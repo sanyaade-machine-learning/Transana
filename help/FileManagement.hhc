@@ -1,0 +1,33 @@
+<ul>
+
+  <li> <object type="text/sitemap">
+           <param name="Name" value="File Management Utility">
+           <param name="Local" value="FileManagementHelp.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="File Area">
+           <param name="Local" value="FileArea.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Copy and Move">
+           <param name="Local" value="CopyMove.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Delete">
+           <param name="Local" value="Delete.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="New Folder">
+           <param name="Local" value="NewFolder.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Update DB">
+           <param name="Local" value="UpdateDB.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Connect">
+           <param name="Local" value="Connection.htm">
+       </object>
+
+</ul>
+

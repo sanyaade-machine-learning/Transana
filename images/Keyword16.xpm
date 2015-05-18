@@ -1,0 +1,27 @@
+/* XPM */
+static char *Keyword.xpm[] = {
+/* columns rows colors chars-per-pixel */
+"16 16 5 1",
+"  c black",
+". c red",
+"X c #ff2626",
+"o c #ff3f3f",
+"O c White",
+/* pixels */
+"OOOOOOOOOOOOOOOO",
+"OOOOOOOOOOOOOOOO",
+"OOOOOOOOOOOOOOOO",
+"OOOOOOOOOOOOOOOO",
+"OO...OOOOOOOOOOO",
+"O.....OOOOOOOOOO",
+".......OOOOOOOOO",
+"..OO...........O",
+"..OO...........O",
+"..oo......OO..OO",
+"O.....XO..OO..OO",
+"OOX..XOOOOOOOOOO",
+"OOOOOOOOOOOOOOOO",
+"OOOOOOOOOOOOOOOO",
+"OOOOOOOOOOOOOOOO",
+"OOOOOOOOOOOOOOOO"
+};

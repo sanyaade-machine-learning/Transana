@@ -1,0 +1,31 @@
+<HTML>
+<HEAD>
+<TITLE>Program Settings</TITLE>
+</HEAD>
+
+<BODY    >
+
+<H1>Program Settings<HR ></H1><P>
+There are several tabs under Program Settings:<P>
+<IMG SRC="images/programsettingsdirectoriessu.gif"  ALT="programsettingsdirectoriessu"   BORDER=0><P>
+The Directories Tab allows you to specify the folder on your system where Transana should store the Waveform files it creates.  Since these files can take up significant disk space, you may wish to change this to a drive with more space.<P>
+The Video Root Directory allows a user to define a common starting point for all videos to be analyzed with Transana.  While most Transana users will not need this setting, it is useful for people who need to copy data between different computers, a desktop and a laptop for example.  The desktop may specify a network location where all video is stored, while the laptop may need to point to a local hard drive where only a subset of the video is available because of storage limitations.  In such a situation, the Video Root Directory on Desktop might be N:\ProjectName\Video, while on the laptop it might be D:\Video.  As long as video files were arranged in the same directory hierarchy from these starting points, Transana would be able to find the appropriate video on either system.  Making use of the Video Root Directory allows users to set up multiple systems with different sets of videos more conveniently.<P>
+
+The Database Directory setting allows you to specify the location of your database files.  You should store your database somewhere where it will be backed up regularly.<P>
+
+<IMG SRC="images/programsettingstranscribersettings.gif"  ALT="programsettingstranscribersettings"   BORDER=0><P>
+Within the Transcript Window, the Ctrl-S key combination can be used to start and stop video playback while you are transcribing your video.  The video is automatically rewound a small amount before it is played to ease the transcription process.  The Transcription Setback setting allows you to specify the amount of rewind, from 0 to 5 seconds, used in this situation.  <P>
+
+Video Playback Speed can be changed with the second slider, and can range from 1/10<SUP>th</SUP> normal speed to twice normal speed.  This allows you to adjust the playback speed to match your typing abilities, and allows more careful analysis of quick events in the video, such as rapid animal behaviors.<P>
+
+You can also set the default font and font size for new transcripts on this tab.  These settings have no effect on existing transcripts.<P>
+
+Transana-MU, the multi-user version, has an additional tab under Program Settings.  If you are not using the multi-user version of Transana, you can ignore the rest of this help page.<P>
+
+<IMG SRC="images/programsettingsmessagehostmu.gif"  ALT="programsettingsmessagehostmu"   BORDER=0><P>
+Did you know that when you change the Database tab in the Data Window, all other users sharing the same database see your change instantly and automatically?  This is possible because of the Transana-MU Message Server.  <P>
+The MU Message Server page within Program Settings allows you to specify the name of the server where your copy of the Transana Message Server is running, and the port number it is running on.  There is no default server name (we have no idea what server yours will be installed on), but the default port number is 17595.  <I><B>Please note that all Transana-MU instances working with the same data set need to connect to the same Transana-MU Message Server.</B></I><P>
+<A HREF="filemanagement.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>     <A HREF="export.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>
