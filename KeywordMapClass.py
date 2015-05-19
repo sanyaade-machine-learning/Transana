@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2010  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2012  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -40,12 +40,16 @@ import Collection
 import DBInterface
 # Import Transana's Dialogs
 import Dialogs
+# Import Transana's Episode object
+import Episode
 # Import Transana's Filter Dialog
 import FilterDialog
-# import Transana's Globals
-import TransanaGlobal
 # import Transana Miscellaneous functions
 import Misc
+# Import Transana's Exceptions
+import TransanaExceptions
+# import Transana's Globals
+import TransanaGlobal
 
 # Declare Control IDs
 # Menu Item and Toolbar Item for File > Filter
@@ -94,7 +98,7 @@ class KeywordMap(wx.Frame):
         # If we're NOT embedded, we need to create a full frame etc.
         if not self.embedded:
             # Determine the screen size for setting the initial dialog size
-            rect = wx.ClientDisplayRect()
+            rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
             width = rect[2] * .80
             height = rect[3] * .80
             # Create the basic Frame structure with a white background
@@ -415,7 +419,7 @@ class KeywordMap(wx.Frame):
                 profileList = dlgFilter.GetConfigNames()
                 # If (translated) "Default" is in the list ...
                 # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
-                if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                if unicode(_('Default'), 'utf8') in profileList:
                     # ... then signal that we need to load the config.
                     dlgFilter.OnFileOpen(None)
                     # Fake that we asked the user for a filter name and got an OK
@@ -556,8 +560,8 @@ class KeywordMap(wx.Frame):
         if not self.preview.Ok():
             self.SetStatusText(_("Print Preview Problem"))
             return
-        theWidth = max(wx.ClientDisplayRect()[2] - 180, 760)
-        theHeight = max(wx.ClientDisplayRect()[3] - 200, 560)
+        theWidth = max(wx.Display(0).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
+        theHeight = max(wx.Display(0).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
         frame2 = wx.PreviewFrame(self.preview, self, _("Print Preview"), size=(theWidth, theHeight))
         frame2.Centre()
         frame2.Initialize()
@@ -622,7 +626,7 @@ class KeywordMap(wx.Frame):
             scale = 0.0
         # The horizontal coordinate is the left margin plus the Horizontal Adjustment for Keyword Labels plus
         # position times the scaling factor
-        res = marginwidth + hadjust + ((XPos - self.startTime) * scale) 
+        res = marginwidth + hadjust + ((XPos - self.startTime) * scale)
         return int(res)
 
     def FindTime(self, x):
@@ -767,38 +771,32 @@ class KeywordMap(wx.Frame):
         return Num, Interval
 
     def ProcessEpisode(self):
+        """ Process a Keyword Map for an Episode """
+        # Initialize the Clip Filter List to be empty
         self.clipFilterList = []
-        
         # We need a data struture to hold the data about what clips correspond to what keywords
         self.MediaFile = ''
         self.MediaLength = 0
-        # Get Series Number, Episode Number, Media File Name, and Length
-        SQLText = """SELECT e.EpisodeNum, e.SeriesNum, e.MediaFile, e.EpLength
-                       FROM Episodes2 e, Series2 s
-                       WHERE s.SeriesID = %s AND
-                             s.SeriesNum = e.SeriesNum AND
-                             e.EpisodeID = %s"""
-        if 'unicode' in wx.PlatformInfo:
-            querySeriesName = self.seriesName.encode(TransanaGlobal.encoding)
-            queryEpisodeName = self.episodeName.encode(TransanaGlobal.encoding)
-        else:
-            querySeriesName = self.seriesName
-            queryEpisodeName = self.episodeName
-        self.DBCursor.execute(SQLText, (querySeriesName, queryEpisodeName))
-        if self.DBCursor.rowcount == 1:
-            (EpisodeNum, SeriesNum, MediaFile, EpisodeLength) = self.DBCursor.fetchone()
-            # Capture Media File Name and Length for use in the Graph
-            self.MediaFile = os.path.split(MediaFile)[1]
-            self.MediaLength = EpisodeLength
+
+        # Start Exception Handling
+        try:
+            # Load the specified Episode
+            tmpEpObj = Episode.Episode(num=self.episodeNum)
+            # Note the Media File Name (without path) and the Media File Length
+            self.MediaFile = os.path.split(tmpEpObj.media_filename)[1]
+            self.MediaLength = tmpEpObj.episode_length()
             # If the end time is 0 or greater than the (non-zero) media length, set it to the media length.
             if (self.endTime == 0) or ((self.endTime > self.MediaLength) and (self.MediaLength > 0)):
                 self.endTime = self.MediaLength
         # If we don't have a single record from the database, we probably have an orphaned Clip.
-        else:
-            # In that case, we can just use the Episode Number passed in by the calling routine ...
-            EpisodeNum = self.episodeNum
+        except TransanaExceptions.RecordNotFoundError:
             # ... and we can set the MediaLength to the end time passed in.
             self.MediaLength = self.endTime
+        except:
+            import traceback
+            traceback.print_exc(file=sys.stdout)
+
+        # If this is our first time through ...
         if (self.filteredKeywordList == []) and (self.unfilteredKeywordList == []):
             # If we deleted the last keyword in a filtered list, the Filter Dialog ended up with
             # duplicate entries.  This should prevent it!!
@@ -810,7 +808,7 @@ class KeywordMap(wx.Frame):
                                  cl.ClipNum = ck.ClipNum
                            GROUP BY ck.keywordgroup, ck.keyword
                            ORDER BY KeywordGroup, Keyword, ClipStart"""
-            self.DBCursor.execute(SQLText, EpisodeNum)
+            self.DBCursor.execute(SQLText, self.episodeNum)
             for (kwg, kw) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                 kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -824,7 +822,7 @@ class KeywordMap(wx.Frame):
                        WHERE cl.EpisodeNum = %s AND
                              cl.ClipNum = ck.ClipNum
                        ORDER BY ClipStart, ClipNum, KeywordGroup, Keyword"""
-        self.DBCursor.execute(SQLText, EpisodeNum)
+        self.DBCursor.execute(SQLText, self.episodeNum)
         for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) in self.DBCursor.fetchall():
             kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
             kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -1033,19 +1031,37 @@ class KeywordMap(wx.Frame):
             # Draw the top Grid Line, if appropriate
             if self.hGridLines:
                 self.graphic.AddLines([(10, self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2))])
+
             for KWG, KW in self.filteredKeywordList:
                 self.graphic.AddText("%s : %s" % (KWG, KW), 10, self.CalcY(Count) - 7)
+                
                 # Add Horizontal Grid Lines, if appropriate
                 if self.hGridLines and (Count % 2 == 1):
                     self.graphic.AddLines([(10, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
                 Count = Count + 1
             # Reset the graphic color following drawing the Grid Lines
             self.graphic.SetColour("BLACK")
-                
-            self.graphicindent = self.graphic.GetMaxWidth(start=3)
+
+            # We need to skip the Title lines in determining the Graphic Indent.
+            # If we have a Collection Number ...
+            if self.collectionNum > 0:
+                # ... the Collection Keyword Map has a single Title element
+                start = 1
+            # If we DO NOT have a Collection Number ...
+            else:
+                # ... the Episode Keyword Map has three Title elements
+                start = 3
+            # If we have a Configuration loaded ...
+            if self.configName != '':
+                # ... then we have one additional Title element
+                start += 1
+            # Determine the max width of the Keywords (by skipping the correct number of Title elements!)
+            self.graphicindent = self.graphic.GetMaxWidth(start=start)
+
         else:
             # We need 2 pixels to account for the rounded edge of the thick line in the Keyword visualization
             self.graphicindent = 2
+
             # Draw the top Grid Line, if appropriate
             if self.hGridLines:
                 Count = 0
@@ -1178,12 +1194,9 @@ class KeywordMap(wx.Frame):
                     self.graphic.SetColour(colorLookup[colorSet[colourindex]])
 
                     self.graphic.AddLines(tempLine)
-                    
+
                 lastclip = ClipNum
 
-                if DEBUG and KWG == 'Transana Users' and KW == 'DavidW':
-                    print "Looking at %s (%d)" % (ClipName, CollectNum)
-                            
                 # Now add the Clip to the keywordClipList.  This holds all Keyword/Clip data in memory so it can be searched quickly
                 # This dictionary object uses the keyword pair as the key and holds a list of Clip data for all clips with that keyword.
                 # If the list for a given keyword already exists ...

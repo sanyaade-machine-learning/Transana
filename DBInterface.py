@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -37,6 +37,8 @@ from exceptions import *
 import _mysql_exceptions
 # import Python's array module
 import array
+# import Python's fast cPickle
+import cPickle
 # import Python's os module
 import os
 # import Python's sys module
@@ -45,17 +47,31 @@ import sys
 import string
 # import Transana's Clip object
 import Clip
-# Import Transana's Dialog Boxes
+# import Transana's Collection Object
+import Collection
+# import Transana's Core Data Object
+import CoreData
+# import Transana's Dialog Boxes
 import Dialogs
 # import Transana's Episode Object
 import Episode
+# import Transana's Keyword Object
+import KeywordObject
+# import Transana's Note Object
+import Note
+# import Transana's Series Object
+import Series
 # import Transana's Constants
 import TransanaConstants
 # import Transana's Global Variables
 import TransanaGlobal
 # import Transana's Exceptions
 import TransanaExceptions
+# Import Transana's Transcript Object
+import Transcript
 
+# Declare Global Variables
+# Database Reference
 _dbref = None
 
 def InitializeSingleUserDatabase():
@@ -108,6 +124,9 @@ def InitializeSingleUserDatabase():
     # Polish
     elif (TransanaGlobal.configData.language == 'pl'):
         lang = '--language=./share/polish'
+    # Portuguese
+    elif (TransanaGlobal.configData.language == 'pt'):
+        lang = '--language=./share/portuguese'
     # 
     elif (TransanaGlobal.configData.language == 'ru'):
         lang = '--language=./share/russian'
@@ -152,21 +171,329 @@ def SetTableType(hasInnoDB, query):
     if TransanaGlobal.DBVersion >= u'4.1':
         # Add the Character Set specification
         query += '  CHARACTER SET %s' % TransanaGlobal.encoding
+
     return query
 
 def is_db_open():
     """ Quick and dirty test to see if the database is currently open """
     return _dbref != None
 
-def establish_db_exists():
-    """Check for the existence of all database tables and create them
-    if necessary."""
+def CreateSeriesTableQuery(num):
+    """ Create query for the Series Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the SERIES object
+    #        AND in the UpdateEncoding250() method below in this file!
+    
+    # Series Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS Series%d
+                (SeriesNum            INTEGER auto_increment, 
+                 SeriesID             VARCHAR(100), 
+                 SeriesComment        VARCHAR(255), 
+                 SeriesOwner          VARCHAR(100), 
+                 DefaultKeywordGroup  VARCHAR(50), 
+                 RecordLock           VARCHAR(25),
+                 LockTime             DATETIME, 
+                 PRIMARY KEY (SeriesNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateEpisodesTableQuery(num):
+    """ Create query for the Episode Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the EPISODE object
+    #        AND in the UpdateEncoding250() method below in this file!
+
+    # Episode Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS Episodes%d
+                (EpisodeNum     INTEGER auto_increment, 
+                 EpisodeID      VARCHAR(100), 
+                 SeriesNum      INTEGER, 
+                 TapingDate     DATE, 
+                 MediaFile      VARCHAR(255), 
+                 EpLength       INTEGER, 
+                 EpComment      VARCHAR(255), 
+                 RecordLock     VARCHAR(25), 
+                 LockTime       DATETIME, 
+                 PRIMARY KEY (EpisodeNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateTranscriptsTableQuery(num):
+    """ Create query for the Transcripts Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the TRANSCRIPT object
+    #        AND in the UpdateEncoding250() method below in this file!
+    
+    # Transcripts Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS Transcripts%d
+                (TranscriptNum        INTEGER auto_increment, 
+                 TranscriptID         VARCHAR(100), 
+                 EpisodeNum           INTEGER,
+                 SourceTranscriptNum  INTEGER,
+                 ClipNum              INTEGER,
+                 SortOrder            INTEGER,
+                 Transcriber          VARCHAR(100),
+                 ClipStart            INTEGER,
+                 ClipStop             INTEGER,
+                 Comment              VARCHAR(255),
+                 MinTranscriptWidth   INTEGER,
+                 RTFText              LONGBLOB, 
+                 RecordLock           VARCHAR(25), 
+                 LockTime             DATETIME, 
+                 LastSaveTime         DATETIME, 
+                 PRIMARY KEY (TranscriptNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateCollectionsTableQuery(num):
+    """ Create query for the Collections Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the COLLECTIONS object
+    #        AND in the UpdateEncoding250() method below in this file!
+    
+    # Collections Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS Collections%d
+                (CollectNum            INTEGER auto_increment, 
+                 CollectID             VARCHAR(100), 
+                 ParentCollectNum      INTEGER, 
+                 CollectComment        VARCHAR(255), 
+                 CollectOwner          VARCHAR(100), 
+                 DefaultKeywordGroup   VARCHAR(50), 
+                 RecordLock            VARCHAR(25), 
+                 LockTime              DATETIME, 
+                 PRIMARY KEY (CollectNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateClipsTableQuery(num):
+    """ Create query for the Clips Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the CLIPS object
+    #        AND in the UpdateEncoding250() method below in this file!
+    
+    # Clips Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS Clips%d
+                (ClipNum        INTEGER auto_increment, 
+                 ClipID         VARCHAR(100), 
+                 CollectNum     INTEGER, 
+                 EpisodeNum     INTEGER, 
+                 MediaFile      VARCHAR(255), 
+                 ClipStart      INTEGER, 
+                 ClipStop       INTEGER,
+                 ClipOffset     INTEGER,
+                 Audio          INTEGER,
+                 ClipComment    VARCHAR(255), 
+                 SortOrder      INTEGER, 
+                 RecordLock     VARCHAR(25), 
+                 LockTime       DATETIME, 
+                 PRIMARY KEY (ClipNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateNotesTableQuery(num):
+    """ Create query for the Notes Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the NOTES object
+    #        AND in the UpdateEncoding250() method below in this file!
+
+    # Notes Table: Test for existence and create if needed
+    query = """
+                  CREATE TABLE IF NOT EXISTS Notes%d
+                    (NoteNum        INTEGER auto_increment, 
+                     NoteID         VARCHAR(100), 
+                     SeriesNum      INTEGER, 
+                     EpisodeNum     INTEGER, 
+                     CollectNum     INTEGER, 
+                     ClipNum        INTEGER, 
+                     TranscriptNum  INTEGER, 
+                     NoteTaker      VARCHAR(100), 
+                     NoteText       LONGBLOB, 
+                     RecordLock     VARCHAR(25), 
+                     LockTime       DATETIME, 
+                     PRIMARY KEY (NoteNum))
+                     DEFAULT CHARACTER SET utf8
+                     COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateKeywordsTableQuery(num):
+    """ Create query for the Keywords Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the KEYWORD object
+    #        AND in the UpdateEncoding250() method below in this file!
+    
+    # Keywords Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS Keywords%d
+                (KeywordGroup  VARCHAR(50) NOT NULL, 
+                 Keyword       VARCHAR(85) NOT NULL, 
+                 Definition    LONGBLOB, 
+                 RecordLock    VARCHAR(25), 
+                 LockTime      DATETIME, 
+                 PRIMARY KEY (KeywordGroup, Keyword))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateClipKeywordsTableQuery(num):
+    """ Create query for the Clip Keywords Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the EPISODE and CLIP object
+    #        AND in the UpdateEncoding250() method below in this file!
+
+    # Clip Keywords Table: Test for existence and create if needed
+    # MySQL Primary Keys cannot contain NULL values, and either EpisodeNum
+    # or ClipNum will always be NULL!  Therefore, use a UNIQUE KEY rather
+    # than a PRIMARY KEY for this table.
+    query = """
+              CREATE TABLE IF NOT EXISTS ClipKeywords%d
+                (EpisodeNum    INTEGER, 
+                 ClipNum       INTEGER, 
+                 KeywordGroup  VARCHAR(50), 
+                 Keyword       VARCHAR(85), 
+                 Example       CHAR(1), 
+                 UNIQUE KEY (EpisodeNum, ClipNum, KeywordGroup, Keyword))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateCoreDataTableQuery(num):
+    """ Create query for the Core Data table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the CORE DATA object
+    #        AND in the UpdateEncoding250() method below in this file!
+
+    # Core Data Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS CoreData%d
+                (CoreDataNum    INTEGER auto_increment, 
+                 Identifier     VARCHAR(255), 
+                 Title          VARCHAR(255), 
+                 Creator        VARCHAR(255), 
+                 Subject        VARCHAR(255), 
+                 Description    VARCHAR(255), 
+                 Publisher      VARCHAR(255), 
+                 Contributor    VARCHAR(255), 
+                 DCDate         DATE, 
+                 DCType         VARCHAR(50), 
+                 Format         VARCHAR(100), 
+                 Source         VARCHAR(255), 
+                 Language       VARCHAR(25), 
+                 Relation       VARCHAR(255), 
+                 Coverage       VARCHAR(255), 
+                 Rights         VARCHAR(255), 
+                 RecordLock     VARCHAR(25), 
+                 LockTime       DATETIME, 
+                 PRIMARY KEY (CoreDataNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateFiltersTableQuery(num):
+    """ Create query for the Filters table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the Filter Dialog form file
+    #        AND in the UpdateEncoding250() method below in this file!
+
+    # Filters Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS Filters%d
+                (ReportType      INTEGER, 
+                 ReportScope     INTEGER, 
+                 ConfigName      VARCHAR(100),
+                 FilterDataType  INTEGER,
+                 FilterData      LONGBLOB,
+                 PRIMARY KEY (ReportType, ReportScope, ConfigName, FilterDataType))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateAdditionalVidsTableQuery(num):
+    """ Create query for the Additional Videos table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the EPISODE and Clip objects
+    #        AND in the UpdateEncoding250() method below in this file!
+
+    # Additional Videos Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS AdditionalVids%d
+                (AddVidNum      INTEGER auto_increment,
+                 EpisodeNum     INTEGER,
+                 ClipNum        INTEGER,
+                 MediaFile      VARCHAR(255), 
+                 VidLength      INTEGER,
+                 Offset         INTEGER,
+                 Audio          INTEGER,
+                 PRIMARY KEY (AddVidNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+
+def establish_db_exists(dbToOpen=None):
+    """ Check for the existence of all database tables and create them
+        if necessary.  dbToOpen is passed if we are automatically importing a database
+        following 2.42 to 2.50 Data Conversion. """
 
     # NOTE:  Syntax for updating tables from MySQL 4.0 to MySQL 4.1 with Unicode UTF8 Characters Set:
     #          ALTER TABLE xxxx2 default character set utf8
 
     # Obtain a Database
-    db = get_db()
+    db = get_db(dbToOpen)
+
     # If this fails, return "False" to indicate failure
     if db == None:
         return False
@@ -179,7 +506,7 @@ def establish_db_exists():
     # Execute the Query
     # dbCursor.execute(query)
     db.autocommit(1)
-    
+
     # MySQLdb 1.2.2 displays Warnings if the tables already exist as they are created.  We don't want this!
     if not MySQLdb.version_info in [(1, 2, 0, 'final', 1)]:
         dbCursor._defer_warnings = True
@@ -212,7 +539,6 @@ def establish_db_exists():
                 p1 = pair[1]
             if p1 == 'YES':
                 hasInnoDB = True
-
     # If neither BDB nor InnoDB are supported, display an error message.
     if not (hasBDB or hasInnoDB):
         dlg = Dialogs.ErrorDialog(None, _("This MySQL Server is not configured to use BDB or InnoDB Tables.  Transana requires a MySQL-max Server."))
@@ -221,63 +547,68 @@ def establish_db_exists():
     # If either DBD or InnoDB is supported ...
     else:
 
-        # Series Table: Test for existence and create if needed
+        TransanaGlobal.hasInnoDB = hasInnoDB
+        # Create the Configuration Information table if it doesn't exist
         query = """
-                  CREATE TABLE IF NOT EXISTS Series2
-                    (SeriesNum            INTEGER auto_increment, 
-                     SeriesID             VARCHAR(100), 
-                     SeriesComment        VARCHAR(255), 
-                     SeriesOwner          VARCHAR(100), 
-                     DefaultKeywordGroup  VARCHAR(50), 
-                     RecordLock           VARCHAR(25),
-                     LockTime             DATETIME, 
-                     PRIMARY KEY (SeriesNum))
+                  CREATE TABLE IF NOT EXISTS ConfigInfo
+                      (KeyVal        VARCHAR(25),
+                       Value         VARCHAR(255),
+                       PRIMARY KEY (KeyVal))
+                     DEFAULT CHARACTER SET utf8
+                     COLLATE utf8_bin
                 """
         # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
         # Execute the Query
         dbCursor.execute(query)
 
-        # Episode Table: Test for existence and create if needed
-        query = """
-                  CREATE TABLE IF NOT EXISTS Episodes2
-                    (EpisodeNum     INTEGER auto_increment, 
-                     EpisodeID      VARCHAR(100), 
-                     SeriesNum      INTEGER, 
-                     TapingDate     DATE, 
-                     MediaFile      VARCHAR(255), 
-                     EpLength       INTEGER, 
-                     EpComment      VARCHAR(255), 
-                     RecordLock     VARCHAR(25), 
-                     LockTime       DATETIME, 
-                     PRIMARY KEY (EpisodeNum))
-                """
-        # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        # Now let's get the Database Version value from the Configuration Information table
+        query = "SELECT Value FROM  ConfigInfo WHERE KeyVal = 'DBVersion'"
+        # Execute the Query
+        dbCursor.execute(query)
+        # if no value is returned ...
+        if dbCursor.rowcount == 0:
+            # ... then we've just created this table.  Let's populate it!
+            # Now let's get the Database Version value from the Configuration Information table
+            query = """INSERT INTO ConfigInfo
+                         (KeyVal, Value)
+                        VALUES
+                         ('DBVersion', '250')"""
+            # Execute the Query
+            dbCursor.execute(query)
+            # Set the Database Version Number to reflect the version that didn't yet have this feature
+            DBVersion = 242
+        else:
+            # Get the Transana Database Version from the Database
+            DBVersion = int(dbCursor.fetchone()[0])
+
+        # Detect NEWER Database Versions
+        if DBVersion > 250:
+            # Create and report the problem
+            prompt = _("This Transana Database has been upgraded.\nYou need to upgrade your copy of Transana to work with it.")
+            dlg = Dialogs.ErrorDialog(None, prompt)
+            dlg.ShowModal()
+            dlg.Destroy()
+
+            # Close the Database Cursor
+            dbCursor.close()
+            # Close the Database Connection
+            close_db()
+            # Report failure to establish the database connection
+            return False
+
+        # Get the SQL to create the Series2 Table
+        query = CreateSeriesTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
 
-        # Transcript Table: Test for existence and create if needed
-        query = """
-                  CREATE TABLE IF NOT EXISTS Transcripts2
-                    (TranscriptNum        INTEGER auto_increment, 
-                     TranscriptID         VARCHAR(100), 
-                     EpisodeNum           INTEGER,
-                     SourceTranscriptNum  INTEGER,
-                     ClipNum              INTEGER,
-                     SortOrder            INTEGER,
-                     Transcriber          VARCHAR(100),
-                     ClipStart            INTEGER,
-                     ClipStop             INTEGER,
-                     Comment              VARCHAR(255), 
-                     RTFText              LONGBLOB, 
-                     RecordLock           VARCHAR(25), 
-                     LockTime             DATETIME, 
-                     LastSaveTime         DATETIME, 
-                     PRIMARY KEY (TranscriptNum))
-                """
-        # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        # Get the SQL to create the Episodes2 table
+        query = CreateEpisodesTableQuery(2)
+        # Execute the Query
+        dbCursor.execute(query)
+
+        # Transcripts2 Table: Test for existence and create if needed
+        query = CreateTranscriptsTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
 
@@ -370,44 +701,13 @@ def establish_db_exists():
                     # signal failure to connect to the database
                     return False
 
-        # Collection Table: Test for existence and create if needed
-        query = """
-                  CREATE TABLE IF NOT EXISTS Collections2
-                    (CollectNum            INTEGER auto_increment, 
-                     CollectID             VARCHAR(100), 
-                     ParentCollectNum      INTEGER, 
-                     CollectComment        VARCHAR(255), 
-                     CollectOwner          VARCHAR(100), 
-                     DefaultKeywordGroup   VARCHAR(50), 
-                     RecordLock          VARCHAR(25), 
-                     LockTime            DATETIME, 
-                     PRIMARY KEY (CollectNum))
-                """
-        # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        # Collections2 Table: Test for existence and create if needed
+        query = CreateCollectionsTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
 
-        #  Clip Table: Test for existence and create if needed
-        query = """
-                  CREATE TABLE IF NOT EXISTS Clips2
-                    (ClipNum        INTEGER auto_increment, 
-                     ClipID         VARCHAR(100), 
-                     CollectNum     INTEGER, 
-                     EpisodeNum     INTEGER, 
-                     MediaFile      VARCHAR(255), 
-                     ClipStart      INTEGER, 
-                     ClipStop       INTEGER,
-                     ClipOffset     INTEGER,
-                     Audio          INTEGER,
-                     ClipComment    VARCHAR(255), 
-                     SortOrder      INTEGER, 
-                     RecordLock     VARCHAR(25), 
-                     LockTime       DATETIME, 
-                     PRIMARY KEY (ClipNum))
-                """
-        # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        #  Clips2 Table: Test for existence and create if needed
+        query = CreateClipsTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
 
@@ -448,24 +748,8 @@ def establish_db_exists():
                 query = "UPDATE Clips2 SET Audio = 1"
                 dbCursor2.execute(query)
 
-        # Notes Table: Test for existence and create if needed
-        query = """
-                  CREATE TABLE IF NOT EXISTS Notes2
-                    (NoteNum        INTEGER auto_increment, 
-                     NoteID         VARCHAR(100), 
-                     SeriesNum      INTEGER, 
-                     EpisodeNum     INTEGER, 
-                     CollectNum     INTEGER, 
-                     ClipNum        INTEGER, 
-                     TranscriptNum  INTEGER, 
-                     NoteTaker      VARCHAR(100), 
-                     NoteText       LONGBLOB, 
-                     RecordLock     VARCHAR(25), 
-                     LockTime       DATETIME, 
-                     PRIMARY KEY (NoteNum))
-                """
-        # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        # Notes2 Table: Test for existence and create if needed
+        query = CreateNotesTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
 
@@ -494,18 +778,8 @@ def establish_db_exists():
                 dbCursor2 = db.cursor()
                 dbCursor2.execute(query)
 
-        # Keywords Table: Test for existence and create if needed
-        query = """
-                  CREATE TABLE IF NOT EXISTS Keywords2
-                    (KeywordGroup  VARCHAR(50) NOT NULL, 
-                     Keyword       VARCHAR(85) NOT NULL, 
-                     Definition    LONGBLOB, 
-                     RecordLock    VARCHAR(25), 
-                     LockTime      DATETIME, 
-                     PRIMARY KEY (KeywordGroup, Keyword))
-                """
-        # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        # Keywords2 Table: Test for existence and create if needed
+        query = CreateKeywordsTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
 
@@ -529,66 +803,19 @@ def establish_db_exists():
                 dbCursor2 = db.cursor()
                 dbCursor2.execute(query)
 
-        # ClipKeywords Table: Test for existence and create if needed
-        # MySQL Primary Keys cannot contain NULL values, and either EpisodeNum
-        # or ClipNum will always be NULL!  Therefore, use a UNIQUE KEY rather
-        # than a PRIMARY KEY for this table.
-        query = """
-                  CREATE TABLE IF NOT EXISTS ClipKeywords2
-                    (EpisodeNum    INTEGER, 
-                     ClipNum       INTEGER, 
-                     KeywordGroup  VARCHAR(50), 
-                     Keyword       VARCHAR(85), 
-                     Example       CHAR(1), 
-                     UNIQUE KEY (EpisodeNum, ClipNum, KeywordGroup, Keyword))
-                """
-        # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        # ClipKeywords2 Table: Test for existence and create if needed
+        query = CreateClipKeywordsTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
 
-        # Core Data Table: Test for existence and create if needed
-        query = """
-                  CREATE TABLE IF NOT EXISTS CoreData2
-                    (CoreDataNum    INTEGER auto_increment, 
-                     Identifier     VARCHAR(255), 
-                     Title          VARCHAR(255), 
-                     Creator        VARCHAR(255), 
-                     Subject        VARCHAR(255), 
-                     Description    VARCHAR(255), 
-                     Publisher      VARCHAR(255), 
-                     Contributor    VARCHAR(255), 
-                     DCDate         DATE, 
-                     DCType         VARCHAR(50), 
-                     Format         VARCHAR(100), 
-                     Source         VARCHAR(255), 
-                     Language       VARCHAR(25), 
-                     Relation       VARCHAR(255), 
-                     Coverage       VARCHAR(255), 
-                     Rights         VARCHAR(255), 
-                     RecordLock     VARCHAR(25), 
-                     LockTime       DATETIME, 
-                     PRIMARY KEY (CoreDataNum))
-                """
-        # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        # CoreData2 Table: Test for existence and create if needed
+        query = CreateCoreDataTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
 
-        # Filters Table: Test for existence and create if needed
-        query = """
-                  CREATE TABLE IF NOT EXISTS Filters2
-                    (ReportType      INTEGER, 
-                     ReportScope     INTEGER, 
-                     ConfigName      VARCHAR(100),
-                     FilterDataType  INTEGER,
-                     FilterData      LONGBLOB,
-                     PRIMARY KEY (ReportType, ReportScope, ConfigName, FilterDataType))
-                """
-        # See FilterDialog.py for a list of ReportTypes adn FilterDataTypes
-        
-        # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        # Filters2 Table: Test for existence and create if needed
+        query = CreateFiltersTableQuery(2)
+        # See FilterDialog.py for a list of ReportTypes and FilterDataTypes
         # Execute the Query
         dbCursor.execute(query)
 
@@ -623,22 +850,118 @@ def establish_db_exists():
         if dbCursor.rowcount == 0:
             UpdateTranscriptRecsfor240(None)
 
-        # AdditionalVids (Additional Videos) Table: Test for existence and create if needed
-        query = """
-                  CREATE TABLE IF NOT EXISTS AdditionalVids2
-                    (AddVidNum      INTEGER auto_increment,
-                     EpisodeNum     INTEGER,
-                     ClipNum        INTEGER,
-                     MediaFile      VARCHAR(255), 
-                     VidLength      INTEGER,
-                     Offset         INTEGER,
-                     Audio          INTEGER,
-                     PRIMARY KEY (AddVidNum))
-                """
-        # Add the appropriate Table Type to the CREATE Query
-        query = SetTableType(hasInnoDB, query)
+        # AdditionalVids2 (Additional Videos) Table: Test for existence and create if needed
+        query = CreateAdditionalVidsTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
+
+        # Let's test for COLLATION.  ** NOTE:  THIS DOESN'T WORK for CHINESE!! **
+        # Create a list of table to check
+        tables = ['AdditionalVids2', 'ClipKeywords2', 'Clips2', 'Collections2', 'CoreData2', 'Episodes2', 'Filters2', 'Keywords2', 'Notes2', 'Series2', 'Transcripts2']
+        # For each table in the list ...
+        for table in tables:
+            # ... get the table creation statement
+            query = "SHOW CREATE TABLE %s" % table
+            # Execute the Query
+            dbCursor.execute(query)
+            # now let's look at the data returned from the database
+            for data in dbCursor.fetchall():
+                # Check for "array" data and convert if needed
+                if type(data[1]).__name__ == 'array':
+                    d1 = data[1].tostring()
+                else:
+                    d1 = data[1]
+                # See if the urf8_bin collation has been declared.  If NOT ...
+                if not u'utf8_bin' in d1.lower():
+                    # ... then we need to alter the table to change the character set and collation
+                    query = "ALTER TABLE %s DEFAULT CHARACTER SET utf8 COLLATE utf8_bin" % table
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
+
+        # Now, let's look at the Transcripts table structure again.  This time we're looking for MinTranscriptWidth for 2.50.
+        # Define the appropriate query
+        query = "SHOW CREATE TABLE Transcripts2"
+        # Execute the Query
+        dbCursor.execute(query)
+        # now let's look at the data returned from the database
+        for data in dbCursor.fetchall():
+            # Check for "array" data and convert if needed
+            if type(data[1]).__name__ == 'array':
+                d1 = data[1].tostring()
+            else:
+                d1 = data[1]
+            # if no "MinTranscriptWidth" field is present, the table has needs to be updated.  Added for Transana 2.50
+            if not u"mintranscriptwidth" in d1.lower():
+                # Set the need to include Encoding options to False by default
+                includeEncoding = False
+                # If we're converting from 2.4x to 2.50 AND are on the Single-user version on Windows,
+                # there may be encoding issues we need to deal with.  This will display a
+                # Message for the user.
+                msg = _("Transana has detected that this database needs to be upgraded.") + "\n" + \
+                      _("Once you upgrade your database, you cannot use it with older \nversions of Transana.")
+                # Provide an extra warning for MU users
+                if not TransanaConstants.singleUserVersion:
+                    msg += "\n\n" + _("NOTE:  Upgrading the database before the Message Server has been upgraded\ncan lead to serious problems.  Do not upgrade unless you are SURE your\nMessage Server has already been upgraded.")
+                # Also provide an extra warning for single-user Windows users!
+                elif (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
+                    msg += "\n\n" + _("NOTE:  This process will include changing the encoding for your database.\nPlease be sure your database is backed up, and that you select the\ncorrect language option below.  Making an incorrect selection will\ncorrupt your database!\n\nPlease back up your data before proceeding.")
+                    # This is the case where we need to include the Encoding options!
+                    includeEncoding = True
+                # Finally, ask for confirmation.
+                msg += "\n\n" + _("Do you want to upgrade this database at this time?")
+
+                # Create the dialog box.  This should include the Encoding choice box!!
+                dlg = Dialogs.QuestionDialog(None, msg, header=_("IMPORTANT UPGRADE NOTICE"), noDefault=True, includeEncoding=includeEncoding)
+                # Display the question and get the answer
+                result = dlg.LocalShowModal()
+                # If we're single-user on Windows ...
+                if (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
+                    # Get the user's recommended encoding
+                    encodingToUse = dlg.encodingOptions[dlg.chImportEncoding.GetStringSelection()]
+                # Destroy the dialog
+                dlg.Destroy()
+                # If the user answered "YES" to upgrading ...
+                if result == wx.ID_YES:
+                    
+                    # We need to alter the table to add the MinTranscriptWidth field.
+                    # Get a database cursor ...
+                    dbCursor2 = db.cursor()
+                    # ... create the Query ...
+                    query = """ ALTER TABLE Transcripts2
+                                  ADD COLUMN
+                                    MinTranscriptWidth  INTEGER AFTER Comment """
+                    # ... and execute the query
+                    dbCursor2.execute(query)
+
+##                    # If we're single-user on Windows ...
+##                    if (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
+##
+##
+##                        ##  WE SHOULD NEVER GET HERE!!!
+##
+##
+##                        # We need to alter the table to remove the MinTranscriptWidth field added above.
+##                        # This way, the database will still require an Encoding update, giving the user another chance.
+##                        # Get a database cursor ...
+##                        dbCursor2 = db.cursor()
+##                        # ... create the Query ...
+##                        query = """ ALTER TABLE Transcripts2
+##                                      DROP COLUMN
+##                                        MinTranscriptWidth """
+##                        # ... and execute the query
+##                        dbCursor2.execute(query)
+##
+##                        # ... close the database ...
+##                        close_db()
+##                        # ... and indicate failure!
+##                        return False
+
+                # If the user says "NO" to upgrading ...
+                else:
+                    # Close the database before any changes get made!
+                    close_db()
+                    # signal failure to connect to the database
+                    return False
 
         # See if this (username, server, database) combination has defined paths.
         if TransanaGlobal.configData.pathsByDB.has_key((TransanaGlobal.userName.encode('utf8'), TransanaGlobal.configData.host.encode('utf8'), TransanaGlobal.configData.database.encode('utf8'))):
@@ -728,22 +1051,32 @@ def UpdateTranscriptRecsfor240(self):
         # Execute the query
         dbCursor2.execute(query % (TNum2, TranscriptNum))
 
-def get_db():
-    """Get a connection object reference to the database.  If a connection
-    has not yet been established, then create the connection."""
+def get_db(dbToOpen=None):
+    """ Get a connection object reference to the database.  If a connection has not yet been established, then create the connection.
+        dbToOpen is passed if we are automatically importing a database following 2.42 to 2.50 Data Conversion. """
     global _dbref
     # If a database reference is not defined ...
     if (_dbref == None):
-        # import the Username and Password Dialog.
-        # (This dialog requests Username, Password, dbServer, and Database Name for the multi-user version
-        # of Transana, Database Name only for the single-user version)
-        from UsernameandPasswordClass import UsernameandPassword
-        # Create the Dialog Box
-        UsernameForm = UsernameandPassword(TransanaGlobal.menuWindow)
-        # Get the Data Entered in the Dialog
-        (userName, password, dbServer, databaseName, port) = UsernameForm.GetValues()
-        # Destroy the form now that we're done with it.
-        UsernameForm.Destroy()
+        # If we are NOT passed a database name, we need to get information from the user.
+        if dbToOpen == None:
+            # import the Username and Password Dialog.
+            # (This dialog requests Username, Password, dbServer, and Database Name for the multi-user version
+            # of Transana, Database Name only for the single-user version)
+            from UsernameandPasswordClass import UsernameandPassword
+            # Create the Dialog Box
+            UsernameForm = UsernameandPassword(TransanaGlobal.menuWindow)
+            # Get the Data Entered in the Dialog
+            (userName, password, dbServer, databaseName, port) = UsernameForm.GetValues()
+            # Destroy the form now that we're done with it.
+            UsernameForm.Destroy()
+        # If we are passed a database name ...
+        else:
+            # ... then we can skip the Username and Password Dialog
+            userName = TransanaGlobal.userName
+            password = ''
+            dbServer = ''
+            databaseName = dbToOpen
+            port = ''
         # Check for the validity of the data.
         # The single-user version of Transana needs only the Database Name.  The multi-user version of
         # Transana requires all four values.
@@ -826,30 +1159,53 @@ def get_db():
                             max_allowed_packet = pair[1].tostring()
                         else:
                             max_allowed_packet = pair[1]
+                # We need to know what the max allowed packet size is later, so save it to the Globals
+                TransanaGlobal.max_allowed_packet = long(max_allowed_packet)
                         
-                # We need to increase the size of the maximum allowed "packet" from 1MB (default) to 8MB.
+                # We need to increase the size of the maximum allowed "packet" from 1MB (default) to at least 8MB, and preferably to 64MB.
+                # The MySQL documentation indicates that MySQL 4.01 and higher allow a maximum setting of 1GB, and that increasing this
+                # value above the default of 1MB should not be problematic.
 
-                if DEBUG:
-                    print "DBInterface.get_db():  max_allowed_packet:", int(max_allowed_packet), '<', 8388608, '=', (int(max_allowed_packet) < 8388608)
-                
-                if int(max_allowed_packet) < 8388608:
-                    dbCursor.execute('SET GLOBAL max_allowed_packet=8388608')
-                    # If we had to change this, we need to shut down our connection and re-establish it for the change to "take".
-                    close_db()
-                    # Re-establish a connection to the Database Server.
+                desiredPacket = 64 # MB
+
+                # Check the current value
+                if int(max_allowed_packet) < desiredPacket * 1024 * 1024:
+                    # If we have the single-user version ...
                     if TransanaConstants.singleUserVersion:
+                        # ... create the SQL to change the value
+                        prompt = "SET GLOBAL max_allowed_packet=%d" % (desiredPacket * 1024 * 1024)
+                        # ... and execute that SQL
+                        dbCursor.execute(prompt)
+                        # If we had to change this, we need to shut down our connection and re-establish it for the change to "take".
+                        close_db()
+                        # Re-establish a connection to the Database Server.
                         if 'unicode' in wx.PlatformInfo:
                             # The single-user version requires no parameters
                             _dbref = MySQLdb.connect(use_unicode=True)
                         else:
                             # The single-user version requires no parameters
                             _dbref = MySQLdb.connect()
+                        # We need to know what the max allowed packet size is later, so save it to the Globals
+                        TransanaGlobal.max_allowed_packet = long(desiredPacket * 1024 * 1024)
+                    # If we have the multi-user version ...
                     else:
-                        if 'unicode' in wx.PlatformInfo:
-                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port), use_unicode=True)
-                        else:
-                            # The multi-user version requires all information to connect to the database server
-                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port))
+                        # We need a minimum of 8 MB for text-only transcripts.  Larger values are desirable so that graphics
+                        # can be inserted into transcripts, but we allow sysadmins to use smaller values if they need to.
+                        # Therefore, only show a warning if the value is less than 8MB.
+                        if int(max_allowed_packet) < 8 * 1024 * 1024 - 1024:
+                            # We can't change the variable due to permissions issues.  Let's tell the user.
+                            # First, create the prompt.
+                            prompt = _("Your MySQL Server requires a configuration change.") + '\n\n' + \
+                                     _('Please ask your server administrator to change the\n"max_allowed_packet" variable in the "my.ini" or\n"my.cnf" file.  The desired value is "%dM", but the\nminimum acceptable value is "8M" or "8388620".') % desiredPacket + '\n\n' + \
+                                     _("Larger values allow more and larger images to be\ninserted in each transcript.")
+                            # now display the prompt.
+                            dlg = Dialogs.ErrorDialog(None, prompt)
+                            dlg.ShowModal()
+                            dlg.Destroy()
+                            # Now exit this function, indicating failure.
+                            _dbref.close()
+                            _dbref = None
+                            return None
 
                 # We need to know the MySQL version we're dealing with to know if UTF-8 is supported.
                 # Get a Database Cursor
@@ -866,6 +1222,41 @@ def get_db():
             try:
                 # If we made a connection to MySQL...
                 if _dbref != None:
+
+                    # If we're single-user on Windows ...
+                    if (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
+                        # Check the database to see if it is a version 2.50 database
+                        result = CheckSUWin250Database(databaseName)
+                        # If the database is NOT a 2.50 database ...
+                        if not result:
+                            # ... construct an error message
+                            errormsg = unicode(_('Database "%s" has not been converted for Transana release 2.50.\nIt cannot be opened in this version of Transana.\n\n'), 'utf8')
+                            errormsg = errormsg % databaseName
+                            # If there already IS a converted version of this database ...
+                            if os.path.exists(os.path.join(TransanaGlobal.configData.databaseDir, databaseName + '_Converted')):
+                                # ... the message should direct the user there ...
+                                errormsg += unicode(_('Please try again, choosing database "%s" from the database list.'), 'utf8')
+                                errormsg = errormsg % (databaseName + '_Converted',)
+                                # ... and we'll make this the default database to make it even easier.
+                                TransanaGlobal.configData.database = databaseName + '_Converted'
+                                TransanaGlobal.configData.SaveConfiguration()
+                            # if the database has NOT been converted yet ...
+                            else:
+                                # ... the message should direct the user to the Conversion Utility
+                                errormsg += unicode(_('Please quit Transana, run the "2.42 to 2.50 Data Conversion Utility,"\nand re-start Transana.'), 'utf8')
+                            # Display the Error Message
+                            errordlg = Dialogs.ErrorDialog(None, errormsg)
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # Close the Database Cursor
+                            dbCursor.close()
+                            # Close the Database Connection
+                            _dbref.close()
+                            # If database limits have been exceeded, block the database open ...
+                            _dbref = None
+                            # ... and get out of here.
+                            return None
+
                     # If we have MySQL 4.1 or later, we have UTF-8 support and should use it.
                     if TransanaGlobal.DBVersion >= u'4.1':
                         # Get a Database Cursor
@@ -946,8 +1337,8 @@ def get_db():
                 if DEBUG:
                     print "DBInterface.get_db():  Unknown Database!"
 
-                # Skip the Database Creation message if we're in Demonstartion Mode
-                if not TransanaConstants.demoVersion:
+                # Skip the Database Creation message if we're in Demonstation Mode
+                if (dbToOpen == None) and not TransanaConstants.demoVersion:
                     # If the Database Name was not found, prompt the user to see if they want to create a new Database.
                     # First, create the Prompt Dialog
                     # NOTE:  This does not use Dialogs.ErrorDialog because it requires a Yes/No reponse
@@ -970,8 +1361,9 @@ def get_db():
                             tempDatabaseName = databaseName.encode(TransanaGlobal.encoding)
                         else:
                             tempDatabaseName = databaseName
+                        # If MySQL is version 4.1 or greater, we can use explicit Character Sets including UTF8
                         if TransanaGlobal.DBVersion >= u'4.1':
-                            query = 'CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8' % tempDatabaseName
+                            query = 'CREATE DATABASE IF NOT EXISTS %s CHARACTER SET %s' % (tempDatabaseName, TransanaGlobal.encoding)
                         else:
                             query = 'CREATE DATABASE IF NOT EXISTS %s' % tempDatabaseName
                         # ... create the Database ...
@@ -1496,14 +1888,14 @@ def list_of_clip_copies(clipID, sourceTranscriptNum, clipStart, clipStop):
     # Return the data list to the calling routine
     return clipList
 
-def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart, clipStop):
+def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart, clipStop, vidFiles):
     """ Check to see if there is already a Quick Clip for this video segment. """
     # Get a database cursor
     DBCursor = get_db().cursor()
     # If we have a single-transcript Quick Clip, transcriptNum will be a longint value.
     if type(transcriptNum) in [int, long]:
         # Design a query to identify single-transcript Quick Clips which match the data passed in
-        query = """SELECT a.ClipNum FROM Clips2 a, Transcripts2 b
+        query = """SELECT a.ClipNum, a.MediaFile FROM Clips2 a, Transcripts2 b
                      WHERE CollectNum = %s AND
                            a.EpisodeNum = %s AND
                            b.SourceTranscriptNum = %s AND
@@ -1522,8 +1914,32 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
             return -1
         # If duplicate clip(s) are found ...
         else:
-            # ... get the Clip Number of the first one ...
-            clipNum = DBCursor.fetchone()[0]
+            # ... for each clip found ...
+            for data in DBCursor.fetchall():
+                # ... create a list of the found CLIP's media files, starting with the clip's mail file
+                cmpVidFiles = [os.path.join(TransanaGlobal.configData.videoPath, data[1]).replace('/', os.sep)]
+                # Initialize the Clip Number, assuming a match will NOT be found
+                clipNum = -1
+                # if the found clip's main file matches the new clip's main file ....
+                if cmpVidFiles[0] == vidFiles[0]:
+                    # Get a database cursor
+                    DBCursor2 = get_db().cursor()
+                    # Let's get the found clip's remaining video files.  Create a query
+                    query2 = 'SELECT MediaFile FROM AdditionalVids2 WHERE ClipNum = %s'
+                    # execute the query
+                    DBCursor2.execute(query2, data[0])
+                    # For each additional media file in the found clip ...
+                    for data2 in DBCursor2.fetchall():
+                        # ... append the additional video to the found clip's video file list
+                        cmpVidFiles.append(os.path.join(TransanaGlobal.configData.videoPath, data2[0]).replace('/', os.sep))
+                    # Close the cursor
+                    DBCursor2.close()
+                # If the found clip's video files EXACTLY MATCH the new clip's video files ...
+                if cmpVidFiles == vidFiles:
+                    # ... note the found clip's clip number ...
+                    clipNum = data[0]
+                    # ... and stop looking
+                    break
             # ... close the database cursor ...
             DBCursor.close()
             # ... and return the Clip Number of the offending clip.
@@ -1535,7 +1951,7 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
         # Design a query to identify multi-transcript Quick Clips which match the data passed in.
         # This query returns a row for each transcript for all clips in the same collection, from the same episide with the same
         # starting and stopping points.  If there are different Transcript configurations, these MAY NOT be duplicates!
-        query = """SELECT a.ClipNum, SourceTranscriptNum
+        query = """SELECT a.ClipNum, SourceTranscriptNum, a.MediaFile
                      FROM Clips2 a, Transcripts2 b
                      WHERE CollectNum = %s AND
                            a.EpisodeNum = %s AND
@@ -1569,36 +1985,63 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
             # ... get the query results ...
             queryResults = DBCursor.fetchall()
             # Iterate through the query results
-            for (cl, tr) in queryResults:
+            for (cl, tr, mf) in queryResults:
                 # If we're looking at a new Clip number ...
                 if cl != currentClipNum:
                     # ... update the current clip number ...
                     currentClipNum = cl
                     # ... and create a list for the source transcripts associated with THIS clip.
-                    queryTranscripts[cl] = []
+                    queryTranscripts[cl] = {}
+                    queryTranscripts[cl]['tr'] = []
+                    queryTranscripts[cl]['mf'] = os.path.join(TransanaGlobal.configData.videoPath, mf).replace('/', os.sep)
                 # Add the source transcripts to the clip's Source Transcripts list.
-                queryTranscripts[cl].append(tr)
+                queryTranscripts[cl]['tr'].append(tr)
             # Assume we will find no matches, so default the return Clip Number to signal no matches.
-            clipNum = -1
+            clipList = []
             # Iterate through the dictionary's keys
             for key in queryTranscripts.keys():
                 # If the transcript configuration for a particular clip matches what was sent in ...
-                if queryTranscripts[key] == transcriptNum:
+                if queryTranscripts[key]['tr'] == transcriptNum:
                     # ... then we've found our duplicate clips ...
-                    clipNum = key
-                    # ... and we're done.
+                    clipList.append((key, queryTranscripts[key]['mf']))
+            # Initialize the Clip Number, assuming a match will NOT be found
+            clipNum = -1
+            # ... for each clip found ...
+            for data in clipList:
+                # ... create a list of the found CLIP's media files, starting with the clip's mail file
+                cmpVidFiles = [os.path.join(TransanaGlobal.configData.videoPath, data[1]).replace('/', os.sep)]
+                # if the found clip's main file matches the new clip's main file ....
+                if cmpVidFiles[0] == vidFiles[0]:
+                    # Get a database cursor
+                    DBCursor2 = get_db().cursor()
+                    # Let's get the found clip's remaining video files.  Create a query
+                    query2 = 'SELECT MediaFile FROM AdditionalVids2 WHERE ClipNum = %s'
+                    # execute the query
+                    DBCursor2.execute(query2, data[0])
+                    # For each additional media file in the found clip ...
+                    for data2 in DBCursor2.fetchall():
+                        # ... append the additional video to the found clip's video file list
+                        cmpVidFiles.append(os.path.join(TransanaGlobal.configData.videoPath, data2[0]).replace('/', os.sep))
+                    # Close the cursor
+                    DBCursor2.close()
+                # If the found clip's video files EXACTLY MATCH the new clip's video files ...
+                if cmpVidFiles == vidFiles:
+                    # ... note the found clip's clip number ...
+                    clipNum = data[0]
+                    # ... and stop looking
                     break
+
             # ... close the database cursor ...
             DBCursor.close()
             # ... and return the Clip Number of the offending clip.
             return clipNum
 
-def FindAdjacentClips(episodeNum, startTime, endTime, trNums, trFiles):
+def FindAdjacentClips(episodeNum, startTime, endTime, trInfo, trFiles):
     """ Find clips that are adjacent to the time codes sent in.
         Parameters:  episodeNum of the chosen clip
                      startTime of the chosen clip
                      endTime of the chosen clip
-                     trNums - source transcript numbers from the selected clip's one or more transcripts """
+                     trInfo - source transcript information (number, start_time, end_time) from the selected clip's one or more transcripts """
 
     # NOTE:  This is a bit complex.  To be considered adjacent, the clip needs to be from the same Episode as clip X,
     #        end where X starts or start where X ends,
@@ -1629,28 +2072,30 @@ def FindAdjacentClips(episodeNum, startTime, endTime, trNums, trFiles):
     for clipData in DBCursor.fetchall():
         # Actually load the clip found by the query.
         tempClip = Clip.Clip(clipData[0])
-        # Assume it's identical until proven otherwise
-        identical = True
+        # Assume it's matching until proven otherwise
+        matching = True
         # See if the number of transcripts is the same.
-        if len(trNums) == len(tempClip.transcripts):
+        if len(trInfo) == len(tempClip.transcripts):
             # Iterate through the sequence of source transcripts
-            for x in range(len(trNums)):
-                # If the indexed source transcript DON'T match ...
-                if trNums[x] != tempClip.transcripts[x].source_transcript:
-                    # ... then the clips are not identical ...
-                    identical = False
+            for x in range(len(trInfo)):
+                # If the indexed source transcript DOESN'T match (number the same, and either start = end or end = start) ...
+                if not ((trInfo[x][0] == tempClip.transcripts[x].source_transcript) and \
+                        ((trInfo[x][1] == tempClip.transcripts[x].clip_stop) or
+                         (trInfo[x][2] == tempClip.transcripts[x].clip_start))):
+                    # ... then the clips are not MATCHING ...
+                    matching = False
                     # ... and we can stop looking
                     break
         # If not ...
         else:
             # ... FAIL.
-            identical = False
+            matching = False
 
         # If we pass the Transcripts test, we need to do the Media Files test
-        if identical:
-            # See if the number of media files is identical, and
-            # the first media files names are identical, and
-            # the first audio inclusion flags are identical ...
+        if matching:
+            # See if the number of media files is matching, and
+            # the first media files names are matching, and
+            # the first audio inclusion flags are matching ...
             if (len(trFiles) == len(tempClip.additional_media_files) + 1) and \
                (trFiles[0][0] == tempClip.media_filename) and \
                (trFiles[0][1] == tempClip.audio):
@@ -1661,7 +2106,7 @@ def FindAdjacentClips(episodeNum, startTime, endTime, trNums, trFiles):
                     # ... and compare them to the data passed in from the original clip
                     if (trFiles[cnt][0] != addFile['filename']) or (trFiles[cnt][1] != addFile['audio']):
                         # If they differ, the comparison FAILS ...
-                        identical = False
+                        matching = False
                         # ... and we can stop looking at additional media files
                         break
                     # Increment the comparison counter
@@ -1669,10 +2114,10 @@ def FindAdjacentClips(episodeNum, startTime, endTime, trNums, trFiles):
             # If not ...
             else:
                 # ... FAIL
-                identical = False
+                matching = False
 
-        # If no transcript sources or media file sources were NOT identical ...
-        if identical:
+        # If no transcript sources or media file sources were NOT matching ...
+        if matching:
             # ... then include the query data in the results set.  Note that we expand the collection name to
             # include the full collection path.
             results.append((clipData[0],) + (ProcessDBDataForUTF8Encoding(clipData[1]),) + (clipData[2:3] + (tempClip.GetNodeString(includeClip=False),) + clipData[4:]))
@@ -2025,7 +2470,7 @@ def check_username_as_keyword():
     DBCursor.execute(query, data)
     # See if the keyword already exists.  If not, we need to create it.
     if DBCursor.rowcount == 0:
-        import Keyword
+        import KeywordObject as Keyword
         tempKeyword = Keyword.Keyword()
         if 'unicode' in wx.PlatformInfo:
             tempKeyword.keywordGroup = unicode(_("Transana Users"), 'utf8')
@@ -2150,7 +2595,7 @@ def VideoFilePaths(filePath, update=False):
                 clipCount += 1
                 # If update is True, we should update the record we find.
                 if update:
-                    # Load the Clip using the Clip Number.
+                    # Load the Clip using the Clip Number. 
                     tempClip = Clip.Clip(clipNum)
                     # We need a "try .. except" block to catch record lock exceptions
                     try:
@@ -2663,8 +3108,17 @@ def record_match_count(table, field_names, field_values):
     contain the given values.  If the field name begins with the `!'
     character, then it will match only if the value does NOT equal the given
     field value."""
+    # Get a database Cursor
     DBCursor = get_db().cursor()
-    query = "SELECT * FROM %s\n   WHERE" % table
+    # If we're NOT in the Transcript table ...
+    if table != 'Transcripts2':
+        # ... we can get ALL row values
+        query = "SELECT * FROM %s\n   WHERE" % table
+    # If we ARE in the Transcript table ...
+    else:
+        # ... just get TranscriptID.  With images, getting the RTF Text takes too long!
+        query = "SELECT TranscriptID FROM %s\n   WHERE" % table
+    # Set up the fields and values that identify the record(s) to find
     for field in field_names:
         if field[0] == "!":
             cmp_op = "<>"
@@ -2672,11 +3126,15 @@ def record_match_count(table, field_names, field_values):
         else:
             cmp_op = "="
         query = "%s    %s %s %%s AND\n" % (query, field, cmp_op)
+    # The query will have a trailing " AND\n".  Remove it.
     query = query[:-5]
-
+    # Execute the query
     DBCursor.execute(query, field_values)
+    # Determine the number of records returned
     num = DBCursor.rowcount
+    # Close the Database Cursor
     DBCursor.close()
+    # Return the number of records found
     return num
 
 def ProcessDBDataForUTF8Encoding(text):
@@ -2760,14 +3218,14 @@ def ProcessDBDataForUTF8Encoding(text):
             # If we're in Korean, change the encoding to cp949
             elif TransanaGlobal.configData.language == 'ko':
                 TransanaGlobal.encoding = 'cp949'
-            # Otherwise, fall back to Latin-1
+            # Otherwise, fall back to UTF8, not Latin-1 as of 2.50
             else:
-                TransanaGlobal.encoding = 'latin1'
-
+                TransanaGlobal.encoding = 'utf8'  # 'latin1'
         return result
 
 
-def UpdateDBFilenames(parent, filePath, fileList):
+def UpdateDBFilenames(parent, filePath, fileList, newName=''):
+    """ Update the Database Filenames """
     # To start with, let's make sure the filePath ends with the appropriate Seperator
     if filePath[-1] != os.sep:
         filePath = filePath + os.sep
@@ -2801,16 +3259,18 @@ def UpdateDBFilenames(parent, filePath, fileList):
 
     # Go through the fileList and run the query repeatedly
     for fileName in fileList:
-        if 'unicode' in wx.PlatformInfo:
-            # NOTE:  Hmmmm.  How do we know what encoding the filenames are in?  It could be UTF-8 or it could be Latin1.
-            #        The Global encoding may not be correct.
-            queryFileName = fileName.encode(TransanaGlobal.encoding)
-        else:
-            queryFileName = fileName
+        # let's remember the original file name
+        originalFileName = fileName
+        # Manipulate the file name in the ways that the database data has been manipulated
+        queryFileName = fileName.encode(TransanaGlobal.encoding)
+        # If we are CHANGING the file name (as with Media File Conversion), we do that here.
+        if (newName != '') and (len(fileList) == 1):
+            fileName = newName
         
         # Add a "%" character to the beginning of the File Name so that the "LIKE" operator will work
         # Execute the Episode Query
-        DBCursor.execute(episodeQuery, '%' + queryFileName)
+        DBCursor.execute(episodeQuery, ('%' + queryFileName))
+
         # Iterate through the records returned from the Database
         for (episodeNum, ) in DBCursor.fetchall():
             # Load the Episode
@@ -2821,7 +3281,7 @@ def UpdateDBFilenames(parent, filePath, fileList):
                 tempEpisode.lock_record()
                 # Make sure the file names match, that we don't have a subset name.
                 # ('mens group.mov' was substituted for 'womens group.mov', for instance.)
-                if os.path.split(tempEpisode.media_filename)[1].upper() == fileName.upper():
+                if (fileName == newName) or (os.path.split(tempEpisode.media_filename)[1].upper() == fileName.upper()):
                     # Update the Media Filename
                     tempEpisode.media_filename = filePath + fileName
                 # Save the Record
@@ -2844,11 +3304,11 @@ def UpdateDBFilenames(parent, filePath, fileList):
             break
         
         # Execute the Clip Query
-        DBCursor.execute(clipQuery, '%' + queryFileName)
+        DBCursor.execute(clipQuery, ('%' + queryFileName))
 
         # Iterate through the records returned from the Database
         for (clipNum, ) in DBCursor.fetchall():
-            # Load the Clip
+            # Load the Clip.
             tempClip = Clip.Clip(clipNum)
             # Be ready to catch exceptions
             try:
@@ -2856,7 +3316,7 @@ def UpdateDBFilenames(parent, filePath, fileList):
                 tempClip.lock_record()
                 # Make sure the file names match, that we don't have a subset name.
                 # ('mens group.mov' was substituted for 'womens group.mov', for instance.)
-                if os.path.split(tempClip.media_filename)[1].upper() == fileName.upper():
+                if (fileName == newName) or (os.path.split(tempClip.media_filename)[1].upper() == fileName.upper()):
                     # Update the Media Filename
                     tempClip.media_filename = filePath + fileName
                 # Save the Record
@@ -2880,7 +3340,7 @@ def UpdateDBFilenames(parent, filePath, fileList):
             break
 
         # Execute the Additional Query
-        DBCursor.execute(additionalQuery, '%' + queryFileName)
+        DBCursor.execute(additionalQuery, ('%' + queryFileName))
 
         # Iterate through the records returned from the Database
         for (addVidNum, episodeNum, clipNum) in DBCursor.fetchall():
@@ -2901,7 +3361,7 @@ def UpdateDBFilenames(parent, filePath, fileList):
                         # Extract the video filename
                         fn = vid['filename']
                         # If the file matches the name being updated ...
-                        if os.path.split(fn)[1].upper() == fileName.upper():
+                        if (os.path.split(fn)[1].upper() == originalFileName.upper()):
                             # ... then update the additional filename entry
                             tempEpisode.additional_media_files = {'filename' : filePath + fileName,
                                                                   'length'   : vid['length'],
@@ -2928,7 +3388,7 @@ def UpdateDBFilenames(parent, filePath, fileList):
                     break
 
             elif clipNum > 0:
-                # Load the Clip
+                # Load the Clip.
                 tempClip = Clip.Clip(clipNum)
                 # Be ready to catch exceptions
                 try:
@@ -2939,11 +3399,11 @@ def UpdateDBFilenames(parent, filePath, fileList):
                     # Clear the Additional Media Files from the Clip
                     del(tempClip.additional_media_files)
                     # Update the Additional Media Files.  Iterate through the list of files
-                    for fn in additionalMediaFiles:
+                    for vid in additionalMediaFiles:
                         # Extract the video filename
                         fn = vid['filename']
                         # If the file matches the name being updated ...
-                        if os.path.split(fn)[1].upper() == fileName.upper():
+                        if (os.path.split(fn)[1].upper() == originalFileName.upper()):
                             # ... then update the additional filename entry
                             tempClip.additional_media_files = {'filename' : filePath + fileName,
                                                                'length'   : vid['length'],
@@ -3606,3 +4066,27 @@ def ServerDateTime():
     DBCursor.close()
     # Return the value retrieved from the server
     return serverDateTime
+
+def CheckSUWin250Database(dbName):
+    """  On the single-user version of Transana on Windows, version 2.50, we CANNOT upgrade existing data.
+         This sucks, but is unavoidable, according to the MySQL folks.  This method does a subtle check
+         of the database a user selects to make sure they aren't trying to accidentally load a 2.42 database
+         in 2.50 on single-user Windows.  """
+    # Get the Database Path from the Configuration Data
+    dbPath = TransanaGlobal.configData.databaseDir
+    # Get the path to the database's Forms directory (to check if the DATABASE exists!)
+    pathToCheck1 = os.path.join(dbPath, dbName)
+    # Get the path to the Series2 file (to check if the database is a Transana database!)
+    pathToCheck2 = os.path.join(dbPath, dbName, 'series2.frm')
+    # Get the path to the ConfigInfo file (to check if the database is a 2.50 or later database!)
+    pathToCheck3 = os.path.join(dbPath, dbName, 'configinfo.frm')
+    # If the Database exists AND
+    # it's a Transana database AND
+    # it is NOT a 2.50 or later database ...
+    if os.path.exists(pathToCheck1) and os.path.exists(pathToCheck2) and not os.path.exists(pathToCheck3):
+        # ... then we FAIL this test.
+        return False
+    # Otherwise ...
+    else:
+        # ... we pass this test.
+        return True

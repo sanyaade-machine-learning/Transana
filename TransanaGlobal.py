@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -22,6 +22,8 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case <nacase@wisc.ed
 import wx
 # import Transana's ConfigData
 import ConfigData
+# import Transana's Dialogs
+import Dialogs
 # import Transana's Constants
 import TransanaConstants
 # import Python's os and sys modules
@@ -47,8 +49,8 @@ if 'wxMac' in wx.PlatformInfo:
     # We set it to 24 on the Mac!  It used to be 0, but seems to need to be 24 for wxPython 2.6.1.0.
     menuHeight = 24
 elif 'wxGTK' in wx.PlatformInfo:
-    # Linux, at least my FC6-Gnome setup, requires space for the Linux menu and Transana's menu.
-    menuHeight = 72
+    # Linux, at least my Ubuntu 10.04 setup, requires space for the Linux menu and Transana's menu.
+    menuHeight = 28 + 24 # wx.Display(0).GetClientArea()[1]
 else:
     # While we default to 44, this value actually can get altered elsewhere to reflect the height of
     # the title/header bar.  XP using Large Fonts, for example, needs a larger value.
@@ -69,10 +71,10 @@ printData.SetPaperId(wx.PAPER_LETTER)
 # Declare the default character encoding for Transana.  This MUST be declared before the ConfigData call.
 # Furthermore, it must ignore the possibility of Russian or other languages for now, as the
 # configData.language setting is not yet known.
-if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-    encoding = 'latin1'
-else:
-    encoding = 'utf8'
+#if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+#    encoding = 'latin1'
+#else:
+encoding = 'utf8'
 
 # We need to know the MySQL version to know if UTF-8 is supported.  Initialize that here.
 DBVersion = 0
@@ -128,21 +130,32 @@ def getColorDefs(filename):
                 lineCount += 1
         # If an exception is raised ...
         except:
+            # Add White to the end of the list (as much as was read in, anyway) so that this element is on the end.
+            colorList.append(('White',             (255, 255, 255)))
+
             # ... Create an error message
             msg = _('Error reading configuration file "%s" at line %d.') + "\n\n%s"
             # NOTE:  msg is already Unicode at this point, so no need to convert it!  Note sure why.  Default Encoding not yet changed??
             if (type(msg) != unicode) and ('unicode' in wx.PlatformInfo):
                 msg = unicode(msg, 'utf8')
-            # No wxApp has been created yet.  We can't display an error message unless we create one here!
-            tmpApp = wx.App()
             # Display an error message.  We can't use Trasnana's ErrorDialog yet.
-            dlg = wx.MessageDialog(None, msg % (filename, lineCount, line), _("Transana Error"), wx.OK | wx.CENTRE | wx.ICON_ERROR)
+            dlg = Dialogs.ErrorDialog(None, msg % (filename, lineCount, line))
             dlg.ShowModal()
             dlg.Destroy()
-            # Add White to the end of the list (as much as was read in, anyway) so that this element is on the end.
-            colorList.append(('White',             (255, 255, 255)))
-            # Destroy the temporary wxApp object we created.
-            tmpApp.Destroy()
+
+        # If there are no colors in the list, or only White is defined ...
+        if len(colorList) <= 1:
+
+            prompt = unicode(_('File "%s" is not a valid color file.'), 'utf8') + u"\n" + \
+                     unicode(_("Transana's default colors have been restored."), 'utf8')
+            dlg = Dialogs.ErrorDialog(None, prompt % filename)
+            dlg.ShowModal()
+            dlg.Destroy()
+            # ... then load the default Color List by calling this routine recursively, without a file name
+            colorList = getColorDefs('')
+        else:
+            configData.colorConfigFilename = filename
+
     # If we don't have a Color Definition file to load ...
     else:
         # We want enough colors, but not too many.  This list seems about right to me.  I doubt my color names are standard.
@@ -168,7 +181,7 @@ def getColorDefs(filename):
                      ('Indian Red',        ( 79,  47,  47)),
                      ('Violet Red',        (204,  50, 153)),
                      ('Magenta',           (255,   0, 255)),
-                     ('Light Fuscia',      (255, 128, 255)),
+                     ('Light Fuchsia',     (255, 128, 255)),
                      ('Rose',              (255,   0, 128)),
                      ('Red',               (255,   0,   0)),
                      ('Red Orange',        (204,  50,  50)),
@@ -209,7 +222,7 @@ transana_textColorList = [('Black',             (  0,   0,   0)),
                           ('Indian Red',        ( 79,  47,  47)),
                           ('Violet Red',        (204,  50, 153)),
                           ('Magenta',           (255,   0, 255)),
-                          ('Light Fuscia',      (255, 128, 255)),
+                          ('Light Fuchsia',     (255, 128, 255)),
                           ('Rose',              (255,   0, 128)),
                           ('Red',               (255,   0,   0)),
                           ('Red Orange',        (204,  50,  50)),
@@ -248,7 +261,7 @@ def SetColorVariables():
 #  the initial language.) This is needed for Text Colors, not for Graphics Colors, and is displayed in the Font Dialog.
 tmpColorList = (_('Black'), _('Dark Blue'), _('Blue'), _('Light Blue'), _('Cyan'), _('Light Aqua'), _('Green Blue'),
                  _('Dark Green'), _('Blue Green'),_('Green'), _('Chartreuse'), _('Light Green'), _('Olive'), _('Gray'),
-                _('Lavender'), _('Purple'), _('Dark Purple'), _('Maroon'), _('Magenta'), _('Light Fuscia'), _('Rose'),
+                _('Lavender'), _('Purple'), _('Dark Purple'), _('Maroon'), _('Magenta'), _('Light Fuchsia'), _('Rose'),
                 _('Red'), _('Salmon'), _('Orange'), _('Yellow'), _('Light Yellow'), _('White'),
                 _('Violet Red'), _('Sienna'), _('Indian Red'), _('Goldenrod'), _('Dark Slate Gray'), _('Red Orange'),
                 _('Light Purple'))

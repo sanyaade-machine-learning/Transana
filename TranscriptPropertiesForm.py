@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -24,6 +24,8 @@ import wx
 import DBInterface
 # Import Transana's Dialogs
 import Dialogs
+# import Transana's Episode object
+import Episode
 # Import the Transcript Object
 import Transcript
 # import Python's os module
@@ -33,85 +35,176 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
     """Form containing Transcript fields."""
 
     def __init__(self, parent, id, title, transcript_object):
-        self.width = 400
+        """ Create the Transcript Properties form """
+        self.width = 500
         self.height = 260
         # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style
-        Dialogs.GenForm.__init__(self, parent, id, title, size=(self.width, self.height), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Transcript Properties')
-        # Define the minimum size for this dialog as the initial size, and define height as unchangeable
-        self.SetSizeHints(self.width, self.height, -1, self.height)
+        Dialogs.GenForm.__init__(self, parent, id, title, size=(self.width, self.height), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext='Transcript Properties')
 
+        # Define the form's main object
         self.obj = transcript_object
 
-        # Transcript ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 40)  # 40% width
-        lay.height.AsIs()
-        self.id_edit = self.new_edit_box(_("Transcript ID"), lay, self.obj.id, maxLen=100)
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Series ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.SameAs(self.id_edit, wx.Right, 10)   # 10 from id_edit
-        lay.width.PercentOf(self.panel, wx.Width, 25)  # 25% width
-        lay.height.AsIs()
-        series_id_edit = self.new_edit_box(_("Series ID"), lay, self.obj.series_id)
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+        # Add the Transcript ID element
+        self.id_edit = self.new_edit_box(_("Transcript ID"), v1, self.obj.id, maxLen=100)
+        # Add the element to the sizer
+        r1Sizer.Add(v1, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v2 = wx.BoxSizer(wx.VERTICAL)
+        # Add the Series ID element
+        series_id_edit = self.new_edit_box(_("Series ID"), v2, self.obj.series_id)
+        # Add the element to the row sizer
+        r2Sizer.Add(v2, 1, wx.EXPAND)
+        # Disable Series ID
         series_id_edit.Enable(False)
 
-        # Episode ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)                # 10 from top
-        lay.left.SameAs(series_id_edit, wx.Right, 10)   # 10 from series_id_edit
-        lay.width.PercentOf(self.panel, wx.Width, 25)         # 25% width
-        lay.height.AsIs()
-        episode_id_edit = self.new_edit_box(_("Episode ID"), lay, self.obj.episode_id)
+        # Add a horizontal spacer to the row sizer        
+        r2Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v3 = wx.BoxSizer(wx.VERTICAL)
+        # Add the Episode ID element
+        episode_id_edit = self.new_edit_box(_("Episode ID"), v3, self.obj.episode_id)
+        # Add the element to the row sizer
+        r2Sizer.Add(v3, 1, wx.EXPAND)
+        # Disable Episode ID
         episode_id_edit.Enable(False)
 
-        # Transcriber layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.id_edit, 10)              # 10 below id_edit
-        lay.left.SameAs(self.id_edit, wx.Left, 0)     # Same as id_edit (10 from left)
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        transcriber_edit = self.new_edit_box(_("Transcriber"), lay, self.obj.transcriber, maxLen=100)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
 
-        # Comment layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(transcriber_edit, 10)     # 10 under transcriber
-        lay.left.SameAs(self.id_edit, wx.Left, 0)     # Same as id_edit (10 from left)
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        comment_edit = self.new_edit_box(_("Comment"), lay, self.obj.comment, maxLen=255)
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
 
-        # File to Import layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(comment_edit, 10)         # 10 under comment
-        lay.left.SameAs(self.id_edit, wx.Left, 0)     # Same as id_edit (10 from left)
-        lay.right.SameAs(self.panel, wx.Right, 100)  # Leave room for the Browse button
-        lay.height.AsIs()
-        self.rtfname_edit = self.new_edit_box(_("RTF File to import  (optional)"), lay, '')
+        # Create a HORIZONTAL sizer for the next row
+        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Browse button
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.rtfname_edit, wx.Top, 0)
-        lay.left.SameAs(self.panel, wx.Right, -87)
-        lay.height.AsIs()
-        lay.width.AsIs()
+        # Create a VERTICAL sizer for the next element
+        v4 = wx.BoxSizer(wx.VERTICAL)
+        # Add the Transcriber element
+        transcriber_edit = self.new_edit_box(_("Transcriber"), v4, self.obj.transcriber, maxLen=100)
+        # Add the element to the row sizer
+        r3Sizer.Add(v4, 3, wx.EXPAND | wx.RIGHT, 10)
+
+        # Create a VERTICAL sizer for the next element
+        v7 = wx.BoxSizer(wx.VERTICAL)
+        # Add the Min Transcript Width element
+        mintranscriptwidth = self.new_edit_box(_("Min. Width"), v7, str(self.obj.minTranscriptWidth))
+        # Add the element to the row sizer
+        r3Sizer.Add(v7, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r3Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+        
+        # Create a HORIZONTAL sizer for the next row
+        r4Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v5 = wx.BoxSizer(wx.VERTICAL)
+        # Add the Comment element
+        comment_edit = self.new_edit_box(_("Comment"), v5, self.obj.comment, maxLen=255)
+        # Add the element to the row sizer
+        r4Sizer.Add(v5, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r4Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+        
+        # Create a HORIZONTAL sizer for the next row
+        r5Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v6 = wx.BoxSizer(wx.VERTICAL)
+        # Add the Import File element
+        self.rtfname_edit = self.new_edit_box(_("RTF/XML/TXT File to import  (optional)"), v6, '')
+        # Add the element to the row sizer
+        r5Sizer.Add(v6, 1, wx.EXPAND)
+
+        # Add a horizontal spacer to the row sizer        
+        r5Sizer.Add((10, 0))
+
+        # Add the Browse Button
         browse = wx.Button(self.panel, -1, _("Browse"))
-        browse.SetConstraints(lay)
+        # Add the Browse Method to the Browse Button
         wx.EVT_BUTTON(self, browse.GetId(), self.OnBrowseClick)
+        # Add the element to the sizer
+        r5Sizer.Add(browse, 0, wx.ALIGN_BOTTOM)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            r5Sizer.Add((2, 0))
 
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r5Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
         self.Layout()
-        self.SetAutoLayout(True)
-        self.CenterOnScreen()
+        # Resize the form to fit the contents
+        self.Fit()
 
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(self.width, width), height))
+        # Define the minimum size for this dialog as the current size, and define height as unchangeable
+        self.SetSizeHints(max(self.width, width), height, -1, height)
+        # Center the form on screen
+        self.CenterOnScreen()
+        # Set focus to the Transcript ID
         self.id_edit.SetFocus()
 
     def OnBrowseClick(self, event):
         """ Method for when Browse button is clicked """
-        # Allow for RTF, TXT or *.* combinations
-        dlg = wx.FileDialog(None, wildcard="Rich Text Format Files (*.rtf)|*.rtf|Text Files(*.txt)|*.txt|All Files (*.*)|*.*", style=wx.OPEN)
+        # Load the source episode
+        tmpEpisode = Episode.Episode(num=self.obj.episode_num)
+        # Get the directory for the MAIN media file name
+        dirName = os.path.dirname(tmpEpisode.media_filename)
+        # Allow for RTF, XML, TXT or *.* combinations
+        dlg = wx.FileDialog(None, defaultDir=dirName,
+                            wildcard="Transcript Import Formats (*.rtf, *.xml, *.txt)|*.rtf;*.xml;*.txt|Rich Text Format Files (*.rtf)|*.rtf|XML Files (*.xml)|*.xml|Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+                            style=wx.OPEN)
         # Get a file selection from the user
         if dlg.ShowModal() == wx.ID_OK:
             # If the user clicks OK, set the file to import to the selected path.
@@ -140,8 +233,13 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
             self.obj.transcriber = d[_('Transcriber')]
             # Set the Comment
             self.obj.comment = d[_('Comment')]
+            # Set Minimum Transcript Width
+            try:
+                self.obj.minTranscriptWidth = int(d[_("Min. Width")])
+            except:
+                self.obj.minTranscriptWidth = 0
             # Get the Media File to import
-            fname = d[_('RTF File to import  (optional)')]
+            fname = d[_('RTF/XML/TXT File to import  (optional)')]
             # If a media file is entered ...
             if fname:
                 # ... start exception handling ...
@@ -151,7 +249,7 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
                     # Read the file straight into the Transcript Text
                     self.obj.text = f.read()
                     # if the text does NOT have an RTF header ...
-                    if (self.obj.text[:5].lower() != '{\\rtf'):
+                    if (self.obj.text[:5].lower() != '{\\rtf') and (self.obj.text[:5].lower() != '<?xml'):
                         # ... add "txt" to the start of the file to signal that it's probably a text file
                         self.obj.text = 'txt\n' + self.obj.text
                     # Close the file

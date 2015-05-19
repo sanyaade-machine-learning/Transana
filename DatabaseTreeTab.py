@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -37,8 +37,9 @@ import ClipPropertiesForm
 import Note
 import NotePropertiesForm
 import NotesBrowser
-import Keyword                      
+import KeywordObject as Keyword                      
 import KeywordPropertiesForm
+import ClipKeywordObject
 import BatchFileProcessor
 import ProcessSearch
 from TransanaExceptions import *
@@ -61,6 +62,7 @@ import DragAndDropObjects           # Implements Drag and Drop logic and objects
 import cPickle                      # Used in Drag and Drop
 import Misc                         # Transana's Miscellaneous functions
 import PropagateEpisodeChanges      # Transana's Change Propagation routines
+import MediaConvert
 
 class DatabaseTreeTab(wx.Panel):
     """This class defines the object for the "Database" tab of the Data
@@ -75,32 +77,26 @@ class DatabaseTreeTab(wx.Panel):
         self.ControlObject = None            # The ControlObject handles all inter-object communication, initialized to None
 
         # Use WANTS_CHARS style so the panel doesn't eat the Enter key.
-        wx.Panel.__init__(self, parent, -1, style=wx.WANTS_CHARS,
-                                size=(width, height), name='DatabaseTreeTabPanel')
+        wx.Panel.__init__(self, parent, -1, style=wx.WANTS_CHARS, size=(width, height), name='DatabaseTreeTabPanel')
 
-        #EVT_SIZE(self, self.OnSize)
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
 
         tID = wx.NewId()
 
-        # I'll add Constraints code here in an attempt to get the tab to resize automatically with the notebook
-        lay = wx.LayoutConstraints()
-        lay.left.SameAs(self, wx.Left, 1)
-        lay.top.SameAs(self, wx.Top, 1)
-        lay.right.SameAs(self, wx.Right, 1)
-        lay.bottom.SameAs(self, wx.Bottom, 1)
         self.tree = _DBTreeCtrl(self, tID, wx.DefaultPosition, self.GetSizeTuple(), wx.TR_HAS_BUTTONS | wx.TR_EDIT_LABELS | wx.TR_MULTIPLE)
-        self.tree.SetConstraints(lay)
+        mainSizer.Add(self.tree, 1, wx.EXPAND)
         self.tree.UnselectAll()
         self.tree.SelectItem(self.tree.GetRootItem())
-        
+
         # For Copy and Paste to work on the Mac, we need to open the Clipboard once on application startup
         # rather than opening and closing it repeatedly
         wx.TheClipboard.Open()
         # Clear the Clipboard.  (This prevents an odd Clipboard error message on the Mac.)
         DragAndDropObjects.ClearClipboard()
 
-        self.Layout()
+        self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
+        self.Layout()
         
 
     def Register(self, ControlObject=None):
@@ -341,6 +337,8 @@ class DatabaseTreeTab(wx.Panel):
                 try:
                     # Display the Episode Properties Dialog Box and get the data from the user
                     if dlg.get_input() != None:
+                        # Check to see if there are keywords to be propagated
+                        self.ControlObject.PropagateEpisodeKeywords(episode.number, episode.keyword_list)
                         # Try to save the Episode
                         self.save_episode(episode)
                         # Note the original Tree Selection
@@ -866,13 +864,15 @@ class DatabaseTreeTab(wx.Panel):
                 try:
                     # Display the Clip Properties Dialog Box and get the data from the user
                     if dlg.get_input() != None:
+                        # Create a Popup Dialog
+                        tmpDlg = Dialogs.PopupDialog(None, _("Saving Clip"), _("Saving the Clip"))
                         # Try to save the Clip Data
                         self.save_clip(clip)
                         # If any keywords that served as Keyword Examples that got removed from the Clip,
                         # we need to remove them from the Database Tree.  
                         for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
-                            # Load the specified Clip record
-                            tempClip = Clip.Clip(clipNum)
+                            # Load the specified Clip record.  We can speed the load by not loading the Clip Transcript(s)
+                            tempClip = Clip.Clip(clipNum, skipText=True)
                             # Prepare the Node List for removing the Keyword Example Node, using the clip's original name
                             nodeList = (_('Keywords'), keywordGroup, keyword, originalClipID)
                             # Call the DB Tree's delete_Node method.  Include the Clip Record Number so the correct Clip entry will be removed.
@@ -943,6 +943,10 @@ class DatabaseTreeTab(wx.Panel):
                             # we can detect that by looking at the propagatePressed property of the form.  Now that the
                             # clip changes have been successfully saved, we need to deal with propagation if requested.
                             if dlg.propagatePressed:
+                                # Close popup dialog prior to showing the Propagate Clip Changes form
+                                tmpDlg.Destroy()
+                                # Signal that the tmpDlg has been closed.
+                                tmpDlg = None
                                 # Start up the Propagate Changes tool, passing in the original clip copy and the proper data
                                 # from the edited clip.
                                 propagateDlg = PropagateEpisodeChanges.PropagateClipChanges(self,
@@ -986,18 +990,30 @@ class DatabaseTreeTab(wx.Panel):
 
                             # If we do all this, we don't need to continue any more.
                             contin = False
+                        # If the tmpDlg is still open ...
+                        if tmpDlg is not None:
+                            # Close popup dialog
+                            tmpDlg.Destroy()
                     # If the user pressed Cancel ...
                     else:
                         # ... then we don't need to continue any more.
                         contin = False
                 # Handle "SaveError" exception
                 except SaveError:
+                    # If the tmpDlg is still open ...
+                    if tmpDlg is not None:
+                        # Close popup dialog
+                        tmpDlg.Destroy()
                     # Display the Error Message, allow "continue" flag to remain true
                     errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
                     errordlg.ShowModal()
                     errordlg.Destroy()
                 # Handle other exceptions
                 except:
+                    # If the tmpDlg is still open ...
+                    if tmpDlg is not None:
+                        # Close popup dialog
+                        tmpDlg.Destroy()
                     if DEBUG:
                         import traceback
                         traceback.print_exc(file=sys.stdout)
@@ -1026,18 +1042,24 @@ class DatabaseTreeTab(wx.Panel):
         # We should lock the parent object when adding a note.
         # First, get the appropriate parent object
         if seriesNum > 0:
+            # Load the Series Object
             parentObj = Series.Series(seriesNum)
             objType = _("Series")
         elif episodeNum > 0:
+            # Load the Episode Object
             parentObj = Episode.Episode(episodeNum)
             objType = _("Episode")
         elif transcriptNum > 0:
-            parentObj = Transcript.Transcript(transcriptNum)
+            # Load the Transcript Object
+            # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+            parentObj = Transcript.Transcript(transcriptNum, skipText=True)
             objType = _("Transcript")
         elif collectionNum > 0:
+            # Load the Collection Object
             parentObj = Collection.Collection(collectionNum)
             objType = _("Collection")
         elif clipNum > 0:
+            # Load the Clip Object.  We can speed the load by not loading the Clip Transcript(s)
             parentObj = Clip.Clip(clipNum)
             objType = _("Clip")
         try:
@@ -1487,7 +1509,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         "Transcript16", "db", ]
         self.image_list = wx.ImageList(16, 16, 0, len(self.icon_list))
         for icon_file in self.icon_list:
-            fname = "images/" + icon_file + ".xpm"
+            fname = os.path.join(TransanaGlobal.programDir, "images", icon_file + ".xpm")
             bitmap = wx.Bitmap(fname, wx.BITMAP_TYPE_XPM)
             self.image_list.Add(bitmap)
     
@@ -1765,7 +1787,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # need to reset it to "normal" here or it can get stuck as a "No_Entry" cursor if
                 # a Drop is abandoned.
                 self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-
 
     def create_root_node(self):
         """ Build the entire Database Tree """
@@ -2056,8 +2077,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
         
         # Iterate through the examples
         for (episodeNum, clipNum, kwg, kw, example) in keywordExamples:
-            # Load the indicated clip
-            exampleClip = Clip.Clip(clipNum)
+            # Load the indicated clip.  We can speed the load by not loading the Clip Transcript(s)
+            exampleClip = Clip.Clip(clipNum, skipText=True)
             # Determine where it should be displayed in the Node Structure.
             # (Keyword Root, Keyword Group, Keyword, Example Clip Name)
             nodeData = (_('Keywords'), kwg, kw, exampleClip.id)
@@ -3000,7 +3021,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         self.create_menu('ClipNode',
                         (_("Cut"), _("Copy"), _("Paste"),
                          _("Open"), _("Add Clip"), _("Add Multi-transcript Clip"), _("Add Clip Note"), _("Merge Clips"),
-                         _("Delete Clip"), _("Locate Clip in Episode"), _("Clip Properties")),
+                         _("Delete Clip"), _("Locate Clip in Episode"), _("Export Clip Video"), _("Clip Properties")),
                         self.OnClipCommand)
 
         # Keywords Root Menu
@@ -3079,7 +3100,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Default Double-click is Open.  (See OnItemActivated())
         self.create_menu("SearchClipNode",
                         (_("Cut"), _("Copy"), _("Paste"),
-                         _("Open"), _("Drop from Search Result"), _("Locate Clip in Episode"), _("Rename")),
+                         _("Open"), _("Drop from Search Result"), _("Locate Clip in Episode"),
+                         _("Locate Clip in Collection"), _("Rename")),
                         self.OnSearchClipCommand)
 
 
@@ -3221,7 +3243,23 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         confirmations = False
 
                 # If the user confirms, or we skip the confirmation programatically ...
-                if result == wx.ID_YES:                        
+                if result == wx.ID_YES:
+                    # ... initialize a Keyword List
+                    kwList = []
+                    # If data is a list, there are multiple nodes to paste
+                    if isinstance(data, list):
+                        # For each keyword node item in the data list ...
+                        for datum in data:
+                            # ... create a Clip Keyword Object with the Keyword information ...
+                            ckw = ClipKeywordObject.ClipKeyword(datum.parent, datum.text)
+                            # ... and add the Clip Keyword Object to the Keyword List
+                            kwList.append(ckw)
+                    # If data is a single Keyword Node item ...
+                    else:
+                        # ... create a Clip Keyword Object with the Keyword information ...
+                        ckw = ClipKeywordObject.ClipKeyword(data.parent, data.text)
+                        # ... and add the Clip Keyword Object to the Keyword List
+                        kwList.append(ckw)
 
                     # For each Series in the selected items ...
                     for item in selItems:
@@ -3229,12 +3267,26 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         sel = item
                         # If data is a list, there are multiple Episode nodes to paste
                         if isinstance(data, list):
+                            # ... get the item's data ...
+                            selData = self.GetPyData(sel)
+                            # Now get a list of all Episodes in the Series and iterate through them
+                            for tempEpisodeNum, tempEpisodeID, tempSeriesNum in DBInterface.list_of_episodes_for_series(self.GetItemText(sel)):
+                                # ... propagating the new Episode Keywords to all Clips from that Episode
+                                self.parent.ControlObject.PropagateEpisodeKeywords(tempEpisodeNum, kwList)
                             # Iterate through the Episode nodes
                             for datum in data:
                                 # ... and paste the data
                                 DragAndDropObjects.ProcessPasteDrop(self, datum, sel, self.cutCopyInfo['action'], confirmations=False)
                         # if data is NOT a list, it is a single Episode node to paste
                         else:
+                            # If we're not displaying confirmation messages ...
+                            if not confirmations:
+                                # ... get the item's data ...
+                                selData = self.GetPyData(sel)
+                                # Now get a list of all Episodes in the Series and iterate through them ...
+                                for tempEpisodeNum, tempEpisodeID, tempSeriesNum in DBInterface.list_of_episodes_for_series(self.GetItemText(sel)):
+                                    # ... propagating the new Episode Keywords to all Clips from that Episode
+                                    self.parent.ControlObject.PropagateEpisodeKeywords(tempEpisodeNum, kwList)
                             # ... and paste the data
                             DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'], confirmations=confirmations)
 
@@ -3330,21 +3382,36 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         tmpTranscript.id = filenameroot
                         # Assign the new Episode's number 
                         tmpTranscript.episode_num = tmpEpisode.number
-                        # Let's see if there is a Transcript file.  See if an RTF file exists in the media file's
+                        # Let's see if there is a Transcript file.  See if an XML file exists in the media file's
                         # directory with the same root file name
-                        if os.path.exists(os.path.join(path, filenameroot + '.rtf')):
+                        if os.path.exists(os.path.join(path, filenameroot + '.xml')):
+                            # If so, let's remember that.
+                            fname = os.path.join(path, filenameroot + '.xml')
+                        # See if an RTF file exists in the media file's
+                        # directory with the same root file name
+                        elif os.path.exists(os.path.join(path, filenameroot + '.rtf')):
                             # If so, let's remember that.
                             fname = os.path.join(path, filenameroot + '.rtf')
-                        # If there's not RTF file, see if a TXT file exists in the media file's
+                        # If there's no RTF file, see if a TXT file exists in the media file's
                         # directory with the same root file name
                         elif os.path.exists(os.path.join(path, filenameroot + '.txt')):
                             # If so, let's remember that.
                             fname = os.path.join(path, filenameroot + '.txt')
-                        # If neither an RTF nor a TXT file exists ...
+                        # If there's no TXT file, see if a default.xml file exists in the video root
+                        # directory
+                        elif os.path.exists(os.path.join(TransanaGlobal.configData.videoPath, 'default.xml')):
+                            # If so, let's remember that.
+                            fname = os.path.join(TransanaGlobal.configData.videoPath, 'default.xml')
+                        # If there's no default.xml file, see if a default.rtf file exists in the video
+                        # root directory
+                        elif os.path.exists(os.path.join(TransanaGlobal.configData.videoPath, 'default.rtf')):
+                            # If so, let's remember that.
+                            fname = os.path.join(TransanaGlobal.configData.videoPath, 'default.rtf')
+                        # If none of these files exists ...
                         else:
                             # ... then signal that no file was found by setting fname to None
                             fname = False
-                        # If an RTF file or a TXT file was found ...
+                        # If an XML file, an RTF file, or a TXT file was found ...
                         if fname:
                             # ... start exception handling ...
                             try:
@@ -3352,9 +3419,9 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                 f = open(fname, "r")
                                 # Read the file straight into the Transcript Text
                                 tmpTranscript.text = f.read()
-                                # if the text does NOT have an RTF header ...
-                                if (tmpTranscript.text[:5].lower() != '{\\rtf'):
-                                    # ... add "txt" to the start of the file to signal that it's probably a text file
+                                # if we have a text file but no txt header ...
+                                if (fname[-4:].lower() == '.txt') and (tmpTranscript.text[:3].lower() != 'txt'):
+                                    # ... add "txt" to the start of the file to signal that it's a text file
                                     tmpTranscript.text = 'txt\n' + tmpTranscript.text
                                 # Close the file
                                 f.close()
@@ -3644,18 +3711,46 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                 # If the user confirms, or we skip the confirmation programatically ...
                 if result == wx.ID_YES:
+                    # ... initialize a Keyword List
+                    kwList = []
+                    # If data is a list, there are multiple nodes to paste
+                    if isinstance(data, list):
+                        # For each item in the data list ...
+                        for datum in data:
+                            # ... create a Clip Keyword object with the keyword information ...
+                            ckw = ClipKeywordObject.ClipKeyword(datum.parent, datum.text)
+                            # ... and add the Clip Keyword Object to the Keyword List
+                            kwList.append(ckw)
+                    # If there's only ONE object in Data, we have a single Keyword Node object
+                    else:
+                        # ... create a Clip Keyword object with the keyword information ...
+                        ckw = ClipKeywordObject.ClipKeyword(data.parent, data.text)
+                        # ... and add the Clip Keyword Object to the Keyword List
+                        kwList.append(ckw)
+                    
                     # For each Episode in the selected items ...
                     for item in selItems:
                         # ... grab the individual item ...
                         sel = item
                         # If data is a list, there are multiple nodes to paste
                         if isinstance(data, list):
+                            # ... get tthe item's data ...
+                            selData = self.GetPyData(sel)
+                            # ... and propagate the Episode Keywords for this Episode.
+                            self.parent.ControlObject.PropagateEpisodeKeywords(selData.recNum, kwList)
                             # Iterate through the nodes
                             for datum in data:
                                 # ... and paste the data
                                 DragAndDropObjects.ProcessPasteDrop(self, datum, sel, self.cutCopyInfo['action'], confirmations=False)
                         # if data is NOT a list, it is a single node to paste
                         else:
+                            # if we're not displaying confirmations ...
+                            if not confirmations:
+                                # ... get the item's data ...
+                                selData = self.GetPyData(sel)
+                                # ... and propagate the Episode Keywords for this Episode.  (Handled elsewhere if we are displaying
+                                #     confirmations.)
+                                self.parent.ControlObject.PropagateEpisodeKeywords(selData.recNum, kwList)
                             # ... and paste the data
                             DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'], confirmations=confirmations)
             
@@ -3901,7 +3996,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     selData = self.GetPyData(sel)
 
                     # Load the Selected Transcript
-                    transcript = Transcript.Transcript(selData.recNum)
+                    # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+                    transcript = Transcript.Transcript(selData.recNum, skipText=True)
                     # Get user confirmation of the Transcript Delete request
                     if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -4209,6 +4305,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # Add the Clip.
                 self.parent.add_clip(coll_name)
             except:
+                # Create an error message.
                 msg = _('You must make a selection in a transcript to be able to add a Clip.')
                 errordlg = Dialogs.InfoDialog(None, msg)
                 errordlg.ShowModal()
@@ -4595,13 +4692,13 @@ class _DBTreeCtrl(wx.TreeCtrl):
             self.parent.add_note(clipNum=selData.recNum)
 
         elif n == 7:    # Merge Clips
-            # Load the Selected Clip
+            # Load the Selected Clip.  We DO need the Transcript Text
             clip = Clip.Clip(selData.recNum)
-            # We need a list of the Clip Source Transcript numbers.  Initialize that here.
-            trNums = []
-            # now iterate through the clip transcripts and add their source numbers to the list.
+            # We need a list of the Clip Source Transcript information (number, clip_start, clip_stop).  Initialize that here.
+            trInfo = []
+            # now iterate through the clip transcripts and add their source numbers, start, and end times to the list.
             for tr in clip.transcripts:
-                trNums.append(tr.source_transcript)
+                trInfo.append((tr.source_transcript, tr.clip_start, tr.clip_stop))
             # We also need a list of the Clip Media Files and Audio Inclusion information.  Initialize that
             # with the primary media file and audio information
             trFiles = [(clip.media_filename, clip.audio)]
@@ -4610,7 +4707,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # ... adding media filename and audio information.
                 trFiles.append((addFile['filename'], addFile['audio']))
             # Find out if there are adjacent clips
-            adjacentClips = DBInterface.FindAdjacentClips(clip.episode_num, clip.clip_start, clip.clip_stop, trNums, trFiles)
+            adjacentClips = DBInterface.FindAdjacentClips(clip.episode_num, clip.clip_start, clip.clip_stop, trInfo, trFiles)
             # If there are NO adjacent (mergeable) clips ...
             if len(adjacentClips) == 0:
                 # ... build and display an appropriate message.
@@ -4641,7 +4738,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     try:
                         # For all adjacent clips ...
                         for tmpClipData in adjacentClips:
-                            # ... create a clip object ...
+                            # ... create a clip object ...  (We CANNOT speed the load by not loading the Clip Transcript(s),
+                            #                                as we need to lock Clip Transcripts!)
                             tmpClip = Clip.Clip(tmpClipData[0])
                             # ... lock that clip object ...
                             tmpClip.lock_record()
@@ -4660,7 +4758,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         # Now exit this method, as the merge has failed.
                         return
                         
-                    # Now create the Cliip Properties form, passing the mergeable clips list to signal that a Merge is requested.
+                    # Now create the Clip Properties form, passing the mergeable clips list to signal that a Merge is requested.
                     dlg = ClipPropertiesForm.ClipPropertiesForm(self, -1, _("Merge Clips"), clip, mergeList=adjacentClips)
                     # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
                     contin = True
@@ -4747,7 +4845,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                                 # If a Merge Clip has been selected in the Merge Dialog ...
                                 if dlg.mergeItemIndex > -1:
-                                    # ... get the merged Clip, so we can delete it
+                                    # ... get the merged Clip, so we can delete it.  Don't skipText!
                                     mergedClip = Clip.Clip(dlg.mergeList[dlg.mergeItemIndex][0])
                                     # If the merged clip contains KW Examples, we need to rename the example nodes.
                                     # Iterate through the list of keywords
@@ -4911,7 +5009,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     # ... and get the item's data
                     selData = self.GetPyData(sel)
 
-                    # Load the Selected Clip
+                    # Load the Selected Clip.  We DO need the Clip Transcript(s) here
                     clip = Clip.Clip(selData.recNum)
                     # Remember the Clip Number, to use after the clip has been deleted
                     clipNum = clip.number
@@ -5008,7 +5106,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             errordlg.Destroy()
 
         elif n == 9:    # Locate Clip in Episode
-            # Load the Clip
+            # Load the Clip.  We DO need the Clip Transcript(s) here
             clip = Clip.Clip(clip_name, coll_name, coll_parent_num)
             # We need to track what this clip's source transcripts are.
             # Initialize a list to store them.
@@ -5024,7 +5122,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # If all source transcripts are KNOWN ...
                 if not 0 in sourceTranscripts:
                     # ... load the SOURCE transcript for the first Clip Transcript
-                    transcript = Transcript.Transcript(clip.transcripts[0].source_transcript)
+                    # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+                    transcript = Transcript.Transcript(clip.transcripts[0].source_transcript, skipText=True)
                 # If any of the transcripts are orphans ...
                 else:
 ##                    # Get the list of possible replacement source transcripts
@@ -5062,28 +5161,35 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     self.parent.ControlObject.activeTranscript = 0
                     # Load the source Transcript
                     self.parent.ControlObject.LoadTranscript(episode.series_id, episode.id, transcript.id)
-                    # We need to signal that the Visualization needs to be re-drawn.
-                    self.parent.ControlObject.ChangeVisualization()
-                    # For each Clip transcript except the first one (which has already been loaded) ...
-                    for tr in clip.transcripts[1:]:
-                        # ... load the source Transcript as an Additional Transcript
-                        self.parent.ControlObject.OpenAdditionalTranscript(tr.source_transcript)
-                    # Mark the Clip as the current selection.  (This needs to be done AFTER all transcripts have been opened.)
-                    self.parent.ControlObject.SetVideoSelection(clip.clip_start, clip.clip_stop)
+                    # Check to see if the load succeeded before continuing!
+                    if self.parent.ControlObject.currentObj != None:
+                        # We need to signal that the Visualization needs to be re-drawn.
+                        self.parent.ControlObject.ChangeVisualization()
+                        # For each Clip transcript except the first one (which has already been loaded) ...
+                        for tr in clip.transcripts[1:]:
+                            # ... load the source Transcript as an Additional Transcript
+                            self.parent.ControlObject.OpenAdditionalTranscript(tr.source_transcript)
+                        # Mark the Clip as the current selection.  (This needs to be done AFTER all transcripts have been opened.)
+                        self.parent.ControlObject.SetVideoSelection(clip.clip_start, clip.clip_stop)
 
-                    # We need the screen to update here, before the next step.
-                    wx.Yield()
-                    # Now let's go through each Transcript Window ...
-                    for trWin in self.parent.ControlObject.TranscriptWindow:
-                        # ... move the cursor to the TRANSCRIPT's Start Time (not the Clip's)
-                        trWin.dlg.editor.scroll_to_time(clip.transcripts[trWin.transcriptWindowNumber].clip_start + 10)
-                        # .. and select to the TRANSCRIPT's End Time (not the Clip's)
-                        trWin.dlg.editor.select_find(str(clip.transcripts[trWin.transcriptWindowNumber].clip_stop))
-                        # update the selection text
-                        self.parent.ControlObject.UpdateSelectionTextLater(trWin.transcriptWindowNumber)
-                        #wx.CallLater(200, self.UpdateSelectionTextLater, winNum)
+                        # We need the screen to update here, before the next step.
+                        wx.Yield()
+                        # Now let's go through each Transcript Window ...
+                        for trWin in self.parent.ControlObject.TranscriptWindow:
+                            # ... move the cursor to the TRANSCRIPT's Start Time (not the Clip's)
+                            trWin.dlg.editor.scroll_to_time(clip.transcripts[trWin.transcriptWindowNumber].clip_start + 10)
+                            # .. and select to the TRANSCRIPT's End Time (not the Clip's)
+                            trWin.dlg.editor.select_find(str(clip.transcripts[trWin.transcriptWindowNumber].clip_stop))
+                            # update the selection text
+                            wx.CallLater(50, trWin.dlg.editor.ShowCurrentSelection)
             except:
                 (exctype, excvalue, traceback) = sys.exc_info()
+
+                if DEBUG:
+                    print exctype, excvalue
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+                
                 if len(clip.transcripts) == 1:
                     msg = _('The Transcript this Clip was created from cannot be loaded.\nMost likely, the transcript has been deleted.')
                 else:
@@ -5093,8 +5199,18 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 result = dlg.ShowModal()
                 dlg.Destroy()
 
-        elif n == 10:    # Properties
-            # Load the Clip
+        elif n == 10:    # Export Clip Video
+            # Load the Clip.  We can speed the load by not loading the Clip Transcript(s).
+            clip = Clip.Clip(selData.recNum, skipText=True)
+            # Create the Media Conversion dialog, including Clip Information so we export only the clip segment
+            convertDlg = MediaConvert.MediaConvert(self, clip.media_filename, clip.clip_start - clip.offset, clip.clip_stop - clip.clip_start, clip.id)
+            # Show the Media Conversion Dialog
+            convertDlg.ShowModal()
+            # Destroy the Media Conversion Dialog
+            convertDlg.Destroy()
+            
+        elif n == 11:    # Properties
+            # Load the Clip.  We DO need the Clip Transcript(s) here.
             clip = Clip.Clip(selData.recNum)
             # Edit the Clip properties
             self.parent.edit_clip(clip)
@@ -5155,12 +5271,20 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
             if result == wx.ID_YES:
                 self.cutCopyInfo['action'] = 'Move'    # Functionally, "Cut" is the same as Drag/Drop Move
-                self.cutCopyInfo['sourceItem'] = sel
+                # If there's only one selected item ...
+                if len(selItems) == 1:
+                    self.cutCopyInfo['sourceItem'] = sel
+                else:
+                    self.cutCopyInfo['sourceItem'] = selItems
                 self.OnCutCopyBeginDrag(evt)
 
         elif n == 1:    # Copy
             self.cutCopyInfo['action'] = 'Copy'
-            self.cutCopyInfo['sourceItem'] = sel
+            # If there's only one selected item ...
+            if len(selItems) == 1:
+                self.cutCopyInfo['sourceItem'] = sel
+            else:
+                self.cutCopyInfo['sourceItem'] = selItems
             self.OnCutCopyBeginDrag(evt)
 
         elif n == 2:      # Open
@@ -5635,6 +5759,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # This is, of course, incorrect, and we must replace it with the Episode Length.
                 if endTime <= 0:
                     endTime = self.parent.ControlObject.currentObj.tape_length
+                videoCheckboxData = self.parent.ControlObject.GetVideoCheckboxDataForClips(startTime)
             # If our source is a Clip ...
             elif isinstance(self.parent.ControlObject.currentObj, Clip.Clip):
                 # ... we need the ControlObject's currentObj's originating episode number
@@ -5647,6 +5772,46 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # This is, of course, incorrect, and we must replace it with the Clip Stop Time.
                 if endTime <= 0:
                     endTime = self.parent.ControlObject.currentObj.clip_stop
+
+                # We need to determine what EPISODE media files are used in the CLIP we're quick-clipping from.
+                # Get temporary Episode and Clip data
+                tmpEpisode = Episode.Episode(episodeNum)
+                tmpClip = self.parent.ControlObject.currentObj
+                # First, let's find out if the EPISODE's main file is included in the Clip.
+                if tmpEpisode.media_filename == tmpClip.media_filename:
+                    # If so, its video would be checked, and the CLIP's audio value tells us if its audio would be checked.
+                    videoCheckboxData = [(True, tmpClip.audio)]
+                # If not ...
+                else:
+                    # ... then neither box would be checked.
+                    videoCheckboxData = [(False, False)]
+                # Now let's iterate through the EPISODE's additional media files
+                for addEpVidData in tmpEpisode.additional_media_files:
+                    # If this Episode Additional Media File is the Clip's Main Media File ...
+                    if (addEpVidData['filename'] == tmpClip.media_filename):
+                        # ... then the Video Checkbox would have been checked, and the object tells us if audio was too.
+                        videoCheckboxData.append((True, addEpVidData['audio']))
+                    # If the Clip's main media file was already established, we need to check the Episode additional files
+                    # against the Clip Additional media files.
+                    else:
+                        # Assume the video will not be found ...
+                        vidFound = False
+                        # ... and that the audio should NOT be included.
+                        audIncluded = False
+                        # Iterate throught the CLIP additional media files ...
+                        for addClipVidData in tmpClip.additional_media_files:
+                            # If the Clip Media File matches the Episode Media File ...
+                            if addClipVidData['filename'] == addEpVidData['filename']:
+                                # ... then we've found the Media File!
+                                vidFound = True
+                                # Note if audio should be included, getting data from the Clip Object
+                                audIncluded = addClipVidData['audio']
+                                # Stop looking!
+                                break
+                        # Add info to videoCheckboxData to indicate whether the Episode's media file and audio were checked when
+                        # the source clip was created.
+                        videoCheckboxData.append((vidFound, audIncluded))
+
             # Initialize the Keyword List
             kwList = []
             # For each Keyword in the selected items ...
@@ -5658,35 +5823,39 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # Add the keyword to the Keyword List
                 kwList.append((kw_group, kw_name))
             # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
-            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, videoCheckboxData=self.parent.ControlObject.GetVideoCheckboxDataForClips(startTime))
+            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, videoCheckboxData=videoCheckboxData)
             # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
             # because drag and drop is an alternate way to create a Quick Clip.
             DragAndDropObjects.CreateQuickClip(clipData, kwList[0][0], kwList[0][1], self, extraKeywords=kwList[1:])
             
         elif n == 5:    # Create Multi-transcript Quick Clip
-            # Get the Quick Clip Collection information
-            (coll_num, coll_name, coll_created) = DBInterface.locate_quick_clips_collection()
-            # Create the appropriate Clip object
-            tempClip = self.CreateMultiTranscriptClip(coll_num, coll_name)
-            # Initialize the Episode Number to 0
-            episodeNum = tempClip.episode_num
-            # Initialize Transcript Number to 0, which signals multi-transcript Quick Clip
-            transcriptNum = 0
-            # Initialize the Keyword List
-            kwList = []
-            # For each Keyword in the selected items ...
-            for item in selItems:
-                # Get the item's data
-                selData = self.GetPyData(item)
-                kw_group = self.GetItemText(self.GetItemParent(item))
-                kw_name = self.GetItemText(item)
-                # Add the keyword to the Keyword List
-                kwList.append((kw_group, kw_name))
-            # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
-            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, tempClip.clip_start, tempClip.clip_stop, tempClip, videoCheckboxData=self.parent.ControlObject.GetVideoCheckboxDataForClips(tempClip.clip_start))
-            # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
-            # because drag and drop is an alternate way to create a Quick Clip.
-            DragAndDropObjects.CreateQuickClip(clipData, kwList[0][0], kwList[0][1], self, extraKeywords=kwList[1:])
+            # If our source is an Episode ...
+            if isinstance(self.parent.ControlObject.currentObj, Episode.Episode):
+                # Get the Quick Clip Collection information
+                (coll_num, coll_name, coll_created) = DBInterface.locate_quick_clips_collection()
+                # Create the appropriate Clip object
+                tempClip = self.CreateMultiTranscriptClip(coll_num, coll_name)
+                # If the Clip Object is created ...
+                if tempClip != None:
+                    # Initialize the Episode Number to 0
+                    episodeNum = tempClip.episode_num
+                    # Initialize Transcript Number to 0, which signals multi-transcript Quick Clip
+                    transcriptNum = 0
+                    # Initialize the Keyword List
+                    kwList = []
+                    # For each Keyword in the selected items ...
+                    for item in selItems:
+                        # Get the item's data
+                        selData = self.GetPyData(item)
+                        kw_group = self.GetItemText(self.GetItemParent(item))
+                        kw_name = self.GetItemText(item)
+                        # Add the keyword to the Keyword List
+                        kwList.append((kw_group, kw_name))
+                    # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
+                    clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, tempClip.clip_start, tempClip.clip_stop, tempClip, videoCheckboxData=self.parent.ControlObject.GetVideoCheckboxDataForClips(tempClip.clip_start))
+                    # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
+                    # because drag and drop is an alternate way to create a Quick Clip.
+                    DragAndDropObjects.CreateQuickClip(clipData, kwList[0][0], kwList[0][1], self, extraKeywords=kwList[1:])
 
         elif n == 6:    # Quick Search
             # request a Search, passing in the keyword group : keyword information
@@ -5733,8 +5902,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             self.OnItemActivated(evt)                            # Use the code for double-clicking the Keyword Example
 
         elif n == 1:    # Locate this Clip
-            clipname = self.GetItemText(sel)                    # Capture Clip Name
-            tempClip = Clip.Clip(selData.recNum)
+            # Capture Clip Name
+            clipname = self.GetItemText(sel)
+            # Load the Clip.  To save time, we can skip the Clip Transcripts.
+            tempClip = Clip.Clip(selData.recNum, skipText=True)
             tempCollection = Collection.Collection(tempClip.collection_num)
             collectionList = [tempCollection.id]                     # Initialize a List
             while tempCollection.parent != 0:
@@ -6098,7 +6269,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 self.DropSearchResult(sel)
             
         elif n == 5:    # Locate Clip in Episode
-            # Load the Clip
+            # Load the Clip.  We DO need the Clip Transcripts here.
             clip = Clip.Clip(selData.recNum)
 
             # Start exception handling to catch failures due to orphaned clips
@@ -6109,36 +6280,37 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # If the first transcript has a known source (isn't a known orphan) ...
                 if clip.transcripts[0].source_transcript != 0:
                     # ... load the SOURCE transcript for the first Clip Transcript
-                    transcript = Transcript.Transcript(clip.transcripts[0].source_transcript)
+                    # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+                    transcript = Transcript.Transcript(clip.transcripts[0].source_transcript, skipText=True)
                 # If the first transcript is a KNOWN orphan ...
                 else:
-                    # Get the list of possible replacement source transcripts
-                    transcriptList = DBInterface.list_transcripts(episode.series_id, episode.id)
-                    # If only 1 transcript is in the list ...
-                    if len(transcriptList) == 1:
-                        # ... use that.
-                        transcript = Transcript.Transcript(transcriptList[0][0])
-                    # If there are NO transcripts (perhaps because the Episode is gone, perhaps because it has no Transcripts) ...
-                    elif len(transcriptList) == 0:
-                        # ... raise an exception.  We can't locate a transcript if the Episode is gone or if it has no Transcripts.
-                        raise RecordNotFoundError ('Transcript', 0)
-                    # If there are multiple transcripts to choose from ...
-                    else:
-                        # Initialize a list
-                        strList = []
-                        # Iterate through the list of transcripts ...
-                        for (transcriptNum, transcriptID, episodeNum) in transcriptList:
-                            # ... and extract the Transcript IDs
-                            strList.append(transcriptID)
-                        # Create a dialog where the user can choose one Transcript
-                        dlg = wx.SingleChoiceDialog(self, _('Transana cannot identify the Transcript where this clip originated.\nPlease select the Transcript that was used to create this Clip.'),
-                                                    _('Transana Information'), strList, wx.OK | wx.CANCEL)
-                        # Show the dialog.  If the user presses OK ...
-                        if dlg.ShowModal() == wx.ID_OK:
-                            # ... use the selected transcript
-                            transcript = Transcript.Transcript(dlg.GetStringSelection(), episode.number)
-                        # If the user presses Cancel (Esc, etc.) ...
-                        else:
+##                    # Get the list of possible replacement source transcripts
+##                    transcriptList = DBInterface.list_transcripts(episode.series_id, episode.id)
+##                    # If only 1 transcript is in the list ...
+##                    if len(transcriptList) == 1:
+##                        # ... use that.
+##                        transcript = Transcript.Transcript(transcriptList[0][0])
+##                    # If there are NO transcripts (perhaps because the Episode is gone, perhaps because it has no Transcripts) ...
+##                    elif len(transcriptList) == 0:
+##                        # ... raise an exception.  We can't locate a transcript if the Episode is gone or if it has no Transcripts.
+##                        raise RecordNotFoundError ('Transcript', 0)
+##                    # If there are multiple transcripts to choose from ...
+##                    else:
+##                        # Initialize a list
+##                        strList = []
+##                        # Iterate through the list of transcripts ...
+##                        for (transcriptNum, transcriptID, episodeNum) in transcriptList:
+##                            # ... and extract the Transcript IDs
+##                            strList.append(transcriptID)
+##                        # Create a dialog where the user can choose one Transcript
+##                        dlg = wx.SingleChoiceDialog(self, _('Transana cannot identify the Transcript where this clip originated.\nPlease select the Transcript that was used to create this Clip.'),
+##                                                    _('Transana Information'), strList, wx.OK | wx.CANCEL)
+##                        # Show the dialog.  If the user presses OK ...
+##                        if dlg.ShowModal() == wx.ID_OK:
+##                            # ... use the selected transcript
+##                            transcript = Transcript.Transcript(dlg.GetStringSelection(), episode.number)
+##                        # If the user presses Cancel (Esc, etc.) ...
+##                        else:
                             # ... raise an exception
                             raise RecordNotFoundError ('Transcript', 0)
                 # As long as a Control Object is defines (which it always will be)
@@ -6176,7 +6348,15 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 result = dlg.ShowModal()
                 dlg.Destroy()
 
-        elif n == 6:    # Rename
+        elif n == 6:    # Locate Clip in Collection
+            # Load the Clip.  To save time, we can skip the Clip Transcripts.
+            tmpClip = Clip.Clip(selData.recNum, skipText=True)
+            # Get the Node Data for the Clip
+            nodeList = (_('Collections'),) + tmpClip.GetNodeData()
+            # Highlight that node
+            self.select_Node(nodeList, 'ClipNode')
+
+        elif n == 7:    # Rename
             self.EditLabel(sel)
             
         else:
@@ -6185,6 +6365,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
     def CreateMultiTranscriptClip(self, coll_num, coll_name):
         # Begin exception handling
         try:
+            # Create a Popup Dialog
+            tmpDlg = Dialogs.PopupDialog(None, _("Creating Clip"), _("Gathering Clip Information"))
             # Get the Transcript Selection information from the ControlObject.
             transcriptSelectionInfo = self.parent.ControlObject.GetMultipleTranscriptSelectionInfo()
             # Create a Clip Object
@@ -6193,10 +6375,15 @@ class _DBTreeCtrl(wx.TreeCtrl):
             if type(self.parent.ControlObject.currentObj) == type(Episode.Episode()):
                 # ... then the Clip's Episde Number is the Episode's number ... (from the Control Object's current object, the Episode)
                 tempClip.episode_num = self.parent.ControlObject.currentObj.number
+                # Load the Episode that is connected to the Clip's Originating Transcript
+                sourceObj = Episode.Episode(tempClip.episode_num)
+
             # If this clip ISN'T from an Episode, it's from another Clip ...
             else:
                 # ... so we get the new clip's Episode number from the original clip's Episode Number
                 tempClip.episode_num = self.parent.ControlObject.currentObj.episode_num
+                # Load the Clip we're starting from.  (Get a fresh copy in case KEYWORDS have changed!)
+                sourceObj = Clip.Clip(self.parent.ControlObject.currentObj.number)
             # Initialize the clip start time to the end of the media file
             earliestStartTime = self.parent.ControlObject.GetMediaLength(True)
             # Initialise the clip end time to the beginning of the media file
@@ -6289,9 +6476,21 @@ class _DBTreeCtrl(wx.TreeCtrl):
             tempClip.clip_stop = latestEndTime
             # The new clip's Sort Order is the max sort order Value.  (We change it later!)
             tempClip.sort_order = DBInterface.getMaxSortOrder(tempClip.collection_num) + 1
+
+            # We need to set up the initial keywords.
+            # Iterate through the source object's Keyword List ...
+            for clipKeyword in sourceObj.keyword_list:
+                # ... and copy each keyword to the new Clip
+                tempClip.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
+            # Remove the Popup Dialog
+            tmpDlg.Destroy()
+
             return tempClip
         # Catch exceptions
         except:
+
+            # Remove the Popup Dialog
+            tmpDlg.Destroy()
 
             if DEBUG:
                 import traceback
@@ -6612,6 +6811,15 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     # Determine if the Add Multi-transcript Clip menu item should be enabled
                     if (len(self.parent.ControlObject.TranscriptWindow) == 1):
                         menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), False)
+                    # Load the clip being right-clicked.  To save time, we can skip the Clip Transcripts.
+                    tmpClip = Clip.Clip(sel_item_data.recNum, skipText=True)
+                    # Get the file extension of the clip's video
+                    (nm, ext) = os.path.splitext(tmpClip.media_filename)
+                    # Determine if the media format allows "Export Clip Video"
+                    # We CANNOT export from multiple simultaneous media files.
+                    if (len(tmpClip.additional_media_files) > 0):
+                        # ... so disable the export clip video menu option
+                        menu.Enable(menu.FindItem(_('Export Clip Video')), False)
                 # If there are multiple items selected ...
                 else:
                     # Enable Cut menu item
@@ -6648,8 +6856,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # Determine if the Create Quick Clip item should be enabled
                 if (self.parent.ControlObject.currentObj != None):
                     menu.Enable(menu.FindItem(_('Create Quick Clip')), True)
-                    # Determine if the Add Multi-transcript Clip menu item should be enabled
-                    if (len(self.parent.ControlObject.TranscriptWindow) > 1):
+                    # Determine if the Add Multi-transcript Clip menu item should be enabled.
+                    # 1.  More than one open transcript.  2. Episode, not Clip, loaded
+                    if (len(self.parent.ControlObject.TranscriptWindow) > 1) and \
+                       isinstance(self.parent.ControlObject.currentObj, Episode.Episode):
                         menu.Enable(menu.FindItem(_('Create Multi-transcript Quick Clip')), True)
                     else:
                         menu.Enable(menu.FindItem(_('Create Multi-transcript Quick Clip')), False)
@@ -6679,6 +6889,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             elif sel_item_data.nodetype in ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
                 # If there are multiple items selected ...
                 if len(self.GetSelections()) > 1:
+                    # Enable Cut menu item
+                    menu.Enable(menu.FindItem(_('Cut')), True)
+                    # Enable Copy menu item
+                    menu.Enable(menu.FindItem(_('Copy')), True)
                     # Enable Delete menu item
                     menu.Enable(menu.FindItem(_('Delete Note')), True)
                     
@@ -6771,161 +6985,165 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
     def OnItemActivated(self, event):
         """ Handles the double-click selection of items in the Database Tree """
-        # Identify the selected item.  Most uses default to the FIRST selected item.
-        # (Only multiple transcript selections make sense here.)
-        sel_item = self.GetSelections()[0]
-        # Get the data associated with the selected item
-        sel_item_data = self.GetPyData(sel_item)
-        # The ControlObject must be registered for anything to work
-        if self.parent.ControlObject != None:
+        # If at least one item in the database tree is selected ...
+        if len(self.GetSelections()) > 0:
+            # Identify the selected item.  Most uses default to the FIRST selected item.
+            # (Only multiple transcript selections make sense here.)
+            sel_item = self.GetSelections()[0]
+            # Get the data associated with the selected item
+            sel_item_data = self.GetPyData(sel_item)
+            # The ControlObject must be registered for anything to work
+            if self.parent.ControlObject != None:
 
-            # if the item is of the appropriate type and is not expanded ...
-            if sel_item_data.nodetype in ['SeriesRootNode', 'SeriesNode', 'EpisodeNode', 'CollectionsRootNode', 'CollectionNode', \
-                                          'KeywordRootNode', 'KeywordGroupNode', 'SearchSeriesNode', 'SearchEpisodeNode', \
-                                          'SearchCollectionNode'] and \
-               self.ItemHasChildren(sel_item) and \
-               not self.IsExpanded(sel_item):
+                # if the item is of the appropriate type and is not expanded ...
+                if sel_item_data.nodetype in ['SeriesRootNode', 'SeriesNode', 'EpisodeNode', 'CollectionsRootNode', 'CollectionNode', \
+                                              'KeywordRootNode', 'KeywordGroupNode', 'SearchSeriesNode', 'SearchEpisodeNode', \
+                                              'SearchCollectionNode'] and \
+                   self.ItemHasChildren(sel_item) and \
+                   not self.IsExpanded(sel_item):
 
-                # expand it!
-                self.Expand(sel_item)
-                    
-            # If it's not of the appropriate type, or it's already expanded ...
-            else:
-                # If the item is the Series Root, Add a Series
-                if sel_item_data.nodetype == 'SeriesRootNode':
-                    # Change the eventID to match "Add Series"
-                    event.SetId(self.cmd_id_start["SeriesRootNode"])
-                    # Call the Series Root Event Processor
-                    self.OnSeriesRootCommand(event)
+                    # expand it!
+                    self.Expand(sel_item)
+                        
+                # If it's not of the appropriate type, or it's already expanded ...
+                else:
+                    # If the item is the Series Root, Add a Series
+                    if sel_item_data.nodetype == 'SeriesRootNode':
+                        # Change the eventID to match "Add Series"
+                        event.SetId(self.cmd_id_start["SeriesRootNode"])
+                        # Call the Series Root Event Processor
+                        self.OnSeriesRootCommand(event)
 
-                # If the item is a Series, Add an Episode
-                elif sel_item_data.nodetype == 'SeriesNode':
-                    # Change the eventID to match "Add Episode"
-                    event.SetId(self.cmd_id_start["SeriesNode"] + 1)
-                    # Call the Series Event Processor
-                    self.OnSeriesCommand(event)
-                    
-                # If the item is an Episode, Add a Transcript
-                elif sel_item_data.nodetype == 'EpisodeNode':
-                    # Change the eventID to match "Add Transcript"
-                    event.SetId(self.cmd_id_start["EpisodeNode"] + 2)
-                    # Call the Episode Event Processor
-                    self.OnEpisodeCommand(event)
-                    
-                # If the item is a Transcript, load the appropriate objects
-                elif (sel_item_data.nodetype == 'TranscriptNode') or (sel_item_data.nodetype == 'SearchTranscriptNode'):
-                    # Get the list of all selected transcripts
-                    sel_items = self.GetSelections()
-                    # Set the Control Object's Active Transcript to 0 to signal the opening of a NEW trascript.
-                    self.parent.ControlObject.activeTranscript = 0
-                    # Signal that we need to open a first transcript
-                    firstTr = True
-                    # Iterate through the selected items
-                    for sel_item in sel_items:
-                        # If we're looking at the first item ...
-                        if firstTr:
-                            # Capture the Series Name
-                            seriesname=self.GetItemText(self.GetItemParent(self.GetItemParent(sel_item)))
-                            # Capture the Episode Name
-                            episodename=self.GetItemText(self.GetItemParent(sel_item))
-                            # Capture the Transcript Name
-                            transcriptname=self.GetItemText(sel_item)
-                            # Load the first transcript via the ControlObject
-                            self.parent.ControlObject.LoadTranscript(seriesname, episodename, transcriptname)
-                            # Signal that we now have loaded the first transcript
-                            firstTr = False
-                        # If we are looking at the second or later items ...
-                        else:
-                            # Get the item's data
-                            selData = self.GetPyData(sel_item)
-                            # Open the transcript item as an additional Transcript
-                            self.parent.ControlObject.OpenAdditionalTranscript(selData.recNum, seriesname, episodename)
+                    # If the item is a Series, Add an Episode
+                    elif sel_item_data.nodetype == 'SeriesNode':
+                        # Change the eventID to match "Add Episode"
+                        event.SetId(self.cmd_id_start["SeriesNode"] + 1)
+                        # Call the Series Event Processor
+                        self.OnSeriesCommand(event)
+                        
+                    # If the item is an Episode, Add a Transcript
+                    elif sel_item_data.nodetype == 'EpisodeNode':
+                        # Change the eventID to match "Add Transcript"
+                        event.SetId(self.cmd_id_start["EpisodeNode"] + 2)
+                        # Call the Episode Event Processor
+                        self.OnEpisodeCommand(event)
+                        
+                    # If the item is a Transcript, load the appropriate objects
+                    elif (sel_item_data.nodetype == 'TranscriptNode') or (sel_item_data.nodetype == 'SearchTranscriptNode'):
+                        # Get the list of all selected transcripts
+                        sel_items = self.GetSelections()
+                        # Set the Control Object's Active Transcript to 0 to signal the opening of a NEW trascript.
+                        self.parent.ControlObject.activeTranscript = 0
+                        # Signal that we need to open a first transcript
+                        firstTr = True
+                        # Iterate through the selected items
+                        for sel_item in sel_items:
+                            # If we're looking at the first item ...
+                            if firstTr:
+                                # Capture the Series Name
+                                seriesname=self.GetItemText(self.GetItemParent(self.GetItemParent(sel_item)))
+                                # Capture the Episode Name
+                                episodename=self.GetItemText(self.GetItemParent(sel_item))
+                                # Capture the Transcript Name
+                                transcriptname=self.GetItemText(sel_item)
+                                # Load the first transcript via the ControlObject
+                                self.parent.ControlObject.LoadTranscript(seriesname, episodename, transcriptname)
+                                # Signal that we now have loaded the first transcript
+                                firstTr = False
+                            # If we are looking at the second or later items ...
+                            else:
+                                # If the first Transcript loaded correctly ...
+                                if self.parent.ControlObject.activeTranscript != -1:
+                                    # Get the item's data
+                                    selData = self.GetPyData(sel_item)
+                                    # Open the transcript item as an additional Transcript
+                                    self.parent.ControlObject.OpenAdditionalTranscript(selData.recNum, seriesname, episodename)
 
-                # If the item is the Collection Root, Add a Collection
-                elif sel_item_data.nodetype == 'CollectionsRootNode':
-                    # Change the eventID to match "Add Collection"
-                    event.SetId(self.cmd_id_start['CollectionsRootNode'] + 1)
-                    # Call the Collection Root Event Processor
-                    self.OnCollRootCommand(event)
+                    # If the item is the Collection Root, Add a Collection
+                    elif sel_item_data.nodetype == 'CollectionsRootNode':
+                        # Change the eventID to match "Add Collection"
+                        event.SetId(self.cmd_id_start['CollectionsRootNode'] + 1)
+                        # Call the Collection Root Event Processor
+                        self.OnCollRootCommand(event)
 
-                # If the item is a Collection, Add a Clip
-                elif sel_item_data.nodetype == 'CollectionNode':
-                    # If there IS an object loaded in the main interface ...
-                    if self.parent.ControlObject.currentObj != None:
-                        # ... Change the eventID to match "Add Clip"
-                        event.SetId(self.cmd_id_start["CollectionNode"] + 3)
-                        # Call the Collection Event Processor
-                        self.OnCollectionCommand(event)
+                    # If the item is a Collection, Add a Clip
+                    elif sel_item_data.nodetype == 'CollectionNode':
+                        # If there IS an object loaded in the main interface ...
+                        if self.parent.ControlObject.currentObj != None:
+                            # ... Change the eventID to match "Add Clip"
+                            event.SetId(self.cmd_id_start["CollectionNode"] + 3)
+                            # Call the Collection Event Processor
+                            self.OnCollectionCommand(event)
 
-                # If the item is a Clip, load the appropriate object.
-                elif (sel_item_data.nodetype == 'ClipNode') or (sel_item_data.nodetype == 'SearchClipNode'):
+                    # If the item is a Clip, load the appropriate object.
+                    elif (sel_item_data.nodetype == 'ClipNode') or (sel_item_data.nodetype == 'SearchClipNode'):
+                            self.parent.ControlObject.LoadClipByNumber(sel_item_data.recNum)  # Load everything via the ControlObject
+
+                    # If the item is the Keyword Root, Add a Keyword Group
+                    elif sel_item_data.nodetype == 'KeywordRootNode':
+                        # Change the eventID to match "Add Keyword Group"
+                        event.SetId(self.cmd_id_start["KeywordRootNode"])
+                        # Call the Keyword Root Event Processor
+                        self.OnKwRootCommand(event)
+
+                    # If the item is a Keyword Group, Add a Keyword
+                    elif sel_item_data.nodetype == 'KeywordGroupNode':
+                        # Change the eventID to match "Add Keyword"
+                        event.SetId(self.cmd_id_start["KeywordGroupNode"] + 1)
+                        # Call the Keyword Group Event Processor
+                        self.OnKwGroupCommand(event)
+
+                    # If the item is a Keyword, Display its properties (?)
+                    elif sel_item_data.nodetype == 'KeywordNode':
+                        # If there IS an object loaded in the main interface ...
+                        if self.parent.ControlObject.currentObj != None:
+                            # ... change the eventID to match "Add Quick Clip"
+                            event.SetId(self.cmd_id_start["KeywordNode"] + 4)
+                            # Call the Keyword Event Processor
+                            self.OnKwCommand(event)
+
+                    elif sel_item_data.nodetype == 'KeywordExampleNode':
+                        # Load the Clip
+                        sel_item_data = self.GetPyData(sel_item)                 # Get the Collection's data so we can test its nodetype
                         self.parent.ControlObject.LoadClipByNumber(sel_item_data.recNum)  # Load everything via the ControlObject
 
-                # If the item is the Keyword Root, Add a Keyword Group
-                elif sel_item_data.nodetype == 'KeywordRootNode':
-                    # Change the eventID to match "Add Keyword Group"
-                    event.SetId(self.cmd_id_start["KeywordRootNode"])
-                    # Call the Keyword Root Event Processor
-                    self.OnKwRootCommand(event)
+                    elif sel_item_data.nodetype in ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
+                        # We store the record number in the data for the node item
+                        num = self.GetPyData(sel_item).recNum
+                        # Open the note that was selected
+                        n = Note.Note(num)
+                        try:
+                            # If the NotesBrowser is currently open ...
+                            if (self.parent.ControlObject.NotesBrowserWindow != None):
+                                # ... make the Notes Browser visible, on top of other windows
+                                wx.CallAfter(self.parent.ControlObject.NotesBrowserWindow.Raise)
+                                # If the window has been minimized ...
+                                if self.parent.ControlObject.NotesBrowserWindow.IsIconized():
+                                    # ... then restore it to its proper size!
+                                    self.parent.ControlObject.NotesBrowserWindow.Iconize(False)
+                                # Open the appropriate note
+                                self.parent.ControlObject.NotesBrowserWindow.OpenNote(num)
+                            # If the Notes Browser is NOT currently open, 
+                            else:
+                                # ... Obtain a record lock on the note
+                                n.lock_record()
+                                # Load the note into the Note Editor
+                                noteedit = NoteEditor.NoteEditor(self, n.text)
+                                # Get User Input
+                                n.text = noteedit.get_text()
+                                # Save the user's changes to the note
+                                n.db_save()
+                                # Lock the Note
+                                n.unlock_record()
+                        # Handle the exception if the record is locked
+                        except RecordLockedError, e:
+                            self.parent.handle_locked_record(e, _("Note"), n.id)
 
-                # If the item is a Keyword Group, Add a Keyword
-                elif sel_item_data.nodetype == 'KeywordGroupNode':
-                    # Change the eventID to match "Add Keyword"
-                    event.SetId(self.cmd_id_start["KeywordGroupNode"] + 1)
-                    # Call the Keyword Group Event Processor
-                    self.OnKwGroupCommand(event)
-
-                # If the item is a Keyword, Display its properties (?)
-                elif sel_item_data.nodetype == 'KeywordNode':
-                    # If there IS an object loaded in the main interface ...
-                    if self.parent.ControlObject.currentObj != None:
-                        # ... change the eventID to match "Add Quick Clip"
-                        event.SetId(self.cmd_id_start["KeywordNode"] + 4)
-                        # Call the Keyword Event Processor
-                        self.OnKwCommand(event)
-
-                elif sel_item_data.nodetype == 'KeywordExampleNode':
-                    # Load the Clip
-                    sel_item_data = self.GetPyData(sel_item)                 # Get the Collection's data so we can test its nodetype
-                    self.parent.ControlObject.LoadClipByNumber(sel_item_data.recNum)  # Load everything via the ControlObject
-
-                elif sel_item_data.nodetype in ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
-                    # We store the record number in the data for the node item
-                    num = self.GetPyData(sel_item).recNum
-                    # Open the note that was selected
-                    n = Note.Note(num)
-                    try:
-                        # If the NotesBrowser is currently open ...
-                        if (self.parent.ControlObject.NotesBrowserWindow != None):
-                            # ... make the Notes Browser visible, on top of other windows
-                            wx.CallAfter(self.parent.ControlObject.NotesBrowserWindow.Raise)
-                            # If the window has been minimized ...
-                            if self.parent.ControlObject.NotesBrowserWindow.IsIconized():
-                                # ... then restore it to its proper size!
-                                self.parent.ControlObject.NotesBrowserWindow.Iconize(False)
-                            # Open the appropriate note
-                            self.parent.ControlObject.NotesBrowserWindow.OpenNote(num)
-                        # If the Notes Browser is NOT currently open, 
-                        else:
-                            # ... Obtain a record lock on the note
-                            n.lock_record()
-                            # Load the note into the Note Editor
-                            noteedit = NoteEditor.NoteEditor(self, n.text)
-                            # Get User Input
-                            n.text = noteedit.get_text()
-                            # Save the user's changes to the note
-                            n.db_save()
-                            # Lock the Note
-                            n.unlock_record()
-                    # Handle the exception if the record is locked
-                    except RecordLockedError, e:
-                        self.parent.handle_locked_record(e, _("Note"), n.id)
-
-                elif sel_item_data.nodetype == 'SearchRootNode':
-                    # Process the Search Request
-                    search = ProcessSearch.ProcessSearch(self, self.searchCount)
-                    # Get the new searchCount Value (which may or may not be changed)
-                    self.searchCount = search.GetSearchCount()
+                    elif sel_item_data.nodetype == 'SearchRootNode':
+                        # Process the Search Request
+                        search = ProcessSearch.ProcessSearch(self, self.searchCount)
+                        # Get the new searchCount Value (which may or may not be changed)
+                        self.searchCount = search.GetSearchCount()
 
     def OnBeginLabelEdit(self, event):
         """ Process a request to edit a Tree Node Label, by vetoing it if it is not a Node that can be edited. """
@@ -7001,7 +7219,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                 # If we are renaming a Clip Record...
                 elif sel_item_data.nodetype == 'ClipNode':
-                    # Load the Clip
+                    # Load the Clip.
                     tempObject = Clip.Clip(sel_item_data.recNum)
 
                 # If we are renaming a Note Record...
@@ -7192,6 +7410,11 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
     def OnKeyDown(self, event):
         """ Handle Key Presses """
+        # See if the ControlObject wants to handle the key that was pressed.
+        if self.parent.ControlObject.ProcessCommonKeyCommands(event):
+            # If so, we're done here.
+            return
+
         # We probably want to call event.Skip()
         callSkip = True
         # If Ctrl is pressed ...
@@ -7265,7 +7488,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             clipExport = ClipDataExport.ClipDataExport(self, -1, collectionNum = collectionNum)
         else:
             clipExport = ClipDataExport.ClipDataExport(self, -1)
-        # Set up the confirmation loop signal variable
+        # Set up the confirmation loop signal variable to get us into the loop
         repeat = True
         # While we are in the confirmation loop ...
         while repeat:
@@ -7273,17 +7496,55 @@ class _DBTreeCtrl(wx.TreeCtrl):
             repeat = False
             # Get the Clip Data Export input from the user
             result = clipExport.get_input()
-            # Check to see if the selected filename already exists.
+            # if the user clicked OK ...
             if (result != None):
+                # ... make sure they entered a file name.
                 if result[_('Export Filename')] == '':
-                    # If so, create a prompt to inform the user and ask to overwrite the file.
-                    prompt = unicode(_('A file name is required'), 'utf8')
+                    # If not, create a prompt to inform the user ...
+                    prompt = unicode(_('A file name is required'), 'utf8') + '.'
+                    # ... and signal that we need to repeat the file prompt
+                    repeat = True
+                # If they did ...
+                else:
+                    # ... error check the file name.  If it does not have a PATH ...
+                    if os.path.split(result[_('Export Filename')])[0] == u'':
+                        # ... add the Video Path to the file name
+                        fileName = os.path.join(TransanaGlobal.configData.videoPath, result[_('Export Filename')])
+                    # If there is a path, just continue.
+                    else:
+                        fileName = result[_('Export Filename')]
+
+                    # If the file does not have a .TXT extension ...
+                    if fileName[-4:].lower() != '.txt':
+                        # ... add one
+                        fileName = fileName + '.txt'
+                    # Set the FORM's field value to the modified file name
+                    clipExport.exportFile.SetValue(fileName)
+                    
+                    # Check the file name for illegal characters.  First, define illegal characters
+                    # (not including PATH characters)
+                    illegalChars = '"*?<>|'
+                    # For each illegal character ...
+                    for char in illegalChars:
+                        # ... see if that character appears in the file name the user entered
+                        if char in result[_('Export Filename')]:
+                            # If so, create a prompt to inform the user ...
+                            prompt = unicode(_('There is an illegal character in the file name.'), 'utf8')
+                            # ... and signal that we need to repeat the file prompt ...
+                            repeat = True
+                            # ... and stop looking.
+                            break
+
+                # Was there a file name problem or an illegal character?
+                if repeat:
+                    # If so, display the prompt to inform the user.
                     dlg2 = Dialogs.ErrorDialog(self, prompt)
                     dlg2.ShowModal()
                     dlg2.Destroy()
+                    # Signal that we have not gotten a result.
                     result = None
-                    repeat = True
-                elif (os.path.exists(result[_('Export Filename')])):
+                # If we get to here, check for a duplicate file name
+                elif (os.path.exists(fileName)):
                     # If so, create a prompt to inform the user and ask to overwrite the file.
                     if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -7291,7 +7552,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     else:
                         prompt = _('A file named "%s" already exists.  Do you want to replace it?')
                     # Create the dialog for the prompt for the user
-                    dlg2 = Dialogs.QuestionDialog(None, prompt % result[_('Export Filename')])
+                    dlg2 = Dialogs.QuestionDialog(None, prompt % fileName)
                     # Center the confirmation dialog on screen
                     dlg2.CentreOnScreen()
                     # Show the confirmation dialog and get the user response.  If the user DOES NOT say to overwrite the file, ...
@@ -7355,7 +7616,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Initialize the Sort Order Counter
             sortOrder = 1
             (childNode, cookieItem) = self.GetFirstChild(sel)
-            while 1:
+            while childNode.IsOk():
                 childData = self.GetPyData(childNode)
                 if childData.nodetype == 'SearchSeriesNode':
                     # print "SearchSeries %s:  Drop this." % self.GetItemText(childNode)
@@ -7408,7 +7669,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                     # print "SearchClip %s: Convert to Clip." % self.GetItemText(childNode)
 
-                    # Load the existing Clip
+                    # Load the existing Clip.  We DO need the Clip Transcripts here.
                     sourceClip = Clip.Clip(childData.recNum)
                     # Duplicate this Clip
                     newClip = sourceClip.duplicate()

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -51,7 +51,7 @@ class NoteEditor(wx.Dialog):
     def __init__(self, parent, default_text=""):
         """Initialize an NoteEditor object."""
         # Determine the screen size
-        rect = wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
         # We'll make our default window 60% of the size of the screen
         self.width = rect[2] * .60
         self.height = rect[3] * .60
@@ -430,8 +430,8 @@ class _NotePanel(wx.Panel):
             self.SetStatusText(_("Print Preview Problem"))
             return
         # Calculate the best size for the Print Preview window
-        theWidth = max(wx.ClientDisplayRect()[2] - 180, 760)
-        theHeight = max(wx.ClientDisplayRect()[3] - 200, 560)
+        theWidth = max(wx.Display(0).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
+        theHeight = max(wx.Display(0).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
         # Create the dialog to hold the wx.PrintPreview object
         frame2 = wx.PreviewFrame(self.preview, TransanaGlobal.menuWindow, _("Print Preview"), size=(theWidth, theHeight))
         frame2.Centre()

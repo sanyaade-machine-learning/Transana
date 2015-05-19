@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2010  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2012  The Board of Regents of the University of Wisconsin System
 #
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -655,9 +655,10 @@ if __name__ == '__main__':
             if not self.preview.Ok():
                 self.SetStatusText("Print Preview Problem")
                 return
+
             # Create the Frame for the Print Preview
-            theWidth = max(wx.ClientDisplayRect()[2] - 180, 760)
-            theHeight = max(wx.ClientDisplayRect()[3] - 200, 560)
+            theWidth = max(wx.Display(0).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
+            theHeight = max(wx.Display(0).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
             frame2 = wx.PreviewFrame(self.preview, self, _("Print Preview"), size=(theWidth, theHeight))
             frame2.Centre()
             # Initialize the Frame for the Print Preview

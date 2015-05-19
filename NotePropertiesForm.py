@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -38,9 +38,8 @@ class NotePropertiesForm(Dialogs.GenForm):
 
     def __init__(self, parent, id, title, note_object):
         # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style
-        Dialogs.GenForm.__init__(self, parent, id, title, size=(400, 260), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Notes')  # 'Notes' is the Help Context for Notes.  There is no entry for Note Properties at this time
-        # Define the minimum size for this dialog as the initial size, and define height as unchangeable
-        self.SetSizeHints(400, 260, -1, 260)
+        Dialogs.GenForm.__init__(self, parent, id, title, size=(400, 260), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext='Notes')  # 'Notes' is the Help Context for Notes.  There is no entry for Note Properties at this time
 
         self.obj = note_object
         seriesID = ''
@@ -57,7 +56,8 @@ class NotePropertiesForm(Dialogs.GenForm):
             tempSeries = Series.Series(tempEpisode.series_num)
             seriesID = tempSeries.id
         elif (self.obj.transcript_num != 0) and (self.obj.transcript_num != None):
-            tempTranscript = Transcript.Transcript(self.obj.transcript_num)
+            # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+            tempTranscript = Transcript.Transcript(self.obj.transcript_num, skipText=True)
             transcriptID = tempTranscript.id
             tempEpisode = Episode.Episode(tempTranscript.episode_num)
             episodeID = tempEpisode.id
@@ -67,95 +67,145 @@ class NotePropertiesForm(Dialogs.GenForm):
             tempCollection = Collection.Collection(self.obj.collection_num)
             collectionID = tempCollection.id
         elif (self.obj.clip_num != 0) and (self.obj.clip_num != None):
-            tempClip = Clip.Clip(self.obj.clip_num)
+            # We can skip loading the Clip Transcript to save load time
+            tempClip = Clip.Clip(self.obj.clip_num, skipText=True)
             clipID = tempClip.id
             tempCollection = Collection.Collection(tempClip.collection_num)
             collectionID = tempCollection.id
             
-        ######################################################
-        # Tedious GUI layout code follows
-        ######################################################
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Note ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        id_edit = self.new_edit_box(_("Note ID"), lay, self.obj.id, maxLen=100)
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+        # Note ID
+        id_edit = self.new_edit_box(_("Note ID"), v1, self.obj.id, maxLen=100)
+        # Add the element to the sizer
+        r1Sizer.Add(v1, 1, wx.EXPAND)
 
-        # Series ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(id_edit, 10)                 # 10 under Note ID
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 30)  # 31% width
-        lay.height.AsIs()
-        seriesID_edit = self.new_edit_box(_("Series ID"), lay, seriesID)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v2 = wx.BoxSizer(wx.VERTICAL)
+        # Series ID
+        seriesID_edit = self.new_edit_box(_("Series ID"), v2, seriesID)
+        # Add the element to the row sizer
+        r2Sizer.Add(v2, 1, wx.EXPAND)
         seriesID_edit.Enable(False)
 
-        # Episode ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(id_edit, 10)                 # 10 under Note ID
-        lay.left.RightOf(seriesID_edit, 10)        # 10 right of Series ID
-        lay.width.PercentOf(self.panel, wx.Width, 30)  # 31% width
-        lay.height.AsIs()
-        episodeID_edit = self.new_edit_box(_("Episode ID"), lay, episodeID)
+        # Add a horizontal spacer to the row sizer        
+        r2Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v3 = wx.BoxSizer(wx.VERTICAL)
+        # Episode ID
+        episodeID_edit = self.new_edit_box(_("Episode ID"), v3, episodeID)
+        # Add the element to the row sizer
+        r2Sizer.Add(v3, 1, wx.EXPAND)
         episodeID_edit.Enable(False)
 
-        # Transcript ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(id_edit, 10)                 # 10 under Note ID
-        lay.left.RightOf(episodeID_edit, 10)       # 10 right of Episode ID
-        lay.width.PercentOf(self.panel, wx.Width, 30)  # 31% width
-        lay.height.AsIs()
-        transcriptID_edit = self.new_edit_box(_("Transcript ID"), lay, transcriptID)
+        # Add a horizontal spacer to the row sizer        
+        r2Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v4 = wx.BoxSizer(wx.VERTICAL)
+        # Transcript ID
+        transcriptID_edit = self.new_edit_box(_("Transcript ID"), v4, transcriptID)
+        # Add the element to the row sizer
+        r2Sizer.Add(v4, 1, wx.EXPAND)
         transcriptID_edit.Enable(False)
 
-        # Collection ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(seriesID_edit, 10)           # 10 under Series ID
-        lay.left.SameAs(seriesID_edit, wx.Left)  # Same as Series ID
-        lay.width.PercentOf(self.panel, wx.Width, 30)  # 31% width
-        lay.height.AsIs()
-        collectionID_edit = self.new_edit_box(_("Collection ID"), lay, collectionID)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v5 = wx.BoxSizer(wx.VERTICAL)
+        # Collection ID
+        collectionID_edit = self.new_edit_box(_("Collection ID"), v5, collectionID)
+        # Add the element to the row sizer
+        r3Sizer.Add(v5, 2, wx.EXPAND)
         collectionID_edit.Enable(False)
 
-        # Clip ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(seriesID_edit, 10)           # 10 under Series ID
-        lay.left.RightOf(collectionID_edit, 10)    # 10 right of Collection ID
-        lay.width.PercentOf(self.panel, wx.Width, 30)  # 31% width
-        lay.height.AsIs()
-        clipID_edit = self.new_edit_box(_("Clip ID"), lay, clipID)
+        # Add a horizontal spacer to the row sizer        
+        r3Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v6 = wx.BoxSizer(wx.VERTICAL)
+        # Clip ID
+        clipID_edit = self.new_edit_box(_("Clip ID"), v6, clipID)
+        # Add the element to the row sizer
+        r3Sizer.Add(v6, 1, wx.EXPAND)
         clipID_edit.Enable(False)
 
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r3Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r4Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v7 = wx.BoxSizer(wx.VERTICAL)
         # Comment layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(collectionID_edit, 10)       # 10 under Collection ID
-        
-# We're not ready to show a Comment field here yet!
-# The Commenting is laid out this way to place the Note Taker field under the Collection Field, but to
-# preserve the positioning when we want to add Comments in.
+        noteTaker_edit = self.new_edit_box(_("Note Taker"), v7, self.obj.author, maxLen=100)
+        # Add the element to the row sizer
+        r4Sizer.Add(v7, 2, wx.EXPAND)
 
-#        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-#        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-#        lay.height.AsIs()
-#        comment_edit = self.new_edit_box("Comment", lay, self.obj.comment)
-#        comment_edit.Enable(False)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r4Sizer, 0, wx.EXPAND)
 
-        # Note taker layout
-#        lay = wx.LayoutConstraints()
-#        lay.top.Below(comment_edit, 10)       # 10 under Comment
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
 
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        noteTaker_edit = self.new_edit_box(_("Note Taker"), lay, self.obj.author, maxLen=100)
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
 
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
         self.Layout()
-        self.SetAutoLayout(True)
-        self.CenterOnScreen()
+        # Resize the form to fit the contents
+        self.Fit()
 
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(400, width), height))
+        # Define the minimum size for this dialog as the current size, and define height as unchangeable
+        self.SetSizeHints(max(400, width), height, -1, height)
+        # Center the form on screen
+        self.CenterOnScreen()
+        
+        # Set focus to the Note ID
         id_edit.SetFocus()
 
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -66,7 +66,7 @@ import Collection                   # Import the Transana Collection Object
 import Clip                         # Import the Transana Clip Object
 import Note                         # Import the Transana Note Object
 import ClipPropertiesForm           # Import the Transana Clip Properties Form for adding Clips on Transcript Text Drop
-import Keyword                      # Import the Transana Keyword Object
+import KeywordObject as Keyword     # Import the Transana Keyword Object
 import KeywordPropertiesForm        # Import the Trasnana Keyword Properties Form for adding Keywords on Transcript Text Drop
 import DatabaseTreeTab              # Import the Transana Database Tree Tab Object (for setting _NodeData in manipulating the tree)
 import Misc                         # Import the Transana Miscellaneous routines
@@ -81,6 +81,18 @@ def DragDropEvaluation(source, destination):
         tree node.  This function is encapsulated because it needs to be called from several different locations
         during the Drag-and-Drop process, including the DropSource's GiveFeedback() Method and the DropTarget's
         OnData() Method, as well as the DBTree's OnRightClick() to enable or disable the "Paste" option. """
+    # If the SOURCE data is not a list but IS a CLIP ...
+    if (not isinstance(source, list)) and (source.nodetype == 'ClipNode'):
+        # Start exception handling
+        try:
+            # Try to load the Clip to know that it hasn't been deleted after a COPY.
+            # (Trying to paste a clip that's been deleted can trash the database!)
+            # Don't load the Clip Transcript to save time.
+            tmpClip = Clip.Clip(source.recNum, skipText=True)
+        # If the clips does not exist ...
+        except:
+            # ... then we can't PASTE it, can we?
+            return False
     # Return True if the drop is legal, false if it is not.
     # To be legal, we must have a legitimate source and be on a legitimate drop target.
     # If the source is the Database Tree Tab (nodetype = DataTreeDragDropData), then we compare
@@ -92,7 +104,7 @@ def DragDropEvaluation(source, destination):
        (not isinstance(source, list)) and \
        ((source.nodetype == 'EpisodeNode'          and destination.nodetype == 'SeriesNode'           and source.parent != destination.recNum) or \
         (source.nodetype == 'CollectionNode'       and destination.nodetype == 'CollectionNode'       and source.parent != destination.recNum) or \
-        (source.nodetype == 'CollectionNode'       and destination.nodetype == 'CollectionsRootNode') or \
+        (source.nodetype == 'CollectionNode'       and destination.nodetype == 'CollectionsRootNode'  and source.parent != 0) or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'CollectionNode'       and source.parent != destination.recNum) or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'ClipNode') or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'KeywordNode') or \
@@ -133,6 +145,11 @@ def DragDropEvaluation(source, destination):
           (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'CollectionNode') or \
           (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'ClipNode') or \
           (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'KeywordGroupNode') or \
+          (source[0].nodetype == 'SeriesNoteNode'       and destination.nodetype == 'SeriesNode') or \
+          (source[0].nodetype == 'EpisodeNoteNode'      and destination.nodetype == 'EpisodeNode') or \
+          (source[0].nodetype == 'TranscriptNoteNode'   and destination.nodetype == 'TranscriptNode') or \
+          (source[0].nodetype == 'CollectionNoteNode'   and destination.nodetype == 'CollectionNode') or \
+          (source[0].nodetype == 'ClipNoteNode'         and destination.nodetype == 'ClipNode') or \
           (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode') or \
           (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode') or \
           (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchClipNode')):
@@ -549,7 +566,18 @@ class DataTreeDropTarget(wx.PyDropTarget):
                     # Create a new Keyword Object with the desired KWG and KW values
                     kw = Keyword.Keyword()
                     kw.keywordGroup = self.tree.GetItemText(self.dropNode)
-                    kw.keyword = clipData.plainText
+                    # While the Clipboard's Plain Text has TIME CODES in it ...
+                    while (clipData.plainText.find(u'\xa4') > -1) and \
+                          (clipData.plainText.find('>', clipData.plainText.find(u'\xa4')) > 0):
+                        # ... remove the time codes and the time code data
+                        clipData.plainText = clipData.plainText[:clipData.plainText.find(u'\xa4')] + \
+                                             clipData.plainText[clipData.plainText.find('>', clipData.plainText.find(u'\xa4')) + 1:]
+                    # If there's still a time code, the data must have been truncated before the ">" terminator.
+                    if (clipData.plainText.find(u'\xa4') > -1):
+                        # Remove it from the end of the string.
+                        clipData.plainText = clipData.plainText[:clipData.plainText.find(u'\xa4')]
+                    # Limit the keyword length to 85 characters!
+                    kw.keyword = clipData.plainText[:85]
                     # Create the Keyword Properties Dialog Box to Add a Keyword
                     dlg = KeywordPropertiesForm.EditKeywordDialog(None, -1, kw)
                     # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
@@ -677,7 +705,8 @@ def CreateClip(clipData, dropData, tree, dropNode):
     tempClip = Clip.Clip()
     # We need to know if the Clip is coming from an Episode or another Clip.
     # We can determine that by looking at the transcript passed in the ClipData
-    tempTranscript = Transcript.Transcript(clipData.transcriptNum)
+    # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+    tempTranscript = Transcript.Transcript(clipData.transcriptNum, skipText=True)
     # If we are working from an Episode Transcript ...
     if tempTranscript.clip_num == 0:
         # Get the Episode Number from the clipData Object
@@ -877,6 +906,8 @@ def CreateClip(clipData, dropData, tree, dropNode):
                     # If the user cancels Clip Creation, we don't need to continue any more.
                     contin = False
                 else:
+                    # Create a Popup Dialog.  (After duplicate names have been resolved to avoid conflict.)
+                    tmpDlg = Dialogs.PopupDialog(None, _("Saving Clip"), _("Saving the Clip"))
                     # If the Name was changed, reflect that in the Clip Object
                     tempClip.id = newClipName
                     # See if we're dropping on a Collection Node ...
@@ -942,16 +973,22 @@ def CreateClip(clipData, dropData, tree, dropNode):
                     # Unlock the parent collection
                     if collectionLocked:
                         tempCollection.unlock_record()
+                    # Remove the Popup Dialog
+                    tmpDlg.Destroy()
                     # If we do all this, we don't need to continue any more.
                     contin = False
             # Handle "SaveError" exception
             except TransanaExceptions.SaveError:
+                # Remove the Popup Dialog
+                tmpDlg.Destroy()
                 # Display the Error Message, allow "continue" flag to remain true
                 errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
                 errordlg.ShowModal()
                 errordlg.Destroy()
             # Handle other exceptions
             except:
+                # Remove the Popup Dialog
+                tmpDlg.Destroy()
                 # Display the Exception Message, allow "continue" flag to remain true
                 errordlg = Dialogs.ErrorDialog(None, "%s" % (sys.exc_info()[:2], ))
                 errordlg.ShowModal()
@@ -1007,6 +1044,10 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
                     tempEpisode.lock_record()
                     # Add the Keyword to the Episode
                     tempEpisode.add_keyword(sourceData.parent, sourceData.text)
+                    # If we're using confirmations (only have ONE operation) ...
+                    if confirmations:
+                        # ... Check to see if there are keywords to be propagated
+                        parent.parent.ControlObject.PropagateEpisodeKeywords(tempEpisode.number, tempEpisode.keyword_list)
                     # Save the Episode
                     tempEpisode.db_save()
                     # Now let's communicate with other Transana instances if we're in Multi-user mode
@@ -1048,6 +1089,10 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             tempEpisode.lock_record()
             # Add the keyword to the Episode
             tempEpisode.add_keyword(sourceData.parent, sourceData.text)
+            # If we're using confirmations (only have ONE operation) ...
+            if confirmations:
+                # ... Check to see if there are keywords to be propagated
+                parent.parent.ControlObject.PropagateEpisodeKeywords(tempEpisode.number, tempEpisode.keyword_list)
             # Save the Episode
             tempEpisode.db_save()
             # Now let's communicate with other Transana instances if we're in Multi-user mode
@@ -1087,7 +1132,7 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             tempCollection.lock_record()
             # Now load a list of all the Clips in the Collection and iterate through them
             for tempClipNum, tempClipID, tempCollectNum in DBInterface.list_of_clips_by_collection(tempCollection.id, tempCollection.parent):
-                # Load the Clip
+                # Load the Clip.
                 tempClip = Clip.Clip(id_or_num=tempClipNum)
                 try:
                     # Lock the Clip
@@ -1150,7 +1195,7 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
                 return
         try:
             # If confirmed, copy the Keyword to the Clip
-            # First, load the Clip
+            # First, load the Clip.
             tempClip = Clip.Clip(id_or_num=targetRecNum)
             # Lock the Clip Record
             tempClip.lock_record()
@@ -1226,6 +1271,19 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
             copyMovePrompt = _('COPY')
         elif action == 'Move':
             copyMovePrompt = _('MOVE')
+
+
+    # If the SOURCE data is a CLIP ...
+    if (sourceData.nodetype == 'ClipNode'):
+        # Start exception handling
+        try:
+            # See if the clip exists (hasn't been deleted, which can happen after COPY)
+            # Don't load the Clip Transcript to save time.
+            tmpClip = Clip.Clip(sourceData.recNum, skipText=True)
+        # If the clip doesn't exist ...
+        except:
+            # ... then we can't paste it, can we?
+            return
 
     # Drop an Episode on a Series (Move an Episode)
     if (sourceData.nodetype == 'EpisodeNode' and destNodeData.nodetype == 'SeriesNode'):
@@ -2111,11 +2169,13 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
         # Load the Source Transcript Note
         sourceNote = Note.Note(id_or_num=sourceData.recNum)
         # Load the Source Transcript
-        sourceTranscript = Transcript.Transcript(sourceNote.transcript_num)
+        # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+        sourceTranscript = Transcript.Transcript(sourceNote.transcript_num, skipText=True)
         # Load the Source Episode
         sourceEpisode = Episode.Episode(sourceTranscript.episode_num)
         # Load the Destination Transcript
-        destTranscript = Transcript.Transcript(destNodeData.recNum)
+        # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+        destTranscript = Transcript.Transcript(destNodeData.recNum, skipText=True)
         # Load the Destination Episode
         destEpisode = Episode.Episode(destTranscript.episode_num)
         # Can't drop a note on it's own parent!
@@ -2685,8 +2745,10 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                     nodeList = (treeCtrl.GetItemText(currentNode),) + nodeList
                     # and we move up to the node's parent
                     currentNode = treeCtrl.GetItemParent(currentNode)
+                # Get the node data for the DESTINATION node, so we can update the Clip's Parent record
+                destData = treeCtrl.GetPyData(destNode)
                 # Now Add the new Node, using the SourceData's Data
-                treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, sourceData.recNum, sourceData.parent, False)
+                treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, sourceData.recNum, destData.recNum, False)
                 # No need to communicate with other Transana Clients here, we're just manipulating Search Results.
                 # If we need to remove the node, the SourceData carries the nodeList we need to delete
                 if action == 'Move':
@@ -3079,25 +3141,28 @@ def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollectio
 
 def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
     """ This function changes the order of the clips in a Collection """
-
     # If we can't lock all the clips in the collection, sort orders get all screwed up.
     # ... Set up a variable that signals failure
     allClipsLocked = True
     # Create a Dictionary to hold all the Clip data, so we only need to have one copy of the clip
     Clips = {}
+    # Get all the clips for the Source Collection Number
     clipLockList = DBInterface.list_of_clips_by_collectionnum(sourceCollection.number)
+    # Start Exception Handling
     try:
+        # For each Clip in the Collection ...
         for (tmpClipNum, tmpClipID, tmpCollectNum) in clipLockList:
-
+            # Load the Clip.
             tmpClip = Clip.Clip(tmpClipNum)
-
+            # Lock the Clip Record
             tmpClip.lock_record()
-
+            # Add this clip to the Clips dictionary
             Clips[tmpClipNum] = tmpClip
-
+    # If we couldn't get a lock on one or more of the clips ...
     except TransanaExceptions.RecordLockedError, e:
+        # Set the "Failure" flag
         allClipsLocked = False
-
+        # Create an error message for the user
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
             msg = unicode(_('Clips in Collection "%s" are not in the desired order.') + '\n\n' + \
@@ -3107,13 +3172,12 @@ def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
             msg = _('Clips in Collection "%s" are not in the desired order.') + '\n\n' + \
                   _('Transana could not change the sort order because you cannot obtain a lock on Clip "%s"') + \
                   _('.\nThe record is currently locked by %s.')
-
+        # Display the error message
         dlg = Dialogs.ErrorDialog(None, msg % (sourceCollection.id, tmpClip.id, e.user))
         dlg.ShowModal()
         dlg.Destroy()
-
+    # If locking ALL clips DID NOT fail ...
     if allClipsLocked:
-
         # If we are changing Clip Sort Order, the clip's Notes need to travel with the Clip.  The first step is to
         # get a list of those Notes.
         noteList = DBInterface.list_of_notes(Clip=sourceClip.number)
@@ -3184,32 +3248,20 @@ def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
 
                 # Since we just inserted a new Node, we need to increment our NodeCounter
                 nodeCounter += 1
-                # Open a copy of the Clip that is being inserted
-#                localClip = Clip.Clip(sourceClip.number)
-                # Lock the Clip Record
-#                localClip.lock_record()
                 # Set the Clip's Sort Order based on the NodeCounter
                 Clips[sourceClip.number].sort_order = nodeCounter
                 # Save the Clip Record
                 Clips[sourceClip.number].db_save()
-                # Unlock the Clip Record
-#                localClip.unlock_record()
 
             # Increment the Node Counter
             nodeCounter += 1
 
             # If the current node is a Clip, let's reset its sort order
             if (tempNodeData.nodetype == 'ClipNode'):
-                # Load the Clip
-#                localClip = Clip.Clip(tempNodeData.recNum)
-                # Lock the Clip Record
-#                localClip.lock_record()
                 # Reset the Sort Order based on the NodeCounter
                 Clips[tempNodeData.recNum].sort_order = nodeCounter
                 # Save the Clip
                 Clips[tempNodeData.recNum].db_save()
-                # Unlock the Clip Record
-#                localClip.unlock_record()
 
             # If we are looking at the last Child in the Parent's Node, exit the while loop
             if tempNode == treeCtrl.GetLastChild(parentNode):
@@ -3233,9 +3285,11 @@ def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
             else:
                 (tempNode, cookie) = treeCtrl.GetNextChild(parentNode, cookie)
 
+    # Iterate through the Clips dictionary
     for tmpClipNum in Clips.keys():
+        # Unlock each of the locked clips
         Clips[tmpClipNum].unlock_record()
-
+    # Return the flag that indicates success or failure
     return allClipsLocked
 
 def CreateQuickClip(clipData, kwg, kw, dbTree, extraKeywords=[]):
@@ -3317,9 +3371,31 @@ def CreateQuickClip(clipData, kwg, kw, dbTree, extraKeywords=[]):
             for tr in clipData.text.transcripts:
                 # ... append its source transcript to the list.
                 clipData.transcriptNum.append(tr.source_transcript)
+        # If we have a single media file SOURCE ...
+        if clipData.videoCheckboxData == []:
+            # ... then drop the media file in the list of video files
+            vidFiles = [sourceEpisode.media_filename]
+        # If we have a MULTIPLE media file SOURCE ...
+        else:
+            # ... initialize a list of media files ...
+            vidFiles = []
+            # ... if the FIRST media file is to be included ...
+            if clipData.videoCheckboxData[0][0]:
+                # ... add that to the media file list
+                vidFiles.append(sourceEpisode.media_filename)
+            # Initialize a counter
+            cnt = 0
+            # For each additional media file in the NEW CLIP media file checkboxes ...  (skip the original file, #0)
+            for cbData in clipData.videoCheckboxData[1:]:
+                # .. if the media file is checked to be included ...
+                if cbData[0]:
+                    # ... then get the file name from the EPISODE and add it to the media file list
+                    vidFiles.append(sourceEpisode.additional_media_files[cnt]['filename'])
+                # increment the counter
+                cnt += 1
 
         # Check to see if a Quick Clip for this selection in this Transcript in this Episode has already been created.
-        dupClipNum = DBInterface.CheckForDuplicateQuickClip(collectNum, clipData.episodeNum, clipData.transcriptNum, clipData.clipStart, clipData.clipStop)
+        dupClipNum = DBInterface.CheckForDuplicateQuickClip(collectNum, clipData.episodeNum, clipData.transcriptNum, clipData.clipStart, clipData.clipStop, vidFiles)
 
         # -1 indicates no duplicate Quick Clip.  If there IS a duplicate ...
         if dupClipNum > -1:
@@ -3404,12 +3480,14 @@ def CreateQuickClip(clipData, kwg, kw, dbTree, extraKeywords=[]):
                 clipName = clipItem[1]
                 # We can ignore errors in converting clip names to integers, but we have to trap it.
                 try:
-                    # Get the integer portion of the Clip Name that follows the base Clip Name
-                    clipNum = int(clipName[len(baseName):])
-                    # We're looking for the largest value.
-                    if clipNum >= baseNum:
-                        # The base number value should always be 1 larger than the largest used value.
-                        baseNum = clipNum + 1
+                    # make sure the Base Name matches the comparison Quick Clip name.
+                    if baseName == clipName[:len(baseName)]:
+                        # Get the integer portion of the Clip Name that follows the base Clip Name
+                        clipNum = int(clipName[len(baseName):])
+                        # We're looking for the largest value.
+                        if clipNum >= baseNum:
+                            # The base number value should always be 1 larger than the largest used value.
+                            baseNum = clipNum + 1
                 except:
                     pass
 

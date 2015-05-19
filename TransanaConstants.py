@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -42,9 +42,9 @@ if workshopVersion:
     expirationdate = TransanaConfigConstants.xpdt
 
 # Program Version Number
-versionNumber = '2.43a1'
+versionNumber = '2.50'
 # Build Number
-buildNumber = '243a1'
+buildNumber = '250'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
@@ -55,7 +55,7 @@ if '__WXMAC__' in wx.PlatformInfo:
 elif 'wxMSW' in wx.PlatformInfo:
     versionNumber = versionNumber + '-Win'
 elif 'wxGTK' in wx.PlatformInfo:
-    versionNumber += '-Linux Alpha 1.0'
+    versionNumber += '-Linux Alpha 1.1'
 else:
     versionNumber += '-Unknown Platform Alpha 1.0'
 
@@ -86,6 +86,10 @@ if 'unicode' in wx.PlatformInfo:
 else:
     TIMECODE_CHAR = '\xa4'
 
+# Indicate whether we are to use the (old) wxPython Styled Text Control (STC)
+# or the (new) wxPython Rich Text Control (RTC)
+USESRTC = True
+
 # IDs for the Visualization Window
 VISUAL_BUTTON_ZOOMIN            =  wx.NewId()
 VISUAL_BUTTON_ZOOMOUT           =  wx.NewId()
@@ -113,7 +117,7 @@ MEDIA_PLAYSTATE_PAUSE              =  wx.media.MEDIASTATE_PAUSED
 MEDIA_PLAYSTATE_PLAY               =  wx.media.MEDIASTATE_PLAYING
 
 # Define the Media File type strings to be used throughout Transana
-fileTypesString = _("""All files (*.*)|*.*|All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv, *.mp3, *.wav, *.wma, *.aac)|*.mpg;*.avi;*.mov;*.mp4;*.m4v;*.wmv;*.mp3;*.wav;*.wma;*.aac|All video files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv)|*.mpg;*.mpeg;*.avi;*.mov;*.mp4;*.m4v;*.wmv|All audio files (*.mp3, *.wav, *.wma, *.aac, *.au, *.snd)|*.mp3;*.wav;*.wma;*.aac;*.au;*.snd|MPEG files (*.mpg)|*.mpg;*.mpeg|AVI files (*.avi)|*.avi|QuickTime files (*.mov, *.mp4, *.m4v)|*.mov;*.mp4;*.m4v|Windows Media Video (*.wmv)|*wmv|MP3 files (*.mp3)|*.mp3|WAV files (*.wav)|*.wav|Windows Media Audio (*.wma)|*.wma|AAC Audio (*.aac)|*.aac""")
+fileTypesString = _("""All files (*.*)|*.*|All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv, *.mp3, *.wav, *.wma, *.aac, *.m4a)|*.mpg;*.avi;*.mov;*.mp4;*.m4v;*.wmv;*.mp3;*.wav;*.wma;*.aac;*.m4a|All video files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv)|*.mpg;*.mpeg;*.avi;*.mov;*.mp4;*.m4v;*.wmv|All audio files (*.mp3, *.wav, *.wma, *.aac, *.m4a, *.au, *.snd)|*.mp3;*.wav;*.wma;*.aac;*.m4a;*.au;*.snd|MPEG files (*.mpg)|*.mpg;*.mpeg|AVI files (*.avi)|*.avi|QuickTime files (*.mov, *.mp4, *.m4v)|*.mov;*.mp4;*.m4v|Windows Media Video (*.wmv)|*wmv|MP3 files (*.mp3)|*.mp3|WAV files (*.wav)|*.wav|Windows Media Audio (*.wma)|*.wma|AAC Audio (*.aac)|*.aac|QuickTime Audio (*.m4a)|*.m4a""")
 fileTypesList = [_("All files (*.*)"),
                  _("All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv, *.mp3, *.wav, *.wma, *.aac)"),
                  _("All video files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv)"),
@@ -126,14 +130,23 @@ fileTypesList = [_("All files (*.*)"),
                  _("WAV files (*.wav)"),
                  _("Windows Media Audio files (*.wma)"),
                  _("AAC files (*.aac)"),
+                 _("QuickTime Audio files (*.m4a)"),
+                 _("Transcript Formats (*.rtf, *.xml, *.txt)"), 
                  _("Rich Text Format files (*.rtf)"),
+                 _("XML Format files (*.xml)"),
+                 _("Plain Text Format files (*.txt)"),
+                 _("Graphics Files (*.bmp, *.jpg, *.jpeg, *.png, *.tif, *.xpm)"),
+                 _("Transana Database Exports (*.tra)"),
                  _("BMP, PNG, and WAV files (*.bmp, *.png, *.wav)")]
-mediaFileTypes = ['mpg', 'mpeg', 'avi', 'mov', 'mp4', 'm4v', 'wmv', 'mp3', 'wav', 'wma', 'aac']
+mediaFileTypes = ['mpg', 'mpeg', 'avi', 'mov', 'mp4', 'm4v', 'wmv', 'mp3', 'wav', 'wma', 'aac', 'm4a']
+imageFileTypesString = _("""All files (*.*)|*.*|All supported graphics files (*.ani, *.bmp, *.cur, *.gif, *.ico, *.iff, *.jpg, *.jpeg, *.pcx, *.png, *.pnm, *.tga, *.tif, *.xpm)|*.ani;*.bmp;*.cur;*.gif;*.ico;*.iff;*.jpg;*.jpeg;*.pcx;*.png;*.pnm;*.tga;*.tif;*.xpm""")
+
 
 # We need to know what characters are legal in a file name!
 legalFilenameCharacters = string.ascii_letters + string.digits + ":. -_$&@!%(){}[]~'#^+=/" 
 if "__WXMSW__" in wx.PlatformInfo:
     legalFilenameCharacters += '\\'
 
-# There are several different encodings that could be used with Chinese.  "gbk" seems to work bests
-chineseEncoding = 'gbk'
+# There are several different encodings that could be used with Chinese.  "gbk" seems to work bests for Tranana 2.1 to 2.42.
+# Changed to UTF8 with Transana 2.50, as embedded MySQL on Windows can finally be upgraded to support UTF8.
+chineseEncoding = 'utf8'  # 'gbk'

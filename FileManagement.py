@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -17,7 +17,8 @@
 """This module implements the File Management window for Transana, but can be also run as a stand-alone utility.
    The File Management Tool is designed to facilitate local file management, such as copying and moving video
    files, and updating the Transana Database when video files have been moved.  It is also used for connecting
-   to the Storage Resource Broker (SRB) and transfering files between the local file system and the SRB.  """
+   to an sFTP server or a Storage Resource Broker (SRB) and securely transfering files between the local file 
+   system and the remote computer.  """
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare <rasambhare@wisc.edu>'
 
@@ -27,20 +28,30 @@ if __name__ == '__main__':
     __builtins__._ = wx.GetTranslation
     wx.SetDefaultPyEncoding('utf_8')
 
-import os                # used to determine what files are on the local computer
-import sys               # Python sys module, used in exception reporting
-import exceptions
-import pickle            # Python pickle module
-import string            # String manipulation
-import shutil            # used to copy files on the local file system
-import gettext           # localization module
+# Import Python modules
+import base64            # Base64 processing (used by paramiko)
 import ctypes            # used for connecting to the srbClient DLL/Linked Library in Windows
+import exceptions        # exception handling
+import gettext           # localization module
+import os                # used to determine what files are on the local computer
+import pickle            # Python pickle module
 import re                # used in parsing list of files in the list control
-import SRBConnection     # SRB Connection Parameters dialog box
-import SRBFileTransfer   # SRB File Transfer Progress Box and FTP Logic
+import shutil            # used to copy files on the local file system
+import stat              # file information (used with paramiko)
+import string            # String manipulation
+import sys               # Python sys module, used in exception reporting
+import time              # time processing (used with paramiko)
+# import paramiko for ssh/sFTP functionality
+import paramiko
+# Import Transana modules
 import DBInterface       # Import Transana's Database Interface
 import Dialogs           # Import Transana's Dialog Boxes
 import Misc              # import Transana's Miscellaneous functions
+import LocalFileTransfer # LOCAL File Transfer Progres Box and File Transfer Logic
+import sFTPConnection    # sFTP Connection Parameters dialog box
+import sFTPFileTransfer  # sFTP File Transfer Progress Box and File Transfer Logic
+import SRBConnection     # SRB Connection Parameters dialog box
+import SRBFileTransfer   # SRB File Transfer Progress Box and File Tranfer Logic
 import TransanaConstants # used for getting list of fileTypes
 import TransanaGlobal    # get Transana's globals, used to get current encoding
 
@@ -70,7 +81,7 @@ class FMFileDropTarget(wx.FileDropTarget):
             if targetLbl.GetLabel() == self.FileManagementWindow.LOCAL_LABEL:
                 targetDir = self.FileManagementWindow.dirLeft.GetPath()
             else:
-                targetDir = self.FileManagementWindow.GetFullPath(self.FileManagementWindow.srbDirLeft)
+                targetDir = self.FileManagementWindow.GetFullPath(self.FileManagementWindow.remoteDirLeft)
             target = self.FileManagementWindow.fileLeft
             filter = self.FileManagementWindow.filterLeft
             # We need to know the other side to, so it can also be updated if necessary
@@ -79,7 +90,7 @@ class FMFileDropTarget(wx.FileDropTarget):
             if otherLbl.GetLabel() == self.FileManagementWindow.LOCAL_LABEL:
                 otherDir = self.FileManagementWindow.dirRight.GetPath()
             else:
-                otherDir = self.FileManagementWindow.GetFullPath(self.FileManagementWindow.srbDirRight)
+                otherDir = self.FileManagementWindow.GetFullPath(self.FileManagementWindow.remoteDirRight)
             othertarget = self.FileManagementWindow.fileRight
             otherfilter = self.FileManagementWindow.filterRight
         elif self.activeSide == 'Right':
@@ -88,7 +99,7 @@ class FMFileDropTarget(wx.FileDropTarget):
             if targetLbl.GetLabel() == self.FileManagementWindow.LOCAL_LABEL:
                 targetDir = self.FileManagementWindow.dirRight.GetPath()
             else:
-                targetDir = self.FileManagementWindow.GetFullPath(self.FileManagementWindow.srbDirRight)
+                targetDir = self.FileManagementWindow.GetFullPath(self.FileManagementWindow.remoteDirRight)
             target = self.FileManagementWindow.fileRight
             filter = self.FileManagementWindow.filterRight
             # We need to know the other side to, so it can also be updated if necessary
@@ -97,13 +108,13 @@ class FMFileDropTarget(wx.FileDropTarget):
             if otherLbl.GetLabel() == self.FileManagementWindow.LOCAL_LABEL:
                 otherDir = self.FileManagementWindow.dirLeft.GetPath()
             else:
-                otherDir = self.FileManagementWindow.GetFullPath(self.FileManagementWindow.srbDirLeft)
+                otherDir = self.FileManagementWindow.GetFullPath(self.FileManagementWindow.remoteDirLeft)
             othertarget = self.FileManagementWindow.fileLeft
             otherfilter = self.FileManagementWindow.filterLeft
 
         if os.path.split(filenames[0])[0] != targetDir:
             # If a Path has been defined for the Drop Target, copy the files.
-            # First, determine if it's local or SRB receiving the files
+            # First, determine if it's local or remote receiving the files
             if targetLbl.GetLabel() == self.FileManagementWindow.LOCAL_LABEL:
                 if targetDir != '':
                     self.FileManagementWindow.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
@@ -116,8 +127,15 @@ class FMFileDropTarget(wx.FileDropTarget):
                         self.FileManagementWindow.SetStatusText(prompt % (fileNm, targetDir))
                         # extract the file name...
                         (dir, fn) = os.path.split(fileNm)
-                        # copy the file to the destination path
-                        shutil.copyfile(fileNm, os.path.join(targetDir, fn))
+
+                        if os.stat(fileNm)[6] < 5000000:
+                            # copy the file to the destination path
+                            shutil.copyfile(fileNm, os.path.join(targetDir, fn))
+                        else:
+                            dlg = LocalFileTransfer.LocalFileTransfer(self.FileManagementWindow, _("Local File Transfer"), fileNm, targetDir)
+                            success = dlg.TransferSuccessful()
+                            dlg.Destroy()
+                            
                         # Update the File Window where the files were dropped.
                         self.FileManagementWindow.RefreshFileList(targetLbl.GetLabel(), targetDir, target, filter)
                         # Let's update the target control after every file so that the new files show up in the list ASAP.
@@ -152,13 +170,23 @@ class FMFileDropTarget(wx.FileDropTarget):
                         prompt = unicode(prompt, 'utf8')
                     self.FileManagementWindow.SetStatusText(prompt % (fileNm, targetDir))
 
-                    # The SRBFileTransfer class handles file transfers and provides Progress Feedback
-                    dlg = SRBFileTransfer.SRBFileTransfer(self.FileManagementWindow, _("SRB File Transfer"), fileNm, fileSize, sourceDir, self.FileManagementWindow.srbConnectionID, targetDir, SRBFileTransfer.srb_UPLOAD, self.FileManagementWindow.srbBuffer)
-                    success = dlg.TransferSuccessful()
-                    dlg.Destroy()
+                    # If we are connected to a Storage Resource Broker ...
+                    if self.FileManagementWindow.connectionType == 'SRB':
+                        # The SRBFileTransfer class handles file transfers and provides Progress Feedback
+                        dlg = SRBFileTransfer.SRBFileTransfer(self.FileManagementWindow, _("SRB File Transfer"), fileNm, fileSize, sourceDir, self.FileManagementWindow.srbConnectionID, targetDir, SRBFileTransfer.srb_UPLOAD, self.FileManagementWindow.srbBuffer)
+                        success = dlg.TransferSuccessful()
+                        dlg.Destroy()
+                    # If we are connected to an sFTP Server ...
+                    elif self.FileManagementWindow.connectionType == 'sFTP':
+                        # The sFTPFileTransfer class handles file transfers and provides Progress Feedback
+                        dlg = sFTPFileTransfer.sFTPFileTransfer(self.FileManagementWindow, _("sFTP File Transfer"), fileNm, sourceDir, targetDir, sFTPFileTransfer.sFTP_UPLOAD)
+                        success = dlg.TransferSuccessful()
+                        dlg.Destroy()
 
+                    # If the copy was successful ...
                     if success:
                         self.FileManagementWindow.SetStatusText(_('Copy complete.'))
+                    # If the copy was not successful, it was cancelled by the user!
                     else:
                         self.FileManagementWindow.SetStatusText(_('Copy cancelled.'))
                         cancelPressed = True
@@ -174,8 +202,9 @@ class FMFileDropTarget(wx.FileDropTarget):
 
 class FileManagement(wx.Dialog):
     """ This displays the main File Management window. """
-    def __init__(self,parent,id,title):
+    def __init__(self, parent, id, title):
         """ Initialize the Main File Management Window.  (You must also call Setup) """
+        self.parent = parent
 
         # Because of Unicode issues, it's easiest to use Constants for the Local and Remote labels.
         # Otherwise, there are comparison problems.
@@ -186,6 +215,14 @@ class FileManagement(wx.Dialog):
         if 'unicode' in wx.PlatformInfo:
             self.REMOTE_LABEL = unicode(self.REMOTE_LABEL, 'utf8')
 
+        # Initialize ConnectionType to sFTP, not SRB
+        self.connectionType = 'sFTP'
+
+        # sFTPConnectionID indicates the Connection status for sFTP
+        # It is initialized to None, as the connection is not established by default
+        self.sFTPConnectionID = None
+        # Initialize the sFTP Home Path to None.  We'll get it when we connect.
+        self.sFTPHomePath = None
         # srbConnectionID indicates the Connection ID for the Storage Resource Broker connection.
         # It is initialized to None, as the connection is not established by default
         self.srbConnectionID = None
@@ -213,7 +250,9 @@ class FileManagement(wx.Dialog):
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
-        # Create the Connection Dialog
+        # Create the sFTP Connection Dialog (Do it here so values in it are retained)
+        self.sFTPConnDlg = sFTPConnection.sFTPConnection(self)
+        # Create the SRB Connection Dialog (Do it here so values in it are retained)
         self.SRBConnDlg = SRBConnection.SRBConnection(self)
 
 
@@ -236,7 +275,7 @@ class FileManagement(wx.Dialog):
         filesLeftSizer.Add(self.lblLeft, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
 
         # Directory Listing
-        self.dirLeft = wx.GenericDirCtrl(self, -1, style=wx.DIRCTRL_DIR_ONLY | wx.BORDER_DOUBLE)
+        self.dirLeft = GenericDirCtrl_MacFix(self, -1, wx.DIRCTRL_DIR_ONLY | wx.BORDER_DOUBLE)
         # Add directory listing to Sizer
         filesLeftSizer.Add(self.dirLeft, 3, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
 
@@ -248,12 +287,12 @@ class FileManagement(wx.Dialog):
             if os.path.exists('E:\\Video'):
                 self.dirLeft.SetPath('E:\\Video')
 
-        # Source SRB Collections listing
-        self.srbDirLeft = wx.TreeCtrl(self, -1, style=wx.TR_HAS_BUTTONS | wx.TR_SINGLE | wx.BORDER_DOUBLE)
-        # This control is not visible initially, as Local Folders, not SRB Collections are shown
-        self.srbDirLeft.Show(False)
+        # Source SRB / sFTP Server Collections listing
+        self.remoteDirLeft = wx.TreeCtrl(self, -1, style=wx.TR_HAS_BUTTONS | wx.TR_SINGLE | wx.BORDER_DOUBLE)
+        # This control is not visible initially, as Local Folders, not SRB / sFTP Server Collections are shown
+        self.remoteDirLeft.Show(False)
         # Add directory listing to Sizer
-        filesLeftSizer.Add(self.srbDirLeft, 3, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        filesLeftSizer.Add(self.remoteDirLeft, 3, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
 
         # NOTE:  Although it would be possible to display files as well as folders in the wxGenericDirCtrls,
         #        we chose not to so that users could select multiple files at once for manipulation
@@ -425,6 +464,24 @@ class FileManagement(wx.Dialog):
         hSizer.Add(self.btnConnectRight, 0)
         # Add the horizontal button sizer to the vertical button area sizer
         buttonSizer.Add(hSizer, 0, wx.ALIGN_CENTER | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+
+        # NOTE:  Commented out because the SRB is dead, and thus no longer an option!
+        # If we're on Linux ...
+        ## if 'wxGTK' in wx.PlatformInfo:
+            # ... sFTP is the only choice.  SRB isn't supported.
+        ##     choices = ['sFTP']
+        # If we're on Windows or OS X ...
+        ## else:
+            # ... sFTP and SRB are options.
+        ##     choices = ['sFTP', 'SRB 3.3.1']
+        # Add a Connection Type Choice Box
+        ## self.connectionTypeChoice = wx.Choice(self, -1, choices = choices)
+        ## self.connectionTypeChoice.SetStringSelection(self.connectionType)
+        ## self.connectionTypeChoice.Bind(wx.EVT_CHOICE, self.SetConnectionType)
+        ## buttonSizer.Add(self.connectionTypeChoice, 0, wx.ALIGN_CENTER | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        ##
+        ## SEE OnConnect and RemoteDisconnect Methods for commented-out references to ConnectionTypeChoice as well
+        
         # Spacer
         buttonSizer.Add((1,1), 2)
 
@@ -465,7 +522,7 @@ class FileManagement(wx.Dialog):
         filesRightSizer.Add(self.lblRight, 0, wx.TOP | wx.LEFT | wx.RIGHT, 5)
 
         # Directory Listing
-        self.dirRight = wx.GenericDirCtrl(self, -1, style=wx.DIRCTRL_DIR_ONLY | wx.BORDER_DOUBLE)
+        self.dirRight = GenericDirCtrl_MacFix(self, -1, wx.DIRCTRL_DIR_ONLY | wx.BORDER_DOUBLE)
         # Add directory listing to Sizer
         filesRightSizer.Add(self.dirRight, 3, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
 
@@ -477,12 +534,12 @@ class FileManagement(wx.Dialog):
             if os.path.exists('E:\\Video'):
                 self.dirRight.SetPath('E:\\Video')
 
-        # Destination SRB Collections listing
-        self.srbDirRight = wx.TreeCtrl(self, -1, style=wx.TR_HAS_BUTTONS | wx.TR_SINGLE | wx.BORDER_DOUBLE)
-        # This control is not visible initially, as Local Folders, not SRB Collections are shown
-        self.srbDirRight.Show(False)
+        # Destination SRB / sFTP Server Collections listing
+        self.remoteDirRight = wx.TreeCtrl(self, -1, style=wx.TR_HAS_BUTTONS | wx.TR_SINGLE | wx.BORDER_DOUBLE)
+        # This control is not visible initially, as Local Folders, not SRB / sFTP Collections are shown
+        self.remoteDirRight.Show(False)
         # Add directory listing to Sizer
-        filesRightSizer.Add(self.srbDirRight, 3, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        filesRightSizer.Add(self.remoteDirRight, 3, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
 
         # NOTE:  Although it would be possible to display files as well as folders in the wxGenericDirCtrls,
         #        we chose not to so that users could select multiple files at once for manipulation
@@ -596,11 +653,11 @@ class FileManagement(wx.Dialog):
         self.btnClose.Bind(wx.EVT_BUTTON, self.CloseWindow)
         self.btnHelp.Bind(wx.EVT_BUTTON, self.OnHelp)
 
-        # Directory Tree and SRB Collection Selection Events
+        # Directory Tree and SRB / sFTP Server Collection Selection Events
         self.dirLeft.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnDirSelect)
         self.dirRight.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnDirSelect)
-        self.srbDirLeft.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnDirSelect)
-        self.srbDirRight.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnDirSelect)
+        self.remoteDirLeft.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnDirSelect)
+        self.remoteDirRight.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnDirSelect)
 
         # File Filter Events
         self.filterLeft.Bind(wx.EVT_CHOICE, self.OnDirSelect)
@@ -620,7 +677,7 @@ class FileManagement(wx.Dialog):
         # Enable Auto Layout
         self.SetAutoLayout(True)
         self.CenterOnScreen()
-        # Call OnSize to set the srb directory control size initially
+        # Call OnSize to set the SRB / sFTP directory control size initially
         self.OnSize(None)
 
         # Populate File Lists for initial directory settings
@@ -637,17 +694,46 @@ class FileManagement(wx.Dialog):
         """ Update the Text in the fake Status Bar """
         self.StatusText.SetLabel(txt)
 
-    def srbDisconnect(self):
-        """ Disconnect from the SRB """
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
-        # Break the connection to the SRB.
-        srb.srb_disconnect(self.srbConnectionID.value)
-        # Signal that the Connection has been broken by resetting the ConnectionID value to None
-        self.srbConnectionID = None
+    def RemoteDisconnect(self):
+        """ Disconnect from the SRB or sFTP Server """
+        # If we have a SRB connection ...
+        if self.connectionType == 'SRB':
+            # Load the SRB DLL / Dynamic Library
+            if "__WXMSW__" in wx.PlatformInfo:
+                srb = ctypes.cdll.srbClient
+            else:
+                srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+            # Break the connection to the SRB.
+            srb.srb_disconnect(self.srbConnectionID.value)
+            # Signal that the Connection has been broken by resetting the ConnectionID value to None
+            self.srbConnectionID = None
+
+        # If we have an sFTP connection ...
+        elif self.connectionType == 'sFTP':
+            # ... close the sFTP Client ...
+            self.sFTPClient.close()
+            # ... close the sFTP Transport ...
+            self.sFTPTransport.close()
+            # ... reset the sFTP Connection ID ...
+            self.sFTPConnectionID = None
+            # ... and clear the sFTP Home Path.
+            self.sFTPHomePath = None
+
+        # Re-enable the connection type selection
+        ## self.connectionTypeChoice.Enable(True)
+
+    def SetConnectionType(self, event):
+        """ Handle selection of Connection Type """
+        # Get the selection from the control
+        selection = self.connectionTypeChoice.GetStringSelection()
+        # if SRB is selected ...
+        if selection == 'SRB 3.3.1':
+            # ... signal that the SRB is in use
+            self.connectionType = 'SRB'
+        # If sFTP is selected ...
+        elif selection == 'sFTP':
+            # ... signal that the sFTP Server is in use
+            self.connectionType = 'sFTP'
 
     def OnSize(self, event):
         """ Form Resize Event """
@@ -660,26 +746,26 @@ class FileManagement(wx.Dialog):
         if self.dirLeft.IsShown():
             # Get the Size and Position of the current Directory Controls
             rectLeft = self.dirLeft.GetRect()
-            # Set the SRB Directory Controls to the same position and size as the regular Directory Controls
-            self.srbDirLeft.SetDimensions(rectLeft[0], rectLeft[1], rectLeft[2], rectLeft[3])
+            # Set the SRB / sFTP Directory Controls to the same position and size as the regular Directory Controls
+            self.remoteDirLeft.SetDimensions(rectLeft[0], rectLeft[1], rectLeft[2], rectLeft[3])
         # If the REMOTE directory listing is showing on the LEFT ...
         else:
             # Get the Size and Position of the current Directory Controls
-            rectLeft = self.srbDirLeft.GetRect()
-            # Set the SRB Directory Controls to the same position and size as the regular Directory Controls
+            rectLeft = self.remoteDirLeft.GetRect()
+            # Set the SRB / sFTP Directory Controls to the same position and size as the regular Directory Controls
             self.dirLeft.SetDimensions(rectLeft[0], rectLeft[1], rectLeft[2], rectLeft[3])
 
         # If the LOCAL directory listing is showing on the RIGHT ...
         if self.dirRight.IsShown():
             # Get the Size and Position of the current Directory Controls
             rectRight = self.dirRight.GetRect()
-            # Set the SRB Directory Controls to the same position and size as the regular Directory Controls
-            self.srbDirRight.SetDimensions(rectRight[0], rectRight[1], rectRight[2], rectRight[3])
+            # Set the SRB / sFTP Directory Controls to the same position and size as the regular Directory Controls
+            self.remoteDirRight.SetDimensions(rectRight[0], rectRight[1], rectRight[2], rectRight[3])
         # If the REMOTE directory listing is showing on the RIGHT ...
         else:
             # Get the Size and Position of the current Directory Controls
-            rectRight = self.srbDirRight.GetRect()
-            # Set the SRB Directory Controls to the same position and size as the regular Directory Controls
+            rectRight = self.remoteDirRight.GetRect()
+            # Set the SRB / sFTP Directory Controls to the same position and size as the regular Directory Controls
             self.dirRight.SetDimensions(rectRight[0], rectRight[1], rectRight[2], rectRight[3])
 
         # reset column widths for the File Lists
@@ -691,12 +777,14 @@ class FileManagement(wx.Dialog):
     def CloseWindow(self, event):
         """ Clean up upon closing the File Management Window """
         try:
-            # If we are connected to the SRB, we need to disconnect before closing the window
-            if self.srbConnectionID != None:
-                self.srbDisconnect()
+            # If we are connected to the sFTP server or the SRB, we need to disconnect before closing the window
+            if (self.sFTPConnectionID != None) or (self.srbConnectionID != None):
+                self.RemoteDisconnect()
         except:
             pass
 
+        # Destroy the sFTP Connection Dialog
+        self.sFTPConnDlg.Destroy()
         # Destroy the SRB Connection Dialog 
         self.SRBConnDlg.Destroy()
         # Hide the File Management Dialog.  (You can't destroy it here, like I used to, because that crashes on Mac as of
@@ -705,13 +793,15 @@ class FileManagement(wx.Dialog):
         # As of wxPython 2.8.6.1, you can't destroy yourself during Close on the Mac if you're Modal, and let's delay it a bit
         # if you're not Modal.
         if not self.isModal:
+            if self.parent != None:
+                self.parent.fileManagementWindow = None
             wx.CallAfter(self.Destroy)
 
     def OnMouseOver(self, event):
         """ Update the Status Bar when a button is moused-over """
         # Identify controls for the SOURCE data.  Copy, Move, and Synch RIGHT operate left to right, while all
         # other controls operate on the side they point to.
-        if event.GetId() in [self.btnCopyToRight.GetId(), self.btnMoveToRight.GetId(), self.btnSynchToRight.GetId(),
+        if event.GetEventObject().GetId() in [self.btnCopyToRight.GetId(), self.btnMoveToRight.GetId(), self.btnSynchToRight.GetId(),
                              self.btnDeleteLeft.GetId(), self.btnNewFolderLeft.GetId(), self.btnUpdateDBLeft.GetId(),
                              self.btnConnectLeft.GetId()]:
             # Get the Local / Remote label
@@ -726,7 +816,7 @@ class FileManagement(wx.Dialog):
             # If we are REMOTE ...
             else:
                 # ... get the REMOTE path
-                sourcePath = self.GetFullPath(self.srbDirLeft)
+                sourcePath = self.GetFullPath(self.remoteDirLeft)
             # Get the source File Control
             sourceFile = self.fileLeft
             # The directory control and file path differ for local and remote file systems
@@ -737,9 +827,9 @@ class FileManagement(wx.Dialog):
             # If the DESTINATION is REMOTE ...
             else:
                 # ... get the REMOTE path
-                destPath = self.GetFullPath(self.srbDirRight)
+                destPath = self.GetFullPath(self.remoteDirRight)
         # Copy, Move, and Synch LEFT operate right to left, while all other controls operate on the side they point to.
-        elif event.GetId() in [self.btnCopyToLeft.GetId(), self.btnMoveToLeft.GetId(), self.btnSynchToLeft.GetId(), 
+        elif event.GetEventObject().GetId() in [self.btnCopyToLeft.GetId(), self.btnMoveToLeft.GetId(), self.btnSynchToLeft.GetId(), 
                                self.btnDeleteRight.GetId(), self.btnNewFolderRight.GetId(), self.btnUpdateDBRight.GetId(),
                                self.btnConnectRight.GetId()]:
             # Get the Local / Remote label
@@ -754,7 +844,7 @@ class FileManagement(wx.Dialog):
             # If we are REMOTE ...
             else:
                 # ... get the REMOTE path
-                sourcePath = self.GetFullPath(self.srbDirRight)
+                sourcePath = self.GetFullPath(self.remoteDirRight)
             # Get the source File Control
             sourceFile = self.fileRight
             # The directory control and file path differ for local and remote file systems
@@ -765,13 +855,13 @@ class FileManagement(wx.Dialog):
             # If the DESTINATION is REMOTE ...
             else:
                 # ... get the REMOTE path
-                destPath = self.GetFullPath(self.srbDirLeft)
+                destPath = self.GetFullPath(self.remoteDirLeft)
 
         # Determine which button is being moused-over and display an appropriate message in the
         # Status Bar
 
         # Copy buttons
-        if event.GetId() in [self.btnCopyToLeft.GetId(), self.btnCopyToRight.GetId()]:
+        if event.GetEventObject().GetId() in [self.btnCopyToLeft.GetId(), self.btnCopyToRight.GetId()]:
             # Indicate whether selected files or all files will be copied
             if sourceFile.GetSelectedItemCount() == 0:
                 tempText = _('all')
@@ -787,7 +877,7 @@ class FileManagement(wx.Dialog):
             self.SetStatusText(prompt % (tempText, sourcePath, destPath))
 
         # Move buttons
-        elif event.GetId() in [self.btnMoveToLeft.GetId(), self.btnMoveToRight.GetId()]:
+        elif event.GetEventObject().GetId() in [self.btnMoveToLeft.GetId(), self.btnMoveToRight.GetId()]:
             # Indicate whether selected files or all files will be copied
             if sourceFile.GetSelectedItemCount() == 0:
                 tempText = _('all')
@@ -804,7 +894,7 @@ class FileManagement(wx.Dialog):
             self.SetStatusText(prompt % (tempText, sourcePath, destPath))
 
         # CopyAllNew buttons
-        elif event.GetId() in [self.btnSynchToLeft.GetId(), self.btnSynchToRight.GetId()]:
+        elif event.GetEventObject().GetId() in [self.btnSynchToLeft.GetId(), self.btnSynchToRight.GetId()]:
             # Create the appropriate Status Bar prompt
             prompt = _('Copy all new files files from %s to %s')
             # Specify source and destination Folder/Collections in Status Bar
@@ -815,7 +905,7 @@ class FileManagement(wx.Dialog):
             self.SetStatusText(prompt % (sourcePath, destPath))
 
         # Delete buttons
-        elif event.GetId() in [self.btnDeleteLeft.GetId(), self.btnDeleteRight.GetId()]:
+        elif event.GetEventObject().GetId() in [self.btnDeleteLeft.GetId(), self.btnDeleteRight.GetId()]:
             # Specify source Folder/Collection in the Status Bar
             # If there are files selected in the File List ...
             if (sourceFile.GetItemCount() > 0):
@@ -835,7 +925,7 @@ class FileManagement(wx.Dialog):
             self.SetStatusText(prompt % sourcePath)
 
         # New Folder button
-        elif event.GetId() in [self.btnNewFolderLeft.GetId(), self.btnNewFolderRight.GetId()]:
+        elif event.GetEventObject().GetId() in [self.btnNewFolderLeft.GetId(), self.btnNewFolderRight.GetId()]:
             # Create the appropriate Status Bar prompt
             prompt = _('Create new folder in %s')
             # Specify source Folder/Collection in the Status Bar
@@ -846,37 +936,55 @@ class FileManagement(wx.Dialog):
             self.SetStatusText(prompt % sourcePath)
 
         # Update DB button
-        elif event.GetId() in [self.btnUpdateDBLeft.GetId(), self.btnUpdateDBRight.GetId()]:
+        elif event.GetEventObject().GetId() in [self.btnUpdateDBLeft.GetId(), self.btnUpdateDBRight.GetId()]:
             if sourceLbl.GetLabel() == self.LOCAL_LABEL:
+                prompt = _('Update selected file locations in the Transana database to %s')
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(prompt, 'utf8')
                 # Put the prompt in the Status Bar
-                self.SetStatusText(_('Update selected file locations in the Transana database to %s') % sourcePath)
+                self.SetStatusText(prompt % sourcePath)
             else:
+                prompt = _('You cannot update the file locations in the database to %s')
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(prompt, 'utf8')
                 # Display error message in the Status Bar
-                self.SetStatusText(_('You cannot update the file locations in the database to %s') % sourcePath)
+                self.SetStatusText(prompt % sourcePath)
 
         # Connect button
-        elif event.GetId() in [self.btnConnectLeft.GetId(), self.btnConnectRight.GetId()]:
+        elif event.GetEventObject().GetId() in [self.btnConnectLeft.GetId(), self.btnConnectRight.GetId()]:
             # Status Bar Text needs to indicate whether this button will establish or break
             # the connection to the SRB
             if sourceLbl.GetLabel() == self.LOCAL_LABEL:
-                # Put the prompt in the Status Bar
-                self.SetStatusText(_('Connect %s side to SRB') % sideLbl)
+                # If our remote server is a SRB ...
+                if self.connectionType == 'SRB':
+                    # Put the prompt in the Status Bar
+                    self.SetStatusText(_('Connect %s side to SRB') % sideLbl)
+                else:
+                    # Put the prompt in the Status Bar
+                    self.SetStatusText(_('Connect %s side to sFTP') % sideLbl)
             else:
-                # Put the prompt in the Status Bar
-                self.SetStatusText(_('Disconnect %s side from SRB') % sideLbl)
+                # If our remote server is a SRB ...
+                if self.connectionType == 'SRB':
+                    # Put the prompt in the Status Bar
+                    self.SetStatusText(_('Disconnect %s side from SRB') % sideLbl)
+                else:
+                    # Put the prompt in the Status Bar
+                    self.SetStatusText(_('Disconnect %s side from sFTP') % sideLbl)
 
         # Refresh button
-        elif event.GetId() == self.btnRefresh.GetId():
+        elif event.GetEventObject().GetId() == self.btnRefresh.GetId():
             # Put the prompt in the Status Bar
             self.SetStatusText(_('Refresh File Lists'))
 
         # Close button
-        elif event.GetId() == self.btnClose.GetId():
+        elif event.GetEventObject().GetId() == self.btnClose.GetId():
             # Put the prompt in the Status Bar
             self.SetStatusText(_('Close File Management'))
 
         # Help button
-        elif event.GetId() == self.btnHelp.GetId():
+        elif event.GetEventObject().GetId() == self.btnHelp.GetId():
             # Put the prompt in the Status Bar
             self.SetStatusText(_('View File Management Help'))
 
@@ -967,12 +1075,27 @@ class FileManagement(wx.Dialog):
             # Read the list of folders from the SRB and put them in the SRB Dir Tree
             # Start by clearing the list
             dirCtrl.DeleteAllItems()
+            # If we're connected to the SRB ...
+            if self.connectionType == 'SRB':
+                # ... then we start with the tmpCollection name
+                rootItemText = self.tmpCollection
+            # If we're connected to the sFTP Server ...
+            elif self.connectionType == 'sFTP':
+                # ... then we start at the root item
+                rootItemText = '/'
             # Add a Root Item to the SRB Dir Tree
-            srbRootItem = dirCtrl.AddRoot(self.srbCollection)
-            # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
-            self.srbAddChildNode(dirCtrl, srbRootItem, self.tmpCollection)
+            rootItem = dirCtrl.AddRoot(rootItemText)
+            # If we're connected to the SRB ...
+            if self.connectionType == 'SRB':
+                # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
+                self.remoteAddChildNode(dirCtrl, rootItem, self.tmpCollection)
+            # If we're connected to the sFTP Server ...
+            elif self.connectionType == 'sFTP':
+                self.sFTPClient.chdir(self.sFTPHomePath)
+                # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
+                self.remoteAddChildNode(dirCtrl, rootItem, '.')
             # Expand the previously selected item
-            dirCtrl.Expand(srbRootItem)
+            dirCtrl.Expand(rootItem)
 
             # Now look for the correct path, so we can expand it
             # Initialize a pointer to the position in the Node List
@@ -980,9 +1103,17 @@ class FileManagement(wx.Dialog):
             # Remove the slash that is probably at the end of the path
             if path[-1] == '/':
                 path = path[:-1]
-            # Create the list of nodes we need to move up.  Remove SRB basic info (/WCER/home/dwoods.digital-insight) 
-            # from the start of the path.
-            nodeList = path.split('/')[4:]
+            # If we're connected to the SRB ...
+            if self.connectionType == 'SRB':
+                # Create the list of nodes we need to move up.  Remove SRB basic info (/WCER/home/dwoods.digital-insight) 
+                # from the start of the path.
+                nodeList = path.split('/')[4:]
+            # If we're connected to the sFTP Server ...
+            elif self.connectionType == 'sFTP':
+                # Get the Home Path, split at the directory boundaries
+                homeNodeList = self.sFTPHomePath.split('/')
+                # Now create the Node List, skipping the number of directories indicated by the Home Path nodes from above
+                nodeList = path.split('/')[len(homeNodeList):]
             # Start at the Root item
             currentNode = dirCtrl.GetRootItem()
             # For each node ...
@@ -1022,22 +1153,8 @@ class FileManagement(wx.Dialog):
                 # ... and expand it to show its subdirectories, if there are any
                 dirCtrl.Expand(currentNode)
 
-    def GetSRBDirectoryList(self, startDir):
-        """ Get a list of all directories within a SRB collection """
-        #  srbDaiMcatQuerySubColls runs a query on the SRB server and returns a number of records.  Not the total
-        #  number of records, perhaps, but the number it can read into a data buffer.  According to Bing Zhu at
-        #  SDSC, it is about 200 records at a time.
-        #
-        #  Those records can then be accessed by using srbDaiMcatGetColl.
-        #
-        #  Once all the records in the buffer are read, srbDaiMcatGetMoreColls is called, telling the SRB server
-        #  to fill the buffer with the next set of records.  Only when this function returns a value of 0 have all
-        #  the records been returned.
-        #
-        #  Also, this function cannot be called recursively, because the SRB loses it's place when backing out of the
-        #  recursion.  Therefore, I will use a List structure to pull all the Collection Names out at once, then call
-        #  this method recursively based on that list's items.  In other words, we need to exhaust a given srbDaiMcatQuerySubColls
-        #  call before we move on to the next recursion.
+    def GetRemoteDirectoryList(self, startDir):
+        """ Get a list of all directories within a SRB of sFTP collection """
 
         # Set a temporary varaible for the starting collection, encoding it if needed
         tmpCollection = startDir
@@ -1048,110 +1165,192 @@ class FileManagement(wx.Dialog):
         # Start with an empty Node List and an empty list of values to return
         nodeList = []
         returnList = []
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
-        # Get the list of sub-Collections from the SRB
-        srbCatalogCount = srb.srb_query_subcolls(self.srbConnectionID.value, 0, tmpCollection)
-        # Check to see if Sub-Collections are returned or if an error code (negative result) is generated
-        if srbCatalogCount < 0:
-            # Report an error, if found
-            self.srbErrorMessage(srbCatalogCount)
-        # If no error occurred ...
-        else:
-            # Process the partial list and request more data from the SRB as long as additional data is forthcoming.
-            # (srbCatalogCount > 0 indicates there is more data, while a value of 0 indicates all data has been sent.)
-            while srbCatalogCount > 0:
-                # Loop through all data in the partial list that has been returned from the SRB so far
-                for loop in range(srbCatalogCount):
-                    # Create a 1k buffer of spaces to receive data from the SRB
-                    buf = ' ' * 1024
-                    # Get data for the next Collection in the partial list (indicated by "loop")
-                    srb.srb_get_coll_data(loop, buf, len(buf))
 
-                    # Strip whitespace from the buffer
-                    tempStr = string.strip(buf)
-                    # Remove the #0 terminator character from the end of the string
-                    if ord(tempStr[-1]) == 0:
-                        tempStr = tempStr[:-1]
-               
-                    # Add the full path, not just the last part of it, to the nodeList for further processing
-                    nodeList.append(tempStr)
+        # if we're connected to a SRB ...
+        if self.connectionType == 'SRB':
 
-                # When all elements of a partial list have been processed, request the next chunk of the list.
-                # If the entire list of Collections has been sent, the SRB function will return 0
-                srbCatalogCount = srb.srb_get_more_subcolls(self.srbConnectionID.value)
+            #  srbDaiMcatQuerySubColls runs a query on the SRB server and returns a number of records.  Not the total
+            #  number of records, perhaps, but the number it can read into a data buffer.  According to Bing Zhu at
+            #  SDSC, it is about 200 records at a time.
+            #
+            #  Those records can then be accessed by using srbDaiMcatGetColl.
+            #
+            #  Once all the records in the buffer are read, srbDaiMcatGetMoreColls is called, telling the SRB server
+            #  to fill the buffer with the next set of records.  Only when this function returns a value of 0 have all
+            #  the records been returned.
+            #
+            #  Also, this function cannot be called recursively, because the SRB loses it's place when backing out of the
+            #  recursion.  Therefore, I will use a List structure to pull all the Collection Names out at once, then call
+            #  this method recursively based on that list's items.  In other words, we need to exhaust a given srbDaiMcatQuerySubColls
+            #  call before we move on to the next recursion.
 
-                # Check to see if Sub-Collections are returned or if an error code (negative result) is generated
-                if srbCatalogCount < 0:
-                    self.srbErrorMessage(srbCatalogCount)
+            # Load the SRB DLL / Dynamic Library
+            if "__WXMSW__" in wx.PlatformInfo:
+                srb = ctypes.cdll.srbClient
+            else:
+                srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+            # Get the list of sub-Collections from the SRB
+            srbCatalogCount = srb.srb_query_subcolls(self.srbConnectionID.value, 0, tmpCollection)
+            # Check to see if Sub-Collections are returned or if an error code (negative result) is generated
+            if srbCatalogCount < 0:
+                # Report an error, if found
+                self.srbErrorMessage(srbCatalogCount)
+            # If no error occurred ...
+            else:
+                # Process the partial list and request more data from the SRB as long as additional data is forthcoming.
+                # (srbCatalogCount > 0 indicates there is more data, while a value of 0 indicates all data has been sent.)
+                while srbCatalogCount > 0:
+                    # Loop through all data in the partial list that has been returned from the SRB so far
+                    for loop in range(srbCatalogCount):
+                        # Create a 1k buffer of spaces to receive data from the SRB
+                        buf = ' ' * 1024
+                        # Get data for the next Collection in the partial list (indicated by "loop")
+                        srb.srb_get_coll_data(loop, buf, len(buf))
 
-            # For each item in the node list ...
-            for item in nodeList:
-                # ... add it to the Return List
-                returnList.append(item)
-                # Call this method recursively to get the subdirectories of each directory!
-                returnList += self.GetSRBDirectoryList(item)
-                
+                        # Strip whitespace from the buffer
+                        tempStr = string.strip(buf)
+                        # Remove the #0 terminator character from the end of the string
+                        if ord(tempStr[-1]) == 0:
+                            tempStr = tempStr[:-1]
+                   
+                        # Add the full path, not just the last part of it, to the nodeList for further processing
+                        nodeList.append(tempStr)
+
+                    # When all elements of a partial list have been processed, request the next chunk of the list.
+                    # If the entire list of Collections has been sent, the SRB function will return 0
+                    srbCatalogCount = srb.srb_get_more_subcolls(self.srbConnectionID.value)
+
+                    # Check to see if Sub-Collections are returned or if an error code (negative result) is generated
+                    if srbCatalogCount < 0:
+                        self.srbErrorMessage(srbCatalogCount)
+
+                # For each item in the node list ...
+                for item in nodeList:
+                    # ... add it to the Return List
+                    returnList.append(item)
+                    # Call this method recursively to get the subdirectories of each directory!
+                    returnList += self.GetRemoteDirectoryList(item)
+
+        # if we're connected to an sFTP Server ...
+        elif self.connectionType == 'sFTP':
+
+            # Remember the current sFTP directory
+            cwd = self.sFTPClient.getcwd()
+            # if the startDir ends with a slash ...
+            if startDir[-1] == '/':
+                # ... then strip it
+                startDir = startDir[:-1]
+            # Change the sFTP server to the Start Directory
+            self.sFTPClient.chdir(startDir)
+
+            # For each entry in the directory's list ...
+            for tempStr in self.sFTPClient.listdir(startDir):
+                # ... if we don't have a system file, which should be ignored ...
+                if tempStr[0] != '.':
+                    # ... get the file's status
+                    fileStat = self.sFTPClient.stat(tempStr)
+                    # If the listing is a Directory ...
+                    if stat.S_ISDIR(fileStat.st_mode):
+                        # Encode values, if needed
+                        if isinstance(startDir, unicode):
+                            startDir = startDir.encode('utf8')
+                        if isinstance(tempStr, unicode):
+                            tempStr = tempStr.encode('utf8')
+                        # ... add the directory name to the list of nodes to add
+                        returnList.append(string.join([startDir, tempStr], '/'))
+                        # Call this method recursively to get the subdirectories of each directory!
+                        returnList += self.GetRemoteDirectoryList(string.join([startDir, tempStr], '/'))
+
+            # Change the sFTP Server back to the directory where it was
+            self.sFTPClient.chdir(cwd)
+
+            # Sort the list of directories
+            returnList.sort()
+            
+            # For each directory ...
+            for node in returnList:
+                # ... recursively call this routine
+                self.GetRemoteDirectoryList(node)
         # Return the results
         return returnList
 
-    def GetSRBFileList(self, path):
+    def GetRemoteFileList(self, path):
         """ Get a list of all files within a SRB collection """
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
-
-        #  srbDaiMcatQueryChildDataset runs a query on the SRB server and returns a number of records.  Not the total
-        #  number of records, perhaps, but the number it can read into a data buffer.  According to Bing Zhu at
-        #  SDSC, it is about 200 records at a time.
-        #
-        #  Those records can then be accessed by using srbDaiMcatGetData.
-        #
-        #  Once all the records in the buffer are read, srbDaiMcatGetMoreData is called, telling the SRB server
-        #  to fill the buffer with the next set of records.  Only when this function returns a value of 0 have all
-        #  the records been returned.
-         
         # Create an empty File List
         filelist = []
-        # If the calling path ends with a slash, remove that character (which interferes with SRB calls)
-        if path[-1] == '/':
-            path = path[:-1]
-        # Encode the path
-        if ('unicode' in wx.PlatformInfo) and isinstance(path, unicode):
-            path = path.encode(TransanaGlobal.encoding)
 
-        # Now we retrieve the list of files from the SRB.
-        # Get the first batch of File Names from the SRB
-        srbCatalogCount = srb.srb_query_child_dataset(self.srbConnectionID.value, 0, path)
+        # if we're connected to the SRB
+        if self.connectionType == 'SRB':
+            # Load the SRB DLL / Dynamic Library
+            if "__WXMSW__" in wx.PlatformInfo:
+                srb = ctypes.cdll.srbClient
+            else:
+                srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
 
-        # Check for errors in getting the File Names
-        if srbCatalogCount < 0:
-            # Report the error, it present
-            self.srbErrorMessage(srbCatalogCount)
-        # If there's no error ...
-        else:
-            # As long as there are Data objects in the SRB's Data Buffer...
-            while srbCatalogCount > 0:
-                # Iterate through the items in the Buffer by Item Number
-                for loop in range(srbCatalogCount):
-                    # Create an string full of spaces to recieve data from the SRB
-                    buf = ' ' * 1024
-                    # Get the next Data Record (File Name) from the SRB (result stored in "buf")
-                    srb.srb_get_dataset_system_metadata(0, loop, buf, len(buf))
-                    # Strip extraneous whitespace (a chr(0) remains on the end of the file name)
-                    tempStr = string.strip(buf)
-                    if ord(tempStr[-1]) == 0:
-                        tempStr = tempStr[:-1]
-                    # Add the result to the File List
-                    filelist.append(tempStr)
+            #  srbDaiMcatQueryChildDataset runs a query on the SRB server and returns a number of records.  Not the total
+            #  number of records, perhaps, but the number it can read into a data buffer.  According to Bing Zhu at
+            #  SDSC, it is about 200 records at a time.
+            #
+            #  Those records can then be accessed by using srbDaiMcatGetData.
+            #
+            #  Once all the records in the buffer are read, srbDaiMcatGetMoreData is called, telling the SRB server
+            #  to fill the buffer with the next set of records.  Only when this function returns a value of 0 have all
+            #  the records been returned.
+             
+            # If the calling path ends with a slash, remove that character (which interferes with SRB calls)
+            if path[-1] == '/':
+                path = path[:-1]
+            # Encode the path
+            if ('unicode' in wx.PlatformInfo) and isinstance(path, unicode):
+                path = path.encode(TransanaGlobal.encoding)
 
-                # Make another call to the SRB to see if there are more records to read into the SRB's Data Buffer
-                srbCatalogCount = srb.srb_get_more_subcolls(self.srbConnectionID.value)
+            # Now we retrieve the list of files from the SRB.
+            # Get the first batch of File Names from the SRB
+            srbCatalogCount = srb.srb_query_child_dataset(self.srbConnectionID.value, 0, path)
+
+            # Check for errors in getting the File Names
+            if srbCatalogCount < 0:
+                # Report the error, it present
+                self.srbErrorMessage(srbCatalogCount)
+            # If there's no error ...
+            else:
+                # As long as there are Data objects in the SRB's Data Buffer...
+                while srbCatalogCount > 0:
+                    # Iterate through the items in the Buffer by Item Number
+                    for loop in range(srbCatalogCount):
+                        # Create an string full of spaces to recieve data from the SRB
+                        buf = ' ' * 1024
+                        # Get the next Data Record (File Name) from the SRB (result stored in "buf")
+                        srb.srb_get_dataset_system_metadata(0, loop, buf, len(buf))
+                        # Strip extraneous whitespace (a chr(0) remains on the end of the file name)
+                        tempStr = string.strip(buf)
+                        if ord(tempStr[-1]) == 0:
+                            tempStr = tempStr[:-1]
+                        # Add the result to the File List
+                        filelist.append(tempStr)
+
+                    # Make another call to the SRB to see if there are more records to read into the SRB's Data Buffer
+                    srbCatalogCount = srb.srb_get_more_subcolls(self.srbConnectionID.value)
+
+        # If we're connected to the sFTP Server ...
+        elif self.connectionType == 'sFTP':
+            # Get the list of folders/files in the current path on the sFTP server and iterate through them
+            for tempStr in self.sFTPClient.listdir(path):
+                # If the sFTP directory object isn't a hidden system file (starting with a dot) ...
+                if not (tempStr[0] in ['.', '/']):
+                    # Encode values, if needed
+                    if isinstance(path, unicode):
+                        path = path.encode('utf8')
+                    if isinstance(tempStr, unicode):
+                        tempStr = tempStr.encode('utf8')
+                    # ... get the file information for the sFTP directory object
+                    y = self.sFTPClient.stat(string.join([path, tempStr], '/'))
+                    # if the sFTP directory object is a REGULAR FILE ...
+                    if stat.S_ISREG(y.st_mode):
+                        # ... add the sFTP directory object to the File List
+                        filelist.append(tempStr)
+            # Sort the File List
+            filelist.sort()
 
         # Return the results
         return filelist
@@ -1160,6 +1359,16 @@ class FileManagement(wx.Dialog):
         """ Copy or Move a FILE from LOCAL to LOCAL """
         # Build the full File Name by joining the source path with the file name from the list
         sourceFile = os.path.join(sourceDir, fileName)
+        # Confirm that the file exists
+        if not os.path.exists(sourceFile):
+            # If not, inform the user ...
+            prompt = unicode(_('File "%s" not found.')) + u'\n' + unicode(_('Please press "Refresh".'), 'utf8')
+            dlg = Dialogs.ErrorDialog(self, prompt % sourceFile)
+            dlg.ShowModal()
+            dlg.Destroy()
+            # ... and exit
+            return True
+
         # If we want to MOVE the file ...
         if moveFlag:
             # Create the Status Prompt
@@ -1195,9 +1404,11 @@ class FileManagement(wx.Dialog):
                 dlg.Show()  # NOT Modal, and no Destroy prevents interruption
             # Update the status to indicate the move is done
             self.SetStatusText(_('Move complete.'))
+            return True
 
         # ... otherwise we want to copy the file
         else:
+            success = True
             # Create the Status Prompt
             prompt = _('Copying %s to %s')
             if 'unicode' in wx.PlatformInfo:
@@ -1207,8 +1418,14 @@ class FileManagement(wx.Dialog):
             self.SetStatusText(prompt % (sourceFile, destDir))
             # Check if the destination file already exists.  If NOT ...
             if not os.path.exists(os.path.join(destDir, fileName)):
-                # shutil is the most efficient way I have found to copy a file on the local file system
-                shutil.copyfile(sourceFile, os.path.join(destDir, fileName))
+                
+                if os.stat(sourceFile)[6] < 5000000:
+                    # copy the file to the destination path
+                    shutil.copyfile(sourceFile, os.path.join(destDir, fileName))
+                else:
+                    dlg = LocalFileTransfer.LocalFileTransfer(self, _("Local File Transfer"), sourceFile, destDir)
+                    success = dlg.TransferSuccessful()
+                    dlg.Destroy()
             # If the file DOES exist ...
             else:
                 # Create an error message
@@ -1220,11 +1437,26 @@ class FileManagement(wx.Dialog):
                 dlg.Show()  # NOT Modal, and no Destroy prevents interruption
             # Update the status to indicate the copy is done
             self.SetStatusText(_('Copy complete.'))
+            return success
 
     def FileCopyMoveLocalToRemote(self, moveFlag, sourceDir, destDir, fileName):
         """ Copy or Move a FILE from LOCAL to REMOTE (SRB) """
+        # If the SourceDir is a STRING ...
+        if isinstance(sourceDir, str):
+            # ... we have to decode it with the proper encoding!
+            sourceDir = sourceDir.decode(TransanaGlobal.encoding)
         # Build the full File Name by joining the source path with the file name from the list
         sourceFile = os.path.join(sourceDir, fileName)
+        # Confirm that the file exists
+        if not os.path.exists(sourceFile):
+            # If not, inform the user ...
+            prompt = unicode(_('File "%s" not found.')) + u'\n' + unicode(_('Please press "Refresh".'), 'utf8')
+            dlg = Dialogs.ErrorDialog(self, prompt % sourceFile)
+            dlg.ShowModal()
+            dlg.Destroy()
+            # ... and exit
+            return
+                             
         # Get the File Size
         fileSize = os.path.getsize(sourceFile)
         # If we want to MOVE the file ...
@@ -1245,10 +1477,19 @@ class FileManagement(wx.Dialog):
                 prompt = unicode(prompt, 'utf8')
             # Display the prompt
             self.SetStatusText(prompt % (sourceFile, destDir))
-        # The SRBFileTransfer class handles file transfers and provides Progress Feedback
-        dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), fileName, fileSize, sourceDir, self.srbConnectionID, destDir, SRBFileTransfer.srb_UPLOAD, self.srbBuffer)
-        success = dlg.TransferSuccessful()
-        dlg.Destroy()
+
+        # If we're connecting to the SRB ...
+        if self.connectionType == 'SRB':
+            # The SRBFileTransfer class handles file transfers and provides Progress Feedback
+            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), fileName, fileSize, sourceDir, self.srbConnectionID, destDir, SRBFileTransfer.srb_UPLOAD, self.srbBuffer)
+            success = dlg.TransferSuccessful()
+            dlg.Destroy()
+        # If we're connecting to the sFTP Server ...
+        elif self.connectionType == 'sFTP':
+            # The sFTPFileTransfer class handles file transfers and provides Progress Feedback
+            dlg = sFTPFileTransfer.sFTPFileTransfer(self, _("sFTP File Transfer"), fileName, sourceDir, destDir, sFTPFileTransfer.sFTP_UPLOAD)
+            success = dlg.TransferSuccessful()
+            dlg.Destroy()
         # Report the outcome in the status bar.  If we MOVED ...
         if moveFlag:
             # ... and succeeded ...
@@ -1276,11 +1517,6 @@ class FileManagement(wx.Dialog):
 
     def FileCopyMoveRemoteToLocal(self, moveFlag, sourceDir, destDir, fileName, sourceFileIndex):
         """ Copy or Move a FILE from REMOTE (SRB) to LOCAL """
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
         # Build the full File Name by joining the source path with the file name from the list
         sourceFile = os.path.join(sourceDir, fileName)
         # If we want to MOVE the file ...
@@ -1302,31 +1538,45 @@ class FileManagement(wx.Dialog):
             # Display the prompt
             self.SetStatusText(prompt % (sourceFile, destDir))
 
-        # Check if the destination file already exists.  If NOT ...
-        if not os.path.exists(os.path.join(destDir, fileName)):
-            # Find the File Size
-            buf = ' ' * 50
-            srb.srb_get_dataset_system_metadata(2, sourceFileIndex, buf, 50)
-            # Strip whitespace and null character (c string terminator) from buf
-            buf = string.strip(buf)
-            # Strip the #0 null character off the buffer, if needed
-            if ord(buf[-1]) == 0:
-                buf = buf[:-1]
-            # The SRBFileTransfer class handles file transfers and provides Progress Feedback
-            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), fileName, int(buf), destDir, self.srbConnectionID, sourceDir, SRBFileTransfer.srb_DOWNLOAD, self.srbBuffer)
+        # If we're connected to the SRB ...
+        if self.connectionType == 'SRB':
+            # Load the SRB DLL / Dynamic Library
+            if "__WXMSW__" in wx.PlatformInfo:
+                srb = ctypes.cdll.srbClient
+            else:
+                srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+            # Check if the destination file already exists.  If NOT ...
+            if not os.path.exists(os.path.join(destDir, fileName)):
+                # Find the File Size
+                buf = ' ' * 50
+                srb.srb_get_dataset_system_metadata(2, sourceFileIndex, buf, 50)
+                # Strip whitespace and null character (c string terminator) from buf
+                buf = string.strip(buf)
+                # Strip the #0 null character off the buffer, if needed
+                if ord(buf[-1]) == 0:
+                    buf = buf[:-1]
+                # The SRBFileTransfer class handles file transfers and provides Progress Feedback
+                dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), fileName, int(buf), destDir, self.srbConnectionID, sourceDir, SRBFileTransfer.srb_DOWNLOAD, self.srbBuffer)
+                success = dlg.TransferSuccessful()
+                dlg.Destroy()
+            # If the file DOES exist ...
+            else:
+                # ... indicate that the copy failed.
+                success = False
+                # Create an error message
+                errMsg = _('File "%s" could not be copied.') + '\n' + _('File "%s" already exists.')
+                if 'unicode' in wx.PlatformInfo:
+                    errMsg = unicode(errMsg, 'utf8')
+                # Display the error message
+                dlg = Dialogs.ErrorDialog(self, errMsg % (sourceFile, os.path.join(destDir, fileName)))
+                dlg.Show()  # NOT Modal, and no Destroy prevents interruption
+        # If we're connected to the sFTP Server ...
+        elif self.connectionType == 'sFTP':
+            # The sFTPFileTransfer class handles file transfers and provides Progress Feedback
+            dlg = sFTPFileTransfer.sFTPFileTransfer(self, _("sFTP File Transfer"), fileName, destDir, sourceDir, sFTPFileTransfer.sFTP_DOWNLOAD)
             success = dlg.TransferSuccessful()
             dlg.Destroy()
-        # If the file DOES exist ...
-        else:
-            # ... indicate that the copy failed.
-            success = False
-            # Create an error message
-            errMsg = _('File "%s" could not be copied.') + '\n' + _('File "%s" already exists.')
-            if 'unicode' in wx.PlatformInfo:
-                errMsg = unicode(errMsg, 'utf8')
-            # Display the error message
-            dlg = Dialogs.ErrorDialog(self, errMsg % (sourceFile, os.path.join(destDir, fileName)))
-            dlg.Show()  # NOT Modal, and no Destroy prevents interruption
+            
         # Report the outcome in the status bar.  If we MOVED ...
         if moveFlag:
             # ... and succeeded ...
@@ -1350,7 +1600,7 @@ class FileManagement(wx.Dialog):
                 # ... report the failure
                 self.SetStatusText(_('Copy cancelled.'))
         # If the COPY/MOVE failed because the destination already exists ...
-        if os.path.exists(os.path.join(destDir, fileName)):
+        if (self.connectionType != 'sFTP') and os.path.exists(os.path.join(destDir, fileName)):
             # ... we don't need to interrupt the whole copy/move process
             success = True
         # Return the result
@@ -1358,11 +1608,6 @@ class FileManagement(wx.Dialog):
 
     def FileCopyMoveRemoteToRemote(self, moveFlag, sourceDir, destDir, fileName):
         """ Copy or Move a FILE from REMOTE (SRB) to REMOTE (SRB) """
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
         # Build the full File Name by joining the source path with the file name from the list
         sourceFile = sourceDir + u'/' + fileName
         # If we want to MOVE the file ...
@@ -1397,29 +1642,69 @@ class FileManagement(wx.Dialog):
             tmpFile = tmpFile.encode(TransanaGlobal.encoding)
             tmpSourceDir = tmpSourceDir.encode(TransanaGlobal.encoding)
             tmpTargetDir = tmpTargetDir.encode(TransanaGlobal.encoding)
-
-        # Copy the SRB files
-        Result = srb.srb_obj_to_coll_copy(  
-                    self.srbConnectionID,    # Connection ID
-                    0,                       # Catalog Type - Use 0
-                    tmpFile,                 # Source File name
-                    0,                       # "replNum" - Use 0. Transana does not support replications
-                    tmpSourceDir,            # Source Collection
-                    'unknown',               # File Type - "unknown" works
-                    0,                       # Size - ??
-                    tmpTargetDir,            # Destination Collection
-                    self.tmpResource,        # Resource (could be different than old Resource!)  Transana does not support alternate Resource Specification at this time!
-                    '');                     # Container.  Transana does not use Containers.
-        # If there was an error ...
-        if Result < 0:
-            # ... report the error message
-            self.srbErrorMessage(Result)
+        # If our remote server is a SRB ...
+        if self.connectionType == 'SRB':
+            # Load the SRB DLL / Dynamic Library
+            if "__WXMSW__" in wx.PlatformInfo:
+                srb = ctypes.cdll.srbClient
+            else:
+                srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+            # Copy the SRB files
+            Result = srb.srb_obj_to_coll_copy(  
+                        self.srbConnectionID,    # Connection ID
+                        0,                       # Catalog Type - Use 0
+                        tmpFile,                 # Source File name
+                        0,                       # "replNum" - Use 0. Transana does not support replications
+                        tmpSourceDir,            # Source Collection
+                        'unknown',               # File Type - "unknown" works
+                        0,                       # Size - ??
+                        tmpTargetDir,            # Destination Collection
+                        self.tmpResource,        # Resource (could be different than old Resource!)  Transana does not support alternate Resource Specification at this time!
+                        '');                     # Container.  Transana does not use Containers.
+            # If there was an error ...
+            if Result < 0:
+                # ... report the error message
+                self.srbErrorMessage(Result)
+        # if our remote server is an sFTP Server ...
+        elif self.connectionType == 'sFTP':
+            # If Moving ...
+            if moveFlag:
+                # Start exception handling
+                try:
+                    # Encode values, if needed
+                    if isinstance(tmpSourceDir, unicode):
+                        tmpSourceDir = tmpSourceDir.encode('utf8')
+                    if isinstance(tmpTargetDir, unicode):
+                        tmpTargetDir = tmpTargetDir.encode('utf8')
+                    if isinstance(tmpFile, unicode):
+                        tmpFile = tmpFile.encode('utf8')
+                    # Rename handles sFTP to sFTP MOVE very quickly
+                    self.sFTPClient.rename(string.join([tmpSourceDir, tmpFile], '/'), string.join([tmpTargetDir, tmpFile], '/'))
+                    # Indicate success if no exception is raised
+                    Result = 1
+                # If an exception arises
+                except:   # IOError
+                    # ... signal failure
+                    Result = 0
+                    # Inform the user ...
+                    prompt = unicode(_('File "%s" not found.')) + u'\n' + unicode(_('Please press "Refresh".'), 'utf8')
+                    dlg = Dialogs.ErrorDialog(self, prompt % unicode(string.join([tmpSourceDir, tmpFile], '/'), 'utf8'))
+                    dlg.ShowModal()
+                    dlg.Destroy()
+            # if Copying ...
+            else:
+                # Signal failure  (that the COPY is not supported)
+                Result = 0
+                
+                
         # Report the outcome in the status bar.  If we MOVED ...
         if moveFlag:
             # If we succeeded ...
             if Result >= 0 :
-                # ... delete the SOURCE file to complete the MOVE ...
-                self.DeleteFile(self.REMOTE_LABEL, sourceDir, fileName)
+                # If the remote server is a SRB ...
+                if self.connectionType == 'SRB':
+                    # ... delete the SOURCE file to complete the MOVE ...
+                    self.DeleteFile(self.REMOTE_LABEL, sourceDir, fileName)
                 # ... and report success
                 self.SetStatusText(_('Move complete.'))
             # ... and failed ...
@@ -1454,7 +1739,7 @@ class FileManagement(wx.Dialog):
             if sourceLbl == self.LOCAL_LABEL:
                 sourceDir = self.dirLeft.GetPath()
             else:
-                sourceDir = self.GetFullPath(self.srbDirLeft)
+                sourceDir = self.GetFullPath(self.remoteDirLeft)
             sourceFile = self.fileLeft
             sourceFilter = self.filterLeft
             # ... and get the DEST from the RIGHT side
@@ -1463,7 +1748,7 @@ class FileManagement(wx.Dialog):
             if destLbl == self.LOCAL_LABEL:
                 destDir = self.dirRight.GetPath()
             else:
-                destDir = self.GetFullPath(self.srbDirRight)
+                destDir = self.GetFullPath(self.remoteDirRight)
             destFile = self.fileRight
             destFilter = self.filterRight
         # If we're going from Right to Left ...
@@ -1474,7 +1759,7 @@ class FileManagement(wx.Dialog):
             if sourceLbl == self.LOCAL_LABEL:
                 sourceDir = self.dirRight.GetPath()
             else:
-                sourceDir = self.GetFullPath(self.srbDirRight)
+                sourceDir = self.GetFullPath(self.remoteDirRight)
             sourceFile = self.fileRight
             sourceFilter = self.filterRight
             # ... and get the DEST from the LEFT side
@@ -1483,7 +1768,7 @@ class FileManagement(wx.Dialog):
             if destLbl == self.LOCAL_LABEL:
                 destDir = self.dirLeft.GetPath()
             else:
-                destDir = self.GetFullPath(self.srbDirLeft)
+                destDir = self.GetFullPath(self.remoteDirLeft)
             destFile = self.fileLeft
             destFilter = self.filterLeft
 
@@ -1515,23 +1800,31 @@ class FileManagement(wx.Dialog):
 
         # Set the Cursor to the Hourglass
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
 
         # Copy or Move from Local Drive to Local Drive
         if (sourceLbl == self.LOCAL_LABEL) and \
            (destLbl == self.LOCAL_LABEL):
             # For each file in the fileList ...
             for fileNm in fileList:
-                # ... call the Local to Local File Copy routine
-                self.FileCopyMoveLocalToLocal(moveFlag, sourceDir, destDir, fileNm)
-                # Let's update the dest control after every file so that the new files show up in the list ASAP.
-                self.RefreshFileList(destLbl, destDir, destFile, destFilter)
-                # wxYield allows the Windows Message Queue to update the display.
-                wx.Yield()
+                # See if the file is already in the destination list.  If NOT ...
+                if destFile.FindItem(-1, fileNm) == -1:
+                    # ... call the Local to Local File Copy routine
+                    success = self.FileCopyMoveLocalToLocal(moveFlag, sourceDir, destDir, fileNm)
+                    # Let's update the dest control after every file so that the new files show up in the list ASAP.
+                    self.RefreshFileList(destLbl, destDir, destFile, destFilter)
+                    # wxYield allows the Windows Message Queue to update the display.
+                    wx.Yield()
+                    if not success:
+                        break
+                else:
+
+                    # Create an error message
+                    errMsg = _('File "%s" could not be copied.') + '\n' + _('File "%s" already exists.')
+                    if 'unicode' in wx.PlatformInfo:
+                        errMsg = unicode(errMsg, 'utf8')
+                    # Display the error message
+                    dlg = Dialogs.ErrorDialog(self, errMsg % (os.path.join(sourceDir, fileNm), os.path.join(destDir, fileNm)))
+                    dlg.Show()  # NOT Modal, and no Destroy prevents interruption
 
         # Copy or Move from Local Drive to SRB Collection
         elif (sourceLbl == self.LOCAL_LABEL) and \
@@ -1550,34 +1843,89 @@ class FileManagement(wx.Dialog):
                     if not success:
                         # ... we should stop trying to copy / move files
                         break
+                else:
+                    # Create an error message
+                    errMsg = _('File "%s" could not be copied.') + '\n' + _('File "%s" already exists.')
+                    if 'unicode' in wx.PlatformInfo:
+                        errMsg = unicode(errMsg, 'utf8')
+                    # Encode values, if needed
+                    if isinstance(sourceDir, unicode):
+                        sourceDir = sourceDir.encode('utf8')
+                    if isinstance(destDir, unicode):
+                        destDir = destDir.encode('utf8')
+                    if isinstance(fileNm, unicode):
+                        fileNm = fileNm.encode('utf8')
+
+                    p1 = os.path.join(sourceDir, fileNm)
+                    p2 = string.join([destDir, fileNm], '/')
+                    # Display the error message
+                    dlg = Dialogs.ErrorDialog(self, errMsg % (p1.decode('utf8'), p2.decode('utf8')))
+                    dlg.Show()  # NOT Modal, and no Destroy prevents interruption
 
         # Copy or Move from SRB Collection to Local Drive
         elif (sourceLbl == self.REMOTE_LABEL) and \
              (destLbl == self.LOCAL_LABEL):
             # For each file in the fileList ...
             for fileNm in fileList:
-                # ... call the Remote to Local File Copy routine, capturing the result
-                success = self.FileCopyMoveRemoteToLocal(moveFlag, sourceDir, destDir, fileNm, sourceFile.FindItem(-1, fileNm))
-                # Let's update the dest control after every file so that the new files show up in the list ASAP.
-                self.RefreshFileList(destLbl, destDir, destFile, destFilter)
-                # wxYield allows the Windows Message Queue to update the display.
-                wx.Yield()
-                # If the Copy / Move failed or was cancelled by the user ...
-                if not success:
-                    # ... we should stop trying to copy / move files
-                    break
+                # See if the file is already in the destination list.  If NOT ...
+                if destFile.FindItem(-1, fileNm) == -1:
+                    # ... call the Remote to Local File Copy routine, capturing the result
+                    success = self.FileCopyMoveRemoteToLocal(moveFlag, sourceDir, destDir, fileNm, sourceFile.FindItem(-1, fileNm))
+                    # Let's update the dest control after every file so that the new files show up in the list ASAP.
+                    self.RefreshFileList(destLbl, destDir, destFile, destFilter)
+                    # wxYield allows the Windows Message Queue to update the display.
+                    wx.Yield()
+                    # If the Copy / Move failed or was cancelled by the user ...
+                    if not success:
+                        # ... we should stop trying to copy / move files
+                        break
+                else:
+
+                    # Create an error message
+                    errMsg = _('File "%s" could not be copied.') + '\n' + _('File "%s" already exists.')
+                    if 'unicode' in wx.PlatformInfo:
+                        errMsg = unicode(errMsg, 'utf8')
+                    # Display the error message
+                    dlg = Dialogs.ErrorDialog(self, errMsg % (string.join([sourceDir[len(self.sFTPHomePath):], fileNm], '/'), os.path.join(destDir, fileNm)))
+                    dlg.Show()  # NOT Modal, and no Destroy prevents interruption
 
         # Copy or Move from SRB Collection to SRB Collection
         elif (sourceLbl == self.REMOTE_LABEL) and \
              (destLbl == self.REMOTE_LABEL):
-            # For each file in the fileList ...
-            for fileNm in fileList:
-                # ... call the Remote to Remote File Copy routine
-                self.FileCopyMoveRemoteToRemote(moveFlag, sourceDir, destDir, fileNm)
-                # Let's update the dest control after every file so that the new files show up in the list ASAP.
-                self.RefreshFileList(destLbl, destDir, destFile, destFilter)
-                # wxYield allows the Windows Message Queue to update the display.
-                wx.Yield()
+            if moveFlag or (self.connectionType != 'sFTP'):
+                # For each file in the fileList ...
+                for fileNm in fileList:
+                    # See if the file is already in the destination list.  If NOT ...
+                    if destFile.FindItem(-1, fileNm) == -1:
+                        # ... call the Remote to Remote File Copy routine
+                        self.FileCopyMoveRemoteToRemote(moveFlag, sourceDir, destDir, fileNm)
+                        # Let's update the dest control after every file so that the new files show up in the list ASAP.
+                        self.RefreshFileList(destLbl, destDir, destFile, destFilter)
+                        # wxYield allows the Windows Message Queue to update the display.
+                        wx.Yield()
+                    else:
+
+                        # Create an error message
+                        errMsg = _('File "%s" could not be copied.') + '\n' + _('File "%s" already exists.')
+                        if 'unicode' in wx.PlatformInfo:
+                            errMsg = unicode(errMsg, 'utf8')
+                        # Encode values, if needed
+                        if isinstance(sourceDir, unicode):
+                            sourceDir = sourceDir.encode('utf8')
+                        if isinstance(destDir, unicode):
+                            destDir = destDir.encode('utf8')
+                        if isinstance(fileNm, unicode):
+                            fileNm = fileNm.encode('utf8')
+                        # Display the error message
+                        dlg = Dialogs.ErrorDialog(self, errMsg % (string.join([sourceDir[len(self.sFTPHomePath):], fileNm], '/'), string.join([destDir[len(self.sFTPHomePath):], fileNm], '/')))
+                        dlg.Show()  # NOT Modal, and no Destroy prevents interruption
+            else:
+                
+                # Inform the user
+                prompt = _("Copying files from one directory to another on an sFTP server is not supported.")
+                dlg = Dialogs.InfoDialog(self, prompt)
+                dlg.ShowModal()
+                dlg.Destroy()
 
         # Reset the cursor to the Arrow
         self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
@@ -1592,11 +1940,6 @@ class FileManagement(wx.Dialog):
              DEST tree, recursing through subdirectories  """
         # Set the Cursor to the Hourglass
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
 
         # If we are copying from Left to Right ...
         if event.GetId() == self.btnSynchToRight.GetId():
@@ -1611,8 +1954,8 @@ class FileManagement(wx.Dialog):
             # If our SOURCE is REMOTE ...
             else:
                 # ... we need  the Directory LIst, the Path, and the Tree
-                sourceDir = self.srbDirLeft
-                sourcePath = self.GetFullPath(self.srbDirLeft)
+                sourceDir = self.remoteDirLeft
+                sourcePath = self.GetFullPath(self.remoteDirLeft)
                 sourceTree = sourceDir
             # ... and our DEST goes to the RIGHT
             destLbl = self.lblRight.GetLabel()
@@ -1625,8 +1968,8 @@ class FileManagement(wx.Dialog):
             # If our DEST is REMOTE ...
             else:
                 # ... we need  the Directory LIst, the Path, and the Tree
-                destDir = self.srbDirRight
-                destPath = self.GetFullPath(self.srbDirRight)
+                destDir = self.remoteDirRight
+                destPath = self.GetFullPath(self.remoteDirRight)
                 destTree = destDir
             # We also need the DEST File Control and the DEST Filter Control
             destFile = self.fileRight
@@ -1644,8 +1987,8 @@ class FileManagement(wx.Dialog):
             # If our SOURCE is REMOTE ...
             else:
                 # ... we need  the Directory LIst, the Path, and the Tree
-                sourceDir = self.srbDirRight
-                sourcePath = self.GetFullPath(self.srbDirRight)
+                sourceDir = self.remoteDirRight
+                sourcePath = self.GetFullPath(self.remoteDirRight)
                 sourceTree = sourceDir
             # ... and our DEST goes to the LEFT
             destLbl = self.lblLeft.GetLabel()
@@ -1658,8 +2001,8 @@ class FileManagement(wx.Dialog):
             # If our DEST is REMOTE ...
             else:
                 # ... we need  the Directory LIst, the Path, and the Tree
-                destDir = self.srbDirLeft
-                destPath = self.GetFullPath(self.srbDirLeft)
+                destDir = self.remoteDirLeft
+                destPath = self.GetFullPath(self.remoteDirLeft)
                 destTree = destDir
             # We also need the DEST File Control and the DEST Filter Control
             destFile = self.fileLeft
@@ -1668,20 +2011,26 @@ class FileManagement(wx.Dialog):
         # Now COPY the FILES.
         # If our SOURCE is LOCAL ...
         if sourceLbl == self.LOCAL_LABEL:
+
+            # We can't just call os.walk() while copying files.  This causes directories worth of files to be
+            # copies recursively if you copy something into one of it's own sub-directories.  Instead, let's
+            # get a list of all the files before we start copying.
+
+            # Initialize the Source File list
+            sourceFileList = []
+            # Now let's get all the data for the copy
+            for fileListData in os.walk(sourcePath):
+                sourceFileList.append(fileListData)
+            
             # if our DEST is REMOTE ...
             if destLbl != self.LOCAL_LABEL:
-                # ... then we need a list of the DEST Collections on the SRB
-                srbCollList = self.GetSRBDirectoryList(destPath)
-
-                print "Directory Comparison:"
-                for td in srbCollList:
-                    print td, type(td)
-                print
+                # ... then we need a list of the DEST Collections on the SRB or sFTP Server
+                remoteCollList = self.GetRemoteDirectoryList(destPath)
 
                 # Initialize the list of SRF Files
                 srbFileList = []
                 # Get a list of files from the DEST SRB 
-                tmpSRBFileList = self.GetSRBFileList(destPath)
+                tmpSRBFileList = self.GetRemoteFileList(destPath)
                 # For each file in the file list ...
                 for f in tmpSRBFileList:
 
@@ -1702,7 +2051,7 @@ class FileManagement(wx.Dialog):
             # Initialize that the user has NOT pressed CANCEL
             cancelPressed = False
             # Get all directory and file names from the LOCAL SOURCE
-            for (path, dirs, files) in os.walk(sourcePath):
+            for (path, dirs, files) in sourceFileList:
                 # If the user has pressed CANCEL ...
                 if cancelPressed:
                     # ... then we need to stop iterating through the local directory / file list
@@ -1731,20 +2080,8 @@ class FileManagement(wx.Dialog):
                         if 'unicode' in wx.PlatformInfo:
                             tmpDir = tmpDir.encode(TransanaGlobal.encoding)
 
-                        print tmpDir, type(tmpDir), tmpDir in srbCollList
-                        print
-                        print
-                        for td in srbCollList:
-                            if (td.decode('utf8') == tmpDir.decode('utf8')) and (not tmpDir in srbCollList):
-                                print "DECODE WORKS!!!!!"
-                            else:
-                                print "Compare:"
-                                print td
-                                print tmpDir, td.decode('utf8') == tmpDir.decode('utf8')
-                                print
-                        
                         # ... if the DEST Directory does not exist (is not in the SRB Collection List) ...
-                        if not tmpDir in srbCollList:
+                        if not tmpDir in remoteCollList:
                             # ... Create temporary folder and path variables
                             tmpNewFolder = d
                             # Encode if needed
@@ -1754,38 +2091,38 @@ class FileManagement(wx.Dialog):
                             # We need to drop the ending slash from the path if there is one
                             if tmpPath[-1] == "/":
                                 tmpPath = tmpPath[:-1]
-                            # Create the folder on the SRB file system
-                            newCollection = srb.srb_new_collection(self.srbConnectionID, 0, tmpPath, tmpNewFolder);
-                            # If the SRB returns an error message ...
-                            if newCollection < 0:
-                               # ... display the error message
-                               self.srbErrorMessage(newCollection)
+                            # If we're connected to the SRB ...
+                            if self.connectionType == 'SRB':
+                                # Load the SRB DLL / Dynamic Library
+                                if "__WXMSW__" in wx.PlatformInfo:
+                                    srb = ctypes.cdll.srbClient
+                                else:
+                                    srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+                                # Create the folder on the SRB file system
+                                newCollection = srb.srb_new_collection(self.srbConnectionID, 0, tmpPath, tmpNewFolder);
+                                # If the SRB returns an error message ...
+                                if newCollection < 0:
+                                   # ... display the error message
+                                   self.srbErrorMessage(newCollection)
+                            # If we're connected to the sFTP Server ...
+                            elif self.connectionType == 'sFTP':
+                                self.sFTPClient.mkdir(string.join([tmpPath, tmpNewFolder], '/'))
                         # if the DEST SRB Collection exists ...
                         else:
                             # We need to drop the slash from the path we added above
                             if tmpPath[-1] != "/":
                                 tmpPath += '/'
-#                            if isinstance(tmpPath, unicode):
-#                                tmpPath = tmpPath.decode(TransanaGlobal.encoding)
-#                            if isinstance(d, unicode):
-#                                d = d.decode(TransanaGlobal.encoding)
-                            # Get the files from this SRB Collection, since it exists
-                            tmpSRBFileList = self.GetSRBFileList(tmpPath + d)
+                            # Get the files from this SRB / sFTP Server Collection, since it exists
+                            tmpSRBFileList = self.GetRemoteFileList(tmpPath + d)
                             # For each file in the file list ...
                             for f in tmpSRBFileList:
 
                                 if isinstance(f, str):
                                     f = f.decode(TransanaGlobal.encoding)
                                 
-                                # Create a temporary file name
-#                                tmpFile = tmpPath + d + '/' + f
                                 # Encode if needed
                                 if 'unicode' in wx.PlatformInfo:
                                     tmpFile = tmpPath + d + '/' + f
-
-
-
-                                    
                                     tmpFile = tmpFile.encode(TransanaGlobal.encoding)
                                 # ... add the path and file name to the list of files on the SRB
                                 srbFileList.append(tmpFile)
@@ -1801,7 +2138,13 @@ class FileManagement(wx.Dialog):
                         # ... if the DEST File does not exist ...
                         if not os.path.exists(os.path.join(destPath, path[len(sourcePath) + 1:], f)):
                             # ... then we need to copy the File
-                            self.FileCopyMoveLocalToLocal(False, path, os.path.join(destPath, path[len(sourcePath) + 1:]), f)
+                            success = self.FileCopyMoveLocalToLocal(False, path, os.path.join(destPath, path[len(sourcePath) + 1:]), f)
+                            # If the result is not True, the user probably pressed Cancel.
+                            if not success:
+                                # Indicate that Cancel was pressed so outer loop processing will stop
+                                cancelPressed = True
+                                # ... and stop processing for the Files loop
+                                break
                     # If our DEST is REMOTE ....
                     else:
                         # Create a temporary file name
@@ -1826,40 +2169,38 @@ class FileManagement(wx.Dialog):
 
         # if our SOURCE is REMOTE ...
         else:
+            # If our DESTINATION is REMOTE ...
+            if destLbl != self.LOCAL_LABEL:
+                # Inform the user
+                prompt = _("Copying files from one directory to another on an sFTP server is not supported.")
+                dlg = Dialogs.InfoDialog(self, prompt)
+                dlg.ShowModal()
+                dlg.Destroy()
+                return
+
             # ... then we need a list of the SOURCE Collections on the SRB
-            sourceSRBCollList = self.GetSRBDirectoryList(sourcePath)
+            sourceRemoteCollList = self.GetRemoteDirectoryList(sourcePath)
             # Add the CURRENT directory to the Collections List!  Otherwise, files from the root level don't get included
             # in the SRB File List
             tmpPath = sourcePath
             if 'unicode' in wx.PlatformInfo:
                 tmpPath = tmpPath.encode(TransanaGlobal.encoding)
-            sourceSRBCollList = [tmpPath] + sourceSRBCollList
-
-            # If our DESTINATION is REMOTE ...
-            if destLbl != self.LOCAL_LABEL:
-                # ... then we need a list of the DEST Collections on the SRB
-                destSRBCollList = self.GetSRBDirectoryList(destPath)
-                tmpPath = destPath
-                if 'unicode' in wx.PlatformInfo:
-                    tmpPath = tmpPath.encode(TransanaGlobal.encoding)
-                # Add the CURRENT directory to the Collections List!  Otherwise, files from the root level don't get included
-                # in the SRB File List
-                destSRBCollList = [tmpPath] + destSRBCollList
+            sourceRemoteCollList = [tmpPath] + sourceRemoteCollList
 
             # Initialize that the user has NOT pressed CANCEL
             cancelPressed = False
             # For each Collection in the SOURCE SRB Collection List ...
-            for d in sourceSRBCollList:
+            for d in sourceRemoteCollList:
                 # If the user has pressed CANCEL ...
                 if cancelPressed:
                     # ... then we need to stop iterating through the remote directory list
                     break
                 # Get the SOURCE File list from the SRB
-                sourceSRBFiles = self.GetSRBFileList(d)
+                sourceSRBFiles = self.GetRemoteFileList(d)
                 # If the DEST is LOCAL ...
                 if destLbl == self.LOCAL_LABEL:
                     # ... build the appropriate directory entry for the current DEST directory
-                    tmpDestDir = d[len(sourcePath) + 1:].replace('/', os.sep)
+                    tmpDestDir = d[len(sourcePath):].replace('/', os.sep)
                     if len(tmpDestDir) > 0 and tmpDestDir[0] == os.sep:
                         tmpDestDir = tmpDestDir[1:]
                     if isinstance(tmpDestDir, str):
@@ -1868,53 +2209,6 @@ class FileManagement(wx.Dialog):
                     if not os.path.exists(os.path.join(destPath, tmpDestDir)):
                         # ... then we need to create the DEST Directory
                         os.makedirs(os.path.join(destPath, tmpDestDir))
-                # If the DEST is REMOTE ...
-                else:
-                    # ... intialize the DEST SRB File List
-                    destSRBFileList = []
-                    tmpDir = d
-                    if isinstance(tmpDir, str):
-                        tmpDir = tmpDir.decode(TransanaGlobal.encoding)
-                    
-                    # Build the appropriate DEST path
-                    tmpDestDir = destPath + tmpDir[len(sourcePath):]
-                    if 'unicode' in wx.PlatformInfo:
-                        tmpDestDir = tmpDestDir.encode(TransanaGlobal.encoding)
-
-                    # If the DEST Path does NOT exist (is not in the DEST SRB Collection List) ...
-                    if not tmpDestDir in destSRBCollList:
-                        # ... create temporary folder and path variables
-                        tmpNewFolder = tmpDestDir[tmpDestDir.rfind('/') + 1:]
-                        tmpPath = tmpDestDir[:tmpDestDir.rfind('/')]
-                        # Encode, if needed
-#                        if 'unicode' in wx.PlatformInfo:
-#                            tmpNewFolder = tmpNewFolder.encode(TransanaGlobal.encoding)
-#                            tmpPath = tmpPath.encode(TransanaGlobal.encoding)
-                        # We need to drop the ending slash if there is one
-                        if tmpPath[-1] == "/":
-                            tmpPath = tmpPath[:-1]
-                        # Create the folder on the SRB file system
-                        newCollection = srb.srb_new_collection(self.srbConnectionID, 0, tmpPath, tmpNewFolder);
-                        # If the SRB returns an error message ...
-                        if newCollection < 0:
-                            # ... display the error message
-                            self.srbErrorMessage(newCollection)
-                    # If the DEST path DOES exist ...
-                    else:
-                        # Get the files from this SRB Collection
-                        tmpSRBFileList = self.GetSRBFileList(tmpDestDir)
-                        # For each file in the file list ...
-                        for f in tmpSRBFileList:
-
-                            if isinstance(tmpDestDir, str):
-                                tmpDestDir = tmpDestDir.decode(TransanaGlobal.encoding)
-                            if isinstance(f, str):
-                                f = f.decode(TransanaGlobal.encoding)
-                            tmpF = tmpDestDir + u'/' + f
-                            if ('unicode' in wx.PlatformInfo) and isinstance(tmpF, unicode):
-                                tmpF.encode(TransanaGlobal.encoding)
-                            # ... add the path and file name to the list of files on the SRB
-                            destSRBFileList.append(tmpF)
 
                 # For each file in the SOURCE SRB File List ...
                 for f in sourceSRBFiles:
@@ -1948,7 +2242,6 @@ class FileManagement(wx.Dialog):
                             tmpF = f[f.rfind('/') + 1:]
                             if isinstance(tmpF, str):
                                 tmpF = tmpF.decode(TransanaGlobal.encoding)
-
                             # ... then we need to copy the File, capturing the result
                             # FileCopyMoveRemoteToLocal(moveFlag, sourceDir, destDir, fileName, sourceFileIndex)
                             success = self.FileCopyMoveRemoteToLocal(False, tmpD, os.path.join(destPath, tmpDestDir), tmpF, sourceSRBFiles.index(f))
@@ -1958,23 +2251,6 @@ class FileManagement(wx.Dialog):
                                 cancelPressed = True
                                 # ... and stop processing for the Files loop
                                 break
-                    # If the DEST is REMOTE ...
-                    else:
-                        if isinstance(tmpDestDir, str):
-                            tmpDestDir = tmpDestDir.decode(TransanaGlobal.encoding)
-                        tmpF = f
-                        if isinstance(tmpF, str):
-                            tmpF = tmpF.decode(TransanaGlobal.encoding)
-                        tmpFile = tmpDestDir + u'/' + tmpF
-                        # ... if the DEST File does not exist ...
-                        if not tmpFile in destSRBFileList:
-
-                            if isinstance(d, str):
-                                d = d.decode(TransanaGlobal.encoding)
-                            if isinstance(f, str):
-                                f = f.decode(TransanaGlobal.encoding)
-                            # ... then we need to copy the File
-                            self.FileCopyMoveRemoteToRemote(False, d, tmpDestDir, f)
 
         # If the SOURCE and DEST are both REMOTE, SOURCE DIR may need to be updated, 
         if sourceLbl == destLbl:
@@ -1991,11 +2267,6 @@ class FileManagement(wx.Dialog):
         """ Delete the specified file """
         # Set cursor to hourglass
         self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
         # Create the appropriate Prompt
         prompt = _('Deleting %s')
         # Encode if needed
@@ -2018,7 +2289,7 @@ class FileManagement(wx.Dialog):
                 dlg = Dialogs.ErrorDialog(self, "%s" % sys.exc_info()[1])
                 dlg.ShowModal()
                 dlg.Destroy()
-        # if the file is REMOTE (SRB) ...
+        # if the file is REMOTE (SRB or sFTP) ...
         else:
             # Get the full name of the file to be deleted by adding the file path to it
             fileName = path + '/' + filename
@@ -2031,12 +2302,23 @@ class FileManagement(wx.Dialog):
             if 'unicode' in wx.PlatformInfo:
                 tmpFilename = tmpFilename.encode(TransanaGlobal.encoding)
                 tmpPath = tmpPath.encode(TransanaGlobal.encoding)
-            # Delete the File
-            delResult = srb.srb_remove_obj(self.srbConnectionID, tmpFilename, tmpPath, 0)
-            # If an error occurred ...
-            if delResult < 0:
-                # ... report the error
-                self.srbErrorMessage(delResult)
+            # if we're connected to the SRB ...
+            if self.connectionType == 'SRB':
+                # Load the SRB DLL / Dynamic Library
+                if "__WXMSW__" in wx.PlatformInfo:
+                    srb = ctypes.cdll.srbClient
+                else:
+                    srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+                # Delete the File
+                delResult = srb.srb_remove_obj(self.srbConnectionID, tmpFilename, tmpPath, 0)
+                # If an error occurred ...
+                if delResult < 0:
+                    # ... report the error
+                    self.srbErrorMessage(delResult)
+            # If we're connected to the sFTP Server ...
+            elif self.connectionType == 'sFTP':
+                # ... then sFTP's REMOVE will take care of the delete
+                self.sFTPClient.remove(string.join([tmpPath, tmpFilename], '/'))
         # Update the Status Text
         self.SetStatusText(_('Delete complete.'))
         # Set the cursor back to the arrow pointer
@@ -2056,7 +2338,7 @@ class FileManagement(wx.Dialog):
                 sourceDir = self.dirLeft
                 sourcePath = sourceDir.GetPath()
             else:
-                sourceDir = self.srbDirLeft
+                sourceDir = self.remoteDirLeft
                 sourcePath = self.GetFullPath(sourceDir)
             sourceFile = self.fileLeft
             sourceFilter = self.filterLeft
@@ -2068,8 +2350,8 @@ class FileManagement(wx.Dialog):
                 other = self.dirRight
                 otherPath = self.dirRight.GetPath()
             else:
-                other = self.srbDirRight
-                otherPath = self.GetFullPath(self.srbDirRight)
+                other = self.remoteDirRight
+                otherPath = self.GetFullPath(self.remoteDirRight)
             otherFile = self.fileRight
             otherFilter = self.filterRight
         # If we are deleting on the RIGHT side ...
@@ -2081,7 +2363,7 @@ class FileManagement(wx.Dialog):
                 sourceDir = self.dirRight
                 sourcePath = sourceDir.GetPath()
             else:
-                sourceDir = self.srbDirRight
+                sourceDir = self.remoteDirRight
                 sourcePath = self.GetFullPath(sourceDir)
             sourceFile = self.fileRight
             sourceFilter = self.filterRight
@@ -2093,37 +2375,61 @@ class FileManagement(wx.Dialog):
                 other = self.dirLeft
                 otherPath = self.dirLeft.GetPath()
             else:
-                other = self.srbDirLeft
-                otherPath = self.GetFullPath(self.srbDirLeft)
+                other = self.remoteDirLeft
+                otherPath = self.GetFullPath(self.remoteDirLeft)
             otherFile = self.fileLeft
             otherFilter = self.filterLeft
-         
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+
+        # If we're connected to the SRB ...
+        if self.connectionType == 'SRB':
+            # Load the SRB DLL / Dynamic Library
+            if "__WXMSW__" in wx.PlatformInfo:
+                srb = ctypes.cdll.srbClient
+            else:
+                srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
 
         # If files are listed, delete files.  Otherwise, remove the folder!
         # FILE ItemCount() > 0 indicates we need to delete FILES
         if sourceFile.GetItemCount() > 0:
-            # Get all Selected files from the File List.  Starting with itemNum = -1 signals to search the whole list.
-            itemNum = -1
-            # Keep iterating until all files in the control have been examined
-            while True:
-                # Request the item number of the next selected item in the file list
-                itemNum = sourceFile.GetNextItem(itemNum, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
-                # If the return value is -1, there are no more files selected, so stop looping
-                if itemNum == -1:
-                    break
-                else:
-                    # If an itemNum is returned, delete the item.
-                    self.DeleteFile(sourceLbl.GetLabel(), sourcePath, sourceFile.GetItemText(itemNum))
-            # Refresh the file list now that all files have been deleted
-            self.RefreshFileList(sourceLbl.GetLabel(), sourcePath, sourceFile, sourceFilter)
+            if sourceFile.GetSelectedItemCount() > 0:
+                # Get all Selected files from the File List.  Starting with itemNum = -1 signals to search the whole list.
+                itemNum = -1
+                # Keep iterating until all files in the control have been examined
+                while True:
+                    # Request the item number of the next selected item in the file list
+                    itemNum = sourceFile.GetNextItem(itemNum, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
+                    # If the return value is -1, there are no more files selected, so stop looping
+                    if itemNum == -1:
+                        break
+                    else:
+                        # If an itemNum is returned, delete the item.
+                        self.DeleteFile(sourceLbl.GetLabel(), sourcePath, sourceFile.GetItemText(itemNum))
+                # Refresh the file list now that all files have been deleted
+                self.RefreshFileList(sourceLbl.GetLabel(), sourcePath, sourceFile, sourceFilter)
+            else:
+                # Create an error message for the user
+                prompt = _("Unable to remove directory.  It contains a file or subdirectory.")
+                # Display the error message
+                dlg = Dialogs.ErrorDialog(self, prompt)
+                dlg.ShowModal()
+                dlg.Destroy()
+                # No more processing is necessary
+                return
         # FILE ItemCount() = 0 indicates we need to delete DIRECTORIES
         else:
-            # Create a prompt
+             # If we are pointing to a ROOT DIRECTORY ...
+            if (sourcePath == '/') or (sourcePath == os.sep) or \
+               ((self.sFTPHomePath != None) and ((sourcePath == self.sFTPHomePath) or (sourcePath == self.sFTPHomePath + '/'))):
+                # Create an error message for the user
+                prompt = _("Unable to remove directory.  You cannot remove the root directory.")
+                # Display the error message
+                dlg = Dialogs.ErrorDialog(self, prompt)
+                dlg.ShowModal()
+                dlg.Destroy()
+                # No more processing is necessary
+                return
+
+           # Create a prompt
             prompt = _('Removing %s')
             # Encode if needed
             if 'unicode' in wx.PlatformInfo:
@@ -2133,60 +2439,116 @@ class FileManagement(wx.Dialog):
             self.SetStatusText(prompt % sourcePath)
             # If we have a LOCAL Directory ...
             if sourceLbl.GetLabel() == self.LOCAL_LABEL:
-                # Get the Parent Item
-                parentItem = sourceDir.GetTreeCtrl().GetItemParent(sourceDir.GetTreeCtrl().GetSelection())
-                # Delete the Current (Selected) Item from the TreeCtrl (Does not remove it from the File System)
-                sourceDir.GetTreeCtrl().Delete(sourceDir.GetTreeCtrl().GetSelection())
-                # Update the Selection in the Tree to point to the Parent Item
-                sourceDir.GetTreeCtrl().SelectItem(parentItem)
-                # Remove the original path (folder) from the File System
-                os.rmdir(sourcePath)
-                # Update the other side's Folder Listing if it's pointing to the same location (Local vs. Remote) 
-                if sourceLbl.GetLabel() == otherLbl.GetLabel():
-                    # Temporarily match the OTHER SIDE's current selection with the one we just deleted from.
-                    other.SetPath(sourceDir.GetPath())
-                    # Get the Item ID for the current selection (the directory that has been changed)
-                    itemId = other.GetTreeCtrl().GetSelection()
-                    # From Robin Dunn -- Force refresh of the tree node where the change occurred
-                    other.GetTreeCtrl().CollapseAndReset(itemId)
-                    # If we changed the directory temporarily above ...
-                    if otherPath != sourcePath:
-                        # ... change it back to the directory it used to point to
-                        other.SetPath(otherPath)
-            # If we have a REMOTE (SRB) Directory ...
+                try:
+                    # Remove the original path (folder) from the File System
+                    os.rmdir(sourcePath)
+                    # Get the Parent Item
+                    parentItem = sourceDir.GetTreeCtrl().GetItemParent(sourceDir.GetTreeCtrl().GetSelection())
+                    # Delete the Current (Selected) Item from the TreeCtrl (Does not remove it from the File System)
+                    sourceDir.GetTreeCtrl().Delete(sourceDir.GetTreeCtrl().GetSelection())
+                    # Update the Selection in the Tree to point to the Parent Item
+                    sourceDir.GetTreeCtrl().SelectItem(parentItem)
+                    # Update the other side's Folder Listing if it's pointing to the same location (Local vs. Remote) 
+                    if sourceLbl.GetLabel() == otherLbl.GetLabel():
+                        # Temporarily match the OTHER SIDE's current selection with the one we just deleted from.
+                        other.SetPath(sourceDir.GetPath())
+                        # Get the Item ID for the current selection (the directory that has been changed)
+                        itemId = other.GetTreeCtrl().GetSelection()
+                        # From Robin Dunn -- Force refresh of the tree node where the change occurred
+                        other.GetTreeCtrl().CollapseAndReset(itemId)
+                        # If we changed the directory temporarily above ...
+                        if otherPath != sourcePath:
+                            # ... change it back to the directory it used to point to
+                            other.SetPath(otherPath)
+                except:
+                    if (sys.exc_info()[0] == OSError) or (('wxMSW' in wx.PlatformInfo) and (sys.exc_info()[0] == WindowsError)):
+                        # Create an error message for the user
+                        prompt = _("Unable to remove directory.  It contains a file or subdirectory.")
+                    else:
+                        prompt = sys.exc_info()[1]
+                        
+                    # Display the error message
+                    dlg = Dialogs.ErrorDialog(self, prompt)
+                    dlg.ShowModal()
+                    dlg.Destroy()
+                    # No more processing is necessary
+                    return
+            # If we have a REMOTE (SRB or sFTP Server) Directory ...
             else:
+                # Get a temporary copy of the source path
+                tmpSourcePath = sourcePath
+                # Encode if needed
+                if 'unicode' in wx.PlatformInfo:
+                    tmpSourcePath = sourcePath.encode(TransanaGlobal.encoding)
+
+                # If we're connected to the SRB ...
+                if self.connectionType == 'SRB':
+                    # Remove the directory from the SRB
+                    removeResult = srb.srb_remove_collection(self.srbConnectionID, 0, tmpSourcePath);
+                    # If an error was detected ...
+                    if removeResult < 0:
+                        # ... display the error message
+                        self.srbErrorMessage(removeResult)
+                # If we're connected to the sFTP Server ...
+                elif self.connectionType == 'sFTP':
+                    # Start exception handling
+                    try:
+                        # Remove the sFTP Directory
+                        removeResult = self.sFTPClient.rmdir(tmpSourcePath)
+                    # Problems show up as IOError Exceptions
+                    except IOError:
+                        # Create an error message for the user
+                        prompt = _("Unable to remove directory.  It contains a file or subdirectory.")
+                        # Display the error message
+                        dlg = Dialogs.ErrorDialog(self, prompt)
+                        dlg.ShowModal()
+                        dlg.Destroy()
+                        # No more processing is necessary
+                        return
+                    
                 # Get the Parent Item
                 parentItem = sourceDir.GetItemParent(sourceDir.GetSelection())
                 # Delete the Current (Selected) Item from the TreeCtrl (Does not remove it from the File System)
                 sourceDir.Delete(sourceDir.GetSelection())
                 # Update the Selection in the Tree to point to the Parent Item
                 sourceDir.SelectItem(parentItem)
-                # Get a temporary copy of the source path
-                tmpSourcePath = sourcePath
-                # Encode if needed
-                if 'unicode' in wx.PlatformInfo:
-                    tmpSourcePath = sourcePath.encode(TransanaGlobal.encoding)
-                # Remove the directory from the SRB
-                removeResult = srb.srb_remove_collection(self.srbConnectionID, 0, tmpSourcePath);
-                # If an error was detected ...
-                if removeResult < 0:
-                    # ... display the error message
-                    self.srbErrorMessage(removeResult)
+
                 # If the Source and Other are showing the same location, we need to update the Other too!
                 if sourceLbl.GetLabel() == otherLbl.GetLabel():
+                    # If we're connected to the SRB ...
+                    if self.connectionType == 'SRB':
+                        # ... set up variables for the SRB
+                        prompt = _('Reading Collections from SRB.')
+                        rootItemText = self.tmpCollection
+                    # If we're connected to the sFTP Server ...
+                    elif self.connectionType == 'sFTP':
+                        # ... set up variables for the sFTP Server
+                        prompt = _('Reading Files from Remote Server')
+                        rootItemText = '/'
                     # Update the Status Bar
-                    self.SetStatusText(_('Reading Collections from SRB.'))
+                    self.SetStatusText(prompt)
+                    # Remember the path for the other window
+                    otherPath = self.GetFullPath(other)
                     # Read the list of folders from the SRB and put them in the SRB Dir Tree
                     # Start by clearing the list
                     other.DeleteAllItems()
                     # Add a Root Item to the SRB Dir Tree
-                    srbRootItem = other.AddRoot(self.srbCollection)
-                    # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
-                    self.srbAddChildNode(other, srbRootItem, self.tmpCollection)
+                    rootItem = other.AddRoot(rootItemText)
+                    # If we're connected to the SRB ...
+                    if self.connectionType == 'SRB':
+                        # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
+                        self.remoteAddChildNode(other, rootItem, self.tmpCollection)
+                    # If we're connected to the sFTP Server ...
+                    elif self.connectionType == 'sFTP':
+                        self.sFTPClient.chdir(self.sFTPHomePath)
+                        # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
+                        self.remoteAddChildNode(other, rootItem, '.')
                     # Expand the Root Item to show all the first-level collections
-                    other.Expand(srbRootItem)
+                    other.Expand(rootItem)
                     # Select the Root item in the tree
-                    other.SelectItem(srbRootItem)
+                    other.SelectItem(rootItem)
+                    # Restore the path selection in the other directory tree control
+                    self.SetFullPath(other, otherPath)
 
         # If both sides are pointed to the same folder, we need to update the other side's File List as well.  
         if sourcePath == otherPath:
@@ -2243,94 +2605,139 @@ class FileManagement(wx.Dialog):
                 infodlg.ShowModal()
                 infodlg.Destroy()
 
-    def srbAddChildNode(self, srbDir, treeNode, srbCollectionName):
-        """ This method recursively populates a tree node in the SRB Directory Tree """
-
-        #  srbDaiMcatQuerySubColls runs a query on the SRB server and returns a number of records.  Not the total
-        #  number of records, perhaps, but the number it can read into a data buffer.  According to Bing Zhu at
-        #  SDSC, it is about 200 records at a time.
-        #
-        #  Those records can then be accessed by using srbDaiMcatGetColl.
-        #
-        #  Once all the records in the buffer are read, srbDaiMcatGetMoreColls is called, telling the SRB server
-        #  to fill the buffer with the next set of records.  Only when this function returns a value of 0 have all
-        #  the records been returned.
-        #
-        #  Also, this function cannot be called recursively, because the SRB loses it's place when backing out of the
-        #  recursion.  Therefore, I will use a List structure to pull all the Collection Names out at once, then call
-        #  this method recursively based on that list's items.  In other words, we need to exhaust a given srbDaiMcatQuerySubColls
-        #  call before we move on to the next recursion.
+    def remoteAddChildNode(self, remoteDir, treeNode, initialCollectionName):
+        """ This method recursively populates a tree node in the remote Directory Tree """
 
         # Start with an empty Node List
         nodeList = []
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
-        # Get the list of sub-Collections from the SRB
-        srbCatalogCount = srb.srb_query_subcolls(self.srbConnectionID.value, 0, srbCollectionName)
-        # Check to see if an error code (negative result) is generated
-        if srbCatalogCount < 0:
-            # Display the error message
-            self.srbErrorMessage(srbCatalogCount)
-        # If Sub-Collections are returned 
-        else:
-            # Process the partial list and request more data from the SRB as long as additional data is forthcoming.
-            # (srbCatalogCount > 0 indicates there is more data, while a value of 0 indicates all data has been sent.)
-            while srbCatalogCount > 0:
-                # Loop through all data in the partial list that has been returned from the SRB so far
-                for loop in range(srbCatalogCount):
-                    # Create a 1k buffer of spaces to receive data from the SRB
-                    buf = ' ' * 1024
-                    # Get data for the next Collection in the partial list (indicated by "loop")
-                    srb.srb_get_coll_data(loop, buf, len(buf))
-                    # Strip whitespace from the buffer
-                    tempStr = string.strip(buf)
-                    # Only include the last part of the full Collection string in the tree.
-                    # (remove everything before the final "/" character)
-                    tempStr = tempStr[string.rfind(tempStr, '/') + 1:]
-                    # Add the last part of the Collecton String to the SRB Directory Control
-                    newTreeNode = srbDir.AppendItem(treeNode, tempStr)
-                    # Add the full path, not just the last part of it, to the nodeList for further processing
-                    nodeList.append((newTreeNode, string.strip(buf)))
-                # When all elements of a partial list have been processed, request the next chunk of the list.
-                # If the entire list of Collections has been sent, the SRB function will return 0
-                srbCatalogCount = srb.srb_get_more_subcolls(self.srbConnectionID.value)
-                # Check to see if Sub-Collections are returned or if an error code (negative result) is generated
-                if srbCatalogCount < 0:
-                    self.srbErrorMessage(srbCatalogCount)
-            # Now that the entire list of sub-Collections under the one that was initially called has been sent,
-            # we can recursively request all the sub-Collections for each of the Collections returned, as stored
-            # in the Node List.  (See the long comment at the beginning of this method.)
-            for (node, collName) in nodeList:
-                self.srbAddChildNode(srbDir, node, collName)
+
+        # If we're using a SRB server ...
+        if self.connectionType == 'SRB':
+
+            #  srbDaiMcatQuerySubColls runs a query on the SRB server and returns a number of records.  Not the total
+            #  number of records, perhaps, but the number it can read into a data buffer.  According to Bing Zhu at
+            #  SDSC, it is about 200 records at a time.
+            #
+            #  Those records can then be accessed by using srbDaiMcatGetColl.
+            #
+            #  Once all the records in the buffer are read, srbDaiMcatGetMoreColls is called, telling the SRB server
+            #  to fill the buffer with the next set of records.  Only when this function returns a value of 0 have all
+            #  the records been returned.
+            #
+            #  Also, this function cannot be called recursively, because the SRB loses it's place when backing out of the
+            #  recursion.  Therefore, I will use a List structure to pull all the Collection Names out at once, then call
+            #  this method recursively based on that list's items.  In other words, we need to exhaust a given srbDaiMcatQuerySubColls
+            #  call before we move on to the next recursion.
+
+            # Load the SRB DLL / Dynamic Library
+            if "__WXMSW__" in wx.PlatformInfo:
+                srb = ctypes.cdll.srbClient
+            else:
+                srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+            # Get the list of sub-Collections from the SRB
+            srbCatalogCount = srb.srb_query_subcolls(self.srbConnectionID.value, 0, initialCollectionName)
+            # Check to see if an error code (negative result) is generated
+            if srbCatalogCount < 0:
+                # Display the error message
+                self.srbErrorMessage(srbCatalogCount)
+            # If Sub-Collections are returned 
+            else:
+                # Process the partial list and request more data from the SRB as long as additional data is forthcoming.
+                # (srbCatalogCount > 0 indicates there is more data, while a value of 0 indicates all data has been sent.)
+                while srbCatalogCount > 0:
+                    # Loop through all data in the partial list that has been returned from the SRB so far
+                    for loop in range(srbCatalogCount):
+                        # Create a 1k buffer of spaces to receive data from the SRB
+                        buf = ' ' * 1024
+                        # Get data for the next Collection in the partial list (indicated by "loop")
+                        srb.srb_get_coll_data(loop, buf, len(buf))
+                        # Strip whitespace from the buffer
+                        tempStr = string.strip(buf)
+                        # Only include the last part of the full Collection string in the tree.
+                        # (remove everything before the final "/" character)
+                        tempStr = tempStr[string.rfind(tempStr, '/') + 1:]
+                        # Add the last part of the Collecton String to the SRB Directory Control
+                        newTreeNode = remoteDir.AppendItem(treeNode, tempStr)
+                        # Add the full path, not just the last part of it, to the nodeList for further processing
+                        nodeList.append((newTreeNode, string.strip(buf)))
+                    # When all elements of a partial list have been processed, request the next chunk of the list.
+                    # If the entire list of Collections has been sent, the SRB function will return 0
+                    srbCatalogCount = srb.srb_get_more_subcolls(self.srbConnectionID.value)
+                    # Check to see if Sub-Collections are returned or if an error code (negative result) is generated
+                    if srbCatalogCount < 0:
+                        self.srbErrorMessage(srbCatalogCount)
+                # Now that the entire list of sub-Collections under the one that was initially called has been sent,
+                # we can recursively request all the sub-Collections for each of the Collections returned, as stored
+                # in the Node List.  (See the long comment at the beginning of this method.)
+                for (node, collName) in nodeList:
+                    self.remoteAddChildNode(remoteDir, node, collName)
+
+        # If we have an sFTP Connection ...
+        elif self.connectionType == 'sFTP':
+            # If we are NOT at the user's Root directory ...
+            if not (initialCollectionName in ['.', '/']):
+                # ... note that we have changed directories
+                dirChanged = True
+                # ... change to the appropriate directory 
+                self.sFTPClient.chdir(initialCollectionName)
+                # ... and reset the initial collection name (ready for recursive calls)
+                initialCollectionName = self.sFTPClient.getcwd()
+            # If we ARE at the user's Root directorfileStat ...
+            else:
+                # ... note that we have NOT changed directories
+                dirChanged = False
+
+            # For each entry in the directory's list ...
+            for tempStr in self.sFTPClient.listdir(initialCollectionName):
+                # ... if we don't have a system file, which should be ignored ...
+                if tempStr[0] != '.':
+                    # ... get the file's status
+                    fileStat = self.sFTPClient.stat(tempStr)
+                    # If the listing is a Directory ...
+                    if stat.S_ISDIR(fileStat.st_mode):
+                        # ... add the directory name to the list of nodes to add
+                        nodeList.append(tempStr)
+
+            # If the initial collection is the Root collection ...
+            if initialCollectionName == '.':
+                # ... change the representation from a dot to a slash
+                initialCollectionName = '/'
+            # If not, check to see if the last character is a slash ...
+            elif initialCollectionName[-1] != '/':
+                # and add one if needed
+                initialCollectionName += '/'
+            # Sort the list of directories
+            nodeList.sort()
+            # For each directory ...
+            for node in nodeList:
+                # ... add the directory name to the Directory Control's tree
+                newTreeNode = remoteDir.AppendItem(treeNode, node)
+                # ... and recursively call this routine
+                self.remoteAddChildNode(remoteDir, newTreeNode, node)
+            # If we changed the directory above ...
+            if dirChanged:
+                # ... change it back.
+                self.sFTPClient.chdir('..')
 
     def OnConnect(self, event):
         """ Process the "Connect" button """
         # Determine which side is active and which controls should be manipulated
         # If we are connecting on the LEFT side ...
         if event.GetId() == self.btnConnectLeft.GetId():
-            # ... get the LEFT Label, Directory Ctrl, SRB Directory Ctrl, File Ctrl, and Filter Ctrl
+            # ... get the LEFT Label, Directory Ctrl, sFTP/SRB Directory Ctrl, File Ctrl, and Filter Ctrl
             sourceLbl = self.lblLeft
             sourceDir = self.dirLeft
-            sourceSrbDir = self.srbDirLeft
+            sourceRemoteDir = self.remoteDirLeft
             sourceFile = self.fileLeft
             sourceFilter = self.filterLeft
         # If we are connecting on the RIGHT side ...
         else:
-            # ... get the RIGHT Label, Directory Ctrl, SRB Directory Ctrl, File Ctrl, and Filter Ctrl
+            # ... get the RIGHT Label, Directory Ctrl, sFTP/SRB Directory Ctrl, File Ctrl, and Filter Ctrl
             sourceLbl = self.lblRight
             sourceDir = self.dirRight
-            sourceSrbDir = self.srbDirRight
+            sourceRemoteDir = self.remoteDirRight
             sourceFile = self.fileRight
             sourceFilter = self.filterRight
-
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
 
         # Determine whether we are connecting to the SRB or disconnecting from it.
         # If the label is "Remote", then we want to disconnect.
@@ -2340,7 +2747,7 @@ class FileManagement(wx.Dialog):
             # Show the Local File System's Directories
             sourceDir.Show(True)
             # Hide the SRB's Directories
-            sourceSrbDir.Show(False)
+            sourceRemoteDir.Show(False)
             # Refresh the File List to now display the appropriate files from either the Local File System or the SRB as appropriate
             if sourceDir.GetPath() != '':
                 self.RefreshFileList(sourceLbl.GetLabel(), sourceDir.GetPath(), sourceFile, sourceFilter)
@@ -2349,119 +2756,276 @@ class FileManagement(wx.Dialog):
             # Check to see if we need to disconnect, and do so if needed.  (If both sides are "local", we should disconnect.)
             if (self.lblLeft.GetLabel() == self.LOCAL_LABEL) and \
                (self.lblRight.GetLabel() == self.LOCAL_LABEL):
-                self.srbDisconnect()
-        # If the label is not "Remote", we should connect to the SRB
+                self.RemoteDisconnect()
+        # If the label is not "Remote", we should connect to the sFTP Server or the SRB
         else:
-            # If no connection exists, we should make a connection to the SRB
-            if self.srbConnectionID == None:
-                self.SetStatusText(_('Connecting to SRB...'))
-                # The Status Bar won't be updated unless we allow the OS to Process Messages.
-                wx.Yield()
-                # Display the SRB Connection Dialog Box and see if the user fills it out and clicks OK
-                if self.SRBConnDlg.ShowModal() == wx.ID_OK:
-                    # Set Cursor to the HourGlass
-                    self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-                    # Create the appropriate Collection Name from the information we've obtained from the user
-                    if self.SRBConnDlg.rbSRBStorageSpace.GetSelection() == 1:
-                        # Make sure the Collection Root does NOT end with the '/' character
-                        if self.SRBConnDlg.editCollectionRoot.GetValue()[-1] == '/':
-                            self.SRBConnDlg.editCollectionRoot.SetValue(self.SRBConnDlg.editCollectionRoot.GetValue()[:-1])
-                        self.srbCollection = self.SRBConnDlg.editCollectionRoot.GetValue()
+            # If we're connecting to the SRB ...
+            if self.connectionType == 'SRB':
+
+                # Load the SRB DLL / Dynamic Library
+                if "__WXMSW__" in wx.PlatformInfo:
+                    srb = ctypes.cdll.srbClient
+                else:
+                    srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+
+                # If no connection exists, we should make a connection to the SRB
+                if self.srbConnectionID == None:
+                    self.SetStatusText(_('Connecting to SRB...'))
+                    # The Status Bar won't be updated unless we allow the OS to Process Messages.
+                    wx.Yield()
+                    # Display the SRB Connection Dialog Box and see if the user fills it out and clicks OK
+                    if self.SRBConnDlg.ShowModal() == wx.ID_OK:
+                        # Set Cursor to the HourGlass
+                        self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+                        # Create the appropriate Collection Name from the information we've obtained from the user
+                        if self.SRBConnDlg.rbSRBStorageSpace.GetSelection() == 1:
+                            # Make sure the Collection Root does NOT end with the '/' character
+                            if self.SRBConnDlg.editCollectionRoot.GetValue()[-1] == '/':
+                                self.SRBConnDlg.editCollectionRoot.SetValue(self.SRBConnDlg.editCollectionRoot.GetValue()[:-1])
+                            self.srbCollection = self.SRBConnDlg.editCollectionRoot.GetValue()
+                        else:
+                            # Make sure the Collection Root ends with the '/' character
+                            if self.SRBConnDlg.editCollectionRoot.GetValue()[-1] != '/':
+                                self.SRBConnDlg.editCollectionRoot.SetValue(self.SRBConnDlg.editCollectionRoot.GetValue() + '/')
+                            self.srbCollection = self.SRBConnDlg.editCollectionRoot.GetValue() + self.SRBConnDlg.editUserName.GetValue() + '.' + self.SRBConnDlg.editDomain.GetValue()
+                        # Assign the function to a Function Name
+                        SRBConnectFx = srb.srbDaiConnect
+
+                        # Initialize the ConnectionID variable for use within c_types
+                        self.srbConnectionID = ctypes.c_int()
+
+                        # Get temporary variable values for connecting to the SRB
+                        self.tmpCollection = self.srbCollection
+                        tmpDomain = self.SRBConnDlg.editDomain.GetValue()
+                        tmpHost = self.SRBConnDlg.editSRBHost.GetValue()
+                        tmpSEAOption = self.SRBConnDlg.editSRBSEAOption.GetValue()
+                        tmpPort = self.SRBConnDlg.editSRBPort.GetValue()
+                        self.tmpResource = self.SRBConnDlg.editSRBResource.GetValue()
+                        tmpUserName = self.SRBConnDlg.editUserName.GetValue()
+                        tmpPassword = self.SRBConnDlg.editPassword.GetValue()
+                        tmpBuffer = self.SRBConnDlg.choiceBuffer.GetStringSelection()
+                        # Encode if needed
+                        if 'unicode' in wx.PlatformInfo:
+                            self.tmpCollection = self.tmpCollection.encode(TransanaGlobal.encoding)
+                            tmpDomain = tmpDomain.encode(TransanaGlobal.encoding)
+                            self.tmpResource = self.tmpResource.encode(TransanaGlobal.encoding)
+                            tmpSEAOption = tmpSEAOption.encode(TransanaGlobal.encoding)
+                            tmpPort = tmpPort.encode(TransanaGlobal.encoding)
+                            tmpHost = tmpHost.encode(TransanaGlobal.encoding)
+                            tmpUserName = tmpUserName.encode(TransanaGlobal.encoding)
+                            tmpPassword = tmpPassword.encode(TransanaGlobal.encoding)
+                            tmpBuffer = tmpBuffer.encode(TransanaGlobal.encoding)
+
+                        # Remember the buffer size setting, which is needed when transfers are initiated.
+                        # (This parameter was added as different connection speeds work best with different buffer sizes.)
+                        self.srbBuffer = tmpBuffer
+
+                        # Call the Function
+                        connResult = SRBConnectFx(ctypes.byref(self.srbConnectionID),
+                                                   self.tmpCollection,
+                                                   tmpDomain,
+                                                   self.tmpResource,
+                                                   tmpSEAOption,
+                                                   tmpPort,
+                                                   tmpHost,
+                                                   tmpUserName,
+                                                   tmpPassword)
+
+                        # If connection is successful, save the Connection Data in the File Management configuration
+                        if self.srbConnectionID.value >= 0:
+                            self.SRBConnDlg.SaveConfiguration()
+                        # If an error occurred ...
+                        else:
+                            # ... report the error message
+                            self.srbErrorMessage(self.srbConnectionID.value)
+                            self.srbConnectionID = None
+                            connResult = -1
+                       
+                        # The File Management Object needs to remember what Resource the user connects to
+                        self.srbResource = self.tmpResource  # self.SRBConnDlg.editSRBResource.GetValue()
+
                     else:
-                        # Make sure the Collection Root ends with the '/' character
-                        if self.SRBConnDlg.editCollectionRoot.GetValue()[-1] != '/':
-                            self.SRBConnDlg.editCollectionRoot.SetValue(self.SRBConnDlg.editCollectionRoot.GetValue() + '/')
-                        self.srbCollection = self.SRBConnDlg.editCollectionRoot.GetValue() + self.SRBConnDlg.editUserName.GetValue() + '.' + self.SRBConnDlg.editDomain.GetValue()
-                    # Assign the function to a Function Name
-                    SRBConnectFx = srb.srbDaiConnect
-
-                    # Initialize the ConnectionID variable for use within c_types
-                    self.srbConnectionID = ctypes.c_int()
-
-                    # Get temporary variable values for connecting to the SRB
-                    self.tmpCollection = self.srbCollection
-                    tmpDomain = self.SRBConnDlg.editDomain.GetValue()
-                    tmpHost = self.SRBConnDlg.editSRBHost.GetValue()
-                    tmpSEAOption = self.SRBConnDlg.editSRBSEAOption.GetValue()
-                    tmpPort = self.SRBConnDlg.editSRBPort.GetValue()
-                    self.tmpResource = self.SRBConnDlg.editSRBResource.GetValue()
-                    tmpUserName = self.SRBConnDlg.editUserName.GetValue()
-                    tmpPassword = self.SRBConnDlg.editPassword.GetValue()
-                    tmpBuffer = self.SRBConnDlg.choiceBuffer.GetStringSelection()
-                    # Encode if needed
-                    if 'unicode' in wx.PlatformInfo:
-                        self.tmpCollection = self.tmpCollection.encode(TransanaGlobal.encoding)
-                        tmpDomain = tmpDomain.encode(TransanaGlobal.encoding)
-                        self.tmpResource = self.tmpResource.encode(TransanaGlobal.encoding)
-                        tmpSEAOption = tmpSEAOption.encode(TransanaGlobal.encoding)
-                        tmpPort = tmpPort.encode(TransanaGlobal.encoding)
-                        tmpHost = tmpHost.encode(TransanaGlobal.encoding)
-                        tmpUserName = tmpUserName.encode(TransanaGlobal.encoding)
-                        tmpPassword = tmpPassword.encode(TransanaGlobal.encoding)
-                        tmpBuffer = tmpBuffer.encode(TransanaGlobal.encoding)
-
-                    # Remember the buffer size setting, which is needed when transfers are initiated.
-                    # (This parameter was added as different connection speeds work best with different buffer sizes.)
-                    self.srbBuffer = tmpBuffer
-
-                    # Call the Function
-                    connResult = SRBConnectFx(ctypes.byref(self.srbConnectionID),
-                                               self.tmpCollection,
-                                               tmpDomain,
-                                               self.tmpResource,
-                                               tmpSEAOption,
-                                               tmpPort,
-                                               tmpHost,
-                                               tmpUserName,
-                                               tmpPassword)
-
-                    # If connection is successful, save the Connection Data in the File Management configuration
-                    if self.srbConnectionID.value >= 0:
-                        self.SRBConnDlg.SaveConfiguration()
-                    # If an error occurred ...
-                    else:
-                        # ... report the error message
-                        self.srbErrorMessage(self.srbConnectionID.value)
-                        self.srbConnectionID = None
+                        # Cancelling the Connection Dialog fails to make the connection.  This signals that.
                         connResult = -1
                    
-                    # The File Management Object needs to remember what Resource the user connects to
-                    self.srbResource = self.tmpResource  # self.SRBConnDlg.editSRBResource.GetValue()
-
+                # If a connection to the SRB already exists, we need to update the display values, but don't need to establish the connection
                 else:
-                    # Cancelling the Connection Dialog fails to make the connection.  This signals that.
-                    connResult = -1
-               
-            # If a connection to the SRB already exists, we need to update the display values, but don't need to establish the connection
-            else:
-                # Set Cursor to the HourGlass
-                self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-                # The Connection Result from when the Connection was originally made is the srbConnectionID
-                connResult = self.srbConnectionID.value
+                    # Set Cursor to the HourGlass
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+                    # The Connection Result from when the Connection was originally made is the srbConnectionID
+                    connResult = self.srbConnectionID.value
 
-            # connResult of 0 or higher indicates successful connection to the SRB.
+            # If we're connecting to an sFTP Server ...
+            elif self.connectionType == 'sFTP':
+                # If no connection exists, we should connect to the sFTP Server
+                if self.sFTPConnectionID == None:
+                    # Set the default Connection Result to failure
+                    connResult = -1
+                    # Update the Status
+                    self.SetStatusText(_('Connecting to sFTP Server ...'))
+                    # The Status Bar won't be updated unless we allow the OS to Process Messages.
+                    wx.Yield()
+                    # Display the sFTP Connection Dialog Box and see if the user fills it out and clicks OK
+                    if self.sFTPConnDlg.ShowModal() == wx.ID_OK:
+                        # Set Cursor to the HourGlass
+                        self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+                        # Start Exception Handling for sFTP connection exceptions
+                        try:
+                            # Create a paramiko Transport object to carry the sFTP connection
+                            self.sFTPTransport = paramiko.Transport((self.sFTPConnDlg.editsFTPServer.GetValue(),
+                                                                     int(self.sFTPConnDlg.editsFTPPort.GetValue())))
+                            # Get the Public Key Type from the Connection Form
+                            publicKeyType = self.sFTPConnDlg.choicesFTPPublicKeyType.GetStringSelection()
+                            # Get the Public Key Value from the Connection Form
+                            publicKey = self.sFTPConnDlg.editsFTPPublicKey.GetValue()
+
+                            # If we have an RSA Public Key ...
+                            if publicKeyType == 'ssh-rsa':
+                                # ... create a paramiko RSA KEY based on the Key Value
+                                key = paramiko.RSAKey(data=base64.decodestring(publicKey))
+                            # If we have a DSS Public Key ...
+                            elif publicKeyType == 'ssh-dss':
+                                # ... create a paramiko DSS KEY based on the Key Value
+                                key = paramiko.DSSKey(data=base64.decodestring(publicKey))
+                            # If we DON'T HAVE a Publik Key ...
+                            else:
+                                # ... then we don't need to create a key
+                                key = None
+                                # Create a warning message for the user.
+                                prompt = _("You have not provided the sFTP Public Key to validate this server.") + '\n' + \
+                                         _("Are you sure this server is secure?")
+                                # Display the prompt in a Question Dialog
+                                dlg = Dialogs.QuestionDialog(self, prompt, noDefault = True)
+                                result = dlg.LocalShowModal()
+                                dlg.Destroy()
+                                # If the user isn't sure the server is secure ...
+                                if result == wx.ID_NO:
+                                    # ... create a prompt explaining that the connection is being made
+                                    prompt = _('sFTP connection interrupted by user.')
+                                    # Display the prompt to the user in an Error Dialog
+                                    dlg = Dialogs.ErrorDialog(self, prompt)
+                                    dlg.ShowModal()
+                                    dlg.Destroy()
+                                    
+                                    # Restore the Cursor to show the normal pointer
+                                    self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+                                    # Exiting here prevents the connection from being completed
+                                    return
+
+                            # Signal that we want to use Compression in our Transport connection
+                            self.sFTPTransport.use_compression(compress=True)
+                            # Try to connect to the sFTP Server using the Transport
+                            self.sFTPTransport.connect(username=self.sFTPConnDlg.editUserName.GetValue(),
+                                                       password=self.sFTPConnDlg.editPassword.GetValue(),
+                                                       hostkey=key)
+                            # Create a paramiko sFTP Client object based on the Transport
+                            self.sFTPClient = paramiko.SFTPClient.from_transport(self.sFTPTransport)
+                            # Save the sFTP Configuration Information
+                            self.sFTPConnDlg.SaveConfiguration()
+                            # Set the Temporary Collection to "dot"
+                            self.tmpCollection = '.'
+
+                            # If we don't know what the Home path is for the sFTP server ...
+                            if self.sFTPHomePath == None:
+                                # ... first "change" to the root directory.  (Otherwise, getcwd() returns None)
+                                self.sFTPClient.chdir('.')
+                                # ... get the Home Path
+                                self.sFTPHomePath = self.sFTPClient.normalize('.')
+                            # If we get here without an exception, the connection was successful!                                
+                            connResult = 1
+                            # Use 1 to signal successful connection
+                            self.sFTPConnectionID = 1
+
+                        # Handle paramiko Authentication Exceptions (User name / Password failures)
+                        except paramiko.AuthenticationException:
+                            # Inform the user of the type of problem that has occurred.
+                            prompt = _('sFTP Authentication Error.  Unable to connect to the sFTP Server.')
+                            dlg = Dialogs.ErrorDialog(self, prompt)
+                            dlg.ShowModal()
+                            dlg.Destroy()
+
+                        # Handle paramiko SSH Exceptions (Server / Key failures)
+                        except paramiko.SSHException:
+                            # Inform the user of the type of problem that has occurred.
+                            prompt = _("SSH Exception") + "\n" + str(sys.exc_info()[1])
+                            dlg = Dialogs.ErrorDialog(self, prompt)
+                            dlg.ShowModal()
+                            dlg.Destroy()
+
+                        # handle other exceptions                            
+                        except:
+                            # Inform the user of the type of problem that has occurred.
+                            prompt = u"%s\n%s" % (sys.exc_info()[0], sys.exc_info()[1])
+                            dlg = Dialogs.ErrorDialog(self, prompt)
+                            dlg.ShowModal()
+                            dlg.Destroy()
+
+                # If a connection to the sFTP Server already exists, we need to update the display values, but don't need to establish the connection
+                else:
+                    # Set Cursor to the HourGlass
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+                    # The Connection Result from when the Connection was originally made is the sFTPConnectionID
+                    connResult = self.sFTPConnectionID
+
+            # connResult of 0 or higher indicates successful connection to the SRB / sFTP Server
             if connResult >= 0:
                 # Change the Label to indicate connection
                 sourceLbl.SetLabel(self.REMOTE_LABEL)
                 # hide the Local File System's Directory Structure
                 sourceDir.Show(False)
                 # Display the SRB's Directory Structure
-                sourceSrbDir.Show(True)
+                sourceRemoteDir.Show(True)
+                # If we're connected to the SRB ...
+                if self.connectionType == 'SRB':
+                    # ... set up the SRB variables
+                    prompt = _('Reading Collections from SRB.')
+                    rootItemText = self.tmpCollection
+                # If we're connected to an sFTP Server ...
+                elif self.connectionType == 'sFTP':
+                    # ... set up the sFTP Server variables
+                    prompt = _('Reading Files from Remote Server')
+                    rootItemText = '/'
+                    # Get the sFTP Current Directory
+                    cwd = self.sFTPClient.getcwd()
                 # Update Status Bar
-                self.SetStatusText(_('Reading Collections from SRB.'))
-                # Read the list of folders from the SRB and put them in the SRB Dir Tree
+                self.SetStatusText(prompt)
                 # Start by clearing the list
-                sourceSrbDir.DeleteAllItems()
+                sourceRemoteDir.DeleteAllItems()
+                # Read the list of folders from the sFTP Server and put them in the Remote Dir Tree
                 # Add a Root Item to the SRB Dir Tree
-                srbRootItem = sourceSrbDir.AddRoot(self.srbCollection)
-                # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
-                self.srbAddChildNode(sourceSrbDir, srbRootItem, self.tmpCollection)
+                rootItem = sourceRemoteDir.AddRoot(rootItemText)
+
+                # If we're connected to the SRB ...
+                if self.connectionType == 'SRB':
+                    # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
+                    self.remoteAddChildNode(sourceRemoteDir, rootItem, self.tmpCollection)
+
+                    remoteDir = sourceRemoteDir.GetItemText(sourceRemoteDir.GetSelection())
+                # If we're connected to the sFTP Server ...
+                elif self.connectionType == 'sFTP':
+                    self.sFTPClient.chdir(self.sFTPHomePath)
+                    # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
+                    self.remoteAddChildNode(sourceRemoteDir, rootItem, '.')
+
+                    if cwd != None:
+                        remoteDir = cwd
+                    else:
+                        remoteDir = self.sFTPHomePath
                 # Expand the Root Item to show all the first-level collections
-                sourceSrbDir.Expand(srbRootItem)
+                sourceRemoteDir.Expand(rootItem)
                 # Select the Root item in the tree
-                sourceSrbDir.SelectItem(srbRootItem)
+                sourceRemoteDir.SelectItem(rootItem)
+
                 # Add the Files from the selected Folder
-                self.RefreshFileList(sourceLbl.GetLabel(), sourceSrbDir.GetItemText(sourceSrbDir.GetSelection()), sourceFile, sourceFilter)
+                self.RefreshFileList(sourceLbl.GetLabel(), remoteDir, sourceFile, sourceFilter)
+
+                # if we're connected to the sFTP Server ...
+                if self.connectionType == 'sFTP':
+                    # ... change back to the original sFTP Directory
+                    self.sFTPClient.chdir(cwd)
+
+                # Disable the connection type selection
+                ## self.connectionTypeChoice.Enable(False)
 
             # Clear the Status Bar's text
             self.SetStatusText('')
@@ -2483,40 +3047,40 @@ class FileManagement(wx.Dialog):
         if event.GetId() == self.btnNewFolderLeft.GetId():
             # ... get the LEFT Label, Directory Ctrl, and path
             sourceLbl = self.lblLeft.GetLabel()
-            # ... Directory and Path are different if they're LOCAL or REMOTE (SRB) ...
+            # ... Directory and Path are different if they're LOCAL or REMOTE (SRB or sFTP Server) ...
             if sourceLbl == self.LOCAL_LABEL:
                 target = self.dirLeft
                 path = target.GetPath()
             else:
-                target = self.srbDirLeft
+                target = self.remoteDirLeft
                 path = self.GetFullPath(target)
             # We also need to know the controls for the inactive side, so they can be updated too if needed
             # ... get the RIGHT Label and Directory Ctrl
             otherLbl = self.lblRight.GetLabel()
-            # ... Directory and Path are different if they're LOCAL or REMOTE (SRB) ...
+            # ... Directory and Path are different if they're LOCAL or REMOTE (SRB or sFTP Server) ...
             if otherLbl == self.LOCAL_LABEL:
                 other = self.dirRight
             else:
-                other = self.srbDirRight
+                other = self.remoteDirRight
         # If we are connecting on the RIGHT side ...
         elif event.GetId() == self.btnNewFolderRight.GetId():
             # ... get the RIGHT Label, Directory Ctrl, and path
             sourceLbl = self.lblRight.GetLabel()
-            # ... Directory and Path are different if they're LOCAL or REMOTE (SRB) ...
+            # ... Directory and Path are different if they're LOCAL or REMOTE (SRB or sFTP Server) ...
             if sourceLbl == self.LOCAL_LABEL:
                 target = self.dirRight
                 path = target.GetPath()
             else:
-                target = self.srbDirRight
+                target = self.remoteDirRight
                 path = self.GetFullPath(target)
             # We also need to know the controls for the inactive side, so they can be updated too if needed
             # ... get the LEFT Label and Directory Ctrl
             otherLbl = self.lblLeft.GetLabel()
-            # ... Directory and Path are different if they're LOCAL or REMOTE (SRB) ...
+            # ... Directory and Path are different if they're LOCAL or REMOTE (SRB or sFTP Server) ...
             if otherLbl == self.LOCAL_LABEL:
                 other = self.dirLeft
             else:
-                other = self.srbDirLeft
+                other = self.remoteDirLeft
         # Create a prompt
         prompt = _('Create new folder for %s')
         # Encode if needed
@@ -2526,11 +3090,13 @@ class FileManagement(wx.Dialog):
         # Display the prompt in the Status Bar
         self.SetStatusText(prompt % path)
 
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+        # If we're connected to the SRB ...
+        if self.connectionType == 'SRB':
+            # Load the SRB DLL / Dynamic Library
+            if "__WXMSW__" in wx.PlatformInfo:
+                srb = ctypes.cdll.srbClient
+            else:
+                srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
         # Create a TextEntry Dialog to get the name for the new Folder from the user
         newFolder = wx.TextEntryDialog(self, prompt % path, _('Create new folder'), style = wx.OK | wx.CANCEL | wx.CENTRE)
         # Display the Dialog and see if the user presses OK
@@ -2547,22 +3113,34 @@ class FileManagement(wx.Dialog):
                 try:
                     # Create the folder on the local file system
                     os.mkdir(folderName)
-                    # Update the Directory Tree Control.  Get the current selection
-                    itemId = target.GetTreeCtrl().GetSelection()
-                     # From Robin Dunn -- Forces refresh of the tree node to get it to update.
-                    target.GetTreeCtrl().CollapseAndReset(itemId)
-                    # If both sides are pointed to the same LOCAL / REMOTE (SRB) source, we need to update the other side too.
+
+                    if 'wxMSW' in wx.PlatformInfo:
+                        # Update the Directory Tree Control.  Get the current selection
+                        itemId = target.GetTreeCtrl().GetSelection()
+                         # From Robin Dunn -- Forces refresh of the tree node to get it to update.
+                        target.GetTreeCtrl().CollapseAndReset(itemId)
+                    else:
+
+                        target.ReCreateTree()
+                        target.SetPath(path)
+                    
+                    # If both sides are pointed to the same LOCAL / REMOTE (SRB or sFTP Server) source, we need to update the other side too.
                     if sourceLbl == otherLbl:
                         # Get the current path for the opposite side
                         otherPath = other.GetPath()
                         # Set the path temporarily to the folder that was changed.
-                        other.SetPath(path)
-                        # Get the current selection
-                        itemId = other.GetTreeCtrl().GetSelection()
-                         # From Robin Dunn -- Forces refresh of the tree node to get it to update.
-                        other.GetTreeCtrl().CollapseAndReset(itemId)
+#                        other.SetPath(path)
+#                        if 'wxMSW' in wx.PlatformInfo:
+                            # Get the current selection
+#                            itemId = other.GetTreeCtrl().GetSelection()
+                             # From Robin Dunn -- Forces refresh of the tree node to get it to update.
+#                            other.GetTreeCtrl().CollapseAndReset(itemId)
+#                        else:
+                        other.ReCreateTree()
+
                         # Reset the path to the original location
                         other.SetPath(otherPath)
+
                 except OSErrorException, e:
                     # Probably a duplicate directory name
                     prompt = _('Folder "%s" already exists.')
@@ -2581,44 +3159,91 @@ class FileManagement(wx.Dialog):
                     errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
                     errordlg.ShowModal()
                     errordlg.Destroy()
-                    
+
                 # Automatically change to the newly created folder
                 target.SetPath(folderName)
-            # If we're creating a REMOTE (SRB) Directory (Collection) ...
+            # If we're creating a REMOTE (SRB or sFTP Server) Directory (Collection) ...
             else:
                 # Get a temporary copy of the new folder name
                 tmpNewFolder = newFolder.GetValue()
-                # Encode if needed
-                if 'unicode' in wx.PlatformInfo:
-                    tmpNewFolder = tmpNewFolder.encode(TransanaGlobal.encoding)
-                    path = path.encode(TransanaGlobal.encoding)
-                # Create the folder on the SRB file system
-                newCollection = srb.srb_new_collection(self.srbConnectionID, 0, path, tmpNewFolder);
+                # If we're connected to the SRB ...
+                if self.connectionType == 'SRB':
+                    # Encode if needed
+                    if 'unicode' in wx.PlatformInfo:
+                        tmpNewFolder = tmpNewFolder.encode(TransanaGlobal.encoding)
+                        path = path.encode(TransanaGlobal.encoding)
+                    # Create the folder on the SRB file system
+                    newCollection = srb.srb_new_collection(self.srbConnectionID, 0, path, tmpNewFolder);
+                # If we're connected to the sFTP Server ...
+                elif self.connectionType == 'sFTP':
+                    # Start exception handling
+                    try:
+                        # Make the new sFTP Directory
+                        newCollection = self.sFTPClient.mkdir(string.join([self.GetFullPath(target), tmpNewFolder], '/'))
+                        # Signal success if we get here
+                        newCollection = 1
+                    # Handle any exception
+                    except:
+                        # Signal failure if we get here
+                        newCollection = -1
+
+                        # ... by simply reporting them
+                        dlg = Dialogs.ErrorDialog(self, "%s : %s" % (sys.exc_info()[0], sys.exc_info()[1]))
+                        dlg.ShowModal()
+                        dlg.Destroy()
+
                 # If no error occurred
                 if newCollection >= 0:
                     # Update the Directory Tree Control
                     itemId = target.AppendItem(target.GetSelection(), newFolder.GetValue())
                     # If both sides are pointed to the same LOCAL / REMOTE (SRB) source, we need to update the other side too.
                     if sourceLbl == otherLbl:
+                        if self.connectionType == 'sFTP':
+                            prompt = _('Reading Files from Remote Server')
+                            rootItemText = '/'
+                        else:
+                            prompt = _('Reading Collections from SRB.')
+                            rootItemText = self.tmpCollection
+                        # Remember the path for the other window
+                        otherPath = self.GetFullPath(other)
                         # Update the Status Bar
-                        self.SetStatusText(_('Reading Collections from SRB.'))
+                        self.SetStatusText(prompt)
                         # Read the list of folders from the SRB and put them in the SRB Dir Tree
                         # Start by clearing the list
                         other.DeleteAllItems()
                         # Add a Root Item to the SRB Dir Tree
-                        srbRootItem = other.AddRoot(self.srbCollection)
-                        # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
-                        self.srbAddChildNode(other, srbRootItem, self.tmpCollection)
+                        rootItem = other.AddRoot(rootItemText)
+                        # If we're connected to the SRB ...
+                        if self.connectionType == 'SRB':
+                            # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
+                            self.remoteAddChildNode(other, rootItem, self.tmpCollection)
+                        # If we're connected to the sFTP Server ...
+                        elif self.connectionType == 'sFTP':
+                            self.sFTPClient.chdir(self.sFTPHomePath)
+                            # Initiate the recursive call to get all Collections from the SRB and add them to the SRB Dir Tree
+                            self.remoteAddChildNode(other, rootItem, '.')
                         # Expand the Root Item to show all the first-level collections
-                        other.Expand(srbRootItem)
+                        other.Expand(rootItem)
                         # Select the Root item in the tree
-                        other.SelectItem(srbRootItem)
+                        other.SelectItem(rootItem)
+                        # Restore the path in the other window's directory tree
+                        self.SetFullPath(other, otherPath)
+
                     # Automatically change to the newly created folder
                     target.SelectItem(itemId)
                 # If an error did occur ...
                 else:
-                    # ... display the error message
-                    self.srbErrorMessage(newCollection)
+                    # If we're connected to the SRB ...
+                    if self.connectionType == 'SRB':
+                        # ... display the error message
+                        self.srbErrorMessage(newCollection)
+                    # If we're connected to the sFTP Server ...
+                    elif self.connectionType == 'sFTP':
+                        # Create an error message and display it to the user
+                        prompt = _("Unable to create the requested directory.")
+                        dlg = Dialogs.ErrorDialog(self, prompt)
+                        dlg.ShowModal()
+                        dlg.Destroy()
         # Destroy the TextEntry Dialog, now that we are done with it.
         newFolder.Destroy()
 
@@ -2634,7 +3259,7 @@ class FileManagement(wx.Dialog):
         # If LEFT is REMOTE ...
         else:
             # ... refresh the REMOTE directory control
-            self.RefreshDirCtrl(lblLeft, self.srbDirLeft)
+            self.RefreshDirCtrl(lblLeft, self.remoteDirLeft)
         # Get the RIGHT label
         lblRight = self.lblRight.GetLabel()
         # If RIGHT is LOCAL ...
@@ -2644,7 +3269,7 @@ class FileManagement(wx.Dialog):
         # If RIGHT is REMOTE ...
         else:
             # ... refresh the REMOTE directory control
-            self.RefreshDirCtrl(lblRight, self.srbDirRight)
+            self.RefreshDirCtrl(lblRight, self.remoteDirRight)
 
         # Update File Listings
         # Initialize a path variable
@@ -2653,7 +3278,7 @@ class FileManagement(wx.Dialog):
         if lblLeft == self.LOCAL_LABEL:
             path = self.dirLeft.GetPath()
         else:
-            path = self.GetFullPath(self.srbDirLeft)
+            path = self.GetFullPath(self.remoteDirLeft)
         # As long as there is a defined path ...
         if path != '':
             # ... refresh the left hand side controls
@@ -2665,7 +3290,7 @@ class FileManagement(wx.Dialog):
         if lblRight == self.LOCAL_LABEL:
             path = self.dirRight.GetPath()
         else:
-            path = self.GetFullPath(self.srbDirRight)
+            path = self.GetFullPath(self.remoteDirRight)
         # As long as there is a defined path ...
         if path != '':
             # refresh the right hand side controls
@@ -2724,7 +3349,7 @@ class FileManagement(wx.Dialog):
                 os.spawnv(os.P_NOWAIT, path + 'Help', ['Help', helpContext])
 
     def GetFullPath(self, control):
-        """ Produce the full Path secification for the given srb Directory Tree Control """
+        """ Produce the full Path secification for the given sFTP / srb Directory Tree Control """
         # Start with the current selection and work backwards up the tree
         item = control.GetSelection()
         # Start the Path List with the current folder name
@@ -2732,13 +3357,53 @@ class FileManagement(wx.Dialog):
         # Move up the tree one node at a time until we get to the root
         while item != control.GetRootItem():
             item = control.GetItemParent(item)
-            # Add the new folder name to the FRONT of the path list
-            pathList = control.GetItemText(item).strip() + '/' + pathList  # '/', not os.sep, because the SRB ALWAYS uses unix-style paths.
+            if control.GetItemText(item).strip() != '/':
+                # Add the new folder name to the FRONT of the path list
+                pathList = control.GetItemText(item).strip() + '/' + pathList  # '/', not os.sep, because the SRB ALWAYS uses unix-style paths.
+#            else:
+#                # Add the new folder name to the FRONT of the path list
+#               pathList = control.GetItemText(item).strip() + pathList  # '/', not os.sep, because the SRB ALWAYS uses unix-style paths.
         # On the Mac, there are null characters (#0) ending the strings.  We need to remove these.
         while pathList.find(chr(0)) > -1:
             pathList = pathList[:pathList.find(chr(0))] + pathList[pathList.find(chr(0)) + 1:]
+        # If we're connected to the sFTP Server ...
+        if self.connectionType == 'sFTP':
+            # ... create the appropriate path list ...
+            pathList = string.join([self.sFTPHomePath, pathList], '/')
+            # ... and get rid of double slashes, if there are any.
+            pathList = pathList.replace('//', '/')
+            
         # Return the path list that has been built
         return pathList
+
+    def SetFullPath(self, control, path):
+        """ Set the correct selection in a given sFTP / SRB Directory Tree Control """
+        # Divide the path up into a list of nodes
+        pathNodes = path.split('/')
+        # Skip the first three nodes, '/', 'home', and the username.
+        pathNodes = pathNodes[3:]
+        # Get the tree's Root Node
+        currentNode = control.GetRootItem()
+        # Get the root node's first child
+        (childNode, cookie) = control.GetFirstChild(currentNode)
+        # As long as the child node is valid and there are more nodes to go in the path ...
+        while childNode.IsOk() and (len(pathNodes) > 0):
+            # ... if the current child node's text matches the path node being sought ...
+            if control.GetItemText(childNode) == pathNodes[0]:
+                # ... make this child node the current node ...
+                currentNode = childNode
+                # ... remove the found node from the path of nodes to seek ...
+                pathNodes = pathNodes[1:]
+                # ... select the found node (in case the next node can't be found) ...
+                control.SelectItem(currentNode)
+                # ... make sure the node is visible ...
+                control.EnsureVisible(currentNode)
+                # ... and get it's first child (if any)
+                (childNode, cookie) = control.GetFirstChild(currentNode)
+            # ... if the current node's text does NOT match teh path being sought ...
+            else:
+                # ... then get the current node's next child
+                (childNode, cookie) = control.GetNextChild(currentNode, cookie)
 
     def IsEmpty(self, lbl, path):
         """ This method detects whether the specified file path is empty or not.  This is used to determine
@@ -2760,47 +3425,54 @@ class FileManagement(wx.Dialog):
                 result = False
         # If REMOTE (SRB)
         else:
-            # Load the SRB DLL / Dynamic Library
-            if "__WXMSW__" in wx.PlatformInfo:
-                srb = ctypes.cdll.srbClient
-            else:
-                srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
-            # Encode the path, if needed
-            if 'unicode' in wx.PlatformInfo:
-                path = path.encode(TransanaGlobal.encoding)
-            # See if there's anything in the SRB catalog
-            srbCatalogCount = srb.srb_query_child_dataset(self.srbConnectionID.value, 0, path)
-            # If any files are counted ...
-            if srbCatalogCount != 0:
-                # ... then we're not Empty.
-                result = False
+            # If we're connected to the SRB ...
+            if self.connectionType == 'SRB':
+                # Load the SRB DLL / Dynamic Library
+                if "__WXMSW__" in wx.PlatformInfo:
+                    srb = ctypes.cdll.srbClient
+                else:
+                    srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
+                # Encode the path, if needed
+                if 'unicode' in wx.PlatformInfo:
+                    path = path.encode(TransanaGlobal.encoding)
+                # See if there's anything in the SRB catalog
+                srbCatalogCount = srb.srb_query_child_dataset(self.srbConnectionID.value, 0, path)
+                # If any files are counted ...
+                if srbCatalogCount != 0:
+                    # ... then we're not Empty.
+                    result = False
+            # If we're connected to the sFTP Server ...
+            elif self.connectionType == 'sFTP':
+                result = (len(self.sFTPClient.listdir(path)) == 0)
+                
         # Return the result
         return result
 
     def OnDirSelect(self, event):
         """ This method is called when a directory/folder is selected in the tree, either locally or on the SRB """
+
         # First, determine whether we're on the source or destination side and set local variables lbl, path, target,
         # and filter accordingly.
         if (event.GetEventObject() == self.dirLeft.GetTreeCtrl()) or \
-           (event.GetId() == self.srbDirLeft.GetId()) or \
+           (event.GetId() == self.remoteDirLeft.GetId()) or \
            (event.GetId() == self.filterLeft.GetId()):
             lbl = self.lblLeft.GetLabel()
             # We need a different path depending on whether we are on the local file system or on the SRB
             if lbl == self.LOCAL_LABEL:
                 path = self.dirLeft.GetPath()
             else:
-                path = self.GetFullPath(self.srbDirLeft)
+                path = self.GetFullPath(self.remoteDirLeft)
             target = self.fileLeft
             filter = self.filterLeft
         elif (event.GetEventObject() == self.dirRight.GetTreeCtrl()) or \
-             (event.GetId() == self.srbDirRight.GetId()) or \
+             (event.GetId() == self.remoteDirRight.GetId()) or \
              (event.GetId() == self.filterRight.GetId()):
             lbl = self.lblRight.GetLabel()
             # We need a different path depending on whether we are on the local file system or on the SRB
             if lbl == self.LOCAL_LABEL:
                 path = self.dirRight.GetPath()
             else:
-                path = self.GetFullPath(self.srbDirRight)
+                path = self.GetFullPath(self.remoteDirRight)
             target = self.fileRight
             filter = self.filterRight
         prompt = _('Directory changed to %s')
@@ -2835,12 +3507,11 @@ class FileManagement(wx.Dialog):
             such as when a Folder is selected.  It is also used for the Refresh button, which allows the user to
             update the screen to reflect changes that may have occurred outside of Transana or the File Management
             Utility."""
-        # Load the SRB DLL / Dynamic Library
-        if "__WXMSW__" in wx.PlatformInfo:
-            srb = ctypes.cdll.srbClient
-        else:
-            srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
 
+        # if the path is a STRING, decode it to a Unicode object or the File List will be cleared on Windows!
+        if isinstance(path, str):
+            path = path.decode(TransanaGlobal.encoding)
+        
         # Clear the File List
         target.ClearAll()
         target.InsertColumn(0, "Files")
@@ -2862,29 +3533,26 @@ class FileManagement(wx.Dialog):
                 # Iterate through all files from the filelist and add to the ListCtrl target
                 for item in self.itemsToShow(path, filelist, selection, isSrbList=False):
                     index = target.InsertStringItem(target.GetItemCount(), item)
-            # The DirRefresh model causes a WindowsError to be raised when there is an empty CD drive
-            # on the system.  This ignores that error.
-            except WindowsError, e:
-                pass
             except:
-                import traceback
-                traceback.print_exc(file=sys.stdout)
-                # Display the Exception Message, allow "continue" flag to remain true
-                prompt = "%s : %s"
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(prompt, 'utf8')
-                errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
-                errordlg.ShowModal()
-                errordlg.Destroy()
-                # Pass the exception on up the path
-                raise
 
-        # If we are not looking at the Local File System, we are looking at a SRB connection
+                if not (('wxMSW' in wx.PlatformInfo) and (sys.exc_info()[0] == WindowsError)):
+#                    import traceback
+#                    traceback.print_exc(file=sys.stdout)
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    prompt = "%s : %s"
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # Pass the exception on up the path
+                    raise
+
+        # If we are not looking at the Local File System, we are looking at a SRB or sFTP Server connection
         else:
-
-            filelist = self.GetSRBFileList(path)
-
+            # Get the Remote File List for the current path
+            filelist = self.GetRemoteFileList(path)
             # Get selection from dropdown list
             selection=filter.GetStringSelection()
             # Iterate through all files from the filelist and add to the ListCtrl target
@@ -2947,6 +3615,62 @@ class FileManagement(wx.Dialog):
         dlg.ShowModal()
         dlg.Destroy()
 
+class GenericDirCtrl_MacFix(wx.GenericDirCtrl):
+    """ The wx.GenericDirCtrl cannot set paths on OS X that start with /Volumes, i.e. are not on the main Mac hard drive.
+        This class makes a minor adjustment to the SetPath method to detect and correct that problem. """
+   
+    def __init__(self, parent, id, style):
+        """ Initialize the GenericDirCtrl_MacFix control, creating a standard wx.GenericDirCtrl object """
+        wx.GenericDirCtrl.__init__(self, parent, id, style=style)
+
+    def SetPath(self, path):
+        """ The SetPath() method of the wx.GenericDirCtrl is defective on OS X.  This detects the problem
+            and fixes it. """
+        # Call the wx.GenericDirCtrl's SetPath() method
+        wx.GenericDirCtrl.SetPath(self, path)
+        # If we'r on OS X AND the path was not correctly changed ...
+        if ('wxMac' in wx.PlatformInfo) and (path != '') and (self.GetPath() != path):
+            # Get the directory tree
+            tree = self.GetTreeCtrl()
+            # Split the path into its component parts and drop the first two elements. '' and '/Volumes'
+            pathElements = path.split(os.sep)[2:]
+            if (len(pathElements) > 0) and (pathElements[-1] == u''):
+                pathElements = pathElements[:-1]
+            # Get the directory tree's root node
+            node = tree.GetRootItem()
+            # Get the first child node
+            (childNode, cookie) = tree.GetFirstChild(node)
+            # While we have valid child nodes ...
+            while childNode.IsOk():
+                # ... If the child node's text matches the next element in our path ...
+                if tree.GetItemText(childNode) == pathElements[0]:
+                    # ... drop the first element from the path, as it's been found.
+                    pathElements = pathElements[1:]
+                    # If there are no more elements in the path ...
+                    if len(pathElements) == 0:
+                        # ... select the final node we found ...
+                        tree.SelectItem(childNode)
+                        # Ensure the node is visible
+                        tree.EnsureVisible(childNode)
+                        # ... and stop searching.
+                        break
+                    # if there are more elements in the path ...
+                    else:
+                        # ... set the Search Node to the element we just found
+                        node = childNode
+                        # ... expand this tree node.  The GenericDirCtrl doesn't appear to populate the child nodes until we do this!!
+                        tree.Expand(childNode)
+                        # ... select the final node we found ...
+                        tree.SelectItem(childNode)
+                        # Ensure the node is visible
+                        tree.EnsureVisible(childNode)
+                        # ... and get the first Child of the last found node
+                        (childNode, cookie) = tree.GetFirstChild(node)
+                # If the current node's text doesn't match what we're looking for ...
+                else:
+                    # ... get the next child node.
+                    (childNode, cookie) = tree.GetNextChild(node, cookie)
+         
 
 # Allow this module to function as a stand-alone application
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -1712,7 +1712,7 @@ class FilterDialog(wx.Dialog):
                 dlg2 = Dialogs.QuestionDialog(self, prompt % localConfigName)
                 if dlg2.LocalShowModal() == wx.ID_YES:
                     # If we're deleting the Default configuration ...
-                    if localConfigName == unicode(_('Default'), TransanaGlobal.encoding):
+                    if localConfigName == unicode(_('Default'), 'utf8'):
                         # ... we need to convert the configuration name to English!
                         localConfigName = 'Default'
                     # Clear the global configuration name
@@ -2410,7 +2410,7 @@ class FilterDialog(wx.Dialog):
     def OnOK(self, event):
         """ implement the Filter Dialog's OK button """
         # If we're using a Default configuration ...
-        if self.configName == unicode(_('Default'), TransanaGlobal.encoding):
+        if self.configName == unicode(_('Default'), 'utf8'):
             # ... then we automatically save!
             self.OnFileSave(event)
         # Process the Dialog's default OK behavior

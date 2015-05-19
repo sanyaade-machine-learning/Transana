@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -63,8 +63,10 @@ import PropagateEpisodeChanges
 # import Transana's Exceptions
 import TransanaExceptions
 # Import Transana's Transcript User Interface for creating supplemental Transcript Windows
-import TranscriptionUI
-
+if TransanaConstants.USESRTC:
+    import TranscriptionUI_RTC as TranscriptionUI
+else:
+    import TranscriptionUI
 # import Python's os module
 import os
 # import Python's sys module
@@ -100,6 +102,8 @@ class ControlObject(object):
         self.WindowPositions = []       # Initial Screen Positions for all Windows, used for Presentation Mode
         self.TranscriptNum = []         # Transcript record # LIST loaded
         self.currentObj = None          # Currently loaded Object (Episode or Clip)
+        # Have the Export Directory default to the Video Root, but then remember its changed value for the session
+        self.defaultExportDir = TransanaGlobal.configData.videoPath
         self.playInLoop = False         # Should we loop playback?
         self.LoopPresMode = None        # What presentation mode are we ignoring while Looping?
         self.shuttingDown = False       # We need to signal when we want to shut down to prevent problems
@@ -228,8 +232,17 @@ class ControlObject(object):
             # Enable the transcript menu item options
             self.MenuWindow.SetTranscriptOptions(True)
 
+            if TransanaConstants.USESRTC:
+                # After two seconds, call the EditorPaint method of the Transcript Dialog (in the TranscriptionUI_RTC file)
+                # This causes improperly placed line numers to "correct" themselves!
+                wx.CallLater(2000, self.TranscriptWindow[self.activeTranscript].dlg.EditorPaint, None)
+
+             # Set focus to the new Transcript's Editor (so that CommonKeys work on the Mac)
+            self.TranscriptWindow[self.activeTranscript].dlg.editor.SetFocus()
         # If the video won't load ...
         else:
+            # Clear the interface!
+            self.ClearAllWindows()
             # We only want to load the File Manager in the Single User version.  It's not the appropriate action
             # for the multi-user version!
             if TransanaConstants.singleUserVersion:
@@ -303,10 +316,22 @@ class ControlObject(object):
             # Add the Keyword Tab to the DataWindow
             self.DataWindow.AddKeywordsTab(collectionObj=collectionObj, clipObj=clipObj)
 
-            # Let's make sure this clip is displayed in the Database Tree
-            nodeList = (_('Collections'),) + self.currentObj.GetNodeData()
-            # Now point the DBTree (the notebook's parent window's DBTab's tree) to the loaded Clip
-            self.DataWindow.DBTab.tree.select_Node(nodeList, 'ClipNode')
+            # Get the current selection(s) from the Database Tree
+            selItems = self.DataWindow.DBTab.tree.GetSelections()
+            # If there are one or more items selected ...
+            if len(selItems) >= 1:
+                # ... get the item data from the first selection
+                selData = self.DataWindow.DBTab.tree.GetPyData(selItems[0])
+            # If NO items are selected ...
+            else:
+                # ... then there's no item data to get
+                selData = None
+            # If no items are selected or the item selected is NOT a Search Collection or Search Clip ...
+            if (selData == None) or not (selData.nodetype in ['SearchCollectionNode', 'SearchClipNode']):
+                # Let's make sure this clip is displayed in the Database Tree
+                nodeList = (_('Collections'),) + self.currentObj.GetNodeData()
+                # Now point the DBTree (the notebook's parent window's DBTab's tree) to the loaded Clip
+                self.DataWindow.DBTab.tree.select_Node(nodeList, 'ClipNode')
             
             # Enable the transcript menu item options
             self.MenuWindow.SetTranscriptOptions(True)
@@ -381,6 +406,13 @@ class ControlObject(object):
         newTranscriptWindow.Show()
         newTranscriptWindow.UpdatePosition(self.VideoWindow.GetCurrentVideoPosition())
 
+        # Enable the Multiple Transcript buttons
+        for x in range(len(self.TranscriptWindow)):
+            self.TranscriptWindow[x].dlg.toolbar.UpdateMultiTranscriptButtons(True)
+
+        # Set focus to the new Transcript's Editor (so that CommonKeys work on the Mac)
+        self.TranscriptWindow[self.activeTranscript].dlg.editor.SetFocus()
+
         if DEBUG:
             print "ControlObjectClass.OpenAdditionalTranscript(%d)  %d" % (transcriptNum, self.activeTranscript)
             for x in range(len(self.TranscriptWindow)):
@@ -425,6 +457,10 @@ class ControlObject(object):
         self.TranscriptWindow[prevActiveTranscript].dlg.SetFocus()
         # Update the Active Transcript number
         self.activeTranscript = prevActiveTranscript
+        # If there's only one transcript left ...
+        if len(self.TranscriptWindow) == 1:
+            # ... Disable the Multiple Transcript buttons
+            self.TranscriptWindow[0].dlg.toolbar.UpdateMultiTranscriptButtons(False)
 
     def SaveAllTranscriptCursors(self):
         """ Save the current cursor position or selection for all open Transcript windows """
@@ -462,7 +498,7 @@ class ControlObject(object):
             (left, top) = self.TranscriptWindow[0].dlg.GetPositionTuple()
             (width, height) = self.TranscriptWindow[0].dlg.GetSizeTuple()
             # Get the size of the full screen
-            (x, y, w, h) = wx.ClientDisplayRect()
+            (x, y, w, h) = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
             # We don't want the height of the first Transcript window, but the size of the space for all Transcript windows.
             # We assume that it extends from the top of the first Transcript window to the bottom of the whole screen.
             height = h - top
@@ -509,26 +545,26 @@ class ControlObject(object):
         # Identify the loaded media file
         str = _('Video')
         self.VideoWindow.SetTitle(str)
-            
+        
         # If we are resetting multiple transcripts ...
         if resetMultipleTranscripts:
             # While there are additional Transcript windows open ...
             while len(self.TranscriptWindow) > 1:
                 # Save the transcript
                 self.SaveTranscript(1, transcriptToSave=len(self.TranscriptWindow) - 1)
-
+                
                 # Clear Transcript Window
                 self.TranscriptWindow[len(self.TranscriptWindow) - 1].ClearDoc()
                 self.TranscriptWindow[len(self.TranscriptWindow) - 1].dlg.Close()
             # When all the Transcritp Windows are closed, rearrrange the screen
             self.AutoArrangeTranscriptWindows()
-                
+                    
         # Clear the Data Window
         self.DataWindow.ClearData()
         # Clear the currently loaded object, as there is none
         self.currentObj = None
+        
         # Force the screen updates
-            
         # there can be an issue with recursive calls to wxYield, so trap the exception ...
         try:
             wx.Yield()
@@ -613,6 +649,176 @@ class ControlObject(object):
             # Display the Keywords Tab
             self.DataWindow.nb.SetSelection(tabValue)
 
+    def ProcessCommonKeyCommands(self, event):
+        """ Process keyboard commands common to several of Transana's main windows """
+        # Assume the key WILL be processed here in this this method
+        keyProcessed = True
+        # Extract the key code from the event passed in
+        c = event.GetKeyCode()
+        # Determine if there are modifiers
+        hasMods = event.AltDown() or event.ControlDown() or event.CmdDown() or event.ShiftDown()
+        # Note whether there is something loaded in the main interface
+        loaded = (self.currentObj != None)
+
+        # F1 = Focus on Menu Window
+        if (c == wx.WXK_F1) and not hasMods:
+            # Set the focus on the Menu Window
+            self.MenuWindow.SetFocus()
+
+        # F2 = Focus on Visualization Window
+        elif (c == wx.WXK_F2) and not hasMods:
+            # Set the focus to the Visualization Window
+            self.VisualizationWindow.SetFocus()
+
+        # F3 = Focus on Video Window
+        elif (c == wx.WXK_F3) and not hasMods:
+            # Set the focus to the Video Window
+            self.VideoWindow.SetFocus()
+
+        # F4 = Focus on Transcript Window
+        elif (c == wx.WXK_F4) and not hasMods:
+            # Determine where the focus currently is (I don't exactly understand why this works.  It's something about
+            # this being a "static function")
+            tmpFocVal = self.TranscriptWindow[self.activeTranscript].dlg.editor.FindFocus()
+            # Now set the focus to the currently active transcript window
+            self.TranscriptWindow[self.activeTranscript].dlg.editor.SetFocus()
+            # If the focus didn't change ...
+            if tmpFocVal == self.TranscriptWindow[self.activeTranscript].dlg.editor.FindFocus():
+                # ... then the Transcript Window already HAD focus.  So see if there is more than one Transcript Window ...
+                if len(self.TranscriptWindow) > 1:
+                    # ... if so, see if the active window is NOT the highest numbered transcript window.
+                    if self.activeTranscript < len(self.TranscriptWindow) - 1:
+                        # If NOT, increment the Transcript Window by one
+                        self.activeTranscript += 1
+                    # If we're on the highest-numbered transcript window ...
+                    else:
+                        # ... then increment back to the start, window zero
+                        self.activeTranscript = 0
+                    # Now set the focus to the NEW Transcript Window
+                    self.TranscriptWindow[self.activeTranscript].dlg.editor.SetFocus()
+
+        # F5 = Focus on Data Window
+        elif (c == wx.WXK_F5) and not hasMods:
+            # If the Data Window is currently showing the Database tab ...
+            if self.DataWindow.nb.GetPageText(self.DataWindow.nb.GetSelection()) == unicode(_("Database"), 'utf8'):
+                # ... set the focus to the Database Tree on that tab
+                self.DataWindow.DBTab.tree.SetFocus()
+            # Otherwise ...
+            else:
+                # ... just focus on the Data Window Notebook control.
+                self.DataWindow.nb.SetFocus()
+
+        # F6 = Toggle Edit / Read Only Mode
+        elif (c == wx.WXK_F6) and not hasMods and loaded:
+            # Set the focus to the Transcript
+            self.TranscriptWindow[self.activeTranscript].dlg.editor.SetFocus()
+            # Toggle the Read Only Button on the Transcript Toolbar
+            self.TranscriptWindow[self.activeTranscript].dlg.toolbar.ToggleTool(
+                self.TranscriptWindow[self.activeTranscript].dlg.toolbar.CMD_READONLY_ID,
+                self.TranscriptWindow[self.activeTranscript].dlg.editor.get_read_only())
+            # Emulate the Press of the Read Only Button by calling its event directly
+            self.TranscriptWindow[self.activeTranscript].dlg.toolbar.OnReadOnlySelect(event)
+
+        # F12 and Ctrl-F12 (for Mac) are Quick Save
+        elif (c == wx.WXK_F12) and not (event.AltDown() or event.CmdDown() or event.ShiftDown()) and loaded:
+            # if the transcript is in EDIT mode ...
+            if not self.TranscriptWindow[self.activeTranscript].dlg.editor.get_read_only():
+                # ... save it
+                self.TranscriptWindow[self.activeTranscript].dlg.editor.save_transcript()
+
+        # Ctrl-A is Rewind 10 seconds
+        elif (c == ord('A')) and event.ControlDown() and loaded:
+            # Get the current video position
+            vpos = self.GetVideoPosition()
+            # Rewind 10 seconds
+            self.SetVideoStartPoint(vpos-10000)
+            # Explicitly tell Transana to play to the end of the Episode/Clip
+            self.SetVideoEndPoint(-1)
+            # Play should always be initiated on Ctrl-A, with no auto-rewind
+            self.Play(False)
+
+        # Ctrl-D is Stop / Start without Rewind
+        elif (c == ord('D')) and event.ControlDown() and loaded:
+            if not self.IsPlaying():
+                # Explicitly tell Transana to play to the end of the Episode/Clip
+                self.SetVideoEndPoint(-1)
+            # Play/Pause without rewinding
+            self.PlayPause(False)
+
+        # Ctrl-F is Fast Forward 10 seconds
+        elif (c == ord('F')) and event.ControlDown() and loaded:
+            # Get the current video position
+            vpos = self.GetVideoPosition()
+            # Fast Forward 10 seconds
+            self.SetVideoStartPoint(vpos+10000)
+            # Explicitly tell Transana to play to the end of the Episode/Clip
+            self.SetVideoEndPoint(-1)
+            # Play should always be initiated on Ctrl-F, with no auto-rewind
+            self.Play(False)
+
+        # Ctrl-P is Play Previous Time-Coded Segment
+        elif (c == ord("P")) and event.ControlDown() and loaded:
+            # Get the value for the previous time code
+            start_timecode = self.TranscriptWindow[self.activeTranscript].dlg.editor.PrevTimeCode()
+            # If there WAS a Previous Segment ....
+            if (start_timecode > -1) and self.TranscriptWindow[self.activeTranscript].dlg.editor.get_read_only():
+                # Move the Video Start Point to this time position
+                self.SetVideoStartPoint(start_timecode)
+                # Explicitly tell Transana to play to the end of the Episode/Clip
+                self.SetVideoEndPoint(-1)
+                # Play should always be initiated on Ctrl-P
+                self.Play(0)
+
+        # Ctrl-N is Play Next Time-Coded Segment
+        elif (c == ord("N")) and event.ControlDown() and loaded:
+            # Get the value for the next time code
+            start_timecode = self.TranscriptWindow[self.activeTranscript].dlg.editor.NextTimeCode()
+            # If there WAS a Next Segment ...
+            if (start_timecode > -1) and self.TranscriptWindow[self.activeTranscript].dlg.editor.get_read_only():
+                # Move the Video Start Point to this time position
+                self.SetVideoStartPoint(start_timecode)
+                # Explicitly tell Transana to play to the end of the Episode/Clip
+                self.SetVideoEndPoint(-1)
+                # Play should always be initiated on Ctrl-P
+                self.Play(0)
+
+        # Ctrl-S is Stop / Start with Rewind
+        elif (c == ord('S')) and event.ControlDown() and loaded:
+            if not self.IsPlaying():
+                # Explicitly tell Transana to play to the end of the Episode/Clip
+                self.SetVideoEndPoint(-1)
+            # Play/Pause with auto-rewind
+            self.PlayPause(True)
+
+        # Ctrl-T inserts a Time Code
+        elif (c == ord('T')) and event.ControlDown() and loaded:
+            self.TranscriptWindow[self.activeTranscript].dlg.editor.insert_timecode()
+
+        # Ctrl-. is increases playback speed, if possible
+        elif (c == ord('.')) and event.ControlDown() and loaded:
+            # Ctrl-period increases playback speed by 10% of normal speed
+            self.ChangePlaybackSpeed('faster')
+
+        # Ctrl-, is decreases playback speed, if possible
+        elif (c == ord(',')) and event.ControlDown() and loaded:
+            # Ctrl-comma decreases playback speed by 10% of normal speed
+            self.ChangePlaybackSpeed('slower')
+
+        # Ctrl-M is Shapshot (iMage)
+        elif (c == ord('M')) and event.ControlDown() and loaded:
+            # If possible ...
+            if self.VideoWindow.btnSnapshot:
+                # Take a Snapshot
+                self.VideoWindow.OnSnapshot(event)
+
+        # Otherwise ...
+        else:
+            # ... the key press had NOT been processed by this method
+            keyProcessed = False
+
+        # Let the calling method know if this method processed the key appropriately
+        return keyProcessed
+
     def InsertTimecodeIntoTranscript(self):
         """ Insert a Timecode into the Transcript(s) """
         # For each Transcript window ...
@@ -634,25 +840,32 @@ class ControlObject(object):
         """ Change the Transcript's Edit Mode """
         self.MenuWindow.SetTranscriptEditOptions(enable)
 
+    def ActiveTranscriptReadOnly(self):
+        return self.TranscriptWindow[self.activeTranscript].dlg.editor.get_read_only()
+
     def TranscriptUndo(self, event):
         """ Send an Undo command to the Transcript """
         self.TranscriptWindow[self.activeTranscript].TranscriptUndo(event)
 
-    def TranscriptCut(self):
+    def TranscriptCut(self, event):
         """ Send a Cut command to the Transcript """
-        self.TranscriptWindow[self.activeTranscript].TranscriptCut()
+        self.TranscriptWindow[self.activeTranscript].TranscriptCut(event)
 
-    def TranscriptCopy(self):
+    def TranscriptCopy(self, event):
         """ Send a Copy command to the Transcript """
-        self.TranscriptWindow[self.activeTranscript].TranscriptCopy()
+        self.TranscriptWindow[self.activeTranscript].TranscriptCopy(event)
 
-    def TranscriptPaste(self):
+    def TranscriptPaste(self, event):
         """ Send a Paste command to the Transcript """
-        self.TranscriptWindow[self.activeTranscript].TranscriptPaste()
+        self.TranscriptWindow[self.activeTranscript].TranscriptPaste(event)
 
-    def TranscriptCallFontDialog(self):
-        """ Tell the TranscriptWindow to open the Font Dialog """
-        self.TranscriptWindow[self.activeTranscript].CallFontDialog()
+    def TranscriptCallFormatDialog(self, tabToOpen=0):
+        """ Tell the TranscriptWindow to open the Format Dialog """
+        self.TranscriptWindow[self.activeTranscript].CallFormatDialog(tabToOpen)
+
+    def TranscriptInsertImage(self, fileName = None):
+        """ Tell the TranscriptWindow to insert an image """
+        self.TranscriptWindow[self.activeTranscript].InsertImage(fileName)
 
     def Help(self, helpContext):
         """ Handles all calls to the Help System """
@@ -951,7 +1164,7 @@ class ControlObject(object):
         """ Return the current video starting and ending points """
         return (self.VideoStartPoint, self.VideoEndPoint)
 
-    def SetVideoSelection(self, StartTimeCode, EndTimeCode):
+    def SetVideoSelection(self, StartTimeCode, EndTimeCode, UpdateSelectionText=True):
         """ Set the Starting and Stopping Points for video segment definition.  TimeCodes are in milliseconds from the beginning. """
         # For each Transcript Window ...
         for trWin in self.TranscriptWindow:
@@ -963,17 +1176,13 @@ class ControlObject(object):
                     (start, end) = trWin.dlg.editor.GetSelection()
                     trWin.dlg.editor.SetCurrentPos(start)
                     trWin.dlg.editor.SetAnchor(end)
-                    
                 # If Word Tracking is ON ...
                 if TransanaGlobal.configData.wordTracking:
                     # ... highlight the full text of the video selection
                     trWin.dlg.editor.scroll_to_time(StartTimeCode)
-
                     if EndTimeCode > 0:
                         trWin.dlg.editor.select_find(str(EndTimeCode))
-            # Save the cursor position.  Otherwise, the previous incorrect value gets restored later.
-            trWin.dlg.editor.SaveCursor()
-                
+
         if EndTimeCode <= 0:
             if type(self.currentObj).__name__ == 'Episode':
                 EndTimeCode = self.VideoWindow.GetMediaLength()
@@ -986,9 +1195,10 @@ class ControlObject(object):
         if (not self.IsPlaying()) or (self.TranscriptWindow[self.activeTranscript].UpdatePosition(StartTimeCode)):
             if self.DataWindow.SelectedEpisodeClipsTab != None:
                 self.DataWindow.SelectedEpisodeClipsTab.Refresh(StartTimeCode)
-        # Update the Selection Text in the current Transcript Window.  But it needs just a tick before the cursor position is set correctly.
-        wx.CallLater(50, self.UpdateSelectionTextLater, self.activeTranscript)
-        
+        # If we should update Selection Text (true at all times other than when clearing the Visualization Window ...)
+        if UpdateSelectionText:
+            # Update the Selection Text in the current Transcript Window.  But it needs just a tick before the cursor position is set correctly.
+            wx.CallLater(50, self.UpdateSelectionTextLater, self.activeTranscript)
         
     def UpdatePlayState(self, playState):
         """ When the Video Player's Play State Changes, we may need to adjust the Screen Layout
@@ -1008,13 +1218,15 @@ class ControlObject(object):
                 self.VideoWindow.SetDims(self.WindowPositions[2][0], self.WindowPositions[2][1], self.WindowPositions[2][2], self.WindowPositions[2][3])
                 # Unpack the Transcript Window Positions
                 for winNum in range(len(self.WindowPositions[3])):
-                    # The Mac has a different base zoom factor than Windows
-                    if 'wxMac' in wx.PlatformInfo:
-                        zoomFactor = 3
-                    else:
-                        zoomFactor = 0
-                    # Zoom the Transcript window back to normal size
-                    self.TranscriptWindow[winNum].dlg.editor.SetZoom(zoomFactor)
+                    # if we're NOT using the Rich Text Ctrl (ie. we are using the Styled Text Ctrl) ...
+                    if not TransanaConstants.USESRTC:
+                        # The Mac has a different base zoom factor than Windows
+                        if 'wxMac' in wx.PlatformInfo:
+                            zoomFactor = 3
+                        else:
+                            zoomFactor = 0
+                        # Zoom the Transcript window back to normal size
+                        self.TranscriptWindow[winNum].dlg.editor.SetZoom(zoomFactor)
                     # Reposition each Transcript Window to its original Position (self.WindowsPositions[3])
                     self.TranscriptWindow[winNum].SetDims(self.WindowPositions[3][winNum][0], self.WindowPositions[3][winNum][1], self.WindowPositions[3][winNum][2], self.WindowPositions[3][winNum][3])
                 # Show the Menu Bar
@@ -1067,7 +1279,7 @@ class ControlObject(object):
                 # Hide the Data Window
                 self.DataWindow.Show(False)
                 # Determine the size of the screen
-                (left, top, width, height) = wx.ClientDisplayRect()
+                (left, top, width, height) = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
 
                 # See if Presentation Mode is set to "Video Only"
                 if self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_VIDEO):
@@ -1120,13 +1332,15 @@ class ControlObject(object):
                     # Hide the other Transcript Windows
                     for trWindow in self.TranscriptWindow[1:]:
                         trWindow.Show(False)
-                    # Set the Transcript Zoom Factor
-                    if 'wxMac' in wx.PlatformInfo:
-                        zoomFactor = 20
-                    else:
-                        zoomFactor = 14
-                    # Zoom in the Transcript window to make the text larger
-                    self.TranscriptWindow[0].dlg.editor.SetZoom(zoomFactor)
+                    # if we're NOT using the Rich Text Ctrl (ie. we are using the Styled Text Ctrl) ...
+                    if not TransanaConstants.USESRTC:
+                        # Set the Transcript Zoom Factor
+                        if 'wxMac' in wx.PlatformInfo:
+                            zoomFactor = 20
+                        else:
+                            zoomFactor = 14
+                        # Zoom in the Transcript window to make the text larger
+                        self.TranscriptWindow[0].dlg.editor.SetZoom(zoomFactor)
 
                 # See if Presentation Mode is set to "Audio and Transcript"
                 elif self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_AUDIO):
@@ -1139,13 +1353,15 @@ class ControlObject(object):
                     winHeight = int((float(height) - top - 2.0) / float(len(self.TranscriptWindow)))
                     # For each Transcript Window:
                     for trWinNum in range(len(self.TranscriptWindow)):
-                        # Set the Transcript Zoom Factor
-                        if 'wxMac' in wx.PlatformInfo:
-                            zoomFactor = 20
-                        else:
-                            zoomFactor = 14
-                        # Zoom in the Transcript window to make the text larger
-                        self.TranscriptWindow[trWinNum].dlg.editor.SetZoom(zoomFactor)
+                        # if we're NOT using the Rich Text Ctrl (ie. we are using the Styled Text Ctrl) ...
+                        if not TransanaConstants.USESRTC:
+                            # Set the Transcript Zoom Factor
+                            if 'wxMac' in wx.PlatformInfo:
+                                zoomFactor = 20
+                            else:
+                                zoomFactor = 14
+                            # Zoom in the Transcript window to make the text larger
+                            self.TranscriptWindow[trWinNum].dlg.editor.SetZoom(zoomFactor)
                         # Set the Transcript Window to take up the entire Client Display Area
                         self.TranscriptWindow[trWinNum].SetDims(left + 1, trWinNum * winHeight + top, width - 2, winHeight)
                         
@@ -1198,7 +1414,10 @@ class ControlObject(object):
             # ... get the text between the nearest time codes.
             (st, end, text) = self.TranscriptWindow[self.activeTranscript].dlg.editor.GetTextBetweenTimeCodes(startTime, endTime)
         else:
-            text = self.TranscriptWindow[self.activeTranscript].dlg.editor.GetRTFBuffer(select_only=1)
+            if TransanaConstants.USESRTC:
+                text = self.TranscriptWindow[self.activeTranscript].dlg.editor.GetFormattedSelection('XML', selectionOnly=True)
+            else:
+                text = self.TranscriptWindow[self.activeTranscript].dlg.editor.GetRTFBuffer(select_only=1)
         # We also need to know the number of the original Transcript Record
         if self.TranscriptWindow[self.activeTranscript].dlg.editor.TranscriptObj.clip_num == 0:
             # If we have an Episode Transcript, we need the Transcript Number
@@ -1239,7 +1458,11 @@ class ControlObject(object):
             if startPos == endPos:
                 text = ''
             else:
-                text = trWindow.dlg.editor.GetRTFBuffer(select_only=1)
+                #text = trWindow.dlg.editor.GetRTFBuffer(select_only=1)
+                if TransanaConstants.USESRTC:
+                    text = trWindow.dlg.editor.GetFormattedSelection('XML', selectionOnly=True)
+                else:
+                    text = trWindow.dlg.editor.GetRTFBuffer(select_only=1)
             # We also need to know the number of the original Transcript Record.  If we have an Episode ....
             if trWindow.dlg.editor.TranscriptObj.clip_num == 0:
                 # ... we need the Transcript Number, which we can get from the Transcript Window's editor's Transcript Object
@@ -1357,33 +1580,7 @@ class ControlObject(object):
                     videoLength = self.VideoWindow.GetMediaLength()
                     # Subtract the video start point, to get segment length
                     mediaLength = videoLength - self.VideoStartPoint
-                    # Sometimes video files don't know their own length because it hasn't been available before.
-                    # This seems to be a good place to detect and correct that problem before it starts to cause problems,
-                    # such as in the Keyword Map.
 
-                    # First, let's see if an episode is currently loaded that doesn't have a proper length.
-                    if (type(self.currentObj).__name__ == 'Episode') and \
-                       (self.currentObj.media_filename == self.VideoFilename) and \
-                       (self.currentObj.tape_length <= 0) and \
-                       (videoLength > 0):
-                        # Start exception handling, so record lock errors can be ignored
-                        try:
-                            # Try to lock the record
-                            self.currentObj.lock_record()
-                            # Get the media length from the first Video Window, not the VideoWindow object, which reports longest adjusted media file length.
-                            self.currentObj.tape_length = self.VideoWindow.mediaPlayers[0].GetMediaLength()
-                            # for each additional media window ...
-                            for x in range(1, len(self.VideoWindow.mediaPlayers)):
-                                # ... get the length for each additional media file.  (We need them all.)
-                                self.currentObj.additional_media_files[x - 1]['length'] = self.VideoWindow.mediaPlayers[x].GetMediaLength()
-                            # Save the object
-                            self.currentObj.db_save()
-                            # Unlock the record
-                            self.currentObj.unlock_record()
-                        # If an exception occurs (most likely a Record Lock exception)
-                        except:
-                            # it can be ignored.
-                            pass
                 # If the video end point is defined ...
                 else:
                     # ... as long as the length is positive ...
@@ -1394,6 +1591,35 @@ class ControlObject(object):
                     else:
                         # ... use the total media length as the end point
                         mediaLength = self.VideoWindow.GetMediaLength() - self.VideoStartPoint
+
+                # Sometimes video files don't know their own length because it hasn't been available before.
+                # This seems to be a good place to detect and correct that problem before it starts to cause problems,
+                # such as in the Keyword Map.
+
+                # First, let's see if an episode is currently loaded that doesn't have a proper length.
+                if (isinstance(self.currentObj, Episode.Episode) and \
+                   (self.currentObj.media_filename == self.VideoFilename) and \
+                   (self.currentObj.tape_length <= 0) and \
+                    (self.VideoWindow.mediaPlayers[0].GetMediaLength() > 0)):
+                    # Start exception handling, so record lock errors can be ignored
+                    try:
+                        # Try to lock the record
+                        self.currentObj.lock_record()
+                        # Get the media length from the first Video Window, not the VideoWindow object, which reports longest adjusted media file length.
+                        self.currentObj.tape_length = self.VideoWindow.mediaPlayers[0].GetMediaLength()
+                        # for each additional media window ...
+                        for x in range(1, len(self.VideoWindow.mediaPlayers)):
+                            # ... get the length for each additional media file.  (We need them all.)
+                            self.currentObj.additional_media_files[x - 1]['length'] = self.VideoWindow.mediaPlayers[x].GetMediaLength()
+                        # Save the object
+                        self.currentObj.db_save()
+                        # Unlock the record
+                        self.currentObj.unlock_record()
+                    # If an exception occurs (most likely a Record Lock exception)
+                    except:
+                        # it can be ignored.
+                        pass
+
                 # Return the calculated value
                 return mediaLength
             # If the entire length was requested ...
@@ -1595,6 +1821,8 @@ class ControlObject(object):
                     dlg.Destroy()
                     return 1
             else:
+                # If the user does not want to save the edits, discard them to avoid duplicate SAVE prompts
+                self.TranscriptWindow[transcriptToSave].dlg.editor.DiscardEdits()
                 if cleardoc:
                     self.TranscriptWindow[transcriptToSave].ClearDoc()
                 return 0
@@ -1602,12 +1830,18 @@ class ControlObject(object):
 
     def SaveTranscriptAs(self):
         """Export the Transcript to an RTF file."""
-        dlg = wx.FileDialog(None, wildcard="*.rtf", style=wx.SAVE)
+        dlg = wx.FileDialog(None, defaultDir=self.defaultExportDir,
+                            wildcard=_("Rich Text Format (*.rtf)|*.rtf|XML Format (*.xml)|*.xml"), style=wx.SAVE)
         if dlg.ShowModal() == wx.ID_OK:
+            # The Default Export Directory should use the last-used value for the session but reset to the
+            # video root between sessions.
+            self.defaultExportDir = dlg.GetDirectory()
             fname = dlg.GetPath()
             # Mac doesn't automatically append the file extension.  Do it if necessary.
-            if not fname.upper().endswith(".RTF"):
+            if (dlg.GetFilterIndex() == 0) and (not fname.upper().endswith(".RTF")):
                 fname += '.rtf'
+            elif (dlg.GetFilterIndex() == 1) and (not fname.upper().endswith(".XML")):
+                fname += '.xml'
             if os.path.exists(fname):
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -1638,12 +1872,20 @@ class ControlObject(object):
                 # If the user has updated the clip's Keywords, self.currentObj will NOT reflect this.
                 # Therefore, we need to load a new copy of the clip to get the latest keywords for propagation.
                 tempClip = Clip.Clip(self.currentObj.number)
-                # Start up the Propagate Clip Changes tool
-                propagateDlg = PropagateEpisodeChanges.PropagateClipChanges(self.MenuWindow,
-                                                                            self.currentObj,
-                                                                            transcriptWindowNumber,
-                                                                            self.TranscriptWindow[transcriptWindowNumber].dlg.editor.GetRTFBuffer(),
-                                                                            newKeywordList=tempClip.keyword_list)
+                if TransanaConstants.USESRTC:
+                    # Start up the Propagate Clip Changes tool
+                    propagateDlg = PropagateEpisodeChanges.PropagateClipChanges(self.MenuWindow,
+                                                                                self.currentObj,
+                                                                                transcriptWindowNumber,
+                                                                                self.TranscriptWindow[transcriptWindowNumber].dlg.editor.GetFormattedSelection('XML'),
+                                                                                newKeywordList=tempClip.keyword_list)
+                else:
+                    # Start up the Propagate Clip Changes tool
+                    propagateDlg = PropagateEpisodeChanges.PropagateClipChanges(self.MenuWindow,
+                                                                                self.currentObj,
+                                                                                transcriptWindowNumber,
+                                                                                self.TranscriptWindow[transcriptWindowNumber].dlg.editor.GetRTFBuffer(),
+                                                                                newKeywordList=tempClip.keyword_list)
 
         # If the user chooses NOT to save the Transcript changes ...
         else:
@@ -1651,6 +1893,100 @@ class ControlObject(object):
             dlg = Dialogs.InfoDialog(None, _("You must save the transcript if you want to propagate the changes."))
             dlg.ShowModal()
             dlg.Destroy()
+
+    def PropagateEpisodeKeywords(self, episodeNum, newKeywordList):
+        """ When Episode Keywords are added, this will allow the user to propagate new keywords to all
+            Clips created from that Episode if desired. """
+        # Get the Episode Object
+        tmpEpisode = Episode.Episode(episodeNum)
+        # Initialize a list of keywords that have been added to the Episode
+        keywordsToAdd = []
+        # Iterate through the NEW Keywords list
+        for kw in newKeywordList:
+            # Initialize that the new keyword has NOT been found
+            found = False
+            # Iterate through the OLD Keyword list (The "in" operator doesn't work here.)
+            for kw2 in tmpEpisode.keyword_list:
+                # See if the new Keyword matches the old Keyword
+                if (kw.keywordGroup == kw2.keywordGroup) and (kw.keyword == kw2.keyword):
+                    # If so, flag it as found ...
+                    found = True
+                    # ... and stop iterating
+                    break
+            # If the NEW Keyword was NOT found ...
+            if not found:
+                # ... add it to the list of keywords to add to Clips
+                keywordsToAdd.append(kw)
+
+        # Get the list of clips created from this Episode
+        clipList = DBInterface.list_of_clips_by_episode(episodeNum)
+        # If there are Clips that have been created from this episode AND Keywords have been added to the Episode ...
+        if (len(clipList) > 0) and (len(keywordsToAdd) > 0):
+            prompt = unicode(_("Do you want to add the new keywords to all clips created from Episode %s?"), 'utf8')
+            # ... build a dialog to prompt the user about adding them to Clips
+            tmpDlg = Dialogs.QuestionDialog(self.MenuWindow, prompt % tmpEpisode.id,
+                                            _("Episode Keyword Propagation"), noDefault = True)
+            # Prompt the user.  If the user says YES ...
+            if tmpDlg.LocalShowModal() == wx.ID_YES:
+                # Create a Progress Dialog
+                prompt = unicode(_("Adding keywords to Episode %s"), 'utf8')
+                progress = wx.ProgressDialog(_('Episode Keyword Propagation'), prompt % tmpEpisode.id, style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
+                progress.Centre()
+                # Initialize the Clip Counter for the progess dialog
+                clipCount = 0.0
+                # Iterate through the Clip list 
+                for clip in clipList:
+                    # increment the clip counter for the progress dialog
+                    clipCount += 1.0
+                    # Load the Clip.
+                    tmpClip = Clip.Clip(clip['ClipNum'])
+                    # Start Exception Handling
+                    try:
+                        # Lock the Clip
+                        tmpClip.lock_record()
+                        # Add the new Keywords
+                        for kw in keywordsToAdd:
+                            tmpClip.add_keyword(kw.keywordGroup, kw.keyword)
+                        # Save the Clip
+                        tmpClip.db_save()
+                        # Unlock the Clip
+                        tmpClip.unlock_record()
+
+                        if not TransanaConstants.singleUserVersion:
+                            # We need to update the Keyword Visualization for the current ClipObject
+                            if DEBUG:
+                                print 'Message to send = "UKV %s %s %s"' % ('Clip', tmpClip.number, tmpClip.episode_num)
+                                
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage("UKL %s %s" % ('Clip', tmpClip.number))
+                                TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', tmpClip.number, tmpClip.episode_num))
+
+                        # Increment the Progress Dialog
+                        progress.Update(int((clipCount / len(clipList) * 100)))
+                    # Handle Exceptions
+                    except TransanaExceptions.RecordLockedError, e:
+                        prompt = unicode(_('New keywords were not added to Clip "%s"\nin collection "%s"\nbecause the clip record was locked by %s.'), 'utf8')
+                        errDlg = Dialogs.ErrorDialog(self.MenuWindow, prompt % (tmpClip.id, tmpClip.GetNodeString(False), e.user))
+                        errDlg.ShowModal()
+                        errDlg.Destroy()
+                # Destroy the Progress Dialog
+                progress.Destroy()
+
+                # Need to Update the Keyword Visualization
+                self.UpdateKeywordVisualization()
+
+                # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                if not TransanaConstants.singleUserVersion:
+                    # We need to update the Episode Keyword Visualization
+                    if DEBUG:
+                        print 'Message to send = "UKV %s %s %s"' % ('Episode', episodeNum, 0)
+                        
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("UKL %s %s" % ('Episode', episodeNum))
+                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', episodeNum, 0))
+
+            # Destroy the User Prompt dialog
+            tmpDlg.Destroy()
 
     def MultiSelect(self, transcriptWindowNumber):
         """ Make selections in all other transcripts to match the selection in the identified transcript """
@@ -1679,11 +2015,15 @@ class ControlObject(object):
                 # ... highlight the full text of the video selection
                 trWin.dlg.editor.scroll_to_time(start)
                 trWin.dlg.editor.select_find(str(end))
+                # Check for time codes at the selection boundaries
+                trWin.dlg.editor.CheckTimeCodesAtSelectionBoundaries()
+                
             # Once selections are set (later), update the Selection Text
             wx.CallLater(200, self.UpdateSelectionTextLater, trWin.transcriptWindowNumber)
                 
     def MultiPlay(self):
         """ Play the current video based on selections in multiple transcripts """
+        # Save the cursors for all transcripts (!)
         self.SaveAllTranscriptCursors()
         # Get the Transcript Selection information from all transcript windows.
         transcriptSelectionInfo = self.GetMultipleTranscriptSelectionInfo()
@@ -1724,8 +2064,8 @@ class ControlObject(object):
     def RemoveDataWindowKeywordExamples(self, keywordGroup, keyword, clipNum):
         """ Remove Keyword Examples from the Data Window """
         # First, remove the Keyword Example from the Database Tree
-        # Load the specified Clip record
-        tempClip = Clip.Clip(clipNum)
+        # Load the specified Clip record.  Skip the Transcript to speed the process up.
+        tempClip = Clip.Clip(clipNum, skipText=True)
         # Prepare the Node List for removing the Keyword Example Node
         nodeList = (_('Keywords'), keywordGroup, keyword, tempClip.id)
         # Call the DB Tree's delete_Node method.  Include the Clip Record Number so the correct Clip entry will be removed.
@@ -1801,45 +2141,46 @@ class ControlObject(object):
         """ Update all screen components to reflect change in the selected program language """
         self.ClearAllWindows()
 
-        # Let's look at the issue of database encoding.  We only need to do something if the encoding is NOT UTF-8
-        # or if we're on Windows single-user version.
-        if (TransanaGlobal.encoding != 'utf8') or \
-           (('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion)):
-            # If it's not UTF-*, then if it is Russian, use KOI8r
-            if TransanaGlobal.configData.language == 'ru':
-                newEncoding = 'koi8_r'
-            # If it's Chinese, use the appropriate Chinese encoding
-            elif TransanaGlobal.configData.language == 'zh':
-                newEncoding = TransanaConstants.chineseEncoding
-            # If it's Eastern European Encoding, use 'iso8859_2'
-            elif TransanaGlobal.configData.language == 'easteurope':
-                newEncoding = 'iso8859_2'
-            # If it's Greek, use 'iso8859_7'
-            elif TransanaGlobal.configData.language == 'el':
-                newEncoding = 'iso8859_7'
-            # If it's Japanese, use cp932
-            elif TransanaGlobal.configData.language == 'ja':
-                newEncoding = 'cp932'
-            # If it's Korean, use cp949
-            elif TransanaGlobal.configData.language == 'ko':
-                newEncoding = 'cp949'
-            # Otherwise, fall back to UTF-8
-            else:
-                newEncoding = 'utf8'
-
-            # If we're changing encodings, we need to do a little work here!
-            if newEncoding != TransanaGlobal.encoding:
-                msg = _('Database encoding is changing.  To avoid potential data corruption, \nTransana must close your database before proceeding.')
-                tmpDlg = Dialogs.InfoDialog(None, msg)
-                tmpDlg.ShowModal()
-                tmpDlg.Destroy()
-
-                # We should get a new database.  This call will actually update our encoding if needed!
-                self.GetNewDatabase()
+##        # Let's look at the issue of database encoding.  We only need to do something if the encoding is NOT UTF-8
+##        # or if we're on Windows single-user version.
+##        if (TransanaGlobal.encoding != 'utf8') or \
+##           (('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion)):
+##            # If it's not UTF-*, then if it is Russian, use KOI8r
+##            if TransanaGlobal.configData.language == 'ru':
+##                newEncoding = 'koi8_r'
+##            # If it's Chinese, use the appropriate Chinese encoding
+##            elif TransanaGlobal.configData.language == 'zh':
+##                newEncoding = TransanaConstants.chineseEncoding
+##            # If it's Eastern European Encoding, use 'iso8859_2'
+##            elif TransanaGlobal.configData.language == 'easteurope':
+##                newEncoding = 'iso8859_2'
+##            # If it's Greek, use 'iso8859_7'
+##            elif TransanaGlobal.configData.language == 'el':
+##                newEncoding = 'iso8859_7'
+##            # If it's Japanese, use cp932
+##            elif TransanaGlobal.configData.language == 'ja':
+##                newEncoding = 'cp932'
+##            # If it's Korean, use cp949
+##            elif TransanaGlobal.configData.language == 'ko':
+##                newEncoding = 'cp949'
+##            # Otherwise, fall back to UTF-8
+##            else:
+##                newEncoding = 'utf8'
+##
+##            # If we're changing encodings, we need to do a little work here!
+##            if newEncoding != TransanaGlobal.encoding:
+##                msg = _('Database encoding is changing.  To avoid potential data corruption, \nTransana must close your database before proceeding.')
+##                tmpDlg = Dialogs.InfoDialog(None, msg)
+##                tmpDlg.ShowModal()
+##                tmpDlg.Destroy()
+##
+##                # We should get a new database.  This call will actually update our encoding if needed!
+##                self.GetNewDatabase()
                 
         self.MenuWindow.ChangeLanguages()
         self.VisualizationWindow.ChangeLanguages()
         self.DataWindow.ChangeLanguages()
+        self.VideoWindow.ChangeLanguages()
         # Updating the Data Window automatically updates the Headers on the Video and Transcript windows!
         for x in range(len(self.TranscriptWindow)):
             self.TranscriptWindow[x].ChangeLanguages()

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -38,6 +38,8 @@ import ClipKeywordObject
 import DataObject
 # import Transana's Database Interface
 import DBInterface
+# import Transana's Miscellaneous Functions
+import Misc
 # import Transana's Note Object
 import Note
 # import Transana's Exceptions
@@ -72,12 +74,13 @@ class Episode(DataObject.DataObject):
         str = str + "Number = %s\n" % self.number
         str = str + "id = %s\n" % self.id
         str = str + "comment = %s\n" % self.comment
-        str = str + "media file = %s\n" % self.media_filename
+        str = str + "Media file 1 = %s\n" % self.media_filename
+        str = str + "Media File 1 Length = %s\n" % self.tape_length
+        str += "Media File 1 Offset = %s\n" % self.offset
         str = str + "Additional media file:\n"
         for addFile in self.additional_media_files:
             str += '  %s  %s %s %s\n' % (addFile['filename'], addFile['offset'], addFile['length'], addFile['audio'])
-        str += "Offset = %s\n" % self.offset
-        str = str + "Length = %s\n" % self.tape_length
+        str += "Total adjusted Episode Length = %d (%s)\n" % (self.episode_length(), Misc.time_in_ms_to_str(self.episode_length()))
         str = str + "Date = %s\n" % self.tape_date
         str = str + "Series ID = %s\n" % self.series_id
         str = str + "Series Num = %s\n\n" % self.series_num
@@ -353,7 +356,8 @@ class Episode(DataObject.DataObject):
             del notes
 
             for (transcriptNo, transcriptID, transcriptEpisodeNo) in DBInterface.list_transcripts(self.series_id, self.id):
-                trans = Transcript.Transcript(transcriptNo)
+                # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+                trans = Transcript.Transcript(transcriptNo, skipText=True)
                 # if transcript delete fails, rollback clip delete
                 result = result and trans.db_delete(0)
                 del trans
@@ -472,7 +476,7 @@ class Episode(DataObject.DataObject):
             # Detection of the use of the Video Root Path is platform-dependent and must be done for EACH filename!
             if wx.Platform == "__WXMSW__":
                 # On Windows, check for a colon in the position, which signals the presence or absence of a drive letter
-                useVideoRoot = (vidFilename[1] != ':')
+                useVideoRoot = (vidFilename[1] != ':') and (vidFilename[:2] != '//')
             else:
                 # On Mac OS-X and *nix, check for a slash in the first position for the root folder designation
                 useVideoRoot = (vidFilename[0] != '/')
@@ -497,13 +501,21 @@ class Episode(DataObject.DataObject):
         """ remove ONE additional media file from the list of additional media files """
         del(self._additional_media[indx])
 
+    def episode_length(self):
+        """ Return the maximum length of the Episode, taking all additional media files into account """
+        # Start with the length of the first media file
+        maxLen = self.tape_length + self.offset
+        # For each additional media file ...
+        for addFile in self.additional_media_files:
+            # ... determine the additional media file's apparent length (adjusted for its own offset AND
+            # the offset for the initial media file) and see if it's larger
+            maxLen = max(maxLen, addFile['length'] + addFile['offset'] + self.offset)
+        # Return the largest length value
+        return maxLen
+
     def tape_length_str(self):
         """Return a string representation (HH:MM:SS) of tape length."""
-        secs = int(round(self._tl / 1000.0))    # total # seconds
-        hours = secs / 3600                     # num full hours
-        mins = (secs / 60) - hours*60
-        secs = secs - mins*60 - hours*3600
-        return "%02d:%02d:%02d" % (hours, mins, secs)
+        return Misc.time_in_ms_to_str(self.episode_length())
 
     
 # Private methods
@@ -539,7 +551,7 @@ class Episode(DataObject.DataObject):
         # Detection of the use of the Video Root Path is platform-dependent.
         if wx.Platform == "__WXMSW__":
             # On Windows, check for a colon in the position, which signals the presence or absence of a drive letter
-            self.useVideoRoot = (self.media_filename[1] != ':')
+            self.useVideoRoot = (self.media_filename[1] != ':') and (self.media_filename[:2] != '\\\\')
         else:
             # On Mac OS-X and *nix, check for a slash in the first position for the root folder designation
             self.useVideoRoot = (self.media_filename[0] != '/')

@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -59,10 +59,10 @@ class Series(DataObject.DataObject):
         """ String Representation of a Series Object """
         str = 'Series Object:\n'
         str += 'number = %s\n' % self.number
-        str += 'id = %s\n' % self.id
-        str += 'comment = %s\n' % self.comment
-        str += 'owner = %s\n' % self.owner
-        str += 'keyword_group = %s\n\n' % self.keyword_group
+        str += 'id = %s (%s)\n' % (self.id.encode('utf8'), type(self.id))
+        str += 'comment = %s\n' % self.comment.encode('utf8')
+        str += 'owner = %s\n' % self.owner.encode('utf8')
+        str += 'keyword_group = %s\n\n' % self.keyword_group.encode('utf8')
         return str
         
 
@@ -114,6 +114,7 @@ class Series(DataObject.DataObject):
     def db_save(self):
         """Save the record to the database using Insert or Update as
         appropriate."""
+
         # Sanity checks
         if self.id == "":
             raise SaveError, _("Series ID is required.")

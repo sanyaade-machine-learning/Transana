@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -60,11 +60,17 @@ class Clip(DataObject.DataObject):
     """This class defines the structure for a clip object.  A clip object
     describes a portion of a video (or other media) file."""
 
-    def __init__(self, id_or_num=None, collection_name=None, collection_parent=0):
+    def __init__(self, id_or_num=None, collection_name=None, collection_parent=0, skipText=False):
         """Initialize an Clip object."""
+        #   skipText indicates that the transcripts can be left off.  This leads to significantly faster transcript loading
+        #     particularly when we start having large transcripts with embedded images.
+
+        # Create a Data Object
         DataObject.DataObject.__init__(self)
         # By default, use the Video Root folder if one has been defined
         self.useVideoRoot = (TransanaGlobal.configData.videoPath != '')
+        # Remember if we're supposed to skip the RTF Text
+        self.skipText = skipText
 
         if type(id_or_num) in (int, long):
             self.db_load_by_num(id_or_num)
@@ -364,16 +370,20 @@ class Clip(DataObject.DataObject):
             
         # Now let's deal with the Clip's Transcripts
 
-        # For each transcript in the list of clip transcripts ...
-        for tr in self.transcripts:
-            # Assign the clip's number as the transcript's clip number
-            tr.clip_num = self.number
-            # There is a spot (in XML Import) where we signal that we DON'T want the Clip
-            # Transcript saved by setting its number to -1.
-            if tr.number != -1:
-                # save the transcript
-                tr.db_save()
+        # If we're NOT skipping the Transcripts ...
+        if not self.skipText:
+            # For each transcript in the list of clip transcripts ...
+            for tr in self.transcripts:
+                # Assign the clip's number as the transcript's clip number
+                tr.clip_num = self.number
+                # There is a spot (in XML Import) where we signal that we DON'T want the Clip
+                # Transcript saved by setting its number to -1.
+                if tr.number != -1:
+                    # save the transcript
+                    tr.db_save()
 
+        # If we're not saving Transcripts, we can also skip Additional Videos!!
+        
         # To save the additional video file names, we must first delete them from the database!
         # Craft a query to remove all existing Additonal Videos
         query = "DELETE FROM AdditionalVids2 WHERE ClipNum = %d" % self.number
@@ -398,7 +408,7 @@ class Clip(DataObject.DataObject):
             # Execute the query
             c.execute(query, data)
 
-        # Add the Episode keywords back
+        # Add the Clip keywords back
         for kws in self._kwlist:
             DBInterface.insert_clip_keyword(0, self.number, kws.keywordGroup, kws.keyword, kws.example)
 
@@ -511,6 +521,15 @@ class Clip(DataObject.DataObject):
         """ Override the DataObject Lock Method """
         # Also lock the Clip Transcript records
 
+        # If we're skipping Transcripts but want to lock the Clip ...
+        if self.skipText:
+            # ... that's a programming error!  That should not be allowed!
+            tmpDlg = Dialogs.ErrorDialog(None, unicode('PROGRAMMING ERROR - Locking Clip "%s"\nwithout locking Clip Transcripts!', 'utf8') % self.id)
+            tmpDlg.ShowModal()
+            tmpDlg.Destroy()
+            # Raise an exception before locking any transcripts!
+            raise RecordLockedError(user='David Woods')
+
         # We can run into trouble if one of a multiple transcript records is locked.  Specifically, if a later
         # transcript is already locked, trying to lock it below will raise an exception, but the earlier
         # transcripts will have gotten locked now and will remain so improperly.
@@ -527,7 +546,7 @@ class Clip(DataObject.DataObject):
         for tr in self.transcripts:
             # ... lock the transcript
             tr.lock_record()
-        
+
         # Lock the Clip Record.  Call this second so the Clip is not identified as locked if the
         # Clip Transcript record lock fails.
         DataObject.DataObject.lock_record(self)
@@ -537,8 +556,8 @@ class Clip(DataObject.DataObject):
         """ Override the DataObject Unlock Method """
         # Unlock the Clip Record
         DataObject.DataObject.unlock_record(self)
-        # Also unlock the Clip Transcript records
 
+        # Also unlock the Clip Transcript records
         # For each transcript in the clip transcript list ...
         for tr in self.transcripts:
             # ... unlock the transcript
@@ -678,7 +697,7 @@ class Clip(DataObject.DataObject):
             # Detection of the use of the Video Root Path is platform-dependent and must be done for EACH filename!
             if wx.Platform == "__WXMSW__":
                 # On Windows, check for a colon in the position, which signals the presence or absence of a drive letter
-                useVideoRoot = (vidFilename[1] != ':')
+                useVideoRoot = (vidFilename[1] != ':') and (vidFilename[:2] != '//')
             else:
                 # On Mac OS-X and *nix, check for a slash in the first position for the root folder designation
                 useVideoRoot = (vidFilename[0] != '/')
@@ -753,12 +772,14 @@ class Clip(DataObject.DataObject):
             self.audio = 1
         # Initialize a list of Transcript objects
         self.transcripts = []
-        # Load the Clip Transcripts.  Get the list of clip transcripts from the database and interate ...
-        for tr in DBInterface.list_clip_transcripts(self.number):
-            # Create a Transcript Object, passing each Transcript's Transcript Number (parameter 0)
-            tempTranscript = Transcript.Transcript(tr[0])
-            # Append the transcript object to the Clip's Transcript List
-            self.transcripts.append(tempTranscript)
+        # If we're NOT skipping the Transcripts ...
+        if not self.skipText:
+            # Load the Clip Transcripts.  Get the list of clip transcripts from the database and interate ...
+            for tr in DBInterface.list_clip_transcripts(self.number):
+                # Create a Transcript Object, passing each Transcript's Transcript Number (parameter 0)
+                tempTranscript = Transcript.Transcript(tr[0])
+                # Append the transcript object to the Clip's Transcript List
+                self.transcripts.append(tempTranscript)
             
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
         # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
@@ -772,7 +793,7 @@ class Clip(DataObject.DataObject):
         # Detection of the use of the Video Root Path is platform-dependent.
         if wx.Platform == "__WXMSW__":
             # On Windows, check for a colon in the position, which signals the presence or absence of a drive letter
-            self.useVideoRoot = (self.media_filename[1] != ':')
+            self.useVideoRoot = (self.media_filename[1] != ':') and (self.media_filename[:2] != '\\\\')
         else:
             # On Mac OS-X and *nix, check for a slash in the first position for the root folder designation
             self.useVideoRoot = (self.media_filename[0] != '/')

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -41,7 +41,10 @@ import TransanaGlobal
 # import Transana's Transcript Object
 import Transcript
 # import Transana's Transcript Editor
-import TranscriptEditor
+if TransanaConstants.USESRTC:
+    import TranscriptEditor_RTC
+else:
+    import TranscriptEditor_STC
 
 # Define IDs for the "Update All" and "Skip" buttons on the confirmation form
 ID_UPDATEALL = wx.NewId()
@@ -157,7 +160,6 @@ class PropagateEpisodeChanges(wx.Dialog):
                 # The return values include the Episode Transcript's time code boundaries, in case they've changed since the
                 # clip was created, as well as the NEW text.
                 (start, end, text) = self.parent.TranscriptWindow[self.parent.activeTranscript].dlg.editor.GetTextBetweenTimeCodes(clipTranscript.clip_start, clipTranscript.clip_stop)
-
                 # Check the start and end times to make sure neither has changed.  THEY MUST MATCH EXACTLY or we won't propagate to that clip.
                 # Also check that the Clip's originating Transcript Number matches the current Episode Transcripts's number, that is,
                 # that this clip was indeed taken from THIS transcript.  The one exception to this rule is if the clip has been orphaned,
@@ -772,6 +774,9 @@ class AcceptClipTranscriptChanges(wx.Dialog):
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
+        # Explicitly declare that there is NO ControlObject, so that some transcript processing won't occur
+        self.ControlObject = None
+
         # Create a Sizer for the form
         box = wx.BoxSizer(wx.VERTICAL)
 
@@ -867,21 +872,48 @@ class AcceptClipTranscriptChanges(wx.Dialog):
         # Put the header on the Transcript sizer
         vBox6.Add(oldTranscriptHdr, 0)
 
-        # Load the Old Transcript into an RTF Control so the RTF Encoding won't show
-        oldTranscript = TranscriptEditor.TranscriptEditor(self)
-        # Make the old transcript writable so it can be populated
-        oldTranscript.SetReadOnly(False)
-        # Set up the Progess Dialog
-        oldTranscript.ProgressDlg = wx.ProgressDialog("Loading Transcript", \
-                                               "Reading document stream", \
-                                                maximum=100, \
-                                                style=wx.PD_AUTO_HIDE)
-        # Load the Old Transcript from the temporary clip
-        oldTranscript.LoadRTFData(tempClip.transcripts[clipTranscriptNum].text)
-        # Clean up the Progress Dialog
-        oldTranscript.ProgressDlg.Destroy()
-        # This doesn't work!  Hidden text remains visible.
-#        oldTranscript.StyleSetVisible(oldTranscript.STYLE_HIDDEN, False)
+        # If we're using the Rich Text Ctrl ...
+        if TransanaConstants.USESRTC:
+            # Load the Old Transcript into an RTF Control so the RTF Encoding won't show
+            oldTranscript = TranscriptEditor_RTC.TranscriptEditor(self)
+
+            # Clip Transcrits are in one of two forms.  They are in the NEW XML format of the Rich Text Control, or they're 
+            # in the old RTF format of the Styled Text Control.  We can tell which by looking at the first few characters.
+
+            # If we have an XML transcript ...
+            if (len(newText) >= 5) and (tempClip.transcripts[clipTranscriptNum].text[:5].upper() == '<?XML'):
+                # Load the XML into the Transcript Edit Control
+                oldTranscript.LoadXMLData(tempClip.transcripts[clipTranscriptNum].text)
+            # If we have anything else, it is an RTF Transcript ...
+            else:
+                # Load the RTF into the Transcript Edit Control.  (This works with STC and RTF versions of Transana's RichTextEditCtrl.)
+                oldTranscript.ProgressDlg = wx.ProgressDialog("Loading Transcript", \
+                                                              "Reading document stream", \
+                                                              maximum=100, \
+                                                              style=wx.PD_AUTO_HIDE)
+                # Load the RTF                
+                oldTranscript.LoadRTFData(tempClip.transcripts[clipTranscriptNum].text)
+                # Hide the Time Code data
+                oldTranscript.HideTimeCodeData()
+                # Destroy the Progress Dialog
+                oldTranscript.ProgressDlg.Destroy()
+            
+            
+        # If we're using the Styled Text Ctrl ...
+        else:
+            # Load the Old Transcript into an RTF Control so the RTF Encoding won't show
+            oldTranscript = TranscriptEditor_STC.TranscriptEditor(self)
+            # Make the old transcript writable so it can be populated
+            oldTranscript.SetReadOnly(False)
+            # Set up the Progess Dialog
+            oldTranscript.ProgressDlg = wx.ProgressDialog("Loading Transcript", \
+                                                   "Reading document stream", \
+                                                    maximum=100, \
+                                                    style=wx.PD_AUTO_HIDE)
+            # Load the Old Transcript from the temporary clip
+            oldTranscript.LoadRTFData(tempClip.transcripts[clipTranscriptNum].text)
+            # Clean up the Progress Dialog
+            oldTranscript.ProgressDlg.Destroy()
         # Set the Visibility flag
         oldTranscript.codes_vis = 0
         # Scan transcript for Time Codes
@@ -926,22 +958,48 @@ class AcceptClipTranscriptChanges(wx.Dialog):
         # Add the label to the main sizer
         vBox8.Add(newTranscriptHdr, 0)
 
-        # Load the Transcript into an RTF Control so the RTF Encoding won't show
-        newTranscript = TranscriptEditor.TranscriptEditor(self)
-        # Make the new transcript writable so it can be populated
-        newTranscript.SetReadOnly(False)
-        # Set up the Progess Dialog
-        newTranscript.ProgressDlg = wx.ProgressDialog("Loading Transcript", \
-                                               "Reading document stream", \
-                                                maximum=100, \
-                                                style=wx.PD_AUTO_HIDE)
-        # Load the Old Transcript from the method parameter
-        newTranscript.LoadRTFData(newText)
-        # Clean up the Progress Dialog
-        newTranscript.ProgressDlg.Destroy()
+        # If we're using the Rich Text Ctrl ...
+        if TransanaConstants.USESRTC:
+            # Load the Old Transcript into an RTF Control so the RTF Encoding won't show
+            newTranscript = TranscriptEditor_RTC.TranscriptEditor(self)
 
-        # This doesn't work!  Hidden text remains visible.
-#        newTranscript.StyleSetVisible(newTranscript.STYLE_HIDDEN, False)
+            # Clip Transcrits are in one of two forms.  They are in the NEW XML format of the Rich Text Control, or they're 
+            # in the old RTF format of the Styled Text Control.  We can tell which by looking at the first few characters.
+
+            # If we have an XML transcript ...
+            if (len(newText) >= 5) and (newText[:5].upper() == '<?XML'):
+                # Load the XML into the Transcript Edit Control
+                newTranscript.LoadXMLData(newText)
+            # If we have anything else, it is an RTF Transcript ...
+            else:
+                # Load the RTF into the Transcript Edit Control.  (This works with STC and RTF versions of Transana's RichTextEditCtrl.)
+                newTranscript.ProgressDlg = wx.ProgressDialog("Loading Transcript", \
+                                                              "Reading document stream", \
+                                                              maximum=100, \
+                                                              style=wx.PD_AUTO_HIDE)
+                # Load the RTF Data
+                newTranscript.LoadRTFData(newText)
+                # Hide the Time Code data
+                newTranscript.HideTimeCodeData()
+                # Destroy the Progress Dialog
+                newTranscript.ProgressDlg.Destroy()
+            
+        # If we're using the Styled Text Ctrl ...
+        else:
+            # Load the Transcript into an RTF Control so the RTF Encoding won't show
+            newTranscript = TranscriptEditor_STC.TranscriptEditor(self)
+            # Make the new transcript writable so it can be populated
+            newTranscript.SetReadOnly(False)
+            # Set up the Progess Dialog
+            newTranscript.ProgressDlg = wx.ProgressDialog("Loading Transcript", \
+                                                   "Reading document stream", \
+                                                    maximum=100, \
+                                                    style=wx.PD_AUTO_HIDE)
+            # Load the Old Transcript from the method parameter
+            newTranscript.LoadRTFData(newText)
+            # Clean up the Progress Dialog
+            newTranscript.ProgressDlg.Destroy()
+
         # Set the Visibility flag
         newTranscript.codes_vis = 0
         # Scan transcript for Time Codes

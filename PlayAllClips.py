@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -179,7 +179,7 @@ class PlayAllClips(wx.Dialog):
             desiredHeight = 122
         else:
             # Determine the size of the Client Window
-            (left, top, width, height) = wx.ClientDisplayRect()
+            (left, top, width, height) = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
             desiredHeight = 56
             
         # Determine (and remember) the appropriate X and Y coordinates for the window
@@ -465,6 +465,11 @@ class PlayAllClips(wx.Dialog):
 
     def PlayAfterLoading(self):
         """ After a Clip is done loading, it needs to be told to Play. """
+        # If we don't have a control object or a currently loaded object ...
+        if (self.ControlObject == None) or (self.ControlObject.currentObj == None):
+            # ... then skip this!
+            return
+        
         # I can't figure out why Vista with WMV files has lost the Clip Start position by this point during Play All Clips.
         # The correct start position gets set, but then something clears it.
         # Fortunately, this corrects it.

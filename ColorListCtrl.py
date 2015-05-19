@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -292,13 +292,15 @@ class ColorListCtrl(wx.Panel):
             self.CheckItem(itemNum)
         # If the item is already in the list ...
         else:
-            # ... swap the value of itemChecks ...
-            self.itemChecks[itemNum] = not self.itemChecks[itemNum]
-            # If the item is now True ...
-            if self.itemChecks[itemNum]:
-                # ... set the item's image.  The appropriate image index is stored in the ListCtrl's internal ItemData value.
-                self.lc.SetItemImage(itemNum, self.GetItemData(itemNum))
-            # If the item is now False ...
-            else:
-                # ... set the item's image to blank, the last image in the imageList.
-                self.lc.SetItemImage(itemNum, self.lc.GetImageList(wx.IMAGE_LIST_SMALL).GetImageCount() - 1)
+            # If we HAVE an item number (avoid OS X index problems)
+            if itemNum > -1:
+                # ... swap the value of itemChecks ...
+                self.itemChecks[itemNum] = not self.itemChecks[itemNum]
+                # If the item is now True ...
+                if self.itemChecks[itemNum]:
+                    # ... set the item's image.  The appropriate image index is stored in the ListCtrl's internal ItemData value.
+                    self.lc.SetItemImage(itemNum, self.GetItemData(itemNum))
+                # If the item is now False ...
+                else:
+                    # ... set the item's image to blank, the last image in the imageList.
+                    self.lc.SetItemImage(itemNum, self.lc.GetImageList(wx.IMAGE_LIST_SMALL).GetImageCount() - 1)

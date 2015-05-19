@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2010  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2012  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -93,7 +93,7 @@ class SeriesMap(wx.Frame):
         #  Create a cursor and execute the appropriate query
         self.DBCursor = DBConn.cursor()
         # Determine the screen size for setting the initial dialog size
-        rect = wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
         width = rect[2] * .80
         height = rect[3] * .80
         # Create the basic Frame structure with a white background
@@ -320,7 +320,7 @@ class SeriesMap(wx.Frame):
                 profileList = dlgFilter.GetConfigNames()
                 # If (translated) "Default" is in the list ...
                 # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
-                if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                if unicode(_('Default'), 'utf8') in profileList:
                     # ... then signal that we need to load the config.
                     dlgFilter.OnFileOpen(None)
                     # Fake that we asked the user for a filter name and got an OK
@@ -471,8 +471,8 @@ class SeriesMap(wx.Frame):
         if not self.preview.Ok():
             self.SetStatusText(_("Print Preview Problem"))
             return
-        theWidth = max(wx.ClientDisplayRect()[2] - 180, 760)
-        theHeight = max(wx.ClientDisplayRect()[3] - 200, 560)
+        theWidth = max(wx.Display(0).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
+        theHeight = max(wx.Display(0).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
         frame2 = wx.PreviewFrame(self.preview, self, _("Print Preview"), size=(theWidth, theHeight))
         frame2.Centre()
         frame2.Initialize()

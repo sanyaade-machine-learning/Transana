@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -47,84 +47,90 @@ class EpisodePropertiesForm(Dialogs.GenForm):
 
     def __init__(self, parent, id, title, ep_object):
         # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style
-        Dialogs.GenForm.__init__(self, parent, id, title, (550,435), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Episode Properties')
-        # Define the minimum size for this dialog as the initial size
-        self.SetSizeHints(550, 435)
+        Dialogs.GenForm.__init__(self, parent, id, title, (550,435), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext='Episode Properties')
         # Remember the Parent Window
         self.parent = parent
         self.obj = ep_object
 
-        ######################################################
-        # Tedious GUI layout code follows
-        ######################################################
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Episode ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 35)  # 35% width
-        lay.height.AsIs()
-        self.id_edit = self.new_edit_box(_("Episode ID"), lay, self.obj.id, maxLen=100)
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+        # Episode ID
+        self.id_edit = self.new_edit_box(_("Episode ID"), v1, self.obj.id, maxLen=100)
+        # Add the element to the sizer
+        r1Sizer.Add(v1, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v2 = wx.BoxSizer(wx.VERTICAL)
         # Series ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.RightOf(self.id_edit, 6)            # 6 right of Episode ID
-        lay.width.PercentOf(self.panel, wx.Width, 30)  # 35% width
-        lay.height.AsIs()
-        series_edit = self.new_edit_box(_("Series ID"), lay, self.obj.series_id)
+        series_edit = self.new_edit_box(_("Series ID"), v2, self.obj.series_id)
+        # Add the element to the sizer
+        r2Sizer.Add(v2, 2, wx.EXPAND)
         series_edit.Enable(False)
+
+        # Add a horizontal spacer to the row sizer        
+        r2Sizer.Add((10, 0))
 
         # Dialogs.GenForm does not provide a Masked text control, so the Date
         # Field is handled differently than other fields.
         
-        # Date layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.RightOf(series_edit, 6)        # 6 right of Series ID
-        lay.width.PercentOf(self.panel, wx.Width, 15)  # 15% width
-        lay.height.AsIs()
+        # Create a VERTICAL sizer for the next element
+        v3 = wx.BoxSizer(wx.VERTICAL)
+        # Date [label]
         date_lbl = wx.StaticText(self.panel, -1, _("Date (MM/DD/YYYY)"))
-        date_lbl.SetConstraints(lay)
+        v3.Add(date_lbl, 0, wx.BOTTOM, 3)
 
-        # Date layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(date_lbl, 3)         # 
-        lay.left.SameAs(date_lbl, 0)        # 6 right of Series ID
-        lay.width.PercentOf(self.panel, wx.Width, 15)  # 15% width
-        lay.height.AsIs()
+        # Date
         # Use the Masked Text Control (Requires wxPython 2.4.2.4 or later)
         # TODO:  Make Date autoformat localizable
         self.dt_edit = wx.lib.masked.TextCtrl(self.panel, -1, '', autoformat='USDATEMMDDYYYY/')
+        v3.Add(self.dt_edit, 0, wx.EXPAND)
         # If a Date is know, load it into the control
         if (self.obj.tape_date != None) and (self.obj.tape_date != '') and (self.obj.tape_date != '01/01/0'):
             self.dt_edit.SetValue(self.obj.tape_date)
-        self.dt_edit.SetConstraints(lay)
+        # Add the element to the sizer
+        r2Sizer.Add(v3, 1, wx.EXPAND)
 
-        # Length layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.RightOf(self.dt_edit, 6)              # 6 right of Date Taped
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        self.len_edit = self.new_edit_box(_("Length"), lay, self.obj.tape_length_str())
+        # Add a horizontal spacer to the row sizer        
+        r2Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v4 = wx.BoxSizer(wx.VERTICAL)
+        # Length
+        self.len_edit = self.new_edit_box(_("Length"), v4, self.obj.tape_length_str())
+        # Add the element to the sizer
+        r2Sizer.Add(v4, 1, wx.EXPAND)
         self.len_edit.Enable(False)
 
-        # Media Filename(s) layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.id_edit, 10)                # 10 under ID
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
-        lay.height.AsIs()
-        txt = wx.StaticText(self.panel, -1, _("Media Filename(s)"))
-        txt.SetConstraints(lay)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
 
-        # Media Filename(s) Layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                          # 3 under prompt
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 75)  # 80% width
-        lay.height.AsIs()
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Media Filename(s) [label]
+        txt = wx.StaticText(self.panel, -1, _("Media Filename(s)"))
+        mainSizer.Add(txt, 0, wx.BOTTOM, 3)
+
+        # Create a HORIZONTAL sizer for the next row
+        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Media Filename(s)
         # If the media filename path is not empty, we should normalize the path specification
         if self.obj.media_filename == '':
             filePath = self.obj.media_filename
@@ -137,70 +143,202 @@ class EpisodePropertiesForm(Dialogs.GenForm):
             # ... add it to the filename list
             self.filenames.append(vid['filename'])
         self.fname_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.Size(180, 60), self.filenames)
-        self.fname_lb.SetConstraints(lay)
+        # Add the element to the sizer
+        r3Sizer.Add(self.fname_lb, 5, wx.EXPAND)
         self.fname_lb.SetDropTarget(ListBoxFileDropTarget(self.fname_lb))
         
+        # Add a horizontal spacer to the row sizer        
+        r3Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v4 = wx.BoxSizer(wx.VERTICAL)
         # Add File button layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(txt, wx.Top)
-        lay.left.RightOf(self.fname_lb, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.height.AsIs()
         addFile = wx.Button(self.panel, wx.ID_FILE1, _("Add File"), wx.DefaultPosition)
-        addFile.SetConstraints(lay)
+        v4.Add(addFile, 0, wx.EXPAND | wx.BOTTOM, 3)
         wx.EVT_BUTTON(self, wx.ID_FILE1, self.OnBrowse)
 
         # Remove File button layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(addFile, 4)
-        lay.left.RightOf(self.fname_lb, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.height.AsIs()
         removeFile = wx.Button(self.panel, -1, _("Remove File"), wx.DefaultPosition)
-        removeFile.SetConstraints(lay)
+        v4.Add(removeFile, 0, wx.EXPAND | wx.BOTTOM, 3)
         wx.EVT_BUTTON(self, removeFile.GetId(), self.OnRemoveFile)
 
         # SynchronizeFiles button layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(removeFile, 4)
-        lay.left.RightOf(self.fname_lb, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.height.AsIs()
         synchronize = wx.Button(self.panel, -1, _("Synchronize"), wx.DefaultPosition)
-        synchronize.SetConstraints(lay)
+        v4.Add(synchronize, 0, wx.EXPAND)
         synchronize.Bind(wx.EVT_BUTTON, self.OnSynchronize)
 
-        # Comment layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.fname_lb, 10)               # 10 under media filename list box
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        comment_edit = self.new_edit_box(_("Comment"), lay, self.obj.comment, maxLen=255)
+        # Add the element to the sizer
+        r3Sizer.Add(v4, 1, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            r3Sizer.Add((2, 0))
 
-        # Keyword Group layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(comment_edit, 10)                # 10 under comment
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
-        lay.height.AsIs()
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r3Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r4Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v5 = wx.BoxSizer(wx.VERTICAL)
+        # Comment
+        comment_edit = self.new_edit_box(_("Comment"), v5, self.obj.comment, maxLen=255)
+        # Add the element to the sizer
+        r4Sizer.Add(v5, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r4Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+        
+        # Create a HORIZONTAL sizer for the next row
+        r5Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v6 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword Group [label]
         txt = wx.StaticText(self.panel, -1, _("Keyword Group"))
-        txt.SetConstraints(lay)
+        v6.Add(txt, 0, wx.BOTTOM, 3)
 
-        # Keyword Group layout [list box]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                          # 3 under label
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.SameAs(txt, wx.Width)                # width same as label
-        lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
+        # Keyword Group [list box]
+
+        kw_groups_id = wx.NewId()
+        # Create an empty Keyword Group List for now.  We'll populate it later (for layout reasons)
+        self.kw_groups = []
+        self.kw_group_lb = wx.ListBox(self.panel, kw_groups_id, wx.DefaultPosition, wx.DefaultSize, self.kw_groups)
+        v6.Add(self.kw_group_lb, 1, wx.EXPAND)
+
+        # Add the element to the sizer
+        r5Sizer.Add(v6, 1, wx.EXPAND)
+
+        self.kw_list = []
+        wx.EVT_LISTBOX(self, kw_groups_id, self.OnGroupSelect)
+
+        # Add a horizontal spacer
+        r5Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v7 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword [label]
+        txt = wx.StaticText(self.panel, -1, _("Keyword"))
+        v7.Add(txt, 0, wx.BOTTOM, 3)
+
+        # Keyword [list box]
+        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list, style=wx.LB_EXTENDED)
+        v7.Add(self.kw_lb, 1, wx.EXPAND)
+
+        wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnAddKW)
+
+        # Add the element to the sizer
+        r5Sizer.Add(v7, 1, wx.EXPAND)
+
+        # Add a horizontal spacer
+        r5Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v8 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword transfer buttons
+        add_kw = wx.Button(self.panel, wx.ID_FILE2, ">>", wx.DefaultPosition)
+        v8.Add(add_kw, 0, wx.EXPAND | wx.TOP, 20)
+        wx.EVT_BUTTON(self.panel, wx.ID_FILE2, self.OnAddKW)
+
+        rm_kw = wx.Button(self.panel, wx.ID_FILE3, "<<", wx.DefaultPosition)
+        v8.Add(rm_kw, 0, wx.EXPAND | wx.TOP, 10)
+        wx.EVT_BUTTON(self, wx.ID_FILE3, self.OnRemoveKW)
+
+        bitmap = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KWManage.xpm"), wx.BITMAP_TYPE_XPM)
+        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, bitmap)
+        v8.Add(kwm, 0, wx.EXPAND | wx.TOP, 10)
+        # Add a spacer to increase the height of the Keywords section
+        v8.Add((0, 60))
+        kwm.SetToolTipString(_("Keyword Management"))
+        wx.EVT_BUTTON(self, wx.ID_FILE4, self.OnKWManage)
+
+        # Add the element to the sizer
+        r5Sizer.Add(v8, 0)
+
+        # Add a horizontal spacer
+        r5Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v9 = wx.BoxSizer(wx.VERTICAL)
+
+        # Episode Keywords [label]
+        txt = wx.StaticText(self.panel, -1, _("Episode Keywords"))
+        v9.Add(txt, 0, wx.BOTTOM, 3)
+
+        # Episode Keywords [list box]
+        
+        # Create an empty ListBox
+        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, style=wx.LB_EXTENDED)
+        v9.Add(self.ekw_lb, 1, wx.EXPAND)
+        
+        self.ekw_lb.Bind(wx.EVT_KEY_DOWN, self.OnKeywordKeyDown)
+
+        # Add the element to the sizer
+        r5Sizer.Add(v9, 2, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r5Sizer, 5, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+        
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Core Data button layout
+        CoreData = wx.Button(self.panel, -1, _("Core Data"))
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            btnSizer.Add((2, 0))
+        btnSizer.Add(CoreData, 0)
+        wx.EVT_BUTTON(self, CoreData.GetId(), self.OnCoreDataClick)
+
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
+        self.Layout()
+        # Resize the form to fit the contents
+        self.Fit()
+
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(550, width), max(435, height)))
+        # Define the minimum size for this dialog as the current size
+        self.SetSizeHints(max(550, width), max(435, height))
+        # Center the form on screen
+        self.CenterOnScreen()
+
+        # We populate the Keyword Groups, Keywords, and Clip Keywords lists AFTER we determine the Form Size.
+        # Long Keywords in the list were making the form too big!
+
+        self.kw_groups = DBInterface.list_of_keyword_groups()
+        for keywordGroup in self.kw_groups:
+            self.kw_group_lb.Append(keywordGroup)
 
         # Load the parent Series in order to determine the default Keyword Group
         tempSeries = Series.Series(self.obj.series_id)
-
-        kw_groups_id = wx.NewId()
-        self.kw_groups = DBInterface.list_of_keyword_groups()
-        self.kw_group_lb = wx.ListBox(self.panel, kw_groups_id, wx.DefaultPosition, wx.DefaultSize, self.kw_groups)
-        self.kw_group_lb.SetConstraints(lay)
         # Select the Series Default Keyword Group in the Keyword Group list
         if (tempSeries.keyword_group != '') and (self.kw_group_lb.FindString(tempSeries.keyword_group) != wx.NOT_FOUND):
             self.kw_group_lb.SetStringSelection(tempSeries.keyword_group)
@@ -214,99 +352,12 @@ class EpisodePropertiesForm(Dialogs.GenForm):
                 DBInterface.list_of_keywords_by_group(self.kw_group_lb.GetStringSelection())
         else:
             self.kw_list = []
-        wx.EVT_LISTBOX(self, kw_groups_id, self.OnGroupSelect)
+        for keyword in self.kw_list:
+            self.kw_lb.Append(keyword)
 
-        # Keyword layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(comment_edit, 10)                # 10 under comment
-        lay.left.RightOf(txt, 10)                      # 10 right of KW Group
-        lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
-        lay.height.AsIs()
-        txt = wx.StaticText(self.panel, -1, _("Keyword"))
-        txt.SetConstraints(lay)
-
-        # Keyword layout [list box]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                          # 3 under label
-        lay.left.SameAs(txt, wx.Left)                  # left same as label
-        lay.width.SameAs(txt, wx.Width)                # width same as label
-        lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
-        
-        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list, style=wx.LB_EXTENDED)
-        self.kw_lb.SetConstraints(lay)
-
-        wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnAddKW)
-
-        # Keyword transfer buttons
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 30)                         # 30 under label
-        lay.left.RightOf(txt, 10)                      # 10 right of label
-        lay.width.PercentOf(self.panel, wx.Width, 6)   # 6% width
-        lay.height.AsIs()
-        add_kw = wx.Button(self.panel, wx.ID_FILE2, ">>", wx.DefaultPosition)
-        add_kw.SetConstraints(lay)
-        wx.EVT_BUTTON(self.panel, wx.ID_FILE2, self.OnAddKW)
-
-        lay = wx.LayoutConstraints()
-        lay.top.Below(add_kw, 10)
-        lay.left.SameAs(add_kw, wx.Left)
-        lay.width.SameAs(add_kw, wx.Width)
-        lay.height.AsIs()
-        rm_kw = wx.Button(self.panel, wx.ID_FILE3, "<<", wx.DefaultPosition)
-        rm_kw.SetConstraints(lay)
-        wx.EVT_BUTTON(self, wx.ID_FILE3, self.OnRemoveKW)
-
-        lay = wx.LayoutConstraints()
-        lay.top.Below(rm_kw, 10)
-        lay.left.SameAs(rm_kw, wx.Left)
-        lay.width.SameAs(rm_kw, wx.Width)
-        lay.height.AsIs()
-        bitmap = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KWManage.xpm"), wx.BITMAP_TYPE_XPM)
-        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, bitmap)
-        kwm.SetConstraints(lay)
-        kwm.SetToolTipString(_("Keyword Management"))
-        wx.EVT_BUTTON(self, wx.ID_FILE4, self.OnKWManage)
-
-
-        # Episode Keywords [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(comment_edit, 10)                # 10 under comment
-        lay.left.SameAs(add_kw, wx.Right, 10)          # 10 from Add keyword button
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        txt = wx.StaticText(self.panel, -1, _("Episode Keywords"))
-        txt.SetConstraints(lay)
-
-        # Episode Keywords [list box]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                          # 3 under label
-        lay.left.SameAs(txt, wx.Left)                  # left same as label
-        lay.width.SameAs(txt, wx.Width)                # width same as label
-        lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
-        
-        # Create an empty ListBox
-        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, style=wx.LB_EXTENDED)
         # Populate the ListBox
         for episodeKeyword in self.obj.keyword_list:
             self.ekw_lb.Append(episodeKeyword.keywordPair)
-
-        self.ekw_lb.SetConstraints(lay)
-        
-        self.ekw_lb.Bind(wx.EVT_KEY_DOWN, self.OnKeywordKeyDown)
-
-        # Core Data button layout
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self.panel, wx.Bottom, 10)
-        lay.left.SameAs(self.id_edit, wx.Left, 0)
-        lay.height.AsIs()
-        lay.width.AsIs()
-        CoreData = wx.Button(self.panel, -1, _("Core Data")) 
-        CoreData.SetConstraints(lay)
-        wx.EVT_BUTTON(self, CoreData.GetId(), self.OnCoreDataClick)
-
-        self.Layout()
-        self.SetAutoLayout(True)
-        self.CenterOnScreen()
 
         self.id_edit.SetFocus()
 
@@ -488,6 +539,11 @@ class EpisodePropertiesForm(Dialogs.GenForm):
 
     def OnCoreDataClick(self, event):
         """ Method for when Core Data button is clicked """
+        # If no items are currently selected ...
+        if (self.fname_lb.GetCount() > 0) and (len(self.fname_lb.GetSelections()) == 0):
+            # ... then select the first item
+            self.fname_lb.Select(0)
+        
         # We can only edit Core Data once the Media Filename has been selected in the file list and the file must exist
         if (self.fname_lb.GetStringSelection() != '') and os.path.exists(self.fname_lb.GetStringSelection()):
             # Extract the path-less File Name from the full-path Media File Name for the selected item in the filename list

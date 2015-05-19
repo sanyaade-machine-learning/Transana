@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -39,9 +39,8 @@ class KeywordListEditForm(Dialogs.GenForm):
 
     def __init__(self, parent, id, title, obj, keywords):
         # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style
-        Dialogs.GenForm.__init__(self, parent, id, title, size=TransanaGlobal.configData.keywordListEditSize, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Edit Keywords')
-        # Define the minimum size for this dialog as the initial size
-        self.SetSizeHints(600, 385)
+        Dialogs.GenForm.__init__(self, parent, id, title, size=TransanaGlobal.configData.keywordListEditSize,
+                                 style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, useSizers = True, HelpContext='Edit Keywords')
 
         # Remember the parent Window
         self.parent = parent
@@ -59,130 +58,163 @@ class KeywordListEditForm(Dialogs.GenForm):
         for kws in keywords:
             self.keywords.append(kws)
 
-        ######################################################
-        # Tedious GUI layout code follows
-        ######################################################
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Keyword Group layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Left, 10)        # 10 under top
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
-        lay.height.AsIs()
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword Group [label]
         txt = wx.StaticText(self.panel, -1, _("Keyword Group"))
-        txt.SetConstraints(lay)
-
+        v1.Add(txt, 0, wx.BOTTOM, 3)
 
         # Keyword Group layout [list box]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                   # 3 under label
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.SameAs(txt, wx.Width)          # width same as label
-        lay.bottom.SameAs(self.panel, wx.Height, 45)   # 45 from bottom
+
+        # Create an empty Keyword Group List for now.  We'll populate it later (for layout reasons)
+        self.kw_groups = []
+        self.kw_group_lb = wx.ListBox(self.panel, 101, wx.DefaultPosition, wx.DefaultSize, self.kw_groups)
+        v1.Add(self.kw_group_lb, 1, wx.EXPAND)
+
+        # Add the element to the sizer
+        r1Sizer.Add(v1, 1, wx.EXPAND)
+
+        self.kw_list = []
+        wx.EVT_LISTBOX(self, 101, self.OnGroupSelect)
+
+        # Add a horizontal spacer
+        r1Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v2 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword [label]
+        txt = wx.StaticText(self.panel, -1, _("Keyword"))
+        v2.Add(txt, 0, wx.BOTTOM, 3)
+
+        # Keyword [list box]
+        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list, style=wx.LB_EXTENDED)
+        v2.Add(self.kw_lb, 1, wx.EXPAND)
+
+        wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnAddKW)
+
+        # Add the element to the sizer
+        r1Sizer.Add(v2, 1, wx.EXPAND)
+
+        # Add a horizontal spacer
+        r1Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v3 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword transfer buttons
+        add_kw = wx.Button(self.panel, wx.ID_FILE2, ">>", wx.DefaultPosition)
+        v3.Add(add_kw, 0, wx.EXPAND | wx.TOP, 20)
+        wx.EVT_BUTTON(self, wx.ID_FILE2, self.OnAddKW)
+
+        rm_kw = wx.Button(self.panel, wx.ID_FILE3, "<<", wx.DefaultPosition)
+        v3.Add(rm_kw, 0, wx.EXPAND | wx.TOP, 10)
+        wx.EVT_BUTTON(self, wx.ID_FILE3, self.OnRemoveKW)
+
+        bitmap = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KWManage.xpm"), wx.BITMAP_TYPE_XPM)
+        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, bitmap)
+        v3.Add(kwm, 0, wx.EXPAND | wx.TOP, 10)
+        # Add a spacer to increase the height of the Keywords section
+        v3.Add((0, 60))
+        kwm.SetToolTipString(_("Keyword Management"))
+        wx.EVT_BUTTON(self, wx.ID_FILE4, self.OnKWManage)
+
+        # Add the element to the sizer
+        r1Sizer.Add(v3, 0)
+
+        # Add a horizontal spacer
+        r1Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v4 = wx.BoxSizer(wx.VERTICAL)
+        # Keywords [label]
+        txt = wx.StaticText(self.panel, -1, _("Keywords"))
+        v4.Add(txt, 0, wx.BOTTOM, 3)
+
+        # Keywords [list box]
+        # Create an empty ListBox
+        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, style=wx.LB_EXTENDED)
+        v4.Add(self.ekw_lb, 1, wx.EXPAND)
+        self.ekw_lb.Bind(wx.EVT_KEY_DOWN, self.OnKeywordKeyDown)
+
+        # Add the element to the sizer
+        r1Sizer.Add(v4, 2, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 1, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+        
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
+        self.Layout()
+        # Resize the form to fit the contents
+        self.Fit()
+
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(600, width), max(385, height)))
+        # Define the minimum size for this dialog as the current size
+        self.SetSizeHints(max(600, width), max(385, height))
+        # Center the form on screen
+        self.CenterOnScreen()
+        
+        # We need to capture the OK and Cancel button clicks locally.  We'll use FindWindowByID to locate the correct widgets.
+        self.Bind(wx.EVT_BUTTON, self.OnOK, self.FindWindowById(wx.ID_OK))
+        self.Bind(wx.EVT_BUTTON, self.OnCancel, self.FindWindowById(wx.ID_CANCEL))
+        
+        # We populate the Keyword Groups, Keywords, and Clip Keywords lists AFTER we determine the Form Size.
+        # Long Keywords in the list were making the form too big!
+
+        # Obtain the list of Keyword Groups
+        self.kw_groups = DBInterface.list_of_keyword_groups()
+        for keywordGroup in self.kw_groups:
+            self.kw_group_lb.Append(keywordGroup)
 
         # Get the Parent Object, so we can know the Default Keyword Group
         if type(self.obj) == type(Episode.Episode()):
             objParent = Series.Series(self.obj.series_num)
         elif type(self.obj) == type(Clip.Clip()):
             objParent = Collection.Collection(self.obj.collection_num)
-        # Obtain the list of Keyword Groups
-        self.kw_groups = DBInterface.list_of_keyword_groups()
-        self.kw_group_lb = wx.ListBox(self.panel, 101, wx.DefaultPosition, wx.DefaultSize, self.kw_groups)
-        self.kw_group_lb.SetConstraints(lay)
         if len(self.kw_groups) > 0:
             # Set the Keyword Group to the Default keyword Group
             if self.kw_group_lb.FindString(objParent.keyword_group) != wx.NOT_FOUND:
                 self.kw_group_lb.SetStringSelection(objParent.keyword_group)
+            else:
+                self.kw_group_lb.SetSelection(0)
             # Obtain the list of Keywords for the intial Keyword Group
             self.kw_list = DBInterface.list_of_keywords_by_group(self.kw_group_lb.GetStringSelection())
         else:
             self.kw_list = []
-        wx.EVT_LISTBOX(self, 101, self.OnGroupSelect)
+        for keyword in self.kw_list:
+            self.kw_lb.Append(keyword)
 
-        # Keyword layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Left, 10)         # 10 under comment
-        lay.left.RightOf(txt, 10)               # 10 right of KW Group
-        lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
-        lay.height.AsIs()
-        txt = wx.StaticText(self.panel, -1, _("Keyword"))
-        txt.SetConstraints(lay)
-
-        # Keyword layout [list box]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                   # 3 under label
-        lay.left.SameAs(txt, wx.Left)            # left same as label
-        lay.width.SameAs(txt, wx.Width)          # width same as label
-        lay.bottom.SameAs(self.panel, wx.Height, 45)   # 45 from bottom
-        
-        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list, style=wx.LB_EXTENDED)
-        self.kw_lb.SetConstraints(lay)
-
-        wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnAddKW)
-
-        # Keyword transfer buttons
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 30)                  # 30 under label
-        lay.left.RightOf(txt, 10)               # 10 right of label
-        lay.width.PercentOf(self.panel, wx.Width, 6)   # 6% width
-        lay.height.AsIs()
-        add_kw = wx.Button(self.panel, wx.ID_FILE2, ">>", wx.DefaultPosition)
-        add_kw.SetConstraints(lay)
-        wx.EVT_BUTTON(self, wx.ID_FILE2, self.OnAddKW)
-
-        lay = wx.LayoutConstraints()
-        lay.top.Below(add_kw, 10)
-        lay.left.SameAs(add_kw, wx.Left)
-        lay.width.SameAs(add_kw, wx.Width)
-        lay.height.AsIs()
-        rm_kw = wx.Button(self.panel, wx.ID_FILE3, "<<", wx.DefaultPosition)
-        rm_kw.SetConstraints(lay)
-        wx.EVT_BUTTON(self, wx.ID_FILE3, self.OnRemoveKW)
-
-        lay = wx.LayoutConstraints()
-        lay.top.Below(rm_kw, 10)
-        lay.left.SameAs(rm_kw, wx.Left)
-        lay.width.SameAs(rm_kw, wx.Width)
-        lay.height.AsIs()
-        bitmap = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KWManage.xpm"), wx.BITMAP_TYPE_XPM)
-        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, bitmap)
-        kwm.SetConstraints(lay)
-        kwm.SetToolTipString(_("Keyword Management"))
-        wx.EVT_BUTTON(self, wx.ID_FILE4, self.OnKWManage)
-
-
-        # Keywords [label]
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 under comment
-        lay.left.SameAs(add_kw, wx.Right, 10)          # 10 from Add Keyword Button
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        txt = wx.StaticText(self.panel, -1, _("Keywords"))
-        txt.SetConstraints(lay)
-
-        # Keywords [list box]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                   # 3 under label
-        lay.left.SameAs(txt, wx.Left)            # left same as label
-        lay.width.SameAs(txt, wx.Width)          # width same as label
-        lay.bottom.SameAs(self.panel, wx.Height, 45)   # 45 from bottom
-        
-        # Create an empty ListBox
-        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, style=wx.LB_EXTENDED)
         # Populate the ListBox
         for clipKeyword in self.keywords:
             self.ekw_lb.Append(clipKeyword.keywordPair)
-        self.ekw_lb.SetConstraints(lay)
-        self.ekw_lb.Bind(wx.EVT_KEY_DOWN, self.OnKeywordKeyDown)
 
-        # We need to capture the OK and Cancel button clicks locally.  We'll use FindWindowByID to locate the correct widgets.
-        self.Bind(wx.EVT_BUTTON, self.OnOK, self.FindWindowById(wx.ID_OK))
-        self.Bind(wx.EVT_BUTTON, self.OnCancel, self.FindWindowById(wx.ID_CANCEL))
-
-        self.Layout()
-        self.SetAutoLayout(True)
-        self.CenterOnScreen()
-        
         self.kw_group_lb.SetFocus()
 
     def OnOK(self, event):

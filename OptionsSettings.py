@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -65,17 +65,19 @@ class OptionsSettings(wx.Dialog):
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
+        # Create the form's main VERTICAL Sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+
         # Define a wxNotebook for the Tab structure
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self, wx.Top, 0)
-        lay.left.SameAs(self, wx.Left, 0)
-        lay.right.SameAs(self, wx.Right, 0)
-        lay.bottom.SameAs(self, wx.Bottom, 27)
         notebook = wx.Notebook(self, -1, size=self.GetSizeTuple())
-        notebook.SetConstraints(lay)
+        # Add the notebook to the main sizer
+        mainSizer.Add(notebook, 1, wx.EXPAND | wx.ALL, 3)
 
         # Define the Directories Tab that goes in the wxNotebook
         panelDirectories = wx.Panel(notebook, -1, size=notebook.GetSizeTuple(), name='OptionsSettings.DirectoriesPanel')
+
+        # Define the main VERTICAL sizer for the Notebook Page
+        panelDirSizer = wx.BoxSizer(wx.VERTICAL)
 
         # The LAB version initial configuration dialog gets some introductory text that can be skipped otherwise.
         if lab:
@@ -83,29 +85,18 @@ class OptionsSettings(wx.Dialog):
             instText = _("Transana needs to know where you store your data.  Please identify the location where you store your \nsource media files, where you want Transana to save your waveform data, and where you want your \ndatabase files stored.  ") + '\n\n'
             instText += _("None of this should be on the lab computer, where others may be able to access your confidential data, \nor where data may be deleted over night.")
             lblLabInst = wx.StaticText(panelDirectories, -1, instText, style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.SameAs(panelDirectories, wx.Top, 10)
-            lay.left.SameAs(panelDirectories, wx.Left, 10)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblLabInst.SetConstraints(lay)
-
-            # The next dialog item goes under these instructions.
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblLabInst, 20)
-        # If NOT in the lab version ...
-        else:
-            # ... the next dialog item goes at the top of the Directories panel.
-            lay = wx.LayoutConstraints()
-            lay.top.SameAs(panelDirectories, wx.Top, 15)
+            # Add the label to the Panel Sizer
+            panelDirSizer.Add(lblLabInst, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
 
         # Add the Video Root Directory Label to the Directories Tab
         lblVideoDirectory = wx.StaticText(panelDirectories, -1, _("Video Root Directory"), style=wx.ST_NO_AUTORESIZE)
-        lay.left.SameAs(panelDirectories, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblVideoDirectory.SetConstraints(lay)
-        
+        # Add the label to the Panel Sizer
+        panelDirSizer.Add(lblVideoDirectory, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        # Add a spacer
+        panelDirSizer.Add((0, 3))
+
+        # Create a Row Sizer
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
         # Add the Video Root Directory TextCtrl to the Directories Tab
         # If the video path is not empty, we should normalize the path specification
         if TransanaGlobal.configData.videoPath == '':
@@ -113,32 +104,27 @@ class OptionsSettings(wx.Dialog):
         else:
             videoPath = os.path.normpath(TransanaGlobal.configData.videoPath)
         self.videoDirectory = wx.TextCtrl(panelDirectories, -1, videoPath)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblVideoDirectory, 3)
-        lay.left.SameAs(panelDirectories, wx.Left, 10)
-        lay.right.SameAs(panelDirectories, wx.Right, 100)
-        lay.height.AsIs()
-        self.videoDirectory.SetConstraints(lay)
+        # Add the element to the Row Sizer
+        r1Sizer.Add(self.videoDirectory, 6, wx.EXPAND | wx.RIGHT, 10)
 
         # Add the Video Root Directory Browse Button to the Directories Tab
         self.btnVideoBrowse = wx.Button(panelDirectories, -1, _("Browse"))
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblVideoDirectory, 3)
-        lay.left.RightOf(self.videoDirectory, 10)
-        lay.right.SameAs(panelDirectories, wx.Right, 10)
-        lay.height.AsIs()
-        self.btnVideoBrowse.SetConstraints(lay)
+        # Add the element to the Row Sizer
+        r1Sizer.Add(self.btnVideoBrowse, 0)
         wx.EVT_BUTTON(self, self.btnVideoBrowse.GetId(), self.OnBrowse)
+
+        # Add the Row Sizer to the Panel Sizer
+        panelDirSizer.Add(r1Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Add the Waveform Directory Label to the Directories Tab
         lblWaveformDirectory = wx.StaticText(panelDirectories, -1, _("Waveform Directory"), style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.videoDirectory, 20)
-        lay.left.SameAs(panelDirectories, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblWaveformDirectory.SetConstraints(lay)
+        # Add the label to the Panel Sizer
+        panelDirSizer.Add(lblWaveformDirectory, 0, wx.LEFT | wx.RIGHT, 10)
+        # Add a spacer
+        panelDirSizer.Add((0, 3))
         
+        # Create a Row Sizer
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
         # Add the Waveform Directory TextCtrl to the Directories Tab
         # If the visualization path is not empty, we should normalize the path specification
         if TransanaGlobal.configData.visualizationPath == '':
@@ -146,32 +132,27 @@ class OptionsSettings(wx.Dialog):
         else:
             visualizationPath = os.path.normpath(TransanaGlobal.configData.visualizationPath)
         self.waveformDirectory = wx.TextCtrl(panelDirectories, -1, visualizationPath)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblWaveformDirectory, 3)
-        lay.left.SameAs(panelDirectories, wx.Left, 10)
-        lay.right.SameAs(panelDirectories, wx.Right, 100)
-        lay.height.AsIs()
-        self.waveformDirectory.SetConstraints(lay)
+        # Add the element to the Row Sizer
+        r2Sizer.Add(self.waveformDirectory, 6, wx.EXPAND | wx.RIGHT, 10)
 
         # Add the Waveform Directory Browse Button to the Directories Tab
         self.btnWaveformBrowse = wx.Button(panelDirectories, -1, _("Browse"))
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblWaveformDirectory, 3)
-        lay.left.RightOf(self.waveformDirectory, 10)
-        lay.right.SameAs(panelDirectories, wx.Right, 10)
-        lay.height.AsIs()
-        self.btnWaveformBrowse.SetConstraints(lay)
+        # Add the element to the Row Sizer
+        r2Sizer.Add(self.btnWaveformBrowse, 0)
         wx.EVT_BUTTON(self, self.btnWaveformBrowse.GetId(), self.OnBrowse)
-        
+
+        # Add the Row Sizer to the Panel Sizer
+        panelDirSizer.Add(r2Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
         # Add the Database Directory Label to the Directories Tab
         lblDatabaseDirectory = wx.StaticText(panelDirectories, -1, _("Database Directory"), style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.waveformDirectory, 20)
-        lay.left.SameAs(panelDirectories, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblDatabaseDirectory.SetConstraints(lay)
+        # Add the element to the Panel Sizer
+        panelDirSizer.Add(lblDatabaseDirectory, 0, wx.LEFT | wx.RIGHT, 10)
+        # Add a spacer
+        panelDirSizer.Add((0, 3))
         
+        # Create a Row Sizer
+        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
         # Add the Database Directory TextCtrl to the Directories Tab
         # If the database path is not empty, we should normalize the path specification
         if TransanaGlobal.configData.databaseDir == '':
@@ -180,23 +161,18 @@ class OptionsSettings(wx.Dialog):
             databaseDir = os.path.normpath(TransanaGlobal.configData.databaseDir)
         self.oldDatabaseDir = databaseDir
         self.databaseDirectory = wx.TextCtrl(panelDirectories, -1, databaseDir)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblDatabaseDirectory, 3)
-        lay.left.SameAs(panelDirectories, wx.Left, 10)
-        lay.right.SameAs(panelDirectories, wx.Right, 100)
-        lay.height.AsIs()
-        self.databaseDirectory.SetConstraints(lay)
+        # Add the element to the Row Sizer
+        r3Sizer.Add(self.databaseDirectory, 6, wx.EXPAND | wx.RIGHT, 10)
 
         # Add the Database Directory Browse Button to the Directories Tab
         self.btnDatabaseBrowse = wx.Button(panelDirectories, -1, _("Browse"))
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblDatabaseDirectory, 3)
-        lay.left.RightOf(self.databaseDirectory, 10)
-        lay.right.SameAs(panelDirectories, wx.Right, 10)
-        lay.height.AsIs()
-        self.btnDatabaseBrowse.SetConstraints(lay)
+        # Add the element to the Row Sizer
+        r3Sizer.Add(self.btnDatabaseBrowse, 0)
         wx.EVT_BUTTON(self, self.btnDatabaseBrowse.GetId(), self.OnBrowse)
-        
+
+        # Add the Row Sizer to the Panel Sizer
+        panelDirSizer.Add(r3Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
         # The Database Directory should not be visible for the Multi-user version of the program.
         # Let's just hide it so that the program doesn't crash for being unable to populate the control.
         if not TransanaConstants.singleUserVersion:
@@ -205,6 +181,7 @@ class OptionsSettings(wx.Dialog):
             self.btnDatabaseBrowse.Show(False)
 
         # Tell the Directories Panel to lay out now and do AutoLayout
+        panelDirectories.SetSizer(panelDirSizer)
         panelDirectories.SetAutoLayout(True)
         panelDirectories.Layout()
 
@@ -213,201 +190,181 @@ class OptionsSettings(wx.Dialog):
             # Add the Transcriber Panel to the Notebook
             panelTranscriber = wx.Panel(notebook, -1, size=notebook.GetSizeTuple(), name='OptionsSettings.TranscriberPanel')
 
+            # Define the main VERTICAL sizer for the Notebook Page
+            panelTranSizer = wx.BoxSizer(wx.VERTICAL)
+
             # Add the Video Setback Label to the Transcriber Settings Tab
-            lblTranscriptionSetback = wx.StaticText(panelTranscriber, -1, _("Transcription Setback:  (Auto-rewind interval for Ctrl-S)"), style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.SameAs(panelTranscriber, wx.Top, 10)
-            lay.left.SameAs(panelTranscriber, wx.Left, 10)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblTranscriptionSetback.SetConstraints(lay)
+            lblTranscriptionSetback = wx.StaticText(panelTranscriber, -1, _("Transcription Setback:  (Auto-rewind interval for Ctrl-S)"),
+                                                    style=wx.ST_NO_AUTORESIZE)
+            # Add the element to the Panel Sizer
+            panelTranSizer.Add(lblTranscriptionSetback, 0, wx.LEFT | wx.TOP, 10)
+            # Add a spacer
+            panelTranSizer.Add((0, 3))
 
             # Add the Video Setback Slider to the Transcriber Settings Tab
-            self.transcriptionSetback = wx.Slider(panelTranscriber, -1, TransanaGlobal.configData.transcriptionSetback, 0, 5, style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblTranscriptionSetback, 3)
-            lay.left.SameAs(panelTranscriber, wx.Left, 10)
-            lay.right.SameAs(panelTranscriber, wx.Right, 10)
-            lay.height.AsIs()
-            self.transcriptionSetback.SetConstraints(lay)
+            self.transcriptionSetback = wx.Slider(panelTranscriber, -1, TransanaGlobal.configData.transcriptionSetback, 0, 5,
+                                                  style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
+            # Add the element to the Panel Sizer
+            panelTranSizer.Add(self.transcriptionSetback, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
+            # Create a Row Sizer
+            setbackSizer = wx.BoxSizer(wx.HORIZONTAL)
+            # Add a spacer so the numbers are positioned correctly
+            setbackSizer.Add((11, 0))
             # Add the Video Setback "0" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetbackMin = wx.StaticText(panelTranscriber, -1, "0", style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.transcriptionSetback, 2)
-            lay.left.SameAs(self.transcriptionSetback, wx.Left, 7)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblTranscriptionSetbackMin.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            setbackSizer.Add(lblTranscriptionSetbackMin, 0)
+            # Add a spacer
+            setbackSizer.Add((1, 0), 1, wx.EXPAND)
 
             # Add the Video Setback "1" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetback1 = wx.StaticText(panelTranscriber, -1, "1", style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.transcriptionSetback, 2)
-            # The "1" position is 20% of the way between 0 and 5.  However, 23% looks better on Windows.
-            lay.left.PercentOf(self.transcriptionSetback, wx.Width, 23)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblTranscriptionSetback1.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            setbackSizer.Add(lblTranscriptionSetback1, 0)
+            # Add a spacer
+            setbackSizer.Add((1, 0), 1, wx.EXPAND)
 
             # Add the Video Setback "2" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetback2 = wx.StaticText(panelTranscriber, -1, "2", style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.transcriptionSetback, 2)
-            # The "2" position is 40% of the way between 0 and 5.  However, 42% looks better on Windows.
-            lay.left.PercentOf(self.transcriptionSetback, wx.Width, 42)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblTranscriptionSetback2.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            setbackSizer.Add(lblTranscriptionSetback2, 0)
+            # Add a spacer
+            setbackSizer.Add((1, 0), 1, wx.EXPAND)
 
             # Add the Video Setback "3" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetback3 = wx.StaticText(panelTranscriber, -1, "3", style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.transcriptionSetback, 2)
-            # The "3" position is 60% of the way between 0 and 5.  However, 61% looks better on Windows.
-            lay.left.PercentOf(self.transcriptionSetback, wx.Width, 61)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblTranscriptionSetback3.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            setbackSizer.Add(lblTranscriptionSetback3, 0)
+            # Add a spacer
+            setbackSizer.Add((1, 0), 1, wx.EXPAND)
 
             # Add the Video Setback "4" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetback4 = wx.StaticText(panelTranscriber, -1, "4", style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.transcriptionSetback, 2)
-            # The "4" position is 80% of the way between 0 and 5.
-            lay.left.PercentOf(self.transcriptionSetback, wx.Width, 80)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblTranscriptionSetback4.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            setbackSizer.Add(lblTranscriptionSetback4, 0)
+            # Add a spacer
+            setbackSizer.Add((1, 0), 1, wx.EXPAND)
 
             # Add the Video Setback "5" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetbackMax = wx.StaticText(panelTranscriber, -1, "5", style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.transcriptionSetback, 2)
-            lay.right.SameAs(self.transcriptionSetback, wx.Right, 7)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblTranscriptionSetbackMax.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            setbackSizer.Add(lblTranscriptionSetbackMax, 0)
+            # Add a spacer so the values are positioned correctly
+            setbackSizer.Add((9, 0))
+
+            # Add the Row Sizer to the Panel Sizer
+            panelTranSizer.Add(setbackSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
             # On Windows, we can use a number of different media players.  There are trade-offs.
-            #   wx.media.MEDIABACKEND_DIRECTSHOW allows speed adjustment, but not WMV or WMA formats.
+            #   wx.media.MEDIABACKEND_DIRECTSHOW allows speed adjustment, but not WMV or WMA formats (at least on XP).
             #   wx.media.MEDIABACKEND_WMP10 allows WMV and WMA formats, but speed adjustment is broken.
             # Let's allow the user to select which back end to use!
-            # This option is Windows 2000 / XP only, but NOT VISTA!!!!!!  (sys.getwindowsversion()[0] of 5 = XP / 2K, 6 = Vista)
-            if ('wxMSW' in wx.PlatformInfo) and (sys.getwindowsversion()[0] < 6):
+            if ('wxMSW' in wx.PlatformInfo):
                 # Add the Media Player Option Label to the Transcriber Settings Tab
                 lblMediaPlayer = wx.StaticText(panelTranscriber, -1, _("Media Player Selection"), style=wx.ST_NO_AUTORESIZE)
-                lay = wx.LayoutConstraints()
-                lay.top.Below(lblTranscriptionSetbackMin, 10)
-                lay.left.SameAs(panelTranscriber, wx.Left, 10)
-                lay.width.AsIs()
-                lay.height.AsIs()
-                lblMediaPlayer.SetConstraints(lay)
+                # Add the element to the Panel Sizer
+                panelTranSizer.Add(lblMediaPlayer, 0, wx.LEFT | wx.TOP, 10)
+                # Add a spacer
+                panelTranSizer.Add((0, 3))
 
                 # Add the Media Player Option to the Transcriber Settings Tab
                 self.chMediaPlayer = wx.Choice(panelTranscriber, -1,
-                                               choices = [_('Enable WMV and WMA formats, disable speed control for some formats'),
-                                                          _('Disable WMV and WMA formats, enable speed control for more formats')])
+                                               choices = [_('Windows Media Player back end'),
+                                                          _('DirectShow back end')])
                 self.chMediaPlayer.SetSelection(TransanaGlobal.configData.mediaPlayer)
-                lay = wx.LayoutConstraints()
-                lay.top.Below(lblMediaPlayer, 3)
-                lay.left.SameAs(panelTranscriber, wx.Left, 10)
-                lay.width.AsIs()
-                lay.height.AsIs()
-                self.chMediaPlayer.SetConstraints(lay)
-
-                nextLabelPositioner = self.chMediaPlayer
-            else:
-                nextLabelPositioner = lblTranscriptionSetbackMin
+                # Add the element to the Panel Sizer
+                panelTranSizer.Add(self.chMediaPlayer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
                 
-
+            # Create a Row Sizer
+            lblSpeedSizer = wx.BoxSizer(wx.HORIZONTAL)
             # Add the Video Speed Slider Label to the Transcriber Settings Tab
             lblVideoSpeed = wx.StaticText(panelTranscriber, -1, _("Video Playback Speed"), style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(nextLabelPositioner, 10)
-            lay.left.SameAs(panelTranscriber, wx.Left, 10)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblVideoSpeed.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            lblSpeedSizer.Add(lblVideoSpeed, 0)
+            # Add a spacer
+            lblSpeedSizer.Add((1, 0), 1, wx.EXPAND)
+
+            # Screen elements get a bit out of order here!  We put the CURRENT VALUE of the slider above the slider.
+            # We'll use the order of adding things to sizers to get around the logic problems this presents.
 
             # Add the Video Speed Slider to the Transcriber Settings Tab
-            self.videoSpeed = wx.Slider(panelTranscriber, -1, TransanaGlobal.configData.videoSpeed, 1, 20, style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblVideoSpeed, 3)
-            lay.left.SameAs(panelTranscriber, wx.Left, 10)
-            lay.right.SameAs(panelTranscriber, wx.Right, 10)
-            lay.height.AsIs()
-            self.videoSpeed.SetConstraints(lay)
+            self.videoSpeed = wx.Slider(panelTranscriber, -1, TransanaGlobal.configData.videoSpeed, 1, 20,
+                                        style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
 
             # Add the Video Speed Slider Current Setting Label to the Transcriber Settings Tab
             self.lblVideoSpeedSetting = wx.StaticText(panelTranscriber, -1, "%1.1f" % (float(self.videoSpeed.GetValue()) / 10))
-            lay = wx.LayoutConstraints()
-            lay.top.Below(nextLabelPositioner, 15)
-            lay.right.SameAs(panelTranscriber, wx.Right, 10)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            self.lblVideoSpeedSetting.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            lblSpeedSizer.Add(self.lblVideoSpeedSetting, 0, wx.ALIGN_RIGHT)
+
+            # Add the LABEL Row Sizer to the Panel Sizer
+            panelTranSizer.Add(lblSpeedSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10)
+            # Add a spacer
+            panelTranSizer.Add((0, 3))
+            # Add the ELEMENT (Control) to the Panel Sizer
+            panelTranSizer.Add(self.videoSpeed, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
             # Define the Scroll Event for the Slider to keep the Current Setting Label updated
             wx.EVT_SCROLL(self, self.OnScroll)
 
+            # Create a Row Sizer
+            speedSizer = wx.BoxSizer(wx.HORIZONTAL)
+            # Add a spacer so the values are positioned correctly
+            speedSizer.Add((6, 0))
             # Add the Video Speed Slider Minimum Speed Label to the Transcriber Settings Tab
             lblVideoSpeedMin = wx.StaticText(panelTranscriber, -1, "0.1", style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.videoSpeed, 2)
-            lay.left.SameAs(self.videoSpeed, wx.Left, 0)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblVideoSpeedMin.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            speedSizer.Add(lblVideoSpeedMin, 0)
+            # Add a spacer
+            speedSizer.Add((1, 0), 8, wx.EXPAND)
 
             # Add the Video Speed Slider Normal Speed Label to the Transcriber Settings Tab
             lblVideoSpeed1 = wx.StaticText(panelTranscriber, -1, "1.0", style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.videoSpeed, 2)
-            # The "center" (1.0) position is 47% (9 / 19) of the way between 0.1 and 2.0.  However, 48% looks better on Windows.
-            lay.left.PercentOf(self.videoSpeed, wx.Width, 48)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblVideoSpeed1.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            speedSizer.Add(lblVideoSpeed1, 0)
+            # Add a spacer
+            speedSizer.Add((1, 0), 9, wx.EXPAND)
 
             # Add the Video Speed Slider Maximum Speed Label to the Transcriber Settings Tab
             lblVideoSpeedMax = wx.StaticText(panelTranscriber, -1, "2.0", style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.videoSpeed, 2)
-            lay.right.SameAs(self.videoSpeed, wx.Right, 0)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblVideoSpeedMax.SetConstraints(lay)
+            # Add the element to the Row Sizer
+            speedSizer.Add(lblVideoSpeedMax, 0)
+            # Add a spacer so the values are positioned properly
+            speedSizer.Add((4, 0))
 
-            # Add Tab Size
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblVideoSpeedMin, 10)
-            lay.left.SameAs(panelTranscriber, wx.Left, 10)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblTabSize = wx.StaticText(panelTranscriber, -1, _("Tab Size"))
-            lblTabSize.SetConstraints(lay)
+            # Add the Row Sizer to the Panel Sizer
+            panelTranSizer.Add(speedSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
-            # Tab Size Box
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblTabSize, 3)
-            lay.left.SameAs(lblTabSize, wx.Left, 0)
-            lay.right.PercentOf(panelTranscriber, wx.Width, 25)
-            lay.height.AsIs()
-            self.tabSize = wx.Choice(panelTranscriber, -1, choices=['0', '2', '4', '6', '8', '10', '12', '14', '16', '18', '20'])
-            self.tabSize.SetConstraints(lay)
+            # Create a Row Sizer
+            fontSizer = wx.BoxSizer(wx.HORIZONTAL)
 
-            # Set the value to the default value provided by the Configuration Data
-            self.tabSize.SetStringSelection(TransanaGlobal.configData.tabSize)
+            # STC needs the Tab Size setting.  RTC does not support it.
+            if not TransanaConstants.USESRTC:
+                # Create an Element Sizer
+                v1 = wx.BoxSizer(wx.VERTICAL)
 
+                # Add Tab Size
+                lblTabSize = wx.StaticText(panelTranscriber, -1, _("Tab Size"))
+                # Add the element to the element Sizer
+                v1.Add(lblTabSize, 0, wx.BOTTOM, 3)
+
+                # Tab Size Box
+                self.tabSize = wx.Choice(panelTranscriber, -1, choices=['0', '2', '4', '6', '8', '10', '12', '14', '16', '18', '20'])
+                # Add the element to the element Sizer
+                v1.Add(self.tabSize, 0, wx.EXPAND | wx.RIGHT, 10)
+
+                # Add the element Sizer to the Row Sizer
+                fontSizer.Add(v1, 1, wx.EXPAND)
+
+                # Set the value to the default value provided by the Configuration Data
+                self.tabSize.SetStringSelection(TransanaGlobal.configData.tabSize)
+
+            # Create an Element Sizer
+            v2 = wx.BoxSizer(wx.VERTICAL)
             # Add Default Transcript Font
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblVideoSpeedMin, 10)
-            lay.left.PercentOf(panelTranscriber, wx.Width, 30)
-            lay.width.AsIs()
-            lay.height.AsIs()
             lblDefaultFont = wx.StaticText(panelTranscriber, -1, _("Default Font"))
-            lblDefaultFont.SetConstraints(lay)
+            # Add the label to the element Sizer
+            v2.Add(lblDefaultFont, 0, wx.BOTTOM, 3)
 
             # We need to figure out what options we have for the default font.
             # First, let's get a list of all available fonts.
@@ -432,54 +389,66 @@ class OptionsSettings(wx.Dialog):
                 choicelist.append(font.GetFaceName())
                    
             # Default Font Combo Box
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblDefaultFont, 3)
-            lay.left.SameAs(lblDefaultFont, wx.Left, 0)
-            lay.right.PercentOf(panelTranscriber, wx.Width, 70)
-            lay.height.AsIs()
             self.defaultFont = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN | wx.CB_SORT)
-            self.defaultFont.SetConstraints(lay)
+            # Add the element to the element Sizer
+            v2.Add(self.defaultFont, 0, wx.EXPAND | wx.RIGHT, 10)
 
             # Set the value to the default value provided by the Configuration Data
             self.defaultFont.SetValue(TransanaGlobal.configData.defaultFontFace)
 
+            # Add the element Sizer to the Row Sizer
+            fontSizer.Add(v2, 3, wx.EXPAND)
+
+            # Create an Element Sizer
+            v3 = wx.BoxSizer(wx.VERTICAL)
             # Add Default Transcript Font Size
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblVideoSpeedMin, 10)
-            lay.left.PercentOf(panelTranscriber, wx.Width, 75)
-            lay.width.AsIs()
-            lay.height.AsIs()
             lblDefaultFontSize = wx.StaticText(panelTranscriber, -1, _("Default Font Size"))
-            lblDefaultFontSize.SetConstraints(lay)
+            # Add the label to the element Sizer
+            v3.Add(lblDefaultFontSize, 0, wx.BOTTOM, 3)
 
             # Set up the list of choices
             choicelist = ['8', '10', '11', '12', '14', '16', '20']
                    
             # Default Font Combo Box
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblDefaultFont, 3)
-            lay.left.SameAs(lblDefaultFontSize, wx.Left, 0)
-            lay.right.SameAs(panelTranscriber, wx.Right, 10)
-            lay.height.AsIs()
             self.defaultFontSize = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN)
-            self.defaultFontSize.SetConstraints(lay)
+            # Add the element to the element Sizer
+            v3.Add(self.defaultFontSize, 0, wx.EXPAND)
 
             # Set the value to the default value provided by the Configuration Data
             self.defaultFontSize.SetValue(str(TransanaGlobal.configData.defaultFontSize))
 
-            # Word Wrap checkbox
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.tabSize, 10)
-            lay.left.SameAs(panelTranscriber, wx.Left, 10)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            self.cbWordWrap = wx.CheckBox(panelTranscriber, -1, _("Word Wrap") + "  ", style=wx.ALIGN_RIGHT)
-            self.cbWordWrap.SetConstraints(lay)
+            # Add the element sizer to the Row Sizer
+            fontSizer.Add(v3, 2, wx.EXPAND)
+
+            # Add the Row Sizer to the Panel Sizer
+            panelTranSizer.Add(fontSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10)
+
+            # Create a Row Sizer
+            checkboxSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # STC needs the Word Wrap setting.  RTC does not support it.
+            if not TransanaConstants.USESRTC:
+                # Word Wrap checkbox  NOT SUPPORTED BY RICH TEXT CTRL!!
+                self.cbWordWrap = wx.CheckBox(panelTranscriber, -1, _("Word Wrap") + "  ", style=wx.ALIGN_RIGHT)
+                # Add the element to the Row Sizer
+                checkboxSizer.Add(self.cbWordWrap, 0)
+                # Set the value to the configured value for Word Wrap
+                self.cbWordWrap.SetValue((TransanaGlobal.configData.wordWrap == stc.STC_WRAP_WORD))
+                # Add a spacer to the sizer
+                checkboxSizer.Add((10, 0))
+
+            # Auto Save checkbox
+            self.cbAutoSave = wx.CheckBox(panelTranscriber, -1, _("Auto Save (10 min)") + "  ", style=wx.ALIGN_RIGHT)
+            # Add the element to the Row Sizer
+            checkboxSizer.Add(self.cbAutoSave, 0)
             # Set the value to the configured value for Word Wrap
-            self.cbWordWrap.SetValue((TransanaGlobal.configData.wordWrap == stc.STC_WRAP_WORD))
-            
+            self.cbAutoSave.SetValue((TransanaGlobal.configData.autoSave))
+
+            # Add the row sizer to the panel sizer
+            panelTranSizer.Add(checkboxSizer, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
 
             # Tell the Transcriber Panel to lay out now and do AutoLayout
+            panelTranscriber.SetSizer(panelTranSizer)
             panelTranscriber.SetAutoLayout(True)
             panelTranscriber.Layout()
 
@@ -488,43 +457,35 @@ class OptionsSettings(wx.Dialog):
             # Add the Message Server Tab to the Notebook
             panelMessageServer = wx.Panel(notebook, -1, size=notebook.GetSizeTuple(), name='OptionsSettings.MessageServerPanel')
             
+            # Define the main VERTICAL sizer for the Notebook Page
+            panelMsgSizer = wx.BoxSizer(wx.VERTICAL)
+            
             # Add the Message Server Label to the Message Server Tab
             lblMessageServer = wx.StaticText(panelMessageServer, -1, _("Transana-MU Message Server Host Name"), style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.SameAs(panelMessageServer, wx.Top, 20)
-            lay.left.SameAs(panelMessageServer, wx.Left, 10)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblMessageServer.SetConstraints(lay)
+            # Add the label to the Panel Sizer
+            panelMsgSizer.Add(lblMessageServer, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+            # Add a spacer
+            panelMsgSizer.Add((0, 3))
             
             # Add the Message Server TextCtrl to the Message Server Tab
             self.messageServer = wx.TextCtrl(panelMessageServer, -1, TransanaGlobal.configData.messageServer)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblMessageServer, 3)
-            lay.left.SameAs(panelMessageServer, wx.Left, 10)
-            lay.right.SameAs(panelMessageServer, wx.Right, 10)
-            lay.height.AsIs()
-            self.messageServer.SetConstraints(lay)
+            # Add the element to the Panel Sizer
+            panelMsgSizer.Add(self.messageServer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
             # Add the Message Server Port Label to the Message Server Tab
             lblMessageServerPort = wx.StaticText(panelMessageServer, -1, _("Port"), style=wx.ST_NO_AUTORESIZE)
-            lay = wx.LayoutConstraints()
-            lay.top.Below(self.messageServer, 20)
-            lay.left.SameAs(panelMessageServer, wx.Left, 10)
-            lay.width.AsIs()
-            lay.height.AsIs()
-            lblMessageServerPort.SetConstraints(lay)
+            # Add the label to the Panel Sizer
+            panelMsgSizer.Add(lblMessageServerPort, 0, wx.LEFT | wx.RIGHT, 10)
+            # Add a spacer
+            panelMsgSizer.Add((0, 3))
             
             # Add the Message Server Port TextCtrl to the Message Server Tab
             self.messageServerPort = wx.TextCtrl(panelMessageServer, -1, str(TransanaGlobal.configData.messageServerPort))
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblMessageServerPort, 3)
-            lay.left.SameAs(panelMessageServer, wx.Left, 10)
-            lay.width.Absolute(50)
-            lay.height.AsIs()
-            self.messageServerPort.SetConstraints(lay)
+            # Add the element to the Panel Sizer
+            panelMsgSizer.Add(self.messageServerPort, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
             # Tell the Message Server Panel to lay out now and do AutoLayout
+            panelMessageServer.SetSizer(panelMsgSizer)
             panelMessageServer.SetAutoLayout(True)
             panelMessageServer.Layout()
       
@@ -558,33 +519,28 @@ class OptionsSettings(wx.Dialog):
             # ... the Message Server field should recieve initial focus
             self.messageServer.SetFocus()
 
+        # Create a Row Sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add a spacer
+        btnSizer.Add((1, 0), 1, wx.EXPAND)
         # Define the buttons on the bottom of the form
         # Define the "OK" Button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(notebook, 3)
-        lay.width.Absolute(85)
-        lay.left.SameAs(self, wx.Right, -268)
-        lay.bottom.SameAs(self, wx.Bottom, 0)
         btnOK = wx.Button(self, -1, _('OK'))
-        btnOK.SetConstraints(lay)
+        # Add the Button to the Row Sizer
+        btnSizer.Add(btnOK, 0, wx.RIGHT, 10)
 
         # Define the Cancel Button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(notebook, 3)
-        lay.width.Absolute(85)
-        lay.left.RightOf(btnOK, 6)
-        lay.bottom.SameAs(self, wx.Bottom, 0)
         btnCancel = wx.Button(self, -1, _('Cancel'))
-        btnCancel.SetConstraints(lay)
+        # Add the Button to the Row Sizer
+        btnSizer.Add(btnCancel, 0, wx.RIGHT, 10)
 
         # Define the Help Button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(notebook, 3)
-        lay.width.Absolute(85)
-        lay.left.RightOf(btnCancel, 6)
-        lay.bottom.SameAs(self, wx.Bottom, 0)
         btnHelp = wx.Button(self, -1, _('Help'))
-        btnHelp.SetConstraints(lay)
+        # Add the Button to the Row Sizer
+        btnSizer.Add(btnHelp, 0)
+
+        # Add the Row Sizer to the main form sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 3)
 
         # Attach events to the Buttons
         wx.EVT_BUTTON(self, btnOK.GetId(), self.OnOK)
@@ -595,9 +551,18 @@ class OptionsSettings(wx.Dialog):
         notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChange)
 
         # Lay out the Window, and tell it to Auto Layout
-        self.Layout()
+        self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
+        self.Layout()
         self.CenterOnScreen()
+
+        # Get the form's current size
+        (width, height) = self.GetSize()
+        # Set the current size as the minimum size
+        self.SetSizeHints(width, height)
+
+        # Make OK the Default Button
+        self.SetDefaultItem(btnOK)
         # Show the newly created Window as a modal dialog
         self.ShowModal()
 
@@ -669,19 +634,25 @@ class OptionsSettings(wx.Dialog):
             # Update the Global Transcription Setback
             TransanaGlobal.configData.transcriptionSetback = self.transcriptionSetback.GetValue()
             # If on Windows ...
-            if ('wxMSW' in wx.PlatformInfo) and (sys.getwindowsversion()[0] < 6):
+            if ('wxMSW' in wx.PlatformInfo):
                 # Update the Media Player selection
                 TransanaGlobal.configData.mediaPlayer = self.chMediaPlayer.GetSelection()
             # Update the Global Video Speed
             TransanaGlobal.configData.videoSpeed = self.videoSpeed.GetValue()
-            # Update the tab size
-            TransanaGlobal.configData.tabSize = self.tabSize.GetStringSelection()
-            # Update the Word Wrap setting
-            if self.cbWordWrap.GetValue():
-                wordWrapValue = stc.STC_WRAP_WORD
-            else:
-                wordWrapValue = stc.STC_WRAP_NONE
-            TransanaGlobal.configData.wordWrap = wordWrapValue
+
+            # STC needs the Tab Size and Word Wrap settings.  RTC does not support them.
+            if not TransanaConstants.USESRTC:
+                # Update the tab size
+                TransanaGlobal.configData.tabSize = self.tabSize.GetStringSelection()
+                # Update the Word Wrap setting
+                if self.cbWordWrap.GetValue():
+                    wordWrapValue = stc.STC_WRAP_WORD
+                else:
+                    wordWrapValue = stc.STC_WRAP_NONE
+                # Update the Word Wrap value in the configuration system
+                TransanaGlobal.configData.wordWrap = wordWrapValue
+            # Update the Auto Save value
+            TransanaGlobal.configData.autoSave = self.cbAutoSave.GetValue()
             # Update the Global Default Font
             TransanaGlobal.configData.defaultFontFace = self.defaultFont.GetValue()
             # Update the Global Default Font Size

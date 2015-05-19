@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -106,7 +106,7 @@ class Help(object):
         # we can change the size of the Help Window.  Yea!
         if parent != None:
             # Get the size of the screen
-            rect = wx.ClientDisplayRect()
+            rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
             # Set the top to 10% of the screen height
             top = int(0.1 * rect[3])
             # Set the height so that the top and bottom will have equal boundaries

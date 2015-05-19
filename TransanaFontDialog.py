@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -36,6 +36,8 @@ if __name__ == '__main__':
     # This module expects i18n.  Enable it here.
     __builtins__._ = wx.GetTranslation
 
+# Import Transana's Constants
+import TransanaConstants
 # import the TransanaGlobal variables
 import TransanaGlobal
 
@@ -62,6 +64,8 @@ class TransanaFontDef(object):
         self._fontUnderline = tfd_OFF    # Options are tfd_OFF, tfd_UNDERLINE, tfd_AMBIGUOUS
         self._fontColorName = None
         self._fontColorDef = None
+        self._backgroundColorName = None
+        self._backgroundColorDef = None
 
     def __repr__(self):
         """ String Representation of the contents of the TransanaFontDef object """
@@ -99,7 +103,9 @@ class TransanaFontDef(object):
             st += 'ILLEGAL SETTING "%s"' % self.fontUnderline
         st += '\n'
         st += 'fontColorName: %s\n' % self.fontColorName
-        st += 'fontColorDef: %s\n\n' % (self.fontColorDef,)
+        st += 'fontColorDef: %s\n' % (self.fontColorDef,)
+        st += 'backgroundColorName: %s\n' % self.backgroundColorName
+        st += 'backgroundColorDef: %s\n\n' % (self.backgroundColorDef,)
         return st
 
     def copy(self):
@@ -114,6 +120,7 @@ class TransanaFontDef(object):
         tfdCopy.fontUnderline = self.fontUnderline
         # We don't need to copy fontColorName.  Copying fontColorDef will take care of it.
         tfdCopy.fontColorDef = self.fontColorDef
+        tfdCopy.backgroundColorDef = self.backgroundColorDef
         # Return the new Object
         return tfdCopy
 
@@ -177,10 +184,6 @@ class TransanaFontDef(object):
     def _getFontColorDef(self):
         return self._fontColorDef
     def _setFontColorDef(self, fontColorDef):
-
-        if DEBUG:
-            print "Setting", fontColorDef
-
         self._fontColorDef = fontColorDef
         # Set fontColorName to match fontColorDef
         for (colorName, colorDef) in TransanaGlobal.transana_textColorList:
@@ -191,6 +194,33 @@ class TransanaFontDef(object):
         self._fontColorDef = None
         self._fontColorName = None
 
+    def _getBackgroundColorName(self):
+        return self._backgroundColorName
+    def _setBackgroundColorName(self, backgroundColorName):
+        if backgroundColorName in TransanaGlobal.transana_colorNameList:
+            self._backgroundColorName = fontColorName
+            # Set backgroundColorDef to match fontColorName
+            for (colorName, colorDef) in TransanaGlobal.transana_textColorList:
+                if colorName == fontColorName:
+                    self._backgroundColorDef = wx.Colour(colorDef[0], colorDef[1], colorDef[2])
+                    break
+    def _delBackgroundColorName(self):
+        self._backgroundColorName = None
+        self._backgroundColorDef = None
+
+    def _getBackgroundColorDef(self):
+        return self._backgroundColorDef
+    def _setBackgroundColorDef(self, backgroundColorDef):
+        self._backgroundColorDef = backgroundColorDef
+        # Set backgroundColorName to match backgroundColorDef
+        for (colorName, colorDef) in TransanaGlobal.transana_textColorList:
+            if colorDef == backgroundColorDef:
+                self._backgroundColorName = colorName
+                break
+    def _delBackgroundColorDef(self):
+        self._backgroundColorDef = None
+        self._backgroundColorName = None
+
     # Public properties
     fontFace      = property(_getFontFace,      _setFontFace,      _delFontFace,      """ Font Face """)
     fontSize      = property(_getFontSize,      _setFontSize,      _delFontSize,      """ Font Size """)
@@ -199,13 +229,15 @@ class TransanaFontDef(object):
     fontUnderline = property(_getFontUnderline, _setFontUnderline, _delFontUnderline, """ Font Underline [tfd_OFF (0), tfd_UNDERLINE (1), tfd_AMBIGUOUS (2)] """)
     fontColorName = property(_getFontColorName, _setFontColorName, _delFontColorName, """ Font Color Name """)
     fontColorDef  = property(_getFontColorDef,  _setFontColorDef,  _delFontColorDef,  """ Font Color Definition """)
+    backgroundColorName = property(_getBackgroundColorName, _setBackgroundColorName, _delBackgroundColorName, """ Background Color Name """)
+    backgroundColorDef  = property(_getBackgroundColorDef,  _setBackgroundColorDef,  _delBackgroundColorDef,  """ Background Color Definition """)
     
 
 class TransanaFontDialog(wx.Dialog):
     """ Transana's custom Font Dialog Box.  Pass in a wxFontData object (to maintain compatability with the wxFontDialog) or
         a TransanaFontDef object to allow for ambiguity in the font specification.  """
     
-    def __init__(self, parent, fontData, sampleText='AaBbCc ... XxYyZz'):
+    def __init__(self, parent, fontData, bgColor=wx.Colour(255, 255, 255), sampleText='AaBbCc ... XxYyZz'):
         """ Initialize the Font Dialog Box.  fontData can either be a wxFontData object or a TransanaFontDef object.
             Use a TransanaFontDef object if some values are ambiguous due to conflicting settings in the selected text.  """
         # Set the initial font data values, depending on the type of object passed in.
@@ -235,8 +267,9 @@ class TransanaFontDialog(wx.Dialog):
             else:
                 self.font.fontUnderline = tfd_OFF
             # Let's pull out a local copy of the font color to manipulate
-            self.currentColor = self.fontData.GetColour()
+            self.currentColor = fontData.GetColour()
             self.font.fontColorDef = fontData.GetColour()
+            self.font.backgroundColorDef = bgColor
         elif type(fontData) == type(TransanaFontDef()):
             self.font = fontData
             # TransanaFontData may have undefined data, where wxFontData is always known.
@@ -271,6 +304,7 @@ class TransanaFontDialog(wx.Dialog):
             else:
                 fontUnderline = False
             self.currentColor = self.font.fontColorDef
+            self.font.backgroundColor = bgColor
             # Create the appropriate wx.Font object
             self.currentFont = wx.Font(fontSize, wx.FONTFAMILY_DEFAULT, style=fontStyle, weight=fontWeight, underline=fontUnderline, faceName=fontFace)
             # now that we have a wx.Font object, let's create a wx.FontData object
@@ -377,7 +411,7 @@ class TransanaFontDialog(wx.Dialog):
         # Add the boxSize sizer to the boxTop sizer
         boxTop.Add(boxSize, 3, wx.ALIGN_RIGHT | wx.EXPAND | wx.GROW)
         # Add the boxTop sizer to the main box sizer
-        box.Add(boxTop, 4, wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.EXPAND | wx.GROW | wx.ALL, 10)
+        box.Add(boxTop, 3, wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.EXPAND | wx.GROW | wx.ALL, 10)
 
         # Create the boxMiddle sizer, which will hold the boxStyle and boxSample sizers
         boxMiddle = wx.BoxSizer(wx.HORIZONTAL)
@@ -450,6 +484,7 @@ class TransanaFontDialog(wx.Dialog):
         # Default to Black, if the original color isn't included in the list.
         # NOTE:  This dialog will only support the colors in this list at this point.
         initialColor = _('Black')
+        initialBgColor = _('White')
         # Iterate through the list of colors ...
         for (color, colDef) in self.colorList:
             # ... adding each color name to the list of what should be displayed ...
@@ -458,6 +493,8 @@ class TransanaFontDialog(wx.Dialog):
             if colDef == self.font.fontColorDef:
                 # If the current color matches a color in the list, remember it's name.
                 initialColor = _(color)
+            if colDef == self.font.backgroundColorDef:
+                initialBgColor = _(color)
 
         # Now create a Choice box listing all the colors in the color list
         self.cbColor = wx.Choice(self, -1, choices=choiceList)
@@ -466,6 +503,25 @@ class TransanaFontDialog(wx.Dialog):
             self.cbColor.SetStringSelection(initialColor)
         self.cbColor.Bind(wx.EVT_CHOICE, self.OnCbColorChange)
         boxStyle.Add(self.cbColor, 1, wx.ALIGN_LEFT | wx.ALIGN_BOTTOM)
+
+        # If we are using the Rich Text Control, which supports background colors ...
+        if TransanaConstants.USESRTC:
+
+            boxStyle.Add((0, 10))  # Spacer
+
+            # Add a label for Color
+            lblBgColor = wx.StaticText(self, -1, _('Background Color:'))
+            boxStyle.Add(lblBgColor, 0, wx.ALIGN_LEFT | wx.ALIGN_TOP)
+            boxStyle.Add((0, 5))  # Spacer
+
+            # Now create a Choice box listing all the colors in the color list
+            self.cbBgColor = wx.Choice(self, -1, choices=choiceList)
+            # Set the initial value of the Choice box to the default value determined above.
+            if self.font.backgroundColorName != None:
+                self.cbBgColor.SetStringSelection(initialBgColor)
+            self.cbBgColor.Bind(wx.EVT_CHOICE, self.OnCbColorChange)
+            boxStyle.Add(self.cbBgColor, 1, wx.ALIGN_LEFT | wx.ALIGN_BOTTOM)
+
 
         # Add the boxStyle sizer to the boxMiddle sizer
         boxMiddle.Add(boxStyle, 1, wx.ALIGN_LEFT | wx.RIGHT, 10)
@@ -482,7 +538,7 @@ class TransanaFontDialog(wx.Dialog):
         # We'll use a Panel for the sample text, painting directly on its Device Context.  The TextCtrl 
         # on the Mac can't handle all we need it to for this task.
         self.txtSample = wx.Panel(self, -1, style=wx.SIMPLE_BORDER)
-        self.txtSample.SetBackgroundColour(wx.NamedColour('white'))
+        self.txtSample.SetBackgroundColour(self.font.backgroundColorDef)
         boxSample.Add(self.txtSample, 1, wx.ALIGN_RIGHT | wx.EXPAND | wx.GROW) 
 
         # Add the boxSample sizer to the boxMiddle sizer
@@ -559,7 +615,7 @@ class TransanaFontDialog(wx.Dialog):
         return self.fontData
 
     def GetFontDef(self):
-        """ This method allows the calling routine to access the TransanaFontDef. """
+        """ This method allows the calling routine to access the TransanaFontDef. This includes background color. """
         # If the user pressed "OK", the originalFont has been updated to reflect the changes.
         # Otherwise, it is the unchanged original data.
         return self.originalFont
@@ -578,15 +634,14 @@ class TransanaFontDialog(wx.Dialog):
         self.PrepareDC(cdc)
         # Link the Control Device Context and the BitMap as a BufferedDC
         dc = wx.BufferedDC(cdc, bmp)
-        # If we are displaying white text, let's change the Device Context's background color to make it show up.
-        colorPrompt = _("White")
-        if 'unicode' in wx.PlatformInfo:
-            colorPrompt = unicode(colorPrompt, 'utf8')
-        if self.cbColor.GetStringSelection() == colorPrompt:
-            dc.SetBackground(wx.Brush(wx.Colour(128, 128, 128)))
-        # Otherwise, the Device Context's background should be white.
+        # if the background color is not ambiguous ...
+        if self.font.backgroundColorDef != None:
+            # Set the background Color
+            dc.SetBackground(wx.Brush(self.font.backgroundColorDef))
+        # If the background color is ambiguous ...
         else:
-            dc.SetBackground(wx.Brush(wx.NamedColour("white")))
+            # ... just use White
+            dc.SetBackground(wx.Brush(wx.NamedColour("White")))
         # Clear the Device Context
         dc.Clear()
         # Begin drawing on the Device Context
@@ -831,6 +886,13 @@ class TransanaFontDialog(wx.Dialog):
 
     def OnCbColorChange(self, event):
         """ cbColor Change Event.  Change the font color. """
+        if event.GetId() == self.cbColor.GetId():
+            ctrl = self.cbColor
+        elif event.GetId() == self.cbBgColor.GetId():
+            ctrl = self.cbBgColor
+        else:
+            print "TransanaFontDialog.OnCbColorChange() FAILURE"
+            return
         # Iterate through the color list ...
         for (color, colDef) in self.colorList:
             # ... and find the color that matches the choice box selection.
@@ -838,12 +900,16 @@ class TransanaFontDialog(wx.Dialog):
                 color = unicode(_(color), 'utf8')
             else:
                 color = _(color)
-            if color == self.cbColor.GetStringSelection():
+            if color == ctrl.GetStringSelection():
                 if DEBUG:
                     print "Color set to:", color, colDef
-                # When you have a match, use that color's definition as the current color.
-                self.currentColor = wx.Colour(colDef[0], colDef[1], colDef[2])
-                self.font.fontColorDef = wx.Colour(colDef[0], colDef[1], colDef[2])
+                if event.GetId() == self.cbColor.GetId():
+                    # When you have a match, use that color's definition as the current color.
+                    self.currentColor = wx.Colour(colDef[0], colDef[1], colDef[2])
+                    self.font.fontColorDef = wx.Colour(colDef[0], colDef[1], colDef[2])
+                elif event.GetId() == self.cbBgColor.GetId():
+                    self.bgColor = wx.Colour(colDef[0], colDef[1], colDef[2])
+                    self.font.backgroundColorDef = wx.Colour(colDef[0], colDef[1], colDef[2])
                 # Update the Font Sample 
                 self.SetSampleFont()
 

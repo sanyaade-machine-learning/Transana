@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -18,10 +18,14 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case, Rajas Sambhare'
 
+# import Python's cStringIO module for fast string processing
+import cStringIO
 # Import Python os module
 import os
 # Import Python sys module
 import sys
+# import Python time module
+import time
 # Import Python's gettext module
 import gettext
 # import python's webbrowser module
@@ -54,17 +58,25 @@ import OptionsSettings
 import TransanaConstants
 # Import Transana Globals
 import TransanaGlobal
-# Import the Transcript Printing Module
-import TranscriptPrintoutClass
+if TransanaConstants.USESRTC:
+    import wx.richtext as richtext
+    # Import the RTC-based RichTextEditCtrl, needed for printing
+    import RichTextEditCtrl_RTC
+else:
+    # Import the Transcript Printing Module
+    import TranscriptPrintoutClass
 # ONLY if we're using the Multi-user version ...
 if not TransanaConstants.singleUserVersion:
     # ... import Transana's ChatWindow
     import ChatWindow
 # import Transana Record Lock Utility
 import RecordLock
+# import Media Conversion Tool
+import MediaConvert
 
 # Language-specific labels for the different languages.  
 ENGLISH_LABEL = 'English'
+ARABIC_LABEL = 'Arabic'
 DANISH_LABEL = 'Dansk'
 GERMAN_LABEL = 'Deutsch'
 GREEK_LABEL = 'English prompts, Greek data'
@@ -77,6 +89,7 @@ if 'unicode' in wx.PlatformInfo:
     FRENCH_LABEL = u'Fran\u00e7ais'
 else:
     FRENCH_LABEL = 'Francais'
+HEBREW_LABEL = 'Hebrew'
 ITALIAN_LABEL = 'Italiano'
 DUTCH_LABEL = 'Nederlands'
 if 'unicode' in wx.PlatformInfo:
@@ -86,6 +99,7 @@ else:
     NORWEGIAN_BOKMAL_LABEL = 'Norvegien Bokmal'
     NORWEGIAN_NYNORSK_LABEL = 'Norvegien Ny-norsk'
 POLISH_LABEL = 'Polish'
+PORTUGUESE_LABEL = 'Portuguese'
 if 'unicode' in wx.PlatformInfo:
     RUSSIAN_LABEL = u'\u0420\u0443\u0441\u0441\u043a\u0438\u0439'
 else:
@@ -105,11 +119,10 @@ class MenuWindow(wx.Frame):
         self.ControlObject = None
         # Initialize the height to be used for the Menu Window.
         self.height = TransanaGlobal.menuHeight
-
         # We need to handle the window differently on Windows vs. Mac.
         # First, Windows ...
         if '__WXMSW__' in wx.Platform:
-            screenDims = wx.ClientDisplayRect()
+            screenDims = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
             self.left = screenDims[0]
             self.top = screenDims[1]
             self.width = screenDims[2]
@@ -129,10 +142,16 @@ class MenuWindow(wx.Frame):
 
         # Linux and who knows what else
         else:
-            screenDims = wx.ClientDisplayRect()
+            screenDims = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+
+            print "MenuWindow.__init__():", screenDims, wx.Display.GetCount()
+            for x in range(wx.Display.GetCount()):
+                d = wx.Display(x)
+                print "Display", x, d.GetClientArea(), d.IsPrimary(), d.GetName()
+            
             self.left = screenDims[0]
             self.top = screenDims[1]
-            self.width = screenDims[2]
+            self.width = min(screenDims[2], 1440)
             self.height = screenDims[3]
             winstyle = wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION      # | wx.MAXIMIZE
 
@@ -150,12 +169,20 @@ class MenuWindow(wx.Frame):
         self.transcriptWindowLayout = None
         self.dataWindowLayout = None
 
+        # Initialize File Management Window
+        self.fileManagementWindow = None
+
+        # Define the Key Down Event Handler
+        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
+
         # If no language has been specified, request an initial language
         if TransanaGlobal.configData.language == '':
             initialLanguage = self.GetLanguage(self)
 
             if initialLanguage == ENGLISH_LABEL:
                 TransanaGlobal.configData.language = 'en'
+            elif initialLanguage == ARABIC_LABEL:
+                TransanaGlobal.configData.language = 'ar'
             elif initialLanguage == DANISH_LABEL:
                 TransanaGlobal.configData.language = 'da'
             elif initialLanguage == GERMAN_LABEL:
@@ -168,6 +195,8 @@ class MenuWindow(wx.Frame):
                 TransanaGlobal.configData.language = 'fi'
             elif initialLanguage == FRENCH_LABEL:
                 TransanaGlobal.configData.language = 'fr'
+            elif initialLanguage == HEBREW_LABEL:
+                TransanaGlobal.configData.language = 'he'
             elif initialLanguage == ITALIAN_LABEL:
                 TransanaGlobal.configData.language = 'it'
             elif initialLanguage == DUTCH_LABEL:
@@ -178,18 +207,20 @@ class MenuWindow(wx.Frame):
                 TransanaGlobal.configData.language = 'nn'
             elif initialLanguage == POLISH_LABEL:
                 TransanaGlobal.configData.language = 'pl'
+            elif initialLanguage == PORTUGUESE_LABEL:
+                TransanaGlobal.configData.language = 'pt'
             elif initialLanguage == RUSSIAN_LABEL:
                 TransanaGlobal.configData.language = 'ru'
                 # The single-user version on Windows needs to set the proper encoding for Russian.
-                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-                    TransanaGlobal.encoding = 'koi8_r'
+##                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+##                    TransanaGlobal.encoding = 'koi8_r'
             elif initialLanguage == SWEDISH_LABEL:
                 TransanaGlobal.configData.language = 'sv'
             # Chinese
             elif initialLanguage == CHINESE_LABEL:
                 TransanaGlobal.configData.language = 'zh'
-                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-                    TransanaGlobal.encoding = TransanaConstants.chineseEncoding
+##                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+##                    TransanaGlobal.encoding = TransanaConstants.chineseEncoding
 
             # Japanese, and Korean are a special circumstance.  We don't have
             # translations for these languages, but want to be able to allow users to
@@ -199,22 +230,22 @@ class MenuWindow(wx.Frame):
             #
             # NOTE:  There are multiple possible encodings for these languages.  I've picked
             #        these at random.
-            elif initialLanguage == EASTEUROPE_LABEL:
-                TransanaGlobal.configData.language = 'easteurope'
-                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-                    TransanaGlobal.encoding = 'iso8859_2'
-            elif initialLanguage == GREEK_LABEL:
-                TransanaGlobal.configData.language = 'el'
-                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-                    TransanaGlobal.encoding = 'iso8859_7'
-            elif initialLanguage == JAPANESE_LABEL:
-                TransanaGlobal.configData.language = 'ja'
-                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-                    TransanaGlobal.encoding = 'cp932'
-            elif initialLanguage == KOREAN_LABEL:
-                TransanaGlobal.configData.language = 'ko'
-                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-                    TransanaGlobal.encoding = 'cp949'
+##            elif initialLanguage == EASTEUROPE_LABEL:
+##                TransanaGlobal.configData.language = 'easteurope'
+##                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+##                    TransanaGlobal.encoding = 'iso8859_2'
+##            elif initialLanguage == GREEK_LABEL:
+##                TransanaGlobal.configData.language = 'el'
+##                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+##                    TransanaGlobal.encoding = 'iso8859_7'
+##            elif initialLanguage == JAPANESE_LABEL:
+##                TransanaGlobal.configData.language = 'ja'
+##                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+##                    TransanaGlobal.encoding = 'cp932'
+##            elif initialLanguage == KOREAN_LABEL:
+##                TransanaGlobal.configData.language = 'ko'
+##                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+##                    TransanaGlobal.encoding = 'cp949'
 
         # Okay, a few notes on Internationalization (i18n) are called for here.  It gets a little complicated.
         #
@@ -240,6 +271,10 @@ class MenuWindow(wx.Frame):
         # gettext.install('Transana', 'locale', False)
         # Define supported languages for Transana
         self.presLan_en = gettext.translation('Transana', 'locale', languages=['en']) # English
+        # Arabic
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'ar', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.presLan_ar = gettext.translation('Transana', 'locale', languages=['ar']) # Arabic
         # Danish
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'da', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -264,6 +299,10 @@ class MenuWindow(wx.Frame):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'fr', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.presLan_fr = gettext.translation('Transana', 'locale', languages=['fr']) # French
+        # Hebrew
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'he', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.presLan_he = gettext.translation('Transana', 'locale', languages=['he']) # Hebrew
         # Italian
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'it', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -284,6 +323,10 @@ class MenuWindow(wx.Frame):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'pl', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.presLan_pl = gettext.translation('Transana', 'locale', languages=['pl']) # Polish
+        # Portuguese
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'pt', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.presLan_pt = gettext.translation('Transana', 'locale', languages=['pt']) # Portuguese
         # Russian
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'ru', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -311,6 +354,12 @@ class MenuWindow(wx.Frame):
             if (TransanaGlobal.configData.language in ['', 'en', 'easteurope', 'el', 'ja', 'ko']) :
                 lang = wx.LANGUAGE_ENGLISH
                 self.presLan_en.install()
+
+            # Arabic
+            elif (TransanaGlobal.configData.language == 'ar'):
+                outofdateLanguage = 'Arabic'
+                lang = wx.LANGUAGE_ARABIC
+                self.presLan_ar.install()
 
             # Danish
             elif (TransanaGlobal.configData.language == 'da'):
@@ -347,6 +396,12 @@ class MenuWindow(wx.Frame):
                 outofdateLanguage = 'French'
                 lang = wx.LANGUAGE_FRENCH
                 self.presLan_fr.install()
+
+            # Hebrew
+            elif (TransanaGlobal.configData.language == 'he'):
+                outofdateLanguage = 'Hebrew'
+                lang = wx.LANGUAGE_HEBREW
+                self.presLan_he.install()
 
             # Italian
             elif (TransanaGlobal.configData.language == 'it'):
@@ -387,6 +442,12 @@ class MenuWindow(wx.Frame):
                 outofdateLanguage = 'Polish'
                 lang = wx.LANGUAGE_POLISH    # Polish spec causes an error message on my computer
                 self.presLan_pl.install()
+
+            # Portuguese
+            elif (TransanaGlobal.configData.language == 'pt'):
+                outofdateLanguage = 'Portuguese'
+                lang = wx.LANGUAGE_PORTUGUESE    # Polish spec causes an error message on my computer
+                self.presLan_pt.install()
 
             # Russian
             elif (TransanaGlobal.configData.language == 'ru'):
@@ -431,10 +492,11 @@ class MenuWindow(wx.Frame):
 
         # Check to see if we have a translation, and if it is up-to-date.
         
-        # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  If you update this, also update the phrase
+        # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  "&Media Conversion" works for 2.50.
+        # If you update this, also update the phrase
         # below in the OnOptionsLanguage method.)
         
-        if (outofdateLanguage != '') and ("Fixed-Increment Time Codes" == _("Fixed-Increment Time Codes")):
+        if (outofdateLanguage != '') and ("&Media Conversion" == _("&Media Conversion")):
             # If not, display an information message.
             dlg = wx.MessageDialog(None, languageErrorPrompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
             dlg.ShowModal()
@@ -471,20 +533,20 @@ class MenuWindow(wx.Frame):
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_EDIT_COPY, self.OnTranscriptCopy)
         # Define handler for Transcript > Paste
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_EDIT_PASTE, self.OnTranscriptPaste)
-        # Define handler for Transcript > Font
-        wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_FONT, self.OnFont)
+        # Define handler for Transcript > Format Font
+        wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_FONT, self.OnFormatFont)
+        # If we're using the Rich Text Control ...
+        if TransanaConstants.USESRTC:
+            # Define handler for Transcript > Format Paragraph
+            wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_PARAGRAPH, self.OnFormatParagraph)
+            # Define handler for Transcript > Format Tabs
+            wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_TABS, self.OnFormatTabs)
+            # Define handler for Transcript > Insert Image
+            wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_INSERT_IMAGE, self.OnInsertImage)
         # Define handler for Transcript > Print
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_PRINT, self.OnPrintTranscript)
         # Define handler for Transcript > Printer Setup
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_PRINTERSETUP, self.OnPrinterSetup)
-
-        # Define handler for Transcript > Character Map
-        # The Character Map is in tough shape. 
-        # 1.  It doesn't appear to return Font information along with the Character information, rendering it pretty useless
-        # 2.  On some platforms, such as XP, it allows the selection of Unicode characters.  But Transana can't cope
-        #     with Unicode at this point.
-        # Let's just disable it completely for now.
-        # wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_CHARACTERMAP, self.OnCharacterMap)
 
         # Define handler for Transcript > Fixed-Increment Time Codes
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, self.OnAutoTimeCode)
@@ -495,6 +557,8 @@ class MenuWindow(wx.Frame):
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_NOTESBROWSER, self.OnNotesBrowser)
         # Define handler for Tools > File Management
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_FILEMANAGEMENT, self.OnFileManagement)
+        # Define handler for Tools > Media Conversion
+        wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_MEDIACONVERSION, self.OnMediaConversion)
         # Define handler for Tools > Import Database
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_IMPORT_DATABASE, self.OnImportDatabase)
         # Define handler for Tools > Export Database
@@ -556,6 +620,16 @@ class MenuWindow(wx.Frame):
             # Header Bar and the Menu.  This is exactly what we need to know.
             TransanaGlobal.menuHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
             
+    def OnKeyDown(self, event):
+        """ Handle Key Down Events """
+        # See if the ControlObject wants to handle the key that was pressed.
+        if self.ControlObject.ProcessCommonKeyCommands(event):
+            # If so, we're done here.
+            return
+        # If we didn't already handle the key ...
+        else:
+            # ... pass it along to the parent control.  (Leaving this out breaks Menu shortcuts!)
+            event.Skip()
 
     def OnMove(self, event):
         # We need to block moving the Menu Bar.  This should allow that, except on Linux, where it causes problems in Gnome
@@ -590,11 +664,16 @@ class MenuWindow(wx.Frame):
                 self.ControlObject.NotesBrowserWindow.Close()
             # unlock the Transcript Records, if any are locked
             for x in range(len(self.ControlObject.TranscriptWindow)):
+                # Turn off the Line Number Timer
+                self.ControlObject.TranscriptWindow[x].dlg.LineNumTimer.Stop()
+                # If the transcript has been modified ...
                 if self.ControlObject.TranscriptWindow[x].TranscriptModified():
+                    # ... save it!
                     self.ControlObject.SaveTranscript(1, transcriptToSave=x)
-                    
+                # If the transcript is locked ...
                 if (self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj != None) and \
                    (self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj.isLocked):
+                    # ... unlock it
                     self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj.unlock_record()
             # Close the connection to the Database, if one is open
             if DBInterface.is_db_open():
@@ -627,6 +706,13 @@ class MenuWindow(wx.Frame):
                     TransanaGlobal.chatWindow.Destroy()
                     # ... and set the pointer to None
                     TransanaGlobal.chatWindow = None
+
+            # If we are running from a BUILD instead of source code ...
+            if hasattr(sys, "frozen") or ('wxMac' in wx.PlatformInfo):
+                # Put a shutdown indicator in the Error Log
+                print "Transana stopped:", time.asctime()
+                print
+
             # Destroy the Menu Window
             self.Destroy()
         # If the user reconsiders exiting...
@@ -655,21 +741,21 @@ class MenuWindow(wx.Frame):
         a Transcript is loaded."""
         self.menuBar.filemenu.Enable(MenuSetup.MENU_FILE_SAVEAS, enable)
         self.menuBar.filemenu.Enable(MenuSetup.MENU_FILE_PRINTTRANSCRIPT, enable)
+        self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_EDIT_COPY, enable)
         self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_PRINT, enable)
 
     def SetTranscriptEditOptions(self, enable):
+        """Enable or disable the menu options that depend on whether or not
+        a Transcript is editable."""
         self.menuBar.filemenu.Enable(MenuSetup.MENU_FILE_SAVE, enable)
         self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_EDIT_UNDO, enable)
         self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_EDIT_CUT, enable)
-        self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_EDIT_COPY, enable)
         self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_EDIT_PASTE, enable)
         self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_FONT, enable)
-        # The Character Map is in tough shape. 
-        # 1.  It doesn't appear to return Font information along with the Character information, rendering it pretty useless
-        # 2.  On some platforms, such as XP, it allows the selection of Unicode characters.  But Transana can't cope
-        #     with Unicode at this point.
-        # Let's just disable it completely for now.
-        # self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_CHARACTERMAP, enable)
+        if TransanaConstants.USESRTC:
+            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_PARAGRAPH, enable)
+            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_TABS, enable)
+            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_INSERT_IMAGE, enable)
         if enable and self.ControlObject.AutoTimeCodeEnableTest():
             self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, enable)
         else:
@@ -713,50 +799,126 @@ class MenuWindow(wx.Frame):
 
     def OnFileManagement(self, event):
         """ Implements the FileManagement Menu command """
-        # Create a File Management Window
-        fileManager = FileManagement.FileManagement(self, -1, _("Transana File Management"))
-        # Set up, display, and process the File Management Window
-        fileManager.Setup()
+        # if no file management window is defined 
+        if self.fileManagementWindow == None:
+            # Create a File Management Window
+            self.fileManagementWindow = FileManagement.FileManagement(self, -1, _("Transana File Management"))
+            # Set up, display, and process the File Management Window
+            self.fileManagementWindow.Setup()
+        # If a file management window IS defined ...
+        else:
+            # ... make sure it is visible ...
+            self.fileManagementWindow.Show(True)
+            # ... and Raise it to the top of other windows
+            self.fileManagementWindow.Raise()
 
     def OnPrintTranscript(self, event):
         """ Implements Transcript Printing from the File and Transcript menus """
-        # Set the Cursor to the Hourglass while the report is assembled
-        self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
         # Get the Transcript Object currently loaded in the Transcript Window
         tempTranscript = self.ControlObject.GetCurrentTranscriptObject()
-        # Prepare the Transcript for printing
-        (graphic, pageData) = TranscriptPrintoutClass.PrepareData(TransanaGlobal.printData, tempTranscript)
-        # Send the results of the PrepareData() call to the MyPrintout object, once for the print preview
-        # version and once for the printer version.  
-        printout = TranscriptPrintoutClass.MyPrintout('', graphic, pageData)
-        printout2 = TranscriptPrintoutClass.MyPrintout('', graphic, pageData)
-        # Create the Print Preview Object
-        printPreview = wx.PrintPreview(printout, printout2, TransanaGlobal.printData)
-        # Check for errors during Print preview construction
-        if not printPreview.Ok():
-            # Restore Cursor to Arrow
-            self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-            errordlg = Dialogs.ErrorDialog(self, "Print Preview Problem")
-            errordlg.ShowModal()
-            errordlg.Destroy()
-        else:
+        # If we're using the RTC ...
+        if TransanaConstants.USESRTC:
+            # We want to ask the user whether we should include time codes or not.  Create the prompt
+            prompt = unicode(_("Do you want to include Transana Time Codes in the printout?"), "utf8")
+            # Create a dialog box for the question
+            dlg = Dialogs.QuestionDialog(self, prompt)
+            # Display the dialog box and get the user response
+            result = dlg.LocalShowModal()
+            # Destroy the dialog box
+            dlg.Destroy()
 
-            # Print Preview on the Mac is broken.  Just print the transcript.
-            if 'wxMac' in wx.PlatformInfo:
-                printPreview.Print(True)
-            else:
-                
-                # Create the Frame for the Print Preview
-                theWidth = max(wx.ClientDisplayRect()[2] - 180, 760)
-                theHeight = max(wx.ClientDisplayRect()[3] - 200, 560)
-                printFrame = wx.PreviewFrame(printPreview, self, _("Print Preview"), size=(theWidth, theHeight))
-                printFrame.Centre()
-                # Initialize the Frame for the Print Preview
-                printFrame.Initialize()
+            # Define the FONT for the Header and Footer text
+            headerFooterFont = wx.Font(10, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, "Times New Roman")
+            # Get the current date and time
+            t = time.localtime()
+            # Format the Footer Date as M/D/Y
+            footerDate = "%d/%d/%d" % (t.tm_mon, t.tm_mday, t.tm_year)
+            # Format the Footer Page Number
+            footerPage = _("Page") + " @PAGENUM@ " + _("of") + " @PAGESCNT@"
+            # Create a RichTextPrinting Object
+            printout = richtext.RichTextPrinting(_("Transana Report"), self)
+            # Let the printout know about the default printer settings
+            printout.SetPrintData(TransanaGlobal.printData)
+            # Specify the Header / Footer Font
+            printout.SetHeaderFooterFont(headerFooterFont)
+            # Add the Report Title to the top right
+            printout.SetHeaderText(tempTranscript.id, location=richtext.RICHTEXT_PAGE_RIGHT)
+            # Add the date to the bottom left
+            printout.SetFooterText(footerDate, location=richtext.RICHTEXT_PAGE_LEFT)
+            # Add the page number to the bottom right
+            printout.SetFooterText(footerPage, location=richtext.RICHTEXT_PAGE_RIGHT)
+            # Do NOT show Header and Footer on the First Page
+            printout.SetShowOnFirstPage(False)
+            # print the RTC Buffer Contents
+            # Create a Rich Text Buffer object
+            buf = richtext.RichTextBuffer()
+            # If the user requested that we strip time codes ...
+            if result == wx.ID_NO:
+                # ... create a hidden RichTextEditCtrl_RTC
+                hiddenCtrl = RichTextEditCtrl_RTC.RichTextEditCtrl(self)
+                # Use the hidden control to strip the time codes from the Temp Transcript Object's text
+                tempTranscript.text = hiddenCtrl.StripTimeCodes(tempTranscript.text)
+                # Now get rid of the hidden control.  We're done with it!
+                hiddenCtrl.Destroy()
+            # Now put the contents of the XML transcript text into the buffer!
+            try:
+                # Create a IO stream object
+                stream = cStringIO.StringIO(tempTranscript.text)
+                # Create an XML Handler
+                handler = richtext.RichTextXMLHandler()
+                # Load the XML text via the XML Handler.
+                # Note that for XML, the BUFFER is passed.
+                handler.LoadStream(buf, stream)
+            # exception handling
+            except:
+                print "XML Handler Load failed"
+                print
+                print sys.exc_info()[0], sys.exc_info()[1]
+                print traceback.print_exc()
+                print
+                pass
+            # Define the RichTextPrintout Object's Print Buffer
+            printout.PrintBuffer(buf)
+            # Destroy the RichTextPrinting Object
+            printout.Destroy()
+
+        # If we're using the STC ...
+        else:
+            # Set the Cursor to the Hourglass while the report is assembled
+            self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+            # Prepare the Transcript for printing
+            (graphic, pageData) = TranscriptPrintoutClass.PrepareData(TransanaGlobal.printData, tempTranscript)
+            # Send the results of the PrepareData() call to the MyPrintout object, once for the print preview
+            # version and once for the printer version.  
+            printout = TranscriptPrintoutClass.MyPrintout('', graphic, pageData)
+            printout2 = TranscriptPrintoutClass.MyPrintout('', graphic, pageData)
+            # Create the Print Preview Object
+            printPreview = wx.PrintPreview(printout, printout2, TransanaGlobal.printData)
+            # Check for errors during Print preview construction
+            if not printPreview.Ok():
                 # Restore Cursor to Arrow
                 self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-                # Display the Print Preview Frame
-                printFrame.Show(True)
+                errordlg = Dialogs.ErrorDialog(self, "Print Preview Problem")
+                errordlg.ShowModal()
+                errordlg.Destroy()
+            else:
+
+                # Print Preview on the Mac is broken.  Just print the transcript.
+                if 'wxMac' in wx.PlatformInfo:
+                    printPreview.Print(True)
+                else:
+                    
+                    # Create the Frame for the Print Preview
+                    theWidth = max(wx.Display(0).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
+                    theHeight = max(wx.Display(0).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
+                    printFrame = wx.PreviewFrame(printPreview, self, _("Print Preview"), size=(theWidth, theHeight))
+                    printFrame.Centre()
+                    # Initialize the Frame for the Print Preview
+                    printFrame.Initialize()
+                    # Restore Cursor to Arrow
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+                    # Display the Print Preview Frame
+                    printFrame.Show(True)
 
     def OnPrinterSetup(self, event):
         """ Printer Setup method """
@@ -795,43 +957,64 @@ class MenuWindow(wx.Frame):
         self.OnCloseWindow(evt)
 
     def OnTranscriptUndo(self, event):
-        self.ControlObject.TranscriptUndo(event)
+        """ Handler for Transcript > Undo """
+        # Determine the object with the current focus
+        tmpObj = wx.Window.FindFocus()
+        # If we have an object OTHER THAN a RichTextEditCtrl ...
+        # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
+        if isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl):
+            self.ControlObject.TranscriptUndo(event)
+        else:
+            event.Skip()
 
     def OnTranscriptCut(self, event):
-        self.ControlObject.TranscriptCut()
+        """ Handler for Transcript > Cut """
+        # Determine the object with the current focus
+        tmpObj = wx.Window.FindFocus()
+        # If we have an object OTHER THAN a RichTextEditCtrl ...
+        # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
+        if isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl):
+            self.ControlObject.TranscriptCut(event)
+        else:
+            event.Skip()
 
     def OnTranscriptCopy(self, event):
-        self.ControlObject.TranscriptCopy()
+        """ Handler for Transcript > Copy """
+        # Determine the object with the current focus
+        tmpObj = wx.Window.FindFocus()
+        # If we have an object OTHER THAN a RichTextEditCtrl ...
+        # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
+        if isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl):
+            self.ControlObject.TranscriptCopy(event)
+        else:
+            event.Skip()
 
     def OnTranscriptPaste(self, event):
-        self.ControlObject.TranscriptPaste()
-
-    def OnFont(self, event):
-        self.ControlObject.TranscriptCallFontDialog()
-
-    def OnCharacterMap(self, event):
-        """ Handler for Transcript > Character Map menu command"""
-        if wx.Platform == "__WXMSW__":
-            import os
-            os.system("start charmap.exe")
-        elif wx.Platform == "__WXMAC__":
-            import platform
-            if platform.release() <= '6.8':
-                import os
-                os.system('Applications/Utilities/Key\ Caps.app/Contents/MacOS/Key\ Caps &')
-                # os.system('/System/Library/Components/CharacterPalette.component/Contents/SharedSupport/CharPaletteServer.app/Contents/MacOS/CharPaletteServer &')
-            else:
-                import Dialogs
-                msg = _("Character Map is not available on OS/X 10.3 Panther or greater.")
-                errordlg = Dialogs.ErrorDialog(self, msg)
-                errordlg.ShowModal()
-                errordlg.Destroy()
+        """ Handler for Transcript > Paste """
+        # Determine the object with the current focus
+        tmpObj = wx.Window.FindFocus()
+        # If we have an object OTHER THAN a RichTextEditCtrl ...
+        # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
+        if isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl):
+            self.ControlObject.TranscriptPaste(event)
         else:
-            import Dialogs
-            msg = _("Character Map not implemented this platform.")
-            errordlg = Dialogs.ErrorDialog(self, msg)
-            errordlg.ShowModal()
-            errordlg.Destroy()
+            event.Skip()
+
+    def OnFormatFont(self, event):
+        """ Handler for Transcript > Format Font """
+        self.ControlObject.TranscriptCallFormatDialog()
+
+    def OnFormatParagraph(self, event):
+        """ Handler for Transcript > Format Paragraph """
+        self.ControlObject.TranscriptCallFormatDialog(tabToOpen=1)
+
+    def OnFormatTabs(self, event):
+        """ Handler for Transcript > Format Tabs """
+        self.ControlObject.TranscriptCallFormatDialog(tabToOpen=2)
+
+    def OnInsertImage(self, event):
+        """ Handler for Transcript > Insert Image """
+        self.ControlObject.TranscriptInsertImage()
 
     def OnAutoTimeCode(self, event):
         """ Handler for Transcript > Fixed-Increment Time Codes """
@@ -882,8 +1065,30 @@ class MenuWindow(wx.Frame):
                 # ... then restore it to its proper size!
                 self.ControlObject.NotesBrowserWindow.Iconize(False)
 
+    def OnMediaConversion(self, event):
+        """ Handler for Tools > Media Conversion """
+        # Create a Media Convert dialog
+        mediaConv = MediaConvert.MediaConvert(self)
+        # Show the dialog
+        mediaConv.ShowModal()
+        # Call Close here to clean up Temp Files in some circumstances
+        mediaConv.Close()
+        # Destroy the dialog
+        mediaConv.Destroy()
+        
     def OnImportDatabase(self, event):
         """ Import Database """
+
+         # If the current database is not empty, we need to tell the user.
+        if not DBInterface.IsDatabaseEmpty():
+            prompt = _('Your current database is not empty.') + '\n\n' + \
+                     _('You can only import data into an existing databases if\nthere are no overlapping Series or Collection records.\nIf there is any overlap in these records, the import\nwill fail.') + '\n\n' + \
+                     _('If you have overlapping Keywords, the existing Keyword\nis retained and the importing Keyword (including its\ndefinition, which could differ) is discarded.') + '\n\n' + \
+                     _('If you have overlapping Core Data records, the existing\nCore Data record is retained and the importing Core\nData record is discarded.')
+            dlg = Dialogs.InfoDialog(self, prompt)
+            dlg.ShowModal()
+            dlg.Destroy()
+
         # Create an Import Database dialog
         temp = XMLImport.XMLImport(self, -1, _('Transana XML Import'))
         # Get the User Input
@@ -910,8 +1115,81 @@ class MenuWindow(wx.Frame):
         """ Export Database """
         # Create an Export Database dialog
         temp = XMLExport.XMLExport(self, -1, _('Transana XML Export'))
-        # Get User Input
-        result = temp.get_input()
+        # Set up the confirmation loop signal variable
+        repeat = True
+        # While we are in the confirmation loop ...
+        while repeat:
+            # ... assume we will want to exit the confirmation loop by default
+            repeat = False
+            # Get the XML Export User Input
+            result = temp.get_input()
+            # if the user clicked OK ...
+            if result != None:
+                # ... make sure they entered a file name.
+                if result[_('Transana-XML Filename')] == '':
+                    # If not, create a prompt to inform the user ...
+                    prompt = unicode(_('A file name is required'), 'utf8') + '.'
+                    # ... and signal that we need to repeat the file prompt
+                    repeat = True
+                # If they did ...
+                else:
+                    # ... error check the file name.  If it does not have a PATH ...
+                    if os.path.split(result[_('Transana-XML Filename')])[0] == u'':
+                        # ... add the Video Path to the file name
+                        fileName = os.path.join(TransanaGlobal.configData.videoPath, result[_('Transana-XML Filename')])
+                    # If there is a path, just continue.
+                    else:
+                        fileName = result[_('Transana-XML Filename')]
+                    # If the file does not have a .TRA extension ...
+                    if fileName[-4:].lower() != '.tra':
+                        # ... add one
+                        fileName = fileName + '.tra'
+                    # Set the FORM's field value to the modified file name
+                    temp.XMLFile.SetValue(fileName)
+
+                    # Check the file name for illegal characters.  First, define illegal characters
+                    # (not including PATH characters)
+                    illegalChars = '"*?<>|'
+                    # For each illegal character ...
+                    for char in illegalChars:
+                        # ... see if that character appears in the file name the user entered
+                        if char in result[_('Transana-XML Filename')]:
+                            # If so, create a prompt to inform the user ...
+                            prompt = unicode(_('There is an illegal character in the file name.'), 'utf8')
+                            # ... and signal that we need to repeat the file prompt ...
+                            repeat = True
+                            # ... and stop looking.
+                            break
+
+                # Was there a file name problem or an illegal character?
+                if repeat:
+                    # If so, display the prompt to inform the user.
+                    dlg2 = Dialogs.ErrorDialog(self, prompt)
+                    dlg2.ShowModal()
+                    dlg2.Destroy()
+                    # Signal that we have not gotten a result.
+                    result = None
+                # If we get to here, check for a duplicate file name
+                elif (os.path.exists(fileName)):
+                    # If so, create a prompt to inform the user and ask to overwrite the file.
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('A file named "%s" already exists.  Do you want to replace it?'), 'utf8')
+                    else:
+                        prompt = _('A file named "%s" already exists.  Do you want to replace it?')
+                    # Create the dialog for the prompt for the user
+                    dlg2 = Dialogs.QuestionDialog(None, prompt % fileName)
+                    # Center the confirmation dialog on screen
+                    dlg2.CentreOnScreen()
+                    # Show the confirmation dialog and get the user response.  If the user DOES NOT say to overwrite the file, ...
+                    if dlg2.LocalShowModal() != wx.ID_YES:
+                        # ... nullify the results of the Clip Data Export dialog so the file won't be overwritten ...
+                        result = None
+                        # ... and signal that the user should be re-prompted.
+                        repeat = True
+                    # Destroy the confirmation dialog
+                    dlg2.Destroy()
+
         # If the user requests it ...
         if (result != None) and (result[_("Transana-XML Filename")] != ''):
             # ... export the data
@@ -1019,6 +1297,12 @@ class MenuWindow(wx.Frame):
             TransanaGlobal.configData.language = 'en'
             self.presLan_en.install()
             
+        # Arabic
+        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_AR:
+            outofdateLanguage = 'Arabic'
+            TransanaGlobal.configData.language = 'ar'
+            self.presLan_ar.install()
+            
         # Danish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DA:
             outofdateLanguage = 'Danish'
@@ -1055,6 +1339,12 @@ class MenuWindow(wx.Frame):
             TransanaGlobal.configData.language = 'fr'
             self.presLan_fr.install()
 
+        # Hebrew
+        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_HE:
+            outofdateLanguage = 'Hebrew'
+            TransanaGlobal.configData.language = 'he'
+            self.presLan_he.install()
+
         # Italian
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_IT:
             outofdateLanguage = 'Italian'
@@ -1084,6 +1374,12 @@ class MenuWindow(wx.Frame):
             outofdateLanguage = 'Polish'
             TransanaGlobal.configData.language = 'pl'
             self.presLan_pl.install()
+
+        # Portuguese
+        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_PT:
+            outofdateLanguage = 'Portuguese'
+            TransanaGlobal.configData.language = 'pt'
+            self.presLan_pt.install()
 
         # Russian
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_RU:
@@ -1131,10 +1427,10 @@ class MenuWindow(wx.Frame):
 
         # Check to see if we have a translation, and if it is up-to-date.
         
-        # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  If you update this, also update the phrase
-        # above in the __init__ method.)
+        # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  "&Media Conversion" works for version 2.50.
+        # If you update this, also update the phrase above in the __init__ method.)
         
-        if (outofdateLanguage != '') and ("Fixed-Increment Time Codes" == _("Fixed-Increment Time Codes")):
+        if (outofdateLanguage != '') and ("&Media Conversion" == _("&Media Conversion")):
             # If not, display an information message.
             prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
             dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
@@ -1273,21 +1569,20 @@ class MenuWindow(wx.Frame):
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_EDIT_CUT, _("Cu&t\tCtrl-X"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_EDIT_COPY, _("&Copy\tCtrl-C"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_EDIT_PASTE, _("&Paste\tCtrl-V"))
-        self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_FONT, _("&Font"))
+        self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_FONT, _("Format &Font"))
+        if TransanaConstants.USESRTC:
+            self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_PARAGRAPH, _("Format Paragrap&h"))
+            self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_TABS, _("Format Ta&bs"))
+            self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_INSERT_IMAGE, _("&Insert Image"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_PRINT, _("&Print"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_PRINTERSETUP, _("Printer &Setup"))
-        # The Character Map is in tough shape. 
-        # 1.  It doesn't appear to return Font information along with the Character information, rendering it pretty useless
-        # 2.  On some platforms, such as XP, it allows the selection of Unicode characters.  But Transana can't cope
-        #     with Unicode at this point.
-        # Let's just disable it completely for now.
-        # self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_CHARACTERMAP, _("&Character Map"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, _("F&ixed-Increment Time Codes"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, _("&Adjust Indexes"))
 
         self.menuBar.SetLabelTop(2, _("Too&ls"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_NOTESBROWSER, _("&Notes Browser"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_FILEMANAGEMENT, _("&File Management"))
+        self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_MEDIACONVERSION, _("&Media Conversion"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_IMPORT_DATABASE, _("&Import Database"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_EXPORT_DATABASE, _("&Export Database"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_COLORCONFIG, _("&Graphics Color Configuration"))
@@ -1301,6 +1596,8 @@ class MenuWindow(wx.Frame):
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE, _("&Language"))
         self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_EN, _("&English"))
         # The Langage menus may not exist, and we should only update them if they do!
+        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_AR) != None:
+            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_AR, _("&Arabic"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_DA) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_DA, _("&Danish"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_DE) != None:
@@ -1313,6 +1610,8 @@ class MenuWindow(wx.Frame):
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_FI, _("Fi&nnish"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_FR) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_FR, _("&French"))
+        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_HE) != None:
+            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_HE, _("&Hebrew"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_IT) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_IT, _("&Italian"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_NL) != None:
@@ -1323,6 +1622,8 @@ class MenuWindow(wx.Frame):
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_NN, _("Norwegian Ny-norsk"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_PL) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_PL, _("&Polish"))
+        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_PT) != None:
+            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_PT, _("P&ortuguese"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_RU) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_RU, _("&Russian"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_SV) != None:
@@ -1370,6 +1671,10 @@ class MenuWindow(wx.Frame):
         """ Determines what languages have been installed and prompts the user to select one. """
         # See what languages are installed on the system and make a list
         languages = [ENGLISH_LABEL]
+        # Arabic
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'ar', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            languages.append(ARABIC_LABEL)
         # Danish
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'da', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -1394,6 +1699,10 @@ class MenuWindow(wx.Frame):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'fr', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             languages.append(FRENCH_LABEL)
+        # Hebrew
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'he', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            languages.append(HEBREW_LABEL)
         # Italian
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'it', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -1414,6 +1723,10 @@ class MenuWindow(wx.Frame):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'pl', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             languages.append(POLISH_LABEL)
+        # Portuguese
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'pt', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            languages.append(PORTUGUESE_LABEL)
         # Russian
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'ru', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):

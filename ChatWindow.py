@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -283,8 +283,8 @@ class ChatWindow(wx.Frame):
         self.txtUser = wx.StaticText(self, -1, _("Current Users"))
         # Put the label in the User Sizer with a little padding below
         boxUser.Add(self.txtUser, 0, wx.BOTTOM, 3)
-        # Add a ListBox to hold the names of active users
-        self.userList = wx.ListBox(self, -1, choices=[self.userName], style=wx.LB_SINGLE)
+        # Add a ListBox to hold the names of active users.  Allow multiple selection for Private Chat specification.
+        self.userList = wx.ListBox(self, -1, choices=[self.userName], style=wx.LB_MULTIPLE)
         boxUser.Add(self.userList, 1, wx.BOTTOM | wx.EXPAND, 3)
 
         # Add a checkbox to enable/disable audio feedback
@@ -308,6 +308,8 @@ class ChatWindow(wx.Frame):
         boxSend.Add(self.txtEntry, 5, wx.EXPAND)
         # bind the OnSend event with the Text Entry control's enter key event
         self.txtEntry.Bind(wx.EVT_TEXT_ENTER, self.OnSend)
+        # Bind the OnKeyUp event with the Text Entry control's wxEVT_KEY_UP event
+        self.txtEntry.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
 
         # Add a "Send" button
         self.btnSend = wx.Button(self, -1, _("Send"))
@@ -385,7 +387,7 @@ class ChatWindow(wx.Frame):
             db = TransanaGlobal.configData.database.encode('utf8')
             
             if DEBUG:
-                print 'C %s %s %s 240 ||| ' % (userName, host, db)
+                print 'C %s %s %s 250 ||| ' % (userName, host, db)
 
             # If we are running the Transana Client on the same computer as the MySQL server, we MUST refer to it as localhost.
             # In this circumstance, this copy of the Transana Client will not be recognized by the Transana Message Server
@@ -404,9 +406,9 @@ class ChatWindow(wx.Frame):
                 # Destroy the Text Entry Dialog.
                 dlg.Destroy()
             
-            self.socketObj.send('C %s %s %s 240 ||| ' % (userName, host, db))
+            self.socketObj.send('C %s %s %s 250 ||| ' % (userName, host, db))
         else:
-            self.socketObj.send('C %s %s %s 240 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
+            self.socketObj.send('C %s %s %s 250 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
 
         # Create a Timer to check for Message Server validation.
         # Initialize to unvalidated state
@@ -441,12 +443,41 @@ class ChatWindow(wx.Frame):
 
     def OnSend(self, event):
         """ Send Message handler """
-            # indicate that this is a Text Message by prefacing the text with "M".
-        self.SendMessage('M %s' % self.txtEntry.GetValue())
+        # Get the message from the text entry box
+        message = self.txtEntry.GetValue()
+        # Make sure there IS a message!
+        if message.strip() != "":
+            # If there are user selections, we want PRIVATE MESSAGING.  If all or none are selected,
+            # everyone gets to see the message.  If only the current user is selected, there are NO
+            # RECIPIENTS, so don't sent the message!
+            if (len(self.userList.GetSelections()) > 0) and \
+               (self.userList.GetSelections() != (0, )):
+                # (len(self.userList.GetSelections()) < self.userList.GetCount()) and \
+                # Make sure THIS user is NOT selected
+                if self.userList.IsSelected(0):
+                    self.userList.Deselect(0)
+                # If (and only if) not everyone in the list is selected ...
+                if len(self.userList.GetSelections()) < self.userList.GetCount() - 1:
+                    # Indicate a Private Message by adding on the intended recipients
+                    message += ' >|<'
+                    # Add the recipients list to the message
+                    for index in self.userList.GetSelections():
+                        message += ' ' + self.userList.GetString(index)
+            # if more than just the current user is selected ...
+            if (self.userList.GetSelections() != (0, )):
+                # ... send the message.  Indicate that this is a Text Message by prefacing the text with "M".
+                self.SendMessage('M %s' % message)
         # Clear the Text Entry control
         self.txtEntry.SetValue('')
         # Set the focus to the Text Entry Control
         self.txtEntry.SetFocus()
+
+    def OnKeyUp(self, event):
+        """ Text Entry Control's wxEVT_KEY_UP method """
+        # if the message length exceeds 800 characters, and the user presses SPACE ...
+        if (len(self.txtEntry.GetValue()) > 800) and (event.GetKeyCode() == wx.WXK_SPACE):
+            # ... just send the damn message
+            self.OnSend(event)
 
     def OnClear(self, event):
         """ Clear button handler """
@@ -574,7 +605,8 @@ class ChatWindow(wx.Frame):
                         elif messageHeader == 'AT':
                             nodelist = ConvertMessageToNodeList(message)
                             tempEpisode = Episode.Episode(series=nodelist[0], episode=nodelist[1])
-                            tempTranscript = Transcript.Transcript(nodelist[-1], ep=tempEpisode.number)
+                            # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+                            tempTranscript = Transcript.Transcript(nodelist[-1], ep=tempEpisode.number, skipText=True)
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('TranscriptNode', (_('Series'),) + nodelist, tempTranscript.number, tempEpisode.number, False, avoidRecursiveYields = True)
 
                         # Add Collection Message
@@ -594,7 +626,8 @@ class ChatWindow(wx.Frame):
                             for coll in nodelist[:-1]:
                                 tempCollection = Collection.Collection(coll, parentNum)
                                 parentNum = tempCollection.number
-                            tempClip = Clip.Clip(nodelist[-1], tempCollection.id, tempCollection.parent)
+                            # Get a temporary copy of the Clip.  We don't need the clip's transcript, which speeds this up.
+                            tempClip = Clip.Clip(nodelist[-1], tempCollection.id, tempCollection.parent, skipText=True)
                             # avoidRecursiveYields added to try to prevent a problem on the Mac when converting Searches
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('ClipNode', (_('Collections'),) + nodelist, tempClip.number, tempCollection.number, False, avoidRecursiveYields=True)
 
@@ -617,7 +650,8 @@ class ChatWindow(wx.Frame):
                                 parentNum = tempCollection.number
                             # We need the NODE for the Clip we should place the new clip in front of.  Let's get that here.
                             insertNode = self.ControlObject.DataWindow.DBTab.tree.select_Node((_('Collections'),) + nodelist[:-1], 'ClipNode', ensureVisible=False)
-                            tempClip = Clip.Clip(nodelist[-1], tempCollection.id, tempCollection.parent)
+                            # Get a temporary copy of the Clip.  We don't need the clip's transcript, which speeds this up.
+                            tempClip = Clip.Clip(nodelist[-1], tempCollection.id, tempCollection.parent, skipText=True)
                             # Add new node, leaving the insertNode out of the nodeList.
                             # avoidRecursiveYields added to try to prevent a problem on the Mac when converting Searches
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('ClipNode', (_('Collections'),) + nodelist[:-2] + (nodelist[-1],), tempClip.number, tempCollection.number, False, insertNode, avoidRecursiveYields=True)
@@ -677,7 +711,8 @@ class ChatWindow(wx.Frame):
                                     # We have a Transcript Note
                                     nodeType = 'TranscriptNoteNode'
                                     # Load the Transcript record ...
-                                    tempObj = Transcript.Transcript(node, ep=parentNum)
+                                    # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+                                    tempObj = Transcript.Transcript(node, ep=parentNum, skipText=True)
                                     # ... and note that the parent of the Transcript Note is this Trasncript.
                                     parentNum = tempObj.number
                                 # If our node is the Collections Root Node ...
@@ -700,8 +735,8 @@ class ChatWindow(wx.Frame):
                                     objectType = 'Clip'
                                     # ... and we're dealing with a Clip Note
                                     nodeType = 'ClipNoteNode'
-                                    # Load the Clip ...
-                                    tempObj = Clip.Clip(node, tempObj.id, tempObj.parent)
+                                    # Get a temporary copy of the Clip.  We don't need the clip's transcript, which speeds this up.
+                                    tempObj = Clip.Clip(node, tempObj.id, tempObj.parent, skipText=True)
                                     # ... and note its number as the parent number of the Note
                                     parentNum = tempObj.number
                             # Initialize the Temporary Note object
@@ -739,7 +774,8 @@ class ChatWindow(wx.Frame):
                         elif messageHeader == 'AKE':
                             # The first message parameter for a Keyword Example is the Clip Number
                             nodelist = ConvertMessageToNodeList(message)
-                            tempClip = Clip.Clip(int(nodelist[0]))
+                            # Get a temporary copy of the Clip.  We don't need the clip's transcript, which speeds this up.
+                            tempClip = Clip.Clip(int(nodelist[0]), skipText=True)
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('KeywordExampleNode', (_('Keywords'),) + nodelist[1:], tempClip.number, tempClip.collection_num, False, avoidRecursiveYields = True)
 
                         # Rename a Node
@@ -843,7 +879,8 @@ class ChatWindow(wx.Frame):
                                             # ... then the only way to go is to a Transcript Note!
                                             objectType = 'Transcript Note'
                                             # Load the Transcript record ...
-                                            tempObj = Transcript.Transcript(node, ep=parentNum)
+                                            # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+                                            tempObj = Transcript.Transcript(node, ep=parentNum, skipText=True)
                                             # ... and note that the parent of the Transcript Note is this Trasncript.
                                             parentNum = tempObj.number
                                         # If our node is the Collections Root Node ...
@@ -862,8 +899,8 @@ class ChatWindow(wx.Frame):
                                         elif (objectType == 'Collections') and (nodeType == 'ClipNoteNode') and (nodeCount == len(nodelist) - 2):
                                             # ... then we're looking at a Clip
                                             objectType = 'Clip'
-                                            # Load the Clip ...
-                                            tempObj = Clip.Clip(node, tempObj.id, tempObj.parent)
+                                            # Get a temporary copy of the Clip.  We don't need the clip's transcript, which speeds this up.
+                                            tempObj = Clip.Clip(node, tempObj.id, tempObj.parent, skipText=True)
                                             # ... and note its number as the parent number of the Note
                                             parentNum = tempObj.number
                                     # Initialize the Temporary Note object
@@ -1145,6 +1182,7 @@ class ChatWindow(wx.Frame):
         # Change the prompts
         self.txtMemo.SetLabel(_("Messages"))
         self.txtUser.SetLabel(_("Current Users"))
+        self.useSound.SetLabel(_("Sound Enabled"))
         # Change the Buttons
         self.btnSend.SetLabel(_("Send"))
         self.btnClear.SetLabel(_("Clear"))

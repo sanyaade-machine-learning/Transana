@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -17,7 +17,7 @@
 """This module contains miscellaneous general-purpose dialog classes.  These
 are mostly intended to be sub-classed for specific uses."""
 
-__author__ = 'Nathaniel Case <nacase@wisc.edu>, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case <nacase@wisc.edu>'
 
 import wx
 from TransanaExceptions import *
@@ -30,7 +30,7 @@ import TransanaGlobal
 class ErrorDialog(wx.Dialog):
     """Error message dialog to the user."""
 
-    def __init__(self, parent, errmsg):
+    def __init__(self, parent, errmsg, includeSkipCheck=False):
         # This should be easy, right?  Just use the OS MessageDialog like so:
         # wx.MessageDialog.__init__(self, parent, errmsg, _("Transana Error"), wx.OK | wx.CENTRE | wx.ICON_ERROR)
         # That's all there is to it, right?
@@ -40,48 +40,73 @@ class ErrorDialog(wx.Dialog):
         # can even get hidden behind other windows, and cause all kinds of problems.  According to Robin Dunn,
         # writing my own class to do this is the only solution.  Here goes.
 
-        # print "ErrorDialog", errmsg
+        # Remember if we're supposed to include the checkbox to skip additional messages
+        self.includeSkipCheck = includeSkipCheck
 
+        # Create a Dialog box
         wx.Dialog.__init__(self, parent, -1, _("Transana Error"), size=(350, 150), style=wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP)
         # Set "Window Variant" to small only for Mac to make fonts match better
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
+        # Create Vertical and Horizontal Sizers
         box = wx.BoxSizer(wx.VERTICAL)
         box2 = wx.BoxSizer(wx.HORIZONTAL)
 
+        # Display the Error graphic in the dialog box
         bitmap = wx.EmptyBitmap(32, 32)
         bitmap = wx.ArtProvider_GetBitmap(wx.ART_ERROR, wx.ART_MESSAGE_BOX, (32, 32))
         graphic = wx.StaticBitmap(self, -1, bitmap)
-
+        # Add the graphic to the Sizers
         box2.Add(graphic, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, 10)
-        
-        message = wx.StaticText(self, -1, errmsg)
 
+        # Display the error message in the dialog box
+        message = wx.StaticText(self, -1, errmsg)
+        # Add the error message to the Sizers
         box2.Add(message, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 10)
         box.Add(box2, 0, wx.EXPAND)
 
+        # If we should add the "Skip Further messages" checkbox ...
+        if self.includeSkipCheck:
+            # ... then add the checkbox to the dialog
+            self.skipCheck = wx.CheckBox(self, -1, _('Do not show this message again'))
+            # ... and add the checkbox to the Sizers
+            box.Add(self.skipCheck, 0, wx.ALIGN_CENTER | wx.ALL, 10)
+        
+        # Add an OK button
         btnOK = wx.Button(self, wx.ID_OK, _("OK"))
-
+        # Add the OK button to the Sizers
         box.Add(btnOK, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
-
         # Make the OK button the default
         self.SetDefaultItem(btnOK)
 
+        # Turn on Auto Layout
         self.SetAutoLayout(True)
-
+        # Set the form sizer
         self.SetSizer(box)
+        # Set the form size
         self.Fit()
+        # Perform the Layout
         self.Layout()
-
+        # Center the dialog on the screen
         self.CentreOnScreen()
 
+    def GetSkipCheck(self):
+        """ Provide the value of the Skip Checkbox """
+        # If the checkbox is displayed ...
+        if self.includeSkipCheck:
+            # ... return the value of the checkbox
+            return self.skipCheck.GetValue()
+        # If the checkbox is NOT displayed ...
+        else:
+            # ... then indicate that it is NOT checked
+            return False
 
 
 class InfoDialog(wx.MessageDialog):
-    """Information message dialog to the user."""
+    """ Information message dialog to the user. """
 
-    def __init__(self, parent, msg):
+    def __init__(self, parent, msg, dlgTitle = _("Transana Information")):
         # This should be easy, right?  Just use the OS MessageDialog like so:
         # wx.MessageDialog.__init__(self, parent, msg, _("Transana Information"), \
         #                     wx.OK | wx.CENTRE | wx.ICON_INFORMATION)
@@ -92,49 +117,57 @@ class InfoDialog(wx.MessageDialog):
         # can even get hidden behind other windows, and cause all kinds of problems.  According to Robin Dunn,
         # writing my own class to do this is the only solution.  Here goes.
 
-        # print "InfoDialog", msg
+        # Create a wxDialog
+        wx.Dialog.__init__(self, parent, -1, dlgTitle, size=(350, 150), style=wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP)
 
-        wx.Dialog.__init__(self, parent, -1, _("Transana Information"), size=(350, 150), style=wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP)
-
+        # Create Vertical and Horizontal Sizers
         box = wx.BoxSizer(wx.VERTICAL)
         box2 = wx.BoxSizer(wx.HORIZONTAL)
 
+        # Display the Information graphic in the dialog box
         bitmap = wx.EmptyBitmap(32, 32)
         bitmap = wx.ArtProvider_GetBitmap(wx.ART_INFORMATION, wx.ART_MESSAGE_BOX, (32, 32))
         graphic = wx.StaticBitmap(self, -1, bitmap)
-
+        # Add the graphic to the Sizers
         box2.Add(graphic, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, 10)
         
+        # Display the error message in the dialog box
         message = wx.StaticText(self, -1, msg)
 
+        # Add the information message to the Sizers
         box2.Add(message, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 10)
         box.Add(box2, 0, wx.EXPAND)
 
+        # Add an OK button
         btnOK = wx.Button(self, wx.ID_OK, _("OK"))
-
+        # Add the OK button to the Sizers
         box.Add(btnOK, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
-
         # Make the OK button the default
         self.SetDefaultItem(btnOK)
 
+        # Turn on Auto Layout
         self.SetAutoLayout(True)
-
+        # Set the form sizer
         self.SetSizer(box)
+        # Set the form size
         self.Fit()
+        # Perform the Layout
         self.Layout()
-
+        # Center the dialog on the screen
         self.CentreOnScreen()
+
 
 class QuestionDialog(wx.MessageDialog):
     """Replacement for wxMessageDialog with style=wx.YES_NO | wx.ICON_QUESTION."""
 
-    def __init__(self, parent, msg, header=_("Transana Confirmation"), noDefault=False, useOkCancel=False):
+    def __init__(self, parent, msg, header=_("Transana Confirmation"), noDefault=False, useOkCancel=False, includeEncoding=False):
         """ QuestionDialog Parameters:
-                parent        Parent Window
-                msg           Message to display
-                header        Dialog box header, "Transana Confirmation by default
-                noDefault     Set the No or Cancel button as the default, instead of Yes or OK
-                useOkCancel   Use OK / Cancel as the button labels rather than Yes / No """
+                parent           Parent Window
+                msg              Message to display
+                header           Dialog box header, "Transana Confirmation by default
+                noDefault        Set the No or Cancel button as the default, instead of Yes or OK
+                useOkCancel      Use OK / Cancel as the button labels rather than Yes / No
+                includeEncoding  Include Encoding selection for upgrading the single-user Windows database for 2.50 """
         
         # This should be easy, right?  Just use the OS MessageDialog like so:
         # wx.MessageDialog.__init__(self, parent, msg, _("Transana Information"), \
@@ -150,6 +183,8 @@ class QuestionDialog(wx.MessageDialog):
         self.result = -1
         # Remember the noDefault setting
         self.noDefault = noDefault
+        # Remember if Encoding is included
+        self.includeEncoding = includeEncoding
         # Define the default Window style
         dlgStyle = wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP
         
@@ -223,6 +258,38 @@ class QuestionDialog(wx.MessageDialog):
         boxButtons.Add((20,1), 1)
         # Add the button bar to the main sizer
         box.Add(boxButtons, 0, wx.ALIGN_CENTER | wx.EXPAND)
+
+        # If we're supposed to include the Encoding prompt ...
+        if includeEncoding:
+            # Create a horizontal sizer for the first row
+            box3 = wx.BoxSizer(wx.HORIZONTAL)
+            # Define the options for the Encoding choice box
+            choices = ['',
+                       _('Most languages from single-user Transana 2.1 - 2.42 on Windows'),
+                       _('Chinese from single-user Transana 2.1 - 2.42 on Windows'),
+                       _('Russian from single-user Transana 2.1 - 2.42 on Windows'),
+                       _('Eastern European data from single-user Transana 2.1 - 2.42 on Windows'),
+                       _('Greek data from single-user Transana 2.1 - 2.42 on Windows'),
+                       _('Japanese data from single-user Transana 2.1 - 2.42 on Windows'),
+                       _("All languages from OS X or MU database files")]
+            # Use a dictionary to define the encodings that go with each of the Encoding options
+            self.encodingOptions = {'' : None,
+                                    _('Most languages from single-user Transana 2.1 - 2.42 on Windows') : 'latin1',
+                                    _('Chinese from single-user Transana 2.1 - 2.42 on Windows') : 'gbk',
+                                    _('Russian from single-user Transana 2.1 - 2.42 on Windows') : 'koi8_r',
+                                    _('Eastern European data from single-user Transana 2.1 - 2.42 on Windows') : 'iso8859_2',
+                                    _('Greek data from single-user Transana 2.1 - 2.42 on Windows') : 'iso8859_7',
+                                    _('Japanese data from single-user Transana 2.1 - 2.42 on Windows') : 'cp932',
+                                    _("All languages from OS X or MU database files") : 'utf8'}
+            # Create a Choice Box where the user can select an import encoding, based on information about how the
+            # Transana-XML file in question was created.  This adds it to the Vertical Sizer created above.
+            chLbl = wx.StaticText(self, -1, _('Language Option used:'))
+            box3.Add(chLbl, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 10)
+            self.chImportEncoding = wx.Choice(self, -1, choices=choices)
+            self.chImportEncoding.SetSelection(0)
+            box3.Add(self.chImportEncoding, 1, wx.EXPAND| wx.ALIGN_CENTER | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 10)
+            box.Add(box3, 0, wx.EXPAND)
+
         # Turn AutoLayout On
         self.SetAutoLayout(True)
         # Set the form's main sizer
@@ -238,8 +305,16 @@ class QuestionDialog(wx.MessageDialog):
         """ Button Event Handler """
         # Set the result variable to the ID of the button that was pressed
         self.result = event.GetId()
-        # Close the form
-        self.Close()
+        # If we need an encoding and none has been selected and the user has selected Yes ...
+        if self.includeEncoding and (self.chImportEncoding.GetSelection() == 0) and (self.result == wx.ID_YES):
+            # then we need to over-ride the button press!  First, report the problem to the user.
+            tmpDlg = ErrorDialog(self, _('You must select a language option to proceed.'))
+            tmpDlg.ShowModal()
+            tmpDlg.Destroy()
+        # If we have a valid form ...
+        else:
+            # ... close the form
+            self.Close()
 
     def LocalShowModal(self):
         """ ShowModal wasn't working right.  This allows some modification. """
@@ -252,11 +327,42 @@ class QuestionDialog(wx.MessageDialog):
         # Return the result to indicate what button was pressed
         return self.result
 
+class PopupDialog(wx.Dialog):
+    """ A popup dialog for temporary user messages """
+
+    def __init__(self, parent, title, msg):
+        # Create a dialog
+        wx.Dialog.__init__(self, parent, -1, title, size=(350, 150), style=wx.CAPTION | wx.STAY_ON_TOP)
+        # Add sizers
+        box = wx.BoxSizer(wx.VERTICAL)
+        box2 = wx.BoxSizer(wx.HORIZONTAL)
+        # Add an Info graphic
+        bitmap = wx.EmptyBitmap(32, 32)
+        bitmap = wx.ArtProvider_GetBitmap(wx.ART_INFORMATION, wx.ART_MESSAGE_BOX, (32, 32))
+        graphic = wx.StaticBitmap(self, -1, bitmap)
+        box2.Add(graphic, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, 10)
+        # Add the message
+        message = wx.StaticText(self, -1, msg)
+        box2.Add(message, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 10)
+        box.Add(box2, 0, wx.EXPAND)
+        # Handle layout
+        self.SetAutoLayout(True)
+        self.SetSizer(box)
+        self.Fit()
+        self.Layout()
+        self.CentreOnScreen()
+        # Display the Dialog
+        self.Show()
+        # Make sure the screen gets fully drawn before continuing.  (Needed for SAVE)
+        try:
+            wx.Yield()
+        except:
+            pass
 
 class GenForm(wx.Dialog):
     """General dialog form used for getting basic field input."""
 
-    def __init__(self, parent, id, title, size=(400,230), style=wx.DEFAULT_DIALOG_STYLE, propagateEnabled=False, HelpContext='Welcome'):
+    def __init__(self, parent, id, title, size=(400,230), style=wx.DEFAULT_DIALOG_STYLE, propagateEnabled=False, useSizers=False, HelpContext='Welcome'):
         self.width = size[0]
         self.height = size[1]
         # Remember if the Propagate Button should be displayed
@@ -270,17 +376,35 @@ class GenForm(wx.Dialog):
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
-        # Due to a problem with wxWindows, Tab Order is not correct if wxTE_MULTILINE style is used in wxTextCtrls.
-        # To fix this, all controls must be placed on a Panel.  This creates that Panel.
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self, wx.Top, 0)
-        lay.bottom.SameAs(self, wx.Bottom, 0)
-        lay.left.SameAs(self, wx.Left, 0)
-        lay.right.SameAs(self, wx.Right, 0)
+        # Create a panel to hold the form contents.  This ensures that Tab Order works properly.
         self.panel = wx.Panel(self, -1, name='Dialog.Genform.Panel')
-        self.panel.SetConstraints(lay)
+        # If we are using Sizers (and we are transitioning to Sizers)
+        if useSizers:
+            # Create a vertical sizer
+            vSizer = wx.BoxSizer(wx.VERTICAL)
+            # Create a horizontal sizer
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            # Add the panel to the horizontal sizer to expand horizontally
+            hSizer.Add(self.panel, 1, wx.EXPAND)
+            # Add the horizontal sizer to the vertical sizer to expand vertically.  Give it a 10 point margin all around.
+            vSizer.Add(hSizer, 1, wx.EXPAND | wx.ALL, 10)
+            # Set the vertical sizer as the form's main sizer.
+            self.SetSizer(vSizer)
+        # If we're using LayoutConstraints (which we're transitioning away from) 
+        else:
+            # Create the Layout Constraint
+            lay = wx.LayoutConstraints()
+            # Set all margins to 0
+            lay.top.SameAs(self, wx.Top, 0)
+            lay.bottom.SameAs(self, wx.Bottom, 0)
+            lay.left.SameAs(self, wx.Left, 0)
+            lay.right.SameAs(self, wx.Right, 0)
+            # Add these layout constraints to the panel.  (The items on the panel implement form margins under Layout Constaints.)
+            self.panel.SetConstraints(lay)
 
-        self.create_buttons()
+            # We can create the buttons here with Layout Constraints, but not Sizers.
+            self.create_buttons()
+            
         # list of (label, widget) tuples
         self.edits = []
         self.choices = []
@@ -288,71 +412,132 @@ class GenForm(wx.Dialog):
 
     def new_edit_box(self, label, layout, def_text, style=0, ctrlHeight=40, maxLen=0):
         """Create a edit box with label above it."""
-        # The ctrlHeight parameter comes into play only when the wxTE_MULTILINE comes into play.
+        # The ctrlHeight parameter comes into play only when the wxTE_MULTILINE is used.
         # The default value of 40 is 2 text lines in height (or a little bit more.)
-        txt = wx.StaticText(self.panel, -1, label)
-        txt.SetConstraints(layout)
 
+        # Create the text box's label
+        txt = wx.StaticText(self.panel, -1, label)
+        # If we're using LayoutContraints ...
+        if isinstance(layout, wx.LayoutConstraints):
+            # ... apply the layout constraints that were passed in.
+            txt.SetConstraints(layout)
+        # If we're using Sizers ...
+        elif isinstance(layout, wx.BoxSizer):
+            # ... add the text label to the sizer that was passed in.
+            layout.Add(txt, 0, wx.BOTTOM, 3)
+
+        # Create the Text Control
         edit = wx.TextCtrl(self.panel, -1, def_text, style=style)
-        # If a maximum length is specified, apply it.
+        # If a maximum length is specified, apply it.  (I don't think this is supported under unicode!!)
         if maxLen > 0:
             edit.SetMaxLength(maxLen)
 
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)
-        lay.left.SameAs(txt, wx.Left)
-        lay.right.SameAs(txt, wx.Right)
-        if style == 0:
-            lay.height.AsIs()
-        else:
-            lay.height.Absolute(ctrlHeight)
-        edit.SetConstraints(lay)
+        # If we're using LayoutContraints ...
+        if isinstance(layout, wx.LayoutConstraints):
+            # ... create a new layout constraint just below the one passed in using its values
+            lay = wx.LayoutConstraints()
+            lay.top.Below(txt, 3)
+            lay.left.SameAs(txt, wx.Left)
+            lay.right.SameAs(txt, wx.Right)
+            if style == 0:
+                lay.height.AsIs()
+            else:
+                lay.height.Absolute(ctrlHeight)
+            # Apply the layout constraint to the text control.
+            edit.SetConstraints(lay)
+        # If we're using Sizers ...
+        elif isinstance(layout, wx.BoxSizer):
+            # ... add the text control to the sizer.
+            layout.Add(edit, 1, wx.EXPAND)
 
+        # Add this text control to the list of edit controls
         self.edits.append((label, edit))
-
+        # Return the text control
         return edit
  
     def new_choice_box(self, label, layout, choices, default=0):
         """Create a choice box with label above it."""
         txt = wx.StaticText(self.panel, -1, label)
-        txt.SetConstraints(layout)
+
+        # If we're using LayoutContraints ...
+        if isinstance(layout, wx.LayoutConstraints):
+            # ... apply the layout constraints that were passed in.
+            txt.SetConstraints(layout)
+        # If we're using Sizers ...
+        elif isinstance(layout, wx.BoxSizer):
+            # ... add the text label to the sizer that was passed in.
+            layout.Add(txt, 0, wx.BOTTOM, 3)
 
         choice = wx.Choice(self.panel, -1, pos=wx.DefaultPosition, size=wx.DefaultSize, choices=choices)
         choice.SetSelection(default)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)
-        lay.left.SameAs(txt, wx.Left)
-        lay.right.SameAs(txt, wx.Right)
-        lay.height.AsIs()
-        choice.SetConstraints(lay)
 
+        # If we're using LayoutContraints ...
+        if isinstance(layout, wx.LayoutConstraints):
+            # ... create a new layout constraint just below the one passed in using its values
+            lay = wx.LayoutConstraints()
+            lay.top.Below(txt, 3)
+            lay.left.SameAs(txt, wx.Left)
+            lay.right.SameAs(txt, wx.Right)
+            lay.height.AsIs()
+            # Apply the layout constraint to the choice control.
+            choice.SetConstraints(lay)
+        # If we're using Sizers ...
+        elif isinstance(layout, wx.BoxSizer):
+            # ... add the choice control to the sizer.
+            layout.Add(choice, 1, wx.EXPAND)
+
+        # Add this choice control to the list of choice controls
         self.choices.append((label, choice))
-
+        # Return the choice control
         return choice
  
     def new_combo_box(self, label, layout, choices, default='', style=wx.CB_DROPDOWN | wx.CB_SORT):
         """Create a combo box with label above it."""
         txt = wx.StaticText(self.panel, -1, label)
-        txt.SetConstraints(layout)
+
+        # If we're using LayoutContraints ...
+        if isinstance(layout, wx.LayoutConstraints):
+            # ... apply the layout constraints that were passed in.
+            txt.SetConstraints(layout)
+        # If we're using Sizers ...
+        elif isinstance(layout, wx.BoxSizer):
+            # ... add the text label to the sizer that was passed in.
+            layout.Add(txt, 0, wx.BOTTOM, 3)
 
         combo = wx.ComboBox(self.panel, -1, pos=wx.DefaultPosition, size=wx.DefaultSize, choices=choices, style=style)
         combo.SetValue(default)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)
-        lay.left.SameAs(txt, wx.Left)
-        lay.right.SameAs(txt, wx.Right)
-        lay.height.AsIs()
-        combo.SetConstraints(lay)
 
+        # If we're using LayoutContraints ...
+        if isinstance(layout, wx.LayoutConstraints):
+            # ... create a new layout constraint just below the one passed in using its values
+            lay = wx.LayoutConstraints()
+            lay.top.Below(txt, 3)
+            lay.left.SameAs(txt, wx.Left)
+            lay.right.SameAs(txt, wx.Right)
+            lay.height.AsIs()
+            # Apply the layout constraint to the combo control.
+            combo.SetConstraints(lay)
+        # If we're using Sizers ...
+        elif isinstance(layout, wx.BoxSizer):
+            # ... add the combo control to the sizer.
+            layout.Add(combo, 1, wx.EXPAND)
+
+        # Add this combo control to the list of combo controls
         self.combos.append((label, combo))
-
+        # Return the combo control
         return combo
     
-    def create_buttons(self, gap=10):
+    def create_buttons(self, gap=10, sizer=None):
         """Create the dialog buttons."""
         # We don't want to use wx.ID_HELP here, as that causes the Help buttons to be replaced with little question
         # mark buttons on the Mac, which don't look good.
         ID_HELP = wx.NewId()
+
+        # If we're using a Sizer (not LayoutConstraints)
+        if sizer:
+            # ... add an expandable spacer here so buttons will be right-justified
+            sizer.Add((1, 0), 1, wx.EXPAND)
+
         # If the Propagation feature is enabled ...
         if self.propagateEnabled:
             # ... load the propagate button graphic
@@ -363,30 +548,49 @@ class GenForm(wx.Dialog):
             self.propagate.SetToolTipString(_("Propagate Changes"))
             # Bind the propogate button to its event
             self.propagate.Bind(wx.EVT_BUTTON, self.OnPropagate)
-            # Position the button on screen
-            lay = wx.LayoutConstraints()
-            lay.height.AsIs()
-            lay.bottom.SameAs(self.panel, wx.Bottom, 10)
-            lay.right.SameAs(self.panel, wx.Right, 265)
-            lay.width.AsIs()
-            self.propagate.SetConstraints(lay)
 
+            # If we're using Layout Constraints ...
+            if sizer == None:
+                # Position the Propagate button on screen
+                lay = wx.LayoutConstraints()
+                lay.height.AsIs()
+                lay.bottom.SameAs(self.panel, wx.Bottom, 10)
+                lay.right.SameAs(self.panel, wx.Right, 265)
+                lay.width.AsIs()
+                self.propagate.SetConstraints(lay)
+            # If we're using Sizers ...
+            else:
+                # ... add the propagate button to the sizer
+                sizer.Add(self.propagate, 0, wx.ALIGN_RIGHT | wx.EXPAND)
+
+        # Define the standard buttons we want to create.
         # Tuple format = (label, id, make default?, indent from right)
         buttons = ( (_("OK"), wx.ID_OK, 1, 180),
                     (_("Cancel"), wx.ID_CANCEL, 0, 95),
-                    (_("Help"), ID_HELP, 0, 10) )
+                    (_("Help"), ID_HELP, 0, gap) )
 
        
         for b in buttons:
-            lay = wx.LayoutConstraints()
-            lay.height.AsIs()
-            lay.bottom.SameAs(self.panel, wx.Bottom, 10)
-            lay.right.SameAs(self.panel, wx.Right, b[3])
-            lay.width.AsIs()
+            # If we're using Layout Constraints:
+            if sizer == None:
+                lay = wx.LayoutConstraints()
+                lay.height.AsIs()
+                lay.bottom.SameAs(self.panel, wx.Bottom, 10)
+                lay.right.SameAs(self.panel, wx.Right, b[3])
+                lay.width.AsIs()
             button = wx.Button(self.panel, b[1], b[0])
-            button.SetConstraints(lay)
+            # If we're using Layout Constraints:
+            if sizer == None:
+                button.SetConstraints(lay)
+            else:
+                sizer.Add(button, 0, wx.ALIGN_RIGHT | wx.LEFT | wx.EXPAND, gap)
+
             if b[2]:
                 button.SetDefault()
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            sizer.Add((2, 0))
 
         wx.EVT_BUTTON(self, ID_HELP, self.OnHelp)
 

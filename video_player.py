@@ -1,4 +1,4 @@
-# Copyright (C) 2006 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2006 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -18,7 +18,11 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
-UPDATE_PROGRESS_INTERVAL = 150
+DEBUG = False
+if DEBUG:
+    print "video_player DEBUG is ON!!!!"
+
+UPDATE_PROGRESS_INTERVAL = 100
 
 # import Python's OS module
 import os
@@ -35,6 +39,8 @@ import wx.media
 import Dialogs
 # import the Transana Global data
 import TransanaGlobal
+# import the Transana VideoWindow
+import VideoWindow
 
 # Declare the main VideoPlayer class, designed to interact with the rest of Transana
 class VideoPlayer(wx.Panel):
@@ -50,8 +56,8 @@ class VideoPlayer(wx.Panel):
             formPar = parent
         # We need to know the Media Player CONTROL's parent
         self.parent = parent
-        # Create a Panel to hold the Media Player, using the FORM parent
-        wx.Panel.__init__(self, formPar, -1, size=(358, 285))
+        # Create a Panel to hold the Media Player, using the FORM parent.  The panel wants to process characters.
+        wx.Panel.__init__(self, formPar, -1, size=(358, 285), style=wx.WANTS_CHARS)
         # Remember the includeCheckBoxes setting
         self.includeCheckBoxes = includeCheckBoxes
         # Remember the (optional) offset value
@@ -93,6 +99,9 @@ class VideoPlayer(wx.Panel):
         timerID = wx.NewId()
         self.ProgressNotification = wx.Timer(self, timerID)
         wx.EVT_TIMER(self, timerID, self.OnProgressNotification)
+        
+        # Define the Key Down Event Handler
+        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
 
         # set default back end to QuickTime, as then either type of media can be opened.  If we
         # set it to DirectShow for Windows, we can't later load Quicktime files
@@ -149,7 +158,7 @@ class VideoPlayer(wx.Panel):
                     # ... destroy the synchronization indicator
                     self.synch.Destroy()
         # Create a new Media Player control
-        self.movie = wx.media.MediaCtrl(self, id=-1, fileName=flNm, szBackend=self.backend)
+        self.movie = wx.media.MediaCtrl(self, szBackend=self.backend)
         # Create a sizer to handle the media control
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(self.movie, 1, wx.EXPAND | wx.ALL, 0)
@@ -230,6 +239,8 @@ class VideoPlayer(wx.Panel):
             box.Add(hSizer, 0, wx.EXPAND)
         # Set the main sizer
         self.SetSizer(box)
+        # Re-bind the key down event
+        self.movie.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         # Re-bind the right-click-up event
         self.movie.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         # Thaw the interface when updates are complete
@@ -253,13 +264,21 @@ class VideoPlayer(wx.Panel):
             if ('wxMSW' in wx.PlatformInfo):
                 # Break out the file extension
                 (videoFilename, videoExtension) = os.path.splitext(filename)
-                # If the extension is one that requires the QuickTime players ...
+                # If the extension is one that requires the QuickTime Player ...
                 if videoExtension.lower() in ['.mov', '.mp4', '.m4v', '.aac']:
                     # ... indicate we need the QuickTime back end
                     backendNeeded = wx.media.MEDIABACKEND_QUICKTIME
-                # If not QuickTime ...
+                # If the extension is one that requires the Windows Media Player ...
+                elif videoExtension.lower() in ['.wmv', '.wma']:
+                    # ... indicate we need the WMP10 back end
+                    backendNeeded = wx.media.MEDIABACKEND_WMP10
+                # If we have MPEG and are on Windows XP or earlier ...
+                elif (videoExtension.lower() in ['.mpg', '.mpeg']) and ((sys.getwindowsversion()[0] < 6)):
+                    # ... indicate we need the DirectShow back end
+                    backendNeeded = wx.media.MEDIABACKEND_DIRECTSHOW
+                # If not QuickTime or Windows Media or MPEG on XP ...
                 else:
-                    # ... Check the Configuration data to see which WMP back end we need.
+                    # ... Check the Configuration data to see which wxMediaPlayer back end we need.
                     if TransanaGlobal.configData.mediaPlayer == 1:
                         backendNeeded = wx.media.MEDIABACKEND_DIRECTSHOW
                     else:
@@ -270,12 +289,62 @@ class VideoPlayer(wx.Panel):
                     self.backend = backendNeeded
                     # ... and recreate the Media Player using the new back end type.
                     self.CreateMediaPlayer(filename)
+
+                if DEBUG:
+                    if self.backend == wx.media.MEDIABACKEND_QUICKTIME:
+                        prompt = 'QuickTime'
+                    elif self.backend == wx.media.MEDIABACKEND_WMP10:
+                        prompt = 'WMP10'
+                    elif self.backend == wx.media.MEDIABACKEND_DIRECTSHOW:
+                        prompt = 'DirectShow'
+                    tmpDlg = Dialogs.InfoDialog(self, prompt)
+                    tmpDlg.ShowModal()
+                    tmpDlg.Destroy()
+                    
             # We need to have a flag that indicates that the video is in the process of loading
             self.isLoading = True
             # We don't know the media length in some back ends until the load is complete.
             self.mediaLengthKnown = False
+
+            # QuickTime on Windows cannot correctly load files if the PATH contains non-CP1252 characters!
+            # A chinese file name in a CP1252 path is OK, but an english file name in a chinese path won't load.
+            # This code fixes that problem.
+
+            # First, detect Windows and QuickTime
+            if ('wxMSW' in wx.PlatformInfo) and (self.backend == wx.media.MEDIABACKEND_QUICKTIME):
+                # Change the Python Encoding to cp1252
+                wx.SetDefaultPyEncoding('cp1252')
+                # Replace backslashes with forward slashes
+                filename = filename.replace('\\', '/')
+                # Get the Current Working Directory
+                originalCWD = os.getcwd()
+                # Divide the path and the file name from each other
+                (currentPath, currentFileName) = os.path.split(filename)
+                # Change the Current Directory to the file's location
+                os.chdir(currentPath)
+
+                if DEBUG:
+                    print "video_player.SetFileName(1):"
+                    print "Path changed to ", currentPath.encode('utf8'), currentPath.encode(sys.getfilesystemencoding()) == os.getcwd(), type(currentPath), type(os.getcwd())
+                
+                # Encode just the File Name portion of the path
+                tmpfilename = currentFileName.encode(sys.getfilesystemencoding())
+
+                if DEBUG:
+                    print "tmpfilename =", tmpfilename, os.path.exists(tmpfilename), os.path.exists(currentFileName)
+                
+            # If we're not on Windows OR we aren't using QuickTime ...
+            else:
+
+                if DEBUG:
+                    print "video_player.SetFileName(2):"
+                    print "filename.encode('utf8') =", filename.encode('utf8')
+                
+                # ... then the unencoded file name including the full path works just fine!
+                tmpfilename = filename
+            
             # Try to load the file in the media player.  If successful ...
-            if self.movie.Load(filename):
+            if self.movie.Load(tmpfilename):
                 # ... remember the file name
                 self.FileName = filename
                 # Initialize the start and end points
@@ -296,10 +365,16 @@ class VideoPlayer(wx.Panel):
                 # Signal that the media file did not load
                 self.isLoading = False
                 self.FileName = ""
+
+            # Again, detect Windows and QuickTime
+            if ('wxMSW' in wx.PlatformInfo) and (self.backend == wx.media.MEDIABACKEND_QUICKTIME):
+                # Reset the Default Python encoding back to UTF8
+                wx.SetDefaultPyEncoding('utf8')
+                # Reset the Current Working Directory to what it used to be
+                os.chdir(originalCWD)
+
         # If no filename is specified ...
         else:
-            # Display the Splash Screen
-#            self.graphic.Show(True)
             # "unload" what might be in the Media Player
             self.movie.Load('')
             # Hide the Media Player
@@ -313,6 +388,13 @@ class VideoPlayer(wx.Panel):
             self.OnSize(None)
         # Update the Panel on screen
         self.Update()
+
+        # If on Windows Vista, Windows 7, or later and we are using DirectShow  ...
+        if ('wxMSW' in wx.PlatformInfo) and (sys.getwindowsversion()[0] >= 6) and (self.backend == wx.media.MEDIABACKEND_DIRECTSHOW):
+            # ... there's a bug in wxPython that prevents DirectShow from triggering wx.EVT_MEDIA_LOADED, so we'll call it
+            #     manually here.  wx.CallAfter is not sufficient, as the video needs time to load and CallAfter doesn't wait
+            #     long enough.
+            wx.CallLater(2000, self.OnMediaLoaded, None)
     
     def GetFilename(self):
         """ Get the name of the currently-loaded media file """
@@ -533,6 +615,13 @@ class VideoPlayer(wx.Panel):
                 dc = wx.BufferedPaintDC(self, self.graphic)
         event.Skip()
 
+    def OnKeyDown(self, event):
+        """ Handle Key Down events """
+        # See if the Control Object wants to handle the key that was pressed, which is only will if the parent object is a VideoWindow
+        if isinstance(self.parent, VideoWindow.VideoWindow) and self.parent.ControlObject.ProcessCommonKeyCommands(event):
+            # If so, we're done here.  (Actually, we're done anyway.)
+            return
+
     def OnRightUp(self, event):
         """ Right Mouse Button Up event handler """
         # let the parent control handle this one!
@@ -550,7 +639,7 @@ class VideoPlayer(wx.Panel):
             (sizeX, sizeY) = self.movie.GetBestSize()
             # Now that we have a size, let's position the window
             #  Determine the screen size 
-            rect = wx.ClientDisplayRect()
+            rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
             #  Get the current position of the Video Window
             pos = self.GetPosition()
             #  Establish the minimum width of the media player control 

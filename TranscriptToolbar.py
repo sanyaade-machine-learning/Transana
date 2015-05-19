@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -22,6 +22,8 @@ __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 
 # import wxPython
 import wx
+# import the wxPython RichTextCtrl
+import wx.richtext as richtext
 # import Transana modules
 import Clip
 import Dialogs
@@ -30,8 +32,7 @@ import KeywordListEditForm
 import TransanaConstants
 import TransanaExceptions
 import TransanaGlobal
-import TranscriptEditor
- 
+import os
 
 class TranscriptToolbar(wx.ToolBar):
     """This class consists of a toolbar for use with a TranscriptEditor
@@ -47,98 +48,106 @@ class TranscriptToolbar(wx.ToolBar):
         else:
             size = wx.Size(470, 30)
         # Create a ToolBar as self
-        wx.ToolBar.__init__(self, parent, id, wx.DefaultPosition, size, wx.TB_HORIZONTAL | wx.NO_BORDER | wx.TB_FLAT | wx.TB_TEXT)
+        wx.ToolBar.__init__(self, parent, id, wx.DefaultPosition, size, wx.TB_HORIZONTAL | wx.BORDER_SIMPLE | wx.TB_FLAT | wx.TB_TEXT)
         # remember the parent
         self.parent = parent
         # Keep a list of the tools placed on the toolbar so they're more easily manipulated
         self.tools = []
 
         # Create an Undo button
-        self.CMD_UNDO_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_UNDO_ID, wx.Bitmap("images/Undo16.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_UNDO_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_UNDO_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Undo16.xpm"), wx.BITMAP_TYPE_XPM),
                         shortHelpString=_('Undo action')))
         wx.EVT_MENU(self, self.CMD_UNDO_ID, self.OnUndo)
 
         self.AddSeparator()
   
         # Bold, Italic, Underline buttons
-        self.CMD_BOLD_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_BOLD_ID, wx.Bitmap("images/Bold.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_BOLD_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_BOLD_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Bold.xpm"), wx.BITMAP_TYPE_XPM),
                         isToggle=1, shortHelpString=_('Bold text')))
         wx.EVT_MENU(self, self.CMD_BOLD_ID, self.OnBold)
 
-        self.CMD_ITALIC_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_ITALIC_ID, wx.Bitmap("images/Italic.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_ITALIC_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_ITALIC_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Italic.xpm"), wx.BITMAP_TYPE_XPM),
                         isToggle=1, shortHelpString=_("Italic text")))
         wx.EVT_MENU(self, self.CMD_ITALIC_ID, self.OnItalic)
        
-        self.CMD_UNDERLINE_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_UNDERLINE_ID, wx.Bitmap("images/Underline.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_UNDERLINE_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_UNDERLINE_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Underline.xpm"), wx.BITMAP_TYPE_XPM),
                         isToggle=1, shortHelpString=_("Underline text")))
         wx.EVT_MENU(self, self.CMD_UNDERLINE_ID, self.OnUnderline)
 
         self.AddSeparator()
 
         # Jeffersonian Symbols
-        self.CMD_RISING_INT_ID = self.GetNextId()
+        self.CMD_RISING_INT_ID = wx.NewId()
         bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_UP, wx.ART_TOOLBAR, (16,16))
         self.tools.append(self.AddTool(self.CMD_RISING_INT_ID, bmp,
                         shortHelpString=_("Rising Intonation")))
         wx.EVT_MENU(self, self.CMD_RISING_INT_ID, self.OnInsertChar)
         
-        self.CMD_FALLING_INT_ID = self.GetNextId()
+        self.CMD_FALLING_INT_ID = wx.NewId()
         bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_DOWN, wx.ART_TOOLBAR, (16,16))
         self.tools.append(self.AddTool(self.CMD_FALLING_INT_ID, bmp,
                         shortHelpString=_("Falling Intonation")))
         wx.EVT_MENU(self, self.CMD_FALLING_INT_ID, self.OnInsertChar) 
        
-        self.CMD_AUDIBLE_BREATH_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_AUDIBLE_BREATH_ID, wx.Bitmap("images/AudibleBreath.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_AUDIBLE_BREATH_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_AUDIBLE_BREATH_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "AudibleBreath.xpm"), wx.BITMAP_TYPE_XPM),
                         shortHelpString=_("Audible Breath")))
         wx.EVT_MENU(self, self.CMD_AUDIBLE_BREATH_ID, self.OnInsertChar)
     
-        self.CMD_WHISPERED_SPEECH_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_WHISPERED_SPEECH_ID, wx.Bitmap("images/WhisperedSpeech.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_WHISPERED_SPEECH_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_WHISPERED_SPEECH_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "WhisperedSpeech.xpm"), wx.BITMAP_TYPE_XPM),
                         shortHelpString=_("Whispered Speech")))
         wx.EVT_MENU(self, self.CMD_WHISPERED_SPEECH_ID, self.OnInsertChar)
       
         self.AddSeparator()
 
         # Add show / hide timecodes button
-        self.CMD_SHOWHIDE_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_SHOWHIDE_ID, wx.Bitmap("images/TimeCode16.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_SHOWHIDE_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_SHOWHIDE_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "TimeCode16.xpm"), wx.BITMAP_TYPE_XPM),
                         isToggle=1, shortHelpString=_("Show/Hide Time Code Indexes")))
         wx.EVT_MENU(self, self.CMD_SHOWHIDE_ID, self.OnShowHideCodes)
 
         # Add show / hide timecodes button
-        self.CMD_SHOWHIDETIME_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_SHOWHIDETIME_ID, wx.Bitmap("images/TimeCodeData16.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_SHOWHIDETIME_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_SHOWHIDETIME_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "TimeCodeData16.xpm"), wx.BITMAP_TYPE_XPM),
                         isToggle=1, shortHelpString=_("Show/Hide Time Code Values")))
         wx.EVT_MENU(self, self.CMD_SHOWHIDETIME_ID, self.OnShowHideValues)
 
         # Add read only / edit mode button
-        self.CMD_READONLY_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_READONLY_ID, wx.Bitmap("images/ReadOnly16.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_READONLY_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_READONLY_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "ReadOnly16.xpm"), wx.BITMAP_TYPE_XPM),
                         isToggle=1, shortHelpString=_("Edit/Read-only select")))
         wx.EVT_MENU(self, self.CMD_READONLY_ID, self.OnReadOnlySelect)
-        
+
+        # Add Formatring button
+        self.CMD_FORMAT_ID = wx.NewId()
+        # ... get the graphic for the Format button ...
+        bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP_SETTINGS, wx.ART_TOOLBAR, (16,16))
+        # ... and create a Format button on the tool bar.
+        self.tools.append(self.AddTool(self.CMD_FORMAT_ID, bmp, shortHelpString=_("Format")))
+        wx.EVT_MENU(self, self.CMD_FORMAT_ID, self.OnFormat)
+
         self.AddSeparator()
 
         # Add QuickClip button
-        self.CMD_QUICKCLIP_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_QUICKCLIP_ID, wx.Bitmap("images/QuickClip16.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_QUICKCLIP_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_QUICKCLIP_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "QuickClip16.xpm"), wx.BITMAP_TYPE_XPM),
                         shortHelpString=_("Create Quick Clip")))
         wx.EVT_MENU(self, self.CMD_QUICKCLIP_ID, self.OnQuickClip)
 
         # Add Edit keywords button
-        self.CMD_KEYWORD_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_KEYWORD_ID, wx.Bitmap("images/KeywordRoot16.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_KEYWORD_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_KEYWORD_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KeywordRoot16.xpm"), wx.BITMAP_TYPE_XPM),
                         shortHelpString=_("Edit Keywords")))
         wx.EVT_MENU(self, self.CMD_KEYWORD_ID, self.OnEditKeywords)
 
         # Add Save Button
-        self.CMD_SAVE_ID = self.GetNextId()
-        self.tools.append(self.AddTool(self.CMD_SAVE_ID, wx.Bitmap("images/Save16.xpm", wx.BITMAP_TYPE_XPM),
+        self.CMD_SAVE_ID = wx.NewId()
+        self.tools.append(self.AddTool(self.CMD_SAVE_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Save16.xpm"), wx.BITMAP_TYPE_XPM),
                         shortHelpString=_("Save Transcript")))
         wx.EVT_MENU(self, self.CMD_SAVE_ID, self.OnSave)
 
@@ -146,9 +155,9 @@ class TranscriptToolbar(wx.ToolBar):
 
         # Add Propagate Changes Button
         # First, define the ID for this button
-        self.CMD_PROPAGATE_ID = self.GetNextId()
+        self.CMD_PROPAGATE_ID = wx.NewId()
         # Now create the button and add it to the Tools list
-        self.tools.append(self.AddTool(self.CMD_PROPAGATE_ID, wx.Bitmap("images/Propagate.xpm", wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_PROPAGATE_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Propagate.xpm"), wx.BITMAP_TYPE_XPM),
                         shortHelpString=_("Propagate Changes")))
         # Link the button to the appropriate event handler
         wx.EVT_MENU(self, self.CMD_PROPAGATE_ID, self.OnPropagate)
@@ -157,18 +166,18 @@ class TranscriptToolbar(wx.ToolBar):
         
         # Add Multi-Select Button
         # First, define the ID for this button
-        self.CMD_MULTISELECT_ID = self.GetNextId()
+        self.CMD_MULTISELECT_ID = wx.NewId()
         # Now create the button and add it to the Tools list
-        self.tools.append(self.AddTool(self.CMD_MULTISELECT_ID, wx.Bitmap("images/MultiSelect.xpm", wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_MULTISELECT_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "MultiSelect.xpm"), wx.BITMAP_TYPE_XPM),
                         shortHelpString=_("Match Selection in Other Transcripts")))
         # Link the button to the appropriate event handler
         wx.EVT_MENU(self, self.CMD_MULTISELECT_ID, self.OnMultiSelect)
 
         # Add Multiple Transcript Play Button
         # First, define the ID for this button
-        self.CMD_PLAY_ID = self.GetNextId()
+        self.CMD_PLAY_ID = wx.NewId()
         # Now create the button and add it to the Tools list
-        self.tools.append(self.AddTool(self.CMD_PLAY_ID, wx.Bitmap("images/Play.xpm", wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_PLAY_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM),
                         shortHelpString=_("Play Multiple Transcript Selection")))
         # Link the button to the appropriate event handler
         wx.EVT_MENU(self, self.CMD_PLAY_ID, self.OnMultiPlay)
@@ -176,11 +185,11 @@ class TranscriptToolbar(wx.ToolBar):
         self.AddSeparator()
 
         # SEARCH moved to TranscriptionUI because you can't put a TextCtrl on a Toolbar on the Mac!
-
         # Set the Initial State of the Editing Buttons to "False"
         for x in (self.CMD_UNDO_ID, self.CMD_BOLD_ID, self.CMD_ITALIC_ID, self.CMD_UNDERLINE_ID, \
-                    self.CMD_RISING_INT_ID, self.CMD_FALLING_INT_ID, \
-                    self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID, self.CMD_PROPAGATE_ID):
+                  self.CMD_RISING_INT_ID, self.CMD_FALLING_INT_ID, \
+                  self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID, self.CMD_FORMAT_ID, \
+                  self.CMD_PROPAGATE_ID, self.CMD_MULTISELECT_ID, self.CMD_PLAY_ID):
             self.EnableTool(x, False)
 
     def GetNextId(self):
@@ -248,9 +257,9 @@ class TranscriptToolbar(wx.ToolBar):
         show_codes = self.GetToolState(self.CMD_SHOWHIDE_ID)
         # Depending on the indent state, show or hide the time codes
         if show_codes:
-            self.parent.editor.show_codes()
+            self.parent.editor.show_codes(showPopup=True)
         else:
-            self.parent.editor.hide_codes()
+            self.parent.editor.hide_codes(showPopup=True)
 
     def OnShowHideValues(self, event):
         """ Implement Show / Hide Time Code Values """
@@ -258,6 +267,10 @@ class TranscriptToolbar(wx.ToolBar):
 
     def OnReadOnlySelect(self, evt):
         """ Implement Read Only / Edit Mode """
+        # If there's no object currently loaded in the interface ...
+        if self.parent.editor.TranscriptObj == None:
+            # ... then we can't edit it, can we?  Let's get out of here.
+            return
         # Get the button's "indent" state
         can_edit = self.GetToolState(self.CMD_READONLY_ID)
         # If leaving edit mode, prompt for save if necessary.
@@ -275,11 +288,22 @@ class TranscriptToolbar(wx.ToolBar):
                     # Determine whether we have a Clip Transcript (not pickled) or an Episode Transcript (pickled)
                     # and load it.
                     if tobj.clip_num > 0:
-                        # The Clip Transcript is never pickled.
-                        self.parent.editor.load_transcript(tobj)
+                        # If we're using the Rich Text Ctrl ...
+                        if TransanaConstants.USESRTC:
+                            # Load the Clip Transcript
+                            self.parent.editor.load_transcript(tobj)
+                        # If we're using the Styled Text Ctrl ...
+                        else:
+                            # The Clip Transcript is never pickled.
+                            self.parent.editor.load_transcript(tobj)
                     else:
-                        # The Episode Transcript will always have been pickled in this circumstance.
-                        self.parent.editor.load_transcript(tobj, dataType='pickle')
+                        # If we're using the Rich Text Ctrl ...
+                        if TransanaConstants.USESRTC:
+                            # Load the Episode Transcript
+                            self.parent.editor.load_transcript(tobj)
+                        else:
+                            # The Episode Transcript will always have been pickled in this circumstance.
+                            self.parent.editor.load_transcript(tobj, dataType='pickle')
             # Drop the Record Lock
             self.parent.editor.TranscriptObj.unlock_record()
             # Set the Read only state based on the button's indent
@@ -318,8 +342,12 @@ class TranscriptToolbar(wx.ToolBar):
                         # The Clip Transcript is never pickled.
                         self.parent.editor.load_transcript(self.parent.editor.TranscriptObj)
                     else:
-                        # The Episode Transcript will always have been pickled in this circumstance.
-                        self.parent.editor.load_transcript(self.parent.editor.TranscriptObj, dataType='pickle')
+                        if TransanaConstants.USESRTC:
+                            # Load the Episode Transcript
+                            self.parent.editor.load_transcript(self.parent.editor.TranscriptObj)
+                        else:
+                            # The Episode Transcript will always have been pickled in this circumstance.
+                            self.parent.editor.load_transcript(self.parent.editor.TranscriptObj, dataType='pickle')
                     # reloading the Transcript unfortunately unlocks the record.  I can't figure out
                     # a clever way to avoid this, so let's just re-lock the record.
                     self.parent.editor.TranscriptObj.lock_record()
@@ -332,6 +360,19 @@ class TranscriptToolbar(wx.ToolBar):
                 self.parent.editor.set_read_only(not can_edit)
                 # update the Toolbar's state
                 self.UpdateEditingButtons()
+
+                # If we're using the Rich Text Ctrl ...
+                if TransanaConstants.USESRTC:
+                    # There's a bit of weirdness with the RTC, or more likely with my implementation of it.
+                    # New transcripts don't have proper values for Paragraph Alignment or Line Spacing.
+                    # I tried to add them when initializing the control, but that caused problems with
+                    # RTF import.  The following code tries to fix that problem when the USER first opens
+                    # a new transcript.  (That's why it's here instead of elsewhere.)
+                    if self.parent.editor.GetLastPosition() == 0:
+                        self.parent.editor.SetTxtStyle(parAlign = wx.TEXT_ALIGNMENT_LEFT, parLineSpacing = richtext.TEXT_ATTR_LINE_SPACING_NORMAL)
+                    # Call CheckFormatting() to set the Default and Basic Styles correctly
+                    self.parent.editor.CheckFormatting()
+
             # Process Record Lock exception
             except TransanaExceptions.RecordLockedError, e:
                 self.parent.editor.TranscriptObj.lastsavetime = oldLastSaveTime
@@ -377,16 +418,31 @@ class TranscriptToolbar(wx.ToolBar):
                 # Clear the deleted objects from the Transana Interface.  Otherwise, problems arise.
                 self.parent.ControlObject.ClearAllWindows()
 
+    def OnFormat(self, event):
+        """ Format Text """
+        # Call the ControlObject's Format Dialog method
+        self.parent.ControlObject.TranscriptCallFormatDialog()
+
     def UpdateEditingButtons(self):
         """ Update the Toolbar Buttons depending on the Edit State """
         # Enable/Disable editing buttons
         can_edit = not self.parent.editor.get_read_only()
         for x in (self.CMD_UNDO_ID, self.CMD_BOLD_ID, self.CMD_ITALIC_ID, self.CMD_UNDERLINE_ID, \
-                    self.CMD_RISING_INT_ID, self.CMD_FALLING_INT_ID, \
-                    self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID, self.CMD_PROPAGATE_ID):
+                  self.CMD_RISING_INT_ID, self.CMD_FALLING_INT_ID, \
+                  self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID, self.CMD_FORMAT_ID, \
+                  self.CMD_PROPAGATE_ID):
             self.EnableTool(x, can_edit)
         # Enable/Disable Transcript menu Items
         self.parent.ControlObject.SetTranscriptEditOptions(can_edit)
+        # If on Windows and we are LEAVING Edit Mode ...
+        if ('wxMSW' in wx.PlatformInfo) and not can_edit:
+            # ... change the Transcript Health Indicator to Neutral
+            self.parent.GDIBmp.SetBitmap(self.parent.GDIBmpAll)
+
+    def UpdateMultiTranscriptButtons(self, enable):
+        """ Update the Toolbar Buttons depending on the enable parameter """
+        for x in (self.CMD_MULTISELECT_ID, self.CMD_PLAY_ID):
+            self.EnableTool(x, enable)
 
     def OnQuickClip(self, event):
         """ Create a Quick Clip """
@@ -416,7 +472,7 @@ class TranscriptToolbar(wx.ToolBar):
 
                 # If the underlying Transcript object has a clip number, we're working with a CLIP.
                 if self.parent.editor.TranscriptObj.clip_num > 0:
-                    # Finally, we can load the Clip object
+                    # Finally, we can load the Clip object.
                     obj = Clip.Clip(self.parent.editor.TranscriptObj.clip_num)
                 # Otherwise ...
                 else:
@@ -469,6 +525,11 @@ class TranscriptToolbar(wx.ToolBar):
                     # Copy the local keywords list into the appropriate object
                     obj.keyword_list = kwlist
 
+                    # If we are dealing with an Episode ...
+                    if isinstance(obj, Episode.Episode):
+                        # Check to see if there are keywords to be propagated
+                        self.parent.ControlObject.PropagateEpisodeKeywords(obj.number, obj.keyword_list)
+
                     # Save the Data object
                     obj.db_save()
 
@@ -508,73 +569,6 @@ class TranscriptToolbar(wx.ToolBar):
 
                 # Unlock the Data Object
                 obj.unlock_record()
-
-                # In MU, if another user updates the transcript you have loaded, then you edit keywords, then you edit
-                # the transcript, the other user's transcript changes get lost.  (Discovered under Clip Merge scenario.)
-                # Code has to be added here to prevent that!
-
-                # Remember the original Last Save time
-                oldLastSaveTime = []
-                # For each existing Transcript Window ...
-                for cnt in range(len(self.parent.ControlObject.TranscriptWindow)):
-                    # ... append the LastSaveTime value
-                    oldLastSaveTime.append(self.parent.ControlObject.TranscriptWindow[cnt].dlg.editor.TranscriptObj.lastsavetime)
-                # Create a flag that knows if the message has been displayed, so we can show it only once.
-                msgShown = False
-                # For each existing Transcript Window ...
-                for cnt in range(len(self.parent.ControlObject.TranscriptWindow)):
-                    # ... get a simplified reference to the transcript window ...
-                    trWin = self.parent.ControlObject.TranscriptWindow[cnt]
-
-                    # Load the revised Transcript.  (This prevents a Last Save Time error in MU.)
-                    trWin.dlg.editor.TranscriptObj.db_load_by_num(trWin.dlg.editor.TranscriptObj.number)
-
-                    # If the Transcript Object was updated during this reload (due to having been
-                    # edited in the interim by another user) we need to refresh the editor!
-                    # Check that we had a record lock and check the new LastSaveTime with the original one.
-                    if not TranscriptLocked[cnt] and (not msgShown and (oldLastSaveTime[cnt] != trWin.dlg.editor.TranscriptObj.lastsavetime)):
-                        msg = _('This Transcript has been updated since you originally loaded it!\nYour copy of the record will be refreshed to reflect the changes.')
-                        dlg = Dialogs.InfoDialog(trWin.dlg, msg)
-                        dlg.ShowModal()
-                        dlg.Destroy()
-                        msgShown = True
-
-                    # If the Transcript Object was updated during this reload (due to having been
-                    # edited in the interim by another user) we need to refresh the editor!
-                    # Check the new LastSaveTime with the original one.
-                    if oldLastSaveTime != trWin.dlg.editor.TranscriptObj.lastsavetime:
-                        # If Time Code Data is displayed ...
-                        if trWin.dlg.toolbar.GetToolState(trWin.dlg.toolbar.CMD_SHOWHIDETIME_ID):
-                            # ... signal that it was being shown ...
-                            timeCodeDataShowing = True
-                            # ... and HIDE it by toggling the button and calling the event!  We don't want it to be propagated.
-                            trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_SHOWHIDETIME_ID, False)
-                            trWin.dlg.toolbar.OnShowHideValues(evt)
-                        # If Time Code Data is NOT displayed ...
-                        else:
-                            # ... then note that it isn't so we know not to re-display it later.
-                            timeCodeDataShowing = False
-                        # Determine whether we have a Clip Transcript (not pickled) or an Episode Transcript (pickled)
-                        # and load it.
-                        if trWin.dlg.editor.TranscriptObj.clip_num > 0:
-                            # The Clip Transcript is never pickled.
-                            trWin.dlg.editor.load_transcript(trWin.dlg.editor.TranscriptObj)
-                        else:
-                            # The Episode Transcript will always have been pickled in this circumstance.
-                            trWin.dlg.editor.load_transcript(trWin.dlg.editor.TranscriptObj, dataType='pickle')
-                        # If Time Code Data was being displayed ...
-                        if timeCodeDataShowing:
-                            # ... RE-DISPLAY it by toggling the button and calling the event!
-                            trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_SHOWHIDETIME_ID, True)
-                            trWin.dlg.toolbar.OnShowHideValues(evt)
-
-                    # If we have locked transcripts (flagged earlier) ...
-                    if TranscriptLocked[cnt]:
-                        # ... toggle the Edit Mode button ...
-                        trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_READONLY_ID, not trWin.dlg.toolbar.GetToolState(trWin.dlg.toolbar.CMD_READONLY_ID))
-                        # ... and call the event associated with toggling the button.  This puts us back in Edit
-                        # mode and re-locks the Transcript.
-                        trWin.dlg.toolbar.OnReadOnlySelect(evt)
 
             except TransanaExceptions.RecordLockedError, e:
                 """Handle the RecordLockedError exception."""
@@ -634,7 +628,6 @@ class TranscriptToolbar(wx.ToolBar):
         """ Implements the "Play" button in the multi-transcript environment """
         self.parent.ControlObject.MultiPlay()
 
-            	
     def OnStyleChange(self, editor):
         """This event handler is setup in the higher level Transcript Window,
         which instructs the Transcript editor to call this function when
@@ -657,6 +650,8 @@ class TranscriptToolbar(wx.ToolBar):
         self.SetToolShortHelp(self.CMD_SHOWHIDE_ID, _("Show/Hide Time Code Indexes"))
         self.SetToolShortHelp(self.CMD_SHOWHIDETIME_ID, _("Show/Hide Time Code Values"))
         self.SetToolShortHelp(self.CMD_READONLY_ID, _("Edit/Read-only select"))
+        self.SetToolShortHelp(self.CMD_FORMAT_ID, _("Format"))
+        self.SetToolShortHelp(self.CMD_QUICKCLIP_ID, _("Create Quick Clip"))
         self.SetToolShortHelp(self.CMD_KEYWORD_ID, _("Edit Keywords"))
         self.SetToolShortHelp(self.CMD_SAVE_ID, _("Save Transcript"))
         self.SetToolShortHelp(self.CMD_PROPAGATE_ID, _("Propagate Changes"))

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -32,53 +32,108 @@ class SeriesPropertiesForm(Dialogs.GenForm):
         self.width = 400
         self.height = 210
         # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style
-        Dialogs.GenForm.__init__(self, parent, id, title, size=(self.width, self.height), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Series Properties')
-        # Define the minimum size for this dialog as the initial size, and define height as unchangeable
-        self.SetSizeHints(self.width, self.height, -1, self.height)
+        Dialogs.GenForm.__init__(self, parent, id, title, size=(self.width, self.height), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext='Series Properties')
 
         self.obj = series_object
 
-        # Series ID layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 40)  # 40% width
-        lay.height.AsIs()
-        id_edit = self.new_edit_box(_("Series ID"), lay, self.obj.id, maxLen=100)
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Owner layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.RightOf(id_edit, 10)           # 10 right of series ID
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        owner_edit = self.new_edit_box(_("Owner"), lay, self.obj.owner, maxLen=100)
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+        # Series ID
+        id_edit = self.new_edit_box(_("Series ID"), v1, self.obj.id, maxLen=100)
+        # Add the element to the row sizer
+        r1Sizer.Add(v1, 1, wx.EXPAND)
 
-        # Comment layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(id_edit, 10)              # 10 under ID
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        comment_edit = self.new_edit_box(_("Comment"), lay, self.obj.comment, maxLen=255)
+        # Add a horizontal spacer to the row sizer        
+        r1Sizer.Add((10, 0))
 
+        # Create a VERTICAL sizer for the next element
+        v2 = wx.BoxSizer(wx.VERTICAL)
+        # Owner
+        owner_edit = self.new_edit_box(_("Owner"), v2, self.obj.owner, maxLen=100)
+        # Add the element to the row sizer
+        r1Sizer.Add(v2, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v3 = wx.BoxSizer(wx.VERTICAL)
+        # Comment
+        comment_edit = self.new_edit_box(_("Comment"), v3, self.obj.comment, maxLen=255)
+        # Add the element to the row sizer
+        r2Sizer.Add(v3, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v4 = wx.BoxSizer(wx.VERTICAL)
         self.kw_groups = DBInterface.list_of_keyword_groups()
-        # Default KW Group Layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(comment_edit, 10)         # 10 under comment
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 40)  # 40% width
-        lay.height.AsIs()
-        self.kwg_choice = self.new_choice_box(_("Default Keyword Group"), lay, [""] + self.kw_groups, 0)
+        # Default KW Group
+        self.kwg_choice = self.new_choice_box(_("Default Keyword Group"), v4, [""] + self.kw_groups, 0)
+        # Add the element to the row sizer
+        r3Sizer.Add(v4, 1, wx.EXPAND)
         if (self.obj.keyword_group) and (self.kwg_choice.FindString(self.obj.keyword_group) != wx.NOT_FOUND):
             self.kwg_choice.SetStringSelection(self.obj.keyword_group)
         else:
             self.kwg_choice.SetSelection(0)
 
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r3Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
         self.Layout()
-        self.SetAutoLayout(True)
+        # Resize the form to fit the contents
+        self.Fit()
+
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(self.width, width), height))
+        # Define the minimum size for this dialog as the current size, and define height as unchangeable
+        self.SetSizeHints(max(self.width, width), height, -1, height)
+        # Center the form on screen
         self.CenterOnScreen()
 
+        # Set focus to Series ID
         id_edit.SetFocus()
 
     def get_input(self):

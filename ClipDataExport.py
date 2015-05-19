@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -44,44 +44,89 @@ class ClipDataExport(Dialogs.GenForm):
         # Define the form title
         title = _("Transana Clip Data Export")
         # Create the form itself
-        Dialogs.GenForm.__init__(self, parent, id, title, (550,150), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Clip Data Export')
-        # Define the minimum size for this dialog as the initial size
-        self.SetSizeHints(550, 150)
+        Dialogs.GenForm.__init__(self, parent, id, title, (550,150), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext='Clip Data Export')
 
-        # Export Message Layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)
-        lay.left.SameAs(self.panel, wx.Left, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.height.AsIs()
-        # If the filename path is not empty, we need to tell the user.
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Header Message
         prompt = _('Please create a Transana Clip Data File for export.')
         exportText = wx.StaticText(self.panel, -1, prompt)
-        exportText.SetConstraints(lay)
+        # Add the export message to the dialog box
+        r1Sizer.Add(exportText, 0)
 
-        # Export Filename Layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(exportText, 10)
-        lay.left.SameAs(self.panel, wx.Left, 10)
-        lay.width.PercentOf(self.panel, wx.Width, 80)  # 80% width
-        lay.height.AsIs()
-        self.exportFile = self.new_edit_box(_("Export Filename"), lay, '')
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+
+        # Export Filename
+        self.exportFile = self.new_edit_box(_("Export Filename"), v1, '')
         self.exportFile.SetDropTarget(EditBoxFileDropTarget(self.exportFile))
+        # Add the element sizer to the row sizer
+        r2Sizer.Add(v1, 1, wx.EXPAND)
 
-        # Browse button layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.exportFile, wx.Top)
-        lay.left.RightOf(self.exportFile, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.bottom.SameAs(self.exportFile, wx.Bottom)
+        # Add a spacer to the row sizer        
+        r2Sizer.Add((10, 0))
+
+        # Browse button
         browse = wx.Button(self.panel, wx.ID_FILE1, _("Browse"), wx.DefaultPosition)
-        browse.SetConstraints(lay)
         wx.EVT_BUTTON(self, wx.ID_FILE1, self.OnBrowse)
+        # Add the element to the row sizer
+        r2Sizer.Add(browse, 0, wx.ALIGN_BOTTOM)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            r2Sizer.Add((2, 0))
 
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
         self.Layout()
-        self.SetAutoLayout(True)
+        # Resize the form to fit the contents
+        self.Fit()
+
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(550, width), max(100, height)))
+        # Define the minimum size for this dialog as the current size, and define height as unchangeable
+        self.SetSizeHints(max(550, width), max(100, height), -1, max(100, height))
+        # Center the form on screen
         self.CenterOnScreen()
 
+        # Set focus to the Export File Name field
         self.exportFile.SetFocus()
 
 
@@ -259,7 +304,7 @@ class ClipDataExport(Dialogs.GenForm):
         profileList = dlgFilter.GetConfigNames()
         # If (translated) "Default" is in the list ...
         # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
-        if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+        if unicode(_('Default'), 'utf8') in profileList:
             # ... set the Filter Dialog to use this filter
             dlgFilter.configName = unicode(_('Default'), TransanaGlobal.encoding)
             # Temporarily set loadDefault to True for the Filter Dialog.  This disables the Filter Load dialog.
@@ -332,7 +377,8 @@ class ClipDataExport(Dialogs.GenForm):
                 # clip should be from the main collection if it is to be included in the report.
                 if clipRec[2] and ((self.collectionNum == 0) or (showNested) or (clipRec[1] == self.collectionNum)):
                     # Load the Clip data.  The ClipLookup dictionary allows this easily.
-                    clip = Clip.Clip(clipLookup[clipRec[0], clipRec[1]])
+                    # No need to load the Clip Transcripts, which can be slow to load.
+                    clip = Clip.Clip(clipLookup[clipRec[0], clipRec[1]], skipText=True)
                     # Get the collection the clip is from.
                     collection = Collection.Collection(clip.collection_num)
                     # Encode string values using the Export Encoding

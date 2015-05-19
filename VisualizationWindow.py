@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -131,17 +131,17 @@ class VisualizationWindow(wx.Dialog):
         wx.EVT_BUTTON(self, self.filter.GetId(), self.OnFilter)
 
         # Add Zoom In Button
-        self.zoomIn = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOMIN, wx.Bitmap('images/ZoomIn.xpm', wx.BITMAP_TYPE_XPM))
+        self.zoomIn = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOMIN, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", 'ZoomIn.xpm'), wx.BITMAP_TYPE_XPM))
         toolbarSizer.Add(self.zoomIn, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL , 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_ZOOMIN, self.OnZoomIn)
 
         # Add Zoom Out Button
-        self.zoomOut = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOMOUT, wx.Bitmap('images/ZoomOut.xpm', wx.BITMAP_TYPE_XPM))
+        self.zoomOut = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOMOUT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", 'ZoomOut.xpm'), wx.BITMAP_TYPE_XPM))
         toolbarSizer.Add(self.zoomOut, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL , 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_ZOOMOUT, self.OnZoomOut)
 
         # Add Zoom to 100% Button
-        self.zoom100 = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOM100, wx.Bitmap('images/Zoom100.xpm', wx.BITMAP_TYPE_XPM))
+        self.zoom100 = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOM100, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", 'Zoom100.xpm'), wx.BITMAP_TYPE_XPM))
         toolbarSizer.Add(self.zoom100, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL , 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_ZOOM100, self.OnZoom100)
 
@@ -152,10 +152,10 @@ class VisualizationWindow(wx.Dialog):
         # We need to use a Generic Bitmap Toggle Button!
         self.loop = wx.lib.buttons.GenBitmapToggleButton(self.toolbar, -1, None)
         # Define the image for the "un-pressed" state
-        bmp = wx.Bitmap('images/loop_up.xpm', wx.BITMAP_TYPE_XPM)
+        bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", 'loop_up.xpm'), wx.BITMAP_TYPE_XPM)
         self.loop.SetBitmapLabel(bmp)
         # Define the image for the "pressed" state
-        bmp = wx.Bitmap('images/loop_down.xpm', wx.BITMAP_TYPE_XPM)
+        bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", 'loop_down.xpm'), wx.BITMAP_TYPE_XPM)
         self.loop.SetBitmapSelected(bmp)
         # Set the button to "un-pressed"
         self.loop.SetToggle(False)
@@ -370,11 +370,24 @@ class VisualizationWindow(wx.Dialog):
                         else:
                             length = self.zoomInfo[-1][1]
                     elif type(self.ControlObject.currentObj) == Clip.Clip:
-                        # Set the current global video selection based on the Clip.
-                        self.ControlObject.SetVideoSelection(self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop) 
-                        # we have to know the right start and end points for the waveform.
-                        start = self.ControlObject.VideoStartPoint
-                        length = self.ControlObject.GetMediaLength()
+
+##                        print "VisualizationWindow.OnIdle():  CLIP"
+##                        print self.zoomInfo
+##                        print
+
+                        if False:
+                            # Set the current global video selection based on the Clip.
+                            self.ControlObject.SetVideoSelection(self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop) 
+                            # we have to know the right start and end points for the waveform.
+                            start = self.ControlObject.VideoStartPoint
+                            length = self.ControlObject.GetMediaLength()
+                        else:
+                            start = self.zoomInfo[-1][0]
+                            length = max(self.zoomInfo[-1][1], 500)
+                            # Set the current global video selection based on the Clip.
+                            self.ControlObject.SetVideoSelection(start, self.ControlObject.currentObj.clip_stop)
+
+##                        print self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop, '/', start, start + length
 
                     # Get the status of the VideoWindow's checkboxes
                     checkboxData = self.ControlObject.GetVideoCheckboxDataForClips(start)
@@ -505,18 +518,38 @@ class VisualizationWindow(wx.Dialog):
                         tmpEpisode = Episode.Episode()
                         tmpEpisode.series_id = 'None'
                         tmpEpisode.id = 'None'
+
+##                    print "VisualizationWindow.OnIdle():  CLIP"
+##                    print self.zoomInfo
+##                    print
+                    
                     # Set the current global video selection based on the Clip.
-                    self.ControlObject.SetVideoSelection(self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop)
+##                    self.ControlObject.SetVideoSelection(self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop)
+
+                    # Set up the embedded Keyword Visualization, sending it all the data it needs so it can draw or redraw itself.
+##                    self.kwMap.SetupEmbedded(self.ControlObject.currentObj.episode_num, tmpEpisode.series_id, \
+##                                             tmpEpisode.id, self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop, \
+##                                             filteredKeywordList = filteredKeywordList, unfilteredKeywordList = unfilteredKeywordList, \
+##                                             keywordColors = keywordColorList, clipNum=self.ControlObject.currentObj.number,
+##                                             configName=configName, loadDefault=self.loadDefault)
+
+                    # Draw the TimeLine values
+##                    self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
+
+                    start = self.zoomInfo[-1][0]
+                    length = max(self.zoomInfo[-1][1], 500)
+                    # Set the current global video selection based on the Clip.
+                    self.ControlObject.SetVideoSelection(start, self.ControlObject.currentObj.clip_stop) 
 
                     # Set up the embedded Keyword Visualization, sending it all the data it needs so it can draw or redraw itself.
                     self.kwMap.SetupEmbedded(self.ControlObject.currentObj.episode_num, tmpEpisode.series_id, \
-                                             tmpEpisode.id, self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop, \
+                                             tmpEpisode.id, start, start + length, \
                                              filteredKeywordList = filteredKeywordList, unfilteredKeywordList = unfilteredKeywordList, \
                                              keywordColors = keywordColorList, clipNum=self.ControlObject.currentObj.number,
                                              configName=configName, loadDefault=self.loadDefault)
 
                     # Draw the TimeLine values
-                    self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
+                    self.draw_timeline(start, length)
 
                 elif self.ControlObject.currentObj != None:
                     self.waveform.AddText('Keyword Visualization - %s not implemented.' % type(self.ControlObject.currentObj), 5, 5)
@@ -566,13 +599,13 @@ class VisualizationWindow(wx.Dialog):
             if "wxMac" in wx.PlatformInfo:
                 # On Mac, the window height is the smaller of the Keyword Visualization + 100 for the rest of the
                 # window or 2/3 of the screen height
-                newHeight = min(self.kwMap.GetKeywordCount()[1] + 100, 2 * wx.ClientDisplayRect()[3] / 3)
+                newHeight = min(self.kwMap.GetKeywordCount()[1] + 100, 2 * wx.Display(0).GetClientArea()[3] / 3)  # wx.ClientDisplayRect()
             else:
                 # On Windows, the window height is the smaller of the Keyword Visualization + 142 for the rest of the
                 # window or 2/3 of the screen height
-                newHeight = min(self.kwMap.GetKeywordCount()[1] + 142, 2 * wx.ClientDisplayRect()[3] / 3)
+                newHeight = min(self.kwMap.GetKeywordCount()[1] + 142, 2 * wx.Display(0).GetClientArea()[3] / 3)  # wx.ClientDisplayRect()
             # Let's say that 1/4 of the screen is the minimum Waveform height!
-            newHeight = max(newHeight, round(wx.ClientDisplayRect()[3] / 4))
+            newHeight = max(newHeight, round(wx.Display(0).GetClientArea()[3] / 4))  # wx.ClientDisplayRect()
 
             # The Hybrid Visualization was losing the waveform when the Filter Dialog was called.  So when this happens ...
             if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
@@ -586,6 +619,18 @@ class VisualizationWindow(wx.Dialog):
         
     def OnKeyDown(self, event):
         """ Captures Key Events to allow this window to control video playback during transcription. """
+
+        # See if the Control Object wants to handle the keys that were pressed
+        if self.ControlObject.ProcessCommonKeyCommands(event):
+            # If Ctrl-A or Ctrl-F are pressed, we need to move the Visualization Window's starting point!
+            if event.ControlDown() and (event.GetKeyCode() in [ord("A"), ord("F")]):
+                # Set the start point to the current video position
+                self.startPoint = self.ControlObject.GetVideoPosition()
+                # Set the end point to the end of the document.
+                self.endPoint = 0
+            # If so, we're done here
+            return
+
         # Get the Key Code
         c = event.GetKeyCode()
 
@@ -617,51 +662,11 @@ class VisualizationWindow(wx.Dialog):
             # Determine the current position (in milliseconds) of the video
             currentPos = self.ControlObject.GetVideoPosition()
 
-            # Ctrl-A -- Rewind video by 10 seconds
-            if (c == ord("A")) and event.ControlDown():
-                vpos = self.ControlObject.GetVideoPosition()
-                self.ControlObject.SetVideoStartPoint(vpos-10000)
-                self.ControlObject.SetVideoEndPoint(0)
-                # Play should always be initiated on Ctrl-A
-                self.ControlObject.Play(0)
-
-            # Ctrl-D -- Start / Pause without setback
-            elif (c == ord("D")) and event.ControlDown():
-                self.ControlObject.SetVideoEndPoint(0)
-                self.ControlObject.PlayPause(0)
-
-            # CTRL-F -- Advance video by 10 seconds
-            elif (c == ord("F")) and event.ControlDown():
-                vpos = self.ControlObject.GetVideoPosition()
-                self.ControlObject.SetVideoStartPoint(vpos+10000)
-                self.ControlObject.SetVideoEndPoint(0)
-                # Play should always be initiated on Ctrl-F
-                self.ControlObject.Play(0)
-
-            # Ctrl-S -- Start / Pause with setback
-            elif (c == ord("S")) and event.ControlDown():
-                self.ControlObject.SetVideoEndPoint(0)
-                self.ControlObject.PlayPause(1)
-                
-            # Ctrl-T -- Insert Time Code
-            elif (c == ord("T")) and event.ControlDown():
-                self.OnCurrent(event)
-
             # Ctrl-K -- Create Quick Clip
-            elif (c == ord("K")) and event.ControlDown():
+            if (c == ord("K")) and event.ControlDown():
                 # Ask the Control Object to create a Quick Clip
                 self.ControlObject.CreateQuickClip()
 
-            # Ctrl-comma -- slow down playback
-            elif (c == ord(',')) and event.ControlDown():
-                # Ask the Control Object to slow down the video playback
-                self.ControlObject.ChangePlaybackSpeed('slower')
-                    
-            # Ctrl-period -- speed up playback
-            elif (c == ord('.')) and event.ControlDown():
-                # Ask the Control Object to speed up the video playback
-                self.ControlObject.ChangePlaybackSpeed('faster')
-                    
             # Cursor Left ...
             elif c in [wx.WXK_LEFT, wx.WXK_NUMPAD_LEFT]:
                 # ... moves the video the equivalent of 1 pixel earlier in the video
@@ -711,7 +716,6 @@ class VisualizationWindow(wx.Dialog):
             # Limit video playback to the selected part of the media by setting the VideoStartPoint and VideoEndPoint in the
             # Control Object
             self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
-
             # Draw the TimeLine values
             self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
             # Signal that the Waveform Graphic should be updated
@@ -788,7 +792,7 @@ class VisualizationWindow(wx.Dialog):
                 # Signal that we need to re-draw the visualization
                 self.redrawWhenIdle = True
                 
-            # If a Scroll Right has been requested ...
+            # If a Scroll Right has been requested...
             elif (direction == 'Right'):
                 # If there's a full 75% of width available to shift right ...
                 if currRight < totalWidth - int(currWidth * 0.75):
@@ -803,6 +807,7 @@ class VisualizationWindow(wx.Dialog):
                     self.startPoint = totalWidth - currWidth
                     self.endPoint = totalWidth
                     self.zoomInfo[-1] = (self.startPoint, self.zoomInfo[-1][1])
+
                 # Signal that we need to re-draw the visualization
                 self.redrawWhenIdle = True
 
@@ -813,12 +818,13 @@ class VisualizationWindow(wx.Dialog):
             # If no selection endpoint is defined ...
             if self.endPoint <= 0:
                 # ... then set the endpoint for the earlier of the media end (episode or clip end) or 5 seconds from start
-                self.endPoint = min(self.zoomInfo[0][1], self.startPoint + 5000)
-                # Now check for self.zoomInfo[0][1] having been zero, which would be a problem!
+                self.endPoint = min(self.zoomInfo[0][0] + self.zoomInfo[0][1], self.startPoint + 5000)
+                # Now check for self.zoomInfo[0] having been (0, 0), which would be a problem!
                 if self.endPoint == 0:
                     self.endPoint = self.startPoint + 5000
                 # Set the video selection to include this new end point
                 self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
+                
             # Signal the Control Object to start or stop looped playback
             self.ControlObject.PlayLoop(self.loop.GetValue())
         # if no data object is currently loaded ...
@@ -842,7 +848,9 @@ class VisualizationWindow(wx.Dialog):
         self.zoomInfo = [self.zoomInfo[0]]
         self.startPoint = self.zoomInfo[0][0]
         self.endPoint = self.zoomInfo[0][1]
-        self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
+        # There's a weird bug where RTF files are not loaded correctly if self.endPoint is passed here instead of -1.
+        # Since we're CLEARING the visualization, I can't think of any harm that would be done by passing -1 instead.
+        self.ControlObject.SetVideoSelection(self.startPoint, -1, UpdateSelectionText=False)
         # Clear the waveform itself
         self.waveform.Clear()
         # Remove old Waveform Selection and Cursor data
@@ -943,11 +951,36 @@ class VisualizationWindow(wx.Dialog):
                             else:
                                 prompt = _("Extracting %s\nfrom %s")
                             # Create the Waveform Progress Dialog
-                            self.progressDialog = WaveformProgress.WaveformProgress(self, waveFilename, prompt % (waveFilename, filenameItem['filename']))
+                            self.progressDialog = WaveformProgress.WaveformProgress(self, prompt % (waveFilename, filenameItem['filename']))
                             # Tell the Waveform Progress Dialog to handle the audio extraction modally.
                             self.progressDialog.Extract(filenameItem['filename'], waveFilename)
+                            # Get the Error Log that may have been created
+                            errorLog = self.progressDialog.GetErrorMessages()
                             # Okay, we're done with the Progress Dialog here!
                             self.progressDialog.Destroy()
+                            # If the user cancelled the audio extraction ...
+                            if (len(errorLog) == 1) and (errorLog[0] == 'Cancelled'):
+                                # ... signal that the WAV file was NOT created!
+                                dllvalue = 1  
+                                
+                            # On Windows only, some Unicode files fail the standard audio extraction process because of the unicode
+                            # file names.  Let's try to detect that and if we do, let's re-run audio extraction using the OLD method!
+
+                            # First, see if the waveform file is NOT created.
+                            elif not os.path.exists(waveFilename):
+                                # If not, re-call audio extraction with the old audio extraction method
+                                # Create the Waveform Progress Dialog
+                                self.progressDialog = WaveformProgress.WaveformProgress(self, prompt % (waveFilename, filenameItem['filename']))
+                                # Tell the Waveform Progress Dialog to handle the audio extraction modally.
+                                self.progressDialog.Extract(filenameItem['filename'], waveFilename, mode='AudioExtraction-OLD')
+                                # Get the Error Log that may have been created
+                                errorLog = self.progressDialog.GetErrorMessages()
+                                # Okay, we're done with the Progress Dialog here!
+                                self.progressDialog.Destroy()
+                                # If the user cancelled the audio extraction ...
+                                if (len(errorLog) == 1) and (errorLog[0] == 'Cancelled'):
+                                    # ... signal that the WAV file was NOT created!
+                                    dllvalue = 1  
 
                         except UnicodeDecodeError:
                             if DEBUG:
@@ -972,7 +1005,7 @@ class VisualizationWindow(wx.Dialog):
                             dllvalue = 1  # Signal that the WAV file was NOT created!                        
 
                             # Close the Progress Dialog when the DLL call is complete
-                            progressDialog.Close()
+                            self.progressDialog.Close()
 
                     else:
                         # User declined to create the WAV file now
@@ -1102,6 +1135,9 @@ class VisualizationWindow(wx.Dialog):
         # Set the values for the waveform Lower and Upper limits
         self.waveformLowerLimit = mediaStart
         self.waveformUpperLimit = mediaStart + mediaLength
+
+#        print "VisualizationWindow.draw_timeline(): waveformUpperLimit set to ", self.waveformUpperLimit
+        
         # Determine the number of labels and the time interval between labels that should be displayed
         numIncrements, Interval = GetScaleIncrements(mediaLength)
         # Now we can determine the appropriate starting point for our labels!
@@ -1189,7 +1225,7 @@ class VisualizationWindow(wx.Dialog):
         # Check to see if automatic waveform scrolling is necessary
         # First, check to see if we are zoomed in, if we're at the END of the waveform, if there's room to scroll, and if a redraw
         # hasn't already been requested.
-        if (len(self.zoomInfo) > 1) and (pos > 0.99) and (self.waveformUpperLimit < self.zoomInfo[0][1]) and not self.redrawWhenIdle:
+        if (len(self.zoomInfo) > 1) and (pos > 0.99) and (self.waveformUpperLimit < self.zoomInfo[0][0] + self.zoomInfo[0][1]) and not self.redrawWhenIdle:
             # If there is a relatively large shift to take place (over 10% of the current width) ...
             if (pos > 1.1):
                 # ... then let's just jump directly to the new position
@@ -1330,14 +1366,17 @@ class VisualizationWindow(wx.Dialog):
 # Private methods    
 
     def __size(self):
-        rect = wx.ClientDisplayRect()
-        width = rect[2] * .715
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        if 'wxGTK' in wx.PlatformInfo:
+            width = min(rect[2], 1440) * .715
+        else:
+            width = rect[2] * .715
         height = (rect[3] - TransanaGlobal.menuHeight) * .25
         return wx.Size(int(width), int(height))
 
     def __pos(self):
-        rect = wx.ClientDisplayRect()
-        # If the Start Menu is on the left side, 0 is incorrect!  Get starting position from ClientDisplayRect.
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        # If the Start Menu is on the left side, 0 is incorrect!  Get starting position from wx.Display.
         x = rect[0]
         # rect[1] compensated if the Start menu is at the top of the screen
         y = rect[1] + TransanaGlobal.menuHeight + 3

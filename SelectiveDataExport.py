@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -25,8 +25,12 @@ import wx
 import os
 import Dialogs
 import DBInterface
+import TransanaConstants
 import TransanaGlobal
-from RichTextEditCtrl import RichTextEditCtrl
+if TransanaConstants.USESRTC:
+    from RichTextEditCtrl_RTC import RichTextEditCtrl
+else:
+    from RichTextEditCtrl import RichTextEditCtrl
 import cPickle
 import pickle
 import sys
@@ -53,10 +57,8 @@ class SelectiveDataExport(Dialogs.GenForm):
         # Create a form to get the name of the file to receive the data
         # Define the form title
         title = _("Transana Selective Data Export")
-        Dialogs.GenForm.__init__(self, parent, id, title, (550,150), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Selective Data Export')
-        # Define the minimum size for this dialog as the initial size
-        self.SetSizeHints(550, 150)
-
+        Dialogs.GenForm.__init__(self, parent, id, title, (550,150), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext='Selective Data Export')
 	# Create an invisible instance of RichTextEditCtrl. This allows us to
 	# get away with converting fastsaved documents to RTF behind the scenes.
 	# Then we can simply pull the RTF data out of this object and write it
@@ -64,40 +66,82 @@ class SelectiveDataExport(Dialogs.GenForm):
 	self.invisibleSTC = RichTextEditCtrl(self)
 	self.invisibleSTC.Show(False)
 
-        # Export Message Layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)
-        lay.left.SameAs(self.panel, wx.Left, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.height.AsIs()
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Export Message
         # If the XML filename path is not empty, we need to tell the user.
         prompt = _('Please create an Transana XML File for export.')
         exportText = wx.StaticText(self.panel, -1, prompt)
-        exportText.SetConstraints(lay)
 
+        # Add the export message to the dialog box
+        r1Sizer.Add(exportText, 0)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
         # Export Filename Layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(exportText, 10)
-        lay.left.SameAs(self.panel, wx.Left, 10)
-        lay.width.PercentOf(self.panel, wx.Width, 80)  # 80% width
-        lay.height.AsIs()
         self.XMLFile = self.new_edit_box(_("Transana Export XML-Filename"), lay, '')
         self.XMLFile.SetDropTarget(EditBoxFileDropTarget(self.XMLFile))
+        # Add the element sizer to the row sizer
+        r2Sizer.Add(v1, 1, wx.EXPAND)
 
-        # Browse button layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.XMLFile, wx.Top)
-        lay.left.RightOf(self.XMLFile, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.bottom.SameAs(self.XMLFile, wx.Bottom)
+        # Add a spacer to the row sizer        
+        r2Sizer.Add((10, 0))
+
+        # Browse button
         browse = wx.Button(self.panel, wx.ID_FILE1, _("Browse"), wx.DefaultPosition)
-        browse.SetConstraints(lay)
         wx.EVT_BUTTON(self, wx.ID_FILE1, self.OnBrowse)
+        # Add the element to the row sizer
+        r2Sizer.Add(browse, 0, wx.ALIGN_BOTTOM)
 
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
         self.Layout()
-        self.SetAutoLayout(True)
-        self.CenterOnScreen()
+        # Resize the form to fit the contents
+        self.Fit()
 
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(550, width), height))
+        # Define the minimum size for this dialog as the current size, and define height as unchangeable
+        self.SetSizeHints(max(550, width), height, -1, height)
+        # Center the form on screen
+        self.CenterOnScreen()
+        # Set focus to the XML file field
         self.XMLFile.SetFocus()
 
     def Export(self):

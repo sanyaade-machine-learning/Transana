@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -50,14 +50,11 @@ class EpisodeClipsTab(wx.Panel):
         # (This panel implements the Episode Clips Tab!  All of the window and Notebook structure is provided by DataWindow.py.)
         wx.Panel.__init__(self, parent, -1, style=wx.WANTS_CHARS, size=(width, height), name='EpisodeClipsTabPanel')
 
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+
         # Create a Grid Control on the panel where the clip data will be displayed
-        lay = wx.LayoutConstraints()
-        lay.left.SameAs(self, wx.Left, 1)
-        lay.top.SameAs(self, wx.Top, 1)
-        lay.right.SameAs(self, wx.Right, 1)
-        lay.bottom.SameAs(self, wx.Bottom, 1)
         self.gridClips = grid.Grid(self, -1)
-        self.gridClips.SetConstraints(lay)
+        mainSizer.Add(self.gridClips, 1, wx.EXPAND)
 
         # Populate the Grid with initial values
         #   Grid is read-only, not editable
@@ -97,10 +94,14 @@ class EpisodeClipsTab(wx.Panel):
         
         # Define the Grid Double-Click event
         grid.EVT_GRID_CELL_LEFT_DCLICK(self.gridClips, self.OnCellLeftDClick)
+
+        # Define the Key Down Event Handler
+        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         
         # Perform GUI Layout
-        self.Layout()
+        self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
+        self.Layout()
 
     def DisplayCells(self, TimeCode):
         """ Get data from the database and populate the Clips Grid """
@@ -143,3 +144,11 @@ class EpisodeClipsTab(wx.Panel):
     def Register(self, ControlObject=None):
         """ Register a ControlObject """
         self.ControlObject=ControlObject
+
+    def OnKeyDown(self, event):
+        """ Handle Key Down Events """
+        # See if the ControlObject wants to handle the key that was pressed.
+        if self.ControlObject.ProcessCommonKeyCommands(event):
+            # If so, we're done here.  (Actually, we're done anyway.)
+            return
+

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -176,6 +176,7 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
             event.Skip()
 
     def PutEditedSelectionInClipboard(self):
+        """ Put the TEXT for the current selection into the Clipboard """
         tempTxt = self.GetSelectedText()
         # Initialize an empty string for the modified data
         newSt = ''
@@ -1490,7 +1491,6 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
     def GetModify(self):
         """Override the existing GetModify to account for style changes."""
         return wx.stc.StyledTextCtrl.GetModify(self) or self.stylechange
-        
         
     # Many of these won't be implemented.  Delete as you find that they're
     # unnecessary.

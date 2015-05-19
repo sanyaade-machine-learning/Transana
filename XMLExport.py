@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -26,8 +26,12 @@ import wx
 
 import Dialogs
 import DBInterface
+import TransanaConstants
 import TransanaGlobal
-from RichTextEditCtrl import RichTextEditCtrl
+if TransanaConstants.USESRTC:
+    import RichTextEditCtrl_RTC
+    import TranscriptEditor_STC  # for conversion
+import RichTextEditCtrl
 import cPickle
 import pickle
 import os
@@ -40,52 +44,139 @@ EXPORT_ENCODING = 'utf8'
 class XMLExport(Dialogs.GenForm):
     """ This window displays a variety of GUI Widgets. """
     def __init__(self,parent,id,title):
-        Dialogs.GenForm.__init__(self, parent, id, title, (550,150), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Export Database')
-        # Define the minimum size for this dialog as the initial size
-        self.SetSizeHints(550, 150)
+        Dialogs.GenForm.__init__(self, parent, id, title, (550,150), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext='Export Database')
 
-	# Create an invisible instance of RichTextEditCtrl. This allows us to
-	# get away with converting fastsaved documents to RTF behind the scenes.
-	# Then we can simply pull the RTF data out of this object and write it
-	# to the desired file.
-	self.invisibleSTC = RichTextEditCtrl(self)
-	self.invisibleSTC.Show(False)
+        # If we're using the RichTextCtrl ...
+        if TransanaConstants.USESRTC:
+            # Create an invisible RichTextCtrl so we can convert RTF format transcripts
+            # to the RTC's XML format.  It's much faster for loading, and is XML compliant.
+            import TranscriptEditor_RTC
+            self.invisibleRTC = TranscriptEditor_RTC.TranscriptEditor(self)  # RichTextEditCtrl_RTC.RichTextEditCtrl(self)
+            self.invisibleRTC.Show(False)
 
-        # Export Message Layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)
-        lay.left.SameAs(self.panel, wx.Left, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.height.AsIs()
-        # If the XML filename path is not empty, we need to tell the user.
+        # Create an invisible instance of RichTextEditCtrl.
+        # If we're USING RTC, this allows us to convert STC formattted transcripts.
+        # If we're NOT using RTC, this allows us to
+        # get away with converting fastsaved documents to RTF behind the scenes.
+        # Then we can simply pull the RTF data out of this object and write it
+        # to the desired file.
+        self.invisibleSTC = RichTextEditCtrl.RichTextEditCtrl(self)
+        self.invisibleSTC.Show(False)
+
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create the main form prompt
         prompt = _('Please create an Transana XML File for export.')
         exportText = wx.StaticText(self.panel, -1, prompt)
-        exportText.SetConstraints(lay)
 
-        # XML Filename Layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(exportText, 10)
-        lay.left.SameAs(self.panel, wx.Left, 10)
-        lay.width.PercentOf(self.panel, wx.Width, 80)  # 80% width
-        lay.height.AsIs()
-        self.XMLFile = self.new_edit_box(_("Transana-XML Filename"), lay, '')
+        # Add the export message to the dialog box
+        r1Sizer.Add(exportText, 0)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+        # Add the Export File Name element
+        self.XMLFile = self.new_edit_box(_("Transana-XML Filename"), v1, '')
+        # Make this text box a File Drop Target
         self.XMLFile.SetDropTarget(EditBoxFileDropTarget(self.XMLFile))
+        # Add the element sizer to the row sizer
+        r2Sizer.Add(v1, 1, wx.EXPAND)
 
-        # Browse button layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.XMLFile, wx.Top)
-        lay.left.RightOf(self.XMLFile, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.bottom.SameAs(self.XMLFile, wx.Bottom)
+        # Add a spacer to the row sizer        
+        r2Sizer.Add((10, 0))
+
+        # Browse button
         browse = wx.Button(self.panel, wx.ID_FILE1, _("Browse"), wx.DefaultPosition)
-        browse.SetConstraints(lay)
+        # Add the Browse Method to the Browse Button
         wx.EVT_BUTTON(self, wx.ID_FILE1, self.OnBrowse)
+        # Add the element to the row sizer
+        r2Sizer.Add(browse, 0, wx.ALIGN_BOTTOM)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            r2Sizer.Add((2, 0))
 
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
         self.Layout()
-        self.SetAutoLayout(True)
-        self.CenterOnScreen()
+        # Resize the form to fit the contents
+        self.Fit()
 
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(550, width), height))
+        # Define the minimum size for this dialog as the current size, and define height as unchangeable
+        self.SetSizeHints(max(550, width), height, -1, height)
+        # Center the form on screen
+        self.CenterOnScreen()
+        # Set focus to the XML file field
         self.XMLFile.SetFocus()
+
+    def Escape(self, inpStr):
+        """ Replaces "&", "<", and ">" with the XML friendly "&amp;", &gt;", and "&lt;"
+            >, <, and & all need to be replaced, but &amp;, &gt;, and &lt; needs to survive! """
+        # We can't just casually replace ampersands, as there are ampersands in the replacement!
+        # Find the first Ampersand in the document
+        chrPos = inpStr.find('&')
+        # While there are more Ampersands ...
+        while (chrPos > -1):
+            # ... replace the Ampersand with the escape string ...
+            inpStr = inpStr[:chrPos] + '&amp;' + inpStr[chrPos + 1:]
+            # ... and look for the NEXT Ampersand after the replacement
+            chrPos = inpStr.find('&', chrPos + 1)
+        # Find the first Greater Than in the document
+        chrPos = inpStr.find('>')
+        # While there are more Greater Thans ...
+        while (chrPos > -1):
+            # ... replace the Greater Than with the escape string ...
+            inpStr = inpStr[:chrPos] + '&gt;' + inpStr[chrPos + 1:]
+            # ... and look for the NEXT Greater Than after the replacement
+            chrPos = inpStr.find('>', chrPos + 1)
+        # Find the first Less Than in the document
+        chrPos = inpStr.find('<')
+        # While there are more Less Thans ...
+        while (chrPos > -1):
+            # ... replace the Less Than with the escape string ...
+            inpStr = inpStr[:chrPos] + '&lt;' + inpStr[chrPos + 1:]
+            # ... and look for the NEXT Less Than after the replacement
+            chrPos = inpStr.find('<', chrPos + 1)
+        # Return the modified string
+        return inpStr
 
     def Export(self):
         # use the LONGEST title here!  That determines the size of the Dialog Box.
@@ -95,7 +186,7 @@ class XMLExport(Dialogs.GenForm):
             progress.Centre()
 
         db = DBInterface.get_db()
-       
+
         try:
             fs = self.XMLFile.GetValue()
             if (fs[-4:].lower() != '.xml') and (fs[-4:].lower() != '.tra'):
@@ -124,7 +215,8 @@ class XMLExport(Dialogs.GenForm):
             #                for Transana 2.30 release.
             # Version 1.5 -- Database structure changed to accomodate Multiple Simultaneous Media Files for the
             #                Transana 2.40 release.
-            f.write('    1.5\n');
+            # Version 1.6 -- Added XML format for transcripts and character escapes for Transana 2.50 release
+            f.write('    1.6\n');
             f.write('  </TransanaXMLVersion>\n');
 
             progress.Update(8, _('Writing Series Records'))
@@ -204,7 +296,8 @@ class XMLExport(Dialogs.GenForm):
             progress.Update(56, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
             if db != None:
                 dbCursor = db.cursor()
-                SQLText = 'SELECT TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum, ClipNum, SortOrder, Transcriber, ClipStart, ClipStop, Comment, RTFText FROM Transcripts2'
+                SQLText = 'SELECT TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum, ClipNum, SortOrder, Transcriber, '
+                SQLText += 'ClipStart, ClipStop, Comment, MinTranscriptWidth, RTFText FROM Transcripts2'
 
                 if DEBUG:
                     print "Selecting Transcripts"
@@ -313,7 +406,6 @@ class XMLExport(Dialogs.GenForm):
         f.write('  <!ELEMENT Date (#PCDATA)>\n');
         f.write('  <!ELEMENT MediaFile (#PCDATA)>\n');
         f.write('  <!ELEMENT Length (#PCDATA)>\n');
-        f.write('  <!ELEMENT Comment (#PCDATA)>\n');
         f.write('\n');
         f.write('  <!ELEMENT Episode (#PCDATA|Num|ID|SeriesNum|Date|MediaFile|Length|Comment)*>\n');
         f.write('\n');
@@ -344,6 +436,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('  <!ELEMENT Transcriber (#PCDATA)>\n');
         f.write('  <!ELEMENT ClipStart (#PCDATA)>\n');
         f.write('  <!ELEMENT ClipStop (#PCDATA)>\n');
+        f.write('  <!ELEMENT MinTranscriptWidth (#PCDATA)>\n');
         f.write('  <!ELEMENT RTFText (#PCDATA)>\n');
         f.write('\n');
         f.write('  <!ELEMENT Transcript (#PCDATA|Num|ID|EpisodeNum|TranscriptNum|ClipNum|SortOrder|Transcriber|ClipStart|ClipStop|Comment|RTFText)*>\n');
@@ -408,19 +501,19 @@ class XMLExport(Dialogs.GenForm):
         f.write('        %s\n' % SeriesNum)
         f.write('      </Num>\n')
         f.write('      <ID>\n')
-        f.write('        %s\n' % SeriesID.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(SeriesID.encode(EXPORT_ENCODING)))
         f.write('      </ID>\n')
         if SeriesComment != '':
             f.write('      <Comment>\n')
-            f.write('        %s\n' % SeriesComment.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(SeriesComment.encode(EXPORT_ENCODING)))
             f.write('      </Comment>\n')
         if SeriesOwner != '':
             f.write('      <Owner>\n')
-            f.write('        %s\n' % SeriesOwner.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(SeriesOwner.encode(EXPORT_ENCODING)))
             f.write('      </Owner>\n')
         if DefaultKeywordGroup != '':
             f.write('      <DefaultKeywordGroup>\n')
-            f.write('        %s\n' % DefaultKeywordGroup.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(DefaultKeywordGroup.encode(EXPORT_ENCODING)))
             f.write('      </DefaultKeywordGroup>\n')
         f.write('    </Series>\n')
 
@@ -431,7 +524,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('        %s\n' % EpisodeNum)
         f.write('      </Num>\n')
         f.write('      <ID>\n')
-        f.write('        %s\n' % EpisodeID.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(EpisodeID.encode(EXPORT_ENCODING)))
         f.write('      </ID>\n')
         f.write('      <SeriesNum>\n')
         f.write('        %s\n' % SeriesNum)
@@ -441,7 +534,7 @@ class XMLExport(Dialogs.GenForm):
             f.write('        %s\n' % TapingDate)
             f.write('      </Date>\n')
         f.write('      <MediaFile>\n')
-        f.write('        %s\n' % MediaFile.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(MediaFile.encode(EXPORT_ENCODING)))
         f.write('      </MediaFile>\n')
         if (EpLength != '') and (EpLength != 0):
             f.write('      <Length>\n')
@@ -449,7 +542,7 @@ class XMLExport(Dialogs.GenForm):
             f.write('      </Length>\n')
         if EpComment != '':
             f.write('      <Comment>\n')
-            f.write('        %s\n' % EpComment.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(EpComment.encode(EXPORT_ENCODING)))
             f.write('      </Comment>\n')
         f.write('    </Episode>\n')
 
@@ -461,31 +554,31 @@ class XMLExport(Dialogs.GenForm):
         f.write('        %s\n' % CoreDataNum)
         f.write('      </Num>\n')
         f.write('      <ID>\n')
-        f.write('        %s\n' % Identifier.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(Identifier.encode(EXPORT_ENCODING)))
         f.write('      </ID>\n')
         if Title != '':
             f.write('      <Title>\n')
-            f.write('        %s\n' % Title.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Title.encode(EXPORT_ENCODING)))
             f.write('      </Title>\n')
         if Creator != '':
             f.write('      <Creator>\n')
-            f.write('        %s\n' % Creator.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Creator.encode(EXPORT_ENCODING)))
             f.write('      </Creator>\n')
         if Subject != '':
             f.write('      <Subject>\n')
-            f.write('        %s\n' % Subject.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Subject.encode(EXPORT_ENCODING)))
             f.write('      </Subject>\n')
         if Description != '':
             f.write('      <Description>\n')
-            f.write('        %s\n' % Description.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Description.encode(EXPORT_ENCODING)))
             f.write('      </Description>\n')
         if Publisher != '':
             f.write('      <Publisher>\n')
-            f.write('        %s\n' % Publisher.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Publisher.encode(EXPORT_ENCODING)))
             f.write('      </Publisher>\n')
         if Contributor != '':
             f.write('      <Contributor>\n')
-            f.write('        %s\n' % Contributor.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Contributor.encode(EXPORT_ENCODING)))
             f.write('      </Contributor>\n')
         if DCDate != None:
             f.write('      <Date>\n')
@@ -493,31 +586,31 @@ class XMLExport(Dialogs.GenForm):
             f.write('      </Date>\n')
         if DCType != '':
             f.write('      <Type>\n')
-            f.write('        %s\n' % DCType.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(DCType.encode(EXPORT_ENCODING)))
             f.write('      </Type>\n')
         if Format != '':
             f.write('      <Format>\n')
-            f.write('        %s\n' % Format.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Format.encode(EXPORT_ENCODING)))
             f.write('      </Format>\n')
         if Source != '':
             f.write('      <Source>\n')
-            f.write('        %s\n' % Source.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Source.encode(EXPORT_ENCODING)))
             f.write('      </Source>\n')
         if Language != '':
             f.write('      <Language>\n')
-            f.write('        %s\n' % Language.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Language.encode(EXPORT_ENCODING)))
             f.write('      </Language>\n')
         if Relation != '':
             f.write('      <Relation>\n')
-            f.write('        %s\n' % Relation.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Relation.encode(EXPORT_ENCODING)))
             f.write('      </Relation>\n')
         if Coverage != '':
             f.write('      <Coverage>\n')
-            f.write('        %s\n' % Coverage.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Coverage.encode(EXPORT_ENCODING)))
             f.write('      </Coverage>\n')
         if Rights != '':
             f.write('      <Rights>\n')
-            f.write('        %s\n' % Rights.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Rights.encode(EXPORT_ENCODING)))
             f.write('      </Rights>\n')
         f.write('    </CoreData>\n')
 
@@ -528,7 +621,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('        %s\n' % CollectNum)
         f.write('      </Num>\n')
         f.write('      <ID>\n')
-        f.write('        %s\n' % CollectID.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(CollectID.encode(EXPORT_ENCODING)))
         f.write('      </ID>\n')
         if (ParentCollectNum != '') and (ParentCollectNum != 0):
             f.write('      <ParentCollectNum>\n')
@@ -536,15 +629,15 @@ class XMLExport(Dialogs.GenForm):
             f.write('      </ParentCollectNum>\n')
         if CollectComment != '':
             f.write('      <Comment>\n')
-            f.write('        %s\n' % CollectComment.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(CollectComment.encode(EXPORT_ENCODING)))
             f.write('      </Comment>\n')
         if CollectOwner != '':
             f.write('      <Owner>\n')
-            f.write('        %s\n' % CollectOwner.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(CollectOwner.encode(EXPORT_ENCODING)))
             f.write('      </Owner>\n')
         if DefaultKeywordGroup != '':
             f.write('      <DefaultKeywordGroup>\n')
-            f.write('        %s\n' % DefaultKeywordGroup.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(DefaultKeywordGroup.encode(EXPORT_ENCODING)))
             f.write('      </DefaultKeywordGroup>\n')
         f.write('    </Collection>\n')
 
@@ -555,7 +648,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('        %s\n' % ClipNum)
         f.write('      </Num>\n')
         f.write('      <ID>\n')
-        f.write('        %s\n' % ClipID.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(ClipID.encode(EXPORT_ENCODING)))
         f.write('      </ID>\n')
         if CollectNum != None:
             f.write('      <CollectNum>\n')
@@ -566,7 +659,7 @@ class XMLExport(Dialogs.GenForm):
             f.write('        %s\n' % EpisodeNum)
             f.write('      </EpisodeNum>\n')
         f.write('      <MediaFile>\n')
-        f.write('        %s\n' % MediaFile.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(MediaFile.encode(EXPORT_ENCODING)))
         f.write('      </MediaFile>\n')
         f.write('      <ClipStart>\n')
         f.write('        %s\n' % ClipStart)
@@ -583,7 +676,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('      </Audio>\n')
         if ClipComment != '':
             f.write('      <Comment>\n')
-            f.write('        %s\n' % ClipComment.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(ClipComment.encode(EXPORT_ENCODING)))
             f.write('      </Comment>\n')
         if (SortOrder != '') and (SortOrder != 0):
             f.write('      <SortOrder>\n')
@@ -606,7 +699,7 @@ class XMLExport(Dialogs.GenForm):
             f.write('        %s\n' % ClipNum)
             f.write('      </ClipNum>\n')
         f.write('      <MediaFile>\n')
-        f.write('        %s\n' % MediaFile.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(MediaFile.encode(EXPORT_ENCODING)))
         f.write('      </MediaFile>\n')
         if (VidLength != '') and (VidLength != 0):
             f.write('      <Length>\n')
@@ -623,7 +716,7 @@ class XMLExport(Dialogs.GenForm):
 
     def WriteTranscriptRec(self, f, progress, transcriptRec):
         (TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum, ClipNum, SortOrder, Transcriber,
-         ClipStart, ClipStop, Comment, RTFText) = transcriptRec
+         ClipStart, ClipStop, Comment, MinTranscriptWidth, RTFText) = transcriptRec
 
         if DEBUG:
             print "TranscriptNum =", TranscriptNum
@@ -634,7 +727,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('      </Num>\n')
         if TranscriptID != '':
             f.write('      <ID>\n')
-            f.write('        %s\n' % TranscriptID.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(TranscriptID.encode(EXPORT_ENCODING)))
 
             if DEBUG:
                 try:
@@ -661,7 +754,7 @@ class XMLExport(Dialogs.GenForm):
             f.write('      </SortOrder>\n')
         if (Transcriber != None) and (Transcriber != ''):
             f.write('      <Transcriber>\n')
-            f.write('        %s\n' % Transcriber.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Transcriber.encode(EXPORT_ENCODING)))
             f.write('      </Transcriber>\n')
         if (ClipStart != None):
             f.write('      <ClipStart>\n')
@@ -673,8 +766,12 @@ class XMLExport(Dialogs.GenForm):
             f.write('      </ClipStop>\n')
         if (Comment != None) and (Comment != ''):
             f.write('      <Comment>\n')
-            f.write('        %s\n' % Comment.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Comment.encode(EXPORT_ENCODING)))
             f.write('      </Comment>\n')
+        if (MinTranscriptWidth != None) and (MinTranscriptWidth != '') and (MinTranscriptWidth > 0):
+            f.write('      <MinTranscriptWidth>\n')
+            f.write('        %s\n' % MinTranscriptWidth)
+            f.write('      </MinTranscriptWidth>\n')
         if RTFText != '':
             # Extract the RTF Text from the DB's array structure, if needed
             # Okay, this isn't so straight-forward any more.
@@ -691,10 +788,55 @@ class XMLExport(Dialogs.GenForm):
 
             if DEBUG:
                 print "type(RTFText) =", type(RTFText)
-                
-            # Determine if we have RTF Text or a pickled wxSTC Object
-            if (type(RTFText).__name__ != 'NoneType') and (len(RTFText) > 6) and (RTFText[:6].upper() != '{\\RTF1'):
 
+            # Determine if we have RTF Text, a pickled wxSTC Object, or XML Text
+            if (type(RTFText).__name__ != 'NoneType') and (len(RTFText) > 5) and (RTFText[:5].upper() == '<?XML'):
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
+                    prompt2 = '\n' + unicode(_('Exporting %s'), 'utf8')
+                else:
+                    prompt1 = _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)')
+                    prompt2 = '\n' + _('Exporting %s')
+
+                progress.Update(60, prompt1 + prompt2 % DBInterface.ProcessDBDataForUTF8Encoding(TranscriptID))
+                progress.Refresh()
+
+                # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
+                rtfData = RTFText[39:]
+
+            elif (type(RTFText).__name__ != 'NoneType') and (len(RTFText) > 6) and (RTFText[:6].upper() == '{\\RTF1'):
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
+                    prompt2 = unicode(_('\nConverting %s'), 'utf8')
+                else:
+                    prompt1 = _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)')
+                    prompt2 = _('\nConverting %s')
+
+                progress.Update(60, prompt1 + prompt2 % DBInterface.ProcessDBDataForUTF8Encoding(TranscriptID))
+
+                # If RTF  ...
+                # If we're using the RichTextCtrl ...
+                if TransanaConstants.USESRTC:
+                    # Load the RTF into the invisible RichTextCtrl
+                    self.invisibleRTC.LoadRTFData(RTFText)
+                    # Hide Time Code data that might not be hidden properly
+                    self.invisibleRTC.HideTimeCodeData()
+                    # ... and extract the XML for it.  This makes export slower, import faster, and means
+                    # we ALWAYS have XML in the export file rather than a mix of XML and RTF.
+                    rtfData = self.invisibleRTC.GetFormattedSelection('XML')
+
+                    # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
+                    rtfData = rtfData[39:]
+
+                # If we're using the StyledTextCtrl ...
+                else:
+                    # ... then we just use the RTF as is.
+                    rtfData = RTFText
+
+            # If we have STC formatted data ...
+            else:
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
@@ -729,10 +871,19 @@ class XMLExport(Dialogs.GenForm):
                 # extract the data as RTF.
                 rtfData = self.invisibleSTC.GetRTFBuffer()
 
-                progress.Update(60, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
+                # If we're using the RichTextCtrl ...
+                if TransanaConstants.USESRTC:
+                    # Load the STC-converted-to-RTF data into the invisible RichTextCtrl
+                    self.invisibleRTC.LoadRTFData(rtfData)
+                    # ... and extract the XML for it.  This makes export slower, import faster, and means
+                    # we ALWAYS have XML in the export file rather than a mix of XML and RTF.
+                    rtfData = self.invisibleRTC.GetFormattedSelection('XML')
+
+                    # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
+                    rtfData = rtfData[39:]
+
+#                progress.Update(60, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
                 
-            else:
-                rtfData = RTFText
             # now simply write the RTF data to the file.  (This does NOT need to be encoded, as the RTF already is!)
             # (but check to make sure there's actually RTF data there!)
             if rtfData != None:
@@ -746,10 +897,10 @@ class XMLExport(Dialogs.GenForm):
         (KeywordGroup, Keyword, Definition) = keywordRec
         f.write('    <KeywordRec>\n')
         f.write('      <KeywordGroup>\n')
-        f.write('        %s\n' % KeywordGroup.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
         f.write('      </KeywordGroup>\n')
         f.write('      <Keyword>\n')
-        f.write('        %s\n' % Keyword.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(Keyword.encode(EXPORT_ENCODING)))
         f.write('      </Keyword>\n')
         if Definition != '':
             f.write('      <Definition>\n')
@@ -769,7 +920,7 @@ class XMLExport(Dialogs.GenForm):
                             Definition = unicode(Definition.decode(TransanaGlobal.encoding))
             elif isinstance(Definition, str):
                 Definition = DBInterface.ProcessDBDataForUTF8Encoding(Definition)
-            f.write('        %s\n' % Definition.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(Definition.encode(EXPORT_ENCODING)))
             f.write('      </Definition>\n')
         f.write('    </KeywordRec>\n')
 
@@ -785,10 +936,10 @@ class XMLExport(Dialogs.GenForm):
             f.write('        %s\n' % ClipNum)
             f.write('      </ClipNum>\n')
         f.write('      <KeywordGroup>\n')
-        f.write('        %s\n' % KeywordGroup.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
         f.write('      </KeywordGroup>\n')
         f.write('      <Keyword>\n')
-        f.write('        %s\n' % Keyword.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(Keyword.encode(EXPORT_ENCODING)))
         f.write('      </Keyword>\n')
         if (Example != '') and (Example != 0):
             f.write('      <Example>\n')
@@ -803,7 +954,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('        %s\n' % NoteNum)
         f.write('      </Num>\n')
         f.write('      <ID>\n')
-        f.write('        %s\n' % NoteID.encode(EXPORT_ENCODING))
+        f.write('        %s\n' % self.Escape(NoteID.encode(EXPORT_ENCODING)))
         f.write('      </ID>\n')
         # Note Series Numbers could be None instead of 0.
         if (SeriesNum != 0) and (SeriesNum != None):
@@ -832,7 +983,7 @@ class XMLExport(Dialogs.GenForm):
             f.write('      </TranscriptNum>\n')
         if NoteTaker != '':
             f.write('      <NoteTaker>\n')
-            f.write('        %s\n' % NoteTaker.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(NoteTaker.encode(EXPORT_ENCODING)))
             f.write('      </NoteTaker>\n')
         if NoteText != '':
             # Okay, this isn't so straight-forward any more.
@@ -859,7 +1010,7 @@ class XMLExport(Dialogs.GenForm):
             # If note text is found ...
             if NoteText != None:
                 # ... add it to the output file ...
-                f.write('%s\n' % NoteText.encode(EXPORT_ENCODING))
+                f.write('%s\n' % self.Escape(NoteText.encode(EXPORT_ENCODING)))
             # ... but if NO note text is found ...
             else:
                 # ... explicitly note that!  (This was crashing the export/import process.)
@@ -886,7 +1037,7 @@ class XMLExport(Dialogs.GenForm):
             f.write('        %s\n' % ReportScope)
             f.write('      </ReportScope>\n')
             f.write('      <ConfigName>\n')
-            f.write('        %s\n' % ConfigName.encode(EXPORT_ENCODING))
+            f.write('        %s\n' % self.Escape(ConfigName.encode(EXPORT_ENCODING)))
             f.write('      </ConfigName>\n')
             f.write('      <FilterDataType>\n')
             f.write('        %s\n' % FilterDataType)
@@ -1051,7 +1202,7 @@ class XMLExport(Dialogs.GenForm):
                 FilterData = filterDataList
 
             f.write('      <FilterData>\n')
-            f.write('        %s\n' % FilterData)
+            f.write('        %s\n' % self.Escape(FilterData))
             f.write('      </FilterData>\n')
             f.write('    </Filter>\n')
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2008 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2008 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -54,7 +54,7 @@ class Synchronize(wx.Dialog):
         self.windowBuilt = False
 
         # This form requires a minimum resolution of 1024 x 768.  It just doesn't fit at 800 x 600.
-        if wx.ClientDisplayRect()[3] < 650:
+        if wx.Display(0).GetClientArea()[3] < 650:  # wx.ClientDisplayRect()
             msg = _('This form requires a screen resolution of 1024 x 768 or higher.')
             dlg = Dialogs.ErrorDialog(parent, msg)
             dlg.ShowModal()
@@ -68,9 +68,9 @@ class Synchronize(wx.Dialog):
         # Freeze the dialog.  This prevents screen updates, speeding up the creation process.
         self.Freeze()
         # Set the initial size as the minimum size.
-        minX = min(self.GetSize()[0], int(0.9 * wx.ClientDisplayRect()[2]))
-        minY = min(self.GetSize()[1], int(0.9 * wx.ClientDisplayRect()[3]))
-        self.SetSizeHints(minX, minY, int(0.9 * wx.ClientDisplayRect()[2]), int(0.9 * wx.ClientDisplayRect()[3]))
+        minX = min(self.GetSize()[0], int(0.9 * wx.Display(0).GetClientArea()[2]))  # wx.ClientDisplayRect()
+        minY = min(self.GetSize()[1], int(0.9 * wx.Display(0).GetClientArea()[3]))  # wx.ClientDisplayRect()
+        self.SetSizeHints(minX, minY, int(0.9 * wx.Display(0).GetClientArea()[2]), int(0.9 * wx.Display(0).GetClientArea()[3]))  # wx.ClientDisplayRect()
 
         # Set the background to White
         self.SetBackgroundColour(wx.WHITE)
@@ -444,7 +444,7 @@ class Synchronize(wx.Dialog):
         btnSizer.Add((4, 1), 0)
 
         # Add a TextCtrl for offset
-        self.txtOffset = wx.TextCtrl(self, -1, Misc.time_in_ms_to_str(self.offset, True), style=wx.TE_RIGHT)
+        self.txtOffset = wx.TextCtrl(self, -1, Misc.time_in_ms_to_str(self.offset, True), style=wx.TE_RIGHT | wx.TE_READONLY)
 
         # Add the offset text to the button sizer
         btnSizer.Add(self.txtOffset, 0, wx.ALL, 6)
@@ -1016,11 +1016,17 @@ class Synchronize(wx.Dialog):
                 else:
                     prompt = _("Extracting %s\nfrom %s")
                 # Create the Waveform Progress Dialog
-                progressDialog = WaveformProgress.WaveformProgress(self, waveFilename1, prompt % (waveFilename1, mediaFile))
+                progressDialog = WaveformProgress.WaveformProgress(self, prompt % (waveFilename1, mediaFile))
                 # Tell the Waveform Progress Dialog to handle the audio extraction modally.
                 progressDialog.Extract(mediaFile, waveFilename1)
+                # Get the Error Log that may have been created
+                errorLog = progressDialog.GetErrorMessages()
                 # Okay, we're done with the Progress Dialog here!
                 progressDialog.Destroy()
+                # If the user cancelled the audio extraction ...
+                if (len(errorLog) == 1) and (errorLog[0] == 'Cancelled'):
+                    # ... signal that the WAV file was NOT created!
+                    dllvalue = 1  
             # handle exceptions
             except UnicodeDecodeError:
                 if DEBUG:

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -35,7 +35,7 @@ import gettext
 import os
 import pickle
 from TranscriptToolbar import TranscriptToolbar
-from TranscriptEditor import TranscriptEditor
+from TranscriptEditor_STC import TranscriptEditor
 import Dialogs
 # Import the Transana Font Dialog
 import TransanaFontDialog
@@ -192,20 +192,21 @@ class TranscriptionUI(wx.Dialog):
     def TranscriptUndo(self, event):
         self.get_toolbar().OnUndo(event)
 
-    def TranscriptCut(self):
+    def TranscriptCut(self, event):
         """  Pass-through for the Cut() method """
         self.get_editor().Cut()
 
-    def TranscriptCopy(self):
+    def TranscriptCopy(self, event):
         """  Pass-through for the Copy() method """
         self.get_editor().Copy()
 
-    def TranscriptPaste(self):
+    def TranscriptPaste(self, event):
         """  Pass-through for the Paste() method """
         self.get_editor().Paste()
 
-    def CallFontDialog(self):
+    def CallFormatDialog(self, tabToOpen=0):
         """  Pass-through for the CallFontDialog() method """
+        # NOTE:  the tabToOpen parameter is used in the STC version of TranscriptionUI, and can be ignored here.
         self.dlg.editor.CallFontDialog()
 
     def AdjustIndexes(self, adjustmentAmount):
@@ -440,14 +441,14 @@ class _TranscriptDialog(wx.Dialog):
 
     def __size(self):
         """Determine the default size for the Transcript frame."""
-        rect = wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
         width = rect[2] * .715
         height = (rect[3] - TransanaGlobal.menuHeight) * .74
         return wx.Size(width, height)
 
     def __pos(self):
         """Determine default position of Transcript Frame."""
-        rect = wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
         (width, height) = self.__size()
         # rect[0] compensates if Start menu is on Left
         x = rect[0]

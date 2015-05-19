@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2010  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2012  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -41,8 +41,12 @@ if DEBUG:
 
 # import Python's os and sys modules
 import os, sys
+# import Python's time module
+import time
 # load wxPython for GUI
 import wx
+# import the wx.richtext framework
+import wx.richtext as richtext
 
 # If running stand-alone ...
 if __name__ == '__main__':
@@ -62,7 +66,10 @@ import TransanaGlobal
 # import Transana's Transcript Object to facilitate printing
 import Transcript
 # import Transana's Transcript Editor.  This forms the base of the editable report.
-import TranscriptEditor
+if TransanaConstants.USESRTC:
+    import TranscriptEditor_RTC
+else:
+    import TranscriptEditor_STC
 # Load the Printout Class
 import TranscriptPrintoutClass
 # import python's platform module
@@ -122,12 +129,13 @@ class TextReport(wx.Frame):
         self.displayMethod = displayMethod
         self.filterMethod = filterMethod
         # Determine the screen size for setting the initial dialog size
-        rect = wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
         width = rect[2] * .80
         height = rect[3] * .80
         # Create the basic Frame structure with a white background
-        frame = wx.Frame.__init__(self, parent, id, title, size=wx.Size(width, height), style=wx.DEFAULT_FRAME_STYLE | wx.TAB_TRAVERSAL | wx.NO_FULL_REPAINT_ON_RESIZE)
+        wx.Frame.__init__(self, parent, id, title, size=wx.Size(width, height), style=wx.DEFAULT_FRAME_STYLE | wx.TAB_TRAVERSAL | wx.NO_FULL_REPAINT_ON_RESIZE)
         self.SetBackgroundColour(wx.WHITE)
+        
         # Set the report's icon
         transanaIcon = wx.Icon(os.path.join(TransanaGlobal.programDir, "images", "Transana.ico"), wx.BITMAP_TYPE_ICO)
         self.SetIcon(transanaIcon)
@@ -141,10 +149,10 @@ class TextReport(wx.Frame):
             self.toolBar.AddTool(T_FILE_FILTER, bmp, shortHelpString=_("Filter"))
         # Add an Edit button  to the Toolbar
         self.toolBar.AddTool(T_FILE_EDIT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "ReadOnly16.xpm"), wx.BITMAP_TYPE_XPM), isToggle=True, shortHelpString=_('Edit/Read-only select'))
-        # ... get the graphic for the Filter button ...
+        # ... get the graphic for the Format button ...
         bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP_SETTINGS, wx.ART_TOOLBAR, (16,16))
-        # ... and create a Filter button on the tool bar.
-        self.toolBar.AddTool(T_FILE_FONT, bmp, shortHelpString=_("Font"))
+        # ... and create a Format button on the tool bar.
+        self.toolBar.AddTool(T_FILE_FONT, bmp, shortHelpString=_("Format"))
         # Disable the Font button
         self.toolBar.EnableTool(T_FILE_FONT, False)
         # Add a Save button to the Toolbar
@@ -193,7 +201,7 @@ class TextReport(wx.Frame):
             # Add "Edit" to the File Menu
             self.menuFile.Append(M_FILE_EDIT, _("&Edit"), _("Edit the report manually"))
             # Add "Font" to the File Menu
-            self.menuFile.Append(M_FILE_FONT, _("Font"), _("Change the current Font characteristics"))
+            self.menuFile.Append(M_FILE_FONT, _("Format"), _("Change the current formatting"))
             # Disable the Font Menu Option
             self.menuFile.Enable(M_FILE_FONT, False)
             # Add "Save As" to File Menu
@@ -246,10 +254,18 @@ class TextReport(wx.Frame):
 
         # Add a Status Bar
         self.CreateStatusBar()
-        # Add a Rich Text Edit control to the Report Frame.  This is where the actual report text goes.
-        self.reportText = TranscriptEditor.TranscriptEditor(self)
-        # Set report margins, the left margin to 1 inch, the right margin to 0 to prevent premature word wrap.
-        self.reportText.SetMargins(TranscriptPrintoutClass.DPI, 0)
+        # If we're using the RTC 
+        if TransanaConstants.USESRTC:
+            # Add a Rich Text Edit control to the Report Frame.  This is where the actual report text goes.
+            self.reportText = TranscriptEditor_RTC.TranscriptEditor(self)
+            # Clear / initialize the document
+            self.reportText.ClearDoc()
+        # If we're using STC
+        else:
+            # Add a Styled Text Edit control to the Report Frame.  This is where the actual report text goes.
+            self.reportText = TranscriptEditor_STC.TranscriptEditor(self)
+            # Set report margins, the left margin to 1 inch, the right margin to 0 to prevent premature word wrap.
+            self.reportText.SetMargins(TranscriptPrintoutClass.DPI, 0)
         # We need to over-ride the reportText's EVT_RIGHT_UP method
         wx.EVT_RIGHT_UP(self.reportText, self.OnRightUp)
         # Initialize a variable to indicate whether a custom edit has occurred
@@ -279,7 +295,7 @@ class TextReport(wx.Frame):
         # line number area and the scroll bar)
         self.SetSize((paperWidth + self.reportText.lineNumberWidth + sizeAdjust, height))
         # Set Size Hints, so the report can't be resized.  (This may not be practical for large paper on small monitors.)
-        self.SetSizeHints(self.GetSize()[0], self.GetSize()[1], self.GetSize()[0], self.GetSize()[1])
+        self.SetSizeHints(self.GetSize()[0], int(self.GetSize()[1] * 0.8), self.GetSize()[0], -1)
         # Center on the screen
         self.CenterOnScreen()
 
@@ -302,6 +318,8 @@ class TextReport(wx.Frame):
             self.displayMethod(self.reportText)
         # Move the cursor to the beginning of the report
         self.reportText.GotoPos(0)
+        # Bring the Report to the top so it will definitely be visible
+        self.Raise()
 
     def OnFilter(self, event):
         """ Call the parent method (passed in during initialization) that implements the Filter Dialog """
@@ -361,7 +379,14 @@ class TextReport(wx.Frame):
 
     def OnFont(self, event):
         """ Change Font Characteristics for editing """
-        self.reportText.CallFontDialog()
+        # If we're using RTC ...
+        if TransanaConstants.USESRTC:
+            # ... use the RTC Format Dialog (font, paragraph, and tabs)
+            self.reportText.CallFormatDialog()
+        # If we're using STC ...
+        else:
+            # ... use the STC Font Dialog
+            self.reportText.CallFontDialog()
             
     def OnSaveAs(self, event):
         """Export the report to an RTF file."""
@@ -425,60 +450,199 @@ class TextReport(wx.Frame):
 
     def OnPrintPreview(self, event):
         """ Define the method that implements Print Preview """
-        # Create a temporary Transcript Object for the print preview
-        tempTranscript = Transcript.Transcript()
-        # Put the RichTextEditCtrl's contents, in RTF from, into the Transcript Object
-        tempTranscript.text = self.reportText.GetRTFBuffer()
-        # Convert the temporary transcript object (and its RTF contents) into the form needed for the
-        # TranscriptPrintoutClass's Print Preview display.  (This creates graphic and pageData)
-        (graphic, pageData) = TranscriptPrintoutClass.PrepareData(TransanaGlobal.printData, tempTranscript)
-        # Pass the graph can data obtained from PrepareData() to the Print Preview mechanism TWICE,
-        # once for the preview and once for the printer.
-        printout = TranscriptPrintoutClass.MyPrintout('', graphic, pageData)
-        printout2 = TranscriptPrintoutClass.MyPrintout('', graphic, pageData)
-        # use wxPython's PrintPreview object to display the Print Preview.
-        self.preview = wx.PrintPreview(printout, printout2, self.printData)
-        # Check to see if the Print Preview was properly created.  
-        if not self.preview.Ok():
-            # If not, display an error message and exit
-            self.SetStatusText(_("Print Preview Problem"))
-            return
-        # Calculate the best size for the Print Preview window
-        theWidth = max(wx.ClientDisplayRect()[2] - 180, 760)
-        theHeight = max(wx.ClientDisplayRect()[3] - 200, 560)
-        # Create the dialog to hold the wx.PrintPreview object
-        frame2 = wx.PreviewFrame(self.preview, self, _("Print Preview"), size=(theWidth, theHeight))
-        frame2.Centre()
-        # Initialize the frame so it will display correctly
-        frame2.Initialize()
-        # Finally, we actually show the frame!
-        frame2.Show(True)
+        # If we're using the Rich Text Control ...
+        if TransanaConstants.USESRTC:
+            # The RichTextPrinting.PreviewBuffer() has a bug such that it crashes Transana.
+            # This is the way things SHOULD work, but of course, they don't.
+            if False:
+                # Define the FONT for the Header and Footer text
+                headerFooterFont = wx.Font(10, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, "Times New Roman")
+                # Get the current date and time
+                t = time.localtime()
+                # Format the Footer Date as M/D/Y
+                footerDate = "%d/%d/%d" % (t.tm_mon, t.tm_mday, t.tm_year)
+                # Format the Footer Page Number
+                footerPage = _("Page") + " @PAGENUM@ " + _("of") + " @PAGESCNT@"
+                # Create a RichTextPrinting Object
+                printout = richtext.RichTextPrinting(_("Transana Report"), self)
+                # Let the printout know about the default printer settings
+                printout.SetPrintData(self.printData)
+                # Specify the Header / Footer Font
+                printout.SetHeaderFooterFont(headerFooterFont)
+                # Add the Report Title to the top right
+                printout.SetHeaderText(self.title, location=richtext.RICHTEXT_PAGE_RIGHT)
+                # Add the date to the bottom left
+                printout.SetFooterText(footerDate, location=richtext.RICHTEXT_PAGE_LEFT)
+                # Add the page number to the bottom right
+                printout.SetFooterText(footerPage, location=richtext.RICHTEXT_PAGE_RIGHT)
+                # Do NOT show Header and Footer on the First Page
+                printout.SetShowOnFirstPage(False)
+                # Preview the RTC Buffer Contents
+                printout.PreviewBuffer(self.reportText.GetBuffer())
+                # Destroy the RichTextPrinting Object
+                printout.Destroy()
+            # Because of the Preview Bug in RichTextPrinting, we have to do things a different,
+            # slightly harder way.  This way does not allow for Headers and Footers because
+            # richtext.RichTextHeaderFooterData() has not been wrapped in wxPython.
+            else:
+                # Create the first Printout object using a RichTextPrintout object
+                printout1 = richtext.RichTextPrintout()
+                # Put the RichTextCtrl's Buffer into the RichTextPrintout object
+                printout1.SetRichTextBuffer(self.reportText.GetBuffer())
+                # Create the second Printout object using a RichTextPrintout object
+                printout2 = richtext.RichTextPrintout()
+                # Put the RichTextCtrl's Buffer into the RichTextPrintout object
+                printout2.SetRichTextBuffer(self.reportText.GetBuffer())
 
-    # Define the Method that implements Print
+                # Get a PrintDialogData object
+                data = wx.PrintDialogData()
+                # Populate the PrintDialogData Object with print data from Transana's configuration info
+                data.SetPrintData(self.printData)
+
+                # Create a PrintPreview Object using the printout objects and print data created above
+                preview = wx.PrintPreview(printout1, printout2, data)
+                # If this didn't work ...
+                if not preview.Ok():
+
+                    print "NEED ERROR MESSAGE HERE!!!!  PREVIEW FAILURE !!!!"
+
+                    # ... just exit here.
+                    return
+
+                # Now create a Print Preview WINDOW using the Print Preview Object created above
+                previewFrame = wx.PreviewFrame(preview, self, _("Transana Report"))
+                # Initialize the Print Preview Window
+                previewFrame.Initialize()
+
+                # Okay, here's another wrinkle.  If you choose Print from the Print Preview, THAT messes up the
+                # RTC formatting too.  Here's a workaround for that.
+
+                # First, identify the "Print" button using its label
+                printButton = previewFrame.FindWindowByLabel("&Print...")
+                # If that failed ...
+                if printButton == None:
+                    # ... try again using its ID, which appears to be 4 pretty consistently for me.
+                    printButton = previewFrame.FindWindowById(4)
+
+                # If the Print button is found
+                if printButton != None:
+                    # hijack the button press, pointing it to the local OnPrint method
+                    printButton.Bind(wx.EVT_BUTTON, self.OnPrint)
+                # If the Print Button is NOT found ... (It's almost certainly due to i18n issues.  Is there another way??)
+                else:
+
+                    print "NEED ERROR MESSAGE HERE!!!!  DO NOT USE PRINT BUTTON!!!!"
+
+                # Position the Print Preview Frame on top of the TextReport frame
+                previewFrame.SetPosition(self.GetPosition())
+                # Size the Print Preview Frame to match the TextReport Frame
+                previewFrame.SetSize(self.GetSize())
+                # We need to capture the Close Event for the Preview Window to compensate for a
+                # problem with RichTextCtrl formatting.
+                previewFrame.Bind(wx.EVT_CLOSE, self.OnClosePreview)
+                # Finally, we can show the Print Preview Frame
+                previewFrame.Show(True)
+
+        # If we're using the Styled Text Control ...
+        else:
+            # Create a temporary Transcript Object for the print preview
+            tempTranscript = Transcript.Transcript()
+            # Put the RichTextEditCtrl's contents, in RTF from, into the Transcript Object
+            tempTranscript.text = self.reportText.GetRTFBuffer()
+            # Convert the temporary transcript object (and its RTF contents) into the form needed for the
+            # TranscriptPrintoutClass's Print Preview display.  (This creates graphic and pageData)
+            (graphic, pageData) = TranscriptPrintoutClass.PrepareData(TransanaGlobal.printData, tempTranscript)
+            # Pass the graph can data obtained from PrepareData() to the Print Preview mechanism TWICE,
+            # once for the preview and once for the printer.
+            printout = TranscriptPrintoutClass.MyPrintout('', graphic, pageData)
+            printout2 = TranscriptPrintoutClass.MyPrintout('', graphic, pageData)
+            # use wxPython's PrintPreview object to display the Print Preview.
+            self.preview = wx.PrintPreview(printout, printout2, self.printData)
+            # Check to see if the Print Preview was properly created.  
+            if not self.preview.Ok():
+                # If not, display an error message and exit
+                self.SetStatusText(_("Print Preview Problem"))
+                return
+            # Calculate the best size for the Print Preview window
+            theWidth = max(wx.Display(0).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
+            theHeight = max(wx.Display(0).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
+            # Create the dialog to hold the wx.PrintPreview object
+            frame2 = wx.PreviewFrame(self.preview, self, _("Print Preview"), size=(theWidth, theHeight))
+            frame2.Centre()
+            # Initialize the frame so it will display correctly
+            frame2.Initialize()
+            # Finally, we actually show the frame!
+            frame2.Show(True)
+
+    def OnClosePreview(self, event):
+        """ Handles processing when the Print Preview window is closed """
+        # Call parent event handler
+        event.Skip()
+        # The Print Preview has caused a problem in the display.  We need to tweak the frame size
+        # to get it to re-draw itself correctly.
+        # Get the current size
+        (w, h) = self.GetSizeTuple()
+        # Increase height by 1 pixel
+        self.SetSize(wx.Size(w, h+1))
+        # Return to original height.
+        self.SetSize(wx.Size(w, h))
+
     def OnPrint(self, event):
-        # Create a temporary Transcript Object for the print preview
-        tempTranscript = Transcript.Transcript()
-        # Put the RichTextEditCtrl's contents, in RTF from, into the Transcript Object
-        tempTranscript.text = self.reportText.GetRTFBuffer()
-        # Convert the temporary transcript object (and its RTF contents) into the form needed for the
-        # TranscriptPrintoutClass's Print display.  (This creates graphic and pageData)
-        (graphic, pageData) = TranscriptPrintoutClass.PrepareData(TransanaGlobal.printData, tempTranscript)
-        # Pass the graph can data obtained from PrepareData() to the Print Preview mechanism ONCE
-        printout = TranscriptPrintoutClass.MyPrintout('', graphic, pageData)
-        # Create a Print Dialog Data object
-        pdd = wx.PrintDialogData()
-        # Populate the Print Dialog Data with the global print data
-        pdd.SetPrintData(self.printData)
-        # Define a wxPrinter object with the Print Dialog Data
-        printer = wx.Printer(pdd)
-        # Send the output to the printer.  If there's a problem ...
-        if not printer.Print(self, printout):
-            # ... create and display an error message
-            dlg = Dialogs.ErrorDialog(None, _("There was a problem printing this report."))
-            dlg.ShowModal()
-            dlg.Destroy()
-        # Finally, destroy the printout object.
-        printout.Destroy()
+        """ Event Handler for Printing """
+        # If we're using the Rich Text Control ...
+        if TransanaConstants.USESRTC:
+            # Define the FONT for the Header and Footer text
+            headerFooterFont = wx.Font(10, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL, False, "Times New Roman")
+            # Get the current date and time
+            t = time.localtime()
+            # Format the Footer Date as M/D/Y
+            footerDate = "%d/%d/%d" % (t.tm_mon, t.tm_mday, t.tm_year)
+            # Format the Footer Page Number
+            footerPage = _("Page") + " @PAGENUM@ " + _("of") + " @PAGESCNT@"
+            # Create a RichTextPrinting Object
+            printout = richtext.RichTextPrinting(_("Transana Report"), self)
+            # Let the printout know about the default printer settings
+            printout.SetPrintData(self.printData)
+            # Specify the Header / Footer Font
+            printout.SetHeaderFooterFont(headerFooterFont)
+            # Add the Report Title to the top right
+            printout.SetHeaderText(self.title, location=richtext.RICHTEXT_PAGE_RIGHT)
+            # Add the date to the bottom left
+            printout.SetFooterText(footerDate, location=richtext.RICHTEXT_PAGE_LEFT)
+            # Add the page number to the bottom right
+            printout.SetFooterText(footerPage, location=richtext.RICHTEXT_PAGE_RIGHT)
+            # Do NOT show Header and Footer on the First Page
+            printout.SetShowOnFirstPage(False)
+            # print the RTC Buffer Contents
+            printout.PrintBuffer(self.reportText.GetBuffer())
+            # Destroy the RichTextPrinting Object
+            printout.Destroy()
+
+        # If we're using the Styled Text Control ...
+        else:
+            # Create a temporary Transcript Object for the print preview
+            tempTranscript = Transcript.Transcript()
+            # Put the RichTextEditCtrl's contents, in RTF from, into the Transcript Object
+            tempTranscript.text = self.reportText.GetRTFBuffer()
+            # Convert the temporary transcript object (and its RTF contents) into the form needed for the
+            # TranscriptPrintoutClass's Print display.  (This creates graphic and pageData)
+            (graphic, pageData) = TranscriptPrintoutClass.PrepareData(TransanaGlobal.printData, tempTranscript)
+            # Pass the graph can data obtained from PrepareData() to the Print Preview mechanism ONCE
+            printout = TranscriptPrintoutClass.MyPrintout('', graphic, pageData)
+            # Create a Print Dialog Data object
+            pdd = wx.PrintDialogData()
+            # Populate the Print Dialog Data with the global print data
+            pdd.SetPrintData(self.printData)
+            # Define a wxPrinter object with the Print Dialog Data
+            printer = wx.Printer(pdd)
+            # Send the output to the printer.  If there's a problem ...
+            if not printer.Print(self, printout):
+                # ... create and display an error message
+                dlg = Dialogs.ErrorDialog(None, _("There was a problem printing this report."))
+                dlg.ShowModal()
+                dlg.Destroy()
+            # Finally, destroy the printout object.
+            printout.Destroy()
 
     def OnHelp(self, event):
         """ Implement the Help function """

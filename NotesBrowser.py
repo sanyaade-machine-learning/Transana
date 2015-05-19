@@ -1,4 +1,4 @@
-# Copyright (C) 2007-2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2007-2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -240,7 +240,8 @@ class NotesBrowser(wx.Dialog):
         # If we have a Transcript Note ...
         elif transcriptNum > 0:
             # Load the Transcript, Episode and Series to get the needed data
-            tempTranscript = Transcript.Transcript(transcriptNum)
+            # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+            tempTranscript = Transcript.Transcript(transcriptNum, skipText=True)
             tempEpisode = Episode.Episode(tempTranscript.episode_num)
             tempSeries = Series.Series(tempEpisode.series_num)
             # The path to the Note is the Series Name, the Episode Name, and the Transcript Name
@@ -257,8 +258,8 @@ class NotesBrowser(wx.Dialog):
             nodeData = DatabaseTreeTab._NodeData('NoteNode', noteNum, collectionNum)
         # If we have a Clip Note ...
         elif clipNum > 0:
-            # Load the Clip and Collection to get the needed data
-            tempClip = Clip.Clip(clipNum)
+            # Load the Clip and Collection to get the needed data.  We can skip loading the Clip Transcript to save load time
+            tempClip = Clip.Clip(clipNum, skipText=True)
             tempCollection = Collection.Collection(tempClip.collection_num)
             # The path to the Note is the Collection's Node String and the Clip Name
             pathData = tempCollection.GetNodeString() + ' > ' + tempClip.id
@@ -575,7 +576,8 @@ class NotesBrowser(wx.Dialog):
         # if we have a Transcript note ...
         elif note.transcript_num != 0:
             # ... load the Series, Episode, and Transcript data ...
-            tempTranscript = Transcript.Transcript(note.transcript_num)
+            # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+            tempTranscript = Transcript.Transcript(note.transcript_num, skipText=True)
             tempEpisode = Episode.Episode(tempTranscript.episode_num)
             tempSeries = Series.Series(tempEpisode.series_num)
             # ... set up the Tree Node data ...
@@ -592,8 +594,8 @@ class NotesBrowser(wx.Dialog):
             nodeType = 'CollectionNoteNode'
         # if we have a Clip note ...
         elif note.clip_num != 0:
-            # ... load the Collection and Clip data ...
-            tempClip = Clip.Clip(note.clip_num)
+            # ... load the Collection and Clip data ....  We can skip loading the Clip Transcript to save load time
+            tempClip = Clip.Clip(note.clip_num, skipText=True)
             tempCollection = Collection.Collection(tempClip.collection_num)
             # ... set up the Tree Node data ...
             nodeData = ("Collections",) + tempCollection.GetNodeData() + (tempClip.id, noteIDToUse,)

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -25,8 +25,12 @@ import wx
 import wx.media
 # Import Transana's Clip object
 import Clip
+# import Transana's Dialog Boxes
+import Dialogs
 # Import Transana's Episode object
 import Episode
+# Import Transana's Media Conversion dialog
+import MediaConvert
 # Import Transana's Constants
 import TransanaConstants
 # Import the Transana Exceptions
@@ -46,7 +50,8 @@ class VideoWindow(wx.Dialog):
     def __init__(self, parent):
         """Initialize the Media Window object"""
         # Initialize a Dialog Box
-        wx.Dialog.__init__(self, parent, -1, _("Video"), pos=self.__pos(), size=self.__size(), style = wx.RESIZE_BORDER | wx.CAPTION )
+        wx.Dialog.__init__(self, parent, -1, _("Video"), pos=self.__pos(), size=self.__size(),
+                           style = wx.RESIZE_BORDER | wx.CAPTION )
         # We need to adjust the screen position on the Mac.  I don't know why.
         if "__WXMAC__" in wx.PlatformInfo:
             pos = self.GetPosition()
@@ -55,6 +60,8 @@ class VideoWindow(wx.Dialog):
         self.Bind(wx.EVT_SIZE, self.OnSize)
         # Bind the Right Click event
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
+        # Bind the Key Down event
+        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         # Remember the parent window
         self.parent = parent
         # The ControlObject handles all inter-object communication, initialized to None
@@ -109,6 +116,9 @@ class VideoWindow(wx.Dialog):
                 self.btnPlayPause.Destroy()
                 # Destroy the slider too!
                 self.videoSlider.Destroy()
+                # And the Snapshot button!
+                if self.btnSnapshot:
+                    self.btnSnapshot.Destroy()
             # Create a media player.  (With no media, it will get a Transana graphic.)
             mediaPlayer = video_player.VideoPlayer(self)
             # Add the media player to the box sizer.
@@ -121,7 +131,7 @@ class VideoWindow(wx.Dialog):
             wx.CallAfter(self.mediaPlayers[0].OnSize, None)
         # If there is a defined Episode / Clip object to base Media Player creation on ...
         else:
-            # For any existign media players ...
+            # For any existing media players ...
             for mp in self.mediaPlayers:
                 # ... just stop the movie from playing.  Calling mp.Stop() involves more.
                 mp.movie.Stop()
@@ -137,7 +147,9 @@ class VideoWindow(wx.Dialog):
             self.btnPlayPause.Destroy()
             # Destroy the slider too!
             self.videoSlider.Destroy()
-            
+            # And the Snapshot button!
+            if self.btnSnapshot:
+                self.btnSnapshot.Destroy()
             # Now we need to examine the file offsets so we can position the various media players correctly to their relative starting points.
             # Initialize a list of offsets
             offset = [0]
@@ -255,20 +267,47 @@ class VideoWindow(wx.Dialog):
         img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
         # Create the Play / Pause button
         self.btnPlayPause = wx.BitmapButton(self, -1, img, size=(48, 24))
+        # Set the Help String
+        self.btnPlayPause.SetToolTipString(_("Play"))
         # Bind the Play / Pause button to its event handler
         self.btnPlayPause.Bind(wx.EVT_BUTTON, self.OnPlayPause)
+        # Allow the PlayPause Button to handle Key Down events too
+        self.btnPlayPause.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         # Add the Play / Pause button to the second horizontal sizer
         hBox2.Add(self.btnPlayPause, 0)
         # Create the video position slider
         self.videoSlider = wx.Slider(self, -1, 0, 0, 1000, style=wx.SL_HORIZONTAL)
         # Bind the video position slider to its event handler
         self.videoSlider.Bind(wx.EVT_SCROLL, self.OnScroll)
+        # Allow the Video Slider to handle Key Down events too
+        self.videoSlider.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
+        # Adjust position on the Mac
         if 'wxMac' in wx.PlatformInfo:
             indent = 6
         else:
             indent = 0
         # Add the slider to the horizontal sizer
         hBox2.Add(self.videoSlider, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, indent)
+
+        # If there's exactly one media player, we want a Snapshot button
+        if len(self.mediaPlayers) == 1:
+            # Get the initial image for the Play / Pause button
+            img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Snapshot.xpm"), wx.BITMAP_TYPE_XPM)
+            # Create the Snapshot button
+            self.btnSnapshot = wx.BitmapButton(self, -1, img, size=(48, 24))
+            # Set the Help String
+            self.btnSnapshot.SetToolTipString(_("Snapshot"))
+            # Bind the Snapshot button to its event handler
+            self.btnSnapshot.Bind(wx.EVT_BUTTON, self.OnSnapshot)
+            # Allow the Snapshot Button to handle Key Down events too
+            self.btnSnapshot.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
+            # Add the Snapshot button to the second horizontal sizer
+            hBox2.Add(self.btnSnapshot, 0)
+        # If we don't create the Snapshot button ...
+        else:
+            # ... set the varaible to None so we don't try to destroy it!!
+            self.btnSnapshot = None
+
         # Add the second horizontal sizer to the vertical sizer.
         vBox.Add(hBox2, 0, wx.EXPAND)
 
@@ -294,6 +333,29 @@ class VideoWindow(wx.Dialog):
             # ... tell the control object to play or pause  (Run this through the Control Object so speed control etc. works.)
             self.ControlObject.PlayPause()
 
+    def OnSnapshot(self, event):
+
+        # If a media file is loaded ...
+        if self.ControlObject.currentObj != None:
+            if self.ControlObject.ActiveTranscriptReadOnly():
+                msg = _("The current transcript is not editable.  The requested snapshot can be saved to disk, but cannot be inserted into the transcript.")
+                msg += '\n\n' + _("To insert the snapshot into the transcript, press the Edit Mode button on the Transcript Toolbar to make the transcript editable.")
+                dlg = Dialogs.InfoDialog(self, msg)
+                dlg.ShowModal()
+                dlg.Destroy()
+            # Create the Media Conversion dialog, including Clip Information so we export only the clip segment
+            convertDlg = MediaConvert.MediaConvert(self, self.ControlObject.currentObj.media_filename, self.GetCurrentVideoPosition(), snapshot=True)
+            # Show the Media Conversion Dialog
+            convertDlg.ShowModal()
+            # If the user took a snapshop and the image was successfully created ...
+            if convertDlg.snapshotSuccess and os.path.exists(convertDlg.txtDestFileName.GetValue() % 1):
+                # ... ask the Control Object to communicate with the transcript to insert this image.
+                self.ControlObject.TranscriptInsertImage(convertDlg.txtDestFileName.GetValue() % 1)
+            # We need to explicitly Close the conversion dialog here to force cleanup of temp files in some circumstances
+            convertDlg.Close()
+            # Destroy the Media Conversion Dialog
+            convertDlg.Destroy()
+
     def OnScroll(self, event):
         """ Event Handler for the Video Position Scroll Bar """
         # Determine the upper and lower bounds for the current video segment.
@@ -318,6 +380,13 @@ class VideoWindow(wx.Dialog):
         # Set the new video selection
         self.ControlObject.SetVideoSelection(newPos, -1)
         
+    def OnKeyDown(self, event):
+        """ Handle Key Down events """
+        # See if the ControlObject wants to handle the key that was pressed.
+        if self.ControlObject.ProcessCommonKeyCommands(event):
+            # If so, we're done here.  (We're done anyway!)
+            return
+
     def Play(self):
         """Start playback."""
         # Get the media player position
@@ -341,6 +410,8 @@ class VideoWindow(wx.Dialog):
         # Change the button image
         img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Pause.xpm"), wx.BITMAP_TYPE_XPM)
         self.btnPlayPause.SetBitmapLabel(img)
+        # Set the Help String
+        self.btnPlayPause.SetToolTipString(_("Pause"))
                 
     def Pause(self):
         """Pause playback."""
@@ -351,6 +422,8 @@ class VideoWindow(wx.Dialog):
         # Change the button image
         img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
         self.btnPlayPause.SetBitmapLabel(img)
+        # Set the Help String
+        self.btnPlayPause.SetToolTipString(_("Play"))
 
     def Stop(self):
         """Reset media, stop playback or pause mode, set seek to start."""
@@ -361,6 +434,8 @@ class VideoWindow(wx.Dialog):
         # Change the button image
         img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
         self.btnPlayPause.SetBitmapLabel(img)
+        # Set the Help String
+        self.btnPlayPause.SetToolTipString(_("Play"))
 
     def SetVideoStartPoint(self, TimeCode):
         """ Sets the Video Starting Point. """
@@ -406,7 +481,7 @@ class VideoWindow(wx.Dialog):
             return
         # Determine the appropriate slider position.
         # If the video length is NOT known ...
-        if (start == 0) and (end == -1):
+        if (start == 0) and (end <= 0):
             # ... position the slider at the start
             newPos = 0
         # if the video length is known ...
@@ -505,12 +580,18 @@ class VideoWindow(wx.Dialog):
             if playState == wx.media.MEDIASTATE_PLAYING:
                 # ... the Play/Pause button image should be "Pause"
                 img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Pause.xpm"), wx.BITMAP_TYPE_XPM)
+                # ... with the matching Help text
+                helpStr = _("Pause")
             # If the media is NOT playing ...
             else:
                 # ... the Play/Pause button image should be "Play"
                 img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
+                # ... with the matching Help text
+                helpStr = _("Play")
             # Display the appropriate image on the Play/Pause button
             self.btnPlayPause.SetBitmapLabel(img)
+            # Set the Help String
+            self.btnPlayPause.SetToolTipString(helpStr)
             # PPC seems to need this explicit call to update the screen
             self.Refresh()
 
@@ -756,7 +837,7 @@ class VideoWindow(wx.Dialog):
                 # since we don't have a control bar in the media player, but causes problems with multiple media players.
                 # (It makes the visualization window too short.)
                 if (sizeY == 0) and (len(self.mediaPlayers) > 1):
-                    sizeY = int((wx.ClientDisplayRect()[3] - TransanaGlobal.menuHeight) * 0.2)
+                    sizeY = int((wx.Display(0).GetClientArea()[3] - TransanaGlobal.menuHeight) * 0.2)  # wx.ClientDisplayRect()
                 # Adjust width for number of media players
                 sizeX *= len(self.mediaPlayers)
                 # if the PlayPause button is defined ...
@@ -768,7 +849,7 @@ class VideoWindow(wx.Dialog):
                     # ... then 24 pixels is a good approximation.
                     sizeY += 24
             #  Determine the screen size 
-            screenSize = wx.ClientDisplayRect()
+            screenSize = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
             # now check width against the screen size.  Allow no more than 2/3 of the screen to be take up by video.
             if sizeX > int(screenSize[2] * 0.66):
                 # Adjust Height proportionally (first, so we can calculate the proportion!)
@@ -836,22 +917,33 @@ class VideoWindow(wx.Dialog):
         for mp in self.mediaPlayers:
             # ... set the new playback speed.  Rates here range from 1 to 20, a factor of 10 larger than GetPlayBackSpeed.  Weird.
             mp.SetPlayBackSpeed(rate * 10)
+
+    def ChangeLanguages(self):
+        """ Update all prompts for the Video Window when changing interface languages """
+        self.btnPlayPause.SetToolTipString(_("Play"))
+        self.btnSnapshot.SetToolTipString(_("Snapshot"))
         
 # Private methods
 
     def __size(self):
         """Determine default size of MediaPlayer Frame."""
-        rect = wx.ClientDisplayRect()
-        width = rect[2] * .28
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        if 'wxGTK' in wx.PlatformInfo:
+            width = min(rect[2], 1440) * .28
+        else:
+            width = rect[2] * .28
         height = (rect[3] - TransanaGlobal.menuHeight) * .35
         return wx.Size(width, height)
 
     def __pos(self):
         """Determine default position of MediaPlayer Frame."""
-        rect = wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
         (width, height) = self.__size()
         # rect[0] compensates if the Start menu is on the left side of the screen.
-        x = rect[0] + rect[2] - width - 3
+        if 'wxGTK' in wx.PlatformInfo:
+            x = rect[0] + min(rect[2], 1440) - width - 3
+        else:
+            x = rect[0] + rect[2] - width - 3
         # rect[1] compensates if the Start menu is on the top of the screen
         y = rect[1] + TransanaGlobal.menuHeight + 3
         return wx.Point(x, y)

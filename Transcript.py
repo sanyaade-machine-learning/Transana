@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -24,6 +24,8 @@ if DEBUG:
 
 # import wxPython
 import wx
+# import Python's os module
+import os
 # import Python's types module
 import types
 # import Transana's Dialogs, required for an error message
@@ -50,13 +52,17 @@ class Transcript(DataObject.DataObject):
     """This class defines the structure for a transcript object.  A transcript
     object describes a transcript document for Episodes or Clips."""
 
-    def __init__(self, id_or_num=None, ep=None, clip=None):
+    def __init__(self, id_or_num=None, ep=None, clip=None, skipText=False):
         """Initialize an Transcript object."""
         # Transcripts can be loaded in 3 ways:
         #   Transcript Number can be provided                   (Loading any Transcript)
         #   Transcript Name and Episode Number can be provided  (Loading an Episode Transcript)
         #   Clip Number can be provided                         (Loading a Clip transcript)
+        #   skipText indicates that the RTFText can be left off.  This leads to significantly faster transcript loading
+        #     particularly when we start having large transcripts with embedded images.
         DataObject.DataObject.__init__(self)
+        # Remember if we're supposed to skip the RTF Text
+        self.skipText = skipText
         if (id_or_num == None) and (clip != None):
             self.db_load_by_clipnum(clip)
         elif type(id_or_num) in (int, long):
@@ -78,6 +84,7 @@ class Transcript(DataObject.DataObject):
         str = str + "Clip Start = %s\n" % Misc.time_in_ms_to_str(self.clip_start)
         str = str + "Clip Stop = %s\n" % Misc.time_in_ms_to_str(self.clip_stop)
         str = str + "Comment = %s\n" % self.comment
+        str += "MinTranscriptWidth = %s\n" % self.minTranscriptWidth
         str = str + "LastSaveTime = %s\n" % self.lastsavetime
         if len(self.text) > 250:
             str = str + "text not displayed due to length.\n\n"
@@ -115,12 +122,25 @@ class Transcript(DataObject.DataObject):
         if 'unicode' in wx.PlatformInfo:
             name = name.encode(TransanaGlobal.encoding)
         db = DBInterface.get_db()
-        query = """SELECT a.*, b.EpisodeID, c.SeriesID FROM Transcripts2 a, Episodes2 b, Series2 c
-            WHERE   TranscriptID = %s AND
-                    a.EpisodeNum = b.EpisodeNum AND
-                    b.EpisodeNum = %s AND
-                    b.SeriesNum = c.SeriesNum
-        """
+        # If we're skipping the RTFText ...
+        if self.skipText:
+            query = """SELECT a.TranscriptNum, a.TranscriptID, a.EpisodeNum, a.SourceTranscriptNum,
+                              a.ClipNum, a.SortOrder, a.Transcriber, a.ClipStart, a.ClipStop, a.Comment,
+                              a.MinTranscriptWidth, a.RecordLock, a.LockTime, a.LastSaveTime,
+                              b.EpisodeID, c.SeriesID FROM Transcripts2 a, Episodes2 b, Series2 c
+                WHERE   TranscriptID = %s AND
+                        a.EpisodeNum = b.EpisodeNum AND
+                        b.EpisodeNum = %s AND
+                        b.SeriesNum = c.SeriesNum
+            """
+        # If we're NOT skipping the RTF Text
+        else:
+            query = """SELECT a.*, b.EpisodeID, c.SeriesID FROM Transcripts2 a, Episodes2 b, Series2 c
+                WHERE   TranscriptID = %s AND
+                        a.EpisodeNum = b.EpisodeNum AND
+                        b.EpisodeNum = %s AND
+                        b.SeriesNum = c.SeriesNum
+            """
         c = db.cursor()
         c.execute(query, (name, episode))
         n = c.rowcount
@@ -137,12 +157,16 @@ class Transcript(DataObject.DataObject):
     def db_load_by_num(self, num):
         """Load a record by record number."""
         db = DBInterface.get_db()
-# This query doesn't work for loading a Clip Transcript, of course!
-#        query = """SELECT a.*, b.EpisodeID, c.SeriesID FROM Transcripts2 a, Episodes2 b, Series2 c
-#            WHERE   TranscriptNum = %s AND
-#                    a.EpisodeNum = b.EpisodeNum AND
-#                    b.SeriesNum = c.SeriesNum"""
-        query = """SELECT * FROM Transcripts2 WHERE   TranscriptNum = %s"""
+        # If we're skipping the RTF Text ...
+        if self.skipText:
+            query = """SELECT TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum,
+                              ClipNum, SortOrder, Transcriber, ClipStart, ClipStop, Comment,
+                              MinTranscriptWidth, RecordLock, LockTime, LastSaveTime
+                         FROM Transcripts2 WHERE   TranscriptNum = %s
+                    """
+        # If we're NOT skipping the RTF Text ...
+        else:
+            query = """SELECT * FROM Transcripts2 WHERE   TranscriptNum = %s"""
         c = db.cursor()
         c.execute(query, num)
         n = c.rowcount
@@ -224,7 +248,36 @@ class Transcript(DataObject.DataObject):
             transcriber = self.transcriber
             comment = self.comment
 
-        if (len(self.text) > 8388000):
+        # If we have a NEW transcript and it HAS an ID and it is EMPTY ...
+        if (self.number == 0) and (self.id != "") and (len(self.text) == 0):
+            # ... build the Video Root default.xml file name.
+            fname = os.path.join(TransanaGlobal.configData.videoPath, 'default.xml')
+            # If the XML default doesn't exist ...
+            if not os.path.exists(fname):
+                # ... build the Video Root default.rtf file name.
+                fname = os.path.join(TransanaGlobal.configData.videoPath, 'default.rtf')
+
+            # If the default file exists ...
+            if os.path.exists(fname):
+                # ... start exception handling ...
+                try:
+                    # Open the file
+                    f = open(fname, "r")
+                    # Read the file straight into the Transcript Text
+                    self.text = f.read()
+                    # if the text does NOT have an RTF or XML header ...
+                    if (self.text[:5].lower() != '{\\rtf') and (self.text[:5].lower() != '<?xml'):
+                        # ... then it's NOT a legal default transcript and we shouldn't use it.
+                        self.obj.text = ''
+                    # Close the file
+                    f.close()
+                # If exceptions are raised ...
+                except:
+                    # ... we don't need to do anything here.  (Error message??)
+                    # The consequence is probably that the Transcript Text will be blank.
+                    pass
+
+        if (len(self.text) > TransanaGlobal.max_allowed_packet):   # 8388000
             raise SaveError, _("This transcript is too large for the database.  Please shorten it, split it into two parts\nor if you are importing an RTF document, remove some unnecessary RTF encoding.")
 
         # Make a minor adjustment to the data, if needed.  (This prevents an error in Database Import.)
@@ -232,9 +285,9 @@ class Transcript(DataObject.DataObject):
             self.source_transcript = 0
 
         fields = ("TranscriptID", "EpisodeNum", "SourceTranscriptNum", "ClipNum", "SortOrder", "Transcriber", \
-                        "ClipStart", "ClipStop", "RTFText", "Comment", "LastSaveTime")
+                        "ClipStart", "ClipStop", "RTFText", "Comment", "MinTranscriptWidth", "LastSaveTime")
         values = (id, self.episode_num, self.source_transcript, self.clip_num, self.sort_order, transcriber, \
-                    self.clip_start, self.clip_stop, self.text, comment)
+                    self.clip_start, self.clip_stop, self.text, comment, self.minTranscriptWidth)
 
         if (self._db_start_save() == 0):
             # Duplicate Transcript IDs within an Episode are not allowed.
@@ -283,6 +336,7 @@ class Transcript(DataObject.DataObject):
                     ClipStop = %s,
                     RTFText = %s,
                     Comment = %s,
+                    MinTranscriptWidth = %s,
                     LastSaveTime = CURRENT_TIMESTAMP
                 WHERE TranscriptNum = %s
             """
@@ -481,6 +535,17 @@ class Transcript(DataObject.DataObject):
     def _del_clip_stop(self):
         self._clip_stop = 0
 
+    # Implementation for Minimum Transcript Width
+    def _get_min_transcript_width(self):
+        return self._minTranscriptWidth
+    def _set_min_transcript_width(self, minTrWidth):
+        if minTrWidth == None:
+            self._minTranscriptWidth = 0
+        else:
+            self._minTranscriptWidth = minTrWidth
+    def _del_min_transcript_width(self):
+        self._minTranscriptWidth = 0
+
     # Implementation for Text Property
     def _get_text(self):
         return self._text
@@ -520,6 +585,8 @@ class Transcript(DataObject.DataObject):
                           """Clip Start Time, only used for multi-transcript clips for propagating Transcript changes""")
     clip_stop = property(_get_clip_stop, _set_clip_stop, _del_clip_stop,
                           """Clip Stop Time, only used for multi-transcript clips for propagating Transcript changes""")
+    minTranscriptWidth = property(_get_min_transcript_width, _set_min_transcript_width, _del_min_transcript_width,
+                                  """ Minimim Transcript Display Width """)
     text = property(_get_text, _set_text, _del_text,
                         """Text of the transcript, stored in the database as a BLOB.""")
     locked_by_me = property(None, None, None,
@@ -540,53 +607,58 @@ class Transcript(DataObject.DataObject):
         self.clip_start = row['ClipStart']
         self.clip_stop = row['ClipStop']
 
-        # Can I get away with assuming Unicode?
-        # Here's the plan:
-        #   test for rtf in here, if you find rtf, process normally
-        #   if you don't find it, pass data off to some weirdo method in TranscriptEditor.py
+        # If we're NOT skipping the RTF Text ...
+        if not self.skipText:
+            # Can I get away with assuming Unicode?
+            # Here's the plan:
+            #   test for rtf in here, if you find rtf, process normally
+            #   if you don't find it, pass data off to some weirdo method in TranscriptEditor.py
 
-        # 1 - Determine encoding, adjust if needed
-        # 2 - enact the plan above
+            # 1 - Determine encoding, adjust if needed
+            # 2 - enact the plan above
 
-        # determine encoding, fix if needed
-        if type(row['RTFText']).__name__ == 'array':
+            # determine encoding, fix if needed
+            if type(row['RTFText']).__name__ == 'array':
 
-            if DEBUG:
-                print "Transcript._load_row(): 2", row['RTFText'].typecode
-            
-            if row['RTFText'].typecode == 'u':
-                self.text = row['RTFText'].tounicode()
-            else:
-                self.text = row['RTFText'].tostring()
-        else:
-            self.text = row['RTFText']
-
-        if 'unicode' in wx.PlatformInfo:
-            if DEBUG:
-                print "debug here"
-		
-            if type(self.text).__name__ == 'str':
-                temp = self.text[2:5]
-
-                # check to see if we're working with RTF
-                try:
-                    if temp == u'rtf':
-                        # convert the data to unicode just to be safe.
-                        self.text = unicode(self.text, 'utf-8')
+                if DEBUG:
+                    print "Transcript._load_row(): 2", row['RTFText'].typecode
                 
-                except UnicodeDecodeError:
-                    # This would sometimes get called while I was using cPickle instead of Pickle.
-                    # You could probably remove the exception handling stuff and be okay, but it's
-                    # not hurting anything like it is.
-                    # self.dlg.editor.load_transcript(transcriptObj, 'pickle')
+                if row['RTFText'].typecode == 'u':
+                    self.text = row['RTFText'].tounicode()
+                else:
+                    self.text = row['RTFText'].tostring()
+            else:
+                self.text = row['RTFText']
 
-                    # NOPE.  There is no self.dlg.editor here!
-                    pass
+            if 'unicode' in wx.PlatformInfo:
+                if type(self.text).__name__ == 'str':
+                    temp = self.text[2:5]
 
-        # self.text gets set to be our data
-        # then load_transcript is called, from transcriptionui.LoadTranscript()
+                    # check to see if we're working with RTF
+                    try:
+                        if temp == u'rtf':
+                            # convert the data to unicode just to be safe.
+                            self.text = unicode(self.text, 'utf-8')
+                    
+                    except UnicodeDecodeError:
+                        # This would sometimes get called while I was using cPickle instead of Pickle.
+                        # You could probably remove the exception handling stuff and be okay, but it's
+                        # not hurting anything like it is.
+                        # self.dlg.editor.load_transcript(transcriptObj, 'pickle')
+
+                        # NOPE.  There is no self.dlg.editor here!
+                        pass
+
+            # self.text gets set to be our data
+            # then load_transcript is called, from transcriptionui.LoadTranscript()
+            
+        # If we ARE skipping the text ...
+        else:
+            # set the text to None
+            self.text = None
 
         self.comment = row['Comment']
+        self.minTranscriptWidth = row['MinTranscriptWidth']
         self.lastsavetime = row['LastSaveTime']
         self.changed = False
 

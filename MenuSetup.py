@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -43,10 +43,13 @@ MENU_FILE_EXIT                  =  wx.ID_EXIT   # Constant used to improve Mac s
 # Trasncript Menu
 MENU_TRANSCRIPT_EDIT            =  wx.NewId()
 MENU_TRANSCRIPT_EDIT_UNDO       =  wx.NewId()
-MENU_TRANSCRIPT_EDIT_CUT        =  wx.NewId()
-MENU_TRANSCRIPT_EDIT_COPY       =  wx.NewId()
-MENU_TRANSCRIPT_EDIT_PASTE      =  wx.NewId()
+MENU_TRANSCRIPT_EDIT_CUT        =  wx.ID_CUT
+MENU_TRANSCRIPT_EDIT_COPY       =  wx.ID_COPY
+MENU_TRANSCRIPT_EDIT_PASTE      =  wx.ID_PASTE
 MENU_TRANSCRIPT_FONT            =  wx.NewId()
+MENU_TRANSCRIPT_PARAGRAPH       =  wx.NewId()
+MENU_TRANSCRIPT_TABS            =  wx.NewId()
+MENU_TRANSCRIPT_INSERT_IMAGE    =  wx.NewId()
 MENU_TRANSCRIPT_PRINT           =  wx.NewId()
 MENU_TRANSCRIPT_PRINTERSETUP    =  wx.NewId()
 MENU_TRANSCRIPT_CHARACTERMAP    =  wx.NewId()
@@ -56,6 +59,7 @@ MENU_TRANSCRIPT_ADJUSTINDEXES   =  wx.NewId()
 # Tools Menu
 MENU_TOOLS_NOTESBROWSER         =  wx.NewId()
 MENU_TOOLS_FILEMANAGEMENT       =  wx.NewId()
+MENU_TOOLS_MEDIACONVERSION      =  wx.NewId()
 MENU_TOOLS_IMPORT_DATABASE      =  wx.NewId()
 MENU_TOOLS_EXPORT_DATABASE      =  wx.NewId()
 MENU_TOOLS_COLORCONFIG          =  wx.NewId()
@@ -67,6 +71,7 @@ MENU_TOOLS_RECORDLOCK           =  wx.NewId()
 MENU_OPTIONS_SETTINGS           =  wx.ID_PREFERENCES  # Constant used to improve Mac standardization
 MENU_OPTIONS_LANGUAGE           =  wx.NewId()
 MENU_OPTIONS_LANGUAGE_EN        =  wx.NewId()
+MENU_OPTIONS_LANGUAGE_AR        =  wx.NewId()  # Arabic
 MENU_OPTIONS_LANGUAGE_DA        =  wx.NewId()  # Danish
 MENU_OPTIONS_LANGUAGE_DE        =  wx.NewId()  # German
 MENU_OPTIONS_LANGUAGE_EASTEUROPE = wx.NewId()  # Central and Eastern European Encoding (iso-8859-2)
@@ -74,6 +79,7 @@ MENU_OPTIONS_LANGUAGE_EL        =  wx.NewId()  # Greek
 MENU_OPTIONS_LANGUAGE_ES        =  wx.NewId()  # Spanish
 MENU_OPTIONS_LANGUAGE_FI        =  wx.NewId()  # Finnish
 MENU_OPTIONS_LANGUAGE_FR        =  wx.NewId()  # French
+MENU_OPTIONS_LANGUAGE_HE        =  wx.NewId()  # Hebrew
 MENU_OPTIONS_LANGUAGE_IT        =  wx.NewId()  # Italian
 MENU_OPTIONS_LANGUAGE_JA        =  wx.NewId()  # Japanese
 MENU_OPTIONS_LANGUAGE_KO        =  wx.NewId()  # Korean
@@ -81,6 +87,7 @@ MENU_OPTIONS_LANGUAGE_NL        =  wx.NewId()  # Dutch
 MENU_OPTIONS_LANGUAGE_NB        =  wx.NewId()  # Norwegian Bokmal
 MENU_OPTIONS_LANGUAGE_NN        =  wx.NewId()  # Norwegian Ny-norsk
 MENU_OPTIONS_LANGUAGE_PL        =  wx.NewId()  # Polish
+MENU_OPTIONS_LANGUAGE_PT        =  wx.NewId()  # Portuguese
 MENU_OPTIONS_LANGUAGE_RU        =  wx.NewId()  # Russian
 MENU_OPTIONS_LANGUAGE_SV        =  wx.NewId()  # Swedish
 MENU_OPTIONS_LANGUAGE_ZH        =  wx.NewId()  # Chinese
@@ -153,8 +160,14 @@ class MenuSetup(wx.MenuBar):
         self.transcriptmenu.Append(MENU_TRANSCRIPT_EDIT_COPY, _("&Copy\tCtrl-C"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_EDIT_PASTE, _("&Paste\tCtrl-V"))
         self.transcriptmenu.AppendSeparator()
-        self.transcriptmenu.Append(MENU_TRANSCRIPT_FONT, _("&Font"))
+        self.transcriptmenu.Append(MENU_TRANSCRIPT_FONT, _("Format &Font"))
+        if TransanaConstants.USESRTC:
+            self.transcriptmenu.Append(MENU_TRANSCRIPT_PARAGRAPH, _("Format Paragrap&h"))
+            self.transcriptmenu.Append(MENU_TRANSCRIPT_TABS, _("Format Ta&bs"))
         self.transcriptmenu.AppendSeparator()
+        if TransanaConstants.USESRTC:
+            self.transcriptmenu.Append(MENU_TRANSCRIPT_INSERT_IMAGE, _("&Insert Image"))
+            self.transcriptmenu.AppendSeparator()
         self.transcriptmenu.Append(MENU_TRANSCRIPT_PRINT, _("&Print"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_PRINTERSETUP, _("P&rinter Setup"))
         self.transcriptmenu.AppendSeparator()
@@ -172,6 +185,7 @@ class MenuSetup(wx.MenuBar):
         self.toolsmenu = wx.Menu()
         self.toolsmenu.Append(MENU_TOOLS_NOTESBROWSER, _("&Notes Browser"))
         self.toolsmenu.Append(MENU_TOOLS_FILEMANAGEMENT, _("&File Management"))
+        self.toolsmenu.Append(MENU_TOOLS_MEDIACONVERSION, _("&Media Conversion"))
         self.toolsmenu.Append(MENU_TOOLS_IMPORT_DATABASE, _("&Import Database"))
         self.toolsmenu.Append(MENU_TOOLS_EXPORT_DATABASE, _("&Export Database"))
         self.toolsmenu.Append(MENU_TOOLS_COLORCONFIG, _("&Graphics Color Configuration"))
@@ -188,6 +202,10 @@ class MenuSetup(wx.MenuBar):
 
         # English should always be installed
         self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EN, _("&English"), kind=wx.ITEM_RADIO)
+        # Arabic
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'ar', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_AR, _("&Arabic"), kind=wx.ITEM_RADIO)
         # Danish
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'da', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -212,6 +230,10 @@ class MenuSetup(wx.MenuBar):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'fr', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_FR, _("&French"), kind=wx.ITEM_RADIO)
+        # Hebrew
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'he', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_HE, _("&Hebrew"), kind=wx.ITEM_RADIO)
         # Italian
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'it', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -232,6 +254,10 @@ class MenuSetup(wx.MenuBar):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'pl', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_PL, _("&Polish"), kind=wx.ITEM_RADIO)
+        # Portuguese
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'pt', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_PT, _("P&ortuguese"), kind=wx.ITEM_RADIO)
         # Russian
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'ru', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -245,10 +271,10 @@ class MenuSetup(wx.MenuBar):
         if os.path.exists(dir):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_ZH, _("&Chinese - Simplified"), kind=wx.ITEM_RADIO)
         # Greek, Japanese, and Korean
-        if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EASTEUROPE, _("English prompts, Eastern European data (ISO-8859-2 encoding)"), kind=wx.ITEM_RADIO)
-            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EL, _("English prompts, Greek data"), kind=wx.ITEM_RADIO)
-            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_JA, _("English prompts, Japanese data"), kind=wx.ITEM_RADIO)
+#        if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+#            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EASTEUROPE, _("English prompts, Eastern European data (ISO-8859-2 encoding)"), kind=wx.ITEM_RADIO)
+#            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EL, _("English prompts, Greek data"), kind=wx.ITEM_RADIO)
+#            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_JA, _("English prompts, Japanese data"), kind=wx.ITEM_RADIO)
             # Korean support must be removed due to a bug in wxSTC on Windows.
             # self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_KO, _("English prompts, Korean data"), kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_LANGUAGE, _("&Language"), self.optionslanguagemenu)
@@ -285,7 +311,9 @@ class MenuSetup(wx.MenuBar):
         self.Append(self.optionsmenu, _("&Options"))
 
         # Set Language Menu to initial value
-        if TransanaGlobal.configData.language == 'da':
+        if TransanaGlobal.configData.language == 'ar':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_AR, True)
+        elif TransanaGlobal.configData.language == 'da':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_DA, True)
         elif TransanaGlobal.configData.language == 'de':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_DE, True)
@@ -307,20 +335,22 @@ class MenuSetup(wx.MenuBar):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_NN, True)
         elif TransanaGlobal.configData.language == 'pl':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_PL, True)
+        elif TransanaGlobal.configData.language == 'pt':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_PT, True)
         elif TransanaGlobal.configData.language == 'ru':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_RU, True)
         elif TransanaGlobal.configData.language == 'sv':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_SV, True)
         elif (TransanaGlobal.configData.language == 'zh'):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_ZH, True)
-        elif (TransanaGlobal.configData.language == 'easteurope') and (TransanaConstants.singleUserVersion):
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EASTEUROPE, True)
-        elif (TransanaGlobal.configData.language == 'el') and (TransanaConstants.singleUserVersion):
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EL, True)
-        elif (TransanaGlobal.configData.language == 'ja') and (TransanaConstants.singleUserVersion):
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_JA, True)
-        elif (TransanaGlobal.configData.language == 'ko') and (TransanaConstants.singleUserVersion):
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_KO, True)
+#        elif (TransanaGlobal.configData.language == 'easteurope') and (TransanaConstants.singleUserVersion):
+#            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EASTEUROPE, True)
+#        elif (TransanaGlobal.configData.language == 'el') and (TransanaConstants.singleUserVersion):
+#            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EL, True)
+#        elif (TransanaGlobal.configData.language == 'ja') and (TransanaConstants.singleUserVersion):
+#            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_JA, True)
+#        elif (TransanaGlobal.configData.language == 'ko') and (TransanaConstants.singleUserVersion):
+#            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_KO, True)
             
         # Set Options Menu items to their initial values based on Configuration Data
         if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):

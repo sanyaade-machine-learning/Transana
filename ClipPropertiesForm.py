@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -26,6 +26,7 @@ import Dialogs
 import EpisodePropertiesForm
 import KWManager
 import Misc
+import PyXML_RTCImportParser
 import TransanaConstants
 import TransanaGlobal
 
@@ -33,7 +34,11 @@ import wx
 import os
 import string
 import sys
-import TranscriptEditor
+import xml.sax
+if TransanaConstants.USESRTC:
+    import TranscriptEditor_RTC
+else:
+    import TranscriptEditor_STC
 
 # Define the maximum number of video files allowed.  (This could change!)
 MEDIAFILEMAX = EpisodePropertiesForm.MEDIAFILEMAX
@@ -58,13 +63,16 @@ class ClipPropertiesForm(Dialogs.GenForm):
             HelpContext='Clip Merge'
 
         # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style.  Signal that Propogation is included.
-        Dialogs.GenForm.__init__(self, parent, id, title, size=size, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, propagateEnabled=propagateEnabled, HelpContext=HelpContext)
+        Dialogs.GenForm.__init__(self, parent, id, title, size=size, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 propagateEnabled=propagateEnabled, useSizers = True, HelpContext=HelpContext)
         if mergeList == None:
             # Define the minimum size for this dialog as the initial size
-            self.SetSizeHints(600, 570)
+            minWidth = 750
+            minHeight = 570
         else:
             # Define the minimum size for this dialog as the initial size
-            self.SetSizeHints(600, 650)
+            minWidth = 750
+            minHeight = 650
         # Remember the Parent Window
         self.parent = parent
         # Remember the original Clip Object passed in
@@ -82,29 +90,26 @@ class ClipPropertiesForm(Dialogs.GenForm):
         # Initialize a variable to hold merged keyword examples.
         self.mergedKeywordExamples = []
 
-        ######################################################
-        # Tedious GUI layout code follows
-        ######################################################
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
 
         # If we're merging Clips ...
         if self.mergeList != None:
-            # ... display a label for the Merge Clips ...
-            lay = wx.LayoutConstraints()
-            lay.top.SameAs(self.panel, wx.Top, 10)
-            lay.left.SameAs(self.panel, wx.Left, 10)
-            lay.right.SameAs(self.panel, wx.Right, 10)
-            lay.height.AsIs()
-            lblMergeClip = wx.StaticText(self.panel, -1, _("Clip to Merge"))
-            lblMergeClip.SetConstraints(lay)
 
+            # ... display a label for the Merge Clips ...
+            lblMergeClip = wx.StaticText(self.panel, -1, _("Clip to Merge"))
+            mainSizer.Add(lblMergeClip, 0)
+            
+            # Add a vertical spacer to the main sizer        
+            mainSizer.Add((0, 3))
+
+            # Create a HORIZONTAL sizer for the merge information
+            mergeSizer = wx.BoxSizer(wx.HORIZONTAL)
+            
             # ... display a ListCtrl for the Merge Clips ...
-            lay = wx.LayoutConstraints()
-            lay.top.Below(lblMergeClip, 3)
-            lay.left.SameAs(self.panel, wx.Left, 10)
-            lay.right.SameAs(self.panel, wx.Right, 10)
-            lay.height.AsIs()
             self.mergeClips = wx.ListCtrl(self.panel, -1, size=(300, 100), style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
-            self.mergeClips.SetConstraints(lay)
+            # Add the element to the sizer
+            mergeSizer.Add(self.mergeClips, 1)
             # ... bind the Item Selected event for the List Control ...
             self.mergeClips.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnItemSelected)
 
@@ -122,72 +127,78 @@ class ClipPropertiesForm(Dialogs.GenForm):
                 self.mergeClips.SetStringItem(index, 2, Misc.time_in_ms_to_str(ClipStart))
                 self.mergeClips.SetStringItem(index, 3, Misc.time_in_ms_to_str(ClipStop))
 
-        # Clip ID layout
-        lay = wx.LayoutConstraints()
-        # Layout differs slightly if we are merging Clips.
-        if self.mergeList == None:
-            lay.top.SameAs(self.panel, wx.Top, 10)     # 10 from top
-        else:
-            lay.top.Below(self.mergeClips, 10)
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 18)  # 18% width
-        lay.height.AsIs()
-        self.id_edit = self.new_edit_box(_("Clip ID"), lay, self.obj.id, maxLen=100)
+            # Add the row sizer to the main vertical sizer
+            mainSizer.Add(mergeSizer, 0, wx.EXPAND)
 
-        # Collection ID layout
-        lay = wx.LayoutConstraints()
-        # Layout differs slightly if we are merging Clips.
-        if self.mergeList == None:
-            lay.top.SameAs(self.panel, wx.Top, 10)     # 10 from top
-        else:
-            lay.top.Below(self.mergeClips, 10)
-        lay.left.RightOf(self.id_edit, 10)             # 10 right of Episode ID
-        lay.width.PercentOf(self.panel, wx.Width, 38)  # 38% width
-        lay.height.AsIs()
-        collection_edit = self.new_edit_box(_("Collection ID"), lay, self.obj.GetNodeString(False))
+            # Add a vertical spacer to the main sizer        
+            mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+        # Clip ID
+        self.id_edit = self.new_edit_box(_("Clip ID"), v1, self.obj.id, maxLen=100)
+        # Add the element to the sizer
+        r1Sizer.Add(v1, 1, wx.EXPAND)
+
+        # Add a horizontal spacer to the row sizer        
+        r1Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v2 = wx.BoxSizer(wx.VERTICAL)
+        # Collection ID
+        collection_edit = self.new_edit_box(_("Collection ID"), v2, self.obj.GetNodeString(False))
+        # Add the element to the sizer
+        r1Sizer.Add(v2, 2, wx.EXPAND)
         collection_edit.Enable(False)
+        
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
 
-        # Series ID layout
-        lay = wx.LayoutConstraints()
-        # Layout differs slightly if we are merging Clips.
-        if self.mergeList == None:
-            lay.top.SameAs(self.panel, wx.Top, 10)     # 10 from top
-        else:
-            lay.top.Below(self.mergeClips, 10)
-        lay.left.RightOf(collection_edit, 10)          # 10 right of Collection ID
-        lay.width.PercentOf(self.panel, wx.Width, 18)  # 18% width
-        lay.height.AsIs()
-        series_edit = self.new_edit_box(_("Series ID"), lay, self.obj.series_id)
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v3 = wx.BoxSizer(wx.VERTICAL)
+        # Series ID
+        series_edit = self.new_edit_box(_("Series ID"), v3, self.obj.series_id)
+        # Add the element to the sizer
+        r2Sizer.Add(v3, 1, wx.EXPAND)
         series_edit.Enable(False)
 
-        # Episode ID layout
-        lay = wx.LayoutConstraints()
-        # Layout differs slightly if we are merging Clips.
-        if self.mergeList == None:
-            lay.top.SameAs(self.panel, wx.Top, 10)     # 10 from top
-        else:
-            lay.top.Below(self.mergeClips, 10)         # 10 below list of mergeable clips
-        lay.left.RightOf(series_edit, 10)              # 10 right of Series ID
-        lay.width.PercentOf(self.panel, wx.Width, 18)  # 18% width
-        lay.height.AsIs()
-        episode_edit = self.new_edit_box(_("Episode ID"), lay, self.obj.episode_id)
+        # Add a horizontal spacer to the row sizer        
+        r2Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v4 = wx.BoxSizer(wx.VERTICAL)
+        # Episode ID
+        episode_edit = self.new_edit_box(_("Episode ID"), v4, self.obj.episode_id)
+        # Add the element to the sizer
+        r2Sizer.Add(v4, 1, wx.EXPAND)
         episode_edit.Enable(False)
 
-        # Media Filename(s) layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.id_edit, 10)                # 10 under ID
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
-        lay.height.AsIs()
-        txt = wx.StaticText(self.panel, -1, _("Media Filename(s)"))
-        txt.SetConstraints(lay)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
 
-        # Media Filename(s) Layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                # 10 under ID
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.right.SameAs(self.panel, wx.Right, 10)  # 48% width
-        lay.height.AsIs()
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Media Filename(s) [label]
+        txt = wx.StaticText(self.panel, -1, _("Media Filename(s)"))
+        mainSizer.Add(txt, 0)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 3))
+
+        # Create a HORIZONTAL sizer for the next row
+        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Media Filename(s)
         # If the media filename path is not empty, we should normalize the path specification
         if self.obj.media_filename == '':
             filePath = self.obj.media_filename
@@ -199,57 +210,86 @@ class ClipPropertiesForm(Dialogs.GenForm):
         for vid in self.obj.additional_media_files:
             # ... add it to the filename list
             self.filenames.append(vid['filename'])
-        self.fname_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.Size(200, 60), self.filenames)
-        self.fname_lb.SetConstraints(lay)
+        self.fname_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.Size(180, 60), self.filenames)
+        r3Sizer.Add(self.fname_lb, 1, wx.EXPAND)
         self.fname_lb.SetDropTarget(ListBoxFileDropTarget(self.fname_lb))
 
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r3Sizer, 2, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
         
-        # Clip Start layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.fname_lb, 10)                # 10 under File Name
-        lay.left.SameAs(self.panel, wx.Left, 10)          # 10 from left 
-        lay.width.PercentOf(self.panel, wx.Width, 32)     # 32% width
-        lay.height.AsIs()
-        # Convert to HH:MM:SS.mm
-        self.clip_start_edit = self.new_edit_box(_("Clip Start"), lay, Misc.time_in_ms_to_str(self.obj.clip_start))
+        # Create a HORIZONTAL sizer for the next row
+        r4Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v5 = wx.BoxSizer(wx.VERTICAL)
+        # Clip Start.  Convert to HH:MM:SS.mm
+        self.clip_start_edit = self.new_edit_box(_("Clip Start"), v5, Misc.time_in_ms_to_str(self.obj.clip_start))
+        # Add the element to the sizer
+        r4Sizer.Add(v5, 1, wx.EXPAND)
         # For merging, we need to remember the merged value of Clip Start
         self.clip_start = self.obj.clip_start
         self.clip_start_edit.Enable(False)
 
-        # Clip Stop layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.fname_lb, 10)                # 10 under File Name
-        lay.left.RightOf(self.clip_start_edit, 10)        # 10 right of Clip start
-        lay.width.PercentOf(self.panel, wx.Width, 32)     # 32% width
-        lay.height.AsIs()
-        # Convert to HH:MM:SS.mm
-        self.clip_stop_edit = self.new_edit_box(_("Clip Stop"), lay, Misc.time_in_ms_to_str(self.obj.clip_stop))
+        # Add a horizontal spacer to the row sizer        
+        r4Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v6 = wx.BoxSizer(wx.VERTICAL)
+        # Clip Stop.  Convert to HH:MM:SS.mm
+        self.clip_stop_edit = self.new_edit_box(_("Clip Stop"), v6, Misc.time_in_ms_to_str(self.obj.clip_stop))
+        # Add the element to the sizer
+        r4Sizer.Add(v6, 1, wx.EXPAND)
         # For merging, we need to remember the merged value of Clip Stop
         self.clip_stop = self.obj.clip_stop
         self.clip_stop_edit.Enable(False)
 
-        # Clip Length layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.fname_lb, 10)                # 10 under File Name
-        lay.left.RightOf(self.clip_stop_edit, 10)         # 10 right of Clip Stop
-        lay.right.SameAs(self.panel, wx.Right, 10)        # 10 from right side
-        lay.height.AsIs()
-        # Convert to HH:MM:SS.mm
-        self.clip_length_edit = self.new_edit_box(_("Clip Length"), lay, Misc.time_in_ms_to_str(self.obj.clip_stop - self.obj.clip_start))
+        # Add a horizontal spacer to the row sizer        
+        r4Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v7 = wx.BoxSizer(wx.VERTICAL)
+        # Clip Length.  Convert to HH:MM:SS.mm
+        self.clip_length_edit = self.new_edit_box(_("Clip Length"), v7, Misc.time_in_ms_to_str(self.obj.clip_stop - self.obj.clip_start))
+        # Add the element to the sizer
+        r4Sizer.Add(v7, 1, wx.EXPAND)
         self.clip_length_edit.Enable(False)
 
-        # Comment layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.clip_start_edit, 10)             # 10 under media filename
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        comment_edit = self.new_edit_box(_("Comment"), lay, self.obj.comment, maxLen=255)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r4Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+        
+        # Create a HORIZONTAL sizer for the next row
+        r5Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v8 = wx.BoxSizer(wx.VERTICAL)
+        # Comment
+        comment_edit = self.new_edit_box(_("Comment"), v8, self.obj.comment, maxLen=255)
+        # Add the element to the sizer
+        r5Sizer.Add(v8, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r5Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+        
+        # Create a HORIZONTAL sizer for the next row
+        r6Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         self.text_edit = []
 
+        # Notebook for holding Transcripts
         # ... we need to display them within a notebook ...
         self.notebook = wx.Notebook(self.panel, -1)
+        # Add the element to the sizer
+        r6Sizer.Add(self.notebook, 2, wx.EXPAND)
+        
         # Initialize a list of notebook pages
         self.notebookPage = []
         # Initialize a counter for notebood pages
@@ -265,80 +305,173 @@ class ClipPropertiesForm(Dialogs.GenForm):
             # Create a panel for each notebook page
             self.notebookPage.append(wx.Panel(self.notebook))
 
-            # Add the notebook to the dialog
-            lay = wx.LayoutConstraints()
-            lay.top.SameAs(self.notebook, wx.Top, 5)
-            lay.left.SameAs(self.notebook, wx.Left, 5)
-            lay.height.SameAs(self.notebook, wx.Height, 5)
-            lay.width.SameAs(self.notebook, wx.Width, 5)
-
             # Add the notebook page to the notebook ...
             self.notebook.AddPage(self.notebookPage[counter], _('Transcript') + " %d" % (counter + 1))
             # ... and use this page as the transcript object's parent
             transcriptParent = self.notebookPage[counter]
             
-            # Notebook layout
-            lay = wx.LayoutConstraints()
-            lay.top.Below(comment_edit, 10)                 # 10 under comment
-            lay.left.SameAs(self.panel, wx.Left, 10)        # 10 from left
-            lay.right.SameAs(self.panel, wx.Right, 10)      # 10 from right
-            lay.height.PercentOf(self.panel, wx.Height, 20) # 20% of frame height
-            self.notebook.SetConstraints(lay)
-
-            # Clip Text layout
-            lay = wx.LayoutConstraints()
-            lay.top.SameAs(self.notebook, wx.Top, 3)
-            lay.left.SameAs(self.notebook, wx.Left, 3)
-            lay.right.SameAs(self.notebook, wx.Right, 3)
-            lay.bottom.SameAs(self.notebook, wx.Bottom, 3)
+            # Clip Text
 
             # Load the Transcript into an RTF Control so the RTF Encoding won't show.
             # We use a list of edit controls to handle multiple transcripts.
-            self.text_edit.append(TranscriptEditor.TranscriptEditor(transcriptParent))
-            self.text_edit[len(self.text_edit) - 1].SetReadOnly(0)
-            self.text_edit[len(self.text_edit) - 1].Enable(False)
-            self.text_edit[len(self.text_edit) - 1].ProgressDlg = wx.ProgressDialog("Loading Transcript", \
-                                                   "Reading document stream", \
-                                                    maximum=100, \
-                                                    style=wx.PD_AUTO_HIDE)
-            self.text_edit[len(self.text_edit) - 1].LoadRTFData(self.obj.transcripts[counter].text)
-            self.text_edit[len(self.text_edit) - 1].ProgressDlg.Destroy()
+            if TransanaConstants.USESRTC:
+                self.text_edit.append(TranscriptEditor_RTC.TranscriptEditor(transcriptParent))
+            else:
+                self.text_edit.append(TranscriptEditor_STC.TranscriptEditor(transcriptParent))
 
-            # This doesn't work!  Hidden text remains visible.
-#            self.text_edit[len(self.text_edit) - 1].StyleSetVisible(self.text_edit[len(self.text_edit) - 1].STYLE_HIDDEN, False)
-            self.text_edit[len(self.text_edit) - 1].codes_vis = 0
-            # Scan transcript for Time Codes
-            self.text_edit[len(self.text_edit) - 1].load_timecodes()
-            # Display the time codes
-            self.text_edit[len(self.text_edit) - 1].show_codes()
-
+            ##  DKW EXPERIMENT 4/5/2011
+            self.text_edit[len(self.text_edit) - 1].load_transcript(self.obj.transcripts[counter])
+                                                                    
+            self.text_edit[len(self.text_edit) - 1].SetReadOnly(False)
             self.text_edit[len(self.text_edit) - 1].Enable(True)
 
-            self.text_edit[len(self.text_edit) - 1].SetConstraints(lay)
             # Increment the counter
             counter += 1
 
-        # Keyword Group layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.notebook, 10)              # 10 under clip text
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
-        lay.height.AsIs()
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r6Sizer, 4, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+        
+        # Create a HORIZONTAL sizer for the next row
+        r7Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v9 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword Group [label]
         txt = wx.StaticText(self.panel, -1, _("Keyword Group"))
-        txt.SetConstraints(lay)
+        v9.Add(txt, 0, wx.BOTTOM, 3)
 
-        # Keyword Group layout [list box]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                          # 3 under label
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.SameAs(txt, wx.Width)                # width same as label
-        lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
+        # Keyword Group [list box]
 
+        # Create an empty Keyword Group List for now.  We'll populate it later (for layout reasons)
+        self.kw_groups = []
+        self.kw_group_lb = wx.ListBox(self.panel, -1, choices = self.kw_groups)
+        v9.Add(self.kw_group_lb, 1, wx.EXPAND)
+        
+        # Add the element to the sizer
+        r7Sizer.Add(v9, 1, wx.EXPAND)
+
+        # Create an empty Keyword List for now.  We'll populate it later (for layout reasons)
+        self.kw_list = []
+        wx.EVT_LISTBOX(self, self.kw_group_lb.GetId(), self.OnGroupSelect)
+
+        # Add a horizontal spacer
+        r7Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v10 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword [label]
+        txt = wx.StaticText(self.panel, -1, _("Keyword"))
+        v10.Add(txt, 0, wx.BOTTOM, 3)
+
+        # Keyword [list box]
+        self.kw_lb = wx.ListBox(self.panel, -1, choices = self.kw_list, style=wx.LB_EXTENDED)
+        v10.Add(self.kw_lb, 1, wx.EXPAND)
+
+        wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnAddKW)
+
+        # Add the element to the sizer
+        r7Sizer.Add(v10, 1, wx.EXPAND)
+
+        # Add a horizontal spacer
+        r7Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v11 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword transfer buttons
+        add_kw = wx.Button(self.panel, wx.ID_FILE2, ">>", wx.DefaultPosition)
+        v11.Add(add_kw, 0, wx.EXPAND | wx.TOP, 20)
+        wx.EVT_BUTTON(self, wx.ID_FILE2, self.OnAddKW)
+
+        rm_kw = wx.Button(self.panel, wx.ID_FILE3, "<<", wx.DefaultPosition)
+        v11.Add(rm_kw, 0, wx.EXPAND | wx.TOP, 10)
+        wx.EVT_BUTTON(self, wx.ID_FILE3, self.OnRemoveKW)
+
+        bitmap = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KWManage.xpm"), wx.BITMAP_TYPE_XPM)
+        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, bitmap)
+        v11.Add(kwm, 0, wx.EXPAND | wx.TOP, 10)
+        # Add a spacer to increase the height of the Keywords section
+        v11.Add((0, 60))
+        kwm.SetToolTipString(_("Keyword Management"))
+        wx.EVT_BUTTON(self, wx.ID_FILE4, self.OnKWManage)
+
+        # Add the element to the sizer
+        r7Sizer.Add(v11, 0)
+
+        # Add a horizontal spacer
+        r7Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v12 = wx.BoxSizer(wx.VERTICAL)
+
+        # Clip Keywords [label]
+        txt = wx.StaticText(self.panel, -1, _("Clip Keywords"))
+        v12.Add(txt, 0, wx.BOTTOM, 3)
+
+        # Clip Keywords [list box]
+        # Create an empty ListBox.  We'll populate it later for layout reasons.
+        self.ekw_lb = wx.ListBox(self.panel, -1, style=wx.LB_EXTENDED)
+        v12.Add(self.ekw_lb, 1, wx.EXPAND)
+
+        self.ekw_lb.Bind(wx.EVT_KEY_DOWN, self.OnKeywordKeyDown)
+
+        # Add the element to the sizer
+        r7Sizer.Add(v12, 2, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r7Sizer, 5, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+        
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+
+        # Because of the way Clips are created (with Drag&Drop / Cut&Paste functions), we have to trap the missing
+        # ID error here.  Therefore, we need to override the EVT_BUTTON for the OK Button.
+        # Since we don't have an object for the OK Button, we use FindWindowById to find it based on its ID.
+        self.Bind(wx.EVT_BUTTON, self.OnOK, self.FindWindowById(wx.ID_OK))
+        # We also need to intercept the Cancel button.
+        self.Bind(wx.EVT_BUTTON, self.OnCancel, self.FindWindowById(wx.ID_CANCEL))
+
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
+        self.Layout()
+        # Resize the form to fit the contents
+        self.Fit()
+
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(minWidth, width), max(minHeight, height)))
+        # Define the minimum size for this dialog as the current size
+        self.SetSizeHints(max(minWidth, width), max(minHeight, height))
+        # Center the form on screen
+        self.CenterOnScreen()
+
+        # We populate the Keyword Groups, Keywords, and Clip Keywords lists AFTER we determine the Form Size.
+        # Long Keywords in the list were making the form too big!
+
+        self.kw_groups = DBInterface.list_of_keyword_groups()
+        for keywordGroup in self.kw_groups:
+            self.kw_group_lb.Append(keywordGroup)
+
+        # Populate the Keywords ListBox
         # Load the parent Collection in order to determine the default Keyword Group
         tempCollection = Collection.Collection(self.obj.collection_num)
-        self.kw_groups = DBInterface.list_of_keyword_groups()
-        self.kw_group_lb = wx.ListBox(self.panel, 101, wx.DefaultPosition, wx.DefaultSize, self.kw_groups)
-        self.kw_group_lb.SetConstraints(lay)
         # Select the Collection Default Keyword Group in the Keyword Group list
         if (tempCollection.keyword_group != '') and (self.kw_group_lb.FindString(tempCollection.keyword_group) != wx.NOT_FOUND):
             self.kw_group_lb.SetStringSelection(tempCollection.keyword_group)
@@ -355,113 +488,14 @@ class ClipPropertiesForm(Dialogs.GenForm):
         else:
             # If not, create a blank one
             self.kw_list = []
-        wx.EVT_LISTBOX(self, 101, self.OnGroupSelect)
+        for keyword in self.kw_list:
+            self.kw_lb.Append(keyword)
 
-        # Keyword layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.notebook, 10)              # 10 under clip text
-        lay.left.RightOf(txt, 10)                      # 10 right of KW Group
-        lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
-        lay.height.AsIs()
-        txt = wx.StaticText(self.panel, -1, _("Keyword"))
-        txt.SetConstraints(lay)
-
-        # Keyword layout [list box]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                          # 3 under label
-        lay.left.SameAs(txt, wx.Left)                  # left same as label
-        lay.width.SameAs(txt, wx.Width)                # width same as label
-        lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
-        
-        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list, style=wx.LB_EXTENDED)
-        self.kw_lb.SetConstraints(lay)
-
-        wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnAddKW)
-
-        # Keyword transfer buttons
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 30)                         # 30 under label
-        lay.left.RightOf(txt, 10)                      # 10 right of label
-        lay.width.PercentOf(self.panel, wx.Width, 6)   # 6% width
-        lay.height.AsIs()
-        add_kw = wx.Button(self.panel, wx.ID_FILE2, ">>", wx.DefaultPosition)
-        add_kw.SetConstraints(lay)
-        wx.EVT_BUTTON(self, wx.ID_FILE2, self.OnAddKW)
-
-        lay = wx.LayoutConstraints()
-        lay.top.Below(add_kw, 10)
-        lay.left.SameAs(add_kw, wx.Left)
-        lay.width.SameAs(add_kw, wx.Width)
-        lay.height.AsIs()
-        rm_kw = wx.Button(self.panel, wx.ID_FILE3, "<<", wx.DefaultPosition)
-        rm_kw.SetConstraints(lay)
-        wx.EVT_BUTTON(self, wx.ID_FILE3, self.OnRemoveKW)
-
-        lay = wx.LayoutConstraints()
-        lay.top.Below(rm_kw, 10)
-        lay.left.SameAs(rm_kw, wx.Left)
-        lay.width.SameAs(rm_kw, wx.Width)
-        lay.height.AsIs()
-        bitmap = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KWManage.xpm"), wx.BITMAP_TYPE_XPM)
-        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, bitmap)
-        kwm.SetConstraints(lay)
-        kwm.SetToolTipString(_("Keyword Management"))
-        wx.EVT_BUTTON(self, wx.ID_FILE4, self.OnKWManage)
-
-
-        # Clip Keywords [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.notebook, 10)              # 10 under clip text
-        lay.left.SameAs(add_kw, wx.Right, 10)          # 10 from Add keyword Button
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        txt = wx.StaticText(self.panel, -1, _("Clip Keywords"))
-        txt.SetConstraints(lay)
-
-        # Clip Keywords [list box]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                          # 3 under label
-        lay.left.SameAs(txt, wx.Left)                  # left same as label
-        lay.width.SameAs(txt, wx.Width)                # width same as label
-        lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
-
-        # Create an empty ListBox
-        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, style=wx.LB_EXTENDED)
-        # Populate the ListBox
+        # Populate the Clip Keywords ListBox
         # If the clip object has keywords ... 
         for clipKeyword in self.obj.keyword_list:
             # ... add them to the keyword list
             self.ekw_lb.Append(clipKeyword.keywordPair)
-
-#       NOTE:  This functionality doesn't belong HERE.  It's NOT a function of the FORM!!!!
-        # If we are loading a defined Clips (Clip.number != 0), use the Clips's keywords
-#        if self.obj.number != 0:
-#            for clipKeyword in self.obj.keyword_list:
-#                self.ekw_lb.Append(clipKeyword.keywordPair)
-        # If we are creating a NEW Clip (Clip.number == 0), use the Episode's Keywords as default Keywords
-#        else:
-#            if self.obj.episode_num != 0:
-#                tempEpisode = Episode.Episode(self.obj.episode_num)
-#                for clipKeyword in tempEpisode.keyword_list:
-#                    self.obj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
-#                    self.ekw_lb.Append(clipKeyword.keywordPair)
-                                
-        self.ekw_lb.SetConstraints(lay)
-
-        self.ekw_lb.Bind(wx.EVT_KEY_DOWN, self.OnKeywordKeyDown)
-
-        # Because of the way Clips are created (with Drag&Drop / Cut&Paste functions), we have to trap the missing
-        # ID error here.  Therefore, we need to override the EVT_BUTTON for the OK Button.
-        # Since we don't have an object for the OK Button, we use FindWindowById to find it based on its ID.
-        self.Bind(wx.EVT_BUTTON, self.OnOK, self.FindWindowById(wx.ID_OK))
-        # We also need to intercept the Cancel button.
-        self.Bind(wx.EVT_BUTTON, self.OnCancel, self.FindWindowById(wx.ID_CANCEL))
-
-        self.Bind(wx.EVT_SIZE, self.OnSize)
-
-        self.Layout()
-        self.SetAutoLayout(True)
-        self.CenterOnScreen()
 
         # If we have a Notebook of text controls ...
         if self.notebookPage:
@@ -470,6 +504,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
                 # ... and set them to the size of the notebook page.
                 textCtrl.SetSize(self.notebookPage[0].GetSizeTuple())
 
+        # Set initial focus to the Clip ID
         self.id_edit.SetFocus()
 
     def OnOK(self, event):
@@ -676,25 +711,48 @@ class ClipPropertiesForm(Dialogs.GenForm):
                 self.transcript_clip_start.append(mergeClip.transcripts[x].clip_start)
                 # We get the TRANSCRIPT end time from the original clip
                 self.transcript_clip_stop.append(self.obj.transcripts[x].clip_stop)
-                # ... clear the transcript ...
-                self.text_edit[x].ClearDoc()
-                # ... turn off read-only ...
-                self.text_edit[x].SetReadOnly(0)
-                # ... insert the merge clip's text, skipping whitespace at the end ...
-                self.text_edit[x].InsertRTFText(mergeClip.transcripts[x].text.rstrip())
-                # ... add a couple of line breaks ...
-                self.text_edit[x].InsertStyledText('\n\n', len('\n\n'))
-                # ... trap exceptions here ...
-                try:
-                    # ... insert a time code at the position of the clip break ...
-                    self.text_edit[x].insert_timecode(self.obj.clip_start)
-                # If there were exceptions (duplicating time codes, for example), just skip it.
-                except:
-                    pass
-                # ... now add the original clip's text ...
-                self.text_edit[x].InsertRTFText(self.obj.transcripts[x].text)
-                # This doesn't work!  Hidden text remains visible.
-#                self.text_edit[x].StyleSetVisible(self.text_edit[x].STYLE_HIDDEN, False)
+                # If we're using the Rich Text Ctrl ...
+                if TransanaConstants.USESRTC:
+                    # ... clear the transcript ...
+                    self.text_edit[x].ClearDoc(skipUnlock = True)
+                    # ... turn off read-only ...
+                    self.text_edit[x].SetReadOnly(0)
+                    # Create the Transana XML to RTC Import Parser.  This is needed so that we can
+                    # pull XML transcripts into the existing RTC.  Pass the RTC to be edited.
+                    handler = PyXML_RTCImportParser.XMLToRTCHandler(self.text_edit[x])
+                    # Parse the merge clip transcript text, adding it to the RTC
+                    xml.sax.parseString(mergeClip.transcripts[x].text, handler)
+                    # Add a blank line
+                    self.text_edit[x].Newline()
+                    # ... trap exceptions here ...
+                    try:
+                        # ... insert a time code at the position of the clip break ...
+                        self.text_edit[x].insert_timecode(self.obj.clip_start)
+                    # If there were exceptions (duplicating time codes, for example), just skip it.
+                    except:
+                        pass
+                    # Parse the original transcript text, adding it to the RTC
+                    xml.sax.parseString(self.obj.transcripts[x].text, handler)
+                # If we're using the Styled Text Ctrl
+                else:
+                    # ... clear the transcript ...
+                    self.text_edit[x].ClearDoc()
+                    # ... turn off read-only ...
+                    self.text_edit[x].SetReadOnly(0)
+                    # ... insert the merge clip's text, skipping whitespace at the end ...
+                    self.text_edit[x].InsertRTFText(mergeClip.transcripts[x].text.rstrip())
+                    # ... add a couple of line breaks ...
+                    self.text_edit[x].InsertStyledText('\n\n', len('\n\n'))
+                    # ... trap exceptions here ...
+                    try:
+                        # ... insert a time code at the position of the clip break ...
+                        self.text_edit[x].insert_timecode(self.obj.clip_start)
+                    # If there were exceptions (duplicating time codes, for example), just skip it.
+                    except:
+                        pass
+                    # ... now add the original clip's text ...
+                    self.text_edit[x].InsertRTFText(self.obj.transcripts[x].text)
+
                 # ... signal that time codes will be visible, which they always are in the Clip Properties ...
                 self.text_edit[x].codes_vis = 0
                 # ... scan transcript for Time Codes ...
@@ -719,25 +777,49 @@ class ClipPropertiesForm(Dialogs.GenForm):
                 self.transcript_clip_start.append(self.obj.transcripts[x].clip_start)
                 # We get the TRANSCRIPT end time from the merge clip
                 self.transcript_clip_stop.append(mergeClip.transcripts[x].clip_stop)
-                # ... clear the transcript ...
-                self.text_edit[x].ClearDoc()
-                # ... turn off read-only ...
-                self.text_edit[x].SetReadOnly(0)
-                # ... insert the original clip's text, skipping whitespace at the end ...
-                self.text_edit[x].InsertRTFText(self.obj.transcripts[x].text.rstrip())
-                # ... add a couple of line breaks ...
-                self.text_edit[x].InsertStyledText('\n\n', len('\n\n'))
-                # ... trap exceptions here ...
-                try:
-                    # ... insert a time code at the position of the clip break ...
-                    self.text_edit[x].insert_timecode(mergeClip.clip_start)
-                # If there were exceptions (duplicating time codes, for example), just skip it.
-                except:
-                    pass
-                # ... now add the merge clip's text ...
-                self.text_edit[x].InsertRTFText(mergeClip.transcripts[x].text)
-                # This doesn't work!  Hidden text remains visible.
-#                self.text_edit[x].StyleSetVisible(self.text_edit[x].STYLE_HIDDEN, False)
+                # If we're using the Rich Text Ctrl ...
+                if TransanaConstants.USESRTC:
+                    # ... clear the transcript ...
+                    self.text_edit[x].ClearDoc(skipUnlock = True)
+                    # ... turn off read-only ...
+                    self.text_edit[x].SetReadOnly(0)
+                    # Create the Transana XML to RTC Import Parser.  This is needed so that we can
+                    # pull XML transcripts into the existing RTC.  Pass the RTC in.
+                    handler = PyXML_RTCImportParser.XMLToRTCHandler(self.text_edit[x])
+                    # Parse the original clip transcript text, adding it to the reportText RTC
+                    xml.sax.parseString(self.obj.transcripts[x].text, handler)
+                    # Add a blank line
+                    self.text_edit[x].Newline()
+                    # ... trap exceptions here ...
+                    try:
+                        # ... insert a time code at the position of the clip break ...
+                        self.text_edit[x].insert_timecode(mergeClip.clip_start)
+                    # If there were exceptions (duplicating time codes, for example), just skip it.
+                    except:
+                        pass
+                    # ... now add the merge clip's text ...
+                    # Parse the merge clip transcript text, adding it to the RTC
+                    xml.sax.parseString(mergeClip.transcripts[x].text, handler)
+                # If we're using the Styled Text Ctrl
+                else:
+                    # ... clear the transcript ...
+                    self.text_edit[x].ClearDoc()
+                    # ... turn off read-only ...
+                    self.text_edit[x].SetReadOnly(0)
+                    # ... insert the original clip's text, skipping whitespace at the end ...
+                    self.text_edit[x].InsertRTFText(self.obj.transcripts[x].text.rstrip())
+                    # ... add a couple of line breaks ...
+                    self.text_edit[x].InsertStyledText('\n\n', len('\n\n'))
+                    # ... trap exceptions here ...
+                    try:
+                        # ... insert a time code at the position of the clip break ...
+                        self.text_edit[x].insert_timecode(mergeClip.clip_start)
+                    # If there were exceptions (duplicating time codes, for example), just skip it.
+                    except:
+                        pass
+                    # ... now add the merge clip's text ...
+                    self.text_edit[x].InsertRTFText(mergeClip.transcripts[x].text)
+
                 # ... signal that time codes will be visible, which they always are in the Clip Properties ...
                 self.text_edit[x].codes_vis = 0
                 # ... scan transcript for Time Codes ...
@@ -817,8 +899,12 @@ class ClipPropertiesForm(Dialogs.GenForm):
             counter = 0
             # For each defined Transcripts object ...
             for tr in self.obj.transcripts:
-                # ... update the text from the appropriate text control ...
-                tr.text = self.text_edit[counter].GetRTFBuffer()
+                if TransanaConstants.USESRTC:
+                    # ... update the text from the appropriate text control ...
+                    tr.text = self.text_edit[counter].GetFormattedSelection('XML')  # GetXMLBuffer()
+                else:
+                    # ... update the text from the appropriate text control ...
+                    tr.text = self.text_edit[counter].GetRTFBuffer()
                 # Also update the TRANSCRIPT start and stop times
                 tr.clip_start = self.transcript_clip_start[counter]
                 tr.clip_stop = self.transcript_clip_stop[counter]

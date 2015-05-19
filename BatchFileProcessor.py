@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -19,11 +19,9 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Jonathan Beavers <jonathan.beavers@gmail.com>'
 
-DEBUG = False
-if DEBUG:
-    print "BatchWaveformGenerator DEBUG is ON!!"
-
+# import wxPython
 import wx
+# import Python's ctypes
 import ctypes
 # import Transana's Common Dialogs
 import Dialogs
@@ -35,8 +33,11 @@ import TransanaConstants
 import TransanaGlobal
 # import Transana's waveform progress routines
 import WaveformProgress
-import locale                 # import locale so we can get the default system encoding for Unicode Waveforming
+# import Python's locale module
+import locale
+# import Python's os module
 import os
+# import Python's sys module
 import sys
 
 class BatchFileProcessor(Dialogs.GenForm):
@@ -57,14 +58,18 @@ class BatchFileProcessor(Dialogs.GenForm):
             print "UNKNOWN BATCHFILEPROCESSOR MODE"
 
         # Create the Dialog box for the File Selection Form            
-        Dialogs.GenForm.__init__(self, parent, -1, formTitle, (500, 550), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext=helpContext)
+        Dialogs.GenForm.__init__(self, parent, -1, formTitle, (500, 550), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext=helpContext)
 
         # To look right, the Mac needs the Small Window Variant.
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
-        # Define the minimum size for this dialog
-        self.SetSizeHints(500, 500)
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
         # Use the Video Root for the initial file path, if there is a Video Root
         if TransanaGlobal.configData.videoPath <> '':
             self.lastPath = TransanaGlobal.configData.videoPath
@@ -73,82 +78,115 @@ class BatchFileProcessor(Dialogs.GenForm):
             self.lastPath = os.path.dirname(sys.argv[0])
 
         # Create the controls that will populate the File Selection Dialog window.
+        # Create a Select Files button
         browse = wx.Button(self.panel, wx.ID_FILE1, _("Select Files"), wx.DefaultPosition)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            r1Sizer.Add((2, 0))
+        # Add the element to the sizer
+        r1Sizer.Add(browse, 1, wx.EXPAND)
+
+        # Add a horizontal spacer to the row sizer        
+        r1Sizer.Add((10, 0))
+
+        # Create a Select Directory button
         directories = wx.Button(self.panel, wx.ID_FILE2, _("Select Directory"), wx.DefaultPosition)
+        # Add the element to the sizer
+        r1Sizer.Add(directories, 1, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            r1Sizer.Add((2, 0))
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a label for the list of Files
         label = wx.StaticText(self.panel, -1, _('Selected Files:'))
-        self.fileList = wx.ListBox(self.panel, -1, style=wx.LB_MULTIPLE)
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Add the element to the sizer
+        r2Sizer.Add(label, 0)
+
+        # For Audio Extraction (waveform creation) ...
         if self.mode == "waveform":
+            # ... create a checkbox for overwriting files
             self.overwrite = wx.CheckBox(self.panel, -1, _('Overwrite existing wave files?'))
+            # place an option to overwrite existing wave files to the upper-right
+            # of the ListBox.
+
+            # Add a horizontal spacer to the row sizer        
+            r2Sizer.Add((10, 0), 1, wx.EXPAND)
+
+            # Add the element to the sizer
+            r2Sizer.Add(self.overwrite, 0, wx.ALIGN_RIGHT)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create the List of Files listbox
+        self.fileList = wx.ListBox(self.panel, -1, style=wx.LB_MULTIPLE)
+        # Add the element to the sizer
+        r3Sizer.Add(self.fileList, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r3Sizer, 1, wx.EXPAND)
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a Remove Files button
         remfile = wx.Button(self.panel, wx.ID_FILE3, _("Remove Selected File(s)"), wx.DefaultPosition)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            btnSizer.Add((2, 0))
+        # Add the element to the Button Sizer
+        btnSizer.Add(remfile, 0)
+
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
 
         # Bind the events that we'll need.
         wx.EVT_BUTTON(self, wx.ID_FILE1, self.OnBrowse)
         wx.EVT_BUTTON(self, wx.ID_FILE2, self.BrowseDirectories)
         wx.EVT_BUTTON(self, wx.ID_FILE3, self.RemoveSelected)
 
-        # Browse button layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)
-        lay.left.SameAs(self.panel, wx.Left, 10)
-        lay.width.PercentOf(self.panel, wx.Width, 46)
-        lay.height.AsIs()
-        browse.SetConstraints(lay)
-
-        # dirdialog button layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.width.PercentOf(self.panel, wx.Width, 46)
-        lay.height.AsIs()
-        directories.SetConstraints(lay)
-
-        # Place the label for the forthcoming file list.
-
-        # 500-2*(margin_sizes=10)=480 - width of label
-        # this provides us with a "good enough" number of pixels to
-        # use so that we can indent the label properly.
-        rightpos = 480 - label.GetBestSizeTuple()[0]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(directories, 12)
-        lay.left.SameAs(self.panel, wx.Left, 10)
-        lay.right.SameAs(self.panel, wx.Right, rightpos)
-        lay.height.AsIs()
-        label.SetConstraints(lay)
-
-        if self.mode == "waveform":
-            # place an option to overwrite existing wave files to the upper-right
-            # of the ListBox.
-
-            # 500-2*(margin_sizes=10)=480 - width of checkbox
-            # this provides us with a "good enough" number of pixels to
-            # use so that we can indent the CheckBox properly.
-            leftpos = 480 - self.overwrite.GetBestSizeTuple()[0]
-            lay = wx.LayoutConstraints()
-            lay.top.Below(directories, 12)
-            lay.right.SameAs(self.panel, wx.Right, 10)
-            lay.left.SameAs(self.panel, wx.Left, leftpos)
-            lay.height.AsIs()
-            self.overwrite.SetConstraints(lay)
-
-        # place the actual ListBox.
-        lay = wx.LayoutConstraints()
-        lay.top.Below(label, 2)
-        lay.left.SameAs(self.panel, wx.Left, 10)
-        lay.right.SameAs(self.panel, wx.Right, 10)
-        lay.bottom.SameAs(self.panel, wx.Bottom, 50)
-        self.fileList.SetConstraints(lay)
-
-        # place the remove file button!
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.fileList, 17)
-        lay.left.SameAs(self.panel, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        remfile.SetConstraints(lay)
-
-        # handle screen layout
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
         self.Layout()
-        self.SetAutoLayout(True)
+        # Resize the form to fit the contents
+        self.Fit()
+
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(500, width), max(500, height)))
+        # Define the minimum size for this dialog as the current size, and define height as unchangeable
+        self.SetSizeHints(max(500, width), max(500, height))
+        # Center the form on screen
         self.CenterOnScreen()
 
     def get_input(self):
@@ -186,12 +224,16 @@ class BatchFileProcessor(Dialogs.GenForm):
                         # Build the correct filename for the Waveform Graphic
                         self.waveformFilename = os.path.join(TransanaGlobal.configData.visualizationPath, filenameroot + '.png')
                         # Create the Waveform Progress Dialog
-                        self.progressDialog = WaveformProgress.WaveformProgress(self, self.waveFilename, prompt % (self.waveFilename, originalFilename))
+                        self.progressDialog = WaveformProgress.WaveformProgress(self, prompt % (self.waveFilename, originalFilename))
                         # Tell the Waveform Progress Dialog to handle the audio extraction modally.
                         self.progressDialog.Extract(originalFilename, self.waveFilename)
+                        # Get the Error Log that may have been created
+                        errorLog = self.progressDialog.GetErrorMessages()
                         # Okay, we're done with the Progress Dialog here!
                         self.progressDialog.Destroy()
-                        # We just have to assume that audio extraction worked.  Signal success!
+                        # If the user cancelled the audio extraction ...
+                        if (len(errorLog) == 1) and (errorLog[0] == 'Cancelled'):
+                            break
                     else:
                         continue
             

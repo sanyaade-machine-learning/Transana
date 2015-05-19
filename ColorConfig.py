@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -542,16 +542,19 @@ class ColorConfig(wx.Dialog):
             # ... split it into path and filename
             (lastPath, filename) = os.path.split(self.configFile)
         # Create a File Open dialog.
-        fdlg = wx.FileDialog(self, _('Select Color Definition file:'), lastPath, filename, fileTypesString,
+        fdlg = wx.FileDialog(self, _('Select Color Definition file'), lastPath, filename, fileTypesString,
                              wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         # Show the dialog and get user response.  If OK ...
         if fdlg.ShowModal() == wx.ID_OK:
             # Remember the file name locally (not globally yet)
             self.configFile = fdlg.GetPath()
-            # Update the file name label on screen
-            self.lblFileName.SetLabel(self.configFile)
             # Load the colors from the file
             self.colors = TransanaGlobal.getColorDefs(self.configFile)
+            # If the File Load failed, the file name will have been cleared.  Check this!
+            if TransanaGlobal.configData.colorConfigFilename == '':
+                self.configFile = ''
+            # Update the file name label on screen
+            self.lblFileName.SetLabel(self.configFile)
             # Populate the dialog's color list
             self.PopulateList()
         # Destroy the File Dialog
@@ -574,7 +577,7 @@ class ColorConfig(wx.Dialog):
                 # ... split it into path and filename
                 (lastPath, filename) = os.path.split(self.configFile)
             # Create a File Save dialog.
-            fdlg = wx.FileDialog(self, _('Save Color Definition file:'), lastPath, filename, fileTypesString, 
+            fdlg = wx.FileDialog(self, _('Save Color Definition file'), lastPath, filename, fileTypesString, 
                                  wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
             # Show the dialog and get user response.  If OK ...
             if fdlg.ShowModal() == wx.ID_OK:

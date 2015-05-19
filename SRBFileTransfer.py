@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2010  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2012  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -46,114 +46,102 @@ class SRBFileTransfer(wx.Dialog):
         self.bufferSize = int(bufferSize)
 
         # Create the Dialog Box itself, with no minimize/maximize/close buttons
-        wx.Dialog.__init__(self, parent, -4, title, size = (350,200), style=wx.CAPTION)  # style=wx.DEFAULT_FRAME_STYLE|wx.NO_FULL_REPAINT_ON_RESIZE)
+        wx.Dialog.__init__(self, parent, -1, title, size = (350,200), style=wx.CAPTION)
+
+        # Create a main VERTICAL sizer for the form
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
 
         # File label
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self, wx.Top, 10)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.height.AsIs()
-        lay.right.SameAs(self, wx.Right, 10)
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
             prompt = unicode(_("File: %s"), 'utf8')
         else:
             prompt = _("File: %s")
         self.lblFile = wx.StaticText(self, -1, prompt % fileName, style=wx.ST_NO_AUTORESIZE)
-        self.lblFile.SetConstraints(lay)
+        # Add the label to the Main Sizer
+        mainSizer.Add(self.lblFile, 0, wx.ALL, 10)
 
         # Progress Bar
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.lblFile, 10)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.height.AsIs()
-        lay.right.SameAs(self, wx.Right, 10)
         self.progressBar = wx.Gauge(self, -1, 100, style=wx.GA_HORIZONTAL | wx.GA_SMOOTH)
-        self.progressBar.SetConstraints(lay)
+        # Add the element to the Main Sizer
+        mainSizer.Add(self.progressBar, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
+        # Create a Row Sizer
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
         # Bytes Transferred label
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.progressBar, 10)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.height.AsIs()
-        lay.width.PercentOf(self.progressBar, wx.Width, 70)
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
             prompt = unicode(_("%d bytes of %d transferred"), 'utf8')
         else:
             prompt = _("%d bytes of %d transferred")
-        self.lblBytes = wx.StaticText(self, -1, prompt % (0, 0), style=wx.ST_NO_AUTORESIZE)
-        self.lblBytes.SetConstraints(lay)
+        self.lblBytes = wx.StaticText(self, -1, prompt % (100000000, 100000000), style=wx.ST_NO_AUTORESIZE)
+        # Add the label to the Row Sizer
+        r1Sizer.Add(self.lblBytes, 5, wx.EXPAND)
 
         # Percent Transferred label
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.progressBar, 10)
-        lay.right.SameAs(self, wx.Right, 10)
-        lay.height.AsIs()
-        lay.width.PercentOf(self.progressBar, wx.Width, 30)
-        self.lblPercent = wx.StaticText(self, -1, "%d %%" % 0, style=wx.ST_NO_AUTORESIZE | wx.ALIGN_RIGHT)
-        self.lblPercent.SetConstraints(lay)
+        self.lblPercent = wx.StaticText(self, -1, "%5.1d %%" % 1000.1, style=wx.ST_NO_AUTORESIZE | wx.ALIGN_RIGHT)
+        # Add the Element to the Row Sizer
+        r1Sizer.Add(self.lblPercent, 1, wx.ALIGN_RIGHT)
+
+        # Add the Row Sizer to the Main Sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        # Create a Row Sizer
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # Elapsed Time label
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.lblBytes, 10)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.height.AsIs()
-        lay.width.PercentOf(self.progressBar, wx.Width, 50)
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
             prompt = unicode(_("Elapsed Time: %d:%02d:%02d"), 'utf8')
         else:
             prompt = _("Elapsed Time: %d:%02d:%02d")
         self.lblElapsedTime = wx.StaticText(self, -1, prompt % (0, 0, 0), style=wx.ST_NO_AUTORESIZE)
-        self.lblElapsedTime.SetConstraints(lay)
+        # Add the element to the Row Sizer
+        r2Sizer.Add(self.lblElapsedTime, 0)
+
+        # Add a spacer
+        r2Sizer.Add((1, 0), 1, wx.EXPAND)
 
         # Remaining Time label
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.lblBytes, 10)
-        lay.right.SameAs(self, wx.Right, 10)
-        lay.height.AsIs()
-        lay.width.PercentOf(self.progressBar, wx.Width, 50)
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
             prompt = unicode(_("Time Remaining: %d:%02d:%02d"), 'utf8')
         else:
             prompt = _("Time Remaining: %d:%02d:%02d")
         self.lblTimeRemaining = wx.StaticText(self, -1, prompt % (0, 0, 0), style=wx.ST_NO_AUTORESIZE | wx.ALIGN_RIGHT)
-        self.lblTimeRemaining.SetConstraints(lay)
+        # Add the element to the Row Sizer
+        r2Sizer.Add(self.lblTimeRemaining, 0)
+
+        # Add the Row Sizer to the Main Sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Transfer Speed label
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.lblElapsedTime, 10)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.height.AsIs()
-        lay.right.SameAs(self, wx.Right, 10)
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
             prompt = unicode(_("Transfer Speed: %d k/sec"), 'utf8')
         else:
             prompt = _("Transfer Speed: %d k/sec")
         self.lblTransferSpeed = wx.StaticText(self, -1, prompt % 0, style=wx.ST_NO_AUTORESIZE)
-        self.lblTransferSpeed.SetConstraints(lay)
+        # Add the element to the Main Sizer
+        mainSizer.Add(self.lblTransferSpeed, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Cancel Button
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self, wx.Bottom, -25)
-        lay.centreX.SameAs(self, wx.CentreX)
-        lay.height.AsIs()
-        lay.width.AsIs()
         btn = wx.Button(self, wx.ID_CANCEL, _("Cancel"))
-        btn.SetConstraints(lay)
+        # Add the element to the Main Sizer
+        mainSizer.Add(btn, 0, wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         wx.EVT_BUTTON(self, wx.ID_CANCEL, self.OnCancel)
 
-        # Lay out the form
-        self.Layout()
+        # Attach the main sizer to the form
+        self.SetSizer(mainSizer)
         # Turn Auto Layout on
         self.SetAutoLayout(True)
+        # Lay out the form
+        self.Layout()
         # Center on the Screen
         self.CenterOnScreen()
-
+        # Show the form
         self.Show()
         # make sure the loca directory ends with the proper path seperator character
         if localDir[-1] != os.sep:
@@ -356,10 +344,12 @@ class SRBFileTransfer(wx.Dialog):
         else:
             prompt = _("%d bytes of %d transferred")
         self.lblBytes.SetLabel(prompt % (bytesTransferred, self.fileSize))
-        # Display % of total bytes transferred
-        self.lblPercent.SetLabel("%5.1f %%" % (float(bytesTransferred) / float(self.fileSize) * 100))
-        # Update the Progress Bar
-        self.progressBar.SetValue(int(float(bytesTransferred) / float(self.fileSize) * 100))
+        # Avoiding division by zero problems ...
+        if bytesTransferred > 0:
+            # ... display % of total bytes transferred
+            self.lblPercent.SetLabel("%5.1f %%" % (float(bytesTransferred) / float(self.fileSize) * 100))
+            # Update the Progress Bar
+            self.progressBar.SetValue(int(float(bytesTransferred) / float(self.fileSize) * 100))
         # Calculate Elapsed Time and display it
         elapsedTime = time.time() - self.StartTime
 

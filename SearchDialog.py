@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -37,7 +37,8 @@ class SearchDialog(wx.Dialog):
     def __init__(self, searchName=''):
         """ Initialize the Search Dialog, passing in the default Search Name. """
         # Define the SearchDialog as a resizable wxDialog Box
-        wx.Dialog.__init__(self, TransanaGlobal.menuWindow, -1, _("Boolean Keyword Search"), wx.DefaultPosition, wx.Size(500, 480), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        wx.Dialog.__init__(self, TransanaGlobal.menuWindow, -1, _("Boolean Keyword Search"), wx.DefaultPosition, wx.Size(500, 480),
+                           style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
 
         # To look right, the Mac needs the Small Window Variant.
         if "__WXMAC__" in wx.PlatformInfo:
@@ -57,282 +58,220 @@ class SearchDialog(wx.Dialog):
 
         # Define all GUI Elements for the Form
         
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+
         # Add Search Name Label
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self, wx.Top, 10)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
         searchNameText = wx.StaticText(self, -1, _('Search Name:'))
-        searchNameText.SetConstraints(lay)
+        mainSizer.Add(searchNameText, 0, wx.TOP | wx.LEFT, 10)
+        mainSizer.Add((0, 3))
         
         # Add Search Name Text Box
-        lay = wx.LayoutConstraints()
-        lay.top.Below(searchNameText, 3)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.right.SameAs(self, wx.Right, 10)
-        lay.height.AsIs()
         self.searchName = wx.TextCtrl(self, -1)
         self.searchName.SetValue(searchName)
-        self.searchName.SetConstraints(lay)
+        mainSizer.Add(self.searchName, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
         # Add Boolean Operators Label
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.searchName, 10)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
         operatorsText = wx.StaticText(self, -1, _('Operators:'))
-        operatorsText.SetConstraints(lay)
+        mainSizer.Add(operatorsText, 0, wx.LEFT, 10)
+        mainSizer.Add((0, 3))
         
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
         # Add AND Button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(operatorsText, 3)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.width.Absolute(50)  # AsIs()
-        lay.height.AsIs()
-        self.btnAnd = wx.Button(self, -1, _('AND'))
-        self.btnAnd.SetConstraints(lay)
+        self.btnAnd = wx.Button(self, -1, _('AND'), size=wx.Size(50, 24))
+        r1Sizer.Add(self.btnAnd, 0)
         self.btnAnd.Enable(False)
         wx.EVT_BUTTON(self, self.btnAnd.GetId(), self.OnBtnClick)
 
+        r1Sizer.Add((10, 0))
+
         # Add OR Button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(operatorsText, 3)
-        lay.left.RightOf(self.btnAnd, 10)
-        lay.width.Absolute(50)  # AsIs()
-        lay.height.AsIs()
-        self.btnOr = wx.Button(self, -1, _('OR'))
-        self.btnOr.SetConstraints(lay)
+        self.btnOr = wx.Button(self, -1, _('OR'), size=wx.Size(50, 24))
+        r1Sizer.Add(self.btnOr, 0)
         self.btnOr.Enable(False)
         wx.EVT_BUTTON(self, self.btnOr.GetId(), self.OnBtnClick)
 
+        r1Sizer.Add((1, 0), 1, wx.EXPAND)
+
         # Add NOT Button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(operatorsText, 3)
-        lay.left.PercentOf(self, wx.Width, 30)
-        lay.width.Absolute(50)  # AsIs()
-        lay.height.AsIs()
-        self.btnNot = wx.Button(self, -1, _('NOT'))
-        self.btnNot.SetConstraints(lay)
+        self.btnNot = wx.Button(self, -1, _('NOT'), size=wx.Size(50, 24))
+        r1Sizer.Add(self.btnNot, 0)
         wx.EVT_BUTTON(self, self.btnNot.GetId(), self.OnBtnClick)
 
+        r1Sizer.Add((1, 0), 1, wx.EXPAND)
+
         # Add Left Parenthesis Button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(operatorsText, 3)
-        lay.left.PercentOf(self, wx.Width, 50)
-        lay.width.Absolute(30)  # AsIs()
-        lay.height.AsIs()
-        self.btnLeftParen = wx.Button(self, -1, '(')
-        self.btnLeftParen.SetConstraints(lay)
+        self.btnLeftParen = wx.Button(self, -1, '(', size=wx.Size(30, 24))
+        r1Sizer.Add(self.btnLeftParen, 0)
         wx.EVT_BUTTON(self, self.btnLeftParen.GetId(), self.OnBtnClick)
 
+        r1Sizer.Add((10, 0))
+
         # Add Right Parenthesis Button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(operatorsText, 3)
-        lay.left.RightOf(self.btnLeftParen, 10)
-        lay.width.Absolute(30)  # AsIs()
-        lay.height.AsIs()
-        self.btnRightParen = wx.Button(self, -1, ')')
-        self.btnRightParen.SetConstraints(lay)
+        self.btnRightParen = wx.Button(self, -1, ')', size=wx.Size(30, 24))
+        r1Sizer.Add(self.btnRightParen, 0)
         self.btnRightParen.Enable(False)
         wx.EVT_BUTTON(self, self.btnRightParen.GetId(), self.OnBtnClick)
 
+        r1Sizer.Add((1, 0), 1, wx.EXPAND)
+
         # Add "Undo" Button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(operatorsText, 3)
-        lay.right.SameAs(self, wx.Right, 100)
-        lay.width.Absolute(32)  # AsIs()
-        lay.height.AsIs()
         # Get the image for Undo
         bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Undo16.xpm"), wx.BITMAP_TYPE_XPM)
-        self.btnUndo = wx.BitmapButton(self, -1, bmp)
+        self.btnUndo = wx.BitmapButton(self, -1, bmp, size=wx.Size(30, 24))
         self.btnUndo.SetToolTip(wx.ToolTip(_('Undo')))
-        self.btnUndo.SetConstraints(lay)
+        r1Sizer.Add(self.btnUndo, 0)
         wx.EVT_BUTTON(self, self.btnUndo.GetId(), self.OnBtnClick)
 
+        r1Sizer.Add((10, 0))
+
         # Add Reset Button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(operatorsText, 3)
-        lay.right.SameAs(self, wx.Right, 10)
-        lay.width.Absolute(80)  # AsIs()
-        lay.height.AsIs()
-        self.btnReset = wx.Button(self, -1, _('Reset'))
-        self.btnReset.SetConstraints(lay)
+        self.btnReset = wx.Button(self, -1, _('Reset'), size=wx.Size(80, 24))
+        r1Sizer.Add(self.btnReset, 0)
         wx.EVT_BUTTON(self, self.btnReset.GetId(), self.OnBtnClick)
 
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
         # Add Keyword Groups Label
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.btnAnd, 10)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
         keywordGroupsText = wx.StaticText(self, -1, _('Keyword Groups:'))
-        keywordGroupsText.SetConstraints(lay)
+        r2Sizer.Add(keywordGroupsText, 1, wx.EXPAND)
+
+        r2Sizer.Add((10, 0))
         
         # Add Keywords Label
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(keywordGroupsText, wx.Top, 0)
-        lay.left.PercentOf(self, wx.Width, 52)
-        lay.width.AsIs()
-        lay.height.AsIs()
         keywordsText = wx.StaticText(self, -1, _('Keywords:'))
-        keywordsText.SetConstraints(lay)
+        r2Sizer.Add(keywordsText, 1, wx.EXPAND)
+
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        mainSizer.Add((0, 3))
         
+        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
         # Add Keyword Groups
-        lay = wx.LayoutConstraints()
-        lay.top.Below(keywordGroupsText, 3)
-        lay.bottom.SameAs(self, wx.Bottom, 226)
-        lay.left.SameAs(keywordGroupsText, wx.Left, 0)
-        lay.width.PercentOf(self, wx.Width, 46)
-        # Get the Keyword Groups from the Database Interface
-        self.kw_groups = DBInterface.list_of_keyword_groups()
-        self.kw_group_lb = wx.ListBox(self, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_groups)
-        self.kw_group_lb.SetConstraints(lay)
-        # Select the first item in the list (required for Mac)
-        if len(self.kw_groups) > 0:
-            self.kw_group_lb.SetSelection(0)
+        self.kw_group_lb = wx.ListBox(self, -1, wx.DefaultPosition, wx.DefaultSize, [])
+        r3Sizer.Add(self.kw_group_lb, 1, wx.EXPAND)
         # Define the "Keyword Group Select" behavior
         wx.EVT_LISTBOX(self, self.kw_group_lb.GetId(), self.OnKeywordGroupSelect)
 
+        r3Sizer.Add((10, 0))
+        
         # Add Keywords
-        lay = wx.LayoutConstraints()
-        lay.top.Below(keywordGroupsText, 3)
-        lay.bottom.SameAs(self, wx.Bottom, 226)
-        lay.left.SameAs(keywordsText, wx.Left, 0)
-        lay.width.PercentOf(self, wx.Width, 46)
-        # If there are defined Keyword Groups, load the Keywords for the first Group in the list
-        if len(self.kw_groups) > 0:
-            self.kw_list = DBInterface.list_of_keywords_by_group(self.kw_groups[0])
-        else:
-            self.kw_list = []
-        self.kw_lb = wx.ListBox(self, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list)
-        # Select the first item in the list (required for Mac)
-        if len(self.kw_list) > 0:
-            self.kw_lb.SetSelection(0)
-        self.kw_lb.SetConstraints(lay)
+        self.kw_lb = wx.ListBox(self, -1, wx.DefaultPosition, wx.DefaultSize, [])
+        r3Sizer.Add(self.kw_lb, 1, wx.EXPAND)
         # Define the "Keyword Select" behavior
         wx.EVT_LISTBOX(self, self.kw_lb.GetId(), self.OnKeywordSelect)
         # Double-clicking a Keyword is equivalent to selecting it and pressing the "Add Keyword to Query" button
         wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnBtnClick)
 
+        mainSizer.Add(r3Sizer, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
         # Add "Add Keyword to Query" Button
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self, wx.Bottom, 190)
-        lay.centreX.SameAs(self, wx.CentreX, 0)
-        lay.width.Absolute(240)  # AsIs()
-        lay.height.AsIs()
-        self.btnAdd = wx.Button(self, -1, _('Add Keyword to Query'))
-        self.btnAdd.SetConstraints(lay)
+        self.btnAdd = wx.Button(self, -1, _('Add Keyword to Query'), size=wx.Size(240, 24))
+        mainSizer.Add(self.btnAdd, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
         wx.EVT_BUTTON(self, self.btnAdd.GetId(), self.OnBtnClick)
 
         # Add Search Query Label
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self, wx.Bottom, 170)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
         searchQueryText = wx.StaticText(self, -1, _('Search Query:'))
-        searchQueryText.SetConstraints(lay)
+        mainSizer.Add(searchQueryText, 0, wx.LEFT | wx.RIGHT, 10)
+        mainSizer.Add((0, 3))
         
         # Add Search Query Text Box
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self, wx.Bottom, 46)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.right.SameAs(self, wx.Right, 10)
-        lay.height.Absolute(120)
         # The Search Query is Read-Only
-        self.searchQuery = wx.TextCtrl(self, -1, style=wx.TE_MULTILINE | wx.TE_READONLY)
-        self.searchQuery.SetConstraints(lay)
+        self.searchQuery = wx.TextCtrl(self, -1, size = wx.Size(200, 120), style=wx.TE_MULTILINE | wx.TE_READONLY)
+        mainSizer.Add(self.searchQuery, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # Add the File Open button
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self, wx.Bottom, 10)
-        lay.left.SameAs(self, wx.Left, 10)
-        lay.width.Absolute(32)  # AsIs()
-        lay.height.AsIs()
         # Get the image for File Open
         bmp = wx.ArtProvider_GetBitmap(wx.ART_FILE_OPEN, wx.ART_TOOLBAR, (16,16))
         # Create the File Open button
-        self.btnFileOpen = wx.BitmapButton(self, -1, bmp)
+        self.btnFileOpen = wx.BitmapButton(self, -1, bmp, size = wx.Size(32, 24))
         self.btnFileOpen.SetToolTip(wx.ToolTip(_('Load a Search')))
-        self.btnFileOpen.SetConstraints(lay)
+        btnSizer.Add(self.btnFileOpen, 0)
         self.btnFileOpen.Bind(wx.EVT_BUTTON, self.OnFileOpen)
 
+        btnSizer.Add((10, 0))
+
         # Add the File Save button
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self, wx.Bottom, 10)
-        lay.left.SameAs(self, wx.Left, 45)
-        lay.width.Absolute(32)  # AsIs()
-        lay.height.AsIs()
         # Get the image for File Save
         bmp = wx.ArtProvider_GetBitmap(wx.ART_FILE_SAVE, wx.ART_TOOLBAR, (16,16))
         # Create the File Save button
-        self.btnFileSave = wx.BitmapButton(self, -1, bmp)
+        self.btnFileSave = wx.BitmapButton(self, -1, bmp, size = wx.Size(32, 24))
         self.btnFileSave.SetToolTip(wx.ToolTip(_('Save a Search')))
-        self.btnFileSave.SetConstraints(lay)
+        btnSizer.Add(self.btnFileSave, 0)
         self.btnFileSave.Bind(wx.EVT_BUTTON, self.OnFileSave)
         self.btnFileSave.Enable(False)
 
+        btnSizer.Add((10, 0))
+
         # Add the File Delete button
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self, wx.Bottom, 10)
-        lay.left.SameAs(self, wx.Left, 80)
-        lay.width.Absolute(32)  # AsIs()
-        lay.height.AsIs()
         # Get the image for File Delete
         bmp = wx.ArtProvider_GetBitmap(wx.ART_DELETE, wx.ART_TOOLBAR, (16,16))
         # Create the File Delete button
-        self.btnFileDelete = wx.BitmapButton(self, -1, bmp)
+        self.btnFileDelete = wx.BitmapButton(self, -1, bmp, size = wx.Size(32, 24))
         self.btnFileDelete.SetToolTip(wx.ToolTip(_('Delete a Saved Search')))
-        self.btnFileDelete.SetConstraints(lay)
+        btnSizer.Add(self.btnFileDelete, 0)
         self.btnFileDelete.Bind(wx.EVT_BUTTON, self.OnFileDelete)
 
+        btnSizer.Add((1, 0), 1, wx.EXPAND)
+
         # Add "Search" Button
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self, wx.Bottom, 10)
-        lay.right.SameAs(self, wx.Right, 190)
-        lay.width.Absolute(80)  # AsIs()
-        lay.height.AsIs()
-        self.btnSearch = wx.Button(self, -1, _('Search'))
-        self.btnSearch.SetConstraints(lay)
+        self.btnSearch = wx.Button(self, -1, _('Search'), size = wx.Size(80, 24))
+        btnSizer.Add(self.btnSearch, 0)
         self.btnSearch.Enable(False)
         wx.EVT_BUTTON(self, self.btnSearch.GetId(), self.OnBtnClick)
 
+        btnSizer.Add((10, 0))
+
         # Add "Cancel" Button
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self, wx.Bottom, 10)
-        lay.right.SameAs(self, wx.Right, 100)
-        lay.width.Absolute(80)  # AsIs()
-        lay.height.AsIs()
-        self.btnCancel = wx.Button(self, -1, _('Cancel'))
-        self.btnCancel.SetConstraints(lay)
+        self.btnCancel = wx.Button(self, -1, _('Cancel'), size = wx.Size(80, 24))
+        btnSizer.Add(self.btnCancel, 0)
         wx.EVT_BUTTON(self, self.btnCancel.GetId(), self.OnBtnClick)
 
+        btnSizer.Add((10, 0))
+
         # Add "Help" Button
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self, wx.Bottom, 10)
-        lay.right.SameAs(self, wx.Right, 10)
-        lay.width.Absolute(80)  # AsIs()
-        lay.height.AsIs()
-        self.btnHelp = wx.Button(self, -1, _('Help'))
-        self.btnHelp.SetConstraints(lay)
+        self.btnHelp = wx.Button(self, -1, _('Help'), size = wx.Size(80, 24))
+        btnSizer.Add(self.btnHelp, 0)
         wx.EVT_BUTTON(self, self.btnHelp.GetId(), self.OnBtnClick)
+
+        mainSizer.Add(btnSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Highlight the default Search name and set the focus to the Search Name.
         # (This is done automatically on Windows, but needs to be done explicitly on the Mac.)
         self.searchName.SetSelection(-1, -1)
         # put the cursor firmly in the Search Name field
         self.searchName.SetFocus()
-        # Lay out the form
-        self.Layout()
+
+        self.SetSizer(mainSizer)
         # Have the form handle layout changes automatically
         self.SetAutoLayout(True)
+        # Lay out the form
+        self.Layout()
         # Center the dialog on screen
         self.CenterOnScreen()
-        # Refresh the display
-        self.Refresh()
-        
+
+        # Get the Keyword Groups from the Database Interface
+        self.kw_groups = DBInterface.list_of_keyword_groups()
+        for kwg in self.kw_groups:
+            self.kw_group_lb.Append(kwg)
+        # Select the first item in the list (required for Mac)
+        if len(self.kw_groups) > 0:
+            self.kw_group_lb.SetSelection(0)
+
+        # If there are defined Keyword Groups, load the Keywords for the first Group in the list
+        if len(self.kw_groups) > 0:
+            self.kw_list = DBInterface.list_of_keywords_by_group(self.kw_groups[0])
+        else:
+            self.kw_list = []
+        for kw in self.kw_list:
+            self.kw_lb.Append(kw)
+        # Select the first item in the list (required for Mac)
+        if len(self.kw_list) > 0:
+            self.kw_lb.SetSelection(0)
 
     def OnBtnClick(self, event):
         """ This method handles all Button Clicks for the Search Dialog. """
@@ -639,6 +578,8 @@ class SearchDialog(wx.Dialog):
                 searchText = filterData.tostring()
             else:
                 searchText = filterData
+            # Decode the text
+            searchText = searchText.decode(TransanaGlobal.encoding)
             # Replace the Search Query with the value from the database.
             self.searchQuery.SetValue(searchText)
             # Only valid searches can be saved, so we know the desired state of the interface buttons

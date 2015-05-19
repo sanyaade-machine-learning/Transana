@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -34,8 +34,8 @@ import wx.lib.masked
 
 # Define the Format Options for different File Types
 imageOptions = ['', 'avi', 'mov', 'mp4', 'm4v', 'mpeg', 'mpeg2', 'wmv']
-soundOptions = ['', 'mp3', 'wav', 'wma']
-allOptions   = ['', 'avi', 'mov', 'mp3', 'mp4', 'm4v', 'mpeg', 'mpeg2', 'wav', 'wma', 'wmv']
+soundOptions = ['', 'mp3', 'wav', 'wma', 'aac']
+allOptions   = ['', 'avi', 'mov', 'mp3', 'mp4', 'm4v', 'mpeg', 'mpeg2', 'wav', 'wma', 'wmv', 'aac']
 
 
 class CoreDataPropertiesForm(Dialogs.GenForm):
@@ -46,114 +46,166 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         self.width = 550
         self.height = 510
         # Create the Base Form, based on GenForm in the Transana Dialogs module
-        Dialogs.GenForm.__init__(self, parent, id, title, size=(self.width, self.height), HelpContext='Core Data Properties')
+        Dialogs.GenForm.__init__(self, parent, id, title, size=(self.width, self.height), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext='Core Data Properties')
 
         # Preserve the initial Core Data Object sent in from the calling routine
         self.obj = coredata_object
 
-        # Media File Name layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from Form top
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form right
-        lay.height.AsIs()
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+        # Media File Name
         # NOTE:  The otherwise unused Comment Field is used to contain the full Media File Name.
-        media_filename_edit = self.new_edit_box(_("Media File Name"), lay, self.obj.comment)
+        media_filename_edit = self.new_edit_box(_("Media File Name"), v1, self.obj.comment)
+        # Add the element to the row sizer
+        r1Sizer.Add(v1, 1, wx.EXPAND)
         # Media File Name Field is not editable
         media_filename_edit.Enable(False)
 
-        # Title layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(media_filename_edit, 10)     # 10 under Media File Name
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form right
-        lay.height.AsIs()
-        title_edit = self.new_edit_box(_("Title"), lay, self.obj.title, maxLen=255)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
 
-        # Creator layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(title_edit, 10)              # 10 under Title
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form Left
-        lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
-        lay.height.AsIs()
-        creator_edit = self.new_edit_box(_("Creator"), lay, self.obj.creator, maxLen=255)
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
 
-        # Subject layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(title_edit, 10)              # 10 under Title
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
-        lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
-        lay.height.AsIs()
-        subject_edit = self.new_edit_box(_("Subject"), lay, self.obj.subject, maxLen=255)
+        # Create a HORIZONTAL sizer for the first row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Description layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(creator_edit, 10)   # 10 under Description
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
-        lay.height.AsIs()
-        self.description_edit = self.new_edit_box(_("Description"), lay, self.obj.description, style=wx.TE_MULTILINE, maxLen=255)
+        # Create a VERTICAL sizer for the next element
+        v2 = wx.BoxSizer(wx.VERTICAL)
+        # Title
+        title_edit = self.new_edit_box(_("Title"), v2, self.obj.title, maxLen=255)
+        # Add the element to the row sizer
+        r2Sizer.Add(v2, 1, wx.EXPAND)
 
-        # Publisher layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.description_edit, 10)   # 10 under Description
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
-        lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
-        lay.height.AsIs()
-        publisher_edit = self.new_edit_box(_("Publisher"), lay, self.obj.publisher, maxLen=255)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
 
-        # Contributor layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.description_edit, 10)   # 10 under Description
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
-        lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
-        lay.height.AsIs()
-        contributor_edit = self.new_edit_box(_("Contributor"), lay, self.obj.contributor, maxLen=255)
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
 
+        # Create a HORIZONTAL sizer for the first row
+        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v3 = wx.BoxSizer(wx.VERTICAL)
+        # Creator
+        creator_edit = self.new_edit_box(_("Creator"), v3, self.obj.creator, maxLen=255)
+        # Add the element to the row sizer
+        r3Sizer.Add(v3, 1, wx.EXPAND)
+
+        # Add a horizontal spacer to the row sizer        
+        r3Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v4 = wx.BoxSizer(wx.VERTICAL)
+        # Subject
+        subject_edit = self.new_edit_box(_("Subject"), v4, self.obj.subject, maxLen=255)
+        # Add the element to the row sizer
+        r3Sizer.Add(v4, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r3Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the first row
+        r4Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v5 = wx.BoxSizer(wx.VERTICAL)
+        # Description
+        self.description_edit = self.new_edit_box(_("Description"), v5, self.obj.description, style=wx.TE_MULTILINE, maxLen=255)
+        # Add the element to the row sizer
+        r4Sizer.Add(v5, 1, wx.EXPAND)
+
+        # Add a spacer to enforce the height of the Description item
+        r4Sizer.Add((0, 80))
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r4Sizer, 5, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the first row
+        r5Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v6 = wx.BoxSizer(wx.VERTICAL)
+        # Publisher
+        publisher_edit = self.new_edit_box(_("Publisher"), v6, self.obj.publisher, maxLen=255)
+        # Add the element to the row sizer
+        r5Sizer.Add(v6, 1, wx.EXPAND)
+
+        # Add a horizontal spacer to the row sizer        
+        r5Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v7 = wx.BoxSizer(wx.VERTICAL)
+        # Contributor
+        contributor_edit = self.new_edit_box(_("Contributor"), v7, self.obj.contributor, maxLen=255)
+        # Add the element to the row sizer
+        r5Sizer.Add(v7, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r5Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the first row
+        r6Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v8 = wx.BoxSizer(wx.VERTICAL)
         # Dialogs.GenForm does not provide a Masked text control, so the Date
         # Field is handled differently than other fields.
         
-        # Date layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(publisher_edit, 10)          # 10 under Publisher
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
-        lay.height.AsIs()
+        # Date [label]
         date_lbl = wx.StaticText(self.panel, -1, _("Date (MM/DD/YYYY)"))
-        date_lbl.SetConstraints(lay)
+        # Add the element to the vertical sizer
+        v8.Add(date_lbl, 0, wx.BOTTOM, 3)
 
         # Date layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(date_lbl, 3)                 #  3 under Date Label
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
-        lay.width.PercentOf(self.panel, wx.Width, 31)  # 31% width, allows for three across positioning
-        lay.height.AsIs()
         # Use the Masked Text Control (Requires wxPython 2.4.2.4 or later)
         # TODO:  Make Date autoformat localizable
         self.date_edit = wx.lib.masked.TextCtrl(self.panel, -1, '', autoformat='USDATEMMDDYYYY/')
+        # Add the element to the vertical sizer
+        v8.Add(self.date_edit, 1, wx.EXPAND)
         # If a Date is know, load it into the control
         if (self.obj.dc_date != '') and (self.obj.dc_date != '01/01/0'):
             self.date_edit.SetValue(self.obj.dc_date)
-        self.date_edit.SetConstraints(lay)
 
-        # Type Layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(publisher_edit, 10)          # 10 under Publisher
-        lay.left.RightOf(self.date_edit, 10)       # 10 to the right of Date
-        lay.width.PercentOf(self.panel, wx.Width, 31)  # 31% width, allows for three across positioning
-        lay.height.AsIs()
+        # Add the element to the row sizer
+        r6Sizer.Add(v8, 1, wx.EXPAND)
+
+        # Add a horizontal spacer to the row sizer        
+        r6Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v9 = wx.BoxSizer(wx.VERTICAL)
+        # Type
         # Define legal options for the Combo Box
         options = ['', _('Image'), _('Sound')]
-        self.type_combo = self.new_combo_box(_("Media Type"), lay, options, self.obj.dc_type)
+        self.type_combo = self.new_combo_box(_("Media Type"), v9, options, self.obj.dc_type)
+        # Add the element to the row sizer
+        r6Sizer.Add(v9, 1, wx.EXPAND)
         # Define a Combo Box Event.  When different Types are selected, different Format options should be displayed.
         wx.EVT_COMBOBOX(self, self.type_combo.GetId(), self.OnTypeChoice)
 
-        # Format Layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(publisher_edit, 10)          # 10 under Publisher
-        lay.left.RightOf(self.type_combo, 10)      # 10 to the right of Type
-        lay.width.PercentOf(self.panel, wx.Width, 31)  # 31% width, allows for three across positioning
-        lay.height.AsIs()
+        # Add a horizontal spacer to the row sizer        
+        r6Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v10 = wx.BoxSizer(wx.VERTICAL)
+        # Format
         # The Format Combo Box has different options depending on the value of Type
         if self.obj.dc_type == unicode(_('Image'), 'utf8'):
             options = imageOptions
@@ -161,62 +213,128 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
             options = soundOptions
         else:
             options = allOptions
-        self.format_combo = self.new_combo_box(_("Format"), lay, options, self.obj.format)
+        self.format_combo = self.new_combo_box(_("Format"), v10, options, self.obj.format)
+        # Add the element to the row sizer
+        r6Sizer.Add(v10, 1, wx.EXPAND)
 
-        # Identifier layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.date_edit, 10)          # 10 under Date
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
-        lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
-        lay.height.AsIs()
-        identifier_edit = self.new_edit_box(_("Identifier"), lay, self.obj.id)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r6Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the first row
+        r7Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v11 = wx.BoxSizer(wx.VERTICAL)
+        # Identifier
+        identifier_edit = self.new_edit_box(_("Identifier"), v11, self.obj.id)
+        # Add the element to the row sizer
+        r7Sizer.Add(v11, 1, wx.EXPAND)
         # Identifier is not editable
         identifier_edit.Enable(False)
 
-        # Source layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.date_edit, 10)          # 10 under Date
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
-        lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
-        lay.height.AsIs()
-        source_edit = self.new_edit_box(_("Source"), lay, self.obj.source, maxLen=255)
+        # Add a horizontal spacer to the row sizer        
+        r7Sizer.Add((10, 0))
 
-        # Language layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(identifier_edit, 10)         # 10 under Identifier
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
-        lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
-        lay.height.AsIs()
-        language_edit = self.new_edit_box(_("Language"), lay, self.obj.language, maxLen=25)
+        # Create a VERTICAL sizer for the next element
+        v12 = wx.BoxSizer(wx.VERTICAL)
+        # Source
+        source_edit = self.new_edit_box(_("Source"), v12, self.obj.source, maxLen=255)
+        # Add the element to the row sizer
+        r7Sizer.Add(v12, 1, wx.EXPAND)
 
-        # Relation layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(source_edit, 10)             # 10 under Source
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
-        lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
-        lay.height.AsIs()
-        relation_edit = self.new_edit_box(_("Relation"), lay, self.obj.relation, maxLen=255)
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r7Sizer, 0, wx.EXPAND)
 
-        # Coverage layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(language_edit, 10)           # 10 under Language
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
-        lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
-        lay.height.AsIs()
-        coverage_edit = self.new_edit_box(_("Coverage"), lay, self.obj.coverage, maxLen=255)
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
 
-        # Rights layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(language_edit, 10)           # 10 under Language
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
-        lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
-        lay.height.AsIs()
-        rights_edit = self.new_edit_box(_("Rights"), lay, self.obj.rights, maxLen=255)
+        # Create a HORIZONTAL sizer for the first row
+        r8Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
+        # Create a VERTICAL sizer for the next element
+        v13 = wx.BoxSizer(wx.VERTICAL)
+        # Language
+        language_edit = self.new_edit_box(_("Language"), v13, self.obj.language, maxLen=25)
+        # Add the element to the row sizer
+        r8Sizer.Add(v13, 1, wx.EXPAND)
+
+        # Add a horizontal spacer to the row sizer        
+        r8Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v14 = wx.BoxSizer(wx.VERTICAL)
+        # Relation
+        relation_edit = self.new_edit_box(_("Relation"), v14, self.obj.relation, maxLen=255)
+        # Add the element to the row sizer
+        r8Sizer.Add(v14, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r8Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the first row
+        r9Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v15 = wx.BoxSizer(wx.VERTICAL)
+        # Coverage
+        coverage_edit = self.new_edit_box(_("Coverage"), v15, self.obj.coverage, maxLen=255)
+        # Add the element to the row sizer
+        r9Sizer.Add(v15, 1, wx.EXPAND)
+
+        # Add a horizontal spacer to the row sizer        
+        r9Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v16 = wx.BoxSizer(wx.VERTICAL)
+        # Rights
+        rights_edit = self.new_edit_box(_("Rights"), v16, self.obj.rights, maxLen=255)
+        # Add the element to the row sizer
+        r9Sizer.Add(v16, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r9Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
         self.Layout()
-        self.SetAutoLayout(True)
+        # Resize the form to fit the contents
+        self.Fit()
+
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(self.width, width), height))
+        # Define the minimum size for this dialog as the current size
+        self.SetSizeHints(max(self.width, width), height)
+        # Center the form on screen
         self.CenterOnScreen()
 
+        # Set focus to Title
         title_edit.SetFocus()
 
         

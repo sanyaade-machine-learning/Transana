@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -21,7 +21,7 @@ __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 import wx                           # import wxPython
 import sys                          # import Python's sys module
 from TransanaExceptions import *    # import Transana's exceptions
-import Keyword                      # import Transana's Keyword Object definition
+import KeywordObject as Keyword     # import Transana's Keyword Object definition
 import KeywordPropertiesForm        # import Transana's Keyword Properties form
 import DBInterface                  # import Transana's Database Interface
 import Dialogs                      # import Transana's Dialog boxes
@@ -44,131 +44,80 @@ class KWManager(wx.Dialog):
         # Define the minimum size for this dialog as the initial size
         self.SetSizeHints(400, 420)
 
-        #####################################
-        # Tedious GUI layout code follows
-        #####################################
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Keyword Group layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self, wx.Top, 20)
-        lay.left.SameAs(self, wx.Left, 20)
-        lay.height.AsIs()
-        lay.width.PercentOf(self, wx.Width, 40)
+        # Keyword Group
         txt = wx.StaticText(self, -1, _("Keyword Group"))
-        txt.SetConstraints(lay)
+        mainSizer.Add(txt, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        mainSizer.Add((0, 3))
 
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)
-        lay.left.SameAs(txt, wx.Left)
-        lay.height.AsIs()
-        lay.width.SameAs(txt, wx.Width)
-        self.kw_groups = DBInterface.list_of_keyword_groups()
-        self.kw_group = wx.Choice(self, 101, wx.DefaultPosition, wx.DefaultSize,
-                                self.kw_groups)
-        self.kw_group.SetConstraints(lay)
-        if len(self.kw_groups) > 0:
-            if defaultKWGroup != None:
-                selPos = self.kw_group.FindString(defaultKWGroup)
-            else:
-                selPos = 0
-            self.kw_group.SetSelection(selPos)
-            self.kw_list = \
-                DBInterface.list_of_keywords_by_group(self.kw_group.GetString(selPos))
-        else:
-            self.kw_list = []
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        self.kw_group = wx.Choice(self, 101, wx.DefaultPosition, wx.DefaultSize, [])
+        r1Sizer.Add(self.kw_group, 9, wx.EXPAND)
         wx.EVT_CHOICE(self, 101, self.OnGroupSelect)
 
-        # Create a new Keyword Group button layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.kw_group, wx.Top)
-        lay.left.RightOf(self.kw_group, 10)
-        lay.right.SameAs(self, wx.Right, 20)
-        lay.height.AsIs()
+        r1Sizer.Add((10, 0))
+
+        # Create a new Keyword Group button
         new_kwg = wx.Button(self, wx.ID_FILE1, _("Create a New Keyword Group"))
-        new_kwg.SetConstraints(lay)
+        r1Sizer.Add(new_kwg, 11, wx.EXPAND)
         wx.EVT_BUTTON(self, wx.ID_FILE1, self.OnNewKWG)
 
-        # Keywords label+listbox layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.kw_group, 10)
-        lay.left.SameAs(self.kw_group, wx.Left)
-        lay.height.AsIs()
-        lay.width.SameAs(self.kw_group, wx.Width)
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+        mainSizer.Add((0, 10))
+
+        # Keywords label+listbox
         txt = wx.StaticText(self, -1, _("Keywords"))
-        txt.SetConstraints(lay)
-        
-        lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)
-        lay.left.SameAs(txt, wx.Left)
-        lay.bottom.SameAs(self, wx.Bottom, 20)
-        lay.width.SameAs(txt, wx.Width)
+        mainSizer.Add(txt, 0, wx.LEFT, 10)
+
+        # Create a HORIZONTAL sizer for the first row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        v1 = wx.BoxSizer(wx.VERTICAL)
         self.kw_lb = wx.ListBox(self, 100, wx.DefaultPosition, wx.DefaultSize,
-                                self.kw_list, style=wx.LB_SINGLE | wx.LB_SORT)
-        self.kw_lb.SetConstraints(lay)
-        if len(self.kw_list) > 0:
-            self.kw_lb.SetSelection(0, False)
+                                [], style=wx.LB_SINGLE | wx.LB_SORT)
+        v1.Add(self.kw_lb, 1, wx.EXPAND)
         wx.EVT_LISTBOX(self, 100, self.OnKeywordSelect)
         wx.EVT_LISTBOX_DCLICK(self, 100, self.OnKeywordDoubleClick)
 
+        r2Sizer.Add(v1, 9, wx.EXPAND)
+        r2Sizer.Add((10, 0))
+
+        v2 = wx.BoxSizer(wx.VERTICAL)
         # Add Keyword to List button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(new_kwg, 25)
-        lay.left.SameAs(new_kwg, wx.Left)
-        lay.right.SameAs(new_kwg, wx.Right)
-        lay.height.AsIs()
         add_kw = wx.Button(self, wx.ID_FILE2, _("Add Keyword to List"))
-        add_kw.SetConstraints(lay)
+        v2.Add(add_kw, 0, wx.EXPAND | wx.BOTTOM, 10)
         wx.EVT_BUTTON(self, wx.ID_FILE2, self.OnAddKW)
-        
+
         # Edit Keyword button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(add_kw, 10)
-        lay.left.SameAs(add_kw, wx.Left)
-        lay.right.SameAs(add_kw, wx.Right)
-        lay.height.AsIs()
         self.edit_kw = wx.Button(self, -1, _("Edit Keyword"))
-        self.edit_kw.SetConstraints(lay)
+        v2.Add(self.edit_kw, 0, wx.EXPAND | wx.BOTTOM, 10)
         wx.EVT_BUTTON(self, self.edit_kw.GetId(), self.OnEditKW)
         self.edit_kw.Enable(False)
         
         # Delete Keyword from List button
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.edit_kw, 10)
-        lay.left.SameAs(self.edit_kw, wx.Left)
-        lay.right.SameAs(self.edit_kw, wx.Right)
-        lay.height.AsIs()
         self.del_kw = wx.Button(self, wx.ID_FILE3, _("Delete Keyword from List"))
-        self.del_kw.SetConstraints(lay)
+        v2.Add(self.del_kw, 0, wx.EXPAND | wx.BOTTOM, 10)
         wx.EVT_BUTTON(self, wx.ID_FILE3, self.OnDelKW)
         self.del_kw.Enable(False)
         
 
         # Definition box
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.del_kw, 10)
-        lay.left.SameAs(self.del_kw, wx.Left)
-        lay.height.AsIs()
-        lay.width.SameAs(self.del_kw, wx.Width)
         def_txt = wx.StaticText(self, -1, _("Definition"))
-        def_txt.SetConstraints(lay)
+        v2.Add(def_txt, 0, wx.BOTTOM, 3)
         
-        lay = wx.LayoutConstraints()
-        lay.top.Below(def_txt, 3)
-        lay.left.SameAs(def_txt, wx.Left)
-        lay.bottom.SameAs(self, wx.Bottom, 50)
-        lay.width.SameAs(def_txt, wx.Width)
         self.definition = wx.TextCtrl(self, -1, '', style=wx.TE_MULTILINE)
-        self.definition.SetConstraints(lay)
+        v2.Add(self.definition, 1, wx.EXPAND | wx.BOTTOM, 10)
         self.definition.Enable(False)
-        
+
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)        
         # Dialog Close button
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(self, wx.Bottom, 20)
-        lay.left.SameAs(self.del_kw, wx.Left)
-        lay.width.PercentOf(self, wx.Width, 23)
-        lay.height.AsIs()
         close = wx.Button(self, wx.ID_CLOSE, _("Close"))
-        close.SetConstraints(lay)
+        btnSizer.Add(close, 1, wx.EXPAND | wx.RIGHT, 10)
         close.SetDefault()
         wx.EVT_BUTTON(self, wx.ID_CLOSE, self.OnClose)
 
@@ -177,18 +126,41 @@ class KWManager(wx.Dialog):
         ID_HELP = wx.NewId()
 
         # Dialog Help button
-        lay = wx.LayoutConstraints()
-        lay.bottom.SameAs(close, wx.Bottom)
-        lay.right.SameAs(self, wx.Right, 20)
-        lay.width.PercentOf(self, wx.Width, 23)
-        lay.height.AsIs()
-        help = wx.Button(self, ID_HELP, _("Help"))
-        help.SetConstraints(lay)
+        helpBtn = wx.Button(self, ID_HELP, _("Help"))
+        btnSizer.Add(helpBtn, 1, wx.EXPAND)
         wx.EVT_BUTTON(self, ID_HELP, self.OnHelp)
 
-        self.Layout()
+        v2.Add(btnSizer, 0, wx.EXPAND)
+
+        r2Sizer.Add(v2, 11, wx.EXPAND)
+
+        mainSizer.Add(r2Sizer, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
+        self.Layout()
         self.CenterOnScreen()
+
+        self.kw_groups = DBInterface.list_of_keyword_groups()
+        for kwg in self.kw_groups:
+            self.kw_group.Append(kwg)
+
+        if len(self.kw_groups) > 0:
+            if defaultKWGroup != None:
+                selPos = self.kw_group.FindString(defaultKWGroup)
+            else:
+                selPos = 0
+            self.kw_group.SetSelection(selPos)
+            self.kw_list = DBInterface.list_of_keywords_by_group(self.kw_group.GetString(selPos))
+        else:
+            self.kw_list = []
+
+        for kw in self.kw_list:
+            self.kw_lb.Append(kw)
+            
+        if len(self.kw_list) > 0:
+            self.kw_lb.SetSelection(0, False)
+
         self.ShowModal()
 
     def refresh_keywords(self):

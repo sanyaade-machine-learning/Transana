@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -78,8 +78,10 @@ class ConfigData(object):
         str += 'pathsByDB = %s\n' % self.pathsByDB
         str += 'tabSize = %s\n' % self.tabSize
         str += 'wordWrap = %s\n' % self.wordWrap
+        str += 'autoSave = %s\n' % self.autoSave
         str = str + 'defaultFontFace = %s\n' % self.defaultFontFace
         str = str + 'defaultFontSize = %s\n' % self.defaultFontSize
+        str += 'formatUnits = %s\n' % self.formatUnits
         str = str + 'keywordMapBarHeight = %s\n' % self.keywordMapBarHeight
         str = str + 'keywordMapWhitespace = %s\n' % self.keywordMapWhitespace
         str = str + 'keywordVisualizationBarHeight = %s\n' % self.keywordVisualizationBarHeight
@@ -189,10 +191,14 @@ class ConfigData(object):
             self.tabSize = config.Read('/2.0/TabSize', '4')
             # Load the Word Wrap setting
             self.wordWrap = config.ReadInt('/2.0/WordWrap', stc.STC_WRAP_WORD)
+            # Load the Auto Save setting
+            self.autoSave = config.ReadInt('2.0/AutoSave', True)
             # Load Default Font Face Setting
             self.defaultFontFace = config.Read('/2.0/FontFace', self.defaultFontFace)
             # Load Default Font Size Setting
             self.defaultFontSize = config.ReadInt('/2.0/FontSize', self.defaultFontSize)
+            # Load Format Units Setting
+            self.formatUnits = config.Read('/2.0/FormatUnits', 'in')
             # Load Keyword Map Bar Height Setting
             self.keywordMapBarHeight = config.ReadInt('/2.0/KeywordMapBarHeight', 8)
             # Load Keyword Map Whitespace Height Setting
@@ -268,8 +274,12 @@ class ConfigData(object):
             self.wordTracking = True
             # Word Wrap
             self.wordWrap = stc.STC_WRAP_WORD
+            # Auto Save
+            self.autoSave = True
             # Language setting
             self.language = ''
+            # Format Units
+            self.formatUnits = 'in'
             # Load Keyword Map Bar Height Setting
             self.keywordMapBarHeight = 8
             # Load Keyword Map Whitespace Height Setting
@@ -463,10 +473,14 @@ class ConfigData(object):
         config.Write('/2.0/TabSize', self.tabSize)
         # Save the Word Wrap setting
         config.WriteInt('/2.0/WordWrap', self.wordWrap)
+        # Save the AutoSave Setting
+        config.WriteInt('/2.0/AutoSave', self.autoSave)
         # Save Default Font Face Setting
         config.Write('/2.0/FontFace', self.defaultFontFace)
         # Save Default Font Size Setting
         config.WriteInt('/2.0/FontSize', self.defaultFontSize)
+        # Save Format Units Setting
+        config.Write('/2.0/FormatUnits', self.formatUnits)
         # Save Keyword Map Bar Height Setting
         config.WriteInt('/2.0/KeywordMapBarHeight', self.keywordMapBarHeight)
         # Save Keyword Map Whitespace Setting

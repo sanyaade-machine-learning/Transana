@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -37,19 +37,14 @@ class DataWindow(wx.Dialog):
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
-        # print "DataWindow:", self.__pos(), self.__size()
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
 
         # add a Notebook Control to the Dialog Box
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self, wx.Top, 0)
-        lay.left.SameAs(self, wx.Left, 0)
-        lay.bottom.SameAs(self, wx.Bottom, 0)
-        lay.right.SameAs(self, wx.Right, 0)
         # The wxCLIP_CHILDREN style allegedly reduces flicker.
         self.nb = wx.Notebook(self, -1, style=wx.CLIP_CHILDREN)
         # In order to 
         self.nb.parent = self
-        self.nb.SetConstraints(lay)
+        mainSizer.Add(self.nb, 1, wx.EXPAND)
 
         # Create tabs for the Notebook Control.  These tabs are complex enough that they are
         # instantiated as separate objects.
@@ -70,8 +65,12 @@ class DataWindow(wx.Dialog):
         # page selected.
         self.nb.SetSelection(0)
 
-        self.Layout()
+        # Handle Key Press Events
+        self.nb.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
+
+        self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
+        self.Layout()
 
         self.ControlObject = None            # The ControlObject handles all inter-object communication, initialized to None
 
@@ -210,6 +209,13 @@ class DataWindow(wx.Dialog):
         # Remove any extra tabs that are displayed
         self.DeleteTabs()
 
+    def OnKeyDown(self, event):
+        """ Handle Key Press events """
+        # See if the ControlObject wants to handle the key that was pressed.
+        if self.ControlObject.ProcessCommonKeyCommands(event):
+            # If so, we're done here.  (Actually, we're done anyway, but what the hell.)
+            return
+
     def GetDimensions(self):
         (left, top) = self.GetPositionTuple()
         (width, height) = self.GetSizeTuple()
@@ -228,17 +234,26 @@ class DataWindow(wx.Dialog):
 
     def __size(self):
         """Determine default size of Data Frame."""
-        rect = wx.ClientDisplayRect()
-        width = rect[2] * .28
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        if 'wxGTK' in wx.PlatformInfo:
+            width = min(rect[2], 1440) * .28
+        else:
+            width = rect[2] * .28
         height = (rect[3] - TransanaGlobal.menuHeight) * .64
+        # Compensate in Linux.  I'm not sure why this is necessary, but it seems to be.
+        if 'wxGTK' in wx.PlatformInfo:
+            height -= 60
         return wx.Size(width, height)
 
     def __pos(self):
         """Determine default position of Data Frame."""
-        rect = wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
         (width, height) = self.__size()
         # rect[0] compensates if the Start menu is on the Left
-        x = rect[0] + rect[2] - width - 3
+        if 'wxGTK' in wx.PlatformInfo:
+            x = rect[0] + min(rect[2], 1440) - width - 3
+        else:
+            x = rect[0] + rect[2] - width - 3
         # rect[1] compensates if the Start menu is on the Top
         y = rect[1] + rect[3] - height - 3
         return wx.Point(x, y)

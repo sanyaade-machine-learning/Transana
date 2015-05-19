@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -38,7 +38,7 @@ import CoreData
 import DBInterface
 import Dialogs
 import Episode
-import Keyword
+import KeywordObject as Keyword
 import Misc
 import Note
 import Series
@@ -56,59 +56,192 @@ import cPickle
 MENU_FILE_EXIT = wx.NewId()
 
 class XMLImport(Dialogs.GenForm):
-   """ This window displays a variety of GUI Widgets. """
-   def __init__(self,parent,id,title):
-       Dialogs.GenForm.__init__(self, parent, id, title, (550,150), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Import Database')
-       # Define the minimum size for this dialog as the initial size
-       self.SetSizeHints(550, 150)
+    """ This window displays a variety of GUI Widgets. """
+    def __init__(self, parent, id, title, importData=None):
+        """ Initialize the XML Import dialog and framework.
+            importData can contain the name of a Transana-XML file and the encoding used for that file, in which case
+            the XML Import Dialog does not need to be displayed to the user. """
+        # Create the Dialog Box
+        Dialogs.GenForm.__init__(self, parent, id, title, (550,150), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext='Import Database')
 
-       # Import Message Layout
-       lay = wx.LayoutConstraints()
-       lay.top.SameAs(self.panel, wx.Top, 10)
-       lay.left.SameAs(self.panel, wx.Left, 10)
-       lay.right.SameAs(self.panel, wx.Right, 10)
-       lay.height.AsIs()
-       # If the XML filename path is not empty, we need to tell the user.
-       if DBInterface.IsDatabaseEmpty():
-           prompt = _('Please select a Transana XML File to import.')
-       else:
-           prompt = _('Your current database is not empty.  Please note that any duplicate object names will cause your import to fail.\nPlease select a Transana XML File to import.')
-       importText = wx.StaticText(self.panel, -1, prompt)
-       importText.SetConstraints(lay)
+        # Remember the import data, if any is passed
+        self.importData = importData
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-       # XML Filename Layout
-       lay = wx.LayoutConstraints()
-       lay.top.Below(importText, 10)
-       lay.left.SameAs(self.panel, wx.Left, 10)
-       lay.width.PercentOf(self.panel, wx.Width, 80)  # 80% width
-       lay.height.AsIs()
-       self.XMLFile = self.new_edit_box(_("Transana-XML Filename"), lay, '')
-       self.XMLFile.SetDropTarget(EditBoxFileDropTarget(self.XMLFile))
+        # Create the main form prompt
+        prompt = _('Please select a Transana XML File to import.')
+        importText = wx.StaticText(self.panel, -1, prompt)
 
-       # Browse button layout
-       lay = wx.LayoutConstraints()
-       lay.top.SameAs(self.XMLFile, wx.Top)
-       lay.left.RightOf(self.XMLFile, 10)
-       lay.right.SameAs(self.panel, wx.Right, 10)
-       lay.bottom.SameAs(self.XMLFile, wx.Bottom)
-       browse = wx.Button(self.panel, wx.ID_FILE1, _("Browse"), wx.DefaultPosition)
-       browse.SetConstraints(lay)
-       wx.EVT_BUTTON(self, wx.ID_FILE1, self.OnBrowse)
+        # Add the import message to the dialog box
+        r1Sizer.Add(importText, 0)
+        
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
 
-       self.Layout()
-       self.SetAutoLayout(True)
-       self.CenterOnScreen()
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
 
-       # We need to know the encoding of the import file, which differs depending on the
-       # TransanaXML Version.  Let's assume UTF-8 unless we have to change it.
-       self.importEncoding = 'utf8'
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-       self.XMLFile.SetFocus()
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+        # Add the Import File Name element
+        self.XMLFile = self.new_edit_box(_("Transana-XML Filename"), v1, '')
+        # If importData is provided ...
+        if importData != None:
+            # ... the first element is the Transana-XML file name to be imported
+            self.XMLFile.SetValue(importData[0])
+        # Make this text box a File Drop Target
+        self.XMLFile.SetDropTarget(EditBoxFileDropTarget(self.XMLFile))
 
+        # Add the element sizer to the row sizer
+        r2Sizer.Add(v1, 1, wx.EXPAND)
 
-   def Import(self):
+        # Add a spacer to the row sizer        
+        r2Sizer.Add((10, 0))
+
+        # Browse button
+        browse = wx.Button(self.panel, wx.ID_FILE1, _("Browse"), wx.DefaultPosition)
+        # Add the Browse Method to the Browse Button
+        wx.EVT_BUTTON(self, wx.ID_FILE1, self.OnBrowse)
+
+        # Add the element to the row sizer
+        r2Sizer.Add(browse, 0, wx.ALIGN_BOTTOM)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            r2Sizer.Add((2, 0))
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # We have encoding issues on import.  At the very least, single-user Transana 2.42 on Windows using
+        # the Chinese prompts export data using GBK instead of UTF-8.  What can I say?  I screwed up.
+        # To fix this, we need to add an option for specifying the import encoding to be used.
+
+        # We need to know the encoding of the import file, which differs depending on the
+        # TransanaXML Version, the Transana version, and the language used during export.
+        # Let's assume UTF-8 unless we have to change it.
+        self.importEncoding = 'utf8'
+
+        # Add a Horizontal sizer
+        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add a Vertical sizer to go in the Horizontal sizer
+        v2 = wx.BoxSizer(wx.VERTICAL)
+        # Define the options for the Encoding choice box.  This must be done as two parallel lists, rather than a dictionary
+        choices = [_('Most Transana database export files'),
+                   _('Chinese data from single-user Transana 2.1 - 2.42 on Windows'),
+                   _('Russian data from single-user Transana 2.1 - 2.42 on Windows'),
+                   _('Eastern European data from single-user Transana 2.1 - 2.42 on Windows'),
+                   _('Greek data from single-user Transana 2.1 - 2.42 on Windows'),
+                   _('Japanese data from single-user Transana 2.1 - 2.42 on Windows'),
+                   _('Transana 2.0 to Transana 2.05 database export files')]
+        # Use a matching list to define the encodings that go with each of the Encoding options
+        self.encodingOptions = ['utf8', 'gbk', 'koi8_r', 'iso8859_2', 'iso8859_7', 'cp932', 'latin1']
+        # Create a Choice Box where the user can select an import encoding, based on information about how the
+        # Transana-XML file in question was created.  This adds it to the Vertical Sizer created above.
+        self.chImportEncoding = self.new_choice_box(_('Exported by:'), v2, choices, 0)
+        # If importData is provided ...
+        if importData != None:
+            # ... set the Import Encoding based on the second element of importData
+            if importData[1] == 'utf8':
+                self.chImportEncoding.SetSelection(0)
+            elif importData[1] == 'gbk':
+                self.chImportEncoding.SetSelection(1)
+            elif importData[1] == 'koi8_r':
+                self.chImportEncoding.SetSelection(2)
+            elif importData[1] == 'iso8859_2':
+                self.chImportEncoding.SetSelection(3)
+            elif importData[1] == 'iso8859_7':
+                self.chImportEncoding.SetSelection(4)
+            elif importData[1] == 'cp932':
+                self.chImportEncoding.SetSelection(5)
+            elif importData[1] == 'latin1':
+                self.chImportEncoding.SetSelection(6)
+
+        # Add the Vertical sizer to the Horizontal sizer
+        r3Sizer.Add(v2, 1, wx.EXPAND)
+        # Add the Horizontal Sizer to the form's main sizer.
+        mainSizer.Add(r3Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
+        self.Layout()
+        # Resize the form to fit the contents
+        self.Fit()
+
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(550, width), height))
+        # Define the minimum size for this dialog as the current size, and define height as unchangeable
+        self.SetSizeHints(max(550, width), height, -1, height)
+        # Center the form on screen
+        self.CenterOnScreen()
+
+        # Set focus to the XML file field
+        self.XMLFile.SetFocus()
+
+    def UnEscape(self, inpStr):
+        """ Replaces "&amp;", "&gt;", and "&lt;" with "&", ">", and "<" 
+            >, <, and & all need to be replaced, but &amp;, &gt;, and &lt; needs to survive!"""
+        # Find the first Greater Than in the document
+        chrPos = inpStr.find('&gt;')
+        # While there are more Greater Thans ...
+        while (chrPos > -1):
+            # ... replace the Greater Than with the escape string ...
+            inpStr = inpStr[:chrPos] + '>' + inpStr[chrPos + 4:]
+            # ... and look for the NEXT Greater Than after the replacement
+            chrPos = inpStr.find('&gt;', chrPos + 1)
+        # Find the first Less Than in the document
+        chrPos = inpStr.find('&lt;')
+        # While there are more Less Thans ...
+        while (chrPos > -1):
+            # ... replace the Less Than with the escape string ...
+            inpStr = inpStr[:chrPos] + '<' + inpStr[chrPos + 4:]
+            # ... and look for the NEXT Less Than after the replacement
+            chrPos = inpStr.find('&lt;', chrPos + 1)
+        # Find the first Ampersand in the document
+        chrPos = inpStr.find('&amp;')
+        # While there are more Ampersands ...
+        while (chrPos > -1):
+            # ... replace the Ampersand with the escape string ...
+            inpStr = inpStr[:chrPos] + '&' + inpStr[chrPos + 5:]
+            # ... and look for the NEXT Ampersand after the replacement
+            chrPos = inpStr.find('&amp;', chrPos + 1)
+        # Return the modified string
+        return inpStr
+
+    def Import(self):
        # use the LONGEST title here to set the width of the dialog box!
-       progress = wx.ProgressDialog(_('Transana XML Import'), _('Importing Transcript records (This may be slow because of the size of Transcript records.)'), style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
+       progress = wx.ProgressDialog(_('Transana XML Import'), _('Importing Transcript records (This may be slow because of the size of Transcript records.)') + '\nTest', style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
        if progress.GetSize()[0] > 800:
             progress.SetSize((800, progress.GetSize()[1]))
             progress.Centre()
@@ -136,7 +269,20 @@ class XMLImport(Dialogs.GenForm):
            dbCursor.execute(SQLText)
 
        # We need to track the number of lines read and processed from the input file.
-       lineCount = 0 
+       lineCount = 0
+       # We need to track how many Transcript records were in the database PRIOR to import!
+       # (Needed for merging non-overlapping databases!  Otherwise, we lose SourceTranscriptNum information.)
+
+       # First, let's find out the largest Transcript Number currently in use
+       SQLText = 'SELECT MAX(TranscriptNum) FROM Transcripts2'
+       dbCursor.execute(SQLText)
+       tmpVal = dbCursor.fetchone()
+       # Let's remember that largest transcript number
+       transcriptCount = tmpVal[0]
+       # If we have an EMPTY database, we get "None" rather than 0.
+       if transcriptCount == None:
+           # Fix that.
+           transcriptCount = 0
 
        # Start exception handling
        try:
@@ -148,6 +294,14 @@ class XMLImport(Dialogs.GenForm):
            # Initialize objectType and dataType, which are used to parse the file
            objectType = None 
            dataType = None
+           # Initialize constants for whether the "Skip additional messages" checkbox should be displayed as part of error messages
+           skipCheck = False
+           skipValue = False
+
+           # Some collections may have become children of LATER collections not yet imported.
+           # Let's keep a list of instances of when this occurs so we can fix it after all the collections are read.
+           collectionsToUpdate = []
+           
            # For each line in the file ...
            for line in f:
                # ... increment the line counter
@@ -172,26 +326,75 @@ class XMLImport(Dialogs.GenForm):
                # Code for updating the Progress Bar
                if line.upper() == '<SERIESFILE>':
                    progress.Update(0, _('Importing Series records'))
+                   # These records should NEVER skip error messages
+                   skipCheck = False
+                   skipValue = False
                elif line.upper() == '<EPISODEFILE>':
                    progress.Update(8, _('Importing Episode records'))
+                   # These records should NEVER skip error messages
+                   skipCheck = False
+                   skipValue = False
                elif line.upper() == '<COREDATAFILE>':
                    progress.Update(16, _('Importing Core Data records'))
+                   # These records MAY skip error messages
+                   skipCheck = True
+                   skipValue = False
                elif line.upper() == '<COLLECTIONFILE>':
                    progress.Update(24, _('Importing Collection records'))
+                   # These records should NEVER skip error messages
+                   skipCheck = False
+                   skipValue = False
                elif line.upper() == '<CLIPFILE>':
                    progress.Update(32, _('Importing Clip records'))
+                   # These records should NEVER skip error messages
+                   skipCheck = False
+                   skipValue = False
                elif line.upper() == '<ADDITIONALVIDSFILE>':
                    progress.Update(40, _('Importing Additional Video records'))
+                   # These records should NEVER skip error messages
+                   skipCheck = False
+                   skipValue = False
                elif line.upper() == '<TRANSCRIPTFILE>':
                    progress.Update(52, _('Importing Transcript records (This may be slow because of the size of Transcript records.)'))
+                   # These records should NEVER skip error messages
+                   skipCheck = False
+                   skipValue = False
                elif line.upper() == '<KEYWORDFILE>':
                    progress.Update(60, _('Importing Keyword records'))
+                   # These records MAY skip error messages
+                   skipCheck = True
+                   skipValue = False
                elif line.upper() == '<CLIPKEYWORDFILE>':
                    progress.Update(68, _('Importing Clip Keyword records'))
+                   # These records should NEVER skip error messages
+                   skipCheck = False
+                   skipValue = False
                elif line.upper() == '<NOTEFILE>':
                    progress.Update(76, _('Importing Note records'))
+                   # These records should NEVER skip error messages
+                   skipCheck = False
+                   skipValue = False
                elif line.upper() == '<FILTERFILE>':
                    progress.Update(84, _('Importing Filter records'))
+                   # These records should NEVER skip error messages
+                   skipCheck = False
+                   skipValue = False
+
+               # When we finish the Collections import section ...
+               elif line.upper() == '</COLLECTIONFILE>':
+                   # ... iterate through the list of Collections that need to be updated because they are parented by collections
+                   #     with a larger collection number ...
+                   for col in collectionsToUpdate:
+                       # ... Load the appropriate collection (after translating the collection number) ...
+                       tmpColl = Collection.Collection(recNumbers['Collection'][col])
+                       # ... lock the collection record ...
+                       tmpColl.lock_record()
+                       # ... Update the Parent Collection Number by translating the parent collection number ...
+                       tmpColl.parent = recNumbers['Collection'][tmpColl.parent]
+                       # ... save the collection ...
+                       tmpColl.db_save()
+                       # ... and unlock the collection record.
+                       tmpColl.unlock_record()
 
                # Transana XML Version Checking
                elif line.upper() == '<TRANSANAXMLVERSION>':
@@ -205,13 +408,18 @@ class XMLImport(Dialogs.GenForm):
                    # Version 1.3 -- FilterData handling changed to accomodate Unicode data for Transana 2.21 release
                    # Version 1.4 -- Database structure changed to accomodate Multiple Transcript Clips for Transana 2.30 release.
                    # Version 1.5 -- Database structure changed to accomodate Multiple Media Files for Transana 2.40
+                   # Version 1.6 -- Added MinTranscriptWidth, XML format for transcripts, and character escapes for Transana 2.50 release
 
                    # Transana-XML version 1.0 ...
                    if self.XMLVersionNumber == '1.0':
                        # ... used Latin1 encoding
-                       self.importEncoding = 'latin-1'
+                       self.importEncoding = 'latin1'
                    # Transana-XML versions 1.1 through 1.4 ...
                    elif self.XMLVersionNumber in ['1.1', '1.2', '1.3', '1.4', '1.5']:
+                       # ... use the encoding selected by the user
+                       self.importEncoding = self.encodingOptions[self.chImportEncoding.GetSelection()]
+                   # Transana-XML version 1.6 ...
+                   elif self.XMLVersionNumber in ['1.6']:
                        # ... use UTF8 encoding
                        self.importEncoding = 'utf8'
                    # All other Transana XML versions ...
@@ -440,6 +648,17 @@ class XMLImport(Dialogs.GenForm):
                                elif self.FilterReportType != '15':
                                    self.FilterFilterData = DBInterface.ProcessDBDataForUTF8Encoding(self.FilterFilterData)
 
+                               # Saved Searches (Added for 2.50)
+                               elif self.FilterReportType == '15':
+                                   # If the Filter Data is a string (it always should be!) ...
+                                   if isinstance(self.FilterFilterData, str):
+                                       # ... then decode it using the import encoding.
+                                       self.FilterFilterData = self.FilterFilterData.decode(self.importEncoding)
+                                   # Now encode the filter data using the file encoding
+                                   self.FilterFilterData = self.FilterFilterData.encode(TransanaGlobal.encoding)
+                           # Encode the Filter Configuration Name using the file encoding
+                           self.FilterConfigName = self.FilterConfigName.encode(TransanaGlobal.encoding)
+
                            # Certain FilterDataTypes need to have their DATA adjusted for the new object numbers!
                            # This should be done before the save.
                            # So if we have Clips or Notes Filter Data ...
@@ -481,11 +700,11 @@ class XMLImport(Dialogs.GenForm):
                                          VALUES
                                            (%s, %s, %s, %s, %s) """
                            # Build the values to match the query, including the pickled Clip data
-                           values = (self.FilterReportType, self.FilterScope, self.FilterConfigName, self.FilterFilterDataType, self.FilterFilterData)
+                           values = (self.FilterReportType, self.FilterScope, self.FilterConfigName, self.FilterFilterDataType,
+                                     self.FilterFilterData)
                            # Save the Filter data
                            if db != None:
                                dbCursor.execute(query, values)
-
                    except:
 
                        if DEBUG:
@@ -500,81 +719,98 @@ class XMLImport(Dialogs.GenForm):
                            traceback.print_exc(file=sys.stdout)
                            print
                            print
-                           
-                       # If an error arises, for now, let's interrupt the import process.  It may be possible
-                       # to eliminate this line later, allowing the import to continue even if there is a problem.
-                       contin = False
-                       # let's build a detailed error message, if we can.
-                       if 'unicode' in wx.PlatformInfo:
-                           # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                           prompt = unicode(_('A problem has been detected importing a %s record'), 'utf8')
-                       else:
-                           prompt = _('A problem has been detected importing a %s record')
-                       msg = prompt % objectType
-                       if (not objectType in ['AddVid', 'Keyword', 'ClipKeyword', 'Filter']) and (currentObj.id != ''):
+
+                       # If we haven't been told to skip error messages of this type ...
+                       if not skipValue:
+                           # If an error arises, for now, let's interrupt the import process.  It may be possible
+                           # to eliminate this line later, allowing the import to continue even if there is a problem.
+                           contin = False
+                           # let's build a detailed error message, if we can.
                            if 'unicode' in wx.PlatformInfo:
                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                               prompt = unicode(_('named "%s".'), 'utf8')
+                               prompt = unicode(_('A problem has been detected importing a %s record'), 'utf8')
                            else:
-                               prompt = _('named "%s".')
-                           msg = msg +  ' ' + prompt % currentObj.id
-                       else:
-                           msg = msg + '.'
-                           # One specific error we need to trap is bogus Transcript records that have lost
-                           # their parents.  This happened to at least one user.
-                           if objectType == 'Transcript':
-                               msg = msg + '\n' + _('The Transcript is for')
-                               if currentObj.episode_num > 0:
+                               prompt = _('A problem has been detected importing a %s record')
+                           msg = prompt % objectType
+                           if objectType == 'CoreData':
+                               msg = msg + '.'
+                               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                               prompt = unicode(_('The Core Data record is for media file "%s".'), 'utf8')
+                               # Explain about Keyword Definitions
+                               prompt += '\n\n' + unicode(_('The existing record will not be updated, but the Database import will continue.'), 'utf8')
+                               msg = msg + '\n\n' + prompt % (currentObj.id)
+                               # So the keyword already exists.  Let's continue the import anyway!  This is a minor issue.
+                               contin = True
+                               
+                           elif (not objectType in ['AddVid', 'Keyword', 'ClipKeyword', 'Filter']) and (currentObj.id != ''):
+                               if 'unicode' in wx.PlatformInfo:
+                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                   prompt = unicode(_('named "%s".'), 'utf8')
+                               else:
+                                   prompt = _('named "%s".')
+                               msg = msg +  ' ' + prompt % currentObj.id
+                           else:
+                               msg = msg + '.'
+                               # One specific error we need to trap is bogus Transcript records that have lost
+                               # their parents.  This happened to at least one user.
+                               if objectType == 'Transcript':
+                                   msg = msg + '\n\n' + _('The Transcript is for')
+                                   if currentObj.episode_num > 0:
+                                        if 'unicode' in wx.PlatformInfo:
+                                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                            prompt = unicode(_('Episode %d.'), 'utf8')
+                                        else:
+                                            prompt = _('Episode %d.')
+                                        msg = msg + ' ' + prompt % currentObj.episode_num
+                                   elif currentObj.clip_num > 0: 
+                                       if 'unicode' in wx.PlatformInfo:
+                                           # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                           prompt = unicode(_('Clip %d.'), 'utf8')
+                                       else:
+                                           prompt = _('Clip %d.')
+                                       msg = msg + ' ' + prompt % currentObj.clip_num
+                                   else: 
+                                       if 'unicode' in wx.PlatformInfo:
+                                           # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                           prompt = unicode(_('Episode 0, Clip 0, Transcript Record %d.'), 'utf8')
+                                       else:
+                                           prompt = _('Episode 0, Clip 0, Transcript Record %d.')
+                                       msg = msg + ' ' + prompt % oldNumber
+                               elif objectType == 'Keyword':
                                     if 'unicode' in wx.PlatformInfo:
                                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                        prompt = unicode(_('Episode %d.'), 'utf8')
+                                        prompt = unicode(_('The record is for Keyword "%s:%s".') + '  ', 'utf8')
+                                        # Explain about Keyword Definitions
+                                        prompt += '\n\n' + unicode(_('The Keyword Definition will not be updated, but the Database import will continue.'), 'utf8')
                                     else:
-                                        prompt = _('Episode %d.')
-                                    msg = msg + ' ' + prompt % currentObj.episode_num
-                               elif currentObj.clip_num > 0: 
-                                   if 'unicode' in wx.PlatformInfo:
-                                       # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                       prompt = unicode(_('Clip %d.'), 'utf8')
-                                   else:
-                                       prompt = _('Clip %d.')
-                                   msg = msg + ' ' + prompt % currentObj.clip_num
-                               else: 
-                                   if 'unicode' in wx.PlatformInfo:
-                                       # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                       prompt = unicode(_('Episode 0, Clip 0, Transcript Record %d.'), 'utf8')
-                                   else:
-                                       prompt = _('Episode 0, Clip 0, Transcript Record %d.')
-                                   msg = msg + ' ' + prompt % oldNumber
-                           elif objectType == 'Keyword':
-                                if 'unicode' in wx.PlatformInfo:
-                                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                    prompt = unicode(_('The record is for Keyword "%s:%s".') + '  ', 'utf8')
-                                    # Explain about Keyword Definitions
-                                    prompt += '\n' + unicode(_('The Keyword Definition will not be updated, but the Database import will continue.'), 'utf8')
-                                else:
-                                    prompt = _('The record is for Keyword "%s:%s".') + '  '
-                                    # Explain about Keyword Definitions
-                                    prompt += '\n' + unicode(_('The Keyword Definition will not be updated, but the Database import will continue.'), 'utf8')
-                                msg = msg + '\n' + prompt % (currentObj.keywordGroup, currentObj.keyword)
-                                # So the keyword already exists.  Let's continue the import anyway!  This is a minor issue.
-                                contin = True
-                       # If we're interrupting and cancelling the import ...
-                       if not contin:
-                           # ... we need to tell the user where to intervene.
-                           if 'unicode' in wx.PlatformInfo:
-                               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                               prompt = unicode(_('You need to correct this record in XML file %s.'), 'utf8')
-                               prompt2 = unicode(_('The %s record ends at line %d.'), 'utf8')
-                           else:
-                               prompt = _('You need to correct this record in XML file %s.')
-                               prompt2 = _('The %s record ends at line %d.')
-                           # Add the intervention information to the error message
-                           msg = msg + '\n' +  prompt % self.XMLFile.GetValue() + '\n' + \
-                                               prompt2 % (objectType, lineCount)
-                       # Display our carefully crafted error message to the user.
-                       errordlg = Dialogs.ErrorDialog(None, msg)
-                       errordlg.ShowModal()
-                       errordlg.Destroy()
+                                        prompt = _('The record is for Keyword "%s:%s".') + '  '
+                                        # Explain about Keyword Definitions
+                                        prompt += '\n\n' + unicode(_('The Keyword Definition will not be updated, but the Database import will continue.'), 'utf8')
+                                    msg = msg + '\n\n' + prompt % (currentObj.keywordGroup, currentObj.keyword)
+                                    # So the keyword already exists.  Let's continue the import anyway!  This is a minor issue.
+                                    contin = True
+                           # If we're interrupting and cancelling the import ...
+                           if not contin:
+                               # ... we need to tell the user where to intervene.
+                               if 'unicode' in wx.PlatformInfo:
+                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                   prompt = unicode(_('You need to correct this record in XML file %s.'), 'utf8')
+                                   prompt2 = unicode(_('The %s record ends at line %d.'), 'utf8')
+                               else:
+                                   prompt = _('You need to correct this record in XML file %s.')
+                                   prompt2 = _('The %s record ends at line %d.')
+                               # Add the intervention information to the error message
+                               msg = msg + '\n' +  prompt % self.XMLFile.GetValue() + '\n' + \
+                                                   prompt2 % (objectType, lineCount)
+                           # Display our carefully crafted error message to the user.
+                           errordlg = Dialogs.ErrorDialog(None, msg, includeSkipCheck=skipCheck)
+                           errordlg.ShowModal()
+                           # if skipping error messages is an option ...
+                           if skipCheck:
+                               # ... see if the Skip Error Messages checkbox has been checked
+                               skipValue = errordlg.GetSkipCheck()
+                           errordlg.Destroy()
+
                    currentObj = None
                    objectType = None
 
@@ -689,6 +925,9 @@ class XMLImport(Dialogs.GenForm):
                elif line.upper() == '<CLIPSTOP>':
                    dataType = 'ClipStop'
 
+               elif line.upper() == '<MINTRANSCRIPTWIDTH>':
+                   dataType = 'MinTranscriptWidth'
+
                elif line.upper() == '<SORTORDER>':
                    dataType = 'SortOrder'
 
@@ -755,6 +994,15 @@ class XMLImport(Dialogs.GenForm):
                    currentObj.id = self.ProcessLine(line)
                    dataType = None
 
+                   if objectType == 'Transcript':
+                       st = _('Importing Transcript records (This may be slow because of the size of Transcript records.)')
+                       st += '\n  '
+                       st += _("Transcript")
+                       st += ' '
+                       st += currentObj.id.encode(TransanaGlobal.encoding)
+                       st += '  (%d)' % currentObj.number
+                       progress.Update(52, st)
+
                elif dataType == 'Comment':
                    currentObj.comment = self.ProcessLine(line)
                    dataType = None
@@ -817,7 +1065,8 @@ class XMLImport(Dialogs.GenForm):
                                else:
                                    prompt = _('Episode Number %s cannot be found for %s record %d at line number %d.')
                                vals = (line, objectType, currentObj.number, lineCount)
-                           errordlg = Dialogs.ErrorDialog(None, prompt % vals)
+                           # This should be INFORMATION rather than ERROR!
+                           errordlg = Dialogs.InfoDialog(None, prompt % vals)
                            errordlg.ShowModal()
                            errordlg.Destroy()
                    dataType = None
@@ -872,7 +1121,8 @@ class XMLImport(Dialogs.GenForm):
                                prompt = unicode(_('Clip Number %s cannot be found for a %s record at line number %d.\n(This is due to an incomplete Clip deletion and is not a problem.)'), 'utf8')
                            else:
                                prompt = _('Clip Number %s cannot be found for a %s record at line number %d.\n(This is due to an incomplete Clip deletion and is not a problem.)')
-                           errordlg = Dialogs.ErrorDialog(None, prompt  % (line, objectType, lineCount))
+                           # This should be INFORMATION rather than ERROR!
+                           errordlg = Dialogs.InfoDialog(None, prompt  % (line, objectType, lineCount))
                            errordlg.ShowModal()
                            errordlg.Destroy()
                    elif objectType == 'AddVid':
@@ -881,6 +1131,10 @@ class XMLImport(Dialogs.GenForm):
                        currentObj.clipNum = recNumbers['Clip'][int(line)]
                             
                    dataType = None
+
+                   if objectType == 'Transcript':
+                       progress.Update(52, _('Importing Transcript records (This may be slow because of the size of Transcript records.)') + \
+                                           '\n  ' + _("Clip Transcript") + ' %d' % currentObj.clip_num)
 
                elif dataType == 'date':
                    # Importing dates can be a little tricky.  Let's trap conversion errors
@@ -1039,14 +1293,31 @@ class XMLImport(Dialogs.GenForm):
                    # Add Line Breaks to the text to match the incoming lines.
                    # Otherwise, the transcript might be messed up, with the first word of the next line
                    # being truncated.
-                   if currentObj.text <> '':
+
+                   # If this is the FIRST LINE ...
+                   if currentObj.text == '':
+                       # If we have an XML richtext specification ...
+                       if line[:10] == '<richtext ':
+                           # ... add the XML Header, which was stripped out during export because it breaks XML
+                           currentObj.text = '<?xml version="1.0" encoding="UTF-8"?>\n'
+                   else:
                        currentObj.text = currentObj.text + '\n'
                    currentObj.text = currentObj.text + line
                    # We DO NOT reset DataType here, as RTFText may be many lines long!
                    # dataType = None
 
                elif dataType == 'ParentCollectNum':
-                   currentObj.parent = recNumbers['Collection'][int(line)]
+                   # If the parent collection has already been defined, and thus has a known record number ...
+                   if int(line) in recNumbers['Collection']:
+                       # ... save the updated parent collection number
+                       currentObj.parent = recNumbers['Collection'][int(line)]
+                   # If the parent collection number is not yet knows, because the parent collection hasn't been processed yet ...
+                   else:
+                       # ... add this collection (by number) to the list of collections that need to be updated later ...
+                       collectionsToUpdate.append(currentObj.number)
+                       # ... and store the UNTRANSLATED parent collection number data to be translated later.
+                       currentObj.parent = int(line)
+                       
                    dataType = None
 
                elif dataType == 'ClipStart':
@@ -1065,6 +1336,10 @@ class XMLImport(Dialogs.GenForm):
                        if line != '0':
                            # ... save the Clip Stop time so it can be added to the Clip Transcript record too.
                            clipStartStop[(currentObj.number, 'Stop')] = int(line)
+                   dataType = None
+
+               elif dataType == 'MinTranscriptWidth':
+                   currentObj.minTranscriptWidth = int(line)
                    dataType = None
 
                elif dataType == 'SortOrder':
@@ -1088,7 +1363,8 @@ class XMLImport(Dialogs.GenForm):
                    if (self.XMLVersionNumber in ['1.1', '1.2', '1.3']):
                        currentObj.definition = currentObj.definition + self.ProcessLine(line)
                    else:
-                       currentObj.definition = currentObj.definition + line.decode(self.importEncoding)
+                       # We changed the encoding here from importEncoding to UTF-8 no matter what for version 2.50.
+                       currentObj.definition = currentObj.definition + line.decode('utf8')  # (self.importEncoding)
                    # We DO NOT reset DataType here, as Definition may be many lines long!
                    # dataType = None
 
@@ -1105,7 +1381,8 @@ class XMLImport(Dialogs.GenForm):
                    # text is added as a single line.
                    if currentObj.text != '':
                        currentObj.text = currentObj.text + '\n'
-                   currentObj.text = currentObj.text + line.decode(self.importEncoding)
+                   # NOTE:  we always use UTF8 here, not self.importEncoding!
+                   currentObj.text = currentObj.text + line.decode('utf8')
                    # We DO NOT reset DataType here, as NoteText may be many lines long!
                    # dataType = None
 
@@ -1140,8 +1417,9 @@ class XMLImport(Dialogs.GenForm):
                        errordlg.Destroy()
                     dataType = None
 
-               elif dataType == 'ConfigName': 
-                    self.FilterConfigName = DBInterface.ProcessDBDataForUTF8Encoding(line)
+               elif dataType == 'ConfigName':
+                    # Struggling to get the encoding correct.  ProcessLine(line) appears to work even in Chinese.
+                    self.FilterConfigName = self.ProcessLine(line)  # line.decode('utf8')  # DBInterface.ProcessDBDataForUTF8Encoding(line)
                     dataType = None
 
                elif dataType == 'FilterDataType': 
@@ -1179,12 +1457,16 @@ class XMLImport(Dialogs.GenForm):
                progress.Update(92, _('Updating Source Transcript Numbers in Clip Transcript records'))
                if db != None:
                    dbCursor2 = db.cursor()
-                   SQLText = 'SELECT TranscriptNum, SourceTranscriptNum, ClipNum FROM Transcripts2 WHERE ClipNum > 0'
-                   dbCursor.execute(SQLText)
+                   # Get all NEW transcript records.  We DON'T want to process transcript records that were in the database prior
+                   # to the import, as they won't be in recNumbers and thus we'd lose all SourceTranscript records!
+                   SQLText = 'SELECT TranscriptNum, SourceTranscriptNum, ClipNum FROM Transcripts2 WHERE ClipNum > 0 AND TranscriptNum > %s'
+                   dbCursor.execute(SQLText % transcriptCount)
+                   # create the SQL for updating the SourceTranscriptNum of all new transcripts
+                   SQLText = """ UPDATE Transcripts2
+                                 SET SourceTranscriptNum = %s
+                                 WHERE TranscriptNum = %s """
+                   # For each new Transcript record ...
                    for (TranscriptNum, SourceTranscriptNum, ClipNum) in dbCursor.fetchall():
-                       SQLText = """ UPDATE Transcripts2
-                                     SET SourceTranscriptNum = %s
-                                     WHERE TranscriptNum = %s """
                        # It is possible that the originating Transcript has been deleted.  If so,
                        # we need to set the TranscriptNum to 0.  We accomplish this by adding the
                        # missing Transcript Number to our recNumbers list with a value of 0
@@ -1238,7 +1520,10 @@ class XMLImport(Dialogs.GenForm):
        except:
            pass
 
-       TransanaGlobal.menuWindow.ControlObject.DataWindow.DBTab.tree.refresh_tree()
+       # If importData is NOT passed in ...
+       if self.importData == None:
+           # .. then we need to update Transana's Database Tree, which we don't need to do when importData IS passed in.
+           TransanaGlobal.menuWindow.ControlObject.DataWindow.DBTab.tree.refresh_tree()
 
        progress.Update(100)
 
@@ -1253,37 +1538,61 @@ class XMLImport(Dialogs.GenForm):
        # db.close()
 
 
-   def ProcessLine(self, txt):
-       """ Process most lines read from the XML file to apply the proper encoding, if needed. """
-       if 'unicode' in wx.PlatformInfo:
-           # If we've got a String instead of a Unicode object ...
-           if type(txt) == str:
-               # ... convert the string to Unicode using the import encoding
-               txt = unicode(txt, self.importEncoding)
-           # If we're not reading a file encoded with UTF-8 encoding, we need to ...
-           if (self.importEncoding != 'utf8'):
-               # ... and then convert it to UTF-8
-               txt = txt.encode('utf8')
-           # Now perform the UTF-8 encoding needed for the database.
-           txt = DBInterface.ProcessDBDataForUTF8Encoding(txt)
-       # Return the encoded text to the calling method
-       return(txt)
+    def ProcessLine(self, txt):
+        """ Process most lines read from the XML file to apply the proper encoding, if needed. """
+        if 'unicode' in wx.PlatformInfo:
+            # If we're not reading a file encoded with UTF-8 encoding, we need to ...
+            if (self.importEncoding != 'utf8'):
+                # ... initialize a STRING variable.  (txt is UNICODE, but the WRONG ENCODING.  Damn.)
+                s = ''
+
+                # NOTE:  We shouldn't have to do this.  I must've screwed up the encoding at some point in XMLExport.py.
+                #        In essence, we need txt.decode('utf8').decode(self.importEncoding), but that 
+                
+                # For each character in the unicode TXT string ...
+                for x in txt.decode('utf8'):
+                    # ... add the appropriate character to the string S variable
+                    s += chr(ord(x))
+
+                # Start Exception Handling.  (Japanese Filter Names weren't encoded right in 2.42, which makes this necessary.)
+                try:
+                    # Now we DECODE this using the the importEncoding selected by the user.
+                    txt = s.decode(self.importEncoding)
+                # If a UnicodeDecodeError is thrown ...
+                except UnicodeDecodeError:
+                    # .. just do a straight decode.  It's not right, but I can't figure out the right decoding,
+                    # and at least this way the filters aren't LOST, just renamed to an unreadable form.
+                    txt = txt.decode('utf8')
+
+            # If we've got a String instead of a Unicode object ...
+            elif type(txt) == str:
+                # ... convert the string to Unicode using the import encoding
+                txt = unicode(txt, self.importEncoding)
+            # Process Escaped characters (& >, <)
+            txt = self.UnEscape(txt)
+            # If we ARE using UTF-8 ....
+            if self.importEncoding == 'utf8':
+                # ... perform the UTF-8 encoding needed for the database.
+                txt = DBInterface.ProcessDBDataForUTF8Encoding(txt)
+
+        # Return the encoded text to the calling method
+        return(txt)
 
 
-   def OnBrowse(self, evt):
+    def OnBrowse(self, evt):
         """Invoked when the user activates the Browse button."""
         fs = wx.FileSelector(_("Select an XML file to import"),
-                        TransanaGlobal.configData.videoPath,
-                        "",
-                        "", 
-                        _("Transana-XML Files (*.tra)|*.tra|XML Files (*.xml)|*.xml|All files (*.*)|*.*"), 
-                        wx.OPEN | wx.FILE_MUST_EXIST)
+                             TransanaGlobal.configData.videoPath,
+                             "",
+                             "", 
+                             _("Transana-XML Files (*.tra)|*.tra|XML Files (*.xml)|*.xml|All files (*.*)|*.*"), 
+                             wx.OPEN | wx.FILE_MUST_EXIST)
         # If user didn't cancel ..
         if fs != "":
             self.XMLFile.SetValue(fs)
 
-   def CloseWindow(self, event):
-       self.Close()
+    def CloseWindow(self, event):
+        self.Close()
 
 
 # This simple derrived class let's the user drop files onto an edit box

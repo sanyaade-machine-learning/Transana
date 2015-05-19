@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2010  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2012  The Board of Regents of the University of Wisconsin System
 #
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -519,7 +519,7 @@ class UsernameandPassword(wx.Dialog):
                     dlg = Dialogs.InfoDialog(None, msg % database)
                     dlg.ShowModal()
                     dlg.Destroy()
-                elif delresult == 1:
+                if delresult in [0, 1]:
                     # If we've deleted the database, remove that database name from the list of existing databases
                     self.Databases[server]['dbList'].remove(dbName)
                     # Clear the database name from the screen control
@@ -533,6 +533,16 @@ class UsernameandPassword(wx.Dialog):
                     TransanaGlobal.configData.databaseList = self.Databases
                     # Remove the Database Name from the Configuration Record for the current database
                     TransanaGlobal.configData.database = ''
+                    # Start exception handling
+                    try:
+                        # Now remove the database Paths for this database
+                        del TransanaGlobal.configData.pathsByDB[(username, server, database)]
+                    # If an exception is raised ...
+                    except:
+                        # ... we can ignore it.
+                        pass
+                    # Save the Config changes
+                    TransanaGlobal.configData.SaveConfiguration()
             else:
                 dlg = Dialogs.ErrorDialog(None, errormsg)
                 dlg.ShowModal()

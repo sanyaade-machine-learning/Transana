@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -20,10 +20,16 @@
 
 __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>'
 
+DEBUG = False
+
 # import the Python String module
 import string
+# import the python xml-sax module
+import xml.sax
 # import wxPython
 import wx
+# import wxPython's Rich Text Ctrl module
+import wx.richtext as richtext
 # Import Transana's Clip object
 import Clip
 # import Transana's Collection Object
@@ -37,21 +43,27 @@ import Episode
 # import Transana's Filter Dialog
 import FilterDialog
 # Import Transana's Keyword object
-import Keyword
+import KeywordObject as Keyword
 # Import Transana's Miscellaneous functions
 import Misc
 # Import Transana's Note object
 import Note
+# import the Transana XML-to-RTC Import Parser
+import PyXML_RTCImportParser
 # Import Transana's Series Object
 import Series
 # Import Transana's Text Report infrastructure
 import TextReport
+# Import Transana's Constants
+import TransanaConstants
 # import Transana's Exceptions
 import TransanaExceptions
 # import Transana's Global variables
 import TransanaGlobal
 # import Transana's Transcript Object
 import Transcript
+# import Transana's Transcript Editor - Rich Text Ctrl version
+import TranscriptEditor_RTC
 
 
 class ReportGenerator(wx.Object):
@@ -148,8 +160,7 @@ class ReportGenerator(wx.Object):
 
         # Create the TextReport object, which forms the basis for text-based reports.
         self.report = TextReport.TextReport(None, title=self.title, displayMethod=self.OnDisplay,
-                                            filterMethod=self.OnFilter, helpContext="Keyword Usage Report")
-
+                                            filterMethod=self.OnFilter, helpContext="Series, Episode, Collection, and Notes Reports")
         # Define the Filter List (which will differ depending on the report type)
         self.filterList = []
         # Define the Keyword Filter List as well, which does NOT differ based on report type
@@ -181,23 +192,38 @@ class ReportGenerator(wx.Object):
 
         # Make the control writable
         reportText.SetReadOnly(False)
-        # Set the font for the Report Title
-        reportText.SetFont('Courier New', 13, 0x000000, 0xFFFFFF)
-        # Make the font Bold
-        reportText.SetBold(True)
-        # Get the style specified associated with this font
-        style = reportText.GetStyleAccessor("size:13,face:Courier New,fore:#000000,back:#ffffff,bold")
-        # Get spaces appropriate to centering the title
-        centerSpacer = self.report.GetCenterSpacer(style, self.title)
-        # Insert the spaces to center the title
-        reportText.InsertStyledText(centerSpacer)
-        # Turn on underlining now (because we don't want the spaces to be underlined)
-        reportText.SetUnderline(True)
-        # Add the Report Title
-        reportText.InsertStyledText(self.title)
-        # Turn off underlining and bold
-        reportText.SetUnderline(False)
-        reportText.SetBold(False)
+
+        # If we're using the Rich Text Ctrl ...
+        if TransanaConstants.USESRTC:
+            # ... Set the Style for the Heading
+            reportText.SetTxtStyle(fontFace='Courier New', fontSize=16, fontBold=True, fontUnderline=True)
+            # Set report margins, the left and right margins to 0.  The RichTextPrinting infrastructure handles that!
+            # Center the title, and add spacing after.
+            reportText.SetTxtStyle(parLeftIndent = 0, parRightIndent = 0, parAlign=wx.TEXT_ALIGNMENT_CENTER,
+                                   parSpacingBefore = 0, parSpacingAfter = 12)
+            # Add the Title to the page
+            reportText.WriteText(self.title + '\n')
+            # End the paragraph
+#            reportText.Newline()
+        # If we're using the Styled Text Ctrl ...
+        else:
+            # Set the font for the Report Title
+            reportText.SetFont('Courier New', 13, 0x000000, 0xFFFFFF)
+            # Make the font Bold
+            reportText.SetBold(True)
+            # Get the style specified associated with this font
+            style = reportText.GetStyleAccessor("size:13,face:Courier New,fore:#000000,back:#ffffff,bold")
+            # Get spaces appropriate to centering the title
+            centerSpacer = self.report.GetCenterSpacer(style, self.title)
+            # Insert the spaces to center the title
+            reportText.InsertStyledText(centerSpacer)
+            # Turn on underlining now (because we don't want the spaces to be underlined)
+            reportText.SetUnderline(True)
+            # Add the Report Title
+            reportText.InsertStyledText(self.title)
+            # Turn off underlining and bold
+            reportText.SetUnderline(False)
+            reportText.SetBold(False)
 
         # If a Collection is passed in ...
         if self.collection != None:
@@ -268,8 +294,8 @@ class ReportGenerator(wx.Object):
             majorList = DBInterface.list_of_clips_by_episode(epObj.number)
             # Put all the Keywords for the Clips in the majorList in the minorList.  Iterate through the Major List ...
             for clipRecord in majorList:
-                # ... load the Clip ...
-                clipObj = Clip.Clip(clipRecord['ClipID'], clipRecord['CollectID'], clipRecord['ParentCollectNum'])
+                # ... load the Clip ....  We can skip loading the Clip Transcript to save load time
+                clipObj = Clip.Clip(clipRecord['ClipID'], clipRecord['CollectID'], clipRecord['ParentCollectNum'], skipText=True)
                 # ... Get the Clip's Keywords and put them in the Minor List keyed to the Clip data
                 minorList[(clipRecord['ClipID'], clipRecord['CollectID'], clipRecord['ParentCollectNum'])] = DBInterface.list_of_keywords(Clip = clipObj.number)
                 # If we're populating the Filter Lists ...
@@ -453,34 +479,63 @@ class ReportGenerator(wx.Object):
                             # ... add them to the Keyword Filter List
                             self.keywordFilterList.append((kwg, kw, True))
 
-        # If a subtitle is defined ...
-        if self.subtitle != '':
-            # ... set the font for the subtitle ...
-            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-            # ... get the style specifier for that font ...
-            style = reportText.GetStyleAccessor("size:10,face:Courier New,fore:#000000,back:#ffffff")
-            # ... get the spaces needed to center the subtitle ...
-            centerSpacer = self.report.GetCenterSpacer(style, self.subtitle)
-            # ... and insert the spacer and the subtitle.
-            reportText.InsertStyledText('\n' + centerSpacer + self.subtitle)
-        if self.configName != '':
-            # ...  add a subtitle
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_("Filter Configuration: %s"), 'utf8')
-            else:
-                prompt = _("Filter Configuration: %s")
-            self.configLine = prompt % self.configName
-            # ... set the font for the subtitle ...
-            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-            # ... get the style specifier for that font ...
-            style = reportText.GetStyleAccessor("size:10,face:Courier New,fore:#000000,back:#ffffff")
-            # ... get the spaces needed to center the subtitle ...
-            centerSpacer = self.report.GetCenterSpacer(style, self.configLine)
-            # ... and insert the spacer and the subtitle.
-            reportText.InsertStyledText('\n' + centerSpacer + self.configLine)
-        # Skip a couple of lines.
-        reportText.InsertStyledText('\n\n')
+        # ...  add a subtitle
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("Filter Configuration: %s"), 'utf8')
+        else:
+            prompt = _("Filter Configuration: %s")
+
+        # There's a problem in wxPython 2.8.12.0 on Windows.  If you use too many format changes in too
+        # long a document, you run out of Windows GDI resources.  This problem can be ameliorated (but not
+        # totally eliminated) by reducing the number of times BOLD text is used.
+        #
+        # So if we're on Windows and have more than 350 elements in the report, DON'T use BOLD as much!
+        # This flag is the signal.
+        useBold = True   # not ((len(majorList) > 350) and  ('wxMSW' in wx.PlatformInfo))
+
+        # If we're using the Rich Text Ctrl ...
+        if TransanaConstants.USESRTC:
+            # If a subtitle is defined ...
+            if self.subtitle != '':
+                # ... set the subtitle font
+                reportText.SetTxtStyle(fontSize=12, fontBold=False, fontUnderline=False, parSpacingBefore = 0, parSpacingAfter = 0)
+                # Add the subtitle to the page
+                reportText.WriteText(self.subtitle + '\n')
+                # Finish the paragraph
+#                reportText.Newline()
+            if self.configName != '':
+                self.configLine = prompt % self.configName
+                # ... set the subtitle font
+                reportText.SetTxtStyle(fontSize=10, fontBold=False, fontUnderline=False, parSpacingBefore = 0, parSpacingAfter = 0)
+                # Add the subtitle to the page
+                reportText.WriteText(self.configLine + '\n')
+                # Finish the paragraph
+#                reportText.Newline()
+        # If we're using the Styled Text Ctrl ...
+        else:
+            # If a subtitle is defined ...
+            if self.subtitle != '':
+                # ... set the font for the subtitle ...
+                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                # ... get the style specifier for that font ...
+                style = reportText.GetStyleAccessor("size:10,face:Courier New,fore:#000000,back:#ffffff")
+                # ... get the spaces needed to center the subtitle ...
+                centerSpacer = self.report.GetCenterSpacer(style, self.subtitle)
+                # ... and insert the spacer and the subtitle.
+                reportText.InsertStyledText('\n' + centerSpacer + self.subtitle)
+            if self.configName != '':
+                self.configLine = prompt % self.configName
+                # ... set the font for the subtitle ...
+                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                # ... get the style specifier for that font ...
+                style = reportText.GetStyleAccessor("size:10,face:Courier New,fore:#000000,back:#ffffff")
+                # ... get the spaces needed to center the subtitle ...
+                centerSpacer = self.report.GetCenterSpacer(style, self.configLine)
+                # ... and insert the spacer and the subtitle.
+                reportText.InsertStyledText('\n' + centerSpacer + self.configLine)
+            # Skip a couple of lines.
+            reportText.InsertStyledText('\n\n')
 
         # Initialize the initial data structure that will be turned into the report
         self.data = []
@@ -507,6 +562,13 @@ class ReportGenerator(wx.Object):
             else:
                 # Initialize workingCollection to an empty string, as we won't be using it.
                 workingCollection = ''
+
+            # If there are 30 or more items in the list ...
+            if (self.collection != None) and (len(majorList) >= 30):
+                # ... create a Progress Dialog.  (The PARENT is needed to prevent the report being hidden
+                #     behind Transana!)
+                progress = wx.ProgressDialog(self.title, _('Assembling report contents'), parent=self.report)
+
             # Iterate through the major list
             for (groupNo, group, parentCollNo) in majorList:
                 # If a Collection Name is passed in ...
@@ -536,121 +598,260 @@ class ReportGenerator(wx.Object):
                         # there's no point showing collection headers if there aren't different collections!), and
                         # see if the new collection is different from the collection of the last clip displayed.
                         if (workingCollection != '') and self.showNested and (workingCollection[0] != tempColl.GetNodeString()):
-                            # If so, print Collection-specific information.
-                            # Set the font for the title
-                            reportText.SetFont('Courier New', 12, 0x000000, 0xFFFFFF)
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Print the header
-                            reportText.InsertStyledText(_('Collection: '))
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # print the collection data
-                            reportText.InsertStyledText('%s\n' % tempColl.GetNodeString())
+                            # If we're using the Rich Text Ctrl ...
+                            if TransanaConstants.USESRTC:
 
-                            # If we are supposed to show Comments ...
-                            if self.showComments:
-                                # ... if the collection has a comment ...
-                                if tempColl.comment != u'':
-                                    # Set the font for the comments
-                                    reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                                    # Turn bold on.
-                                    reportText.SetBold(True)
-                                    # Add the header to the report
-                                    reportText.InsertStyledText(_('Collection Comment:') + '\n')
-                                    # Turn bold off.
-                                    reportText.SetBold(False)
-                                    # Add the content of the Collection Comment to the report
-                                    reportText.InsertStyledText('%s\n' % tempColl.comment)
+                                reportText.SetTxtStyle(fontSize=12, fontBold=useBold, fontUnderline=False,
+                                                       parAlign = wx.TEXT_ALIGNMENT_LEFT,
+                                                       parLeftIndent = 0,
+                                                       parSpacingBefore = 24, parSpacingAfter = 0)
+                                reportText.WriteText(_('Collection: '))
+                                reportText.SetTxtStyle(fontBold=False)
+                                reportText.WriteText('%s\n' % tempColl.GetNodeString())
+#                                reportText.Newline()
+                                
+                                # If we are supposed to show Comments ...
+                                if self.showComments:
+                                    # ... if the collection has a comment ...
+                                    if tempColl.comment != u'':
+                                        # Set the font for the comments
+                                        reportText.SetTxtStyle(fontSize=10, fontBold=useBold, parLeftIndent=63, parRightIndent=63,
+                                                               parSpacingBefore = 0, parSpacingAfter = 0)
+                                        # Add the header to the report
+                                        reportText.WriteText(_('Collection Comment:\n'))
+#                                        reportText.Newline()
+                                        reportText.SetTxtStyle(fontBold=False, parLeftIndent=127,
+                                                               parSpacingBefore = 0, parSpacingAfter = 0)
+                                        # Add the content of the Collection Comment to the report
+                                        reportText.WriteText('%s\n' % tempColl.comment)
+#                                        reportText.Newline()
 
-                            # If we're supposed to show Collection Notes ...
-                            if self.showCollectionNotes:
-                                # ... get a list of notes, including their object numbers
-                                notesList = DBInterface.list_of_notes(Collection=tempColl.number, includeNumber=True)
-                                # If there are notes for this Clip ...
-                                if (len(notesList) > 0):
-                                    # Set the font for the Notes
-                                    reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                                    # Turn bold on.
-                                    reportText.SetBold(True)
-                                    # Add the header to the report
-                                    reportText.InsertStyledText(_('Collection Notes:') + '\n')
-                                    # Turn bold off.
-                                    reportText.SetBold(False)
-                                    # Iterate throught the list of notes ...
-                                    for note in notesList:
-                                        # ... load each note ...
-                                        tempNote = Note.Note(note[0])
+                                # If we're supposed to show Collection Notes ...
+                                if self.showCollectionNotes:
+                                    # ... get a list of notes, including their object numbers
+                                    notesList = DBInterface.list_of_notes(Collection=tempColl.number, includeNumber=True)
+                                    # If there are notes for this Clip ...
+                                    if (len(notesList) > 0):
+                                        # Set the font for the Notes
+                                        reportText.SetTxtStyle(fontSize=10, fontBold=useBold,
+                                                               parLeftIndent=63, parRightIndent=63,
+                                                               parSpacingBefore = 0, parSpacingAfter=0)
+                                        # Add the header to the report
+                                        reportText.WriteText(_('Collection Notes:\n'))
+#                                        reportText.Newline()
+                                        # Iterate throught the list of notes ...
+                                        for note in notesList:
+                                            # ... load each note ...
+                                            tempNote = Note.Note(note[0])
+                                            reportText.SetTxtStyle(parLeftIndent=127, parSpacingBefore = 0, parSpacingAfter = 0)
+                                            # Add the note ID to the report
+                                            reportText.WriteText('%s\n' % tempNote.id)
+#                                            reportText.Newline()
+                                            # Turn bold off.
+                                            reportText.SetTxtStyle(fontBold=False, parLeftIndent=190)
+                                            # Add the note text to the report
+                                            reportText.WriteText('%s\n' % tempNote.text)
+#                                            reportText.Newline()
+                                # Update the workingCollection variable with the data for the current collection so we'll
+                                # be able to tell when the collection changes
+                                workingCollection = (tempColl.GetNodeString(), tempColl.number)
+                            
+                            # If we're using the Styled Text Ctrl ...
+                            else:
+                                # If so, print Collection-specific information.
+                                # Set the font for the title
+                                reportText.SetFont('Courier New', 12, 0x000000, 0xFFFFFF)
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Print the header
+                                reportText.InsertStyledText(_('Collection: '))
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # print the collection data
+                                reportText.InsertStyledText('%s\n' % tempColl.GetNodeString())
+
+                                # If we are supposed to show Comments ...
+                                if self.showComments:
+                                    # ... if the collection has a comment ...
+                                    if tempColl.comment != u'':
+                                        # Set the font for the comments
+                                        reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
                                         # Turn bold on.
                                         reportText.SetBold(True)
-                                        # Add the note ID to the report
-                                        reportText.InsertStyledText('%s\n' % tempNote.id)
+                                        # Add the header to the report
+                                        reportText.InsertStyledText(_('Collection Comment:') + '\n')
                                         # Turn bold off.
                                         reportText.SetBold(False)
-                                        # Add the note text to the report
-                                        reportText.InsertStyledText('%s\n' % tempNote.text)
-                            # Update the workingCollection variable with the data for the current collection so we'll
-                            # be able to tell when the collection changes
-                            workingCollection = (tempColl.GetNodeString(), tempColl.number)
-                            # Add a blank line to the report
-                            reportText.InsertStyledText('\n')
+                                        # Add the content of the Collection Comment to the report
+                                        reportText.InsertStyledText('%s\n' % tempColl.comment)
+
+                                # If we're supposed to show Collection Notes ...
+                                if self.showCollectionNotes:
+                                    # ... get a list of notes, including their object numbers
+                                    notesList = DBInterface.list_of_notes(Collection=tempColl.number, includeNumber=True)
+                                    # If there are notes for this Clip ...
+                                    if (len(notesList) > 0):
+                                        # Set the font for the Notes
+                                        reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                                        # Turn bold on.
+                                        reportText.SetBold(True)
+                                        # Add the header to the report
+                                        reportText.InsertStyledText(_('Collection Notes:') + '\n')
+                                        # Turn bold off.
+                                        reportText.SetBold(False)
+                                        # Iterate throught the list of notes ...
+                                        for note in notesList:
+                                            # ... load each note ...
+                                            tempNote = Note.Note(note[0])
+                                            # Turn bold on.
+                                            reportText.SetBold(True)
+                                            # Add the note ID to the report
+                                            reportText.InsertStyledText('%s\n' % tempNote.id)
+                                            # Turn bold off.
+                                            reportText.SetBold(False)
+                                            # Add the note text to the report
+                                            reportText.InsertStyledText('%s\n' % tempNote.text)
+                                # Update the workingCollection variable with the data for the current collection so we'll
+                                # be able to tell when the collection changes
+                                workingCollection = (tempColl.GetNodeString(), tempColl.number)
+                                # Add a blank line to the report
+                                reportText.InsertStyledText('\n')
+                            # We need to indent EVERYTHING else to adjust for these headers
+                            baseIndent = 63
+                        else:
+                            # We DON'T need to indent later paragraphs
+                            baseIndent = 63
+                    else:
+                        # We DON'T need to indent later paragraphs
+                        baseIndent = 0
                             
-                    # First, set the font for the heading.
-                    reportText.SetFont('Courier New', 12, 0x000000, 0xFFFFFF)
-                    # ... and make it bold.
-                    reportText.SetBold(True)
-                    # Add the group name to the report
-                    reportText.InsertStyledText('%s %s\n' % (majorLabel, group))
-                    # Turn bold off
-                    reportText.SetBold(False)
-                    # Set the font for the Clip Data
-                    reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                    # If we're using the Rich Text Ctrl ...
+                    if TransanaConstants.USESRTC:
+                        # ... Set the formatting for the report, including turning off previous formatting
+                        reportText.SetTxtStyle(fontSize = 12, fontBold = True, fontUnderline = False,
+                                               parAlign = wx.TEXT_ALIGNMENT_LEFT,
+                                               parLeftIndent = baseIndent, parRightIndent = 0,
+                                               parSpacingBefore = 36, parSpacingAfter = 0)
+
+                        if DEBUG:
+                            print "%s, %s (majorLabel, group) l=%d (baseindent), r=0, b=36, a=-36" % (majorLabel, group, baseIndent)
+                        
+                        # Add the group name to the report
+                        reportText.WriteText('%s %s\n' % (majorLabel, group))
+                        # End the paragraph
+#                        reportText.Newline()
+
+                        # ... Set the formatting for the report, including turning off previous formatting
+                        reportText.SetTxtStyle(fontSize = 10, fontBold = useBold,
+                                               parLeftIndent = baseIndent + 63, parRightIndent = 63,
+                                               parSpacingBefore = 0, parSpacingAfter = 0)
+                    # If we're using the Styled Text Ctrl ...
+                    else:
+                        # First, set the font for the heading.
+                        reportText.SetFont('Courier New', 12, 0x000000, 0xFFFFFF)
+                        # ... and make it bold.
+                        reportText.SetBold(True)
+                        # Add the group name to the report
+                        reportText.InsertStyledText('%s %s\n' % (majorLabel, group))
+                        # Turn bold off
+                        reportText.SetBold(False)
+                        # Set the font for the Clip Data
+                        reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+
                     # If we have Collection-based data, we add some Clip-specific data
                     if (self.collection != None) or ((self.searchColl != None) and (self.treeCtrl != None)):
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the header to the report
-                        reportText.InsertStyledText(_('Collection:'))
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the data to the report, the full Collection path in this case
-                        reportText.InsertStyledText('  %s\n' % (tempColl.GetNodeString(),))
-                        # Get the full Clip data
-                        clipObj = Clip.Clip(groupNo)
-                        
-                        # If we're supposed to show the Media File Name ...
-                        if self.showFile:
+                        # If we're using the Rich Text Ctrl ...
+                        if TransanaConstants.USESRTC:
+                            # Add the header to the report
+                            reportText.WriteText(_('Collection:'))
+                            reportText.SetTxtStyle(fontBold = False)
+                            # Add the data to the report, the full Collection path in this case
+                            reportText.WriteText('  %s\n' % (tempColl.GetNodeString(),))
+#                            reportText.Newline()
+                            # Get the full Clip data
+                            clipObj = Clip.Clip(groupNo)
+                            # If we're supposed to show the Media File Name ...
+                            if self.showFile:
+                                # Turn bold on.
+                                reportText.SetTxtStyle(fontBold = useBold)
+                                # Add the header to the report
+                                reportText.WriteText(_('File:'))
+                                # Turn bold off.
+                                reportText.SetTxtStyle(fontBold = False)
+                                # Add the data to the report, the file name in this case
+                                reportText.WriteText(_('  %s\n') % clipObj.media_filename)
+#                                reportText.Newline()
+                                # Add Additional Media File info
+                                for mediaFile in clipObj.additional_media_files:
+                                    reportText.WriteText(_('       %s\n') % mediaFile['filename'])
+#                                    reportText.Newline()
+                                
+                            # If we're supposed to show the Clip Time data ...
+                            if self.showTime:
+                                # Turn bold on.
+                                reportText.SetTxtStyle(fontBold = useBold, parSpacingAfter = 0)
+                                # Add the header to the report
+                                reportText.WriteText(_('Time:'))
+                                # Turn bold off.
+                                reportText.SetTxtStyle(fontBold = False)
+                                # Add the data to the report, the Clip start and stop times in this case
+                                reportText.WriteText('  %s - %s   (' % (Misc.time_in_ms_to_str(clipObj.clip_start), Misc.time_in_ms_to_str(clipObj.clip_stop)))
+                                # Turn bold on.
+                                reportText.SetTxtStyle(fontBold = useBold)
+                                # Add the header to the report
+                                reportText.WriteText(_('Length:'))
+                                # Turn bold off.
+                                reportText.SetTxtStyle(fontBold = False)
+                                # Add the data to the report, the Clip Length in this case
+                                reportText.WriteText('  %s)\n' % (Misc.time_in_ms_to_str(clipObj.clip_stop - clipObj.clip_start)))
+#                                reportText.Newline()
+
+                        # If we're using the Styled Text Ctrl ...
+                        else:
                             # Turn bold on.
                             reportText.SetBold(True)
                             # Add the header to the report
-                            reportText.InsertStyledText(_('File:'))
+                            reportText.InsertStyledText(_('Collection:'))
                             # Turn bold off.
                             reportText.SetBold(False)
-                            # Add the data to the report, the file name in this case
-                            reportText.InsertStyledText(_('  %s\n') % clipObj.media_filename)
-                            # Add Additional Media File info
-                            for mediaFile in clipObj.additional_media_files:
-                                reportText.InsertStyledText(_('       %s\n') % mediaFile['filename'])
+                            # Add the data to the report, the full Collection path in this case
+                            reportText.InsertStyledText('  %s\n' % (tempColl.GetNodeString(),))
+                            # Get the full Clip data
+                            clipObj = Clip.Clip(groupNo)
                             
-                        # If we're supposed to show the Clip Time data ...
-                        if self.showTime:
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Time:'))
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # Add the data to the report, the Clip start and stop times in this case
-                            reportText.InsertStyledText('  %s - %s   (' % (Misc.time_in_ms_to_str(clipObj.clip_start), Misc.time_in_ms_to_str(clipObj.clip_stop)))
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Length:'))
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # Add the data to the report, the Clip Length in this case
-                            reportText.InsertStyledText('  %s)\n' % (Misc.time_in_ms_to_str(clipObj.clip_stop - clipObj.clip_start)))
-                            
+                            # If we're supposed to show the Media File Name ...
+                            if self.showFile:
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('File:'))
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the data to the report, the file name in this case
+                                reportText.InsertStyledText(_('  %s\n') % clipObj.media_filename)
+                                # Add Additional Media File info
+                                for mediaFile in clipObj.additional_media_files:
+                                    reportText.InsertStyledText(_('       %s\n') % mediaFile['filename'])
+                                
+                            # If we're supposed to show the Clip Time data ...
+                            if self.showTime:
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Time:'))
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the data to the report, the Clip start and stop times in this case
+                                reportText.InsertStyledText('  %s - %s   (' % (Misc.time_in_ms_to_str(clipObj.clip_start), Misc.time_in_ms_to_str(clipObj.clip_stop)))
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Length:'))
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the data to the report, the Clip Length in this case
+                                reportText.InsertStyledText('  %s)\n' % (Misc.time_in_ms_to_str(clipObj.clip_stop - clipObj.clip_start)))
+                                
                         # Increment the Clip Counter
                         self.clipCount += 1
                         # Add the Clip's length to the Clip Total Time accumulator
@@ -658,8 +859,14 @@ class ReportGenerator(wx.Object):
                         
                         # If we are supposed to show Clip Transcripts, and the clip HAS a transcript ...
                         if self.showTranscripts:
-                            # Skip a line
-                            reportText.InsertStyledText('\n')
+                            # If we're using the Rich Text Ctrl ...
+                            if TransanaConstants.USESRTC:
+                                reportText.SetTxtStyle(fontSize = 10, parSpacingAfter = 0)
+                            # If we're using the Styled Text Ctrl ...
+                            else:
+                                # Set the font for the clip transcript headers
+                                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+
                             # Iterate through the clips transcripts
                             for tr in clipObj.transcripts:
                                 # Default the Episode Transcript to None in case the load fails
@@ -669,13 +876,627 @@ class ReportGenerator(wx.Object):
                                     # If the Clip Object has a defined Source Transcript ...
                                     if tr.source_transcript > 0:
                                         # ... try to load that source transcript
-                                        episodeTranscriptObj = Transcript.Transcript(tr.source_transcript)
+                                        # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+                                        episodeTranscriptObj = Transcript.Transcript(tr.source_transcript, skipText=True)
                                 # if the record is not found (orphaned Clip)
                                 except TransanaExceptions.RecordNotFoundError:
                                     # We don't need to do anything.
                                     pass
 
-                                # Set the font for the clip transcript headers
+                                # If an Episode Transcript was found ...
+                                if episodeTranscriptObj != None:
+                                    # If we're using the Rich Text Ctrl ...
+                                    if TransanaConstants.USESRTC:
+                                        # Turn bold on.
+                                        reportText.SetTxtStyle(fontSize = 10, fontFace = 'Courier New', fontBold = useBold,
+                                                               parLeftIndent = baseIndent + 63, parRightIndent = 0,
+                                                               parSpacingBefore = 0, parSpacingAfter = 0)
+                                        # Add the header to the report
+                                        reportText.WriteText(_('Episode Transcript:'))
+                                        # Turn bold off.
+                                        reportText.SetTxtStyle(fontBold = False)
+                                        # Add the data to the report, the Episode Transcript ID in this case
+                                        reportText.WriteText('  %s\n' % (episodeTranscriptObj.id,))
+#                                        reportText.Newline()
+                                    # If we're using the Styled Text Ctrl ...
+                                    else:
+                                        # Turn bold on.
+                                        reportText.SetBold(True)
+                                        # Add the header to the report
+                                        reportText.InsertStyledText(_('Episode Transcript:'))
+                                        # Turn bold off.
+                                        reportText.SetBold(False)
+                                        # Add the data to the report, the Episode Transcript ID in this case
+                                        reportText.InsertStyledText('  %s\n' % (episodeTranscriptObj.id,))
+                                # if no Episode Transcript is found, we have an orphan.
+                                else:
+                                    # If we're using the Rich Text Ctrl ...
+                                    if TransanaConstants.USESRTC:
+                                        # Turn bold on.
+                                        reportText.SetTxtStyle(fontBold =useBold)
+                                        # Add the header to the report
+                                        reportText.WriteText(_('Episode Transcript:'))
+                                        # Turn bold off.
+                                        reportText.SetTxtStyle(fontBold = False)
+                                        # Add the data to the report, the Episode Transcript ID in this case
+                                        reportText.WriteText('  %s\n' % _('The Episode Transcript has been deleted.'))
+#                                        reportText.Newline()
+                                    # If we're using the Styled Text Ctrl ...
+                                    else:
+                                        # Turn bold on.
+                                        reportText.SetBold(True)
+                                        # Add the header to the report
+                                        reportText.InsertStyledText(_('Episode Transcript:'))
+                                        # Turn bold off.
+                                        reportText.SetBold(False)
+                                        # Add the data to the report, the lack of an Episode Transcript in this case
+                                        reportText.InsertStyledText('  %s\n' % _('The Episode Transcript has been deleted.'))
+
+                                # If we're using the Rich Text Ctrl ...
+                                if TransanaConstants.USESRTC:
+                                    # Turn bold on.
+                                    reportText.SetTxtStyle(fontBold = useBold)
+                                    # Add the header to the report
+                                    reportText.WriteText(_('Clip Transcript:\n'))
+#                                    reportText.Newline()
+
+                                    # Turn bold off.
+                                    reportText.SetTxtStyle(fontBold = False)
+                                    # Add the Transcript to the report
+                                    # Clip Transcripts could be in the old RTF format, or they could have been
+                                    # updated to the new XML format.  These require different processing.
+
+                                    # If we have a Rich Text Format document ...
+                                    if tr.text[:5].lower() == u'{\\rtf':
+                                        # Create a temporary RTC control
+                                        tmpTxtCtrl = TranscriptEditor_RTC.TranscriptEditor(reportText.parent, pos=(-20, -20), suppressGDIWarning = True)
+                                        # ... import the RTF data into the report text
+                                        tmpTxtCtrl.LoadRTFData(tr.text, clearDoc=True)
+                                        # Pull the data back out of the control as XML
+                                        tmpText = tmpTxtCtrl.GetFormattedSelection('XML')
+                                        # Strip the time codes for the report
+                                        tmpText = reportText.StripTimeCodes(tmpText)
+
+                                        # Create the Transana XML to RTC Import Parser.  This is needed so that we can
+                                        # pull XML transcripts into the existing RTC without resetting the contents of
+                                        # the reportText RTC, which wipes out all accumulated Report data.
+                                        # Pass the reportText RTC and the desired additional margins in.
+                                        handler = PyXML_RTCImportParser.XMLToRTCHandler(reportText, (127 + baseIndent, 127))
+                                        # Parse the transcript text, adding it to the reportText RTC
+                                        xml.sax.parseString(tmpText, handler)
+
+                                        del(handler)
+
+                                        # Destroy the temporary RTC control
+                                        tmpTxtCtrl.Destroy()
+
+                                    # If we have an XML document ...
+                                    elif tr.text[:5].lower() == u'<?xml':
+                                        # Strip the time codes for the report
+                                        tr.text = reportText.StripTimeCodes(tr.text)
+
+                                        # Create the Transana XML to RTC Import Parser.  This is needed so that we can
+                                        # pull XML transcripts into the existing RTC without resetting the contents of
+                                        # the reportText RTC, which wipes out all accumulated Report data.
+                                        # Pass the reportText RTC and the desired additional margins in.
+                                        handler = PyXML_RTCImportParser.XMLToRTCHandler(reportText, (127 + baseIndent, 127))
+                                        # Parse the transcript text, adding it to the reportText RTC
+                                        xml.sax.parseString(tr.text, handler)
+
+                                    # If we have a transcript that is neither RTF nor XML (shouldn't happen!)
+                                    else:
+                                        # ... then just import it directly.  Treat it as plain text.
+                                        reportText.WriteText(tr.text)
+                                # If we're using the Styled Text Ctrl ...
+                                else:
+                                    # Turn bold on.
+                                    reportText.SetBold(True)
+                                    # Add the header to the report
+                                    reportText.InsertStyledText(_('Clip Transcript:') + '\n')
+
+                                    # Turn bold off.
+                                    reportText.SetBold(False)
+                                    # Add the Transcript to the report
+                                    reportText.InsertRTFText(tr.text)
+                                    reportText.InsertStyledText('\n')
+
+                        # If the list has 30 or more items ...
+                        if (self.collection != None) and (len(majorList) >= 30):
+                            # ... update the progress bar
+                            progress.Update(int(float(self.clipCount) / float(len(majorList)) * 100))
+                            
+                    # If we have a Series Report ...
+                    else:
+                        # Get the full Episode data
+                        episodeObj = Episode.Episode(groupNo)
+                        # If we're supposed to show the Media File Name ...
+                        if self.showFile:
+                            # If we're using the Rich Text Ctrl ...
+                            if TransanaConstants.USESRTC:
+                                # Turn bold on.
+                                reportText.SetTxtStyle(fontBold = True, parSpacingAfter = 0)
+                                # Add the header to the report
+                                reportText.WriteText(_('File:'))
+                                # Turn bold off.
+                                reportText.SetTxtStyle(fontBold = False)
+                                # Add the data to the report, the file name in this case
+                                reportText.WriteText(_('  %s\n') % episodeObj.media_filename)
+#                                reportText.Newline()
+                                # Add Additional Media File info
+                                for mediaFile in episodeObj.additional_media_files:
+                                    reportText.WriteText(_('       %s\n') % mediaFile['filename'])
+#                                    reportText.Newline()
+                            # If we're using the Styled Text Ctrl ...
+                            else:
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('File:'))
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the data to the report, the file name in this case
+                                reportText.InsertStyledText(_('  %s\n') % episodeObj.media_filename)
+                                # Add Additional Media File info
+                                for mediaFile in episodeObj.additional_media_files:
+                                    reportText.InsertStyledText(_('       %s\n') % mediaFile['filename'])
+
+                        # If we're supposed to show the Episode Time data ...
+                        if self.showTime and (episodeObj.tape_length > 0):
+                            # If we're using the Rich Text Ctrl ...
+                            if TransanaConstants.USESRTC:
+                                # Turn bold on.
+                                reportText.SetTxtStyle(fontBold = True, parSpacingAfter = 0)
+                                # Add the header to the report
+                                reportText.WriteText(_('Length:'))
+                                # Turn bold off.
+                                reportText.SetTxtStyle(fontBold = False)
+                                # Add the data to the report, the Episode Length in this case
+                                reportText.WriteText('  %s\n' % (Misc.time_in_ms_to_str(episodeObj.tape_length)))
+#                                reportText.Newline()
+#                                reportText.SetTxtStyle(parSpacingAfter = 0)
+
+                            # If we're using the Styled Text Ctrl ...
+                            else:
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Length:'))
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the data to the report, the Episode Length in this case
+                                reportText.InsertStyledText('  %s\n' % (Misc.time_in_ms_to_str(episodeObj.tape_length)))
+                            # Add the Episode's length to the Episode Total Time accumulator (Yeah, we're using clipTotalTime)
+                            self.clipTotalTime += episodeObj.tape_length
+                        # Increment the Episode Counter (Yeah, we're using clipCount)
+                        self.clipCount += 1
+
+                    # If we're using the Rich Text Ctrl ...
+                    if TransanaConstants.USESRTC:
+                        # Reset the font.  It could have been contaminated by the Clip Transcript
+                        reportText.SetTxtStyle(fontFace='Courier New', fontSize = 10, fontColor = wx.Colour(0, 0, 0),
+                                               fontBgColor = wx.Colour(255, 255, 255), fontBold = False, fontItalic = False,
+                                               fontUnderline = False)
+                        reportText.SetTxtStyle(parAlign = wx.TEXT_ALIGNMENT_LEFT,
+                                               parLineSpacing = richtext.TEXT_ATTR_LINE_SPACING_NORMAL,
+                                               parLeftIndent = 0,
+                                               parRightIndent = 0,
+                                               parSpacingBefore = 0,
+                                               parSpacingAfter = 0,
+                                               parTabs = [])
+
+                        if DEBUG:
+                            print "RESET all FONT and PARAGRAPH settings"
+
+                    # if we are supposed to show Keywords ...
+                    if self.showKeywords:
+
+                        # If we're using the Rich Text Ctrl ...
+                        if TransanaConstants.USESRTC:
+                            # If there are keywords in the list ... (even if they might all get filtered out ...)
+                            if len(minorList[groupNo]) > 0:
+                                # Turn bold on.
+                                reportText.SetTxtStyle(fontBold = useBold, parLeftIndent=baseIndent + 63, parRightIndent = 0,
+                                                       parSpacingAfter = 0)
+                                # Add the header to the report
+                                if self.seriesName != None:
+                                    reportText.WriteText(_('Episode Keywords:'))
+                                else:
+                                    reportText.WriteText(_('Clip Keywords:'))
+                                # Turn bold off.
+                                reportText.SetTxtStyle(fontBold = False)
+                                # Finish the Line
+                                reportText.WriteText('\n')
+#                                reportText.Newline()
+                                # Set formatting for Keyword lines
+                                reportText.SetTxtStyle(parLeftIndent = baseIndent + 127, parRightIndent = 0, parSpacingAfter = 0)
+                        # If we're using the Styled Text Ctrl ...
+                        else:
+                            # Set the font for the Keywords
+                            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                            # Skip a line
+                            reportText.InsertStyledText('\n')
+                            # If there are keywords in the list ... (even if they might all get filtered out ...)
+                            if len(minorList[groupNo]) > 0:
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                if self.seriesName != None:
+                                    reportText.InsertStyledText(_('Episode Keywords:') + '\n')
+                                else:
+                                    reportText.InsertStyledText(_('Clip Keywords:') + '\n')
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                        # Iterate through the list of Keywords for the group
+                        for (keywordGroup, keyword, example) in minorList[groupNo]:
+                            # See if the keyword should be included, based on the Keyword Filter List
+                            if (keywordGroup, keyword, True) in self.keywordFilterList:
+                                # If we're using the Rich Text Ctrl ...
+                                if TransanaConstants.USESRTC:
+                                    # Add the Keyword to the report
+                                    reportText.WriteText('%s : %s\n' % (keywordGroup, keyword))
+#                                    reportText.Newline()
+                                # If we're using the Styled Text Ctrl ...
+                                else:
+                                    # Add the Keyword to the report
+                                    reportText.InsertStyledText('  %s : %s\n' % (keywordGroup, keyword))
+                                # Add this Keyword to the Keyword Counts
+                                if keywordCounts.has_key('%s : %s' % (keywordGroup, keyword)):
+                                    keywordCounts['%s : %s' % (keywordGroup, keyword)] += 1
+                                    if (self.episodeName != None) or (self.collection != None) or (self.searchColl != None):
+                                        keywordTimes['%s : %s' % (keywordGroup, keyword)] += clipObj.clip_stop - clipObj.clip_start
+                                else:
+                                    keywordCounts['%s : %s' % (keywordGroup, keyword)] = 1
+                                    if (self.episodeName != None) or (self.collection != None) or (self.searchColl != None):
+                                        keywordTimes['%s : %s' % (keywordGroup, keyword)] = clipObj.clip_stop - clipObj.clip_start
+                                    
+                    # if we are supposed to show Comments ...
+                    if self.showComments:
+                        # If there are keywords in the list ... (even if they might all get filtered out ...)
+                        if clipObj.comment != u'':
+                            # If we're using the Rich Text Ctrl ...
+                            if TransanaConstants.USESRTC:
+                                # Set the font for the Comment
+                                reportText.SetTxtStyle(fontSize = 10, fontBold = useBold,
+                                                       parLeftIndent = baseIndent + 63, parRightIndent = 0,
+                                                       parSpacingBefore = 0, parSpacingAfter = 0)
+                                # Add the header to the report
+                                reportText.WriteText(_('Clip Comment:'))
+                                # Turn bold off.
+                                reportText.SetTxtStyle(fontBold = False)
+                                reportText.WriteText('\n')
+#                                reportText.Newline()
+                                # Format the Clip Comment
+                                reportText.SetTxtStyle(parLeftIndent = baseIndent + 127, parRightIndent = 127,
+                                                       parSpacingBefore = 0, parSpacingAfter = 0)
+                                # Add the content of the Clip Comment to the report
+                                reportText.WriteText('%s\n' % clipObj.comment)
+#                                reportText.Newline()
+
+                            # If we're using the Styled Text Ctrl ...
+                            else:
+                                # Set the font for the Comment
+                                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Clip Comment:') + '\n')
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the content of the Clip Comment to the report
+                                reportText.InsertStyledText('%s\n' % clipObj.comment)
+
+                    # If we are supposed to show Clip Notes ...
+                    if self.showClipNotes:
+                        # ... get a list of notes, including their object numbers
+                        notesList = DBInterface.list_of_notes(Clip=clipObj.number, includeNumber=True)
+                        # If there are notes for this Clip ...
+                        if len(notesList) > 0:
+                            # If we're using the Rich Text Ctrl ...
+                            if TransanaConstants.USESRTC:
+                                # Set the font for the notes
+                                reportText.SetTxtStyle(fontSize = 10, fontBold = useBold,
+                                                       parLeftIndent = baseIndent + 63, parRightIndent = 0,
+                                                       parSpacingBefore = 0, parSpacingAfter = 0)
+                                # Add the header to the report
+                                reportText.WriteText(_('Clip Notes:\n'))
+#                                reportText.Newline()
+                            # If we're using the Styled Text Ctrl ...
+                            else:
+                                # Set the font for the notes
+                                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Clip Notes:') + '\n')
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                            # Iterate throught the list of notes ...
+                            for note in notesList:
+                                # ... load each note ...
+                                tempNote = Note.Note(note[0])
+                                # If we're using the Rich Text Ctrl ...
+                                if TransanaConstants.USESRTC:
+                                    # Turn bold on.
+                                    reportText.SetTxtStyle(fontBold = useBold,
+                                                           parLeftIndent = baseIndent + 127, parRightIndent = 0,
+                                                           parSpacingBefore = 0, parSpacingAfter = 0)
+                                    # Add the note ID to the report
+                                    reportText.WriteText('%s\n' % tempNote.id)
+#                                    reportText.Newline()
+                                    # Turn bold off, format Note
+                                    reportText.SetTxtStyle(fontBold = False,
+                                                           parLeftIndent = baseIndent + 190, parRightIndent = 127,
+                                                           parSpacingBefore = 0, parSpacingAfter = 0)
+                                    # Add the note text to the report
+                                    reportText.WriteText('%s\n' % tempNote.text)
+#                                    reportText.Newline()
+                                # If we're using the Styled Text Ctrl ...
+                                else:
+                                    # Turn bold on.
+                                    reportText.SetBold(True)
+                                    # Add the note ID to the report
+                                    reportText.InsertStyledText('%s\n' % tempNote.id)
+                                    # Turn bold off.
+                                    reportText.SetBold(False)
+                                    # Add the note text to the report
+                                    reportText.InsertStyledText('%s\n' % tempNote.text)
+
+                    # If we're NOT using the Rich Text Ctrl ...
+                    if not TransanaConstants.USESRTC:
+                        # Add a blank line after each group
+                        reportText.InsertStyledText('\n')
+
+            # If the list has 30 or more items ...
+            if (self.collection != None) and (len(majorList) >= 30):
+                # Destroy the progress bar
+                progress.Destroy()
+
+        # If this IS an Episode-based report ...
+        else:
+
+            # If there are 30 or more items in the list ...
+            if len(majorList) >= 30:
+                # ... create a Progress Dialog.  (The PARENT is needed to prevent the report being hidden
+                #     behind Transana!)
+                progress = wx.ProgressDialog(self.title, _('Assembling report contents'), parent=self.report)
+
+            # Iterate through the major list
+            for clipRecord in majorList:
+                # our Filter comparison is based on Clip data
+                filterVal = (clipRecord['ClipID'], clipRecord['CollectNum'], True)
+
+                # now that we have the filter comparison data, we see if it's actually in the Filter List.
+                if filterVal in self.filterList:
+                    # First, load the collection the current clip is in
+                    collectionObj = Collection.Collection(clipRecord['CollectNum'])
+                    # If we're using the Rich Text Ctrl ...
+                    if TransanaConstants.USESRTC:
+                        # Set the font for the heading.
+                        reportText.SetTxtStyle(fontSize = 12, fontBold = True)
+                        reportText.SetTxtStyle(parAlign = wx.TEXT_ALIGNMENT_LEFT,
+                                               parLeftIndent = 0,
+                                               parSpacingBefore = 24, parSpacingAfter = 0)
+                        # Add the header to the report
+                        reportText.WriteText(_("Clip:"))
+                        reportText.SetTxtStyle(fontBold = False)
+                        # Add the data to the report, the Clip ID in this case
+                        reportText.WriteText("  %s\n" % (clipRecord['ClipID'],))
+#                        reportText.Newline()
+                        # Set the font for the rest of the record
+                        reportText.SetTxtStyle(fontSize = 10, fontBold = useBold, parLeftIndent = 63,
+                                               parSpacingBefore = 0, parSpacingAfter = 0)
+                        # Add the header to the report
+                        reportText.WriteText(_('Collection:'))
+                        # Turn bold off.
+                        reportText.SetTxtStyle(fontBold = False)
+                        # Add the data to the report, the full Collection path in this case
+                        reportText.WriteText('  %s\n' % (collectionObj.GetNodeString(),))
+#                        reportText.Newline()
+                    # If we're using the Styled Text Ctrl ...
+                    else:
+                        # Set the font for the heading.
+                        reportText.SetFont('Courier New', 12, 0x000000, 0xFFFFFF)
+                        # ... and make it bold.
+                        reportText.SetBold(True)
+                        # Add the header to the report
+                        reportText.InsertStyledText(_("Clip:"))
+                        # Turn bold off
+                        reportText.SetBold(False)
+                        # Add the data to the report, the Clip ID in this case
+                        reportText.InsertStyledText("  %s\n" % (clipRecord['ClipID'],))
+                        # Set the font for the rest of the record
+                        reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                        # Turn bold on.
+                        reportText.SetBold(True)
+                        # Add the header to the report
+                        reportText.InsertStyledText(_('Collection:'))
+                        # Turn bold off.
+                        reportText.SetBold(False)
+                        # Add the data to the report, the full Collection path in this case
+                        reportText.InsertStyledText('  %s\n' % (collectionObj.GetNodeString(),))
+                    # Load the Clip Object
+                    clipObj = Clip.Clip(clipRecord['ClipNum'])
+
+                    # If we're supposed to show Media File name information ...
+                    if self.showFile:
+                        # If we're using the Rich Text Ctrl ...
+                        if TransanaConstants.USESRTC:
+                            # Turn bold on.
+                            reportText.SetTxtStyle(fontBold = useBold)
+                            # Add the header to the report
+                            reportText.WriteText(_('File:'))
+                            # Turn bold off.
+                            reportText.SetTxtStyle(fontBold = False)
+                            # Add the data to the report, the Clip media file name in this case
+                            reportText.WriteText('  %s\n' % clipObj.media_filename)
+#                            reportText.Newline()
+                            # Add Additional Media File info
+                            for mediaFile in clipObj.additional_media_files:
+                                reportText.WriteText(_('       %s\n') % mediaFile['filename'])
+#                                reportText.Newline()
+                        # If we're using the Styled Text Ctrl ...
+                        else:
+                            # Turn bold on.
+                            reportText.SetBold(True)
+                            # Add the header to the report
+                            reportText.InsertStyledText(_('File:'))
+                            # Turn bold off.
+                            reportText.SetBold(False)
+                            # Add the data to the report, the Clip media file name in this case
+                            reportText.InsertStyledText('  %s\n' % clipObj.media_filename)
+                            # Add Additional Media File info
+                            for mediaFile in clipObj.additional_media_files:
+                                reportText.InsertStyledText(_('       %s\n') % mediaFile['filename'])
+
+                    # If we're supposed to show Clip Time data ...
+                    if self.showTime:
+                        # If we're using the Rich Text Ctrl ...
+                        if TransanaConstants.USESRTC:
+                            # Turn bold on.
+                            reportText.SetTxtStyle(fontBold = useBold, parSpacingAfter = 0)
+                            # Add the header to the report
+                            reportText.WriteText(_('Time:'))
+                            # Turn bold off.
+                            reportText.SetTxtStyle(fontBold = False)
+                            # Add the data to the report, the Clip start and stop times in this case
+                            reportText.WriteText('  %s - %s   (' % (Misc.time_in_ms_to_str(clipRecord['ClipStart']), Misc.time_in_ms_to_str(clipRecord['ClipStop'])))
+                            # Turn bold on.
+                            reportText.SetTxtStyle(fontBold = useBold)
+                            # Add the header to the report
+                            reportText.WriteText(_('Length:'))
+                            # Turn bold off.
+                            reportText.SetTxtStyle(fontBold = False)
+                            # Add the data to the report, the Clip length in this case
+                            reportText.WriteText('  %s)\n' % (Misc.time_in_ms_to_str(clipRecord['ClipStop'] - clipRecord['ClipStart']),))
+#                            reportText.Newline()
+                            reportText.SetTxtStyle(parSpacingBefore = 0) #, parSpacingAfter = 0)
+                        # If we're using the Styled Text Ctrl ...
+                        else:
+                            # Turn bold on.
+                            reportText.SetBold(True)
+                            # Add the header to the report
+                            reportText.InsertStyledText(_('Time:'))
+                            # Turn bold off.
+                            reportText.SetBold(False)
+                            # Add the data to the report, the Clip start and stop times in this case
+                            reportText.InsertStyledText('  %s - %s   (' % (Misc.time_in_ms_to_str(clipRecord['ClipStart']), Misc.time_in_ms_to_str(clipRecord['ClipStop'])))
+                            # Turn bold on.
+                            reportText.SetBold(True)
+                            # Add the header to the report
+                            reportText.InsertStyledText(_('Length:'))
+                            # Turn bold off.
+                            reportText.SetBold(False)
+                            # Add the data to the report, the Clip length in this case
+                            reportText.InsertStyledText('  %s)\n' % (Misc.time_in_ms_to_str(clipRecord['ClipStop'] - clipRecord['ClipStart']),))
+                            
+                    # Increment the Clip Counter
+                    self.clipCount += 1
+                    # Add the Clip's length to the Clip Total Time accumulator
+                    self.clipTotalTime += clipRecord['ClipStop'] - clipRecord['ClipStart']
+                        
+                    # If we are supposed to show Clip Transcripts, and the clip HAS a transcript ...
+                    if self.showTranscripts:
+                        # If we're NOT using the Rich Text Ctrl ...
+                        if not TransanaConstants.USESRTC:
+                            # print a blank line
+                            reportText.InsertStyledText('\n')
+                        # for each Clip transcript:
+                        for tr in clipObj.transcripts:
+                            # Default the Episode Transcript to None in case the load fails
+                            episodeTranscriptObj = None
+                            # Begin exception handling
+                            try:
+                                # If the Clip Object has a defined Source Transcript ...
+                                if tr.source_transcript > 0:
+                                    # ... try to load that source transcript
+                                    # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+                                    episodeTranscriptObj = Transcript.Transcript(tr.source_transcript, skipText=True)
+                            # if the record is not found (orphaned Clip)
+                            except TransanaExceptions.RecordNotFoundError:
+                                # We don't need to do anything.
+                                pass
+
+                            # If we're using the Rich Text Ctrl ...
+                            if TransanaConstants.USESRTC:
+                                # Set the font for the Clip Transcript Header
+                                reportText.SetTxtStyle(fontSize = 10, fontFace = 'Courier New', fontBold = useBold,
+                                                       parLeftIndent = 63, parRightIndent = 0,
+                                                       parSpacingBefore = 0, parSpacingAfter = 0)
+                                
+                                # If an Episode Transcript was found ...
+                                if episodeTranscriptObj != None:
+                                    # Add the header to the report
+                                    reportText.WriteText(_('Episode Transcript:'))
+                                    # Turn bold off.
+                                    reportText.SetTxtStyle(fontBold = False)
+                                    # Add the data to the report, the Episode Transcript ID in this case
+                                    reportText.WriteText('  %s\n' % (episodeTranscriptObj.id,))
+#                                    reportText.Newline()
+                                # if no Episode Transcript is found, we have an orphan.
+                                else:
+                                    # Add the header to the report
+                                    reportText.WriteText(_('Episode Transcript:'))
+                                    # Turn bold off.
+                                    reportText.SetTxtStyle(fontBold = False)
+                                    # Add the data to the report, the lack of an Episode Transcript in this case
+                                    reportText.WriteText('  %s\n' % _('The Episode Transcript has been deleted.'))
+#                                    reportText.Newline()
+
+                                # Turn bold on.
+                                reportText.SetTxtStyle(fontBold = useBold)
+                                # Add the header to the report
+                                reportText.WriteText(_('Clip Transcript:\n'))
+#                                reportText.Newline()
+                                
+                                # Turn bold off.
+                                reportText.SetTxtStyle(fontBold = False)
+                                # Add the Transcript to the report
+                                # Clip Transcripts could be in the old RTF format, or they could have been
+                                # updated to the new XML format.  These require different processing.
+
+                                # If we have a Rich Text Format document ...
+                                if tr.text[:5].lower() == u'{\\rtf':
+
+                                    # Create a temporary RTC control
+                                    tmpTxtCtrl = TranscriptEditor_RTC.TranscriptEditor(reportText.parent, pos=(-20, -20), suppressGDIWarning = True)
+                                    # ... import the RTF data into the report text
+                                    tmpTxtCtrl.LoadRTFData(tr.text, clearDoc=True)
+                                    # Pull the data back out of the control as XML
+                                    tmpText = tmpTxtCtrl.GetFormattedSelection('XML')
+                                    # Strip the time codes for the report
+                                    tmpText = reportText.StripTimeCodes(tmpText)
+
+                                    # Create the Transana XML to RTC Import Parser.  This is needed so that we can
+                                    # pull XML transcripts into the existing RTC without resetting the contents of
+                                    # the reportText RTC, which wipes out all accumulated Report data.
+                                    # Pass the reportText RTC and the desired additional margins in.
+                                    handler = PyXML_RTCImportParser.XMLToRTCHandler(reportText, (127, 127))
+                                    # Parse the transcript text, adding it to the reportText RTC
+                                    xml.sax.parseString(tmpText, handler)
+
+                                    # Destroy the temporary RTC control
+                                    tmpTxtCtrl.Destroy()
+
+                                # If we have an XML document ...
+                                elif tr.text[:5].lower() == u'<?xml':
+                                    # Strip the time codes for the report
+                                    tr.text = reportText.StripTimeCodes(tr.text)
+
+                                    # Create the Transana XML to RTC Import Parser.  This is needed so that we can
+                                    # pull XML transcripts into the existing RTC without resetting the contents of
+                                    # the reportText RTC, which wipes out all accumulated Report data.
+                                    # Pass the reportText RTC and the desired additional margins in.
+                                    handler = PyXML_RTCImportParser.XMLToRTCHandler(reportText, (127, 127))
+                                    # Parse the transcript text, adding it to the reportText RTC
+                                    xml.sax.parseString(tr.text, handler)
+
+                                # If we have a transcript that is neither RTF nor XML (shouldn't happen!)
+                                else:
+                                    # ... then just import it directly.  Treat it as plain text.
+                                    reportText.WriteText(tr.text)
+                            # If we're using the Styled Text Ctrl ...
+                            else:
+                                # Set the font for the Clip Transcript Header
                                 reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
                                 
                                 # If an Episode Transcript was found ...
@@ -703,269 +1524,74 @@ class ReportGenerator(wx.Object):
                                 reportText.SetBold(True)
                                 # Add the header to the report
                                 reportText.InsertStyledText(_('Clip Transcript:') + '\n')
-
                                 # Turn bold off.
                                 reportText.SetBold(False)
                                 # Add the Transcript to the report
-                                reportText.InsertRTFText(tr.text)
+                                reportText.InsertRTFText(tr.text)                        
                                 reportText.InsertStyledText('\n')
-                                
-                    # If we have a Series Report ...
-                    else:
-                        # Get the full Episode data
-                        episodeObj = Episode.Episode(groupNo)
-                        # If we're supposed to show the Media File Name ...
-                        if self.showFile:
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('File:'))
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # Add the data to the report, the file name in this case
-                            reportText.InsertStyledText(_('  %s\n') % episodeObj.media_filename)
-                            # Add Additional Media File info
-                            for mediaFile in episodeObj.additional_media_files:
-                                reportText.InsertStyledText(_('       %s\n') % mediaFile['filename'])
-                        # If we're supposed to show the Episode Time data ...
-                        if self.showTime and (episodeObj.tape_length > 0):
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Length:'))
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # Add the data to the report, the Clip Length in this case
-                            reportText.InsertStyledText('  %s\n' % (Misc.time_in_ms_to_str(episodeObj.tape_length)))
-                            # Add the Episode's length to the Episode Total Time accumulator (Yeah, we're using clipTotalTime)
-                            self.clipTotalTime += episodeObj.tape_length
-                        # Increment the Episode Counter (Yeah, we're using clipCount)
-                        self.clipCount += 1
                             
-                                
+                    # If we're using the Rich Text Ctrl ...
+                    if TransanaConstants.USESRTC:
+                        # Reset the font.  It could have been contaminated by the Clip Transcript
+                        reportText.SetTxtStyle(fontFace='Courier New', fontSize = 10, fontColor = wx.Colour(0, 0, 0),
+                                               fontBgColor = wx.Colour(255, 255, 255), fontBold = False, fontItalic = False,
+                                               fontUnderline = False)
+                        reportText.SetTxtStyle(parAlign = wx.TEXT_ALIGNMENT_LEFT,
+                                               parLineSpacing = richtext.TEXT_ATTR_LINE_SPACING_NORMAL,
+                                               parLeftIndent = 0,
+                                               parRightIndent = 0,
+                                               parSpacingBefore = 0,
+                                               parSpacingAfter = 0,
+                                               parTabs = [])
+
+                        if DEBUG:
+                            print "RESET all FONT and PARAGRAPH settings"
+
                     # if we are supposed to show Keywords ...
                     if self.showKeywords:
-                        # Set the font for the Keywords
-                        reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                        # Skip a line
-                        reportText.InsertStyledText('\n')
-                        # If there are keywords in the list ... (even if they might all get filtered out ...)
-                        if len(minorList[groupNo]) > 0:
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            if self.seriesName != None:
-                                reportText.InsertStyledText(_('Episode Keywords:') + '\n')
-                            else:
-                                reportText.InsertStyledText(_('Clip Keywords:') + '\n')
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                        # Iterate through the list of Keywords for the group
-                        for (keywordGroup, keyword, example) in minorList[groupNo]:
-                            # See if the keyword should be included, based on the Keyword Filter List
-                            if (keywordGroup, keyword, True) in self.keywordFilterList:
-                                # Add the Keyword to the report
-                                reportText.InsertStyledText('  %s : %s\n' % (keywordGroup, keyword))
-                                # Add this Keyword to the Keyword Counts
-                                if keywordCounts.has_key('%s : %s' % (keywordGroup, keyword)):
-                                    keywordCounts['%s : %s' % (keywordGroup, keyword)] += 1
-                                    if (self.episodeName != None) or (self.collection != None) or (self.searchColl != None):
-                                        keywordTimes['%s : %s' % (keywordGroup, keyword)] += clipObj.clip_stop - clipObj.clip_start
-                                else:
-                                    keywordCounts['%s : %s' % (keywordGroup, keyword)] = 1
-                                    if (self.episodeName != None) or (self.collection != None) or (self.searchColl != None):
-                                        keywordTimes['%s : %s' % (keywordGroup, keyword)] = clipObj.clip_stop - clipObj.clip_start
-                                    
-                    # if we are supposed to show Comments ...
-                    if self.showComments:
-                        # If there are keywords in the list ... (even if they might all get filtered out ...)
-                        if clipObj.comment != u'':
-                            # Set the font for the Comment
+                        # If we're NOT using the Rich Text Ctrl ...
+                        if not TransanaConstants.USESRTC:
+                            # Set the font for the Keywords
                             reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Clip Comment:') + '\n')
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # Add the content of the Clip Comment to the report
-                            reportText.InsertStyledText('%s\n' % clipObj.comment)
-
-                    # If we are supposed to show Clip Notes ...
-                    if self.showClipNotes:
-                        # ... get a list of notes, including their object numbers
-                        notesList = DBInterface.list_of_notes(Clip=clipObj.number, includeNumber=True)
-                        # If there are notes for this Clip ...
-                        if len(notesList) > 0:
-                            # Set the font for the notes
-                            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Clip Notes:') + '\n')
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # Iterate throught the list of notes ...
-                            for note in notesList:
-                                # ... load each note ...
-                                tempNote = Note.Note(note[0])
-                                # Turn bold on.
-                                reportText.SetBold(True)
-                                # Add the note ID to the report
-                                reportText.InsertStyledText('%s\n' % tempNote.id)
-                                # Turn bold off.
-                                reportText.SetBold(False)
-                                # Add the note text to the report
-                                reportText.InsertStyledText('%s\n' % tempNote.text)
-
-                    # Add a blank line after each group
-                    reportText.InsertStyledText('\n')
-                            
-        # If this IS an Episode-based report ...
-        else:
-            # Iterate through the major list
-            for clipRecord in majorList:
-                # our Filter comparison is based on Clip data
-                filterVal = (clipRecord['ClipID'], clipRecord['CollectNum'], True)
-
-                # now that we have the filter comparison data, we see if it's actually in the Filter List.
-                if filterVal in self.filterList:
-                    # First, load the collection the current clip is in
-                    collectionObj = Collection.Collection(clipRecord['CollectNum'])
-                    # Set the font for the heading.
-                    reportText.SetFont('Courier New', 12, 0x000000, 0xFFFFFF)
-                    # ... and make it bold.
-                    reportText.SetBold(True)
-                    # Add the header to the report
-                    reportText.InsertStyledText(_("Clip:"))
-                    # Turn bold off
-                    reportText.SetBold(False)
-                    # Add the data to the report, the Clip ID in this case
-                    reportText.InsertStyledText("  %s\n" % (clipRecord['ClipID'],))
-                    # Set the font for the rest of the record
-                    reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                    # Turn bold on.
-                    reportText.SetBold(True)
-                    # Add the header to the report
-                    reportText.InsertStyledText(_('Collection:'))
-                    # Turn bold off.
-                    reportText.SetBold(False)
-                    # Add the data to the report, the full Collection path in this case
-                    reportText.InsertStyledText('  %s\n' % (collectionObj.GetNodeString(),))
-                    # Load the Clip Object
-                    clipObj = Clip.Clip(clipRecord['ClipNum'])
-
-                    # If we're supposed to show Media File name information ...
-                    if self.showFile:
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the header to the report
-                        reportText.InsertStyledText(_('File:'))
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the data to the report, the Clip media file name in this case
-                        reportText.InsertStyledText('  %s\n' % clipObj.media_filename)
-                        # Add Additional Media File info
-                        for mediaFile in clipObj.additional_media_files:
-                            reportText.InsertStyledText(_('       %s\n') % mediaFile['filename'])
-
-                    # If we're supposed to show Clip Time data ...
-                    if self.showTime:
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the header to the report
-                        reportText.InsertStyledText(_('Time:'))
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the data to the report, the Clip start and stop times in this case
-                        reportText.InsertStyledText('  %s - %s   (' % (Misc.time_in_ms_to_str(clipRecord['ClipStart']), Misc.time_in_ms_to_str(clipRecord['ClipStop'])))
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the header to the report
-                        reportText.InsertStyledText(_('Length:'))
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the data to the report, the Clip length in this case
-                        reportText.InsertStyledText('  %s)\n' % (Misc.time_in_ms_to_str(clipRecord['ClipStop'] - clipRecord['ClipStart']),))
-                        
-                    # Increment the Clip Counter
-                    self.clipCount += 1
-                    # Add the Clip's length to the Clip Total Time accumulator
-                    self.clipTotalTime += clipRecord['ClipStop'] - clipRecord['ClipStart']
-                    
-                    # If we are supposed to show Clip Transcripts, and the clip HAS a transcript ...
-                    if self.showTranscripts:
-                        # print a blank line
-                        reportText.InsertStyledText('\n')
-                        # for each Clip transcript:
-                        for tr in clipObj.transcripts:
-                            # Default the Episode Transcript to None in case the load fails
-                            episodeTranscriptObj = None
-                            # Begin exception handling
-                            try:
-                                # If the Clip Object has a defined Source Transcript ...
-                                if tr.source_transcript > 0:
-                                    # ... try to load that source transcript
-                                    episodeTranscriptObj = Transcript.Transcript(tr.source_transcript)
-                            # if the record is not found (orphaned Clip)
-                            except TransanaExceptions.RecordNotFoundError:
-                                # We don't need to do anything.
-                                pass
-
-                            # Set the font for the Clip Transcript Header
-                            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                            
-                            # If an Episode Transcript was found ...
-                            if episodeTranscriptObj != None:
-                                # Turn bold on.
-                                reportText.SetBold(True)
-                                # Add the header to the report
-                                reportText.InsertStyledText(_('Episode Transcript:'))
-                                # Turn bold off.
-                                reportText.SetBold(False)
-                                # Add the data to the report, the Episode Transcript ID in this case
-                                reportText.InsertStyledText('  %s\n' % (episodeTranscriptObj.id,))
-                            # if no Episode Transcript is found, we have an orphan.
-                            else:
-                                # Turn bold on.
-                                reportText.SetBold(True)
-                                # Add the header to the report
-                                reportText.InsertStyledText(_('Episode Transcript:'))
-                                # Turn bold off.
-                                reportText.SetBold(False)
-                                # Add the data to the report, the lack of an Episode Transcript in this case
-                                reportText.InsertStyledText('  %s\n' % _('The Episode Transcript has been deleted.'))
-
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Clip Transcript:') + '\n')
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # Add the Transcript to the report
-                            reportText.InsertRTFText(tr.text)                        
+                            # print a blank line
                             reportText.InsertStyledText('\n')
-                        
-                    # if we are supposed to show Keywords ...
-                    if self.showKeywords:
-                        # Set the font for the Keywords
-                        reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                        # print a blank line
-                        reportText.InsertStyledText('\n')
                         # If there are keywords in the list ... (even if they might all get filtered out ...)
                         if len(minorList[(clipRecord['ClipID'], clipRecord['CollectID'], clipRecord['ParentCollectNum'])]) > 0:
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Clip Keywords:') + '\n')
-                            # Turn bold off.
-                            reportText.SetBold(False)
+                            # If we're using the Rich Text Ctrl ...
+                            if TransanaConstants.USESRTC:
+                                # Set Formatting
+                                reportText.SetTxtStyle(fontSize = 10, fontBold = useBold, parLeftIndent = 63, parRightIndent = 0,
+                                                       parLineSpacing = richtext.TEXT_ATTR_LINE_SPACING_NORMAL,
+                                                       parSpacingBefore = 0, parSpacingAfter = 0)
+                                # Add the header to the report
+                                reportText.WriteText(_('Clip Keywords:'))
+                                # Turn bold off.
+                                reportText.SetTxtStyle(fontBold = False)
+                                reportText.WriteText('\n')
+#                                reportText.Newline()
+                                reportText.SetTxtStyle(parLeftIndent = 127, parSpacingBefore = 0, parSpacingAfter = 0)
+                            # If we're using the Styled Text Ctrl ...
+                            else:
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Clip Keywords:') + '\n')
+                                # Turn bold off.
+                                reportText.SetBold(False)
+
                         # Iterate through the list of Keywords for the group
                         for (keywordGroup, keyword, example) in minorList[(clipRecord['ClipID'], clipRecord['CollectID'], clipRecord['ParentCollectNum'])]:
                             # See if the keyword should be included, based on the Keyword Filter List
                             if (keywordGroup, keyword, True) in self.keywordFilterList:
-                                # Add the Keyword to the report
-                                reportText.InsertStyledText('  %s : %s\n' % (keywordGroup, keyword))
+                                # If we're using the Rich Text Ctrl ...
+                                if TransanaConstants.USESRTC:
+                                    # Add the Keyword to the report
+                                    reportText.WriteText('%s : %s\n' % (keywordGroup, keyword))
+#                                    reportText.Newline()
+                                # If we're using the Styled Text Ctrl ...
+                                else:
+                                    # Add the Keyword to the report
+                                    reportText.InsertStyledText('  %s : %s\n' % (keywordGroup, keyword))
                                 # Add this Keyword to the Keyword Counts
                                 if keywordCounts.has_key('%s : %s' % (keywordGroup, keyword)):
                                     keywordCounts['%s : %s' % (keywordGroup, keyword)] += 1
@@ -978,100 +1604,229 @@ class ReportGenerator(wx.Object):
                     if self.showComments:
                         # If there are keywords in the list ... (even if they might all get filtered out ...)
                         if clipRecord['Comment'] != u'':
-                            # Set the font for the Comments
-                            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Clip Comment:') + '\n')
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # Add the content of the Clip Comment to the report
-                            reportText.InsertStyledText('%s\n' % clipRecord['Comment'])
-                            
+                            # If we're using the Rich Text Ctrl ...
+                            if TransanaConstants.USESRTC:
+                                # Set the font for the Comments
+                                reportText.SetTxtStyle(fontSize = 10, fontBold = useBold, parLeftIndent = 63,
+                                                       parSpacingBefore = 0, parSpacingAfter = 0)
+                                # Add the header to the report
+                                reportText.WriteText(_('Clip Comment:\n'))
+#                                reportText.Newline()
+                                # Turn bold off.
+                                reportText.SetTxtStyle(fontBold = False, parLeftIndent = 127,
+                                                       parSpacingBefore = 0, parSpacingAfter = 0)
+                                # Add the content of the Clip Comment to the report
+                                reportText.WriteText('%s\n' % clipObj.comment)
+#                                reportText.Newline()
+                            # If we're using the Styled Text Ctrl ...
+                            else:
+                                # Set the font for the Comments
+                                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Clip Comment:') + '\n')
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the content of the Clip Comment to the report
+                                reportText.InsertStyledText('%s\n' % clipObj.comment)
+
                     # If we are supposed to show Clip Notes ...
                     if self.showClipNotes:
                         # ... get a list of notes, including their object numbers
                         notesList = DBInterface.list_of_notes(Clip=clipObj.number, includeNumber=True)
                         # If there are notes for this Clip ...
                         if len(notesList) > 0:
-                            # Set the font for the Notes
-                            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Clip Notes:') + '\n')
-                            # Turn bold off.
-                            reportText.SetBold(False)
+                            # If we're using the Rich Text Ctrl ...
+                            if TransanaConstants.USESRTC:
+                                # Set the font for the Notes
+                                reportText.SetTxtStyle(fontSize = 10, fontBold = useBold, parLeftIndent = 63,
+                                                       parSpacingBefore = 0, parSpacingAfter = 0)
+                                # Add the header to the report
+                                reportText.WriteText(_('Clip Notes:\n'))
+#                                reportText.Newline()
+                            # If we're using the Styled Text Ctrl ...
+                            else:
+                                # Set the font for the Notes
+                                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Clip Notes:') + '\n')
+                                # Turn bold off.
+                                reportText.SetBold(False)
                             # Iterate throught the list of notes ...
                             for note in notesList:
                                 # ... load each note ...
                                 tempNote = Note.Note(note[0])
-                                # Turn bold on.
-                                reportText.SetBold(True)
-                                # Add the note ID to the report
-                                reportText.InsertStyledText('%s\n' % tempNote.id)
-                                # Turn bold off.
-                                reportText.SetBold(False)
-                                # Add the note text to the report
-                                reportText.InsertStyledText('%s\n' % tempNote.text)
+                                # If we're using the Rich Text Ctrl ...
+                                if TransanaConstants.USESRTC:
+                                    # Turn bold on.
+                                    reportText.SetTxtStyle(fontBold = useBold, parLeftIndent = 127, parRightIndent = 127,
+                                                           parSpacingBefore = 0, parSpacingAfter = 0)
+                                    # Add the note ID to the report
+                                    reportText.WriteText('%s\n' % tempNote.id)
+#                                    reportText.Newline()
+                                    # Turn bold off.
+                                    reportText.SetTxtStyle(fontBold = False, parLeftIndent = 190, parRightIndent = 127,
+                                                           parSpacingBefore = 0, parSpacingAfter = 0)
+                                    # Add the note text to the report
+                                    reportText.WriteText('%s\n' % tempNote.text)
+#                                    reportText.Newline()
+                                # If we're using the Styled Text Ctrl ...
+                                else:
+                                    # Turn bold on.
+                                    reportText.SetBold(True)
+                                    # Add the note ID to the report
+                                    reportText.InsertStyledText('%s\n' % tempNote.id)
+                                    # Turn bold off.
+                                    reportText.SetBold(False)
+                                    # Add the note text to the report
+                                    reportText.InsertStyledText('%s\n' % tempNote.text)
 
-                    # Add a blank line after each group
-                    reportText.InsertStyledText('\n')
+                    # If the list has 30 or more items ...
+                    if len(majorList) >= 30:
+                        # ... update the progress bar
+                        progress.Update(int(float(self.clipCount) / float(len(majorList)) * 100))
+
+                    # If we're NOT using the Rich Text Ctrl ...
+                    if not TransanaConstants.USESRTC:
+                        # Add a blank line after each group
+                        reportText.InsertStyledText('\n')
+                    else:
+                        reportText.WriteText('\n')
+#                        reportText.Newline()
+
+            # If the list has 30 or more items ...
+            if len(majorList) >= 30:
+                # Destroy the progress bar
+                progress.Destroy()
+
+        if 'wxMac' in wx.PlatformInfo:
+            keyWidth = 50
+            macAdjust = 40
+        else:
+            keyWidth = 52
+            macAdjust = 0
 
         # Now add the Report Summary
-        # If there's data in the majorList ...
-        if self.showKeywords and (len(majorList) != 0):
-            # First, set the font for the summary
-            reportText.SetFont('Courier New', 12, 0x000000, 0xFFFFFF)
-            # Make the current font bold.
-            reportText.SetBold(True)
-            # Add the section heading to the report
-            reportText.InsertStyledText(_("Summary\n"))
-            # Turn bold off
-            reportText.SetBold(False)
-            # Set the font for the Keywords
-            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+        # If there's data in the majorList OR if we're showing TIMES ...
+        if (self.showKeywords and (len(majorList) != 0)) or self.showTime:
+            # If we're using the Rich Text Ctrl ...
+            if TransanaConstants.USESRTC:
+                # First, set the font for the summary
+                reportText.SetTxtStyle(fontSize = 12, fontBold = True, parLeftIndent = 0, parRightIndent = 0,
+                                       parSpacingBefore = 36, parSpacingAfter = 0, overrideGDIWarning = True) 
+                # Add the section heading to the report
+                reportText.WriteText(_("Summary") + '\n')
+#                reportText.SetTxtStyle(fontSize = 10, fontBold = False, overrideGDIWarning = True)
+                # Set the font for the Keywords
+#                reportText.Newline()
+                reportText.SetTxtStyle(fontSize = 10, fontBold = False,
+                                       parLeftIndent = 32, parRightIndent = 0, parSpacingBefore = 0, parSpacingAfter = 0,
+                                       parTabs = [1146 - macAdjust], overrideGDIWarning = True)
+            # If we're using the Styled Text Ctrl ...
+            else:
+                # First, set the font for the summary
+                reportText.SetFont('Courier New', 12, 0x000000, 0xFFFFFF)
+                # Make the current font bold.
+                reportText.SetBold(True)
+                # Add the section heading to the report
+                reportText.InsertStyledText(_("Summary\n"))
+                # Turn bold off
+                reportText.SetBold(False)
+                # Set the font for the Keywords
+                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+
             # Get a list of the Keyword Group : Keyword pairs that have been used
             countKeys = keywordCounts.keys()
             # Sort the list
             countKeys.sort()
             # Add the sorted keywords to the summary with their counts
             for key in countKeys:
-                # Right-pad the keyword with spaces so columns will line up right.
-                st = key + '                                                            '[len(key):]
                 if (self.episodeName != None) or (self.collection != None) or (self.searchColl != None):
-                    # Add the text to the report.
-                    reportText.InsertStyledText('  %60s  %5d  %10s\n' % (st[:60], keywordCounts[key], Misc.time_in_ms_to_str(keywordTimes[key])))
+                    # If we're using the Rich Text Ctrl ...
+                    if TransanaConstants.USESRTC:
+                        # Add the text to the report.
+                        reportText.WriteText('%s\t%5d  %10s\n' % (key[:keyWidth], keywordCounts[key], Misc.time_in_ms_to_str(keywordTimes[key])))
+#                        reportText.Newline()
+                    # If we're using the Styled Text Ctrl ...
+                    else:
+                        # Right-pad the keyword with spaces so columns will line up right.
+                        st = key + '                                                            '[len(key):]
+                        # Add the text to the report.
+                        reportText.InsertStyledText('  %60s  %5d  %10s\n' % (st[:60], keywordCounts[key], Misc.time_in_ms_to_str(keywordTimes[key])))
                 else:
-                    # Add the text to the report.
-                    reportText.InsertStyledText('  %60s  %5d\n' % (st[:60], keywordCounts[key]))
-        # If our Clip Counter shows the presence of Clips ...
-        if self.clipCount > 0:
-            # Set the font for the data
-            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-            reportText.InsertStyledText('\n')
-            # If we're showing Clip Time data ...
-            if self.showTime:
-                # Set the appropriate prompt for Episodes or Clips
-                if self.seriesName != None:
-                    prompt = _('  Episodes:  %8d                                      Total Time:  %s\n')
+                    # If we're using the Rich Text Ctrl ...
+                    if TransanaConstants.USESRTC:
+                        # Add the text to the report.
+                        reportText.WriteText('%s\t%5d\n' % (key[:keyWidth], keywordCounts[key]))
+#                        reportText.Newline()
+                    # If we're using the Styled Text Ctrl ...
+                    else:
+                        # Right-pad the keyword with spaces so columns will line up right.
+                        st = key + '                                                            '[len(key):]
+                        # Add the text to the report.
+                        reportText.InsertStyledText('  %60s  %5d\n' % (st[:60], keywordCounts[key]))
+
+            # If our Clip Counter shows the presence of Clips ...
+            if self.clipCount > 0:
+                # If we're using the Rich Text Ctrl ...
+                if TransanaConstants.USESRTC:
+                    # Set the font for the data
+                    reportText.SetTxtStyle(fontSize = 10, parSpacingBefore = 24, parSpacingAfter = 0, overrideGDIWarning = True)
+                # If we're using the Styled Text Ctrl ...
                 else:
-                    prompt = _('  Clips:  %8d                                         Total Time:  %s\n')
-                # Add the Clip Count and Total Time data to the report
-                reportText.InsertStyledText(prompt % (self.clipCount, Misc.time_in_ms_to_str(self.clipTotalTime)))
-            # if we're not showing Clip Time data ...
-            else:
-                if self.seriesName != None:
-                    prompt = _('  Episodes:  %4d\n')
+                    # Set the font for the data
+                    reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                    reportText.InsertStyledText('\n')
+                    
+                # If we're showing Clip Time data ...
+                if self.showTime:
+                    # If we're using the Rich Text Ctrl ...
+                    if TransanaConstants.USESRTC:
+                        # Set the appropriate prompt for Episodes or Clips
+                        if self.collection == None and self.episodeName == None:
+                            prompt = _('Episodes:  %8d\tTotal Time:  %s')
+                        else:
+                            prompt = _('Clips:  %8d\tTotal Time:  %s')
+                        reportText.SetTxtStyle(parLeftIndent = 32, parTabs = [1039 - macAdjust], overrideGDIWarning = True)
+                        # Add the Clip Count and Total Time data to the report
+                        reportText.WriteText(prompt % (self.clipCount, Misc.time_in_ms_to_str(self.clipTotalTime)))
+                        reportText.WriteText('\n')
+#                        reportText.Newline()
+                    # If we're using the Styled Text Ctrl ...
+                    else:
+                        # Set the appropriate prompt for Episodes or Clips
+                        if self.seriesName != None:
+                            prompt = _('  Episodes:  %8d                                      Total Time:  %s\n')
+                        else:
+                            prompt = _('  Clips:  %8d                                         Total Time:  %s\n')
+                        # Add the Clip Count and Total Time data to the report
+                        reportText.InsertStyledText(prompt % (self.clipCount, Misc.time_in_ms_to_str(self.clipTotalTime)))
+                # if we're not showing Clip Time data ...
                 else:
-                    prompt = _('  Clips:  %4d\n')
-                # Add the Clip Count but NOT the Total Time data to the report
-                reportText.InsertStyledText(prompt % self.clipCount)
-            
+                    # If we're using the Rich Text Ctrl ...
+                    if TransanaConstants.USESRTC:
+                        if self.collection == None and self.episodeName == None:
+                            prompt = _('Episodes:  %4d')
+                        else:
+                            prompt = _('Clips:  %4d')
+                        # Add the Clip Count but NOT the Total Time data to the report
+                        reportText.WriteText(prompt % self.clipCount)
+                        reportText.WriteText('\n')
+#                        reportText.Newline()
+                    # If we're using the Styled Text Ctrl ...
+                    else:
+                        if self.seriesName != None:
+                            prompt = _('  Episodes:  %4d')
+                        else:
+                            prompt = _('  Clips:  %4d')
+                        # Add the Clip Count but NOT the Total Time data to the report
+                        reportText.InsertStyledText((prompt + '\n') % self.clipCount)
+
         # Make the control read only, now that it's done
         reportText.SetReadOnly(True)
-
 
     def OnFilter(self, event):
         """ This method, required by TextReport, implements the call to the Filter Dialog.  It needs to be
@@ -1113,7 +1868,7 @@ class ReportGenerator(wx.Object):
                 profileList = dlgFilter.GetConfigNames()
                 # If (translated) "Default" is in the list ...
                 # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
-                if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                if unicode(_('Default'), 'utf8') in profileList:
                     # ... then signal that we need to load the config.
                     dlgFilter.OnFileOpen(None)
                     # Fake that we asked the user for a filter name and got an OK
@@ -1171,7 +1926,7 @@ class ReportGenerator(wx.Object):
                 profileList = dlgFilter.GetConfigNames()
                 # If (translated) "Default" is in the list ...
                 # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
-                if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                if unicode(_('Default'), 'utf8') in profileList:
                     # ... then signal that we need to load the config.
                     dlgFilter.OnFileOpen(None)
                     # Fake that we asked the user for a filter name and got an OK
@@ -1224,7 +1979,7 @@ class ReportGenerator(wx.Object):
                 profileList = dlgFilter.GetConfigNames()
                 # If (translated) "Default" is in the list ...
                 # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
-                if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                if unicode(_('Default'), 'utf8') in profileList:
                     # ... then signal that we need to load the config.
                     dlgFilter.OnFileOpen(None)
                     # Fake that we asked the user for a filter name and got an OK

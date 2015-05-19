@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -87,15 +87,12 @@ class KeywordsTab(wx.Panel):
         # (This panel implements the Keyword Tab!  All of the window and Notebook structure is provided by DataWindow.py.)
         wx.Panel.__init__(self, parent, -1, style=wx.WANTS_CHARS, size=(width, height), name='KeywordsTabPanel')
 
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+
         # Create a ListCtrl on the panel where the keyword data will be displayed
-        lay = wx.LayoutConstraints()
-        lay.left.SameAs(self, wx.Left, 1)
-        lay.top.SameAs(self, wx.Top, 1)
-        lay.right.SameAs(self, wx.Right, 1)
-        lay.bottom.SameAs(self, wx.Bottom, 1)
         self.lbKeywordsList = wx.ListCtrl(self, -1, style=wx.LC_REPORT | wx.LC_NO_HEADER)
         self.lbKeywordsList.InsertColumn(0, 'Keywords')
-        self.lbKeywordsList.SetConstraints(lay)
+        mainSizer.Add(self.lbKeywordsList, 1, wx.EXPAND)
 
         # Update the display to show the keywords
         self.UpdateKeywords()
@@ -107,12 +104,16 @@ class KeywordsTab(wx.Panel):
         self.menu.Append(MENU_KEYWORDSTAB_DELETE, _("Delete"))
         wx.EVT_MENU(self, MENU_KEYWORDSTAB_DELETE, self.OnDelete)
 
+        # Define the Key Down Event Handler
+        self.lbKeywordsList.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
+
         # Define the Right-Click event (which calls the popup menu)
         wx.EVT_RIGHT_DOWN(self.lbKeywordsList, self.OnRightDown)
 
         # Perform GUI Layout
-        self.Layout()
+        self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
+        self.Layout()
 
     def Refresh(self):
         """ This method allows up to update all data when this tab is displayed.  This is necessary as the objects may have
@@ -128,10 +129,9 @@ class KeywordsTab(wx.Panel):
             # If a Collection Object is defined, reload it
             if self.collectionObj != None:
                 self.collectionObj = Collection.Collection(self.collectionObj.number)
-            # If a Clip Object is defined, reload it
+            # If a Clip Object is defined, reload it.
             if self.clipObj != None:
                 self.clipObj = Clip.Clip(self.clipObj.number)
-
             # Get the local keyword list pointer aimed at the appropriate source object.
             # NOTE:  If a Clip is defined use it (whether an episode is defined or not.)  If
             #        no clip is defined but an episode is defined, use that.
@@ -220,6 +220,13 @@ class KeywordsTab(wx.Panel):
         (width, height) = self.lbKeywordsList.GetSizeTuple()
         self.lbKeywordsList.SetColumnWidth(0, width)
 
+    def OnKeyDown(self, event):
+        """ Handle Key Down Events """
+        # See if the ControlObject wants to handle the key that was pressed.
+        if self.parent.parent.ControlObject.ProcessCommonKeyCommands(event):
+            # If so, we're done.  (Actually, we're done anyway.)
+            return
+
     def OnRightDown(self, event):
         """ Right-click event --> Show popup menu """
         # Determine the item that has been right-clicked.  -1 indicates the click was not on an item.
@@ -271,12 +278,17 @@ class KeywordsTab(wx.Panel):
                 obj.keyword_list = self.kwlist
 
                 for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
-                    # Load the specified Clip record
-                    tempClip = Clip.Clip(clipNum)
+                    # Load the specified Clip record.  Save time by skipping the Clip Transcript, which we don't need.
+                    tempClip = Clip.Clip(clipNum, skipText=True)
                     # Prepare the Node List for removing the Keyword Example Node
                     nodeList = (_('Keywords'), keywordGroup, keyword, tempClip.id)
                     # Call the DB Tree's delete_Node method.  Include the Clip Record Number so the correct Clip entry will be removed.
                     self.parent.GetPage(0).tree.delete_Node(nodeList, 'KeywordExampleNode', tempClip.number)
+
+                # If we are dealing with an Episode ...
+                if isinstance(obj, Episode.Episode):
+                    # Check to see if there are keywords to be propagated
+                    self.parent.parent.ControlObject.PropagateEpisodeKeywords(obj.number, obj.keyword_list)
 
                 obj.db_save()
 

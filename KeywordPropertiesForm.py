@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2010 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2012 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -23,7 +23,7 @@ import Dialogs
 import TransanaGlobal
 
 import wx
-import Keyword
+import KeywordObject as Keyword
 
 class KeywordPropertiesForm(Dialogs.GenForm):
     """Form containing Keyword fields."""
@@ -32,22 +32,103 @@ class KeywordPropertiesForm(Dialogs.GenForm):
         self.width = 400
         self.height = 250
         # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style
-        Dialogs.GenForm.__init__(self, parent, id, title, size=(self.width, self.height), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Keyword Properties')
-        # Define the minimum size for this dialog as the initial size
-        self.SetSizeHints(self.width, self.height)
+        Dialogs.GenForm.__init__(self, parent, id, title, size=(self.width, self.height), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+                                 useSizers = True, HelpContext='Keyword Properties')
 
         self.obj = keyword_object
 
-        self.kw_groups = DBInterface.list_of_keyword_groups()
-        # Keyword Group Layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 46)  # 46% width
-        lay.height.AsIs()
-        self.kwg_choice = self.new_combo_box(_("Keyword Group"), lay, [""] + self.kw_groups)
+        # Create the form's main VERTICAL sizer
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Create a HORIZONTAL sizer for the first row
+        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v1 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword Group
+        self.kwg_choice = self.new_combo_box(_("Keyword Group"), v1, [""])
+        # Add the element to the sizer
+        r1Sizer.Add(v1, 1, wx.EXPAND)
+
+        # Add a horizontal spacer to the row sizer        
+        r1Sizer.Add((10, 0))
+
         # wxComboBox doesn't have a Max Length method.  Let's emulate one here using the Combo Box's EVT_TEXT method
         self.kwg_choice.Bind(wx.EVT_TEXT, self.OnKWGText)
+        
+        # Create a VERTICAL sizer for the next element
+        v2 = wx.BoxSizer(wx.VERTICAL)
+        # Keyword
+        keyword_edit = self.new_edit_box(_("Keyword"), v2, self.obj.keyword, maxLen=85)
+        # Add the element to the sizer
+        r1Sizer.Add(v2, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r1Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
+        v3 = wx.BoxSizer(wx.VERTICAL)
+        # Definition [label]
+        definition_lbl = wx.StaticText(self.panel, -1, _("Definition"))
+        v3.Add(definition_lbl, 0, wx.BOTTOM, 3)
+
+        # Definition layout [control]
+        self.definition_edit = wx.TextCtrl(self.panel, -1, self.obj.definition, style=wx.TE_MULTILINE)
+        v3.Add(self.definition_edit, 1, wx.EXPAND)
+
+        # Add the element to the sizer
+        r2Sizer.Add(v3, 1, wx.EXPAND)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r2Sizer, 1, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a sizer for the buttons
+        btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Add the buttons
+        self.create_buttons(sizer=btnSizer)
+        # Add the button sizer to the main sizer
+        mainSizer.Add(btnSizer, 0, wx.EXPAND)
+        # If Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a spacer to avoid control clipping
+            mainSizer.Add((0, 2))
+
+        # Set the PANEL's main sizer
+        self.panel.SetSizer(mainSizer)
+        # Tell the PANEL to auto-layout
+        self.panel.SetAutoLayout(True)
+        # Lay out the Panel
+        self.panel.Layout()
+        # Lay out the panel on the form
+        self.Layout()
+        # Resize the form to fit the contents
+        self.Fit()
+
+        # Get the new size of the form
+        (width, height) = self.GetSizeTuple()
+        # Reset the form's size to be at least the specified minimum width
+        self.SetSize(wx.Size(max(self.width, width), max(self.height, height)))
+        # Define the minimum size for this dialog as the current size
+        self.SetSizeHints(max(self.width, width), max(self.height, height))
+        # Center the form on screen
+        self.CenterOnScreen()
+
+        # We populate the Keyword Groups, Keywords, and Clip Keywords lists AFTER we determine the Form Size.
+        # Long Keywords in the list were making the form too big!
+
+        self.kw_groups = DBInterface.list_of_keyword_groups()
+        for keywordGroup in self.kw_groups:
+            self.kwg_choice.Append(keywordGroup)
+
         if self.obj.keywordGroup:
             # If the Keyword Group of the passed-in Keyword object does not exist, add it to the list.
             # Otherwise, there's no way to ever add a first keyword to a group!
@@ -56,38 +137,6 @@ class KeywordPropertiesForm(Dialogs.GenForm):
             self.kwg_choice.SetStringSelection(self.obj.keywordGroup)
         else:
             self.kwg_choice.SetSelection(0)
-
-        # Keyword layout
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from Keyword Group
-        lay.left.RightOf(self.kwg_choice, 10)   # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 46)  # 46% width
-        lay.height.AsIs()
-        keyword_edit = self.new_edit_box(_("Keyword"), lay, self.obj.keyword, maxLen=85)
-
-        # Definition layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.kwg_choice, 10)      # 10 under Keyword Group
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.height.AsIs()
-        definition_lbl = wx.StaticText(self.panel, -1, _("Definition"))
-        definition_lbl.SetConstraints(lay)
-
-        # Definition layout [control]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(definition_lbl, 3)        # 10 under label
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
-        lay.bottom.SameAs(self.panel, wx.Bottom, 40)   # 40 from bottom
-        self.definition_edit = wx.TextCtrl(self.panel, -1, self.obj.definition, style=wx.TE_MULTILINE)
-        self.definition_edit.SetConstraints(lay)
-
-        self.Layout()
-        self.SetAutoLayout(True)
-
-        # Center on the screen (for Mac)
-        self.CentreOnScreen()
 
         if self.obj.keywordGroup == '':
             self.kwg_choice.SetFocus()
