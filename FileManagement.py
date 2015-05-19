@@ -176,7 +176,7 @@ class FMFileDropTarget(wx.FileDropTarget):
             self.FileManagementWindow.SetStatusText(prompt % (file, targetDir))
 
             # The SRBFileTransfer class handles file transfers and provides Progress Feedback
-            dlg = SRBFileTransfer.SRBFileTransfer(self.FileManagementWindow, _("SRB File Transfer"), file, fileSize, sourceDir, self.FileManagementWindow.srbConnectionID, targetDir, SRBFileTransfer.srb_UPLOAD)
+            dlg = SRBFileTransfer.SRBFileTransfer(self.FileManagementWindow, _("SRB File Transfer"), file, fileSize, sourceDir, self.FileManagementWindow.srbConnectionID, targetDir, SRBFileTransfer.srb_UPLOAD, self.FileManagementWindow.srbBuffer)
             success = dlg.TransferSuccessful()
             dlg.Destroy()
 
@@ -214,6 +214,8 @@ class FileManagement(wx.Dialog):
       # srbConnectionID indicates the Connection ID for the Storage Resource Broker connection.
       # It is initialized to None, as the connection is not established by default
       self.srbConnectionID = None
+      # Initialize the SRB Buffer Size to 400000.  This size yeilds fast transfers on my office computer with a very fast connection.
+      self.srbBuffer = '400000'
 
       # A wxDialog is used rather than a wxFrame.  While the frame has a Status Bar, which would have made some things
       # easier, a Dialog can be displayed modally, which this tool requires.
@@ -242,6 +244,8 @@ class FileManagement(wx.Dialog):
 
    def Setup(self, showModal=False):
       """ Set up the form widgets for the File Management Window """
+      # remember the showModal setting
+      self.isModal = showModal
       # Set the width of the center column buttons.
       # The buttons need to be slightly wider on the Mac to accommodate "Delete Folder >>"
       if 'wxMac' in wx.PlatformInfo:
@@ -582,8 +586,13 @@ class FileManagement(wx.Dialog):
          print "File Management Exception in CloseWindow(): %s, %s" % (exctype, excvalue)
       # Destroy the SRB Connection Dialog 
       self.SRBConnDlg.Destroy()
-      # Destroy the File Management Dialog
-      self.Destroy()
+      # Hide the File Management Dialog.  (You can't destroy it here, like I used to, because that crashes on Mac as of
+      # wxPython 2.8.6.1.
+      self.Show(False)
+      # As of wxPython 2.8.6.1, you can't destroy yourself during Close on the Mac if you're Modal, and let's delay it a bit
+      # if you're not Modal.
+      if not self.isModal:
+          wx.CallAfter(self.Destroy)
 
    def OnMouseOver(self, event):
       """ Update the Status Bar when a button is moused-over """
@@ -900,7 +909,7 @@ class FileManagement(wx.Dialog):
                self.SetStatusText(prompt % (fileName, targetDir))
 
             # The SRBFileTransfer class handles file transfers and provides Progress Feedback
-            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), file, fileSize, sourceDir, self.srbConnectionID, targetDir, SRBFileTransfer.srb_UPLOAD)
+            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), file, fileSize, sourceDir, self.srbConnectionID, targetDir, SRBFileTransfer.srb_UPLOAD, self.srbBuffer)
             success = dlg.TransferSuccessful()
             dlg.Destroy()
 
@@ -952,7 +961,7 @@ class FileManagement(wx.Dialog):
             # Strip whitespace and null character (c string terminator) from buf
             buf = string.strip(buf)[:-1]
             # The SRBFileTransfer class handles file transfers and provides Progress Feedback
-            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), file, int(buf), targetDir, self.srbConnectionID, sourceDir, SRBFileTransfer.srb_DOWNLOAD)
+            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), file, int(buf), targetDir, self.srbConnectionID, sourceDir, SRBFileTransfer.srb_DOWNLOAD, self.srbBuffer)
             success = dlg.TransferSuccessful()
             dlg.Destroy()
 
@@ -1414,6 +1423,7 @@ class FileManagement(wx.Dialog):
                    tmpHost = self.SRBConnDlg.editSRBHost.GetValue().encode(TransanaGlobal.encoding)
                    tmpUserName = self.SRBConnDlg.editUserName.GetValue().encode(TransanaGlobal.encoding)
                    tmpPassword = self.SRBConnDlg.editPassword.GetValue().encode(TransanaGlobal.encoding)
+                   tmpBuffer = self.SRBConnDlg.choiceBuffer.GetStringSelection().encode(TransanaGlobal.encoding)
                else:
                    self.tmpCollection = self.srbCollection
                    tmpDomain = self.SRBConnDlg.editDomain.GetValue()
@@ -1423,6 +1433,11 @@ class FileManagement(wx.Dialog):
                    self.tmpResource = self.SRBConnDlg.editSRBResource.GetValue()
                    tmpUserName = self.SRBConnDlg.editUserName.GetValue()
                    tmpPassword = self.SRBConnDlg.editPassword.GetValue()
+                   tmpBuffer = self.SRBConnDlg.choiceBuffer.GetStringSelection()
+
+               # Remember the buffer size setting, which is needed when transfers are initiated.
+               # (This parameter was added as different connection speeds work best with different buffer sizes.)
+               self.srbBuffer = tmpBuffer
 
                # Call the Function
                connResult = SRBConnectFx(ctypes.byref(self.srbConnectionID),
@@ -1637,8 +1652,19 @@ class FileManagement(wx.Dialog):
             file = open(os.getenv("HOME") + '/TransanaHelpContext.txt', 'w')
             pickle.dump(helpContext, file)
             file.flush()
-            file.close()            
-            
+            file.close()
+
+            # On OS X 10.4, when Transana is packed with py2app, the Help call stopped working.
+            # It seems we have to remove certain environment variables to get it to work properly!
+            # Let's investigate environment variables here!
+            envirVars = os.environ
+            if 'PYTHONHOME' in envirVars.keys():
+                del(os.environ['PYTHONHOME'])
+            if 'PYTHONPATH' in envirVars.keys():
+                del(os.environ['PYTHONPATH'])
+            if 'PYTHONEXECUTABLE' in envirVars.keys():
+                del(os.environ['PYTHONEXECUTABLE'])
+
             os.system('open -a TransanaHelp.app')
 
         else:

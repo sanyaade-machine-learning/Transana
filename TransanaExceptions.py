@@ -93,7 +93,10 @@ class DeleteError(exceptions.Exception):
     """Raised when a record delete attempt fails."""
     def __init__(self, reason):
         self.reason = reason
-        self.args = _("Unable to delete.  %s") % reason
+        prompt = _("Unable to delete.  %s")
+        if 'unicode' in wx.PlatformInfo:
+            prompt = unicode(prompt, 'utf8')
+        self.args = prompt % reason
 
 class InvalidLockError(SaveError):
     """Raised when a record lock that is no longer valid halts the save."""

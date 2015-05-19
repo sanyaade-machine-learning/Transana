@@ -46,8 +46,12 @@ import Note
 import Series
 # Import Transana's Text Report infrastructure
 import TextReport
+# import Transana's Exceptions
+import TransanaExceptions
 # import Transana's Global variables
 import TransanaGlobal
+# import Transana's Transcript Object
+import Transcript
 
 
 class ReportGenerator(wx.Object):
@@ -56,7 +60,7 @@ class ReportGenerator(wx.Object):
         """ Create the Object Report
               If a seriesName is passed, all Episodes in that Series and their Episode keywords should be listed.
               If an episodeName is passed, all Clips from that Episode, regardless of Collection, and their Clip keywords should be listed.
-              If a Name is passed, all Clips in that Collection, regardless of source Episode, and their Clip keywords should be listed.
+              If a collection is passed, all Clips in that Collection, regardless of source Episode, and their Clip keywords should be listed.
               If a searchSeries is passed, use the treeCtrl to determine the Episodes that should be included.
               if a searchCollection is passed, use the treeCtrl to determine the Clips that should be included. """
         # Parameters can include:
@@ -460,6 +464,8 @@ class ReportGenerator(wx.Object):
         self.data = []
         # Create a Dictionary Data Structure to accumulate Keyword Counts
         keywordCounts = {}
+        # Create a Dictionary Data Structure to accumulate Keyword Times
+        keywordTimes = {}
 
         # The majorList and minorList are constructed differently for the Episode version of the report,
         # and so the report must be built differently here too!
@@ -627,10 +633,45 @@ class ReportGenerator(wx.Object):
                         
                         # If we are supposed to show Clip Transcripts, and the clip HAS a transcript ...
                         if self.showTranscripts and (clipObj.text != ''):
+                            # Default the Episode Transcript to None in case the load fails
+                            episodeTranscriptObj = None
+                            # Begin exception handling
+                            try:
+                                # If the Clip Object has a defined Source Transcript ...
+                                if clipObj.transcript_num > 0:
+                                    # ... try to load that source transcript
+                                    episodeTranscriptObj = Transcript.Transcript(clipObj.transcript_num)
+                            # if the record is not found (orphaned Clip)
+                            except TransanaExceptions.RecordNotFoundError:
+                                # We don't need to do anything.
+                                pass
+
+                            # If an Episode Transcript was found ...
+                            if episodeTranscriptObj != None:
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Episode Transcript:'))
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the data to the report, the Episode Transcript ID in this case
+                                reportText.InsertStyledText('  %s\n' % (episodeTranscriptObj.id,))
+                            # if no Episode Transcript is found, we have an orphan.
+                            else:
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Episode Transcript:'))
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the data to the report, the lack of an Episode Transcript in this case
+                                reportText.InsertStyledText('  %s\n' % _('The Episode Transcript has been deleted.'))
+
                             # Turn bold on.
                             reportText.SetBold(True)
                             # Add the header to the report
                             reportText.InsertStyledText(_('Clip Transcript:') + '\n')
+
                             # Turn bold off.
                             reportText.SetBold(False)
                             # Add the Transcript to the report
@@ -661,8 +702,12 @@ class ReportGenerator(wx.Object):
                                 # Add this Keyword to the Keyword Counts
                                 if keywordCounts.has_key('%s : %s' % (keywordGroup, keyword)):
                                     keywordCounts['%s : %s' % (keywordGroup, keyword)] += 1
+                                    if (self.episodeName != None) or (self.collection != None) or (self.searchColl != None):
+                                        keywordTimes['%s : %s' % (keywordGroup, keyword)] += clipObj.clip_stop - clipObj.clip_start
                                 else:
                                     keywordCounts['%s : %s' % (keywordGroup, keyword)] = 1
+                                    if (self.episodeName != None) or (self.collection != None) or (self.searchColl != None):
+                                        keywordTimes['%s : %s' % (keywordGroup, keyword)] = clipObj.clip_stop - clipObj.clip_start
                                     
                     # if we are supposed to show Comments ...
                     if self.showComments:
@@ -780,6 +825,40 @@ class ReportGenerator(wx.Object):
                     
                     # If we are supposed to show Clip Transcripts, and the clip HAS a transcript ...
                     if self.showTranscripts and (clipObj.text != ''):
+                        # Default the Episode Transcript to None in case the load fails
+                        episodeTranscriptObj = None
+                        # Begin exception handling
+                        try:
+                            # If the Clip Object has a defined Source Transcript ...
+                            if clipObj.transcript_num > 0:
+                                # ... try to load that source transcript
+                                episodeTranscriptObj = Transcript.Transcript(clipObj.transcript_num)
+                        # if the record is not found (orphaned Clip)
+                        except TransanaExceptions.RecordNotFoundError:
+                            # We don't need to do anything.
+                            pass
+
+                        # If an Episode Transcript was found ...
+                        if episodeTranscriptObj != None:
+                            # Turn bold on.
+                            reportText.SetBold(True)
+                            # Add the header to the report
+                            reportText.InsertStyledText(_('Episode Transcript:'))
+                            # Turn bold off.
+                            reportText.SetBold(False)
+                            # Add the data to the report, the Episode Transcript ID in this case
+                            reportText.InsertStyledText('  %s\n' % (episodeTranscriptObj.id,))
+                        # if no Episode Transcript is found, we have an orphan.
+                        else:
+                            # Turn bold on.
+                            reportText.SetBold(True)
+                            # Add the header to the report
+                            reportText.InsertStyledText(_('Episode Transcript:'))
+                            # Turn bold off.
+                            reportText.SetBold(False)
+                            # Add the data to the report, the lack of an Episode Transcript in this case
+                            reportText.InsertStyledText('  %s\n' % _('The Episode Transcript has been deleted.'))
+
                         # Turn bold on.
                         reportText.SetBold(True)
                         # Add the header to the report
@@ -811,8 +890,10 @@ class ReportGenerator(wx.Object):
                                 # Add this Keyword to the Keyword Counts
                                 if keywordCounts.has_key('%s : %s' % (keywordGroup, keyword)):
                                     keywordCounts['%s : %s' % (keywordGroup, keyword)] += 1
+                                    keywordTimes['%s : %s' % (keywordGroup, keyword)] += clipObj.clip_stop - clipObj.clip_start
                                 else:
                                     keywordCounts['%s : %s' % (keywordGroup, keyword)] = 1
+                                    keywordTimes['%s : %s' % (keywordGroup, keyword)] = clipObj.clip_stop - clipObj.clip_start
                                     
                     # if we are supposed to show Comments ...
                     if self.showComments:
@@ -879,9 +960,13 @@ class ReportGenerator(wx.Object):
             # Add the sorted keywords to the summary with their counts
             for key in countKeys:
                 # Right-pad the keyword with spaces so columns will line up right.
-                st = key + '                                                              '[len(key):]
-                # Add the text to the report.
-                reportText.InsertStyledText('  %62s  %8d\n' % (st, keywordCounts[key]))
+                st = key + '                                                            '[len(key):]
+                if (self.episodeName != None) or (self.collection != None) or (self.searchColl != None):
+                    # Add the text to the report.
+                    reportText.InsertStyledText('  %60s  %5d  %10s\n' % (st[:60], keywordCounts[key], Misc.time_in_ms_to_str(keywordTimes[key])))
+                else:
+                    # Add the text to the report.
+                    reportText.InsertStyledText('  %60s  %5d\n' % (st[:60], keywordCounts[key]))
         # If our Clip Counter shows the presence of Clips ...
         if self.clipCount > 0:
             # Set the font for the data
@@ -890,7 +975,7 @@ class ReportGenerator(wx.Object):
             # If we're showing Clip Time data ...
             if self.showTime:
                 # Add the Clip Count and Total Time data to the report
-                reportText.InsertStyledText(_('  Clips:  %4d                                      Total Time:  %s\n') % (self.clipCount, Misc.time_in_ms_to_str(self.clipTotalTime)))
+                reportText.InsertStyledText(_('  Clips:  %8d                                         Total Time:  %s\n') % (self.clipCount, Misc.time_in_ms_to_str(self.clipTotalTime)))
             # if we're not showing Clip Time data ...
             else:
                 # Add the Clip Count but NOT the Total Time data to the report

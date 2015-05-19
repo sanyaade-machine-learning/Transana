@@ -169,6 +169,11 @@ class KeywordMap(wx.Frame):
         self.toolBar.AddTool(T_FILE_SAVEAS, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "SaveJPG16.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Save As'))
         self.toolBar.AddTool(T_FILE_PRINTSETUP, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintSetup.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Set up Page'))
         self.toolBar.AddTool(T_FILE_PRINTPREVIEW, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintPreview.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print Preview'))
+
+        # Disable Print Preview on the Mac
+        if 'wxMac' in wx.PlatformInfo:
+            self.toolBar.EnableTool(T_FILE_PRINTPREVIEW, False)
+            
         self.toolBar.AddTool(T_FILE_PRINT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Print.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print'))
         # Get the graphic for Help
         bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
@@ -487,8 +492,9 @@ class KeywordMap(wx.Frame):
             dlg = Dialogs.ErrorDialog(None, _("There was a problem printing this report."))
             dlg.ShowModal()
             dlg.Destroy()
-        else:
-            self.printData = printer.GetPrintDialogData().GetPrintData()
+        # NO!  REMOVED to prevent crash on 2nd print attempt following Filter Config.
+        # else:
+        #     self.printData = printer.GetPrintDialogData().GetPrintData()
         printout.Destroy()
 
     # Define the Method that closes the Window on File > Exit

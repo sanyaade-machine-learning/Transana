@@ -1987,8 +1987,6 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
         if (clipData.clipStop == sourceEpisode.tape_length) and \
            (clipData.clipStop - clipData.clipStart > 30000):
             prompt = _('The ending point for this Clip is the end of the media file.  Do you want to create this clip?')
-#            errordlg = wx.MessageDialog(None, prompt, _("Transana Error"), style=wx.YES_NO | wx.ICON_QUESTION)
-#            result = errordlg.ShowModal()
             errordlg = Dialogs.QuestionDialog(None, prompt, _("Transana Error"))
             result = errordlg.LocalShowModal()
             errordlg.Destroy()
@@ -2014,7 +2012,7 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
             # Build the node data needed to add the collection.
             nodeData = (_('Collections'), collectName)
             # Add the new Collection to the data tree
-            dbTree.add_Node('CollectionNode', nodeData, collectNum, 0)
+            dbTree.add_Node('CollectionNode', nodeData, collectNum, 0, expandNode=False)
             # If in multi-user mode ...
             if not TransanaConstants.singleUserVersion:
                 # ... inform the Message Server that a Collection has been added
@@ -2141,7 +2139,7 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
                 # ... determine if the Username is already a Keyword
                 if DBInterface.check_username_as_keyword():
                     # Add the new Keyword to the data tree
-                    dbTree.add_Node('KeywordNode', (_('Keywords'), _("Transana Users"), TransanaGlobal.userName), 0, _("Transana Users"))
+                    dbTree.add_Node('KeywordNode', (_('Keywords'), _("Transana Users"), TransanaGlobal.userName), 0, _("Transana Users"), expandNode=False)
                     # Inform the Message Server of the added Keyword
                     if TransanaGlobal.chatWindow != None:
                         msg = "AK %s >|< %s"
@@ -2150,27 +2148,40 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
                         TransanaGlobal.chatWindow.SendMessage(msg % data)
                 # Add the keyword to the Quick Clip
                 quickClip.add_keyword(data[0], data[1])
-            # Save the Quick Clip
-            quickClip.db_save()
 
-            # We need to add the Clip to the database tree.
-            # Build the node data needed to add the clip.
-            nodeData = (_('Collections'), collectName, quickClip.id)
-            # Add the new Collection to the data tree
-            dbTree.add_Node('ClipNode', nodeData, quickClip.number, quickClip.collection_num)
-            # Inform the Message Server of the added Clip
-            if not TransanaConstants.singleUserVersion:
-                msg = "ACl %s >|< %s"
-                if TransanaGlobal.chatWindow != None:
-                    TransanaGlobal.chatWindow.SendMessage(msg % (collectName, quickClip.id))
+            # If we're in Demo mode, an exception can be raised here if the Clip Limit is exceeded.
+            # We need to trap that.
+            try:
+                # Save the Quick Clip
+                quickClip.db_save()
 
-            # See if the Keyword visualization needs to be updated.
-            dbTree.parent.ControlObject.UpdateKeywordVisualization()
-            # Even if this computer doesn't need to update the keyword visualization others, might need to.
-            if not TransanaConstants.singleUserVersion:
-                # We need to update the Episode Keyword Visualization
-                if DEBUG:
-                    print 'Message to send = "UKV %s %s %s"' % ('Clip', quickClip.number, quickClip.episode_num)
-                    
-                if TransanaGlobal.chatWindow != None:
-                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', quickClip.number, quickClip.episode_num))
+                # We need to add the Clip to the database tree.
+                # Build the node data needed to add the clip.
+                nodeData = (_('Collections'), collectName, quickClip.id)
+                # Add the new Collection to the data tree
+                dbTree.add_Node('ClipNode', nodeData, quickClip.number, quickClip.collection_num, expandNode=False)
+                # Inform the Message Server of the added Clip
+                if not TransanaConstants.singleUserVersion:
+                    msg = "ACl %s >|< %s"
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage(msg % (collectName, quickClip.id))
+
+                # See if the Keyword visualization needs to be updated.
+                dbTree.parent.ControlObject.UpdateKeywordVisualization()
+                # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                if not TransanaConstants.singleUserVersion:
+                    # We need to update the Episode Keyword Visualization
+                    if DEBUG:
+                        print 'Message to send = "UKV %s %s %s"' % ('Clip', quickClip.number, quickClip.episode_num)
+                        
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', quickClip.number, quickClip.episode_num))
+            # Process the SaveError.  This should ONLY occur in Demo Mode if the Clip Limit is exceeded.
+            except TransanaExceptions.SaveError:
+                # Remove the part of the error message that refers to clicking "Cancel" in the "Add Clip" dialog box!
+                prompt = sys.exc_info()[1].reason.split('\n')[0]
+
+                # Display the Error Message
+                errordlg = Dialogs.ErrorDialog(None, prompt)
+                errordlg.ShowModal()
+                errordlg.Destroy()

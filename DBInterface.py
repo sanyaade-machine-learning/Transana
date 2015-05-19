@@ -311,7 +311,7 @@ def establish_db_exists():
                      ClipNum        INTEGER, 
                      TranscriptNum  INTEGER, 
                      NoteTaker      VARCHAR(100), 
-                     NoteText       BLOB, 
+                     NoteText       LONGBLOB, 
                      RecordLock     VARCHAR(25), 
                      LockTime       DATETIME, 
                      PRIMARY KEY (NoteNum))
@@ -321,6 +321,30 @@ def establish_db_exists():
         # Execute the Query
         dbCursor.execute(query)
 
+        # Now we need to check the Notes table to see if the NoteText field is a BLOB or a LONGBLOB,
+        # and we need to increase the size of the field if it's a BLOB.
+
+        # I originally used SHOW COLUMNS to detect this, but that caused a WEAK REFERENCE failure on
+        # changing databases against my linux box running MySQL 5.0.27. (Not sure what the relevant
+        # factor was in that.  Just know it fails.)  So I switched to SHOW CREATE TABLE.
+
+        # query = "SHOW COLUMNS FROM Notes2 LIKE 'NoteText'"
+        query = "SHOW CREATE TABLE Notes2"
+        # Execute the Query
+        dbCursor.execute(query)
+        # now let's look at the data returned from the database
+        for data in dbCursor.fetchall():
+            # Check for "array" data and convert if needed
+            if type(data[1]).__name__ == 'array':
+                d1 = data[1].tostring()
+            else:
+                d1 = data[1]
+            # if a LONGBLOB is present, we can skip this.     # If the Field is "NoteText" and the Type is "Blob" ...
+            if not u"longblob" in d1.lower():            # (data[0].lower() == u'notetext') and (data[1].lower() == u'blob'):
+                # ... then we need to alter the table to change the data type to LONGBLOB.
+                query = "ALTER TABLE Notes2 MODIFY NoteText LONGBLOB"
+                dbCursor2 = db.cursor()
+                dbCursor2.execute(query)
 
         # Keywords Table: Test for existence and create if needed
         query = """
@@ -390,20 +414,41 @@ def establish_db_exists():
                      ReportScope     INTEGER, 
                      ConfigName      VARCHAR(100),
                      FilterDataType  INTEGER,
-                     FilterData      BLOB,
+                     FilterData      LONGBLOB,
                      PRIMARY KEY (ReportType, ReportScope, ConfigName, FilterDataType))
                 """
-        # ReportTypes:     1 = Keyword Map
-        #                  2 = Keyword Visualization
-        #                  3 = Keyword Comparison
-        # FilterDataType:  1 = Episode
-        #                  2 = Clip
-        #                  3 = Keyword
+        # See FilterDialog.py for a list of ReportTypes adn FilterDataTypes
         
         # Add the appropriate Table Type to the CREATE Query
         query = SetTableType(hasInnoDB, query)
         # Execute the Query
         dbCursor.execute(query)
+
+        # Now we need to check the Filters table to see if the FilterData field is a BLOB or a LONGBLOB,
+        # and we need to increase the size of the field if it's a BLOB.
+
+        # I originally used SHOW COLUMNS to detect this, but that caused a WEAK REFERENCE failure on
+        # changing databases against my linux box running MySQL 5.0.27. (Not sure what the relevant
+        # factor was in that.  Just know it fails.)  So I switched to SHOW CREATE TABLE.
+
+        # query = "SHOW COLUMNS FROM Filters2 LIKE 'FilterData'"
+        query = "SHOW CREATE TABLE Filters2"
+        # Execute the Query
+        dbCursor.execute(query)
+        # now let's look at the data returned from the database
+        for data in dbCursor.fetchall():
+            # Check for "array" data and convert if needed
+            if type(data[1]).__name__ == 'array':
+                d1 = data[1].tostring()
+            else:
+                d1 = data[1]
+            # if a LONGBLOB is present, we can skip this.     # If the Field is "FilterData" and the Type is "Blob" ...
+            if not u"longblob" in d1.lower():            # (data[0].lower() == u'filterdata') and (data[1].lower() == u'blob'):
+                # ... then we need to alter the table to change the data type to LONGBLOB.
+                query = "ALTER TABLE Filters2 MODIFY FilterData LONGBLOB"
+                dbCursor2 = db.cursor()
+                dbCursor2.execute(query)
+
 
         # If we've gotten this far, return "true" to indicate success.
         return True
@@ -589,25 +634,60 @@ def get_db():
 
                         dbCursor.execute('USE %s' % databaseName.encode(TransanaGlobal.encoding))
 
+                    if TransanaConstants.demoVersion:
+                        # Get a Database Cursor
+                        dbCursor.execute('SELECT COUNT(EpisodeNum) from Episodes2')
+                        # Determine the number of Episode records
+                        epCount = dbCursor.fetchone()[0]
+                        # Determine the number of Episode Transcript records (exclude Clip Transcripts)
+                        dbCursor.execute('SELECT COUNT(TranscriptNum) FROM Transcripts2 WHERE ClipNum = 0')
+                        trCount = dbCursor.fetchone()[0]
+                        # Determine the number of Clip records
+                        dbCursor.execute('SELECT COUNT(ClipNum) from Clips2')
+                        clCount = dbCursor.fetchone()[0]
+                        # Determine the number of Keyword records
+                        dbCursor.execute('SELECT COUNT(Keyword) from Keywords2')
+                        kwCount = dbCursor.fetchone()[0]
+                        # Check to see that the Demo limits are not exceeded
+                        if (epCount > TransanaConstants.maxEpisodes) or \
+                           (trCount > TransanaConstants.maxEpisodeTranscripts) or \
+                           (clCount > TransanaConstants.maxClips) or \
+                           (kwCount > TransanaConstants.maxKeywords):
+                            # If they are, display an error message
+                            errormsg = _("The data in this database exceeds what is allowed in the Transana Demonstration.")
+                            errordlg = Dialogs.ErrorDialog(None, errormsg)
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # Close the Database Cursor
+                            dbCursor.close()
+                            # Close the Database Connection
+                            _dbref.close()
+                            # If database limits have been exceeded, block the database open.
+                            _dbref = None
+
                     TransanaGlobal.configData.database = databaseName
 
             except MySQLdb.OperationalError:
                 if DEBUG:
                     print "DBInterface.get_db():  Unknown Database!"
 
-                # If the Database Name was not found, prompt the user to see if they want to create a new Database.
-                # First, create the Prompt Dialog
-                # NOTE:  This does not use Dialogs.ErrorDialog because it requires a Yes/No reponse
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_('Database "%s" does not exist.  Would you like to create it?\n(If you do not have rights to create a database, see your system administrator.)'), 'utf8')
+                # Skip the Database Creation message if we're in Demonstartion Mode
+                if not TransanaConstants.demoVersion:
+                    # If the Database Name was not found, prompt the user to see if they want to create a new Database.
+                    # First, create the Prompt Dialog
+                    # NOTE:  This does not use Dialogs.ErrorDialog because it requires a Yes/No reponse
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('Database "%s" does not exist.  Would you like to create it?\n(If you do not have rights to create a database, see your system administrator.)'), 'utf8')
+                    else:
+                        prompt = _('Database "%s" does not exist.  Would you like to create it?\n(If you do not have rights to create a database, see your system administrator.)')
+                    dlg = Dialogs.QuestionDialog(None, prompt % databaseName)
+                    # Display the Dialog
+                    result = dlg.LocalShowModal()
+                    # Clean up after the Dialog
+                    dlg.Destroy()
                 else:
-                    prompt = _('Database "%s" does not exist.  Would you like to create it?\n(If you do not have rights to create a database, see your system administrator.)')
-                dlg = Dialogs.QuestionDialog(None, prompt % databaseName)
-                # Display the Dialog
-                result = dlg.LocalShowModal()
-                # Clean up after the Dialog
-                dlg.Destroy()
+                    result = wx.ID_YES
                 # If the user wants to create a new Database ...
                 if result == wx.ID_YES:
                     try:
@@ -917,8 +997,9 @@ def locate_quick_clips_collection():
     """ Determine the collection number of the Quick Clips Collection, creating it if necessary. """
     # Get a Database Cursor
     DBCursor = get_db().cursor()
-    # Create a query to get the Collection Number for the QuickClips Collection
-    query = "SELECT CollectNum from Collections2 where CollectID = %s"
+    # Create a query to get the Collection Number for the QuickClips Collection (Beware of nested copies of
+    # the QuickClips Collection, which might've been created by saving search results!)
+    query = "SELECT CollectNum from Collections2 where CollectID = %s AND ParentCollectNum = 0"
     # Determine the appropriate name for the QuickClips Collection
     if 'unicode' in wx.PlatformInfo:
         collectionName = unicode(_("Quick Clips"), 'utf8')
@@ -1026,7 +1107,7 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
     l = []
     if TimeCode == None:
         query = """
-                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment
+                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment, a.TranscriptNum
                     FROM Clips2 a, Collections2 b
                     WHERE a.CollectNum = b.CollectNum AND
                           a.EpisodeNum = %s
@@ -1035,7 +1116,7 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
         args = (EpisodeNum)
     else:
         query = """
-                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment
+                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment, a.TranscriptNum
                     FROM Clips2 a, Collections2 b
                     WHERE a.CollectNum = b.CollectNum AND
                           a.EpisodeNum = %s AND 
@@ -1055,10 +1136,74 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
             ClipID = ProcessDBDataForUTF8Encoding(ClipID)
             CollectID = ProcessDBDataForUTF8Encoding(CollectID)
         # Add a dictionary object to the results list that spells out the clip data
-        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'], 'Comment' : row['ClipComment']})
+        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'], 'Comment' : row['ClipComment'], 'TranscriptNum' : row['TranscriptNum']})
 
     DBCursor.close()
     return l
+
+def list_of_clips_by_transcriptnum(TranscriptNum):
+    """  Get a list of all Clips that have been created from a given Transcript Number.  """
+    # Initialize an empty list.
+    l = []
+    # Define the query that gets clips based on Transcript Number the clips was created from
+    query = """ SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment, a.TranscriptNum
+                  FROM Clips2 a, Collections2 b
+                  WHERE a.CollectNum = b.CollectNum AND
+                        a.TranscriptNum = %s
+                  ORDER BY a.ClipStart, b.CollectID, a.ClipID """
+    # Set up the query parameters
+    args = (TranscriptNum, )
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Execute the query
+    DBCursor.execute(query, args)
+    # For each row returned from the database ...
+    for row in fetchall_named(DBCursor):
+        # Isolate some of the crucial values into variables
+        ClipNum = row['ClipNum']
+        ClipID = row['ClipID']
+        CollectID = row['CollectID']
+        # Convert the ID values to the proper UTF-8 representation if needed
+        if 'unicode' in wx.PlatformInfo:
+            ClipID = ProcessDBDataForUTF8Encoding(ClipID)
+            CollectID = ProcessDBDataForUTF8Encoding(CollectID)
+        # Add a dictionary object to the results list that spells out the clip data
+        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'], 'Comment' : row['ClipComment'], 'TranscriptNum' : row['TranscriptNum']})
+    # Close the Database Cursor
+    DBCursor.close()
+    # Return the list of Dictionary Objects
+    return l
+
+def list_of_clip_copies(clipID, sourceTranscriptNum, clipStart, clipStop):
+    """ Return a list of clips that match the ClipID, source Transcript number, start, and stop times submitted """
+    # Create an empty list to hold data
+    clipList = []
+    # Define the SQL query
+    query = """ SELECT ClipNum, CollectNum, ClipID
+                  FROM Clips2
+                  WHERE ClipID = %s AND
+                        TranscriptNum = %s AND
+                        ClipStart = %s AND
+                        ClipStop = %s"""
+    # Define the data to get plugged into the SQL query
+    data = (clipID.encode('utf8'), sourceTranscriptNum, clipStart, clipStop)
+    # Get a database cursor
+    cursor = get_db().cursor()
+    # Execute the SQL query
+    cursor.execute(query, data)
+    # Fetch the data and iterate through it.
+    for (clipNum, collectNum, clipID) in cursor.fetchall():
+        # Get the Clip ID
+        id = clipID
+        # Convert it for UTF-8 if needed
+        if 'unicode' in wx.PlatformInfo:
+            id = ProcessDBDataForUTF8Encoding(id)
+        # Add the data to the data list
+        clipList.append((clipNum, collectNum, id))
+    # Close the database cursor
+    cursor.close()
+    # Return the data list to the calling routine
+    return clipList
 
 def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart, clipStop):
     """ Check to see if there is already a Quick Clip for this video segment. """

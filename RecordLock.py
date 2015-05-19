@@ -142,10 +142,10 @@ class RecordLock(wx.Dialog):
         self.userList.Clear()
         # We need to count the number of times THIS USER's UserName is in the list.  Initialize a counter.
         userNameCount = 0
+        # initialize the list of current users
+        currentUsers = []
         # If there's a Chat Window defined, we'll get the current users from there.
         if TransanaGlobal.chatWindow != None:
-            # initialize the list of current users
-            currentUsers = []
             # Iterate through the items in the ChatWindow's User List control
             for n in range(TransanaGlobal.chatWindow.userList.GetCount()):
                 # Assign the userName to a variable for easier manipulation

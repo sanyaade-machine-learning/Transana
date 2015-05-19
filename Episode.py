@@ -123,6 +123,24 @@ class Episode(DataObject):
         """Save the record to the database using Insert or Update as
         appropriate."""
 
+        # Define and implement Demo Version limits
+        if TransanaConstants.demoVersion and (self.number == 0):
+            # Get a DB Cursor
+            c = DBInterface.get_db().cursor()
+            # Find out how many records exist
+            c.execute('SELECT COUNT(EpisodeNum) from Episodes2')
+            res = c.fetchone()
+            c.close()
+            # Define the maximum number of recors allowed
+            maxEpisodes = TransanaConstants.maxEpisodes
+            # Compare
+            if res[0] >= maxEpisodes:
+                # If the limit is exceeded, create and display the error using a SaveError exception
+                prompt = _('The Transana Demonstration limits you to %d Episode records.\nPlease cancel the "Add Episode" dialog to continue.')
+                if 'unicode' in wx.PlatformInfo:
+                    prompt = unicode(prompt, 'utf8')
+                raise SaveError, prompt % maxEpisodes
+            
         # Sanity checks
         if self.id == "":
             raise SaveError, _("Episode ID is required.")
@@ -142,18 +160,18 @@ class Episode(DataObject):
             # then we need to block Unicode characters from media filenames.
             # Unicode characters still cause problems on the Mac for the Multi-User version of Transana,
             # but can be made to work if shared waveforming is done on a Windows computer.
-            if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
+#            if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
                 # Create a string of legal characters for the file names
-                allowedChars = TransanaConstants.legalFilenameCharacters
+#                allowedChars = TransanaConstants.legalFilenameCharacters
                 # check each character in the file name string
-                for char in self.media_filename:
+#                for char in self.media_filename:
                     # If the character is illegal ...
-                    if allowedChars.find(char) == -1:
-                        msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.')
-                        if 'unicode' in wx.PlatformInfo:
+#                    if allowedChars.find(char) == -1:
+#                        msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.')
+#                        if 'unicode' in wx.PlatformInfo:
                             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                            msg = unicode(msg, 'utf8')
-                        raise SaveError, msg % (self.media_filename, char)
+#                            msg = unicode(msg, 'utf8')
+#                        raise SaveError, msg % (self.media_filename, char)
             # if we're not in Unicode mode ...
             if 'ansi' in wx.PlatformInfo:
                 # ... we don't need to encode the string values, but we still need to copy them to our local variables.
@@ -304,33 +322,23 @@ class Episode(DataObject):
             c.close()
             self.clear()
         except RecordLockedError, e:
-
-            if DEBUG:
-                print "Episode: RecordLocked Error", e
-
-
             # if a sub-record is locked, we may need to unlock the Episode record (after rolling back the Transaction)
             if self.isLocked:
                 # c (the database cursor) only exists if the record lock was obtained!
                 # We must roll back the transaction before we unlock the record.
                 c.execute("ROLLBACK")
-
-                if DEBUG:
-                    print "Episode: roll back Transaction"
-            
                 c.close()
-
                 self.unlock_record()
-
-                if DEBUG:
-                    print "Episode: unlocking record"
-
-            raise e    
+            raise e
+        # Handle the DeleteError Exception
+        except DeleteError, e:
+            # If the record is locked ...
+            if self.isLocked:
+                # ... unlock it ...
+                self.unlock_record()
+            # ... then pass the exception on.
+            raise e
         except:
-
-            if DEBUG:
-                print "Episode: Exception"
-            
             raise
 
         return result

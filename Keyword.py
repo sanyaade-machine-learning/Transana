@@ -31,6 +31,7 @@ from TransanaExceptions import *
 import DBInterface
 import Dialogs
 import Misc
+import TransanaConstants
 import TransanaGlobal
 import inspect
 # import Python String module
@@ -245,6 +246,24 @@ class Keyword(object):
     def db_save(self):
         """Save the record to the database using Insert or Update as
         appropriate."""
+
+        # Define and implement Demo Version limits
+        if TransanaConstants.demoVersion and (self._db_start_save() == 0):
+            # Get a DB Cursor
+            c = DBInterface.get_db().cursor()
+            # Find out how many records exist
+            c.execute('SELECT COUNT(Keyword) from Keywords2')
+            res = c.fetchone()
+            c.close()
+            # Define the maximum number of records allowed
+            maxKeywords = TransanaConstants.maxKeywords
+            # Compare
+            if res[0] >= maxKeywords:
+                # If the limit is exceeded, create and display the error using a SaveError exception
+                prompt = _('The Transana Demonstration limits you to %d Keyword records.\nPlease cancel the "Add Keyword" dialog to continue.')
+                if 'unicode' in wx.PlatformInfo:
+                    prompt = unicode(prompt, 'utf8')
+                raise SaveError, prompt % maxKeywords
 
         # Validity Checks
         if (self.keywordGroup == ''):

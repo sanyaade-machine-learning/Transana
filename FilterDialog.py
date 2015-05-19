@@ -806,6 +806,8 @@ class FilterDialog(wx.Dialog):
             dlg.CentreOnScreen()
             # Show the Choice Dialog and see if the user chooses OK
             if dlg.ShowModal() == wx.ID_OK:
+                # Set the Cursor to the Hourglass while the filter is loaded
+                TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
                 # Remember the Configuration Name
                 self.configName = dlg.GetStringSelection()
                 # Get a Database Cursor
@@ -850,22 +852,31 @@ class FilterDialog(wx.Dialog):
                     elif filterDataType == 2:
                         # Get the current Clip data from the Form
                         formClipData = self.GetClips()
-                        # Get the Clip data from the Database.
-                        # (If MySQLDB returns an Array, convert it to a String!)
-                        if type(filterData).__name__ == 'array':
-                            fileClipData = cPickle.loads(filterData.tostring())
-                        else:
-                            fileClipData = cPickle.loads(filterData)
-                        # Clear the Clip List
-                        self.clipList.DeleteAllItems()
-                        # Determine if this list is Ordered
-                        if self.kwargs.has_key('clipSort') and self.kwargs['clipSort']:
-                            orderedList = True
-                        else:
-                            orderedList = False
-                        # We need to compare the file data to the form data and reconcile differences,
-                        # then feed the results to the Clip Tab.
-                        self.SetClips(self.ReconcileLists(formClipData, fileClipData, listIsOrdered=orderedList))
+                        # Due to the BLOB / LONGBLOB problem, we can have bad data in the database.  Better catch it.
+                        try:
+                            # Get the Clip data from the Database.
+                            # (If MySQLDB returns an Array, convert it to a String!)
+                            if type(filterData).__name__ == 'array':
+                                fileClipData = cPickle.loads(filterData.tostring())
+                            else:
+                                fileClipData = cPickle.loads(filterData)
+                            # Clear the Clip List
+                            self.clipList.DeleteAllItems()
+                            # Determine if this list is Ordered
+                            if self.kwargs.has_key('clipSort') and self.kwargs['clipSort']:
+                                orderedList = True
+                            else:
+                                orderedList = False
+                            # We need to compare the file data to the form data and reconcile differences,
+                            # then feed the results to the Clip Tab.
+                            self.SetClips(self.ReconcileLists(formClipData, fileClipData, listIsOrdered=orderedList))
+                        # If the pickled data got truncated in the database, we'll get an Unpickling error here!
+                        except cPickle.UnpicklingError, e:
+                            # Construct and display an error message here
+                            errormsg = _("Transana was unable to load your clip filter data from the database.  Please select your clips again and re-save the filter configuration.")
+                            errorDlg = Dialogs.ErrorDialog(self, errormsg)
+                            errorDlg.ShowModal()
+                            errorDlg.Destroy()
                         
                     # If the data is for the Keywords Tab (filterDataType 3) ...
                     elif filterDataType == 3:
@@ -1126,6 +1137,8 @@ class FilterDialog(wx.Dialog):
                     # If we have an unknown filterDataType ...
                     else:
                         print "Unknown Filter Data:", self.reportType, reportScope, self.configName, filterDataType, type(filterData), filterData
+                # Set the Cursor to the Arrow now that the filter is loaded
+                TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
             # Destroy the Choice Dialog
             dlg.Destroy()

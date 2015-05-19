@@ -39,8 +39,12 @@ class OptionsSettings(wx.Dialog):
     def __init__(self, parent, tabToShow=0):
         """ Initialize the Program Options Dialog Box """
         self.parent = parent
+        if 'wxMSW' in wx.PlatformInfo:
+            dlgHeight = 360
+        else:
+            dlgHeight = 300
         # Define the Dialog Box
-        wx.Dialog.__init__(self, parent, -1, _("Transana Settings"), wx.DefaultPosition, wx.Size(550, 300), style=wx.CAPTION | wx.SYSTEM_MENU | wx.THICK_FRAME)
+        wx.Dialog.__init__(self, parent, -1, _("Transana Settings"), wx.DefaultPosition, wx.Size(550, dlgHeight), style=wx.CAPTION | wx.SYSTEM_MENU | wx.THICK_FRAME)
 
         # To look right, the Mac needs the Small Window Variant.
         if "__WXMAC__" in wx.PlatformInfo:
@@ -248,10 +252,42 @@ class OptionsSettings(wx.Dialog):
         lay.height.AsIs()
         lblTranscriptionSetbackMax.SetConstraints(lay)
 
+        # On Windows, we can use a number of different media players.  There are trade-offs.
+        #   wx.media.MEDIABACKEND_DIRECTSHOW allows speed adjustment, but not WMV or WMA formats.
+        #   wx.media.MEDIABACKEND_WMP10 allows WMV and WMA formats, but speed adjustment is broken.
+        # Let's allow the user to select which back end to use!
+        # This option is Windows only!
+        if 'wxMSW' in wx.PlatformInfo:
+            # Add the Media Player Option Label to the Transcriber Settings Tab
+            lblMediaPlayer = wx.StaticText(panelTranscriber, -1, _("Media Player Selection"), style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblTranscriptionSetbackMin, 15)
+            lay.left.SameAs(panelTranscriber, wx.Left, 10)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblMediaPlayer.SetConstraints(lay)
+
+            # Add the Media Player Option to the Transcriber Settings Tab
+            self.chMediaPlayer = wx.Choice(panelTranscriber, -1, choices = [_('Enable WMV and WMA formats, disable speed control'), _('Disable WMV and WMA formats, enable speed control')])
+            self.chMediaPlayer.SetSelection(TransanaGlobal.configData.mediaPlayer)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblMediaPlayer, 3)
+            lay.left.SameAs(panelTranscriber, wx.Left, 10)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            self.chMediaPlayer.SetConstraints(lay)
+# REMOVED!  When Speed Control is OFF for WMP, it still works for QuickTime!
+#            self.chMediaPlayer.Bind(wx.EVT_CHOICE, self.OnMediaPlayerSelect)
+
+            nextLabelPositioner = self.chMediaPlayer
+        else:
+            nextLabelPositioner = lblTranscriptionSetbackMin
+            
+
         # Add the Video Speed Slider Label to the Transcriber Settings Tab
         lblVideoSpeed = wx.StaticText(panelTranscriber, -1, _("Video Playback Speed"), style=wx.ST_NO_AUTORESIZE)
         lay = wx.LayoutConstraints()
-        lay.top.Below(lblTranscriptionSetbackMin, 15)
+        lay.top.Below(nextLabelPositioner, 15)
         lay.left.SameAs(panelTranscriber, wx.Left, 10)
         lay.width.AsIs()
         lay.height.AsIs()
@@ -269,7 +305,7 @@ class OptionsSettings(wx.Dialog):
         # Add the Video Speed Slider Current Setting Label to the Transcriber Settings Tab
         self.lblVideoSpeedSetting = wx.StaticText(panelTranscriber, -1, "%1.1f" % (float(self.videoSpeed.GetValue()) / 10))
         lay = wx.LayoutConstraints()
-        lay.top.Below(lblTranscriptionSetbackMin, 20)
+        lay.top.Below(nextLabelPositioner, 15)
         lay.right.SameAs(panelTranscriber, wx.Right, 10)
         lay.width.AsIs()
         lay.height.AsIs()
@@ -277,6 +313,12 @@ class OptionsSettings(wx.Dialog):
 
         # Define the Scroll Event for the Slider to keep the Current Setting Label updated
         wx.EVT_SCROLL(self, self.OnScroll)
+
+# REMOVED!  When Speed Control is OFF for WMP, it still works for QuickTime!
+        # Disable the slider if it should be disabled
+#        if TransanaGlobal.configData.mediaPlayer == 0:
+#            self.videoSpeed.Enable(False)
+#            self.lblVideoSpeedSetting.SetLabel("%1.1f" % (1.0))
 
         # Add the Video Speed Slider Minimum Speed Label to the Transcriber Settings Tab
         lblVideoSpeedMin = wx.StaticText(panelTranscriber, -1, "0.1", style=wx.ST_NO_AUTORESIZE)
@@ -532,6 +574,10 @@ class OptionsSettings(wx.Dialog):
                 TransanaGlobal.configData.videoPath = tempVideoPath
         # Update the Global Transcription Setback
         TransanaGlobal.configData.transcriptionSetback = self.transcriptionSetback.GetValue()
+        # If on Windows ...
+        if 'wxMSW' in wx.PlatformInfo:
+            # Update the Media Player selection
+            TransanaGlobal.configData.mediaPlayer = self.chMediaPlayer.GetSelection()
         # Update the Global Video Speed
         TransanaGlobal.configData.videoSpeed = self.videoSpeed.GetValue()
         # Update the Global Default Font
@@ -590,6 +636,19 @@ class OptionsSettings(wx.Dialog):
                 self.databaseDirectory.SetValue(dlg.GetPath())
         # Destroy the Dialog
         dlg.Destroy
+
+
+# REMOVED!  When Speed Control is OFF for WMP, it still works for QuickTime!
+#    def OnMediaPlayerSelect(self, event):
+#        """ Handle the OnChoice Event for the Media Player Choice box """
+        # Disable the slider if it should be disabled
+#        if self.chMediaPlayer.GetCurrentSelection() == 0:
+#            self.videoSpeed.SetValue(10)
+#            self.videoSpeed.Enable(False)
+#            self.lblVideoSpeedSetting.SetLabel("%1.1f" % (1.0))
+#        else:
+#            self.videoSpeed.Enable(True)
+#            self.lblVideoSpeedSetting.SetLabel("%1.1f" % (float(self.videoSpeed.GetValue()) / 10))
 
     def OnScroll(self, event):
         """ Handle the Scroll Event for the Video Speed Slider. """

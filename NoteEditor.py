@@ -25,6 +25,8 @@ import os
 import time
 # import Transana's Dialogs
 import Dialogs
+# import Transana's Constants
+import TransanaConstants
 # import Transana's Global variables
 import TransanaGlobal
 # import Transana's Printout Class
@@ -111,7 +113,7 @@ class _NotePanel(wx.Panel):
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
         # Place a Tool Bar on the Panel
-        self.toolbar = wx.ToolBar(self, style = wx.TB_HORIZONTAL | wx.RAISED_BORDER | wx.TB_TEXT)
+        self.toolbar = wx.ToolBar(self, style = wx.TB_HORIZONTAL | wx.TB_TEXT)   # wx.RAISED_BORDER | 
         # Add an Insert Date/Time button to the Toolbar
         self.toolbar.AddTool(T_DATETIME, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Time16.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Insert Date / Time'))
         # Add a Save As Text button to the Toolbar
@@ -120,6 +122,11 @@ class _NotePanel(wx.Panel):
         self.toolbar.AddTool(T_PAGESETUP, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintSetup.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Page Setup'))
         # Add a Print Preview button to the Toolbar
         self.toolbar.AddTool(T_PRINTPREVIEW, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintPreview.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print Preview'))
+
+        # Disable Print Preview on the Mac
+        if 'wxMac' in wx.PlatformInfo:
+            self.toolbar.EnableTool(T_PRINTPREVIEW, False)
+            
         # Add a Print button to the Toolbar
         self.toolbar.AddTool(T_PRINT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Print.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print'))
         # Get the graphic for Help ...
@@ -128,6 +135,8 @@ class _NotePanel(wx.Panel):
         self.toolbar.AddTool(T_HELP, bmp, shortHelpString=_("Help"))
         # Add an Exit button to the Toolbar
         self.toolbar.AddTool(T_EXIT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Exit.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Exit'))
+        # Adding a separator here helps things look better on the Mac.
+        self.toolbar.AddSeparator()
         # Cause the Toolbar to be built
         self.toolbar.Realize()
 
@@ -142,9 +151,6 @@ class _NotePanel(wx.Panel):
         bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
         # Create the Bitmap Button for Search Back
         self.searchBack = wx.BitmapButton(self, CMD_SEARCH_BACK_ID, bmp, style=wx.NO_BORDER)
-        # Create a ToolTip for the Search Backwards button and attach it
-#        self.searchBackToolTip = wx.ToolTip(_("Search backwards"))
-#        self.searchBack.SetToolTip(self.searchBackToolTip)
         # Add this button to the Toolbar Sizer
         hsizer.Add(self.searchBack, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
         # Connect the button to the OnSearch Method
@@ -215,9 +221,14 @@ class _NotePanel(wx.Panel):
         # Change the status of the Text Ctrl
         self.txt.Enable(enable)
         # Change the status of the Toolbar Buttons
+        self.toolbar.EnableTool(T_DATETIME, enable)
         self.toolbar.EnableTool(T_SAVEAS, enable)
         self.toolbar.EnableTool(T_PAGESETUP, enable)
-        self.toolbar.EnableTool(T_PRINTPREVIEW, enable)
+
+        # Disable Print Preview on the Mac.
+        if not 'wxMac' in wx.PlatformInfo:
+            self.toolbar.EnableTool(T_PRINTPREVIEW, enable)
+            
         self.toolbar.EnableTool(T_PRINT, enable)
         # Change the status of the Search tool elements
         self.searchBack.Enable(enable)
@@ -311,8 +322,13 @@ class _NotePanel(wx.Panel):
             hour -= 12
             ampm = 'pm'
         # Add the Date / Time stamp to the Note Text
-        # TODO:  Localize this!
-        self.txt.WriteText("%s/%s/%s  %s:%02d:%02d %s\n" % (month, day, year, hour, minute, second, ampm))
+        if TransanaConstants.singleUserVersion:
+            # TODO:  Localize this!
+            self.txt.WriteText("%s/%s/%s  %s:%02d:%02d %s\n" % (month, day, year, hour, minute, second, ampm))
+        else:
+            # If multi-user, include the username!
+            # TODO:  Localize this!
+            self.txt.WriteText("%s/%s/%s  %s:%02d:%02d %s - %s\n" % (month, day, year, hour, minute, second, ampm, TransanaGlobal.userName))
 
     def OnSaveAs(self, event):
         """Export the note to a TXT file."""

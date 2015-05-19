@@ -17,7 +17,7 @@
 """This module implements the TranscriptEditor class as part of the Editors
 component.  """
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>, Jonathan Beavers <jonathan.beavers@gmail.com>'
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case, Jonathan Beavers <jonathan.beavers@gmail.com>'
 
 DEBUG = False
 if DEBUG:
@@ -68,10 +68,12 @@ class TranscriptEditor(RichTextEditCtrl):
         # Create a variable to store that information, initialized to 0
         self.cursorPosition = 0
 
-        # These ASCII characters are treated as codes and hidden
-        # self.HIDDEN_CHARS = [TIMECODE_CHAR,]      NOT USED??
+        # Define the Regular Expression that can be used to find Time Codes
         self.HIDDEN_REGEXPS = [re.compile(TIMECODE_REGEXP),]
+        # Indicate whether Time Code Symbols are shown, default to NOT
         self.codes_vis = 0
+        # Indicate whether Time Code Data is shown, default to NOT
+        self.timeCodeDataVisible = False
         self.TranscriptObj = None
         self.timecodes = []
         self.current_timecode = -1
@@ -216,6 +218,31 @@ class TranscriptEditor(RichTextEditCtrl):
                             # To fix that, let's strip the final style character from both strings.  DKW
 			    bufferContents = bufferContents.replace(k[:-1], v[:-1])
 
+                    # Now let's look for mal-formed time codes.
+                    
+                    # Initialize a list to keep track of where corrections are needed
+#                    todo = []
+                    # Iterate through the text buffer, 2 char (content, formatting) at a time ...
+#                    for x in range(0, len(bufferContents), 2):
+                        # ... get the character we're looking at ...
+#                        char = bufferContents[x]
+                        # If it's the Time Code character ...
+#                        if char == '\xa4':
+                            # ... and if the character PRECEEDING IT ISN'T the UTF8 character that, with \xa4, makes up the properly
+                            # formatted time code character ...
+#                            if (x > 2) and (bufferContents[x - 2] != '\xc2'):
+                                # ... then note the position in the text buffer where a correction needs to be made!
+#                                todo.append(x)
+                    # While there are corrections to be made ... (We go from the end of the list, as corrections move later positions!)
+#                    while len(todo) > 0:
+                        # Get the correction position
+#                        x = todo[-1]
+                        # Remove the correction position from the list of corrections
+#                        todo = todo[:-1]
+                        # Correct the text buffer.  We duplicate the formatting character intentionally during this process,
+                        # which is why the slices overlap by 1 character.
+#                        bufferContents = bufferContents[:x] + '\xc2' + bufferContents[x - 1:]
+
 		    # With platform specific issues taken care of, we can now simply
                     # reload the pickled data into the buffer, and everything is just
                     # peachy
@@ -245,10 +272,6 @@ class TranscriptEditor(RichTextEditCtrl):
 
         # If we are dealing with a Plain Text document ...
         elif dataType == 'text':
-
-#            for x in range(18):
-#                print "%2d   %1s %3d %2x" % (x, transcript.text[x], ord(transcript.text[x]), ord(transcript.text[x]))
-                
             # Get the text we need to import
             text = transcript.text[4:]
             
@@ -355,6 +378,9 @@ class TranscriptEditor(RichTextEditCtrl):
         self.show_codes()
 
         self.parent.toolbar.ToggleTool(self.parent.toolbar.CMD_SHOWHIDE_ID, True)
+        # Enable the Change Propagation button on the Tool Bar
+        self.parent.toolbar.EnableTool(self.parent.toolbar.CMD_PROPAGATE_ID, True)
+
 	# Set save point
         self.SetSavePoint()
 	stopTime = time.clock()
@@ -382,7 +408,12 @@ class TranscriptEditor(RichTextEditCtrl):
         initCodesVis = self.codes_vis
         if initCodesVis:
             self.hide_codes()
-        
+        # We shouldn't save with Time Code Values showing!  Remember the initial status for later.
+        initTimeCodeValueStatus = self.timeCodeDataVisible
+        # If Time Code Values are showing ...
+        if self.timeCodeDataVisible:
+            # ... then hide them for now.
+            self.changeTimeCodeValueStatus(False)
         if self.TranscriptObj:
             self.TranscriptObj.has_changed = self.modified()
 	    # If we have an Episode Transcript, save it in FastSave format.  
@@ -402,6 +433,9 @@ class TranscriptEditor(RichTextEditCtrl):
         # If time codes were showing, show them again.
         if initCodesVis:
             self.show_codes()
+        # If Time Code Values were showing, show them again.
+        if initTimeCodeValueStatus:
+            self.changeTimeCodeValueStatus(True)
         
         # Let's try restoring the Cursor Position when all is said and done.
         self.RestoreCursor()
@@ -463,15 +497,6 @@ class TranscriptEditor(RichTextEditCtrl):
     def get_underline(self):
         return self.GetUnderline()
         
-    def cut_selected_text(self):
-        """Delete selected text and place in clipboard."""
-    def copy_seleted_text(self):
-        """Copy selected text to clipboard."""
-    def paste_text(self):
-        """Paste text from clipboard."""
-    def select_all(self):
-        """Select all document text."""
-        
     def show_codes(self):
         """Make encoded text in document visible."""
         self.changeTimeCodeHiddenStatus(False)
@@ -481,6 +506,11 @@ class TranscriptEditor(RichTextEditCtrl):
         """Make encoded text in document visible."""
         self.changeTimeCodeHiddenStatus(True)
         self.codes_vis = 0
+
+    def show_timecodevalues(self, visible):
+        """ Make Time Code value in Human Readable form visible or hidden """
+        # Just passing through.
+        self.changeTimeCodeValueStatus(visible)
 
     def codes_visible(self):
         """Return 1 if encoded text is visible."""
@@ -512,22 +542,32 @@ class TranscriptEditor(RichTextEditCtrl):
             self.cursor_find('%s' % TIMECODE_CHAR)
             # Note the Cursor's Current Position
             curpos = self.GetCurrentPos()
+
+            # I'm seeing different behavior from transcripts of different origins.  Is it age?  Platform?  Some combination?
+            # I don't know.  Anyway, that's why this is more convoluted than I'd like.  I'm looking for something that works
+            # everywhere.
+
             # Adjust cursor position for unicode characters so that the time code symbols are hidden correctly
-            if ('unicode' in wx.PlatformInfo) and (curpos > 0):
+            if ('unicode' in wx.PlatformInfo) and (curpos > 0) and (self.GetCharAt(curpos - 1) == 194):
                 curpos -= 1
+                # Even though len(TIMECODE_CHAR) returns 1, the time code character IS two characters wide in this situation.
+                tcWidth = 2
+            else:
+                # Otherwise, we have a time code character width of only one character.
+                tcWidth = 1
             # Start Styling from the Cursor Position
             self.StartStyling(curpos, 255)
             # If the TimeCodes should be hidden ...
             if hiddenVal:
                 # ... set their style to STYLE_HIDDEN
-                self.SetStyling(1, self.STYLE_HIDDEN)
+                self.SetStyling(tcWidth, self.STYLE_HIDDEN)
             # If the TimeCodes should be displayed ...
             else:
                 # ... set their style to STYLE_TIMECODE
-                self.SetStyling(1, self.STYLE_TIMECODE)
+                self.SetStyling(tcWidth, self.STYLE_TIMECODE)
             # We then need to move the cursor past the current TimeCode so the next one will be
             # found by the "cursor_find" call.
-            self.SetCurrentPos(curpos + 1)
+            self.SetCurrentPos(curpos + tcWidth)
 
         # We better hide all the hidden text for the time codes again
         if wereHidden:
@@ -544,6 +584,142 @@ class TranscriptEditor(RichTextEditCtrl):
         
         # This event should NOT cause the Style Change indicator to suggest the document has been changed.
         self.stylechange = initStyleChange
+
+    def changeTimeCodeValueStatus(self, visible):
+        """ Change visibility of the Time Code Values """
+        # Set the Wait cursor
+        self.parent.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+        # We can change this even if the Transcript is resd-only, but we need to remember the current
+        # state so we can return the transcript to read-only if needed.
+        initReadOnly = self.get_read_only()
+        # Let's also remember if the transcript has already been modified.  This value WILL get changed, but maybe it shouldn't be.
+        initModified = self.modified()
+        # Note whether the document has had a style change yet.
+        initStyleChange = self.stylechange
+        # We don't want the screen to move, so let's remember the current position
+        topLine = self.GetFirstVisibleLine()
+        # Let's try to remember the cursor position
+        self.cursorPosition = (self.GetCurrentPos(), self.GetSelection())
+
+        # Let's show all the hidden text of the time codes.  This doesn't work without it!
+        if not self.codes_vis:
+            # Remember that time codes were hidden ...
+            wereHidden = True
+            # ... and show them
+            self.show_all_hidden()
+        else:
+            # Remember that time codes were showing
+            wereHidden = False
+        # Put the transcript into Edit mode so we can change it.
+        self.set_read_only(False)
+
+        # Let's iterate through every pre-defined regular expression about time codes.  (I think there's only one.  I'm not sure why Nate did it this way.)
+        for tcs in self.HIDDEN_REGEXPS:
+            # Get a list(?) of all the time code sequences in the text
+            tcSequences = tcs.findall(self.GetText())
+            # Initialize the Time Code End position to zero.  
+            tcEndPos = 0
+            # Now iterate through each Time Code in the RegEx list
+            for TC in tcSequences:
+                # Find the next Time Code in the RTF control, starting at the end point of the previous time code for efficiency's sake.
+                tcStartPos = self.FindText(tcEndPos, self.GetLength(), TC, 0)
+                # Remember the end poing of the current time code, used to start the next search.
+                tcEndPos = tcStartPos + len(TC) + 1
+                # Move the cursor to the end of the time code's hidden data
+                self.GotoPos(tcEndPos)
+                # If we're going to SHOW the time code data ...
+                if visible:
+                    # Build the text of the time value.  Take parentheses, and add the conversion of the time code data, which is extracted from
+                    # the Time Code from the RegEx.
+                    text = '(' + Misc.time_in_ms_to_str(int(TC[2:-1])) + ')'
+                    # Note the length of the time code text
+                    lenText = len(text)
+                    # Insert the text into the Styled Text Control
+                    self.InsertStyledText(text, len(text))
+                    # We may need to manipulate the saved cursor position data due to these changes in the document.  Let's find out.
+                    # Let's determine the current data, saving the point to tc1 and the selection to tc2
+                    tc1 = self.cursorPosition[0]
+                    tc2 = self.cursorPosition[1][1]
+                    # if the current position or selection start is AFTER the end of the time code ...
+                    if (self.cursorPosition[0] > tcEndPos) or (self.cursorPosition[1][0] > tcEndPos):
+                        # ... then it needs to be increased by the length of the time code text.
+                        tc1 = self.cursorPosition[0] + lenText
+                    # If the selection end is AFTER teh end of the time code ...
+                    if (self.cursorPosition[1][1] > tcEndPos):
+                        # ... then it needs to be increased by the length of the time code text.
+                        tc2 = self.cursorPosition[1][1] + lenText
+                    # If any of hte values have changed ...
+                    if (tc1 > self.cursorPosition[0]) or (tc2 > self.cursorPosition[1][1]):
+                        # ... then update the cursor position saved data.
+                        self.cursorPosition = (tc1, (tc1, tc2))
+                # If we're gong to HIDE the time code data ...
+                else:
+                    # Let's look at the end of the time code for the opening paragraph character.  This probably signals that the user hasn't
+                    # messed with the text, which they could do.  If they mess with it, they're stuck with it!
+                    if self.GetCharAt(tcEndPos) == ord('('):
+                        # As long as we're dealing with digits or punctuation that is part of the time code data ...
+                        while chr(self.GetCharAt(tcEndPos)) in ['0','1','2','3','4','5','6','7','8','9',':','.','(',')']:
+                            # ... we look to see if we've found the close paragraph character.
+                            if chr(self.GetCharAt(tcEndPos)) == ')':
+                                # If so, signal the need to stop so that "tc<data>(humandata)Numbers" doesn't wipe out the numbers which are part of the
+                                # transcript, not part of the time code data.
+                                breakNow = True
+                            # ... otherwise ...
+                            else:
+                                # ... we're not ready to stop yet.
+                                breakNow = False
+                            # Select the character following the time code data ...
+                            self.SetSelection(tcEndPos, tcEndPos+1)
+                            # ... and get rid of it!  *** THIS COULD BE OPTIMIZED IF SLOW (?) ***
+                            self.ReplaceSelection('')
+                            # We may need to manipulate the saved cursor position data due to these changes in the document.  Let's find out.
+                            # Let's determine the current data, saving the point to tc1 and the selection to tc2
+                            tc1 = self.cursorPosition[0]
+                            tc2 = self.cursorPosition[1][1]
+                            # if the current cursor position or selection start is AFTER the end of the time code ...
+                            if (self.cursorPosition[0] > tcEndPos) or (self.cursorPosition[1][0] > tcEndPos):
+                                # ... then decrement it by 1 character
+                                tc1 = self.cursorPosition[0] - 1
+                            # if the end of the current selection is after the end of the time code ...
+                            if (self.cursorPosition[1][1] > tcEndPos):
+                                # ... decrement it by one character.
+                                tc2 = self.cursorPosition[1][1] - 1
+                            # If any information has changed ...
+                            if (tc1 < self.cursorPosition[0]) or (tc2 < self.cursorPosition[1][1]):
+                                # ... update the cursor data
+                                self.cursorPosition = (tc1, (tc1, tc2))
+                            # If we've reached the end of the time code data ...
+                            if breakNow:
+                                # ... then we need to stop removing characters.
+                                break
+
+        # Change the Time Code Data Visible flag to indicate the new state
+        self.timeCodeDataVisible = visible
+
+        # We better hide all the hidden text for the time codes again, if they were hidden.
+        if wereHidden:
+            self.hide_all_hidden()
+        # now reset the position of the document
+        self.ScrollToLine(topLine)
+        # Let's restore the Cursor Position when all is said and done.
+        self.RestoreCursor()
+        try:
+            self.Update()
+        except wx._core.PyAssertionError, x:
+            pass
+        # If we were in read-only mode ...
+        if initReadOnly:
+            # ... return to read-only mode
+            self.set_read_only(True)
+
+        # This event should NOT cause the Style Change indicator to suggest the document has been changed.
+        self.stylechange = initStyleChange
+        # If we did not think the document was modified before we showed the time code data ...
+        if not initModified:
+            # ... then setting the Save Point here will mean that the control still thinks the data hasn't changed.
+            self.SetSavePoint()
+        # Restore the normal cursor
+        self.parent.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
     def show_all_hidden(self):
         """Make encoded text in document visible."""
@@ -593,7 +769,6 @@ class TranscriptEditor(RichTextEditCtrl):
         # If we didn't find a next/previous instance ...
         else:
             # then restore the original cursor selection.  This just looks better.
-#            self.SetSelection(curSel[0], curSel[1])
             self.SetCurrentPos(curSel[0])
             self.SetAnchor(curSel[1])
 
@@ -606,6 +781,13 @@ class TranscriptEditor(RichTextEditCtrl):
         to the current Video Position if not used."""
         if self.get_read_only():
             # Don't do it in read-only mode
+            return
+        
+        if TransanaConstants.demoVersion and (self.GetLength() > 10000):
+            prompt = _("The Transana Demonstration limits the size of Transcripts.\nYou have reached the limit and cannot edit this transcript further.")
+            tempDlg = Dialogs.InfoDialog(self, prompt)
+            tempDlg.ShowModal()
+            tempDlg.Destroy()
             return
         
         (prevTimeCode, nextTimeCode) = self.get_selected_time_range()
@@ -626,7 +808,12 @@ class TranscriptEditor(RichTextEditCtrl):
                 self.style = tempStyle
             else:
                 self.InsertHiddenText("%s<%d>" % (TIMECODE_CHAR, timepos))
-
+            # If time code data is visible ...
+            if self.timeCodeDataVisible:
+                # ... work out the time code value ...
+                tcText = '(' + Misc.time_in_ms_to_str(int(timepos)) + ')'
+                # ... and insert it into the text
+                self.InsertStyledText(tcText, len(tcText))
             self.Refresh()
             # Update the 'timecodes' list, putting it in the right spot
             i = 0
@@ -707,8 +894,6 @@ class TranscriptEditor(RichTextEditCtrl):
         for timecode in self.timecodes:
             if (timecode <= ms) and (ms - timecode < ms - closest_time):
                 closest_time = timecode
-            #if abs(timecode - ms) < abs(closest_time - ms):
-            #    closest_time = timecode
         
         # Check if ALL timecodes in document are higher than given time.
         # In this case, we scroll to 0
@@ -728,8 +913,15 @@ class TranscriptEditor(RichTextEditCtrl):
 
         if DEBUG:
             print "TranscriptEditor.scroll_to_time():  Initial pos =", self.GetCurrentPos(), self.GetSelection()
-            
-        self.cursor_find("%s<%d>" % (TIMECODE_CHAR, closest_time))
+
+        # If the current time is after the first declared time code ...
+        if closest_time >= self.timecodes[0]:
+            # ... then locate the position based on the time code data
+            self.cursor_find("%s<%d>" % (TIMECODE_CHAR, closest_time))
+        # If the current time is BEFORE the first time code ...
+        else:
+            # ... move to the start of the document!
+            self.GotoPos(0)
 
         if DEBUG:
             print "TranscriptEditor.scroll_to_time():  after cursor_find =", self.GetCurrentPos(), self.GetSelection()
@@ -738,6 +930,7 @@ class TranscriptEditor(RichTextEditCtrl):
 
         if DEBUG:
             print "TranscriptEditor.scroll_to_time():  after select_find =", self.GetCurrentPos(), self.GetSelection()
+            print
             
         if self.GetCurrentPos() != pos:
             return True  # return TRUE since position changed
@@ -796,7 +989,7 @@ class TranscriptEditor(RichTextEditCtrl):
 
         # If not found, select until the end of the document
         if endpos ==  -1:
-            endpos = self.GetLength()-1
+            endpos = self.GetLength()    # -1
 
         # When searching for time codes for positioning of the selection, we end up selecting
         # the time code symbol and "<" that starts the time code.  We don't want to do that.
@@ -881,9 +1074,58 @@ class TranscriptEditor(RichTextEditCtrl):
                   startline, endline, self.GetFirstVisibleLine(), \
                   self.GetFirstVisibleLine() + self.LinesOnScreen()
 
-    def spell_check(self):
-        """Interactively spell-check document."""
-    
+    def GetTextBetweenTimeCodes(self, startTime, endTime):
+        """ Get the text between the time codes indicated """
+        # This method is used for Episode Transcript Change Propagation.
+        # Let's try to remember the cursor position
+        self.cursorPosition = (self.GetCurrentPos(), self.GetSelection())
+
+        # Initialize start time code to zero, in case the first clip has no leading time code
+        startTimeCode = 0
+        # If the Start Time exactly matches an existing time code ...
+        if startTime in self.timecodes:
+            # ... then we can just use it.
+            startTimeCode = startTime
+        # If the Start Time does NOT exactly match an existing time code ...
+        else:
+            # ... iterate through the existing time codes ...
+            for time in self.timecodes:
+                # ... and find the time code immediately BEFORE the Start Time
+                if time < startTime:
+                    startTimeCode = time
+                else:
+                    break
+        # If the End Time exactly matches an existing time code ...
+        if endTime in self.timecodes:
+            # ... then we can just use it.
+            endTimeCode = endTime
+        # If the End Time does NOT exactly match an existing time code ...
+        else:
+            # ... iterate through the existing time codes ...
+            for time in self.timecodes:
+                # ... and find the time code immediately AFTER the End Time
+                if time < endTime:
+                    endTimeCode = time
+                else:
+                    endTimeCode = time
+                    break
+            # Check to see if the end time is AFTER the last time code.
+            if endTime > endTimeCode:
+                # If so, use the end time
+                endTimeCode = endTime
+        # Initialize the text to blank
+        text = ''
+        # Select between the time codes we found above
+        self.scroll_to_time(startTime)
+        self.select_find(str(endTime))
+
+        # Set the text to the RTF version of what we now have selected
+        text = self.GetRTFBuffer(select_only=1)
+        # Let's try restoring the Cursor Position when all is said and done.
+        self.RestoreCursor()
+        # Return the start and end times that were found along with the text between them.
+        return (startTimeCode, endTimeCode, text)
+
     def undo(self):
         """Undo last operation(s)."""
         self.Undo()
@@ -943,8 +1185,6 @@ class TranscriptEditor(RichTextEditCtrl):
             self.SearchAnchor()
             endi = self.SearchNext(0, '>')
             self.SetSelection(pos + offset, endi)
-#            self.SetCurrentPos(pos + offset)
-#            self.SetAnchor(endi)
             timestr = self.GetSelectedText()
             try:
                 start_timecode = int(timestr)
@@ -964,8 +1204,6 @@ class TranscriptEditor(RichTextEditCtrl):
             # Now let's look for the next ">" character, which MUST be the end of the time code data.
             endi = self.SearchNext(0, '>')
             self.SetSelection(pos + offset, endi)
-#            self.SetCurrentPos(pos + offset)
-#            self.SetAnchor(endi)
             timestr = self.GetSelectedText()
             try:
                 end_timecode = int(timestr)
@@ -976,22 +1214,32 @@ class TranscriptEditor(RichTextEditCtrl):
             end_timecode = -1
         # Now we need to reset the selection to where it used to be.
         self.SetSelection(selstart, selend)
-#        self.SetCurrentPos(selstart)
-#        self.SetAnchor(selend)
         return (start_timecode, end_timecode)
 
     def ClearDoc(self):
-        # I think we want to be in read-only always at the end of ClearDoc()
+        """ Clear the Transcript Window """
+        # If the current Transcript is locked ...
         if (self.TranscriptObj != None) and (self.TranscriptObj.isLocked):
+            # ... unlock it.  (Saving has already been taken care of.)
             self.TranscriptObj.unlock_record()
+        # Make the RichTextEditCtrl editable!
         self.set_read_only(0)
+        # Clear the document from the control
         RichTextEditCtrl.ClearDoc(self)
+        # Reset the media time to 0
         self.TimePosition = 0
+        # Clear the Transcript Object
         self.TranscriptObj = None
+        # Clear the time code list
         self.timecodes = []
+        # Clear the current time code pointer
         self.current_timecode = -1
+        # Make the control read-only
         self.set_read_only(1)
+        # Signal that time codes are not visible
         self.codes_vis = 0
+        # Signal that Time Code Data should be hidden too.
+        self.timeCodeDataVisible = False
 
     def PrevTimeCode(self, tc=None):
         """Return the timecode immediately before the current one."""
@@ -1051,12 +1299,16 @@ class TranscriptEditor(RichTextEditCtrl):
                 elif chr(c) == "B":
                     self.set_bold()
                     self.StyleChanged(self)
+                    blockSkip = True
                 elif chr(c) == "U":
                     self.set_underline()
                     self.StyleChanged(self)
+                    # Block the Skip() call to prevent Ctrl-U from calling the Lower Case function that apparently wx.STC provides(?)
+                    blockSkip = True
                 elif chr(c) == "I":
                     self.set_italic()
                     self.StyleChanged(self)
+                    blockSkip = True
                 elif chr(c) == "T":
                     # CTRL-T pressed
                     self.insert_timecode()
@@ -1146,7 +1398,6 @@ class TranscriptEditor(RichTextEditCtrl):
                     else:
                         # The selection must be made in this order, or the cursor is moved to the END rather than being
                         # left at the beginning of the selection where it belongs!
-#                        self.SetSelection(cursel[1], curpos)
                         self.SetCurrentPos(cursel[1])
                         self.SetAnchor(curpos)
             # If the are moving to the RIGHT with the cursor ...
@@ -1155,12 +1406,11 @@ class TranscriptEditor(RichTextEditCtrl):
                 # The evaluation to determine we've come to a time code is a little weird under Unicode.
                 if 'unicode' in wx.PlatformInfo:
                     if 'wxMac' in wx.PlatformInfo:
-                        evaluation = (self.GetCharAt(curpos) == 194) and (self.GetCharAt(curpos + 1) == 167)
+                        evaluation = (self.GetCharAt(curpos) == 194) and (self.GetCharAt(curpos + 1) == 164)  #167)
                     else:
                         evaluation = (self.GetCharAt(curpos) == 194) and (self.GetCharAt(curpos + 1) == 164)
                 else:
                     evaluation = (self.GetCharAt(curpos) == ord(TIMECODE_CHAR))
-                
                 if evaluation:
                     # ... then we need to find the end of the time code data, signalled by the '>' character ...
                     while chr(self.GetCharAt(curpos)) != '>':
@@ -1170,6 +1420,16 @@ class TranscriptEditor(RichTextEditCtrl):
                     if not(self.codes_vis):
                         curpos += 1
 
+                    # If time code data is visible ...
+                    if self.timeCodeDataVisible and self.GetCharAt(curpos+1) == ord('('):
+                        # ... then as long as we're inside the time code data ...
+                        while chr(self.GetCharAt(curpos + 1)) in ['0','1','2','3','4','5','6','7','8','9',':','.','(',')']:
+                            # ... we should keep moving to the right.
+                            curpos += 1
+                            # Once we hit the close parents, we should stop though.
+                            if chr(self.GetCharAt(curpos)) == ')':
+                                break
+                                
                     # If you cursor over a time code while making a selection, the selection was getting lost with
                     # the original code.  Instead, determine if a selection is being made, and if so, make a new
                     # selection appropriately.
@@ -1179,7 +1439,6 @@ class TranscriptEditor(RichTextEditCtrl):
                         # Position the cursor after the hidden timecode data
                         self.GotoPos(curpos)
                     else:
-#                        self.SetSelection(cursel[0], curpos)
                         self.SetCurrentPos(cursel[0])
                         self.SetAnchor(curpos)
             # DELETE KEY pressed
@@ -1191,7 +1450,7 @@ class TranscriptEditor(RichTextEditCtrl):
                     # Are we in Edit Mode?  Are we trying to delete a Time Code?
                     if 'unicode' in wx.PlatformInfo:
                         if 'wxMac' in wx.PlatformInfo:
-                            evaluation = (self.GetCharAt(curpos) == 194) and (self.GetCharAt(curpos + 1) == 167)
+                            evaluation = (self.GetCharAt(curpos) == 194) and (self.GetCharAt(curpos + 1) == 164)  #167)
                         else:
                             evaluation = (self.GetCharAt(curpos) == 194) and (self.GetCharAt(curpos + 1) == 164)
                     else:
@@ -1220,10 +1479,27 @@ class TranscriptEditor(RichTextEditCtrl):
                             # We'll keep looking until we find the ">" character, which closes the time code data.
                             while chr(self.GetCharAt(selEnd)) != '>':
                                 selEnd += 1
+
+                            # If the Time Code Data is visible ...                            
+                            if self.timeCodeDataVisible:
+                                # ... and if the data is still in place ...
+                                if self.GetCharAt(selEnd+1) == ord('('):
+                                    # ... then let's delete the data too.
+                                    selEnd += 1
+                                    # As long as we're still in the time code data ...
+                                    while chr(self.GetCharAt(selEnd)) in ['0','1','2','3','4','5','6','7','8','9',':','.','(',')']:
+                                        # ... extend the selection
+                                        selEnd += 1
+                                        # If we hit the close parens, stop removing characters.  That way "(data)numbers" won't delete the
+                                        # numbers part of the transcript.
+                                        if chr(self.GetCharAt(selEnd)) == ')':
+                                            break
+
                             # Set the RichTextCtrl (wxSTC) selection to encompass the full time code
                             self.SetSelection(curpos, selEnd)
                             # Replace the Time Code with nothing to delete it.
                             self.ReplaceSelection('')
+
                             # We need to remove the time code from the self.timecodes List too.
                             # First we locate that entry ...
                             index = self.timecodes.index(nextTimeCode)
@@ -1236,7 +1512,11 @@ class TranscriptEditor(RichTextEditCtrl):
                             # and we need to reset self.codes_vis to its original state.  (This variable gets updated
                             # when we call hide_all_hidden() and may no longer be accurate.)
                             self.codes_vis = codes_vis
-
+                            # Clear the Undo buffer to prevent Undoing of a time code delete, which can cause problems in the transcript
+                            # (We need CallAfter here.  Otherwise you can undo the last character of the time code!)
+                            wx.CallAfter(self.EmptyUndoBuffer)
+                            # Emptying the Undo Buffer loses track of the fact that the transcript has been modified.  Signal that we HAVE been modified.
+                            self.stylechange = 1
                         else:
                             # We need to block the Skip call so that the key event is not passed up to this control's parent for
                             # processing if the user decides not to delete the time code.
@@ -1299,7 +1579,10 @@ class TranscriptEditor(RichTextEditCtrl):
                             # and we need to reset self.codes_vis to its original state.  (This variable gets updated
                             # when we call hide_all_hidden() and may no longer be accurate.)
                             self.codes_vis = codes_vis
-
+                            # Clear the Undo buffer to prevent Undoing of a time code delete, which can cause problems in the transcript
+                            self.EmptyUndoBuffer()
+                            # Emptying the Undo Buffer loses track of the fact that the transcript has been modified.  Signal that we HAVE been modified.
+                            self.stylechange = 1
                         # We need to block the Skip call so that the key event is not passed up to this control's parent for
                         # processing.  The delete is handled locally or is declined by the user.
                         blockSkip = True
@@ -1346,10 +1629,34 @@ class TranscriptEditor(RichTextEditCtrl):
                             # We need to adjust by 1 more character under Unicode because of the way wxSTC handles the 2-byte time code
                             if 'unicode' in wx.PlatformInfo:
                                 selStart -= 1
+
+                            # If Time Code Data is visible ...
+                            if self.timeCodeDataVisible:
+                                # ... and the user hasn't manually removed the data ...
+                                if (self.GetCharAt(selEnd) == ord('(')) or (self.GetCharAt(selEnd+1) == ord('(')):
+                                    # ... then let's remove the time code data too.
+                                    selEnd += 1
+                                    # initialize that we haven't gotten to the end of the data yet.
+                                    breakNow = False
+                                    # As long as we're in characters that make up the time code data ...
+                                    while chr(self.GetCharAt(selEnd)) in ['0','1','2','3','4','5','6','7','8','9',':','.','(',')']:
+                                        # See if we've gotten to the end of the data, as signalled by ")" (so that "(data)123" doesn't
+                                        # delete the text part ("123") of the transcript.)
+                                        if chr(self.GetCharAt(selEnd)) == ')':
+                                            # If we're at the end, signal that we need to stop.
+                                            breakNow = True
+                                        # Add the character to the selection that will be removed
+                                        selEnd += 1
+                                        # If signalled ...
+                                        if breakNow:
+                                            # ... stop looking for more to delete.
+                                            break
+
                             # Set the RichTextCtrl (wxSTC) selection to encompass the full time code
                             self.SetSelection(selStart, selEnd)
                             # Replace the Time Code with nothing to delete it.
                             self.ReplaceSelection('')
+
                             # We need to remove the time code from the self.timecodes List too.
                             # First we locate that entry ...
                             index = self.timecodes.index(prevTimeCode)
@@ -1360,7 +1667,11 @@ class TranscriptEditor(RichTextEditCtrl):
                             # and we need to reset self.codes_vis to its original state.  (This variable gets updated
                             # when we call hide_all_hidden() and may no longer be accurate.)
                             self.codes_vis = codes_vis
-
+                            # Clear the Undo buffer to prevent Undoing of a time code delete, which can cause problems in the transcript
+                            self.EmptyUndoBuffer()
+                            # Emptying the Undo Buffer loses track of the fact that the transcript has been modified.  Signal that we HAVE been modified.
+                            self.stylechange = 1
+                            
                         # Okay, this is weird.  I suspect a bug in wx.STC.
                         # If you insert a Time Code, then Backspace over it, the letters "BS" get added to the Transcript.  This is
                         # obviously not acceptable.  I've added some code here to try to detect and prevent this from showing up.
@@ -1426,7 +1737,10 @@ class TranscriptEditor(RichTextEditCtrl):
                             # and we need to reset self.codes_vis to its original state.  (This variable gets updated
                             # when we call hide_all_hidden() and may no longer be accurate.)
                             self.codes_vis = codes_vis
-
+                            # Clear the Undo buffer to prevent Undoing of a time code delete, which can cause problems in the transcript
+                            self.EmptyUndoBuffer()
+                            # Emptying the Undo Buffer loses track of the fact that the transcript has been modified.  Signal that we HAVE been modified.
+                            self.stylechange = 1
                         # We need to block the Skip call so that the key event is not passed up to this control's parent for
                         # processing.  We do this regardless of the user response in the dialog, as the deletion is handled locally.
                         blockSkip = True
@@ -1470,6 +1784,10 @@ class TranscriptEditor(RichTextEditCtrl):
                         # Replace the Target Text with nothing to delete it.
                         self.ReplaceTarget(ch)
                         self.GotoPos(selStart + 1)
+                        # Clear the Undo buffer to prevent Undoing of a time code delete, which can cause problems in the transcript
+                        self.EmptyUndoBuffer()
+                        # Emptying the Undo Buffer loses track of the fact that the transcript has been modified.  Signal that we HAVE been modified.
+                        self.stylechange = 1
                     blockSkip = True
         except:
             pass
@@ -1504,8 +1822,8 @@ class TranscriptEditor(RichTextEditCtrl):
             # We can also check to see if the first character is a time code, in which case it should be excluded too!
             if 'unicode' in wx.PlatformInfo:
                 if 'wxMac' in wx.PlatformInfo:
-                    evaluation = (self.GetCharAt(selStart - 1) == 194) and (self.GetCharAt(selStart) == 167)
-                    evaluation2 = (self.GetCharAt(selStart - 2) == 194) and (self.GetCharAt(selStart - 1) == 167)
+                    evaluation = (self.GetCharAt(selStart - 1) == 194) and (self.GetCharAt(selStart) == 164)  #167)
+                    evaluation2 = (self.GetCharAt(selStart - 2) == 194) and (self.GetCharAt(selStart - 1) == 164)  #167)
                     evaluation = evaluation or evaluation2
                 else:
                     evaluation = (self.GetCharAt(selStart - 1) == 194) and (self.GetCharAt(selStart) == 164)
@@ -1525,9 +1843,9 @@ class TranscriptEditor(RichTextEditCtrl):
             # Let's see if the end of the selection falls between a Time Code and its data
             if 'unicode' in wx.PlatformInfo:
                 if 'wxMac' in wx.PlatformInfo:
-                    evaluation = (self.GetCharAt(selEnd - 1) == 194) and (self.GetCharAt(selEnd) == 167)
-                    evaluation2 = (self.GetCharAt(selEnd) == 194) and (self.GetCharAt(selEnd + 1) == 167)
-                    evaluation3 = (self.GetCharAt(selEnd - 2) == 194) and (self.GetCharAt(selEnd - 1) == 167)
+                    evaluation = (self.GetCharAt(selEnd - 1) == 194) and (self.GetCharAt(selEnd) == 164)  #167)
+                    evaluation2 = (self.GetCharAt(selEnd) == 194) and (self.GetCharAt(selEnd + 1) == 164)  #167)
+                    evaluation3 = (self.GetCharAt(selEnd - 2) == 194) and (self.GetCharAt(selEnd - 1) == 164)  #167)
                     evaluation = evaluation or evaluation2 or evaluation3
                 else:
                     evaluation = (self.GetCharAt(selEnd - 1) == 194) and (self.GetCharAt(selEnd) == 164)
@@ -1566,8 +1884,8 @@ class TranscriptEditor(RichTextEditCtrl):
                     print chr(self.GetCharAt(curPos + 1)), (chr(self.GetCharAt(curPos + 1)) == '<')
 
                 if 'wxMac' in wx.PlatformInfo:
-                    evaluation = (self.GetCharAt(curPos - 1) == 194) and (self.GetCharAt(curPos) == 167)
-                    evaluation2 = (self.GetCharAt(curPos - 2) == 194) and (self.GetCharAt(curPos - 1) == 167)
+                    evaluation = (self.GetCharAt(curPos - 1) == 194) and (self.GetCharAt(curPos) == 164)  #167)
+                    evaluation2 = (self.GetCharAt(curPos - 2) == 194) and (self.GetCharAt(curPos - 1) == 164)  #167)
                     evaluation = evaluation or evaluation2
                 else:
                     evaluation = (self.GetCharAt(curPos - 1) == 194) and (self.GetCharAt(curPos) == 164)
@@ -1581,16 +1899,12 @@ class TranscriptEditor(RichTextEditCtrl):
                 # Let's find the position of the end of the Time Code
                 while chr(self.GetCharAt(curPos - 1)) != '>':
                     curPos += 1
-
                 self.GotoPos(curPos)
-
                 self.SetAnchor(curPos)
                 self.SetCurrentPos(curPos)
 
         if selChanged:
             self.SetSelection(selStart, selEnd)
-#            self.SetCurrentPos(selStart)
-#            self.SetAnchor(selEnd)
 
     def OnStartDrag(self, event, copyToClipboard=False):
         """Called on the initiation of a Drag within the Transcript."""
@@ -1682,7 +1996,6 @@ class TranscriptEditor(RichTextEditCtrl):
         if DEBUG:
             print "SetSelectionAfter", self.selection
 
-#        self.SetSelection(self.selection[0], self.selection[1])
         self.SetCurrentPos(self.selection[0])
         self.SetAnchor(self.selection[1])
 
@@ -1795,7 +2108,6 @@ class TranscriptEditor(RichTextEditCtrl):
             # Reset the Cursor Position
             self.SetCurrentPos(self.cursorPosition[0])
             # And reset the Selection, if there was one.
-#            self.SetSelection(self.cursorPosition[1][0], self.cursorPosition[1][1])
             self.SetCurrentPos(self.cursorPosition[1][0])
             self.SetAnchor(self.cursorPosition[1][1])
 
@@ -1892,8 +2204,8 @@ class TranscriptEditor(RichTextEditCtrl):
             
         # If we DO have a selection, we need to check, for mixed font specs in the selection
         else:
-            # Set the Wait cursor (This doesn't appear to show up.)
-            self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+            # Set the Wait cursor
+            self.parent.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
             
             # First, get the initial values for the Font Dialog.  This will match the
             # formatting of the LAST character in the selection.
@@ -1952,7 +2264,7 @@ class TranscriptEditor(RichTextEditCtrl):
                     if (fontData.fontColorDef != None) and (fontData.fontColorDef != wx.ColourRGB(rgbValue)):
                         del(fontData.fontColorDef)
             # Set the cursor back to normal
-            self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+            self.parent.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
         # Create the TransanaFontDialog.
         # Note:  We used to use the wx.FontDialog, but this proved inadequate for a number of reasons.
@@ -1990,7 +2302,7 @@ class TranscriptEditor(RichTextEditCtrl):
 
             else:
                 # Set the Wait cursor
-                self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+                self.parent.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
                 # NEW MODEL -- Only update those attributes not flagged as ambiguous.  This is necessary
                 # when processing a selection
                 # Get the TransanaFontDef data from the Font Dialog.
@@ -2071,7 +2383,7 @@ class TranscriptEditor(RichTextEditCtrl):
                         # Now apply the font settings for the current character
                         self.set_font(fontFace, fontSize, rgbValue, 0xffffff)
                 # Set the cursor back to normal
-                self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+                self.parent.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
         # Destroy the Font Dialog Box, now that we're done with it.
         fontDialog.Destroy()

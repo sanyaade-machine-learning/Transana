@@ -284,10 +284,10 @@ class XMLImport(Dialogs.GenForm):
                            if objectType == 'Clip':
                                currentObj.clip_transcript_num = -1
 
-#                           if DEBUG and (objectType == 'Transcript'):
-#                               tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
-#                               tmpdlg.ShowModal()
-#                               tmpdlg.Destroy()
+                           if DEBUG and (objectType == 'Transcript') and False:
+                               tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
+                               tmpdlg.ShowModal()
+                               tmpdlg.Destroy()
 
                            currentObj.db_save()
                            # Let's keep a record of the old and new object numbers for each object saved.
@@ -381,13 +381,21 @@ class XMLImport(Dialogs.GenForm):
                                dbCursor.close()
 
                    except:
+
                        if DEBUG:
+                           print
+                           print sys.exc_info()[1]
+                           print
+                       
                            if (objectType == 'Transcript'):
                                tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
                                tmpdlg.ShowModal()
                                tmpdlg.Destroy()
                            import traceback
                            traceback.print_exc(file=sys.stdout)
+                           print
+                           print
+                           
                        # If an error arises, for now, let's interrupt the import process.  It may be possible
                        # to eliminate this line later, allowing the import to continue even if there is a problem.
                        contin = False

@@ -101,7 +101,7 @@ class PostMessageEvent(wx.PyEvent):
         self.data = data
 
         if DEBUG:
-            print "PostMessageEvent created with data =", self.data
+            print "PostMessageEvent created with data =", self.data.encode('latin1')
 
 # Create the actual Custom Close Message Event object
 class CloseMessageEvent(wx.PyEvent):
@@ -187,7 +187,7 @@ class ListenerThread(threading.Thread):
                     print "ChatWindow.ListenerThread.run() other error"
 
             if DEBUG:
-                print self.socketObj, 'received "%s"' % data
+                print self.socketObj, 'received "%s"' % data.encode('latin1')
 
             # As long as data should be processed, and the data is not blank ...
             if not self._want_abort and (data != ''):
@@ -272,7 +272,7 @@ class ChatWindow(wx.Frame):
         # Put the Memo control in the Memo Sizer
         boxMemo.Add(self.memo, 1, wx.EXPAND)
         # Add the Memo display to the Receiver Sizer
-        boxRecv.Add(boxMemo, 9, wx.EXPAND)
+        boxRecv.Add(boxMemo, 8, wx.EXPAND)
 
         # Create a Sizer for the User section
         boxUser = wx.BoxSizer(wx.VERTICAL)
@@ -282,7 +282,15 @@ class ChatWindow(wx.Frame):
         boxUser.Add(self.txtUser, 0, wx.BOTTOM, 3)
         # Add a ListBox to hold the names of active users
         self.userList = wx.ListBox(self, -1, choices=[self.userName], style=wx.LB_SINGLE)
-        boxUser.Add(self.userList, 1, wx.EXPAND)
+        boxUser.Add(self.userList, 1, wx.BOTTOM | wx.EXPAND, 3)
+
+        # Add a checkbox to enable/disable audio feedback
+        self.useSound = wx.CheckBox(self, -1, _("Sound Enabled"))
+        # Check the box to start
+        self.useSound.SetValue(True)
+        # Add the checkbox to the sizer
+        boxUser.Add(self.useSound, 0)
+        
         # Add the User List display to the Receiver Sizer
         boxRecv.Add(boxUser, 2, wx.EXPAND | wx.LEFT, 6)
         
@@ -315,12 +323,15 @@ class ChatWindow(wx.Frame):
         # Add the send Sizer to the Form Sizer
         box.Add(boxSend, 1, wx.EXPAND | wx.ALL, 4)
 
+        # Define the Chat Sound
+        flName = TransanaGlobal.programDir + os.sep + 'images' + os.sep + 'chatmessage.wav'
+        # Create the player for the Chat Sound
+        self.soundplayer = wx.media.MediaCtrl(self, -1, fileName = flName)
+        # Hide the player for the Chat Sound.  It doesn't need to be visible.
+        self.soundplayer.Show(False)
+
         # Define the form's OnClose handler
         self.Bind(wx.EVT_CLOSE, self.OnClose)
-
-        # Status Bar
-        # self.CreateStatusBar()
-        # self.SetStatusText(_('Transana Message Server "%s" on port %d.  User "%s" on Database Server "%s", Database "%s".') % (SERVERHOST, SERVERPORT, self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
 
         # Attach the Form's Main Sizer to the form
         self.SetSizer(box)
@@ -419,6 +430,18 @@ class ChatWindow(wx.Frame):
                 self.socketObj.send(msg.encode('utf8'))
             else:
                 self.socketObj.send(msg)
+            # I added this to try to prevent messages from bumping into one another and stacking up.
+            # It *should* allow messages to be sent totally independently.
+            try:
+                wx.Yield()
+                if DEBUG:
+                    print "ChatWindow.SendMessage():  Yield called."
+            except:
+                if DEBUG:
+                    print "ChatWindow.SendMessage():  Yield FAILED.", sys.exc_info()[0],sys.exc_info()[1]
+                pass
+
+            
         except socket.error:
             if DEBUG:
                 print "ChatWindow.SendMessage() socket error."
@@ -459,7 +482,7 @@ class ChatWindow(wx.Frame):
         if event.data != None:
 
             if DEBUG:
-                print 'event.data = "%s"' % event.data
+                print 'event.data = "%s"' % event.data.encode('latin1')
 
             message = event.data
             messageHeader = message[:message.find(' ')]
@@ -470,7 +493,7 @@ class ChatWindow(wx.Frame):
             if DEBUG:
                 print 'messageHeader = "%s"' % messageHeader
                 print 'messageSender = "%s"' % messageSender
-                print 'message = "%s"' % message
+                print 'message = "%s"' % message.encode('latin1')
                 print
             
             # Determine what type of message it is by looking at the first character.                
@@ -482,6 +505,10 @@ class ChatWindow(wx.Frame):
                     self.Show(True)
                 # ... display the message (minus the Message Prefix) on the screen
                 self.memo.AppendText("%s\n" % event.data[2:])
+                # If sound is enabled...
+                if self.useSound.IsChecked():
+                    # ... play the message sound.
+                    self.soundplayer.Play()
                 
             # Connection Message ?
             elif messageHeader == 'C':
@@ -730,13 +757,20 @@ class ChatWindow(wx.Frame):
                             # The second element in the nodelist is the UNTRANSLATED root node label.  This avoids problems
                             # in mixed-language environments.  But we now need to translate it.
                             # The last element is the name the Node should be changed to.
-                            nodelist = (nodelist[0], unicode(_(nodelist[1]), 'utf8')) + nodelist[2:]
+                            # One more wrinkle -- the Root Node label might be a string, or it might already be a Unicode
+                            # object.  It needs to be handled differently.  (In English, it's unicode, otherwise it's a string.)
+                            if type(_(nodelist[1])) == type(u''):
+                                tmpRootNode = _(nodelist[1])
+                            else:
+                                tmpRootNode = unicode(_(nodelist[1]), 'utf8')
+                            
+                            nodelist = (nodelist[0], tmpRootNode) + nodelist[2:]
+                            
                             if DEBUG:
                                 tmpstr = "Calling rename_Node(%s, %s, %s) %s %s" % (nodelist[1:-1], nodelist[0], nodelist[-1], \
                                          type(nodelist[0]), type(nodelist[-1]))
-                                tmpDlg = wx.MessageDialog(None, tmpstr)
-                                tmpDlg.ShowModal()
-                                tmpDlg.Destroy()
+                                print tmpstr.encode('latin1')
+                                print
                                 
                             self.ControlObject.DataWindow.DBTab.tree.rename_Node(nodelist[1:-1], nodelist[0], nodelist[-1])
                             
@@ -958,7 +992,7 @@ class ChatWindow(wx.Frame):
                                     
                         else:
                             if DEBUG:
-                                print "Unprocessed Message: ", event.data
+                                print "Unprocessed Message: ", event.data.encode('latin1')
                                 print
                                 
                             # If it's not visible ...
@@ -993,7 +1027,7 @@ class ChatWindow(wx.Frame):
 
         if DEBUG:
             print "ChatWindow.OnCloseMessage()"
-        
+
         self.Close()
         
     def OnValidationTimer(self, event):
@@ -1057,6 +1091,8 @@ class ChatWindow(wx.Frame):
             print traceback.print_exc(file=sys.stdout)
         # Try to tell the listener thread to abort (probably does nothing.)
         self.listener.abort()
+        # Destroy the Chat Sound player
+        self.soundplayer.Destroy()
         # Go on and close the form.
         self.Close()
 

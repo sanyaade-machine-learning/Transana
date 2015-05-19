@@ -85,7 +85,7 @@ class DataWindow(wx.Dialog):
     def AddEpisodeClipsTab(self, seriesObj=None, episodeObj=None):
         if self.EpisodeClipsTab == None:
             self.EpisodeClipsTab = EpisodeClipsTab(self.nb, seriesObj, episodeObj)
-            # If a ControlObject is defined, propogate it to the EpisodeClipsTab so that Clips can be loaded via double-clicking
+            # If a ControlObject is defined, propagate it to the EpisodeClipsTab so that Clips can be loaded via double-clicking
             if self.ControlObject != None:
                 self.EpisodeClipsTab.Register(self.ControlObject)
             self.nb.AddPage(self.EpisodeClipsTab, _("Episode Clips"), False)
@@ -95,7 +95,7 @@ class DataWindow(wx.Dialog):
     def AddSelectedEpisodeClipsTab(self, seriesObj=None, episodeObj=None, TimeCode=0):
         if self.SelectedEpisodeClipsTab == None:
             self.SelectedEpisodeClipsTab = EpisodeClipsTab(self.nb, seriesObj, episodeObj, TimeCode)
-            # If a ControlObject is defined, propogate it to the EpisodeClipsTab so that Clips can be loaded via double-clicking
+            # If a ControlObject is defined, propagate it to the EpisodeClipsTab so that Clips can be loaded via double-clicking
             if self.ControlObject != None:
                 self.SelectedEpisodeClipsTab.Register(self.ControlObject)
             self.nb.AddPage(self.SelectedEpisodeClipsTab, _("Selected Clips"), False)
@@ -198,7 +198,7 @@ class DataWindow(wx.Dialog):
     def Register(self, ControlObject=None):
         """ Register a ControlObject """
         self.ControlObject=ControlObject
-        self.DBTab.Register(ControlObject=self.ControlObject)  # Propogate the Control Object registration
+        self.DBTab.Register(ControlObject=self.ControlObject)  # Propagate the Control Object registration
         
     def ClearData(self):
         """Clear the display."""

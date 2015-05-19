@@ -32,22 +32,17 @@ import TransanaGlobal
 srb_UPLOAD   = wx.NewId()
 srb_DOWNLOAD = wx.NewId()
 
-# MAX_BUFSIZE is the default Buffer size for sending files.  It is crudely optimized for my computer.
-# If it is set to 4096, I get about 19k/sec transfers.  A value of 262,144 yields about 900k/sec.
-# 400,000 gives me transfer speeds of about 1900k/sec.
-# This needs more experimentation, and I'd love to make it adaptive, so that the system optimizes the
-# buffer size automatically.  
-MAX_BUFSIZE = 400000
 
 
 class SRBFileTransfer(wx.Dialog):
     """ This object transfers files between the SRB and the local file system and displays transfer progress. """
-    def __init__(self, parent, title, fileName, fileSize, localDir, connectionID, collectionName, direction):
+    def __init__(self, parent, title, fileName, fileSize, localDir, connectionID, collectionName, direction, bufferSize):
         """ Set up the Dialog Box and all GUI Widgets. """
 
         # Set up local variables
         self.parent = parent
         self.fileSize = fileSize
+        self.bufferSize = int(bufferSize)
 
         # Create the Dialog Box itself, with no minimize/maximize/close buttons
         wx.Dialog.__init__(self, parent, -4, title, size = (350,200), style=wx.CAPTION)  # style=wx.DEFAULT_FRAME_STYLE|wx.NO_FULL_REPAINT_ON_RESIZE)
@@ -198,12 +193,12 @@ class SRBFileTransfer(wx.Dialog):
                 self.parent.srbErrorMessage(FileResult)
             else:
                 # Create and Open a local binary file for writing to accept the data being sent from the SRB
-                outputFile = file(localDir + fileName, 'wb', MAX_BUFSIZE)
+                outputFile = file(localDir + fileName, 'wb', self.bufferSize)
 
                 # While there is data, read it from the SRB and write it to the local file system.
                 # ("while 1" tells the program to just keep looping until a "break" command is triggered.)
                 while True:
-                    BufSize = MAX_BUFSIZE
+                    BufSize = self.bufferSize
                     # Initialize the buffer to empty spaces to prepare for the SRB Call
                     Buf = ' ' * BufSize
                     # Get a block of data from the SRB and put it in the Buffer
@@ -224,7 +219,7 @@ class SRBFileTransfer(wx.Dialog):
 
                         # Reduce the size of the Buffer to match the data return size.  (We were getting
                         # incomplete downloads without this step!)
-                        if fileWrite < MAX_BUFSIZE:
+                        if fileWrite < self.bufferSize:
                             Buf = Buf[:fileWrite]
 
                         # TODO:  Handle file exceptions (disk full, file exists, read-only etc.)
@@ -254,7 +249,7 @@ class SRBFileTransfer(wx.Dialog):
             fileType = 'unknown'
 
             # Open the local binary file for reading
-            inputFile = file(localDir + fileName, 'rb', MAX_BUFSIZE)
+            inputFile = file(localDir + fileName, 'rb', self.bufferSize)
 
             # Create a file on the SRB to receive the data
             if fileSize <= sys.maxint:
@@ -280,10 +275,10 @@ class SRBFileTransfer(wx.Dialog):
                 # The file was successfully created on the SRB.  Now transfer the data from the Local file system.
                 # ("while 1" tells the program to just keep looping until a "break" command is triggered.)
                 while 1:
-                    # If there is more data left than MAX_BUFSIZE, use the Max Buffer Size.  Otherwise, use
+                    # If there is more data left than self.bufferSize, use the Max Buffer Size.  Otherwise, use
                     # a buffer just big enough for the rest of the data.
-                    if fileSize - BytesRead >= MAX_BUFSIZE:
-                        BufSize = MAX_BUFSIZE
+                    if fileSize - BytesRead >= self.bufferSize:
+                        BufSize = self.bufferSize
                     else:
                         BufSize = fileSize - BytesRead
 

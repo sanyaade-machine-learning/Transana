@@ -97,7 +97,7 @@ class Clip(DataObject):
         for kws in self.keyword_list:
             str = str + "Keyword:  %s\n" % kws
         str = str + '\n'
-        return str
+        return str.encode('utf8')
         
     def GetTranscriptWithoutTimeCodes(self):
         """ Returns a copy of the Transcript Text with the Time Code information removed. """
@@ -178,6 +178,25 @@ class Clip(DataObject):
     def db_save(self):
         """Save the record to the database using Insert or Update as
         appropriate."""
+
+        # Define and implement Demo Version limits
+        if TransanaConstants.demoVersion and (self.number == 0):
+            # Get a DB Cursor
+            c = DBInterface.get_db().cursor()
+            # Find out how many records exist
+            c.execute('SELECT COUNT(ClipNum) from Clips2')
+            res = c.fetchone()
+            c.close()
+            # Define the maximum number of records allowed
+            maxClips = TransanaConstants.maxClips
+            # Compare
+            if res[0] >= maxClips:
+                # If the limit is exceeded, create and display the error using a SaveError exception
+                prompt = _('The Transana Demonstration limits you to %d Clip records.\nPlease cancel the "Add Clip" dialog to continue.')
+                if 'unicode' in wx.PlatformInfo:
+                    prompt = unicode(prompt, 'utf8')
+                raise SaveError, prompt % maxClips
+            
         # Sanity checks
         if self.id == "":
             raise SaveError, _("Clip ID is required.")
@@ -208,19 +227,19 @@ class Clip(DataObject):
             # then we need to block Unicode characters from media filenames.
             # Unicode characters still cause problems on the Mac for the Multi-User version of Transana,
             # but can be made to work if shared waveforming is done on a Windows computer.
-            if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
+#            if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
                 # Create a string of legal characters for the file names
-                allowedChars = TransanaConstants.legalFilenameCharacters
+#                allowedChars = TransanaConstants.legalFilenameCharacters
                 # check each character in the file name string
-                for char in self.media_filename:
+#                for char in self.media_filename:
                     # If the character is illegal ...
-                    if allowedChars.find(char) == -1:
-                        if 'unicode' in wx.PlatformInfo:
+#                    if allowedChars.find(char) == -1:
+#                        if 'unicode' in wx.PlatformInfo:
                             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                            msg = unicode(_('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.'), 'utf8') % (self.media_filename, char)
-                        else:
-                            msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.') % (self.media_filename, char)
-                        raise SaveError, msg
+#                            msg = unicode(_('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.'), 'utf8') % (self.media_filename, char)
+#                        else:
+#                            msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.') % (self.media_filename, char)
+#                        raise SaveError, msg
             # If we're not in Unicode mode ...
             if 'ansi' in wx.PlatformInfo:
                 # ... we don't need to encode the string values, but we still need to copy them to our local variables.
@@ -370,8 +389,10 @@ class Clip(DataObject):
                     # user cancels the delete (after rolling back the Transaction)!
                     if self.isLocked:
                         # c (the database cursor) only exists if the record lock was obtained!
-                        # We must roll back the transaction before we unlock the record.
-                        c.execute("ROLLBACK")
+                        # if we are using Transactions locally ...
+                        if use_transactions:
+                            # We must roll back the transaction before we unlock the record.
+                            c.execute("ROLLBACK")
                         c.close()
                         self.unlock_record()
                     return 0
@@ -442,7 +463,20 @@ class Clip(DataObject):
 
     def duplicate(self):
         # Inherit duplicate method
-        newClip = DataObject.duplicate(self)
+        # BUG:  This duplicate() call wipes out the Keyword Example numbers of BOTH copies of the Clips!!
+        #       The keyword_list is clearly a pointer, not a copy of the list object.
+        # newClip = DataObject.duplicate(self)
+        # INSTEAD:  Let's just create a new clip, loading the existing data from the database!
+        # If we know the Clip Number, the Clip is in the database ...
+        if self.number != 0:
+            # ... so we can just load it
+            newClip = Clip(self.number)
+        # If we have a clips that's not currently in the database ...
+        else:
+            # ... we can use the old duplicate method.  If needed, we may want to copy all the data manually here.
+            newClip = DataObject.duplicate(self)
+        # Eliminate the new clip's object number so it will get a new on when saved.
+        newClip.number = 0
         # A new Clip should get a new Clip Transcript!
         newClip.clip_transcript_num = 0
         # Sort Order should not be duplicated!
@@ -465,8 +499,8 @@ class Clip(DataObject):
             tempClipKeyword = ClipKeywordObject.ClipKeyword(data[0], data[1], clipNum=self.number, example=data[2])
             self._kwlist.append(tempClipKeyword)
         
-    def add_keyword(self, kwg, kw):
-        """Add a keyword to the keyword list."""
+    def add_keyword(self, kwg, kw, example=0):
+        """ Add a keyword to the keyword list.  By default, it is NOT a keyword example. """
         # We need to check to see if the keyword is already in the keyword list
         keywordFound = False
         # Iterate through the list
@@ -479,7 +513,7 @@ class Clip(DataObject):
         # If the keyword is not found, add it.  (If it's already there, we don't need to do anything!)
         if not keywordFound:
             # Create an appropriate ClipKeyword Object
-            tempClipKeyword = ClipKeywordObject.ClipKeyword(kwg, kw, clipNum=self.number)
+            tempClipKeyword = ClipKeywordObject.ClipKeyword(kwg, kw, clipNum=self.number, example=example)
             # Add it to the Keyword List
             self._kwlist.append(tempClipKeyword)
 
@@ -500,23 +534,28 @@ class Clip(DataObject):
 
             # Look for the entry to be deleted
             if (self._kwlist[index].keywordGroup == kwg) and (self._kwlist[index].keyword == kw):
-
+                # If it's a Keyword Example ...
                 if self._kwlist[index].example == 1:
+                    # ... build and encode the prompt ...
                     if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                         prompt = unicode(_('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?'), 'utf8')
                     else:
                         prompt = _('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?')
+                    # ... ask the user if they really want to remove the example keyword ...
                     dlg = Dialogs.QuestionDialog(TransanaGlobal.menuWindow, prompt % (self.id, kwg, kw, self.id, kwg, kw))
                     result = dlg.LocalShowModal()
                     dlg.Destroy()
+                    # ... if the user sayd "Yes" ...
                     if result == wx.ID_YES:
                         # If the entry is found and the user confirms, delete it
                         del self._kwlist[index]
+                        # Signal that a Keyword Example was deleted, so the GUI can update.
                         delResult = 2
                 else:
                     # If the entry is found, delete it and stop looking
                     del self._kwlist[index]
+                    # Signal that the delete was successful and was NOT an Example.
                     delResult = 1
                 # Once the entry has been found, stop looking for it
                 break
@@ -539,6 +578,32 @@ class Clip(DataObject):
         # Return the results
         return res
 
+    def GetNodeData(self, includeClip=True):
+        """ Returns the Node Data list (list of parent collections) needed for Database Tree Manipulation """
+        # Load the Clip's collection
+        tempCollection = Collection.Collection(self.collection_num)
+        # If we're including the Clip in the Node Data ...
+        if includeClip:
+            # ... get the Collection's node data and tack the Clip's ID on the end.
+            return tempCollection.GetNodeData() + (self.id,)
+        # If we're NOT including the Clip in the Node data ...
+        else:
+            # ... just return the Collection's Node Data.
+            return tempCollection.GetNodeData()
+
+    def GetNodeString(self, includeClip=True):
+        """ Returns a string that delineates the full nested collection structure for the present clip.
+            if includeClip=False, only the Collection path will be returned. """
+        # Load the Clip's Collection
+        tempCollection = Collection.Collection(self.collection_num)
+        # If we're including the Clip in the Node String ...
+        if includeClip:
+            # ... get the Collection's node string and tack the Clip's ID on the end.
+            return tempCollection.GetNodeString() + ' > ' + self.id
+        # If we're NOT including the Clip in the Node String ...
+        else:
+            # ... just return the Collection's Node String.
+            return tempCollection.GetNodeString()
     
 # Private methods    
 

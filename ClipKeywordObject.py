@@ -74,7 +74,7 @@ class ClipKeyword(object):
         str = str + '  keyword = %s\n' % self.keyword
         str = str + '  keywordPair = %s\n' % self.keywordPair
         str = str + '  example = %s (%s)\n\n' % (self.example, type(self.example))
-        return str
+        return str.encode('utf8')
 
     def db_save(self):
         """ Saves ClipKeyword record to Database """

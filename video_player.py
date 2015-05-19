@@ -49,10 +49,10 @@ else:
     import TransanaGlobal
 
 CONTROL_PROGRESSNOTIFICATION = wx.NewId()
-if wx.VERSION[0] == 2 and wx.VERSION[1] <= 6:
-    WMPBACKEND = wx.media.MEDIABACKEND_DIRECTSHOW
-else:
-    WMPBACKEND = wx.media.MEDIABACKEND_WMP10
+# if wx.VERSION[0] == 2 and wx.VERSION[1] <= 6:
+#      WMPBACKEND = wx.media.MEDIABACKEND_DIRECTSHOW
+#  else:
+#      WMPBACKEND = wx.media.MEDIABACKEND_WMP10
 
 
 # Declare the main VideoFrame class, designed to interact with the rest of Transana
@@ -92,7 +92,9 @@ class VideoFrame(wx.Dialog):
 
         # set default back end to QuickTime, as then either type of media can be opened.  If we
         # set it to DirectShow for Windows, we can't later load Quicktime files
-        if 'wxGTK' in wx.PlatformInfo:
+        if 'wxMSW' in wx.PlatformInfo:
+            self.backend = wx.media.MEDIABACKEND_QUICKTIME
+        elif 'wxGTK' in wx.PlatformInfo:
             self.backend = wx.media.MEDIABACKEND_GSTREAMER
         else:
             self.backend = wx.media.MEDIABACKEND_QUICKTIME
@@ -127,7 +129,10 @@ class VideoFrame(wx.Dialog):
         if self.movie:
             self.movie.Destroy()
             self.movie = None
-            wx.Yield()
+            try:
+                wx.Yield()
+            except:
+                pass
         self.movie = wx.media.MediaCtrl(self, id=-1, fileName=flNm, szBackend=self.backend)
         box = wx.BoxSizer(wx.HORIZONTAL)
         box.Add(self.movie, 1, wx.EXPAND | wx.ALL, 0)
@@ -144,10 +149,14 @@ class VideoFrame(wx.Dialog):
             self.movie.Show(True)
             if ('wxMSW' in wx.PlatformInfo):
                 (videoFilename, videoExtension) = os.path.splitext(filename)
-                if videoExtension in ['.mov', '.mp4']:
+                if videoExtension.lower() in ['.mov', '.mp4']:
                     backendNeeded = wx.media.MEDIABACKEND_QUICKTIME
                 else:
-                    backendNeeded = WMPBACKEND
+#                    backendNeeded = WMPBACKEND
+                    if TransanaGlobal.configData.mediaPlayer == 1:
+                        backendNeeded = wx.media.MEDIABACKEND_DIRECTSHOW
+                    else:
+                        backendNeeded = wx.media.MEDIABACKEND_WMP10
                 if self.backend != backendNeeded:
                     self.backend = backendNeeded
                     self.CreateMediaPlayer(filename)
@@ -177,15 +186,17 @@ class VideoFrame(wx.Dialog):
 
     def SetVideoStartPoint(self, TimeCode):
         """Set the current position in ms."""
-        # TimeCode must be an int on the Mac.
-        if not isinstance(TimeCode, int):
-            TimeCode = int(TimeCode)
-        self.VideoStartPoint = TimeCode
-        self.SetCurrentVideoPosition(TimeCode)
-        if self.parentVideoWindow != None:
-            # notify the rest of Transana of the change.  However, calling parentVideoWindow.UpdateVideoPosition calls this method, causing
-            # recursion problems, so we make the call to the parentVideoWindow's ControlObject.
-            self.parentVideoWindow.ControlObject.UpdateVideoPosition(self.VideoStartPoint)
+        # If there's a defined video ...
+        if self.movie != None:
+            # TimeCode must be an int on the Mac.
+            if not isinstance(TimeCode, int):
+                TimeCode = int(TimeCode)
+            self.VideoStartPoint = TimeCode
+            self.SetCurrentVideoPosition(TimeCode)
+            if self.parentVideoWindow != None:
+                # notify the rest of Transana of the change.  However, calling parentVideoWindow.UpdateVideoPosition calls this method, causing
+                # recursion problems, so we make the call to the parentVideoWindow's ControlObject.
+                self.parentVideoWindow.ControlObject.UpdateVideoPosition(self.VideoStartPoint)
                    
     def GetVideoStartPoint(self):
         return self.VideoStartPoint
@@ -204,10 +215,20 @@ class VideoFrame(wx.Dialog):
         if not self.mediaLengthKnown:
             return -1
         else:
-            return self.movie.Length()
+            # If there's no defined video ...
+            if self.movie == None:
+                # ... then there's a problem.
+                self.mediaLengthKnown = False
+                return -1
+            else:
+                return self.movie.Length()
 
     def GetState(self):
-        return self.movie.GetState()
+        # If there's a defined video ...
+        if self.movie != None:
+            return self.movie.GetState()
+        else:
+            return -1
     
     def SetCurrentVideoPosition(self, TimeCode):
         """ Set the current video position. """
@@ -268,7 +289,7 @@ class VideoFrame(wx.Dialog):
             # succession to get the behavior we want.  When using the DirectShow back end, Play will work regardless
             # of the selected playback speed, so we only need to alter the call to Play() here if we're in QuickTime
             # at a rate other than 1.0
-            if (self.backend == wx.media.MEDIABACKEND_QUICKTIME) and (self.Rate != 1.0):
+            if (self.Rate != 1.0):  # (self.backend == wx.media.MEDIABACKEND_QUICKTIME) and 
                 self.movie.Play()
                 self.movie.SetPlaybackRate(self.Rate)
             else:
@@ -336,7 +357,7 @@ class VideoFrame(wx.Dialog):
             #    width:   use minimum media player width established above
             #    height:  use height of Movie  + ControlBarSize + headerHeight pixels for the player controls
             # rect[0] compensates if the Start Menu is on the left side of the screen
-            if self.backend == WMPBACKEND:
+            if self.backend in [wx.media.MEDIABACKEND_DIRECTSHOW, wx.media.MEDIABACKEND_WMP10]:
                 controlBarSize = 65
             elif self.backend == wx.media.MEDIABACKEND_QUICKTIME:
                 controlBarSize = 10

@@ -86,6 +86,16 @@
            <param name="Local" value="TimeCodes.htm">
        </object>
   <li> <object type="text/sitemap">
+           <param name="Name" value="Propagate Transcript Changes">
+           <param name="ID" value=87>
+           <param name="Local" value="PropagateEpisodeChanges.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Propagate Clip Changes">
+           <param name="ID" value=88>
+           <param name="Local" value="PropagateClipChanges.htm">
+       </object>
+  <li> <object type="text/sitemap">
            <param name="Name" value="Visualization Window">
            <param name="ID" value=90>
            <param name="Local" value="SoundWindow.htm">

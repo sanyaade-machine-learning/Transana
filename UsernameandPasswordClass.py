@@ -59,6 +59,8 @@ class UsernameandPassword(wx.Dialog):
             dlgSize=(350, 40)
             # Instructions Text
             instructions = _("Please enter the name of the database you wish to use.\nTo create a new database, type in a new database name.\n(Database names may contain only letters and numbers in a single word.)")
+            if TransanaConstants.demoVersion:
+                instructions = _("Database selection has been disabled for the Demonstration Version.\n\nIn the full version of Transana, you can create as many separate\ndatabases as you want.\n")
             # Sizer Proportion for the instructions
             instProportion = 4
         else:
@@ -182,29 +184,36 @@ class UsernameandPassword(wx.Dialog):
         # Database Combo Box
         self.chDBName = wx.ComboBox(panel, -1, choices=choicelist, style = wx.CB_DROPDOWN | wx.CB_SORT)
 
-        # If some Database have been defined...
-        if len(self.Databases) >= 1:
-            # ... Use the Databases object to get the list of Databases for the
-            # identified Server
-            if DBServerName != '':
-                choicelist = self.Databases[DBServerName]
-            else:
-                choicelist = ['']
-
-            # Clear out the control's Choices ...
+        if TransanaConstants.demoVersion:
             self.chDBName.Clear()
-            # ... and populate them with the appropriate values
-            for choice in choicelist:
-                if ('unicode' in wx.PlatformInfo) and (isinstance(choice, str)):
-                    choice = unicode(choice, 'utf8')  # TransanaGlobal.encoding)
-                self.chDBName.Append(choice)
+            self.chDBName.Append("Demonstration")
+            self.chDBName.SetValue("Demonstration")
+            self.chDBName.Enable(False)
 
-        # if the configured database isn't in the database list, don't show it!
-        # This can happen if you have a Russian database name but change away from Russian encoding
-        # by changing languages during the session.
-        if self.chDBName.FindString(TransanaGlobal.configData.database) != wx.NOT_FOUND:
-            # Set the value to the default value provided by the Configuration Data
-            self.chDBName.SetValue(TransanaGlobal.configData.database)
+        else:
+            # If some Database have been defined...
+            if len(self.Databases) >= 1:
+                # ... Use the Databases object to get the list of Databases for the
+                # identified Server
+                if DBServerName != '':
+                    choicelist = self.Databases[DBServerName]
+                else:
+                    choicelist = ['']
+
+                # Clear out the control's Choices ...
+                self.chDBName.Clear()
+                # ... and populate them with the appropriate values
+                for choice in choicelist:
+                    if ('unicode' in wx.PlatformInfo) and (isinstance(choice, str)):
+                        choice = unicode(choice, 'utf8')  # TransanaGlobal.encoding)
+                    self.chDBName.Append(choice)
+
+            # if the configured database isn't in the database list, don't show it!
+            # This can happen if you have a Russian database name but change away from Russian encoding
+            # by changing languages during the session.
+            if self.chDBName.FindString(TransanaGlobal.configData.database) != wx.NOT_FOUND:
+                # Set the value to the default value provided by the Configuration Data
+                self.chDBName.SetValue(TransanaGlobal.configData.database)
 
         # Define the SetFocus and KillFocus events for the Database Combo Box
         wx.EVT_SET_FOCUS(self.chDBName, self.OnCBSetFocus)
@@ -220,9 +229,10 @@ class UsernameandPassword(wx.Dialog):
         # Create another sizer for the buttons, with a horizontal orientation
         box3 = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Define the "Delete Database" Button
-        btnDeleteDatabase = wx.Button(panel, -1, _("Delete Database"))
-        self.Bind(wx.EVT_BUTTON, self.OnDeleteDatabase, btnDeleteDatabase)
+        if not TransanaConstants.demoVersion:
+            # Define the "Delete Database" Button
+            btnDeleteDatabase = wx.Button(panel, -1, _("Delete Database"))
+            self.Bind(wx.EVT_BUTTON, self.OnDeleteDatabase, btnDeleteDatabase)
 
         # Define the "OK" button
         btnOK = wx.Button(panel, wx.ID_OK, _("OK"))
@@ -234,8 +244,9 @@ class UsernameandPassword(wx.Dialog):
         # Define the Cancel Button
         btnCancel = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))
 
-        # Add the Delete Database button to the lower left corner
-        box3.Add(btnDeleteDatabase, 3, wx.ALIGN_LEFT | wx.ALIGN_BOTTOM | wx.LEFT | wx.BOTTOM, 10)
+        if not TransanaConstants.demoVersion:
+            # Add the Delete Database button to the lower left corner
+            box3.Add(btnDeleteDatabase, 3, wx.ALIGN_LEFT | wx.ALIGN_BOTTOM | wx.LEFT | wx.BOTTOM, 10)
         # Lets have some space between this button and  the others.
         box3.Add((30, 1), 1, wx.EXPAND)
         # Add the OK button to the lower right corner

@@ -94,6 +94,15 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         self.StyleSetSpec(stc.STC_STYLE_LINENUMBER, "size:10,face:%s" % TransanaGlobal.configData.defaultFontFace)
         # Indicated that we want Word Wrap
         self.SetWrapMode(stc.STC_WRAP_WORD)
+
+        # Setting the LayoutCache to the whole document seems to reduce the typing lag problem on the PPC Mac
+        self.SetLayoutCache(stc.STC_CACHE_DOCUMENT)
+        # Additional suggestions from wxPython-mac user's mailing list:
+        # Limit the events that trigger the EVT_STC_MODIFIED handler
+        self.SetModEventMask(stc.STC_PERFORMED_UNDO | stc.STC_PERFORMED_REDO | stc.STC_MOD_DELETETEXT | stc.STC_MOD_INSERTTEXT)
+        # Turn off Anti-Aliasing
+        self.SetUseAntiAliasing(False)
+
         # Let's set the default Tab Width to 4 to maintain compatibility with Transana 1.24
         self.SetTabWidth(4)
         # Indicate that we would like Line Numbers in the STC Margin
@@ -109,8 +118,8 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         self.SetMargins(6, 6)
 
         # Set the STC Selection Colors to white text on a blue background
-        self.SetSelForeground(1, "white")
-        self.SetSelBackground(1, "blue")
+        self.SetSelForeground(1, "black")   # "white"
+        self.SetSelBackground(1, "cyan")   # "blue"
 
         # We need to capture key strokes so we can intercept the Paste command.
         self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
@@ -916,25 +925,53 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
     
     def SetBold(self, state=1):
         """Set bold state for current font or for the selected text."""
-        self.__SetAttr("bold", state)
-        self.__ApplyStyle(self.style)
+        self.SetAttributeSkipTimeCodes("bold", state)
         if DEBUG:
             print "SetBold: now self.style = %d" % self.style
     
     def SetItalic(self, state=1):
         """Set italic state for current font or for the selected text."""
-        self.__SetAttr("italic", state)
-        self.__ApplyStyle(self.style)
+        self.SetAttributeSkipTimeCodes("italic", state)
         if DEBUG:
             print "SetItalic: now self.style = %d" % self.style
 
     def SetUnderline(self, state=1):
         """Set underline state for current font or for the selected text."""
-        self.__SetAttr("underline", state)
-        self.__ApplyStyle(self.style)
+        self.SetAttributeSkipTimeCodes("underline", state)
         if DEBUG:
             print "SetUnderline: now self.style = %d" % self.style
 
+    def SetAttributeSkipTimeCodes(self, attribute, state):
+        """ Set the supplied attribute for the current text selection, ignoring Time Codes and their hidden data """
+        # Let's try to remember the cursor position
+        self.cursorPosition = (self.GetCurrentPos(), self.GetSelection())
+        # If we have a selection ...
+        if self.GetSelection()[0] != self.GetSelection()[1]:
+            # Set the Wait cursor
+            self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+            # Now we need to iterate through the selection and update the font information.
+            # It doesn't work to try to apply formatting to the whole block, as time codes get spoiled.
+            for selPos in range(self.GetSelection()[0], self.GetSelection()[1]):
+                # We don't want to update the formatting of Time Codes or of hidden Time Code Data.  
+                if not (self.GetStyleAt(selPos) in [self.STYLE_TIMECODE, self.STYLE_HIDDEN]):
+                    # Select the character we want to work on from the larger selection
+                    self.SetSelection(selPos, selPos + 1)
+                    # Set the style appropriately
+                    self.__SetAttr(attribute, state)
+                    self.__ApplyStyle(self.style)
+            # Set the cursor back to normal
+            self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+        # If we do NOT have a selection ...
+        else:
+            # Set the style appropriately
+            self.__SetAttr(attribute, state)
+            self.__ApplyStyle(self.style)
+        # Let's try restoring the Cursor Position when all is said and done.
+        self.RestoreCursor()
+        # Signal that the transcript has changed, so that the Save prompt will be displayed if this format
+        # change is the only edit.
+        self.stylechange = 1
+        
     def SetFont(self, face, size, fg_color, bg_color):
         """Set the font."""
         
@@ -1077,6 +1114,11 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                                 elif (len(c) == 2) and (ord(c[0]) == 194) and (ord(c[1]) == 167):
                                     c = chr(194) + chr(164)
 
+                            # Correct for mal-formed time codes, which can occur with transcripts that come up
+                            # through older versions of Transana.
+                            if c == '\xa4':
+                                c = chr(194) + chr(164)
+                                
                             # Note the style of the current character.  Multi-byte characters should always have
                             # the same style.
                             style = ord(text[x + 1])
@@ -1350,6 +1392,14 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
 
     def OnCharAdded(self, event):
         """Called when a character is added to the document."""
+
+        if TransanaConstants.demoVersion and (self.GetLength() > 10000):
+            self.Undo()
+            prompt = _("The Transana Demonstration limits the size of Transcripts.\nYou have reached the limit and cannot edit this transcript further.")
+            tempDlg = Dialogs.InfoDialog(self, prompt)
+            tempDlg.ShowModal()
+            tempDlg.Destroy()
+        
         if DEBUG:
             print "RichTextEditCtrl.OnCharAdded(): %s (style=%d)" % (event.GetKey(), self.style)
         # Don't do anything if in read-only mode
@@ -1410,8 +1460,7 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                         self.StyleChanged(self)
 
     def OnModified(self, event):
-        """Triggered when the document is modified, including style
-        changes."""
+        """Triggered when the document is modified, including style changes."""
         # Note: No modifications may be performed when servicing this event!
         if event.GetModificationType() & wx.stc.STC_MOD_CHANGESTYLE:
             self.stylechange = 1

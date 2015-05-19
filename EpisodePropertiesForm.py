@@ -300,27 +300,27 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         # then we need to block Unicode characters from media filenames.
         # Unicode characters still cause problems on the Mac for the Multi-User version of Transana,
         # but can be made to work if shared waveforming is done on a Windows computer.
-        if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
+ #       if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
             # Transana can't cope with non-English characters in the path or file name for media files.  (The ActiveX
             # control chokes on a string conversion on Windos and Python os.path.exists() can't cope on the Mac)
             # Create a string of legal characters for the file names
-            allowedChars = TransanaConstants.legalFilenameCharacters
+ #           allowedChars = TransanaConstants.legalFilenameCharacters
             # check each character in the file name string
-            for char in self.fname_edit.GetValue():
+ #           for char in self.fname_edit.GetValue():
                 # If the character is illegal ...
-                if allowedChars.find(char) == -1:
+ #               if allowedChars.find(char) == -1:
                     # ... Display an error message to the user.
-                    msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.')
-                    if 'unicode' in wx.PlatformInfo:
+ #                   msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.')
+ #                   if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                        msg = unicode(msg, 'utf8')
-                    dlg = Dialogs.ErrorDialog(self, msg % (self.fname_edit.GetValue(), char))
-                    dlg.ShowModal()
-                    dlg.Destroy()
+ #                       msg = unicode(msg, 'utf8')
+ #                   dlg = Dialogs.ErrorDialog(self, msg % (self.fname_edit.GetValue(), char))
+ #                   dlg.ShowModal()
+ #                   dlg.Destroy()
                     # Clear the file name field
-                    self.fname_edit.SetValue('')
+ #                   self.fname_edit.SetValue('')
                     # We only need to detect the first error
-                    break
+ #                   break
         
     def OnBrowse(self, evt):
         """Invoked when the user activates the Browse button."""

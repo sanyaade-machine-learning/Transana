@@ -696,9 +696,10 @@ if __name__ == '__main__':
                 dlg = Dialogs.ErrorDialog(None, _("There was a problem printing this report."))
                 dlg.ShowModal()
                 dlg.Destoy()
-            else:
+            # NO!  REMOVED to prevent crash on 2nd print attempt following Filter Config.
+            # else:
                 # Save any changes that may have been made to the Printer Setup
-                self.printData = printer.GetPrintDialogData().GetPrintData()
+            #     self.printData = printer.GetPrintDialogData().GetPrintData()
             # Destroy the MyPrintout Object
             printout.Destroy()
 

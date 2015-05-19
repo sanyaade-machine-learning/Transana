@@ -45,7 +45,7 @@ class WaveformProgress(wx.Dialog):
         self.process = None
         
         # Define the Dialog Box.  wx.STAY_ON_TOP required because this dialog can't be modal, but shouldn't be hidden or worked behind.
-        wx.Dialog.__init__(self, parent, -1, _('Wave Extraction Progress'), size=(400, 160), style=wx.DEFAULT_DIALOG_STYLE | wx.STAY_ON_TOP)
+        wx.Dialog.__init__(self, parent, -1, _('Wave Extraction Progress'), size=(400, 160), style=wx.CAPTION | wx.STAY_ON_TOP)
 
         # To look right, the Mac needs the Small Window Variant.
         if "__WXMAC__" in wx.PlatformInfo:

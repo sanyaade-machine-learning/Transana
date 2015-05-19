@@ -154,6 +154,8 @@ class Transana(wx.App):
                 programTitle = "Transana"
             else:
                 programTitle = "Transana-MU"
+            if TransanaConstants.demoVersion:
+                programTitle += " - Demonstration Version"
 
             # Create the Menu Window
             TransanaGlobal.menuWindow = MenuWindow.MenuWindow(None, -1, programTitle)

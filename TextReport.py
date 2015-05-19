@@ -148,6 +148,11 @@ class TextReport(wx.Frame):
         self.toolBar.AddTool(T_FILE_PRINTSETUP, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintSetup.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Set up Page'))
         # Add a Print Preview button to the Toolbar
         self.toolBar.AddTool(T_FILE_PRINTPREVIEW, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintPreview.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print Preview'))
+
+        # Disable Print Preview on the Mac
+        if 'wxMac' in wx.PlatformInfo:
+            self.toolBar.EnableTool(T_FILE_PRINTPREVIEW, False)
+            
         # Add a Print button to the Toolbar
         self.toolBar.AddTool(T_FILE_PRINT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Print.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print'))
         # If a help context is defined ...

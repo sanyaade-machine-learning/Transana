@@ -54,6 +54,8 @@ import DBInterface
 import Dialogs
 # import Transana File Management System
 import FileManagement
+# import the Episode Transcript Change Propagation tool
+import PropagateEpisodeChanges
 # import Transana's Exceptions
 import TransanaExceptions
 
@@ -217,6 +219,8 @@ class ControlObject(object):
             fileManager = FileManagement.FileManagement(self.MenuWindow, -1, _("Transana File Management"))
             # Set up, display, and process the File Management Window
             fileManager.Setup(showModal=True)
+            # Destroy the File Manager window
+            fileManager.Destroy()
 
     def LoadClipByNumber(self, clipNum):
         """ When a Clip is identified to trigger systematic loading of all related information,
@@ -241,9 +245,9 @@ class ControlObject(object):
             # Identify the loaded Object
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                str = unicode(_('Transcript for Collection "%s", Clip "%s"'), 'utf8') % (collectionObj.id, clipObj.id)
+                str = unicode(_('Transcript for Collection "%s", Clip "%s"'), 'utf8') % (collectionObj.GetNodeString(), clipObj.id)
             else:
-                str = _('Transcript for Collection "%s", Clip "%s"') % (collectionObj.id, clipObj.id)
+                str = _('Transcript for Collection "%s", Clip "%s"') % (collectionObj.GetNodeString(), clipObj.id)
             # The Mac doesn't clean up around frame titles!
             # (The Mac centers titles, while Windows left-justifies them and should not get the leading spaces!)
             if 'wxMac' in wx.PlatformInfo:
@@ -279,6 +283,8 @@ class ControlObject(object):
             fileManager = FileManagement.FileManagement(self.MenuWindow, -1, _("Transana File Management"))
             # Set up, display, and process the File Management Window
             fileManager.Setup(showModal=True)
+            # Destroy the File Manager window
+            fileManager.Destroy()
 
             return False
 
@@ -846,7 +852,7 @@ class ControlObject(object):
         return self.VideoWindow.GetCurrentVideoPosition()
         
     def UpdateVideoPosition(self, currentPosition):
-        """ This method accepts the currentPosition from the video window and propogates that position to other objects """
+        """ This method accepts the currentPosition from the video window and propagates that position to other objects """
         # If we do not already have a cursor position saved, and there is a defined cursor position, save it
         if (self.TranscriptWindow.dlg.editor.cursorPosition == 0) and \
            (self.TranscriptWindow.dlg.editor.GetCurrentPos() != 0) and \
@@ -1020,6 +1026,33 @@ class ControlObject(object):
             else:
                 self.TranscriptWindow.SaveTranscriptAs(fname)
         dlg.Destroy()
+
+    def PropagateChanges(self):
+        """ Propagate changes in an Episode transcript down to derived clips """
+        # First, let's save the changes in the Transcript.  We don't want to propagate changes, then end up
+        # not saving them in the source!
+        if self.SaveTranscript(prompt=1):
+            # If we are working with an Episode Transcript ...
+            if type(self.currentObj).__name__ == 'Episode':
+                # Start up the Propagate Episode Transcript Changes tool
+                propagateDlg = PropagateEpisodeChanges.PropagateEpisodeChanges(self)
+            # If we are working with a Clip Transcript ...
+            elif type(self.currentObj).__name__ == 'Clip':
+                # If the user has updated the clip's Keywords, self.currentObj will NOT reflect this.
+                # Therefore, we need to load a new copy of the clip to get the latest keywords for propagation.
+                tempClip = Clip.Clip(self.currentObj.number)
+                # Start up the Propagate Clip Changes tool
+                propagateDlg = PropagateEpisodeChanges.PropagateClipChanges(self.MenuWindow,
+                                                                            self.currentObj,
+                                                                            self.TranscriptWindow.dlg.editor.GetRTFBuffer(),
+                                                                            newKeywordList=tempClip.keyword_list)
+
+        # If the user chooses NOT to save the Transcript changes ...
+        else:
+            # ... let them know that nothing was propagated!
+            dlg = Dialogs.InfoDialog(None, _("You must save the transcript if you want to propagate the changes."))
+            dlg.ShowModal()
+            dlg.Destroy()
 
     def UpdateDataWindow(self):
         """ Update the Data Window, as when the "Update Database Window" command is issued """

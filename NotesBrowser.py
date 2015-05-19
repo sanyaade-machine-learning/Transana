@@ -1045,5 +1045,7 @@ class NotesBrowser(wx.Dialog):
         # Remove the reference to the Notes Browser from the Control Object
         if self.ControlObject != None:
             self.ControlObject.Register(NotesBrowser=None)
-        # Destroy the current dialog.  (Close() is NOT sufficient here.)
-        self.Destroy()
+            
+        # self.Close() leads to recursion!  But self.Destroy() seems to cause a seg fault on the Mac.
+        # Let's just stop showing the window, and let the calling routine destroy the dialog.
+        self.Show(False)

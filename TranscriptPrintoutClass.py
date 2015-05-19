@@ -226,8 +226,8 @@ def ProcessRTF(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines, xPos,
 
 
         # Now let's check for line breaks elsewhere in the line.  Actually, this shouldn't happen!
-        if breakPos > 0:
-            print "Line Break inside the line, not at the beginning"
+#        if breakPos > 0:
+#            print "Line Break inside the line, not at the beginning"
 
         # Break the line into words at whitespace breaks
         if ('unicode' in wx.PlatformInfo) and (type(text).__name__ == 'str'):
@@ -265,13 +265,11 @@ def ProcessRTF(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines, xPos,
             if lineHeight > yInc:
                 yInc = lineHeight
 
-            # If the line is still within our margins, add the word and a space to the temporary line 
-            if xPos + lineWidth < sizeX - xMargin:
+            # If the line is still within our margins, add the word and a space to the temporary line
+            if xPos + lineWidth < sizeX - xMargin + (2 * dc.GetTextExtent(" ")[1]):
                 tempLine = tempLine + word
-
             # If the line would be too wide ...
             else:
-
                 datLines = datLines + ((fontSpec, tempLine),)
 
                 thisPageData.append(datLines)
@@ -415,7 +413,6 @@ def ProcessTXT(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines, xPos,
 
             # If the line would be too wide ...
             else:
-
                 datLines = datLines + ((fontSpec, tempLine),)
 
                 thisPageData.append(datLines)
@@ -1008,9 +1005,10 @@ if __name__ == '__main__':
                 dlg = Dialogs.ErrorDialog(None, _("There was a problem printing this report."))
                 dlg.ShowModal()
                 dlg.Destoy()
-            else:
+            # NO!  REMOVED to prevent crash on 2nd print attempt following Filter Config.
+            # else:
                 # Save any changes that may have been made to the Printer Setup
-                self.printData = printer.GetPrintDialogData().GetPrintData()
+            #     self.printData = printer.GetPrintDialogData().GetPrintData()
             # Destroy the MyPrintout Object
             printout.Destroy()
 

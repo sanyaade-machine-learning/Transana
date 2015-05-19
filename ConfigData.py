@@ -49,7 +49,7 @@ class ConfigData(object):
         self.waveformQuickLoad = True
 
         # Set default values for Dialog Size values which are not saved as part of the configuration file
-        self.clipPropertiesSize = (600, 470)
+        self.clipPropertiesSize = (680, 470)
         self.keywordListEditSize = (600, 385)
     
     def __repr__(self):
@@ -89,6 +89,8 @@ class ConfigData(object):
         str = str + 'singleLineDisplay = %s\n\n' % self.singleLineDisplay
         str = str + 'showLegend = %s\n\n' % self.showLegend
         str = str + 'colorOutput = %s\n\n' % self.colorOutput
+        if 'wxMSW' in wx.PlatformInfo:
+            str = str + 'mediaPlayer = %s\n\n' % self.mediaPlayer
         return str
 
     def LoadConfiguration(self):
@@ -197,6 +199,10 @@ class ConfigData(object):
             self.seriesMapVerticalGridLines = config.ReadInt('/2.0/SeriesMapVerticalGridLines', False)
             # Load the Series Map Sequence Map Single Line Setting
             self.singleLineDisplay = config.ReadInt('/2.0/SeriesMapSequenceMapSingleLine', False)
+            # For Windows only ...
+            if 'wxMSW' in wx.PlatformInfo:
+                # ... load the Media Player selection
+                self.mediaPlayer = config.ReadInt('/2.0/MediaPlayer', 0)
 
         # If no version 2.0 Config File exists, ...
         else:
@@ -268,6 +274,10 @@ class ConfigData(object):
             self.seriesMapVerticalGridLines = False
             # Load the Series Map Sequence Map Single Line Setting
             self.singleLineDisplay = False
+            # For Windows only ...
+            if 'wxMSW' in wx.PlatformInfo:
+                # ... load the Media Player selection
+                self.mediaPlayer = 0
 
         # Initialize the Show Legend setting
         self.showLegend = True
@@ -422,6 +432,10 @@ class ConfigData(object):
         config.WriteInt('/2.0/SeriesMapVerticalGridLines', self.seriesMapVerticalGridLines)
         # Save the Series Map Sequence Map Single Line Setting
         config.WriteInt('/2.0/SeriesMapSequenceMapSingleLine', self.singleLineDisplay)
+        # For Windows only ...
+        if 'wxMSW' in wx.PlatformInfo:
+            # ... save the Media Player selection
+            config.WriteInt('/2.0/MediaPlayer', self.mediaPlayer)
 
 
     def GetDefaultProfilePath(self):

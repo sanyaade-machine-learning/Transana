@@ -297,14 +297,14 @@ class ClipDataExport(Dialogs.GenForm):
 
             prompt = unicode(_('Collection Name\tClip Name\tMedia File\tClip Start\tClip End\tClip Length (seconds)'), 'utf8')
             # Write the Header line.  We're creating a tab-delimited file, so we'll use tabs to separate the items.
-            f.write(prompt.encode(EXPORT_ENCODING))
+            f.write(prompt.encode(EXPORT_ENCODING, 'backslashreplace'))
             # Add keywords to the Header.  Iterate through the Keyword List.
             for keyword in keywordList:
                 # See if the user has left the keyword "checked" in the filter dialog.
                 if keyword[2]:
                     # Encode and write all "checked" keywords to the Header.
-                    kwg = keyword[0].encode(EXPORT_ENCODING)
-                    kw = keyword[1].encode(EXPORT_ENCODING)
+                    kwg = keyword[0].encode(EXPORT_ENCODING, 'backslashreplace')
+                    kw = keyword[1].encode(EXPORT_ENCODING, 'backslashreplace')
                     f.write('\t%s : %s' % (kwg, kw))
             # Add a line break to signal the end of the Header line. 
             f.write('\n')
@@ -320,9 +320,9 @@ class ClipDataExport(Dialogs.GenForm):
                     # Get the collection the clip is from.
                     collection = Collection.Collection(clip.collection_num)
                     # Encode string values using the Export Encoding
-                    collectionID = collection.GetNodeString().encode(EXPORT_ENCODING)  # clip.collection_id.encode(EXPORT_ENCODING)
-                    clipID = clip.id.encode(EXPORT_ENCODING)
-                    clipMediaFilename = clip.media_filename.encode(EXPORT_ENCODING)
+                    collectionID = collection.GetNodeString().encode(EXPORT_ENCODING, 'backslashreplace')  # clip.collection_id.encode(EXPORT_ENCODING)
+                    clipID = clip.id.encode(EXPORT_ENCODING, 'backslashreplace')
+                    clipMediaFilename = clip.media_filename.encode(EXPORT_ENCODING, 'backslashreplace')
                     # If we're doing a Series report, we need the clip's source episode and Series for Episode Filter comparison.
                     if self.seriesNum != 0:
                         episode = Episode.Episode(clip.episode_num)

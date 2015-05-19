@@ -331,12 +331,22 @@ class MenuWindow(wx.Frame):
 
         # Norwegian Bokmal
         elif (TransanaGlobal.configData.language == 'nb'):
-            lang = wx.LANGUAGE_NORWEGIAN_BOKMAL
+            # There seems to be a bug in GetText on the Mac when the wxLANGUAGE is set to Bokmal.
+            # Setting this to English seems to make little practical difference.
+            if 'wxMac' in wx.PlatformInfo:
+                lang = wx.LANGUAGE_ENGLISH
+            else:
+                lang = wx.LANGUAGE_NORWEGIAN_BOKMAL
             self.presLan_nb.install()
             
         # Norwegian Ny-norsk
         elif (TransanaGlobal.configData.language == 'nn'):
-            lang = wx.LANGUAGE_NORWEGIAN_NYNORSK
+            # There seems to be a bug in GetText on the Mac when the wxLANGUAGE is set to Nynorsk.
+            # Setting this to English seems to make little practical difference.
+            if 'wxMac' in wx.PlatformInfo:
+                lang = wx.LANGUAGE_ENGLISH
+            else:
+                lang = wx.LANGUAGE_NORWEGIAN_NYNORSK
             self.presLan_nn.install()
 
         # Polish
@@ -652,17 +662,23 @@ class MenuWindow(wx.Frame):
             errordlg.ShowModal()
             errordlg.Destroy()
         else:
-            # Create the Frame for the Print Preview
-            theWidth = max(wx.ClientDisplayRect()[2] - 180, 760)
-            theHeight = max(wx.ClientDisplayRect()[3] - 200, 560)
-            printFrame = wx.PreviewFrame(printPreview, self, _("Print Preview"), size=(theWidth, theHeight))
-            printFrame.Centre()
-            # Initialize the Frame for the Print Preview
-            printFrame.Initialize()
-            # Restore Cursor to Arrow
-            self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-            # Display the Print Preview Frame
-            printFrame.Show(True)
+
+            # Print Preview on the Mac is broken.  Just print the transcript.
+            if 'wxMac' in wx.PlatformInfo:
+                printPreview.Print(True)
+            else:
+                
+                # Create the Frame for the Print Preview
+                theWidth = max(wx.ClientDisplayRect()[2] - 180, 760)
+                theHeight = max(wx.ClientDisplayRect()[3] - 200, 560)
+                printFrame = wx.PreviewFrame(printPreview, self, _("Print Preview"), size=(theWidth, theHeight))
+                printFrame.Centre()
+                # Initialize the Frame for the Print Preview
+                printFrame.Initialize()
+                # Restore Cursor to Arrow
+                self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+                # Display the Print Preview Frame
+                printFrame.Show(True)
 
     def OnPrinterSetup(self, event):
         """ Printer Setup method """
@@ -770,7 +786,8 @@ class MenuWindow(wx.Frame):
         notesBrowser.Register(self.ControlObject)
         # Display the Notes Browser
         notesBrowser.ShowModal()
-        # NotesBrowser destroys itself!  No need for notesBrowser.Destroy() here.
+        # Destroy the notesBrowser dialog here.
+        notesBrowser.Destroy()
 
     def OnImportDatabase(self, event):
         """ Import Database """

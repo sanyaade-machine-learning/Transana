@@ -80,6 +80,13 @@ class SRBConnection(wx.Dialog):
         self.editSRBSEAOption = wx.TextCtrl(self, -1, self.srbSEAOption)
         box.Add(self.editSRBSEAOption, 2, wx.LEFT | wx.RIGHT | wx.BOTTOM| wx.EXPAND, 10)
 
+        lblBuffer = wx.StaticText(self, -1, _("Buffer Size:"))
+        box.Add(lblBuffer, 0, wx.LEFT, 10)
+
+        self.choiceBuffer = wx.Choice(self, -1, size=wx.Size(100, 24), choices=['4096', '8192', '16384', '32767', '64000', '100000', '200000','300000','400000','500000'])
+        self.choiceBuffer.SetStringSelection(self.srbBuffer)
+        box.Add(self.choiceBuffer, 2, wx.LEFT | wx.RIGHT | wx.BOTTOM| wx.EXPAND, 10)
+
         self.rbSRBStorageSpace = wx.RadioBox(self, RB_STORAGESPACE, _("Connect to:"), choices=[" " + _("My own storage space"), " " + _("All user's storage spaces") + "                  "], majorDimension=2, style=wx.RA_SPECIFY_ROWS)
         box.Add(self.rbSRBStorageSpace, 5, wx.LEFT | wx.RIGHT | wx.BOTTOM| wx.EXPAND, 10)
 
@@ -89,7 +96,10 @@ class SRBConnection(wx.Dialog):
 
         btnConnect = wx.Button(self, wx.ID_OK, _("Connect"))
         btnBox.Add(btnConnect, 1, wx.ALIGN_CENTER_HORIZONTAL)
-        
+
+        # Make the Connect button the default
+        self.SetDefaultItem(btnConnect)
+       
         btnBox.Add((20, 0))
 
         btnCancel = wx.Button(self, wx.ID_CANCEL, _("Cancel"))
@@ -119,6 +129,7 @@ class SRBConnection(wx.Dialog):
         defaultsrbPort           = '5544'              # '5823'
         defaultsrbResource       = 'WCERSRBV1'         # 'nt-wcersrb-1'
         defaultsrbSEAOption      = 'ENCRYPT1'
+        defaultsrbBuffer         = '400000'
         # Load the Config Data.  wxConfig automatically uses the Registry on Windows and the appropriate file on Mac.
         # Program Name is Transana, Vendor Name is Verception to remain compatible with Transana 1.0.
         config = wx.Config('Transana', 'Verception')
@@ -155,6 +166,7 @@ class SRBConnection(wx.Dialog):
                 self.srbResource       = defaultsrbResource
                 self.srbSEAOption      = defaultsrbSEAOption
 
+        self.srbBuffer         = config.Read('/2.0/srb/srbBuffer', defaultsrbBuffer)
             
 
     def SaveConfiguration(self):
@@ -176,3 +188,5 @@ class SRBConnection(wx.Dialog):
         config.Write('/2.0/srb/srbResource', self.srbResource)
         self.srbSEAOption = self.editSRBSEAOption.GetValue()
         config.Write('/2.0/srb/srbSEAOptions', self.srbSEAOption)
+        self.srbBuffer = self.choiceBuffer.GetStringSelection()
+        config.Write('/2.0/srb/srbBuffer', self.srbBuffer)

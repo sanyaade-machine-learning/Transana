@@ -44,7 +44,7 @@ class TranscriptToolbar(wx.ToolBar):
         """Initialize an TranscriptToolbar object."""
         # Create a ToolBar as self
         wx.ToolBar.__init__(self, parent, id, wx.DefaultPosition,
-                            wx.Size(325, 30), wx.TB_HORIZONTAL \
+                            wx.Size(385, 30), wx.TB_HORIZONTAL \
                                     | wx.NO_BORDER | wx.TB_FLAT | wx.TB_TEXT)
         # remember the parent
         self.parent = parent
@@ -108,6 +108,12 @@ class TranscriptToolbar(wx.ToolBar):
                         isToggle=1, shortHelpString=_("Show/Hide Time Code Indexes")))
         wx.EVT_MENU(self, self.CMD_SHOWHIDE_ID, self.OnShowHideCodes)
 
+        # Add show / hide timecodes button
+        self.CMD_SHOWHIDETIME_ID = self.GetNextId()
+        self.tools.append(self.AddTool(self.CMD_SHOWHIDETIME_ID, wx.Bitmap("images/TimeCodeData16.xpm", wx.BITMAP_TYPE_XPM),
+                        isToggle=1, shortHelpString=_("Show/Hide Time Code Values")))
+        wx.EVT_MENU(self, self.CMD_SHOWHIDETIME_ID, self.OnShowHideValues)
+
         # Add read only / edit mode button
         self.CMD_READONLY_ID = self.GetNextId()
         self.tools.append(self.AddTool(self.CMD_READONLY_ID, wx.Bitmap("images/ReadOnly16.xpm", wx.BITMAP_TYPE_XPM),
@@ -130,6 +136,17 @@ class TranscriptToolbar(wx.ToolBar):
 
         self.AddSeparator()
 
+        # Add Propagate Changes Button
+        # First, define the ID for this button
+        self.CMD_PROPAGATE_ID = self.GetNextId()
+        # Now create the button and add it to the Tools list
+        self.tools.append(self.AddTool(self.CMD_PROPAGATE_ID, wx.Bitmap("images/Propagate.xpm", wx.BITMAP_TYPE_XPM),
+                        shortHelpString=_("Propagate Changes")))
+        # Link the button to the appropriate event handler
+        wx.EVT_MENU(self, self.CMD_PROPAGATE_ID, self.OnPropagate)
+
+        self.AddSeparator()
+        
         # SEARCH moved to TranscriptionUI because you can't put a TextCtrl on a Toolbar on the Mac!
 
         # Set the Initial State of the Editing Buttons to "False"
@@ -152,7 +169,9 @@ class TranscriptToolbar(wx.ToolBar):
         self.ToggleTool(self.CMD_UNDERLINE_ID, False)
         self.ToggleTool(self.CMD_READONLY_ID, False)
         self.ToggleTool(self.CMD_SHOWHIDE_ID, False)
+        self.ToggleTool(self.CMD_SHOWHIDETIME_ID, False)
         self.UpdateEditingButtons()
+        self.EnableTool(self.CMD_PROPAGATE_ID, False)
         # Clear the Search Text
         self.parent.ClearSearch()
         
@@ -206,6 +225,10 @@ class TranscriptToolbar(wx.ToolBar):
         else:
             self.parent.editor.hide_codes()
 
+    def OnShowHideValues(self, event):
+        """ Implement Show / Hide Time Code Values """
+        self.parent.editor.show_timecodevalues(self.GetToolState(self.CMD_SHOWHIDETIME_ID))
+
     def OnReadOnlySelect(self, evt):
         """ Implement Read Only / Edit Mode """
         # Get the button's "indent" state
@@ -251,6 +274,17 @@ class TranscriptToolbar(wx.ToolBar):
                     dlg = Dialogs.InfoDialog(self.parent, msg)
                     dlg.ShowModal()
                     dlg.Destroy()
+                    # If Time Code Data is displayed ...
+                    if self.GetToolState(self.CMD_SHOWHIDETIME_ID):
+                        # ... signal that it was being shown ...
+                        timeCodeDataShowing = True
+                        # ... and HIDE it by toggling the button and calling the event!  We don't want it to be propagated.
+                        self.ToggleTool(self.CMD_SHOWHIDETIME_ID, False)
+                        self.OnShowHideValues(evt)
+                    # If Time Code Data is NOT displayed ...
+                    else:
+                        # ... then note that it isn't so we know not to re-display it later.
+                        timeCodeDataShowing = False
                     # Determine whether we have a Clip Transcript (not pickled) or an Episode Transcript (pickled)
                     # and load it.
                     if self.parent.editor.TranscriptObj.clip_num > 0:
@@ -262,6 +296,11 @@ class TranscriptToolbar(wx.ToolBar):
                     # reloading the Transcript unfortunately unlocks the record.  I can't figure out
                     # a clever way to avoid this, so let's just re-lock the record.
                     self.parent.editor.TranscriptObj.lock_record()
+                    # If Time Code Data was being displayed ...
+                    if timeCodeDataShowing:
+                        # ... RE-DISPLAY it by toggling the button and calling the event!
+                        self.ToggleTool(self.CMD_SHOWHIDETIME_ID, True)
+                        self.OnShowHideValues(evt)
                 # Set the Read only state based on the button's indent
                 self.parent.editor.set_read_only(not can_edit)
                 # update the Toolbar's state
@@ -295,7 +334,7 @@ class TranscriptToolbar(wx.ToolBar):
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                         msg = unicode(_('You cannot proceed because %s "%s" cannot be found.'), 'utf8') + \
                               unicode(_('\nIt may have been deleted by another user.'), 'utf8')
-                        msg = msg % (_('Transcript'), self.parent.editor.TranscriptObj.id)
+                        msg = msg % (unicode(_('Transcript'), 'utf8'), self.parent.editor.TranscriptObj.id)
                     else:
                         msg = _('You cannot proceed because %s "%s" cannot be found.') + \
                               _('\nIt may have been deleted by another user.') % (_('Transcript'), self.parent.editor.TranscriptObj.id)
@@ -308,6 +347,8 @@ class TranscriptToolbar(wx.ToolBar):
                 dlg = Dialogs.ErrorDialog(self.parent, msg)
                 dlg.ShowModal()
                 dlg.Destroy()
+                # Clear the deleted objects from the Transana Interface.  Otherwise, problems arise.
+                self.parent.ControlObject.ClearAllWindows()
 
     def UpdateEditingButtons(self):
         """ Update the Toolbar Buttons depending on the Edit State """
@@ -326,25 +367,46 @@ class TranscriptToolbar(wx.ToolBar):
         if self.parent.editor.TranscriptObj != None:
             # Default that the transcript was NOT locked, which means we weren't in Edit mode.
             clipTranscriptLocked = False
-            # If the Transcript has a clip number, load the Clip
-            if self.parent.editor.TranscriptObj.clip_num > 0:
-                # If the Clip Transcript is locked, we need to save it first and unlock it.
-                if self.parent.editor.TranscriptObj.isLocked:
-                    # Note that the transcript was locked, which means we HAD to be in Edit Mode
-                    clipTranscriptLocked = True
-                    # Leave Edit Mode, which will prompt about saving the Transcript.
-                    # a) toggle the button
-                    self.ToggleTool(self.CMD_READONLY_ID, not self.GetToolState(self.CMD_READONLY_ID))
-                    # b) call the event that responds to the button state change
-                    self.OnReadOnlySelect(evt)
-                    # Get the "Last Save Time" value
-                    lastSaveTime = self.parent.editor.TranscriptObj.lastsavetime
-                # Finally, we can load the Clip object
-                obj = Clip.Clip(self.parent.editor.TranscriptObj.clip_num)
-            # Otherwise ...
-            else:
-                # ... load the Episode
-                obj = Episode.Episode(self.parent.editor.TranscriptObj.episode_num)
+            try:
+                # If the Transcript has a clip number, load the Clip
+                if self.parent.editor.TranscriptObj.clip_num > 0:
+                    # If the Clip Transcript is locked, we need to save it first and unlock it.
+                    if self.parent.editor.TranscriptObj.isLocked:
+                        # Note that the transcript was locked, which means we HAD to be in Edit Mode
+                        clipTranscriptLocked = True
+                        # Leave Edit Mode, which will prompt about saving the Transcript.
+                        # a) toggle the button
+                        self.ToggleTool(self.CMD_READONLY_ID, not self.GetToolState(self.CMD_READONLY_ID))
+                        # b) call the event that responds to the button state change
+                        self.OnReadOnlySelect(evt)
+                        # Get the "Last Save Time" value
+                        lastSaveTime = self.parent.editor.TranscriptObj.lastsavetime
+                    # Finally, we can load the Clip object
+                    obj = Clip.Clip(self.parent.editor.TranscriptObj.clip_num)
+                # Otherwise ...
+                else:
+                    # ... load the Episode
+                    obj = Episode.Episode(self.parent.editor.TranscriptObj.episode_num)
+            # Process Record Not Found exception
+            except TransanaExceptions.RecordNotFoundError, e:
+                msg = _('You cannot proceed because the %s cannot be found.')
+                # If the Transcript does not have a clip number, 
+                if self.parent.editor.TranscriptObj.clip_num == 0:
+                    prompt = _('Episode')
+                else:
+                    prompt = _('Clip')
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    msg = unicode(msg, 'utf8') % unicode(prompt, 'utf8') + \
+                          unicode(_('\nIt may have been deleted by another user.'), 'utf8')
+                else:
+                    msg = msg % prompt + _('\nIt may have been deleted by another user.')
+                dlg = Dialogs.ErrorDialog(self.parent, msg)
+                dlg.ShowModal()
+                dlg.Destroy()
+                # Clear the deleted objects from the Transana Interface.  Otherwise, problems arise.
+                self.parent.ControlObject.ClearAllWindows()
+                return
             try:
                 # Lock the data record
                 obj.lock_record()
@@ -432,9 +494,46 @@ class TranscriptToolbar(wx.ToolBar):
                 idVal = obj.id
                 TransanaExceptions.ReportRecordLockedException(rtype, idVal, e)
 
+            # Process Record Not Found exception
+            except TransanaExceptions.RecordNotFoundError, e:
+                msg = _('You cannot proceed because the %s cannot be found.')
+                prompt = _('Transcript')
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    msg = unicode(msg, 'utf8') % unicode(prompt, 'utf8') + \
+                          unicode(_('\nIt may have been deleted by another user.'), 'utf8')
+                dlg = Dialogs.ErrorDialog(self.parent, msg)
+                dlg.ShowModal()
+                dlg.Destroy()
+                # Clear the deleted objects from the Transana Interface.  Otherwise, problems arise.
+                self.parent.ControlObject.ClearAllWindows()
+
     def OnSave(self, evt):
         """ Implement the Save Button """
         self.parent.ControlObject.SaveTranscript()
+
+    def OnPropagate(self, event):
+        """ Implement Propagate Changes button """
+        # If Time Code Data is displayed ...
+        if self.GetToolState(self.CMD_SHOWHIDETIME_ID):
+            # ... signal that it was being shown ...
+            timeCodeDataShowing = True
+            # ... and HIDE it by toggling the button and calling the event!  We don't want it to be propagated.
+            self.ToggleTool(self.CMD_SHOWHIDETIME_ID, False)
+            self.OnShowHideValues(event)
+        # If Time Code Data is NOT displayed ...
+        else:
+            # ... then note that it isn't so we know not to re-display it later.
+            timeCodeDataShowing = False
+        
+        # Call the Propagate Changes method in the Control Object
+        self.parent.ControlObject.PropagateChanges()
+
+        # If Time Code Data was being displayed ...
+        if timeCodeDataShowing:
+            # ... RE-DISPLAY it by toggling the button and calling the event!
+            self.ToggleTool(self.CMD_SHOWHIDETIME_ID, True)
+            self.OnShowHideValues(event)
             	
     def OnStyleChange(self, editor):
         """This event handler is setup in the higher level Transcript Window,
@@ -456,6 +555,8 @@ class TranscriptToolbar(wx.ToolBar):
         self.SetToolShortHelp(self.CMD_AUDIBLE_BREATH_ID, _("Audible Breath"))
         self.SetToolShortHelp(self.CMD_WHISPERED_SPEECH_ID, _("Whispered Speech"))
         self.SetToolShortHelp(self.CMD_SHOWHIDE_ID, _("Show/Hide Time Code Indexes"))
+        self.SetToolShortHelp(self.CMD_SHOWHIDETIME_ID, _("Show/Hide Time Code Values"))
         self.SetToolShortHelp(self.CMD_READONLY_ID, _("Edit/Read-only select"))
         self.SetToolShortHelp(self.CMD_KEYWORD_ID, _("Edit Keywords"))
         self.SetToolShortHelp(self.CMD_SAVE_ID, _("Save Transcript"))
+        self.SetToolShortHelp(self.CMD_PROPAGATE_ID, _("Propagate Changes"))

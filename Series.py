@@ -230,32 +230,23 @@ class Series(DataObject):
             c.close()
             self.clear()
         except RecordLockedError, e:
-
-            if DEBUG:
-                print "Series: RecordLocked Error", e
-
             # if a sub-record is locked, we may need to unlock the Series record (after rolling back the Transaction)
             if self.isLocked:
                 # c (the database cursor) only exists if the record lock was obtained!
                 # We must roll back the transaction before we unlock the record.
                 c.execute("ROLLBACK")
-
-                if DEBUG:
-                    print "Series: roll back Transaction"
-            
                 c.close()
-
                 self.unlock_record()
-
-                if DEBUG:
-                    print "Series: unlocking record"
-
             raise e    
+        # Handle the DeleteError Exception
+        except DeleteError, e:
+            # If the record is locked ...
+            if self.isLocked:
+                # ... then unlock it ...
+                self.unlock_record()
+            # ... and pass on the exception.
+            raise e
         except:
-
-            if DEBUG:
-                print "Series: Exception"
-            
             raise
         return result
 

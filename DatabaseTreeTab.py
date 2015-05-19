@@ -57,6 +57,7 @@ import PlayAllClips
 import DragAndDropObjects           # Implements Drag and Drop logic and objects
 import cPickle                      # Used in Drag and Drop
 import Misc                         # Transana's Miscellaneous functions
+import PropagateEpisodeChanges      # Transana's Change Propagation routines
 
 class DatabaseTreeTab(wx.Panel):
     """This class defines the object for the "Database" tab of the Data
@@ -829,6 +830,12 @@ class DatabaseTreeTab(wx.Panel):
         else:
             # Remember the clip's original name
             originalClipID = clip.id
+            # For Clip Change Propagation, we actually need a copy of the clip from before the user changes anything.
+            # So let's make a copy of the clip!
+            originalClip = clip.duplicate()
+            # When you copy a clip, it has "0" for a Clip Number.  Let's preserve the original Clip Number.
+            # (We just have to be careful NOT TO SAVE originalClip!)
+            originalClip.number = clip.number
             # Create the Clip Properties Dialog Box to edit the Clip Properties
             dlg = ClipPropertiesForm.EditClipDialog(self, -1, clip)
             # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
@@ -910,6 +917,17 @@ class DatabaseTreeTab(wx.Panel):
                             if TransanaGlobal.chatWindow != None:
                                 # Send the "Update Keyword List" message
                                 TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                        # If the Clip Properties Dialog was closed by pressing the Propagate Clip Changes button,
+                        # we can detect that by looking at the propagatePressed property of the form.  Now that the
+                        # clip changes have been successfully saved, we need to deal with propagation if requested.
+                        if dlg.propagatePressed:
+                            # Start up the Propagate Changes tool, passing in the original clip copy and the proper data
+                            # from the edited clip.
+                            propagateDlg = PropagateEpisodeChanges.PropagateClipChanges(self,
+                                                                                        originalClip,
+                                                                                        clip.text,
+                                                                                        clip.id,
+                                                                                        clip.keyword_list)
 
                         # If we do all this, we don't need to continue any more.
                         contin = False
@@ -1533,68 +1551,72 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Select the appropriate item in the TreeCtrl
         self.SelectItem(sel_item)
 
-        # Determine what Item is being cut, copied, or dragged, and grab it's data
-        tempNodeName = "%s" % (self.GetItemText(sel_item))
-        tempNodeData = self.GetPyData(sel_item)
-        
-        # If we're dealing with a SearchCollection or SearchClip Node, let's build the nodeList.
-        if tempNodeData.nodetype == 'SearchCollectionNode' or \
-           tempNodeData.nodetype == 'SearchClipNode':
-            # Start with a Node Pointer
-            tempNode = sel_item
-            # Start the node List with that nodePointer's Text
-            nodeList = (self.GetItemText(tempNode),)
-            # Climb the tree up to the Search Root Node ...
-            while self.GetPyData(tempNode).nodetype != 'SearchRootNode':
-                # Get the Parent Node ...
-                tempNode = self.GetItemParent(tempNode)
-                # And add it's text to the Node List
-                nodeList = (self.GetItemText(tempNode),) + nodeList
-
-        # Create a custom Data Object for Cut and Paste AND Drag and Drop
-        ddd = DragAndDropObjects.DataTreeDragDropData(text=tempNodeName, nodetype=tempNodeData.nodetype, nodeList=nodeList, recNum=tempNodeData.recNum, parent=tempNodeData.parent)
-
-        # Use cPickle to convert the data object into a string representation
-        pddd = cPickle.dumps(ddd, 1)
-
-        # Now create a wxCustomDataObject for dragging and dropping and
-        # assign it a custom Data Format
-        cdo = wx.CustomDataObject(wx.CustomDataFormat('DataTreeDragData'))
-        # Put the pickled data object in the wxCustomDataObject
-        cdo.SetData(pddd)
-
-        # If we have a "Cut" or "Copy" request, we put the pickled CustomDataObject in the Clipboard.
-        # If we have a "Drag", we put the pickled CustomDataObject in the DropSource Object.
-
-        # If the event was triggered by a "Cut" or "Copy" request ...
-        if event.GetId() in [self.cmd_id_start["collection"],           self.cmd_id_start["clip"],           self.cmd_id_start["kw"],
-                             self.cmd_id_start["searchcollection"],     self.cmd_id_start["searchclip"],
-                             self.cmd_id_start["collection"] + 1,       self.cmd_id_start["clip"] + 1,        self.cmd_id_start["kw"] + 1,
-                             self.cmd_id_start["searchcollection"] + 1, self.cmd_id_start["searchclip"] + 1]:
-            # ... open the clipboard ...
-            # wx.TheClipboard.Open()
-            # ... put the data in the clipboard ...
-            wx.TheClipboard.SetData(cdo)
-            # ... and close the clipboard.
-            # wx.TheClipboard.Close()
+        # If you're editing a Keyword Label (to merge keywords) and click on a tree item to end the
+        # label edit, the sel_item is NOT OK and you get an error.  Let's make sure we have a good tree
+        # item before we go on with the drag.
+        if sel_item.IsOk():
+            # Determine what Item is being cut, copied, or dragged, and grab it's data
+            tempNodeName = "%s" % (self.GetItemText(sel_item))
+            tempNodeData = self.GetPyData(sel_item)
             
-        # If the event was triggered by a "Drag" request ...
-        elif not '__WXMAC__' in wx.PlatformInfo:
-            # Create a Custom DropSource Object.  The custom drop source object
-            # accepts the tree as a parameter so it can query it about where the
-            # drop is supposed to be occurring to see if it will allow the drop.
-            tds = DragAndDropObjects.DataTreeDropSource(self)
-            # Associate the Data with the Drop Source Object
-            tds.SetData(cdo)
-            # Initiate the Drag Operation
-            dragResult = tds.DoDragDrop(True)
-            # We do the actual processing in the DropTarget object, as we have access to the Dragged Data and the
-            # Drop Target's information there but not here.
+            # If we're dealing with a SearchCollection or SearchClip Node, let's build the nodeList.
+            if tempNodeData.nodetype == 'SearchCollectionNode' or \
+               tempNodeData.nodetype == 'SearchClipNode':
+                # Start with a Node Pointer
+                tempNode = sel_item
+                # Start the node List with that nodePointer's Text
+                nodeList = (self.GetItemText(tempNode),)
+                # Climb the tree up to the Search Root Node ...
+                while self.GetPyData(tempNode).nodetype != 'SearchRootNode':
+                    # Get the Parent Node ...
+                    tempNode = self.GetItemParent(tempNode)
+                    # And add it's text to the Node List
+                    nodeList = (self.GetItemText(tempNode),) + nodeList
 
-            # Because the DropSource GiveFeedback Method can change the cursor, I find that I
-            # need to reset it to "normal" here or it can get stuck as a "No_Entry" cursor if
-            # a Drop is abandoned.
-            self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+            # Create a custom Data Object for Cut and Paste AND Drag and Drop
+            ddd = DragAndDropObjects.DataTreeDragDropData(text=tempNodeName, nodetype=tempNodeData.nodetype, nodeList=nodeList, recNum=tempNodeData.recNum, parent=tempNodeData.parent)
+
+            # Use cPickle to convert the data object into a string representation
+            pddd = cPickle.dumps(ddd, 1)
+
+            # Now create a wxCustomDataObject for dragging and dropping and
+            # assign it a custom Data Format
+            cdo = wx.CustomDataObject(wx.CustomDataFormat('DataTreeDragData'))
+            # Put the pickled data object in the wxCustomDataObject
+            cdo.SetData(pddd)
+
+            # If we have a "Cut" or "Copy" request, we put the pickled CustomDataObject in the Clipboard.
+            # If we have a "Drag", we put the pickled CustomDataObject in the DropSource Object.
+
+            # If the event was triggered by a "Cut" or "Copy" request ...
+            if event.GetId() in [self.cmd_id_start["collection"],           self.cmd_id_start["clip"],           self.cmd_id_start["kw"],
+                                 self.cmd_id_start["searchcollection"],     self.cmd_id_start["searchclip"],
+                                 self.cmd_id_start["collection"] + 1,       self.cmd_id_start["clip"] + 1,        self.cmd_id_start["kw"] + 1,
+                                 self.cmd_id_start["searchcollection"] + 1, self.cmd_id_start["searchclip"] + 1]:
+                # ... open the clipboard ...
+                # wx.TheClipboard.Open()
+                # ... put the data in the clipboard ...
+                wx.TheClipboard.SetData(cdo)
+                # ... and close the clipboard.
+                # wx.TheClipboard.Close()
+                
+            # If the event was triggered by a "Drag" request ...
+            elif not '__WXMAC__' in wx.PlatformInfo:
+                # Create a Custom DropSource Object.  The custom drop source object
+                # accepts the tree as a parameter so it can query it about where the
+                # drop is supposed to be occurring to see if it will allow the drop.
+                tds = DragAndDropObjects.DataTreeDropSource(self)
+                # Associate the Data with the Drop Source Object
+                tds.SetData(cdo)
+                # Initiate the Drag Operation
+                dragResult = tds.DoDragDrop(True)
+                # We do the actual processing in the DropTarget object, as we have access to the Dragged Data and the
+                # Drop Target's information there but not here.
+
+                # Because the DropSource GiveFeedback Method can change the cursor, I find that I
+                # need to reset it to "normal" here or it can get stuck as a "No_Entry" cursor if
+                # a Drop is abandoned.
+                self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
 
     def create_root_node(self):
@@ -1776,21 +1798,29 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 mapDict['Clip'][clipNo] = clip_item
             # This shouldn't happen to anyone but me.  God, I hope not, anyway.
             else:
-                print "ABANDONED CLIP RECORD!" , clipNo, clipID, collNo
+                print "ABANDONED CLIP RECORD!" , clipNo, clipID.encode('utf8'), collNo
 
         # Now add all the Notes to the objects in the Collection node of the database tree
         for (noteNum, noteID, seriesNum, episodeNum, transcriptNum, collectNum, clipNum) in DBInterface.list_of_node_notes(CollectionNode=True):
+            item = None
             # Find the correct Collection or Clip node using the map dictionary
             if collectNum > 0:
-                item = mapDict['Collection'][collectNum]
+                if mapDict['Collection'].has_key(collectNum):
+                    item = mapDict['Collection'][collectNum]
+                else:
+                    print "ABANDONED COLLECTION NOTE RECORD!", noteNum, noteID.encode('utf8'), collectNum
             elif clipNum > 0:
-                item = mapDict['Clip'][clipNum]
-            # Create the tree node
-            noteitem = self.AppendItem(item, noteID)
-            # Add the node's image and node data
-            nodedata = _NodeData(nodetype='NoteNode', recNum=noteNum)  # Identify this as a Note node
-            self.SetPyData(noteitem, nodedata)                  # Associate this data with the node
-            self.set_image(noteitem, "Note16")
+                if mapDict['Clip'].has_key(clipNum):
+                    item = mapDict['Clip'][clipNum]
+                else:
+                    print "ABANDONED CLIP NOTE RECORD!", noteNum, noteID.encode('utf8'), clipNum
+            if item != None:
+                # Create the tree node
+                noteitem = self.AppendItem(item, noteID)
+                # Add the node's image and node data
+                nodedata = _NodeData(nodetype='NoteNode', recNum=noteNum)  # Identify this as a Note node
+                self.SetPyData(noteitem, nodedata)                  # Associate this data with the node
+                self.set_image(noteitem, "Note16")
             
     def create_kwgroups_node(self):
         """ Create the Keywords node and populate it with all appropriate data """
@@ -1984,6 +2014,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             print "Root node = %s" % self.GetItemText(currentNode)
             print "nodeData =", nodeData
             print 'nodeType =', nodeType
+            print 'insertPos =', insertPos
 
         # Having nodes and subnodes with the same name causes a variety of problems.  We need to track how far
         # down the tree branches we are to keep track of what object NodeTypes we should be working with.
@@ -2082,8 +2113,37 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     if childNodeData != None:
                         print "DatabaseTreeTab.add_Node(3)", childNodeData.nodetype, expectedNodeType
                         print "DatabaseTreeTab.add_Node(4)", childNodeData.recNum, nodeRecNum
+
+                # Adding clips to the end of a long list was taking too long.  This code was added to make that process
+                # go MUCH more quickly.  We look for the absence of an insertPos (so we're not needing to position a
+                # clip in the middle of a list), reaching the end (n-1) of the nodeData, and where we're inserting a Clip.
+                if (insertPos == None) and (nodeListPos == len(nodeData) - 1) and (expectedNodeType == 'ClipNode'):
+                    if DEBUG:
+                        print
+                        print "***************************************************************************************"
+                        print "              THIS IS IT"
+                        print "***************************************************************************************"
+                        print
                 
-                if  (childNode.IsOk()) and \
+                    # Add the new Node to the Tree at the end
+                    newNode = self.AppendItem(currentNode, node)
+                    # Add the tree node's graphic.  This section only applied to Clips.
+                    self.set_image(newNode, "Clip16")
+                    # Get the Node Type data
+                    newNodeType = expectedNodeType
+                    # Get the current (clip) record number
+                    currentRecNum = nodeRecNum
+                    # Get the parent information
+                    currentParent = nodeParent
+                    # Use this data to create the node data
+                    nodedata = _NodeData(nodetype=newNodeType, recNum=currentRecNum, parent=currentParent)
+                    # Assign the node data to the new node.
+                    self.SetPyData(newNode, nodedata)
+                    # Signal that we're done!
+                    notDone = False
+                    #break
+                
+                elif  (childNode.IsOk()) and \
                     \
                     (itemText.upper() == tmpNode.upper()) and \
                     \
@@ -2302,7 +2362,9 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     notDone = False
 
                 (childNode, cookieItem) = self.GetNextChild(currentNode, cookieItem)
+        
         self.Refresh()
+
         # Calls from the MessagePost method of the Chat Window have caused exceptions.  This attempts to prevent that.
         if not avoidRecursiveYields:
             # There can be an issue with recursive calls to wxYield, so trap the exception ...
@@ -2761,14 +2823,21 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             # print nodeList
                         # Call the DB Tree's delete_Node method.
                         self.delete_Node(nodeList, 'SeriesNode')
+                # Handle the RecordLocked exception, which arises when records are locked!
                 except RecordLockedError, e:
-                    # Display the Exception Message, allow "continue" flag to remain true
+                    # Display the Exception Message
                     if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                         prompt = unicode(_('You cannot delete Series "%s".\n%s'), 'utf8')
                     else:
                         prompt = _('You cannot delete Series "%s".\n%s')
                     errordlg = Dialogs.ErrorDialog(None, prompt % (series.id, e.args))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle the DeleteError exception, which is used to prevent orphaning of Clips.
+                except DeleteError, e:
+                    # Display the Exception Message
+                    errordlg = Dialogs.InfoDialog(None, e.reason)
                     errordlg.ShowModal()
                     errordlg.Destroy()
                 # Handle other exceptions
@@ -2884,6 +2953,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             # print nodeList
                         # Call the DB Tree's delete_Node method.
                         self.delete_Node(nodeList, 'EpisodeNode')
+                # Handle the RecordLocked exception, which arises when records are locked!
                 except RecordLockedError, e:
                     # Display the Exception Message, allow "continue" flag to remain true
                     if 'unicode' in wx.PlatformInfo:
@@ -2892,6 +2962,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     else:
                         prompt = _('You cannot delete Episode "%s".\n%s')
                     errordlg = Dialogs.ErrorDialog(None, prompt % (episode.id, e.args))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle the DeleteError exception, which is used to prevent orphaning of Clips.
+                except DeleteError, e:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.InfoDialog(None, e.reason)
                     errordlg.ShowModal()
                     errordlg.Destroy()
                 # Handle other exceptions
@@ -2975,6 +3051,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             # print nodeList
                         # Call the DB Tree's delete_Node method.
                         self.delete_Node(nodeList, 'TranscriptNode')
+                # Handle the RecordLocked exception, which arises when records are locked!
                 except RecordLockedError, e:
                     # Display the Exception Message, allow "continue" flag to remain true
                     if 'unicode' in wx.PlatformInfo:
@@ -2982,7 +3059,13 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         prompt = unicode(_('You cannot delete Transcript "%s".\n%s'), 'utf8')
                     else:
                         prompt = _('You cannot delete Transcript "%s".\n%s')
-                    errordlg = Dialogs.ErrorDialog(None, _('You cannot delete Transcript "%s".\n%s') % (transcript.id, e.args))
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (transcript.id, e.args))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle the DeleteError exception, which is used to prevent orphaning of Clips.
+                except DeleteError, e:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.InfoDialog(None, e.reason)
                     errordlg.ShowModal()
                     errordlg.Destroy()
                 # Handle other exceptions
@@ -3058,18 +3141,18 @@ class _DBTreeCtrl(wx.TreeCtrl):
             #   Our data could be a DataTreeDragData object if the source is the Database Tree
             dfNode = wx.CustomDataFormat('DataTreeDragData')
             #   Our data could be a ClipDragDropData object if the source is the Transcript (clip creation)
-            dfClip = wx.CustomDataFormat('ClipDragDropData')
+#            dfClip = wx.CustomDataFormat('ClipDragDropData')
 
             # Specify the data object to accept data for these formats
             #   A DataTreeDragData object will populate the cdoNode object
             cdoNode = wx.CustomDataObject(dfNode)
             #   A ClipDragDropData object will populate the cdoClip object
-            cdoClip = wx.CustomDataObject(dfClip)
+#            cdoClip = wx.CustomDataObject(dfClip)
 
             # Create a composite Data Object from the object types defined above
             cdo = wx.DataObjectComposite()
             cdo.Add(cdoNode)
-            cdo.Add(cdoClip)
+#            cdo.Add(cdoClip)
 
             # Try to get data from the Clipboard
             success = wx.TheClipboard.GetData(cdo)
@@ -3089,21 +3172,21 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     pass
 
                 # Then lets try to get a ClipDragDropData object
-                try:
-                    data2 = cPickle.loads(cdoClip.GetData())
-                except:
-                    data2 = None
+#                try:
+#                    data2 = cPickle.loads(cdoClip.GetData())
+#                except:
+#                    data2 = None
                     # If this fails, that's okay
-                    pass
+#                    pass
 
                 # If we don't get the DataTreeDragData object, we need to substitute the ClipDragDropData item
-                if data == None:
-                    data = data2
+#                if data == None:
+#                    data = data2
                     
-                if type(data) == type(DragAndDropObjects.ClipDragDropData()):
-                    DragAndDropObjects.CreateClip(data, selData, self, sel)
-                else:
-                    DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
+#                if type(data) == type(DragAndDropObjects.ClipDragDropData()):
+#                    DragAndDropObjects.CreateClip(data, selData, self, sel)
+#                else:
+                DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
 
         elif n == 3:    # Add Clip
             try:
@@ -3184,6 +3267,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             if TransanaGlobal.chatWindow != None:
                                 TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
                         
+                # Handle the RecordLocked exception, which arises when records are locked!
                 except RecordLockedError, e:
                     # Display the Exception Message, allow "continue" flag to remain true
                     if 'unicode' in wx.PlatformInfo:
@@ -3403,6 +3487,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                 
                             if TransanaGlobal.chatWindow != None:
                                 TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', clipNum, clipEpisodeNum))
+                # Handle the RecordLocked exception, which arises when records are locked!
                 except RecordLockedError, e:
                     # Display the Exception Message, allow "continue" flag to remain true
                     if 'unicode' in wx.PlatformInfo:
@@ -3549,6 +3634,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         elif noteParentNodeType == 'ClipNode':
                             noteNodeType = 'ClipNoteNode'
                         self.delete_Node(nodeList, noteNodeType)
+                # Handle the RecordLocked exception, which arises when records are locked!
                 except RecordLockedError, e:
                     # Display the Exception Message, allow "continue" flag to remain true
                     if 'unicode' in wx.PlatformInfo:
@@ -3701,6 +3787,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             
                         if TransanaGlobal.chatWindow != None:
                             TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
+                # Handle the RecordLocked exception, which arises when records are locked!
                 except RecordLockedError, e:
                     # Display the Exception Message, allow "continue" flag to remain true
                     if 'unicode' in wx.PlatformInfo:
@@ -4228,21 +4315,21 @@ class _DBTreeCtrl(wx.TreeCtrl):
             #   Our data could be a DataTreeDragData object if the source is the Database Tree
             dfNode = wx.CustomDataFormat('DataTreeDragData')
             #   Our data could be a ClipDragDropData object if the source is the Transcript (clip creation)
-            dfClip = wx.CustomDataFormat('ClipDragDropData')
+#            dfClip = wx.CustomDataFormat('ClipDragDropData')
 
             # Test to see if one of the custom formats is available.  Otherwise, we get odd error messages
             # on the Mac.
-            if wx.TheClipboard.IsSupported(dfNode) or wx.TheClipboard.IsSupported(dfClip):
+            if wx.TheClipboard.IsSupported(dfNode):  # or wx.TheClipboard.IsSupported(dfClip):
                 # Specify the data object to accept data for these formats
                 #   A DataTreeDragData object will populate the cdoNode object
                 cdoNode = wx.CustomDataObject(dfNode)
                 #   A ClipDragDropData object will populate the cdoClip object
-                cdoClip = wx.CustomDataObject(dfClip)
+#                cdoClip = wx.CustomDataObject(dfClip)
 
                 # Create a composite Data Object from the object types defined above
                 cdo = wx.DataObjectComposite()
                 cdo.Add(cdoNode)
-                cdo.Add(cdoClip)
+#                cdo.Add(cdoClip)
 
                 # Try to get data from the Clipboard
                 success = wx.TheClipboard.GetData(cdo)
@@ -4266,16 +4353,16 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     pass
 
                 # Let's also try to get the ClipDragDropData Object 
-                try:
-                    source_item_data2 = cPickle.loads(cdoClip.GetData())
-                except:
-                    source_item_data2 = None
+#                try:
+#                    source_item_data2 = cPickle.loads(cdoClip.GetData())
+#                except:
+#                    source_item_data2 = None
                     # If this fails, that's okay
-                    pass
+#                    pass
 
                 # if we didn't get a DataTreeDragData object, substitute the ClipDragDropData object
-                if source_item_data == None:
-                    source_item_data = source_item_data2
+#                if source_item_data == None:
+#                    source_item_data = source_item_data2
 
             # If the data in the clipboard is not appropriate ...
             else:

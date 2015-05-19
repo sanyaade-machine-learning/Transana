@@ -757,14 +757,108 @@ class XMLExport(Dialogs.GenForm):
                         # For FilterDataTypes for Episodes (1), Clips (2), Keywords(3), Keyword Groups (5), Transcripts (6),
                         # and Collection (7), we have LIST data to process.
                         if FilterDataType in [1, 2, 3, 5, 6, 7]:
-                            # MySQL for Python often saves the data as an array ...
-                            if type(FilterData).__name__ == 'array':
-                                # ... so convert it to a string and un-pickle it
-                                filterDataList = cPickle.loads(FilterData.tostring())
-                            # If it's not an array ...
-                            else:
-                                # ... just un-pickle the data.
-                                filterDataList = cPickle.loads(FilterData)
+                            # Initialize the fileterDataList to None, in case there's an unpickling error
+                            filterDataList = None
+                            # Because of the BLOB size problem, some filter data may not unpickle correctly.  Better trap it.
+                            try:
+                                # MySQL for Python often saves the data as an array ...
+                                if type(FilterData).__name__ == 'array':
+                                    # ... so convert it to a string and un-pickle it
+                                    filterDataList = cPickle.loads(FilterData.tostring())
+                                # If it's not an array ...
+                                else:
+                                    # ... just un-pickle the data.
+                                    filterDataList = cPickle.loads(FilterData)
+                            # If we get an UnpicklingError exception ...
+                            except cPickle.UnpicklingError, e:
+                                # Construct an error message that tells the user exactly what filter is causing
+                                # the problem so it can be fixed.
+                                errorMsg = _("There is a problem with a Filter Data record.") + "\n\n"
+                                # Tell the user what type of report is having a problem.
+                                errorMsg += "  " + _("ReportType:      %s")
+                                if ReportType == 1:
+                                    errorMsg += "   (" + _("Keyword Map") + ")"
+                                elif ReportType == 2:
+                                    errorMsg += "   (" + _("Keyword Visualization") + ")"
+                                elif ReportType == 3:
+                                    errorMsg += "   (" + _("Episode Clip Data Export") + ")"
+                                elif ReportType == 4:
+                                    errorMsg += "   (" + _("Collection Clip Data Export") + ")"
+                                elif ReportType == 5:
+                                    errorMsg += "   (" + _("Series Keyword Sequence Map") + ")"
+                                elif ReportType == 6:
+                                    errorMsg += "   (" + _("Series Keyword Bar Graph") + ")"
+                                elif ReportType == 7:
+                                    errorMsg += "   (" + _("Series Keyword Percentage Map") + ")"
+                                elif ReportType == 8:
+                                    errorMsg += "   (" + _("Episode Clip Data Coder Reliability Export") + ")"
+                                elif ReportType == 9:
+                                    errorMsg += "   (" + _("Keyword Summary Report") + ")"
+                                elif ReportType == 10:
+                                    errorMsg += "   (" + _("Series Report") + ")"
+                                elif ReportType == 11:
+                                    errorMsg += "   (" + _("Episode Report") + ")"
+                                elif ReportType == 12:
+                                    errorMsg += "   (" + _("Collection Report") + ")"
+                                elif ReportType == 13:
+                                    errorMsg += "   (" + _("Notes Report") + ")"
+                                elif ReportType == 14:
+                                    errorMsg += "   (" + _("Series Clip Data Export") + ")"
+                                errorMsg += "\n"
+                                # Tell the user which data object is having a problem.
+                                errorMsg += "  " + _("ReportScope:     %s")
+                                if ReportType in [5, 6, 7, 10, 14]:
+                                    import Series
+                                    tempSeries = Series.Series(ReportScope)
+                                    errorMsg += "  (" + _("Series") + ' "%s")' % tempSeries.id
+                                elif ReportType in [1, 2, 3, 8, 11]:
+                                    import Episode
+                                    tempEpisode = Episode.Episode(ReportScope)
+                                    errorMsg += "  (" + _("Episode") + ' "%s")' % tempEpisode.id
+                                elif ReportType in [4, 12]:
+                                    if ReportScope > 0:
+                                        import Collection
+                                        tempCollection = Collection.Collection(ReportScope)
+                                        errorMsg += "  (" + _("Collection") + ' "%s")' % tempCollection.id
+                                elif ReportType in [13]:
+                                    if ReportScope == 1:
+                                        errorMsg += "  " + _("(All Notes)")
+                                    elif ReportScope == 2:
+                                        errorMsg += "  " + _("(Series Notes)")
+                                    elif ReportScope == 3:
+                                        errorMsg += "  " + _("(Episode Notes)")
+                                    elif ReportScope == 4:
+                                        errorMsg += "  " + _("(Transcript Notes)")
+                                    elif ReportScope == 5:
+                                        errorMsg += "  " + _("(Collection Notes)")
+                                    elif ReportScope == 6:
+                                        errorMsg += "  " + _("(Clip Notes)")
+                                errorMsg += "\n"
+                                # Tell the user which config file is having the problem.
+                                errorMsg += "  " + _("ConfigName:      %s") + "\n"
+                                # Tell the user which part of the filter is having the problem.
+                                errorMsg += "  " + _("FilterDataType:  %s")
+                                if FilterDataType == 1:
+                                    errorMsg += "   (" + _("Episodes") + ")"
+                                elif FilterDataType == 2:
+                                    errorMsg += "   (" + _("Clips") + ")"
+                                elif FilterDataType == 3:
+                                    errorMsg += "   (" + _("Keywords") + ")"
+                                elif FilterDataType == 4:
+                                    errorMsg += "   (" + _("Keyword Colors") + ")"
+                                elif FilterDataType == 8:
+                                    errorMsg += "   (" + _("Notes") + ")"
+                                errorMsg += "\n\n"
+                                errorMsg += _("This Filter Configuration needs to be corrected or the data record needs to be removed from the export file.")
+                                # Convert the error message to Unicode
+                                if ('unicode' in wx.PlatformInfo) and (type(errorMsg) == type('')):
+                                    errorMsg = unicode(errorMsg, 'utf8')
+                                # Gather the data to be put into the error message
+                                errorMsgData = (ReportType, ReportScope, ConfigName, FilterDataType)
+                                # Finally display the error message
+                                errorDlg = Dialogs.ErrorDialog(self, errorMsg % errorMsgData)
+                                errorDlg.ShowModal()
+                                errorDlg.Destroy()
 
                         # For FilterDataType for Keyword Colors (4), we have DICTIONARY data that's already been encoded.
                         # For FilterDataType for Notes (8), we have a LIST that's already been encoded.

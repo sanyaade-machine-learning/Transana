@@ -36,8 +36,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
     """Form containing Clip fields."""
 
     def __init__(self, parent, id, title, clip_object):
-        # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style
-        Dialogs.GenForm.__init__(self, parent, id, title, size=TransanaGlobal.configData.clipPropertiesSize, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Clip Properties')
+        # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style.  Signal that Propogation is included.
+        Dialogs.GenForm.__init__(self, parent, id, title, size=TransanaGlobal.configData.clipPropertiesSize, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, propagateEnabled=True, HelpContext='Clip Properties')
         # Define the minimum size for this dialog as the initial size
         self.SetSizeHints(600, 470)
         # Remember the Parent Window
@@ -56,24 +56,24 @@ class ClipPropertiesForm(Dialogs.GenForm):
         lay = wx.LayoutConstraints()
         lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 23)  # 23% width
+        lay.width.PercentOf(self.panel, wx.Width, 18)  # 18% width
         lay.height.AsIs()
         self.id_edit = self.new_edit_box(_("Clip ID"), lay, self.obj.id, maxLen=100)
 
         # Collection ID layout
         lay = wx.LayoutConstraints()
         lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.RightOf(self.id_edit, 10)           # 10 right of Episode ID
-        lay.width.PercentOf(self.panel, wx.Width, 23)  # 23% width
+        lay.left.RightOf(self.id_edit, 10)             # 10 right of Episode ID
+        lay.width.PercentOf(self.panel, wx.Width, 38)  # 38% width
         lay.height.AsIs()
-        collection_edit = self.new_edit_box(_("Collection ID"), lay, self.obj.collection_id)
+        collection_edit = self.new_edit_box(_("Collection ID"), lay, self.obj.GetNodeString(False))
         collection_edit.Enable(False)
 
         # Series ID layout
         lay = wx.LayoutConstraints()
         lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.RightOf(collection_edit, 10)   # 10 right of Collection ID
-        lay.width.PercentOf(self.panel, wx.Width, 23)  # 23% width
+        lay.left.RightOf(collection_edit, 10)          # 10 right of Collection ID
+        lay.width.PercentOf(self.panel, wx.Width, 18)  # 18% width
         lay.height.AsIs()
         series_edit = self.new_edit_box(_("Series ID"), lay, self.obj.series_id)
         series_edit.Enable(False)
@@ -81,15 +81,15 @@ class ClipPropertiesForm(Dialogs.GenForm):
         # Episode ID layout
         lay = wx.LayoutConstraints()
         lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.RightOf(series_edit, 10)       # 10 right of Series ID
-        lay.width.PercentOf(self.panel, wx.Width, 23)  # 23% width
+        lay.left.RightOf(series_edit, 10)              # 10 right of Series ID
+        lay.width.PercentOf(self.panel, wx.Width, 18)  # 18% width
         lay.height.AsIs()
         episode_edit = self.new_edit_box(_("Episode ID"), lay, self.obj.episode_id)
         episode_edit.Enable(False)
 
         # Media Filename Layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.id_edit, 10)              # 10 under ID
+        lay.top.Below(self.id_edit, 10)                # 10 under ID
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.width.PercentOf(self.panel, wx.Width, 48)  # 48% width
         lay.height.AsIs()
@@ -103,8 +103,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
         
         # Clip Start layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.id_edit, 10)              # 10 under ID
-        lay.left.RightOf(self.fname_edit, 10)   # 10 right of Media FileName
+        lay.top.Below(self.id_edit, 10)                # 10 under ID
+        lay.left.RightOf(self.fname_edit, 10)          # 10 right of Media FileName
         lay.width.PercentOf(self.panel, wx.Width, 15)  # 15% width
         lay.height.AsIs()
         # Convert to HH:MM:SS.mm
@@ -113,8 +113,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Clip Stop layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.id_edit, 10)              # 10 under ID
-        lay.left.RightOf(clip_start_edit, 10)   # 10 right of Clip start
+        lay.top.Below(self.id_edit, 10)                # 10 under ID
+        lay.left.RightOf(clip_start_edit, 10)          # 10 right of Clip start
         lay.width.PercentOf(self.panel, wx.Width, 15)  # 15% width
         lay.height.AsIs()
         # Convert to HH:MM:SS.mm
@@ -123,8 +123,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Clip Length layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.id_edit, 10)              # 10 under ID
-        lay.left.RightOf(clip_stop_edit, 10)    # 10 right of Clip start
+        lay.top.Below(self.id_edit, 10)                # 10 under ID
+        lay.left.RightOf(clip_stop_edit, 10)           # 10 right of Clip start
         lay.width.PercentOf(self.panel, wx.Width, 14)  # 14% width
         lay.height.AsIs()
         # Convert to HH:MM:SS.mm
@@ -133,7 +133,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Comment layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.fname_edit, 10)      # 10 under media filename
+        lay.top.Below(self.fname_edit, 10)             # 10 under media filename
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
@@ -141,7 +141,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Clip Text layout [label]
         lay = wx.LayoutConstraints()
-        lay.top.Below(comment_edit, 10)         # 10 under comment
+        lay.top.Below(comment_edit, 10)                # 10 under comment
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
         lay.height.AsIs()
@@ -150,9 +150,9 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Clip Text layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(clip_text_lbl, 3)         # 3 under label
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
+        lay.top.Below(clip_text_lbl, 3)                 # 3 under label
+        lay.left.SameAs(self.panel, wx.Left, 10)        # 10 from left
+        lay.right.SameAs(self.panel, wx.Right, 10)      # 10 from right
         lay.height.PercentOf(self.panel, wx.Height, 15) # 15% of frame height
 
         # Load the Transcript into an RTF Control so the RTF Encoding won't show
@@ -169,6 +169,10 @@ class ClipPropertiesForm(Dialogs.GenForm):
         # This doesn't work!  Hidden text remains visible.
         self.text_edit.StyleSetVisible(self.text_edit.STYLE_HIDDEN, False)
         self.text_edit.codes_vis = 0
+        # Scan transcript for Time Codes
+        self.text_edit.load_timecodes()
+        # Display the time codes
+        self.text_edit.show_codes()
 
         self.text_edit.Enable(True)
 
@@ -176,7 +180,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Keyword Group layout [label]
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.text_edit, 10)            # 10 under clip text
+        lay.top.Below(self.text_edit, 10)              # 10 under clip text
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
         lay.height.AsIs()
@@ -185,9 +189,9 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Keyword Group layout [list box]
         lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                   # 3 under label
+        lay.top.Below(txt, 3)                          # 3 under label
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.SameAs(txt, wx.Width)          # width same as label
+        lay.width.SameAs(txt, wx.Width)                # width same as label
         lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
 
         # Load the parent Collection in order to determine the default Keyword Group
@@ -215,8 +219,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Keyword layout [label]
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.text_edit, 10)            # 10 under clip text
-        lay.left.RightOf(txt, 10)               # 10 right of KW Group
+        lay.top.Below(self.text_edit, 10)              # 10 under clip text
+        lay.left.RightOf(txt, 10)                      # 10 right of KW Group
         lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
         lay.height.AsIs()
         txt = wx.StaticText(self.panel, -1, _("Keyword"))
@@ -224,9 +228,9 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Keyword layout [list box]
         lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                   # 3 under label
-        lay.left.SameAs(txt, wx.Left)            # left same as label
-        lay.width.SameAs(txt, wx.Width)          # width same as label
+        lay.top.Below(txt, 3)                          # 3 under label
+        lay.left.SameAs(txt, wx.Left)                  # left same as label
+        lay.width.SameAs(txt, wx.Width)                # width same as label
         lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
         
         self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list)
@@ -236,8 +240,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Keyword transfer buttons
         lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 30)                  # 30 under label
-        lay.left.RightOf(txt, 10)               # 10 right of label
+        lay.top.Below(txt, 30)                         # 30 under label
+        lay.left.RightOf(txt, 10)                      # 10 right of label
         lay.width.PercentOf(self.panel, wx.Width, 6)   # 6% width
         lay.height.AsIs()
         add_kw = wx.Button(self.panel, wx.ID_FILE2, ">>", wx.DefaultPosition)
@@ -267,8 +271,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Clip Keywords [label]
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.text_edit, 10)            # 10 under clip text
-        lay.left.SameAs(add_kw, wx.Right, 10)        # 10 from Add keyword Button
+        lay.top.Below(self.text_edit, 10)              # 10 under clip text
+        lay.left.SameAs(add_kw, wx.Right, 10)          # 10 from Add keyword Button
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
         txt = wx.StaticText(self.panel, -1, _("Clip Keywords"))
@@ -276,9 +280,9 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Clip Keywords [list box]
         lay = wx.LayoutConstraints()
-        lay.top.Below(txt, 3)                   # 3 under label
-        lay.left.SameAs(txt, wx.Left)            # left same as label
-        lay.width.SameAs(txt, wx.Width)          # width same as label
+        lay.top.Below(txt, 3)                          # 3 under label
+        lay.left.SameAs(txt, wx.Left)                  # left same as label
+        lay.width.SameAs(txt, wx.Width)                # width same as label
         lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
 
         # Create an empty ListBox

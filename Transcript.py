@@ -24,6 +24,8 @@ if DEBUG:
     print "Transcript DEBUG is ON!"
 
 import wx
+# import Transana's Dialogs, required for an error message
+import Dialogs
 import TransanaConstants
 import TransanaGlobal
 from DataObject import DataObject
@@ -161,6 +163,25 @@ class Transcript(DataObject):
     def db_save(self):
         """Save the record to the database using Insert or Update as
         appropriate."""
+
+        # Define and implement Demo Version limits
+        if TransanaConstants.demoVersion and (self.number == 0) and (self.clip_num == 0):
+            # Get a DB Cursor
+            c = DBInterface.get_db().cursor()
+            # Find out how many Episode Transcript records exist (not counting Clip Transcripts)
+            c.execute('SELECT COUNT(TranscriptNum) FROM Transcripts2 WHERE ClipNum = 0')
+            res = c.fetchone()
+            c.close()
+            # Define the maximum number of recors allowed
+            maxEpisodeTranscripts = TransanaConstants.maxEpisodeTranscripts
+            # Compare
+            if res[0] >= maxEpisodeTranscripts:
+                # If the limit is exceeded, create and display the error using a SaveError exception
+                prompt = _('The Transana Demonstration limits you to %d Transcript records.\nPlease cancel the "Add Transcript" dialog to continue.')
+                if 'unicode' in wx.PlatformInfo:
+                    prompt = unicode(prompt, 'utf8')
+                raise SaveError, prompt % maxEpisodeTranscripts
+
         # Sanity checks
         if (self.id == "") and (self.clip_num == 0):
             raise SaveError, _("Transcript ID is required.")
@@ -281,6 +302,28 @@ class Transcript(DataObject):
         try:
             # Initialize delete operation, begin transaction if necessary
             (db, c) = self._db_start_delete(use_transactions)
+            # Determine if any Clips have been created from THIS Transcript.
+            clips = DBInterface.list_of_clips_by_transcriptnum(self.number)
+            # If there are Clips in the list ...
+            if len(clips) > 0:
+                # ... build a prompt for the warning dialog box
+                prompt = _('Clips have been created from Transcript "%s".\nThese clips will become orphaned if you delete the transcript.\nDo you want to delete this transcript anyway?')
+                # Adjust the prompt for Unicode if needed
+                if 'unicode' in wx.PlatformInfo:
+                    prompt = unicode(prompt, 'utf8')
+                # Display the prompt for the user.  We do not want "Yes" as the default!
+                tempDlg = Dialogs.QuestionDialog(TransanaGlobal.menuWindow, prompt % self.id, noDefault=True)
+                result = tempDlg.LocalShowModal()
+                tempDlg.Destroy()
+                # If the user indicated they did NOT want to delete the Transcript ...
+                if result == wx.ID_NO:
+                    # ... build the appropriate prompt ...
+                    prompt = _('The delete has been cancelled.  Clips have been created from Transcript "%s".')
+                    # ... encode the prompt if needed ...
+                    if 'unicode' in wx.PlatformInfo:
+                        prompt = unicode(prompt, 'utf8')
+                    # ... and use a DeleteError Exception to interupt the deletion.
+                    raise DeleteError(prompt % self.id)
             
             # Detect, Load, and Delete all Transcript Notes.
             notes = self.get_note_nums()
@@ -304,7 +347,20 @@ class Transcript(DataObject):
                 c.execute("ROLLBACK")
                 c.close()
                 self.unlock_record()
-            raise e    
+            raise e
+        # Handle the DeleteError Exception
+        except DeleteError, e:
+            # if a sub-record is locked, we may need to unlock the Transcript record (after rolling back the Transaction)
+            if self.isLocked:
+                # c (the database cursor) only exists if the record lock was obtained!
+                # We must roll back the transaction before we unlock the record.
+                c.execute("ROLLBACK")
+                # Close the database cursor
+                c.close()
+                # unlock the record
+                self.unlock_record()
+            # Pass on the exception
+            raise e
         except:
             raise
 

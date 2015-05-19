@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -30,9 +30,11 @@ import string
 # NOTE:  When you change this value, you MUST change the MySQL for Python installation you are using
 #        to match.
 singleUserVersion = True
+# Set this flag to "True" to create the Demonstration version.  (But don't mix this with MU!)
+demoVersion = False
 
 # Program Version Number
-versionNumber = '2.21'
+versionNumber = '2.22b'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
@@ -46,6 +48,12 @@ elif 'wxGTK' in wx.PlatformInfo:
     versionNumber += '-Linux Alpha 1.0'
 else:
     versionNumber += '-Unknown Platform Alpha 1.0'
+if demoVersion:
+    versionNumber += ' Demonstration'
+    maxEpisodes = 5
+    maxEpisodeTranscripts = 5
+    maxClips = 30
+    maxKeywords = 15
 
 # Define the Timecode Character
 if 'unicode' in wx.PlatformInfo:

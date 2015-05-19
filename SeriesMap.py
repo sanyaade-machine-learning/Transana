@@ -156,6 +156,11 @@ class SeriesMap(wx.Frame):
         self.toolBar.AddTool(T_FILE_SAVEAS, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "SaveJPG16.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Save As'))
         self.toolBar.AddTool(T_FILE_PRINTSETUP, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintSetup.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Set up Page'))
         self.toolBar.AddTool(T_FILE_PRINTPREVIEW, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintPreview.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print Preview'))
+
+        # Disable Print Preview on the Mac
+        if 'wxMac' in wx.PlatformInfo:
+            self.toolBar.EnableTool(T_FILE_PRINTPREVIEW, False)
+            
         self.toolBar.AddTool(T_FILE_PRINT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Print.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print'))
         # Get the graphic for Help
         bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
@@ -239,6 +244,8 @@ class SeriesMap(wx.Frame):
     # Define the Method that implements Filter
     def OnFilter(self, event):
         """ Implement the Filter Dialog call for Series Maps """
+        # Set the Cursor to the Hourglass while the report is assembled
+        TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
         # Set up parameters for creating the Filter Dialog.  Series Map Filter requires Series Number (as episodeNum) for the Config Save.
         title = string.join([self.title, _("Filter Dialog")], ' ')
         # Series Map wants the Clip Filter
@@ -292,6 +299,8 @@ class SeriesMap(wx.Frame):
             dlgFilter.SetKeywordColors(self.keywordColors)
         # Inform the Filter Dialog of the Keywords
         dlgFilter.SetKeywords(self.unfilteredKeywordList)
+        # Set the Cursor to the Arrow now that the filter dialog is assembled
+        TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
         # Create a dummy error message to get our while loop started.
         errorMsg = 'Start Loop'
         # Keep trying as long as there is an error message
@@ -453,8 +462,9 @@ class SeriesMap(wx.Frame):
             dlg = Dialogs.ErrorDialog(None, _("There was a problem printing this report."))
             dlg.ShowModal()
             dlg.Destroy()
-        else:
-            self.printData = printer.GetPrintDialogData().GetPrintData()
+        # NO!  REMOVED to prevent crash on 2nd print attempt following Filter Config.
+        # else:
+        #     self.printData = printer.GetPrintDialogData().GetPrintData()
         printout.Destroy()
 
     # Define the Method that closes the Window on File > Exit
