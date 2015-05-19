@@ -42,6 +42,9 @@ class ProgrammingError(exceptions.Exception):<BR>
 
 class GeneralError(exceptions.Exception):<BR>
     General error message.<BR><BR>
+
+def ReportRecordLockedException(rtype, id, e):<BR>
+    Handles the reporting of Record Lock Exceptions consistently.<BR><BR>
 """
 
 __author__ = 'Nathaniel Case <nacase@wisc.edu>, David K. Woods <dwoods@wcer.wisc.edu>'
@@ -110,3 +113,20 @@ class GeneralError(exceptions.Exception):
     """General error message."""
     def __init__(self, args=_("General error")):
         self.args = args
+
+def ReportRecordLockedException(rtype, idVal, e):
+    """ Report a RecordLocked exception """
+    msg = _('You cannot proceed because you cannot obtain a lock on %s "%s"' + \
+            '.\nThe record is currently locked by %s.\nPlease try again later.')
+    if 'unicode' in wx.PlatformInfo:
+        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+        if isinstance(msg, str):
+            msg = unicode(msg, 'utf8')
+        if isinstance(rtype, str):
+            rtype = unicode(rtype, 'utf8')
+        if isinstance(idVal, str):
+            id = unicode(idVal, 'utf8')
+    import Dialogs
+    dlg = Dialogs.ErrorDialog(None, msg % (rtype, idVal, e.user))
+    dlg.ShowModal()
+    dlg.Destroy()

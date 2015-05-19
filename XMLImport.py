@@ -143,21 +143,23 @@ class XMLImport(Dialogs.GenForm):
                if line.upper() == '<SERIESFILE>':
                    progress.Update(0, _('Importing Series records'))
                elif line.upper() == '<EPISODEFILE>':
-                   progress.Update(10, _('Importing Episode records'))
+                   progress.Update(9, _('Importing Episode records'))
                elif line.upper() == '<COREDATAFILE>':
-                   progress.Update(20, _('Importing Core Data records'))
+                   progress.Update(18, _('Importing Core Data records'))
                elif line.upper() == '<COLLECTIONFILE>':
-                   progress.Update(30, _('Importing Collection records'))
+                   progress.Update(27, _('Importing Collection records'))
                elif line.upper() == '<CLIPFILE>':
-                   progress.Update(40, _('Importing Clip records'))
+                   progress.Update(36, _('Importing Clip records'))
                elif line.upper() == '<TRANSCRIPTFILE>':
-                   progress.Update(50, _('Importing Transcript records (This may be slow because of the size of Transcript records.)'))
+                   progress.Update(45, _('Importing Transcript records (This may be slow because of the size of Transcript records.)'))
                elif line.upper() == '<KEYWORDFILE>':
-                   progress.Update(60, _('Importing Keyword records'))
+                   progress.Update(55, _('Importing Keyword records'))
                elif line.upper() == '<CLIPKEYWORDFILE>':
-                   progress.Update(70, _('Importing Clip Keyword records'))
+                   progress.Update(64, _('Importing Clip Keyword records'))
                elif line.upper() == '<NOTEFILE>':
-                   progress.Update(80, _('Importing Note records'))
+                   progress.Update(73, _('Importing Note records'))
+               elif line.upper() == '<FILTERFILE>':
+                   progress.Update(82, _('Importing Filter records'))
 
                # Transana XML Version Checking
                elif line.upper() == '<TRANSANAXMLVERSION>':
@@ -168,9 +170,10 @@ class XMLImport(Dialogs.GenForm):
                    # importEncoding reflects the encoding used to create the Transana XML file now being imported.
                    # Version 1.0 -- Original Transana XML for Transana 2.0 release
                    # Version 1.1 -- Unicode encoding added to Transana XML for Transana 2.1 release
+                   # Version 1.2 -- Filter Table added to Transaan XML for Transaan 2.11 release
                    if XMLVersionNumber == '1.0':
                        self.importEncoding = 'latin-1'
-                   elif XMLVersionNumber in ['1.1']:
+                   elif XMLVersionNumber in ['1.1', '1.2']:
                        self.importEncoding = 'utf8'
                    else: 
                        msg = _('The Database you are trying to import was created with a later version\nof Transana.  Please upgrade your copy of Transana and try again.')
@@ -228,6 +231,17 @@ class XMLImport(Dialogs.GenForm):
                    objectType = 'Note'
                    dataType = None
 
+               elif line.upper() == '<FILTER>':
+                    # There is not an Object for the Filter table.
+                    currentObj = None
+                    self.FilterReportType = None
+                    self.FilterScope = None
+                    self.FilterConfigName = None
+                    self.FilterFilterDataType = None
+                    self.FilterFilterData = ''
+                    objectType = 'Filter'
+                    dataType = None
+
                elif line.upper() == '</SERIES>' or \
                     line.upper() == '</EPISODE>' or \
                     line.upper() == '</COREDATA>' or \
@@ -236,7 +250,8 @@ class XMLImport(Dialogs.GenForm):
                     line.upper() == '</CLIP>' or \
                     line.upper() == '</KEYWORDREC>' or \
                     line.upper() == '</CLIPKEYWORD>' or \
-                    line.upper() == '</NOTE>':
+                    line.upper() == '</NOTE>' or \
+                    line.upper() == '</FILTER>':
                    dataType = None
 
                    # Saves are one area where problems will arise if the data's not clean.
@@ -285,6 +300,26 @@ class XMLImport(Dialogs.GenForm):
                        elif objectType == 'ClipKeyword':
                            if (currentObj.episodeNum != 0) or (currentObj.clipNum != 0):
                                currentObj.db_save()
+                       elif objectType == 'Filter':
+                           if DEBUG:
+                               print "Save the Filter Data here!"
+                               print self.FilterReportType
+                               print self.FilterScope
+                               print self.FilterConfigName
+                               print self.FilterFilterDataType
+#                               print self.FilterFilterData
+                           query = """ INSERT INTO Filters2
+                                           (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
+                                         VALUES
+                                           (%s, %s, %s, %s, %s) """
+                           # Build the values to match the query, including the pickled Clip data
+                           values = (self.FilterReportType, self.FilterScope, self.FilterConfigName, self.FilterFilterDataType, self.FilterFilterData)
+                           if db != None:
+                               # Begin Database Transaction 
+                               dbCursor = db.cursor()
+                               dbCursor.execute(query, values)
+                               dbCursor.close()
+
                    except:
                        if DEBUG:
                            import traceback
@@ -299,7 +334,7 @@ class XMLImport(Dialogs.GenForm):
                        else:
                            prompt = _('A problem has been detected importing a %s record')
                        msg = prompt % objectType
-                       if (not objectType in ['Keyword', 'ClipKeyword']) and (currentObj.id != ''):
+                       if (not objectType in ['Keyword', 'ClipKeyword', 'Filter']) and (currentObj.id != ''):
                            if 'unicode' in wx.PlatformInfo:
                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                                prompt = unicode(_('named "%s".'), 'utf8')
@@ -490,6 +525,26 @@ class XMLImport(Dialogs.GenForm):
                # Because Note Text can be many lines long, we need to explicitly close this datatype when
                # the closing XML tag is found
                elif line.upper() == '</NOTETEXT>':
+                   dataType = None
+
+               elif line.upper() == '<REPORTTYPE>':
+                   dataType = 'ReportType'
+
+               elif line.upper() == '<REPORTSCOPE>':
+                   dataType = 'ReportScope'
+
+               elif line.upper() == '<CONFIGNAME>':
+                   dataType = 'ConfigName'
+
+               elif line.upper() == '<FILTERDATATYPE>':
+                   dataType = 'FilterDataType'
+
+               elif line.upper() == '<FILTERDATA>':
+                   dataType = 'FilterData'
+
+               # Because Filter Data can be many lines long, we need to explicitly close this datatype when
+               # the closing XML tag is found
+               elif line.upper() == '</FILTERDATA>':
                    dataType = None
 
                # Code for populating Object Properties
@@ -782,6 +837,36 @@ class XMLImport(Dialogs.GenForm):
                    # We DO NOT reset DataType here, as NoteText may be many lines long!
                    # dataType = None
 
+               elif dataType == 'ReportType':
+                    self.FilterReportType = line
+                    dataType = None
+
+               elif dataType == 'ReportScope':
+                    if self.FilterReportType == '1':
+                        self.FilterScope = recNumbers['Episode'][int(line)]
+                    else:
+                        print "XMLImport.Import():  Unknown Filter Report Type.  Cannot interpret Filter Scope!"
+                    dataType = None
+
+               elif dataType == 'ConfigName': 
+                    self.FilterConfigName = line
+                    dataType = None
+
+               elif dataType == 'FilterDataType': 
+                    self.FilterFilterDataType = line
+                    dataType = None
+
+               elif dataType == 'FilterData': 
+                   # If this is not our first line, add a newline character before our new text.  Otherwise, all the
+                   # text is added as a single line.
+                   if self.FilterFilterData != '':
+                       self.FilterFilterData += '\n'
+                   # We just add the encoded line, without the ProcessLine() call, because Filter Data is stored in the Database
+                   # as a BLOB, and thus is encoded and handled differently.
+                   self.FilterFilterData += unicode(line, self.importEncoding)
+                   # We DO NOT reset DataType here, as Filter Data may be many lines long!
+                   # dataType = None
+
                elif dataType == 'XMLVersionNumber':
                    XMLVersionNumber = line
 
@@ -792,7 +877,7 @@ class XMLImport(Dialogs.GenForm):
            if contin: 
                # Since Clips were imported before Transcripts, the Originating Transcript Numbers in the Clip Records
                # are incorrect.  We must update them now.
-               progress.Update(90, _('Updating Transcript Numbers in Clip records'))
+               progress.Update(91, _('Updating Transcript Numbers in Clip records'))
                if db != None:
                    dbCursor = db.cursor()
                    dbCursor2 = db.cursor()

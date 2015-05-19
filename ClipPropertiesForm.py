@@ -58,7 +58,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.width.PercentOf(self.panel, wx.Width, 23)  # 23% width
         lay.height.AsIs()
-        self.id_edit = self.new_edit_box(_("Clip ID"), lay, self.obj.id)
+        self.id_edit = self.new_edit_box(_("Clip ID"), lay, self.obj.id, maxLen=100)
 
         # Collection ID layout
         lay = wx.LayoutConstraints()
@@ -98,7 +98,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
             filePath = self.obj.media_filename
         else:
             filePath = os.path.normpath(self.obj.media_filename)
-        self.fname_edit = self.new_edit_box(_("Media Filename"), lay, filePath)
+        self.fname_edit = self.new_edit_box(_("Media Filename"), lay, filePath, maxLen=255)
         self.fname_edit.SetDropTarget(EditBoxFileDropTarget(self.fname_edit))
         
         # Clip Start layout
@@ -137,7 +137,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
-        comment_edit = self.new_edit_box(_("Title/Comment"), lay, self.obj.comment)
+        comment_edit = self.new_edit_box(_("Title/Comment"), lay, self.obj.comment, maxLen=255)
 
         # Clip Text layout [label]
         lay = wx.LayoutConstraints()
@@ -365,7 +365,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
             # Separate out the Keyword Group and the Keyword
             kwlist = string.split(self.ekw_lb.GetStringSelection(), ':')
             kwg = string.strip(kwlist[0])
-            kw = string.strip(kwlist[1])
+            kw = ':'.join(kwlist[1:]).strip()
             # Remove the Keyword from the Clip Object (this CAN be overridden by the user!)
             delResult = self.obj.remove_keyword(kwg, kw)
             # Remove the Keyword from the Keywords list

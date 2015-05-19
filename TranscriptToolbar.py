@@ -23,7 +23,9 @@ __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 import wx
 import Dialogs
 import TranscriptEditor
+import TransanaConstants
 import TransanaExceptions
+import TransanaGlobal
 import Clip
 import Episode
 import KeywordListEditForm
@@ -236,8 +238,14 @@ class TranscriptToolbar(wx.ToolBar):
                 self.parent.editor.TranscriptObj = None
                 
                 if tobj:
-                    # The Transcript will always have been pickled in this circumstance.
-                    self.parent.editor.load_transcript(tobj, dataType='pickle')
+                    # Determine whether we have a Clip Transcript (not pickled) or an Episode Transcript (pickled)
+                    # and load it.
+                    if tobj.clip_num > 0:
+                        # The Clip Transcript is never pickled.
+                        self.parent.editor.load_transcript(tobj)
+                    else:
+                        # The Episode Transcript will always have been pickled in this circumstance.
+                        self.parent.editor.load_transcript(tobj, dataType='pickle')
 
             self.parent.editor.TranscriptObj.unlock_record()
             self.parent.editor.set_read_only(not can_edit)
@@ -254,19 +262,17 @@ class TranscriptToolbar(wx.ToolBar):
                     dlg = Dialogs.InfoDialog(self.parent, msg)
                     dlg.ShowModal()
                     dlg.Destroy()
-                    # The Transcript will always have been pickled in this circumstance.
-                    self.parent.editor.load_transcript(self.parent.editor.TranscriptObj, dataType='pickle')
+                    # Determine whether we have a Clip Transcript (not pickled) or an Episode Transcript (pickled)
+                    # and load it.
+                    if self.parent.editor.TranscriptObj.clip_num > 0:
+                        # The Clip Transcript is never pickled.
+                        self.parent.editor.load_transcript(self.parent.editor.TranscriptObj)
+                    else:
+                        # The Episode Transcript will always have been pickled in this circumstance.
+                        self.parent.editor.load_transcript(self.parent.editor.TranscriptObj, dataType='pickle')
                     # reloading the Transcript unfortunately unlocks the record.  I can't figure out
                     # a clever way to avoid this, so let's just re-lock the record.
                     self.parent.editor.TranscriptObj.lock_record()
-                    # We also need to update the window title.
-                    episode = Episode.Episode(self.parent.editor.TranscriptObj.episode_num)
-                    if 'unicode' in wx.PlatformInfo:
-                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                        prompt = unicode(_('Transcript "%s" for Series "%s", Episode "%s"'), 'utf8')
-                    else:
-                        prompt = _('Transcript "%s" for Series "%s", Episode "%s"')
-                    self.parent.SetTitle(prompt % (self.parent.editor.TranscriptObj.id, episode.series_id, episode.id))
                 
                 self.parent.editor.set_read_only(not can_edit)
                 self.UpdateEditingButtons()
@@ -274,20 +280,18 @@ class TranscriptToolbar(wx.ToolBar):
                 self.parent.editor.TranscriptObj.lastsavetime = oldLastSaveTime
                 self.ToggleTool(self.CMD_READONLY_ID, not self.GetToolState(self.CMD_READONLY_ID))
                 if self.parent.editor.TranscriptObj.id != '':
-                    msg = _('You cannot proceed because you cannot obtain a lock on %s "%s"' + \
-                            '.\nThe record is currently locked by %s.\nPlease try again later.')
-                    if 'unicode' in wx.PlatformInfo:
-                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                        msg = unicode(msg, 'utf8') % (_('Transcript'), self.parent.editor.TranscriptObj.id, e.user)
+                    rtype = _('Transcript')
+                    idVal = self.parent.editor.TranscriptObj.id
+                    TransanaExceptions.ReportRecordLockedException(rtype, idVal, e)
                 else:
                     msg = _('You cannot proceed because you cannot obtain a lock on the Clip Transcript.\n' + \
                             'The record is currently locked by %s.\nPlease try again later.') 
                     if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                         msg = unicode(msg, 'utf8') % (e.user)
-                dlg = Dialogs.ErrorDialog(self.parent, msg)
-                dlg.ShowModal()
-                dlg.Destroy()
+                    dlg = Dialogs.ErrorDialog(self.parent, msg)
+                    dlg.ShowModal()
+                    dlg.Destroy()
             except TransanaExceptions.RecordNotFoundError, e:
                 self.ToggleTool(self.CMD_READONLY_ID, not self.GetToolState(self.CMD_READONLY_ID))
                 if self.parent.editor.TranscriptObj.id != '':
@@ -326,45 +330,66 @@ class TranscriptToolbar(wx.ToolBar):
             # Otherwise load the Episode
             else:
                 obj = Episode.Episode(self.parent.editor.TranscriptObj.episode_num)
-            # Lock the data record
-            obj.lock_record()
-            # Determine the title for the KeywordListEditForm Dialog Box
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_("Keywords for %s"), 'utf8')
-            else:
-                prompt = _("Keywords for %s")
-            dlgTitle = prompt % obj.id
-            # Extract the keyword List from the Data object
-            kwlist = []
-            for kw in obj.keyword_list:
-                kwlist.append(kw)
-                
-            # Create/define the Keyword List Edit Form
-            dlg = KeywordListEditForm.KeywordListEditForm(self.parent, -1, dlgTitle, obj, kwlist)
-            # Show the Keyword List Edit Form and process it if the user selects OK
-            if dlg.ShowModal() == wx.ID_OK:
-                # Clear the local keywords list and repopulate it from the Keyword List Edit Form
+            try:
+                # Lock the data record
+                obj.lock_record()
+                # Determine the title for the KeywordListEditForm Dialog Box
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_("Keywords for %s"), 'utf8')
+                else:
+                    prompt = _("Keywords for %s")
+                dlgTitle = prompt % obj.id
+                # Extract the keyword List from the Data object
                 kwlist = []
-                for kw in dlg.keywords:
+                for kw in obj.keyword_list:
                     kwlist.append(kw)
+                    
+                # Create/define the Keyword List Edit Form
+                dlg = KeywordListEditForm.KeywordListEditForm(self.parent, -1, dlgTitle, obj, kwlist)
+                # Show the Keyword List Edit Form and process it if the user selects OK
+                if dlg.ShowModal() == wx.ID_OK:
+                    # Clear the local keywords list and repopulate it from the Keyword List Edit Form
+                    kwlist = []
+                    for kw in dlg.keywords:
+                        kwlist.append(kw)
 
-                # Copy the local keywords list into the appropriate object
-                obj.keyword_list = kwlist
+                    # Copy the local keywords list into the appropriate object
+                    obj.keyword_list = kwlist
 
-                # Save the Data object
-                obj.db_save()
+                    # Save the Data object
+                    obj.db_save()
 
-                # If any Keyword Examples were removed, remove them from the Database Tree
-                for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
-                    self.parent.ControlObject.RemoveDataWindowKeywordExamples(keywordGroup, keyword, clipNum)
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        if isinstance(obj, Episode.Episode):
+                            msg = 'Episode %d' % obj.number
+                        elif isinstance(obj, Clip.Clip):
+                            msg = 'Clip %d' % obj.number
+                        else:
+                            msg = ''
+                        if msg != '':
+                            if TransanaGlobal.chatWindow != None:
+                                # Send the "Update Keyword List" message
+                                TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
 
-                # Update the Data Window Keywords Tab (this must be done AFTER the Save)
-                self.parent.ControlObject.UpdateDataWindowKeywordsTab()
-                
-            # Unlock the Data Object
-            obj.unlock_record()
+                    # If any Keyword Examples were removed, remove them from the Database Tree
+                    for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
+                        self.parent.ControlObject.RemoveDataWindowKeywordExamples(keywordGroup, keyword, clipNum)
 
+                    # Update the Data Window Keywords Tab (this must be done AFTER the Save)
+                    self.parent.ControlObject.UpdateDataWindowKeywordsTab()
+                    
+                # Unlock the Data Object
+                obj.unlock_record()
+            except TransanaExceptions.RecordLockedError, e:
+                """Handle the RecordLockedError exception."""
+                if isinstance(obj, Episode.Episode):
+                    rtype = _('Episode')
+                elif isinstance(obj, Clip.Clip):
+                    rtype = _('Clip')
+                idVal = obj.id
+                TransanaExceptions.ReportRecordLockedException(rtype, idVal, e)
 
     def OnSave(self, evt):
         self.parent.ControlObject.SaveTranscript()

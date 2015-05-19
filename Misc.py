@@ -20,7 +20,7 @@ __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 # Patch sent by David Fraser to eliminate need for mx module
 
 #import mx.DateTime
-import string
+import string, sys
 
 #def datestr_to_dt(datestr):
 #    """Construct a DateTime object from a given date string.  This function
@@ -70,6 +70,37 @@ def time_in_ms_to_str(time_in_ms):
     # Now build the final string.  "%02d" converts values to 2-character, 0-padded strings.
     str = "%d:%02d:%02d.%d" % (hours, minutes, seconds, tenthsofasecond)
     return str
+
+
+def time_in_str_to_ms(time_in_str):
+    """ Returns the number of milliseconds represented by a string in H:M:S.s format,
+        or -1 if the string is not properly formatted """
+
+    # Initialize variables for conversion
+    seconds = 0
+    minutes = 0
+    hours = 0
+
+    # Divide the time string into components
+    timeParts = time_in_str.split(':')
+    try:
+        # Convert seconds
+        seconds = float(timeParts[-1])
+        # If there are minutes ...
+        if len(timeParts) > 1:
+            # ... convert the minutes
+            minutes = int(timeParts[-2])
+        # If there are hours ...
+        if len(timeParts) > 2:
+            # ... convert the hours
+            hours = int(timeParts[-3])
+        # Convert values to milliseconds and return the result
+        return (hours * 60 * 60  * 1000) + (minutes * 60 * 1000) + int((seconds * 1000))
+    except:
+        # If a problem arises in conversion, return -1 to signal a conversion failure
+        # print "exception", sys.exc_info()[0], sys.exc_info()[1]
+        return -1
+
 
 def convertMacFilename(filename):
     """ Mac Filenames use a different encoding system.  We need to adjust the string returned by certain wx.Widgets.

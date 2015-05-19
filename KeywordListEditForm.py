@@ -233,7 +233,7 @@ class KeywordListEditForm(Dialogs.GenForm):
             # Separate out the Keyword Group and the Keyword
             kwlist = string.split(self.ekw_lb.GetStringSelection(), ':')
             kwg = string.strip(kwlist[0])
-            kw = string.strip(kwlist[1])
+            kw = ':'.join(kwlist[1:]).strip()
             for index in range(len(self.keywords)):
                 # Look for the entry to be deleted
                 if (self.keywords[index].keywordGroup == kwg) and (self.keywords[index].keyword == kw):

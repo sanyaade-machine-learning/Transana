@@ -61,7 +61,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.width.PercentOf(self.panel, wx.Width, 35)  # 35% width
         lay.height.AsIs()
-        self.id_edit = self.new_edit_box(_("Episode ID"), lay, self.obj.id)
+        self.id_edit = self.new_edit_box(_("Episode ID"), lay, self.obj.id, maxLen=100)
 
         # Series ID layout
         lay = wx.LayoutConstraints()
@@ -70,7 +70,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         lay.width.PercentOf(self.panel, wx.Width, 30)  # 35% width
         lay.height.AsIs()
         series_edit = self.new_edit_box(_("Series ID"), lay, self.obj.series_id)
-        series_edit.Enable(0)
+        series_edit.Enable(False)
 
         # Dialogs.GenForm does not provide a Masked text control, so the Date
         # Field is handled differently than other fields.
@@ -105,7 +105,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
         self.len_edit = self.new_edit_box(_("Length"), lay, self.obj.tape_length_str())
-        self.len_edit.Enable(0)
+        self.len_edit.Enable(False)
 
         # Media Filename Layout
         lay = wx.LayoutConstraints()
@@ -118,7 +118,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
             filePath = self.obj.media_filename
         else:
             filePath = os.path.normpath(self.obj.media_filename)
-        self.fname_edit = self.new_edit_box(_("Media Filename"), lay, filePath)
+        self.fname_edit = self.new_edit_box(_("Media Filename"), lay, filePath, maxLen=255)
         self.fname_edit.SetDropTarget(EditBoxFileDropTarget(self.fname_edit))
         wx.EVT_TEXT(self, self.fname_edit.GetId(), self.OnMediaFilenameEdit)
         
@@ -138,7 +138,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
-        comment_edit = self.new_edit_box(_("Title/Comment"), lay, self.obj.comment)
+        comment_edit = self.new_edit_box(_("Title/Comment"), lay, self.obj.comment, maxLen=255)
 
         # Keyword Group layout [label]
         lay = wx.LayoutConstraints()
@@ -384,17 +384,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
                 # Specify the path-less filename as the Identifier
                 coreData.id = filename
             except RecordLockedError, e:
-                msg = _('You cannot proceed because you cannot obtain a lock on %s "%s"' + \
-                        '.\nThe record is currently locked by %s.\nPlease try again later.')
-                id = coreData.id
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    msg = unicode(msg, 'utf8')
-                    if isinstance(coreData.id, str):
-                        id = unicode(coreData.id, 'utf8')
-                dlg = Dialogs.ErrorDialog(self.parent, msg % (_('Core Data record'), id, e.user))
-                dlg.ShowModal()
-                dlg.Destroy()
+                ReportRecordLockedException(_('Core Data record'), coreData.id, e)
                 # If we get a record lock error, we don't need to display the Core Data Properties form
                 return
             # If a different exception is raised, report it and pass it on.
@@ -461,7 +451,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
             # Separate out the Keyword Group and the Keyword
             kwlist = string.split(self.ekw_lb.GetStringSelection(), ':')
             kwg = string.strip(kwlist[0])
-            kw = string.strip(kwlist[1])
+            kw = ':'.join(kwlist[1:]).strip()
             delResult = self.obj.remove_keyword(kwg, kw)
             if delResult and (sel >= 0):
                 self.ekw_lb.Delete(sel)

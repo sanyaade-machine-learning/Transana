@@ -150,7 +150,7 @@ class GenForm(wx.Dialog):
         self.choices = []
         self.combos = []
         
-    def new_edit_box(self, label, layout, def_text, style=0, ctrlHeight=40):
+    def new_edit_box(self, label, layout, def_text, style=0, ctrlHeight=40, maxLen=0):
         """Create a edit box with label above it."""
         # The ctrlHeight parameter comes into play only when the wxTE_MULTILINE comes into play.
         # The default value of 40 is 2 text lines in height (or a little bit more.)
@@ -158,6 +158,9 @@ class GenForm(wx.Dialog):
         txt.SetConstraints(layout)
 
         edit = wx.TextCtrl(self.panel, -1, def_text, style=style)
+        # If a maximum length is specified, apply it.
+        if maxLen > 0:
+            edit.SetMaxLength(maxLen)
 
         lay = wx.LayoutConstraints()
         lay.top.Below(txt, 3)
@@ -298,23 +301,72 @@ class GenForm(wx.Dialog):
 def add_kw_group_ui(parent, kw_groups):
     """User interface dialog and logic for adding a new keyword group.
     Return the name of the new keyword group to add, or None if cancelled."""
+
+    # ALSO SEE Keyword._set_keywordGroup().  The same errors are caught there.
+
+    # initialize local variables
     s = ""
-    ok = 0
+    ok = False
+
+    # Let's get a copy of kw_groups that's all upper case
+    kw_groups_upper = []
+    for kwg in kw_groups:
+        kw_groups_upper.append(kwg.upper())
+
+    # Repeat until no error is found
     while not ok:
+        # Get a Keyword Group name from the user
         s = string.strip(wx.GetTextFromUser(_("New Keyword Group:"), _("Add Keyword Group"), s))
-   
-        if string.find(s, ":") > -1:
-            msg = _('You may not use a colon (":") in the Keyword Group name.')
-            dlg = ErrorDialog(parent, msg)
-            dlg.ShowModal()
-            dlg.Destroy()
-        elif kw_groups.count(s) != 0:
+
+        # Check (case-insensitively) whether the Keyword Group already exists.
+        if kw_groups_upper.count(s.upper()) != 0:
             msg = _('A Keyword Group by that name already exists.')
             dlg = ErrorDialog(parent, msg)
             dlg.ShowModal()
             dlg.Destroy()
         else:
-            ok = 1
+            # Make sure parenthesis characters are not allowed in Keyword Group.  Remove them if necessary.
+            if (s.find('(') > -1) or (s.find(')') > -1):
+                s = s.replace('(', '')
+                s = s.replace(')', '')
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".'), 'utf8')
+                else:
+                    prompt = _('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".')
+                dlg = ErrorDialog(None, prompt % s)
+                dlg.ShowModal()
+                dlg.Destroy()
+                
+            # Colons are not allowed in Keyword Groups.  Remove them if necessary.
+            if s.find(":") > -1:
+                s = s.replace(':', '')
+                if 'unicode' in wx.PlatformInfo:
+                    msg = unicode(_('You may not use a colon (":") in the Keyword Group name.  Your Keyword Group has been changed to\n"%s"'), 'utf8')
+                else:
+                    msg = _('You may not use a colon (":") in the Keyword Group name.  Your Keyword Group has been changed to\n"%s"')
+                dlg = ErrorDialog(parent, msg % s)
+                dlg.ShowModal()
+                dlg.Destroy()
+                
+            # Let's make sure we don't exceed the maximum allowed length for a Keyword Group.
+            # First, let's see what the max length is.
+            maxLen = TransanaGlobal.maxKWGLength
+            # Check to see if we've exceeded the max length
+            if len(s) > maxLen:
+                # If so, truncate the Keyword Group
+                s = s[:maxLen]
+                # Display a message to the user describing the trunctions
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    msg = unicode(_('Keyword Group is limited to %d characters.  Your Keyword Group has been changed to\n"%s"'), 'utf8')
+                else:
+                    msg = _('Keyword Group is limited to %d characters.  Your Keyword Group has been changed to\n"%s"')
+                dlg = ErrorDialog(parent, msg % (maxLen, s))
+                dlg.ShowModal()
+                dlg.Destroy()
+            # If we hit here, there's no reason to block the closing of the dialog box.  (Parens, Colons, and Length violation should not block close.)
+            ok = True
              
     # If the user cancelled
     if s == "":

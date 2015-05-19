@@ -531,8 +531,12 @@ currently locked by %s.  Please try again later.""")
 
     def _get_keywordGroup(self):
         return self._keywordGroup
+    
     def _set_keywordGroup(self, keywordGroup):
-        # Make sure parenthesis characters are not allowed in Keyword Group
+        
+        # ALSO SEE Dialogs.add_kw_group_ui().  The same errors are caught there.
+    
+        # Make sure parenthesis characters are not allowed in Keyword Group.  Remove them if necessary.
         if (string.find(keywordGroup, '(') > -1) or (string.find(keywordGroup, ')') > -1):
             keywordGroup = string.replace(keywordGroup, '(', '')
             keywordGroup = string.replace(keywordGroup, ')', '')
@@ -544,7 +548,35 @@ currently locked by %s.  Please try again later.""")
             dlg = Dialogs.ErrorDialog(None, prompt)
             dlg.ShowModal()
             dlg.Destroy()
+        # Colons are not allowed in Keyword Groups.  Remove them if necessary.
+        if keywordGroup.find(":") > -1:
+            keywordGroup = keywordGroup.replace(':', '')
+            if 'unicode' in wx.PlatformInfo:
+                msg = unicode(_('You may not use a colon (":") in the Keyword Group name.  Your Keyword Group has been changed to\n"%s"'), 'utf8')
+            else:
+                msg = _('You may not use a colon (":") in the Keyword Group name.  Your Keyword Group has been changed to\n"%s"')
+            dlg = Dialogs.ErrorDialog(None, msg % keywordGroup)
+            dlg.ShowModal()
+            dlg.Destroy()
+        # Let's make sure we don't exceed the maximum allowed length for a Keyword Group.
+        # First, let's see what the max length is.
+        maxLen = TransanaGlobal.maxKWGLength
+        # Check to see if we've exceeded the max length
+        if len(keywordGroup) > maxLen:
+            # If so, truncate the Keyword Group
+            keywordGroup = keywordGroup[:maxLen]
+            # Display a message to the user describing the trunctions
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                msg = unicode(_('Keyword Group is limited to %d characters.  Your Keyword Group has been changed to\n"%s"'), 'utf8')
+            else:
+                msg = _('Keyword Group is limited to %d characters.  Your Keyword Group has been changed to\n"%s"')
+            dlg = ErrorDialog(None, msg % (maxLen, keywordGroup))
+            dlg.ShowModal()
+            dlg.Destroy()
+        # Remove white space from the Keyword Group.
         self._keywordGroup = keywordGroup.strip()
+        
     def _del_keywordGroup(self):
         self._keywordGroup = ""
     

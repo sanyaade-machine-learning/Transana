@@ -194,17 +194,28 @@ class XMLExport(Dialogs.GenForm):
             f.write('\n');
             f.write('  <!ELEMENT Note (#PCDATA|Num|ID|SeriesNum|EpisodeNum|CollectNum|ClipNum|TranscriptNum|NoteTaker|NoteText)*>\n');
             f.write('\n');
-            f.write('  <!ELEMENT Transana (#PCDATA|SeriesFile|EpisodeFile|CoreDataFile|TranscriptFile|CollectionFile|ClipFile|KeywordFile|ClipKeywordFile|NoteFile)*>\n');
+            f.write('  <!ELEMENT FilterFile (Filter)*>\n');
+            f.write('\n');
+            f.write('  <!ELEMENT ReportType (#PCDATA)>\n');
+            f.write('  <!ELEMENT ReportScope (#PCDATA)>\n');
+            f.write('  <!ELEMENT ConfigName (#PCDATA)>\n');
+            f.write('  <!ELEMENT FilterDataType (#PCDATA)>\n');
+            f.write('  <!ELEMENT FilterData (#PCDATA)>\n');
+            f.write('\n');
+            f.write('  <!ELEMENT Filter (#PCDATA|ReportType|ReportScope|ConfigName|FilterDataType|FilterData)*>\n');
+            f.write('\n');
+            f.write('  <!ELEMENT Transana (#PCDATA|SeriesFile|EpisodeFile|CoreDataFile|TranscriptFile|CollectionFile|ClipFile|KeywordFile|ClipKeywordFile|NoteFile|FilterFile)*>\n');
             f.write(']>\n');
             f.write('\n');
             f.write('<Transana>\n');
             f.write('  <TransanaXMLVersion>\n');
             # Version 1.0 -- Original Transana XML for Transana 2.0 release
             # Version 1.1 -- Unicode encoding added to Transana XML for Transana 2.1 release
-            f.write('    1.1\n');
+            # Version 1.2 -- Filter Table added to Transana XML for Transana 2.11 release
+            f.write('    1.2\n');
             f.write('  </TransanaXMLVersion>\n');
 
-            progress.Update(10, _('Writing Series Records'))
+            progress.Update(9, _('Writing Series Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT SeriesNum, SeriesID, SeriesComment, SeriesOwner, DefaultKeywordGroup FROM Series2'
@@ -236,7 +247,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </SeriesFile>\n')
                 dbCursor.close()
 
-            progress.Update(20, _('Writing Episode Records'))
+            progress.Update(18, _('Writing Episode Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT EpisodeNum, EpisodeID, SeriesNum, TapingDate, MediaFile, EpLength, EpComment FROM Episodes2'
@@ -274,7 +285,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </EpisodeFile>\n')
                 dbCursor.close()
 
-            progress.Update(30, _('Writing Core Data Records'))
+            progress.Update(27, _('Writing Core Data Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = """SELECT CoreDataNum, Identifier, Title, Creator, Subject, Description, Publisher,
@@ -353,7 +364,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </CoreDataFile>\n')
                 dbCursor.close()
 
-            progress.Update(40, _('Writing Collection Records'))
+            progress.Update(36, _('Writing Collection Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT CollectNum, CollectID, ParentCollectNum, CollectComment, CollectOwner, DefaultKeywordGroup FROM Collections2'
@@ -389,7 +400,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </CollectionFile>\n')
                 dbCursor.close()
 
-            progress.Update(50, _('Writing Clip Records'))
+            progress.Update(45, _('Writing Clip Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT ClipNum, ClipID, CollectNum, EpisodeNum, TranscriptNum, MediaFile, ClipStart, ClipStop, ClipComment, SortOrder FROM Clips2'
@@ -438,7 +449,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </ClipFile>\n')
                 dbCursor.close()
 
-            progress.Update(60, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
+            progress.Update(54, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT TranscriptNum, TranscriptID, EpisodeNum, ClipNum, Transcriber, Comment, RTFText FROM Transcripts2'
@@ -453,6 +464,10 @@ class XMLExport(Dialogs.GenForm):
                     if TranscriptID != '':
                         f.write('      <ID>\n')
                         f.write('        %s\n' % TranscriptID.encode(EXPORT_ENCODING))
+
+                        if DEBUG:
+                            print "Transcript ", TranscriptID
+                            
                         f.write('      </ID>\n')
                     if EpisodeNum != '':
                         f.write('      <EpisodeNum>\n')
@@ -462,11 +477,11 @@ class XMLExport(Dialogs.GenForm):
                         f.write('      <ClipNum>\n')
                         f.write('        %s\n' % ClipNum)
                         f.write('      </ClipNum>\n')
-                    if Transcriber != '':
+                    if (Transcriber != None) and (Transcriber != ''):
                         f.write('      <Transcriber>\n')
                         f.write('        %s\n' % Transcriber.encode(EXPORT_ENCODING))
                         f.write('      </Transcriber>\n')
-                    if Comment != '':
+                    if (Comment != None) and (Comment != ''):
                         f.write('      <Comment>\n')
                         f.write('        %s\n' % Comment.encode(EXPORT_ENCODING))
                         f.write('      </Comment>\n')
@@ -483,15 +498,21 @@ class XMLExport(Dialogs.GenForm):
                             else:
                                 RTFText = RTFText.tostring()
                         f.write('      <RTFText>\n')
+
+                        if DEBUG:
+                            print "type(RTFText) =", type(RTFText)
+                            
                         # Determine if we have RTF Text or a pickled wxSTC Object
-                        if (len(RTFText) > 6) and (RTFText[:6].upper() != '{\\RTF1'):
+                        if (type(RTFText).__name__ != 'NoneType') and (len(RTFText) > 6) and (RTFText[:6].upper() != '{\\RTF1'):
 
                             if 'unicode' in wx.PlatformInfo:
                                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                prompt = unicode(_('\nConverting %s'), 'utf8')
+                                prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
+                                prompt2 = unicode(_('\nConverting %s'), 'utf8')
                             else:
-                                prompt = _('\nConverting %s')
-                            progress.Update(60, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)') + prompt % TranscriptID)
+                                prompt1 = _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)')
+                                prompt2 = _('\nConverting %s')
+                            progress.Update(60, prompt1 + prompt2 % TranscriptID)
 
                             # unpickle the text and style info
                             (bufferContents, specs, attrs) = pickle.loads(RTFText)
@@ -529,7 +550,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </TranscriptFile>\n')
                 dbCursor.close()
 
-            progress.Update(70, _('Writing Keyword Records'))
+            progress.Update(63, _('Writing Keyword Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT KeywordGroup, Keyword, Definition FROM Keywords2'
@@ -553,7 +574,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </KeywordFile>\n')
                 dbCursor.close()
 
-            progress.Update(80, _('Writing Clip Keyword Records'))
+            progress.Update(72, _('Writing Clip Keyword Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT EpisodeNum, ClipNum, KeywordGroup, Keyword, Example FROM ClipKeywords2'
@@ -585,7 +606,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </ClipKeywordFile>\n')
                 dbCursor.close()
 
-            progress.Update(90, _('Writing Note Records'))
+            progress.Update(81, _('Writing Note Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, TranscriptNum, NoteTaker, NoteText FROM Notes2'
@@ -646,6 +667,42 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </NoteFile>\n')
                 dbCursor.close()
 
+            progress.Update(90, _('Writing Filter Records'))
+            if db != None:
+                dbCursor = db.cursor()
+                SQLText = 'SELECT ReportType, ReportScope, ConfigName, FilterDataType, FilterData FROM Filters2'
+                dbCursor.execute(SQLText)
+                if dbCursor.rowcount > 0:
+                    f.write('  <FilterFile>\n')
+                for (ReportType, ReportScope, ConfigName, FilterDataType, FilterData) in dbCursor.fetchall():
+                    f.write('    <Filter>\n')
+                    f.write('      <ReportType>\n')
+                    f.write('        %s\n' % ReportType)
+                    f.write('      </ReportType>\n')
+                    f.write('      <ReportScope>\n')
+                    f.write('        %s\n' % ReportScope)
+                    f.write('      </ReportScope>\n')
+                    f.write('      <ConfigName>\n')
+                    f.write('        %s\n' % ConfigName.encode(EXPORT_ENCODING))
+                    f.write('      </ConfigName>\n')
+                    f.write('      <FilterDataType>\n')
+                    f.write('        %s\n' % FilterDataType)
+                    f.write('      </FilterDataType>\n')
+                    # FilterData is a BLOB field in the database.  Therefore, it's probably of type array, and needs to be converted.
+                    if type(FilterData).__name__ == 'array':
+                        if (FilterData.typecode == 'u'):
+                            FilterData = FilterData.tounicode()
+                        else:
+                            FilterData = FilterData.tostring()
+                            if ('unicode' in wx.PlatformInfo):
+                                FilterData = unicode(FilterData, EXPORT_ENCODING)
+                    f.write('      <FilterData>\n')
+                    f.write('        %s\n' % FilterData.encode(EXPORT_ENCODING))
+                    f.write('      </FilterData>\n')
+                    f.write('    </Filter>\n')
+                if dbCursor.rowcount > 0:
+                    f.write('  </FilterFile>\n')
+                dbCursor.close()
             f.write('</Transana>\n');
 
             f.flush()

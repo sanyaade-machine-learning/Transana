@@ -20,6 +20,7 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case <nacase@wisc.ed
 
 import DBInterface
 import Dialogs
+import TransanaGlobal
 
 import wx
 import Keyword
@@ -45,6 +46,8 @@ class KeywordPropertiesForm(Dialogs.GenForm):
         lay.width.PercentOf(self.panel, wx.Width, 46)  # 46% width
         lay.height.AsIs()
         self.kwg_choice = self.new_combo_box(_("Keyword Group"), lay, [""] + self.kw_groups)
+        # wxComboBox doesn't have a Max Length method.  Let's emulate one here using the Combo Box's EVT_TEXT method
+        self.kwg_choice.Bind(wx.EVT_TEXT, self.OnKWGText)
         if self.obj.keywordGroup:
             # If the Keyword Group of the passed-in Keyword object does not exist, add it to the list.
             # Otherwise, there's no way to ever add a first keyword to a group!
@@ -60,7 +63,7 @@ class KeywordPropertiesForm(Dialogs.GenForm):
         lay.left.RightOf(self.kwg_choice, 10)   # 10 from left
         lay.width.PercentOf(self.panel, wx.Width, 46)  # 46% width
         lay.height.AsIs()
-        keyword_edit = self.new_edit_box(_("Keyword"), lay, self.obj.keyword)
+        keyword_edit = self.new_edit_box(_("Keyword"), lay, self.obj.keyword, maxLen=85)
 
         # Definition layout [label]
         lay = wx.LayoutConstraints()
@@ -106,6 +109,21 @@ class KeywordPropertiesForm(Dialogs.GenForm):
             self.obj = None
 
         return self.obj
+
+    def OnKWGText(self, event):
+        """ Emulate the SetMaxLength() method of the wxTextCtrl for the Keyword Group combo """
+        # Current maximum length for a Keyword Group is 50 characters
+        maxLen = TransanaGlobal.maxKWGLength
+        # Check to see if we've exceeded out max length
+        if len(self.kwg_choice.GetValue()) > maxLen:
+            # If so, remove excess text
+            self.kwg_choice.SetValue(self.kwg_choice.GetValue()[:maxLen])
+            # Place the Insertion Point at the end of the text in the control
+            self.kwg_choice.SetInsertionPoint(maxLen)
+            # On Windows, emulate the sound that the TextCtrl makes.
+            if 'wxMSW' in wx.PlatformInfo:
+                import winsound
+                winsound.PlaySound("SystemQuestion", winsound.SND_ALIAS)
         
 class AddKeywordDialog(KeywordPropertiesForm):
     """Dialog used when adding a new Keyword."""

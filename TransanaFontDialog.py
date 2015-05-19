@@ -36,6 +36,8 @@ if __name__ == '__main__':
     # This module expects i18n.  Enable it here.
     __builtins__._ = wx.GetTranslation
 
+# import the Transana Constants, which includes the Color system
+import TransanaConstants
 # import the TransanaGlobal variables
 import TransanaGlobal
 
@@ -45,40 +47,6 @@ tfd_BOLD = 1          # The "selected" state for Weight
 tfd_ITALIC = 1        # The "selected" state for Style
 tfd_UNDERLINE = 1     # The "selected" state for Underline
 tfd_AMBIGUOUS = 2     # The "ambiguous" (mixed unselected and selected) state for font Weight, Style, and Underline
-
-# We want enough colors, but not too many.  This list seems about right to me.  I doubt my color names are standard.
-# But then, I'm often perplexed by the colors that are included and excluded by most programs.  (Excel for example.)
-# Each entry is made up of a color name and a tuple of the RGB values for the color.
-tfd_colorList = [('Black',       (  0,   0,   0)),
-                 ('Dark Blue',   (  0,   0, 128)),
-                 ('Blue',        (  0,   0, 255)),
-                 ('Light Blue',  (  0, 128, 255)),
-                 ('Cyan',        (  0, 255, 255)),
-                 ('Green Blue',  (  0, 255, 128)),
-                 ('Blue Green',  (  0, 128, 128)),
-                 ('Dark Green',  (  0, 128,   0)),
-                 ('Green',       (  0, 255,   0)),
-                 ('Light Green', (128, 255,   0)),
-                 ('Olive',       (128, 128,   0)),
-                 ('Gray',        (128, 128, 128)),
-                 ('Maroon',      (128,   0,   0)),
-                 ('Dark Purple', (128,   0, 128)),
-                 ('Purple',      (128,   0, 255)),
-                 ('Magenta',     (255,   0, 255)),
-                 ('Rose',        (255,   0, 128)),
-                 ('Red',         (255,   0,   0)),
-                 ('Orange',      (255, 128,   0)),
-                 ('Yellow',      (255, 255,   0)),
-                 ('White',       (255, 255, 255))]
-tfd_colorNameList = []
-for (colorName, colorDef) in tfd_colorList:
-    tfd_colorNameList.append(colorName)
-# The following exists only to ensure that the color names are available for translation.
-# (I had to take the translation code out of the above data structure, as color names were only showing up in
-#  the initial language.)
-tmpColorList = (_('Black'), _('Dark Blue'), _('Blue'), _('Light Blue'), _('Cyan'), _('Green Blue'), _('Blue Green'),
-                _('Dark Green'), _('Green'), _('Light Green'), _('Olive'), _('Gray'), _('Maroon'), _('Dark Purple'),
-                _('Purple'), _('Magenta'), _('Rose'), _('Red'), _('Orange'), _('Yellow'), _('White'))
 
 
 class TransanaFontDef(object):
@@ -197,10 +165,10 @@ class TransanaFontDef(object):
     def _getFontColorName(self):
         return self._fontColorName
     def _setFontColorName(self, fontColorName):
-        if fontColorName in tfd_colorNameList:
+        if fontColorName in TransanaConstants.transana_colorNameList:
             self._fontColorName = fontColorName
             # Set fontColorDef to match fontColorName
-            for (colorName, colorDef) in tfd_colorList:
+            for (colorName, colorDef) in TransanaConstants.transana_colorList:
                 if colorName == fontColorName:
                     self._fontColorDef = wx.Colour(colorDef[0], colorDef[1], colorDef[2])
                     break
@@ -217,7 +185,7 @@ class TransanaFontDef(object):
 
         self._fontColorDef = fontColorDef
         # Set fontColorName to match fontColorDef
-        for (colorName, colorDef) in tfd_colorList:
+        for (colorName, colorDef) in TransanaConstants.transana_colorList:
             if colorDef == fontColorDef:
                 self._fontColorName = colorName
                 break
@@ -477,7 +445,7 @@ class TransanaFontDialog(wx.Dialog):
         # We want enough colors, but not too many.  This list seems about right to me.  I doubt my color names are standard.
         # But then, I'm often perplexed by the colors that are included and excluded by most programs.  (Excel for example.)
         # Each entry is made up of a color name and a tuple of the RGB values for the color.
-        self.colorList = tfd_colorList
+        self.colorList = TransanaConstants.transana_colorList
 
         # We need to create a list of the colors to be included in the control.
         choiceList = []

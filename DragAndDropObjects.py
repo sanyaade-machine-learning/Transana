@@ -44,7 +44,9 @@
      
    ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection): -- a method used by
      ProcessPasteDrop to implement the altering of Clip Sort Order when desired.  It is a stand-alone
-     method to allow code resuse by several different methods related to dropping and pasting clips.  """
+     method to allow code resuse by several different methods related to dropping and pasting clips.
+
+   CreateQuickClip(clipData, kwg, kw, dbTree): -- a method used to implement Open Coding via Quick Clips. """
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
@@ -534,15 +536,17 @@ def CreateClip(clipData, dropData, tree, dropNode):
     # We need to know if the Clip is coming from an Episode or another Clip.
     # We can determine that by looking at the transcript passed in the ClipData
     tempTranscript = Transcript.Transcript(clipData.transcriptNum)
-    # Get the Episode Number from the clipData Object
-    tempClip.episode_num = clipData.episodeNum
     # If we are working from an Episode Transcript ...
     if tempTranscript.clip_num == 0:
+        # Get the Episode Number from the clipData Object
+        tempClip.episode_num = clipData.episodeNum
         # Get the Transcript Number from the clipData Object
         tempClip.transcript_num = clipData.transcriptNum
     # If we are working from a Clip Transcript ...
     else:
         sourceClip = Clip.Clip(tempTranscript.clip_num)
+        # Get the Episode Number from the sourceClip Object
+        tempClip.episode_num = sourceClip.episode_num
         tempClip.transcript_num = sourceClip.transcript_num
     # Get the Clip Start Time from the clipData Object
     tempClip.clip_start = clipData.clipStart
@@ -578,7 +582,7 @@ def CreateClip(clipData, dropData, tree, dropNode):
         tempCollection.lock_record()
         collectionLocked = True
     # Handle the exception if the record is already locked by someone else
-    except RecordLockedError, c:
+    except TransanaExceptions.RecordLockedError, c:
         # If we can't get a lock on the Collection, it's really not that big a deal.  We only try to get it
         # to prevent someone from deleting it out from under us, which is pretty unlikely.  But we should 
         # still be able to add Clips even if someone else is editing the Collection properties.
@@ -628,7 +632,7 @@ def CreateClip(clipData, dropData, tree, dropNode):
                         tree.add_Node('ClipNode', nodeData, tempClip.number, tempClip.collection_num, True, dropNode)
                     else:
                         # Add the new Clip to the data tree
-                        tree.add_Node('ClipNode', nodeData, tempClip.number, tempClip.collection_num)
+                        tree.add_Node('ClipNode', nodeData, tempClip.number, tempClip.collection_num, avoidRecursiveYields=True)
 
                     # Now let's communicate with other Transana instances if we're in Multi-user mode
                     if not TransanaConstants.singleUserVersion:
@@ -704,22 +708,38 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
         # print "Keyword %s:%s to be dropped on Series %s" % (sourceData.parent, sourceData.text, treeCtrl.GetItemText(destNode))
         # First, let's load the Series Record
         tempSeries = Series.Series(targetRecNum)
-        # Lock the Series Record, just to be on the safe side (Is this necessary??  I don't think so, but maybe that can confirm that all episodes are available.)
-        tempSeries.lock_record()
-        # Now get a list of all Episodes in the Series and iterate through them
-        for tempEpisodeNum, tempEpisodeID, tempSeriesNum in DBInterface.list_of_episodes_for_series(tempSeries.id):
-            # Load the Episode Record
-            tempEpisode = Episode.Episode(num=tempEpisodeNum)
-            # Lock the Episode Record
-            tempEpisode.lock_record()
-            # Add the Keyword to the Episode
-            tempEpisode.add_keyword(sourceData.parent, sourceData.text)
-            # Save the Episode
-            tempEpisode.db_save()
-            # Unlock the Episode Record
-            tempEpisode.unlock_record()
-        # Unlock the Series Record
-        tempSeries.unlock_record()   
+        try:
+            # Lock the Series Record, just to be on the safe side (Is this necessary??  I don't think so, but maybe that can confirm that all episodes are available.)
+            tempSeries.lock_record()
+            # Now get a list of all Episodes in the Series and iterate through them
+            for tempEpisodeNum, tempEpisodeID, tempSeriesNum in DBInterface.list_of_episodes_for_series(tempSeries.id):
+                # Load the Episode Record
+                tempEpisode = Episode.Episode(num=tempEpisodeNum)
+                try:
+                    # Lock the Episode Record
+                    tempEpisode.lock_record()
+                    # Add the Keyword to the Episode
+                    tempEpisode.add_keyword(sourceData.parent, sourceData.text)
+                    # Save the Episode
+                    tempEpisode.db_save()
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        msg = 'Episode %d' % tempEpisode.number
+                        if DEBUG:
+                            print 'Message to send = "UKL %s"' % msg
+                        if TransanaGlobal.chatWindow != None:
+                            # Send the "Update Keyword List" message
+                            TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                    # Unlock the Episode Record
+                    tempEpisode.unlock_record()
+                # Handle "RecordLockedError" exception
+                except TransanaExceptions.RecordLockedError, e:
+                    TransanaExceptions.ReportRecordLockedException(_("Episode"), tempEpisode.id, e)
+            # Unlock the Series Record
+            tempSeries.unlock_record()   
+        # Handle "RecordLockedError" exception
+        except TransanaExceptions.RecordLockedError, e:
+            TransanaExceptions.ReportRecordLockedException(_("Series"), tempSeries.id, e)
     
     elif targetType == 'Episode':
         if 'unicode' in wx.PlatformInfo:
@@ -736,14 +756,26 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
         # print "Keyword %s:%s to be dropped on Episode %s" % (sourceData.parent, sourceData.text, treeCtrl.GetItemText(destNode))
         # Load the Episode Record
         tempEpisode = Episode.Episode(num=targetRecNum)
-        # Lock the Episode Record
-        tempEpisode.lock_record()
-        # Add the keyword to the Episode
-        tempEpisode.add_keyword(sourceData.parent, sourceData.text)
-        # Save the Episode
-        tempEpisode.db_save()
-        # Unlock the Episode
-        tempEpisode.unlock_record()
+        try:
+            # Lock the Episode Record
+            tempEpisode.lock_record()
+            # Add the keyword to the Episode
+            tempEpisode.add_keyword(sourceData.parent, sourceData.text)
+            # Save the Episode
+            tempEpisode.db_save()
+            # Now let's communicate with other Transana instances if we're in Multi-user mode
+            if not TransanaConstants.singleUserVersion:
+                msg = 'Episode %d' % tempEpisode.number
+                if DEBUG:
+                    print 'Message to send = "UKL %s"' % msg
+                if TransanaGlobal.chatWindow != None:
+                    # Send the "Update Keyword List" message
+                    TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+            # Unlock the Episode
+            tempEpisode.unlock_record()
+        # Handle "RecordLockedError" exception
+        except TransanaExceptions.RecordLockedError, e:
+            TransanaExceptions.ReportRecordLockedException(_("Episode"), tempEpisode.id, e)
     
     elif targetType == 'Collection':
         # Get user confirmation of the Keyword Add request
@@ -761,22 +793,38 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
         # print "Keyword %s:%s to be dropped on Collection %s" % (sourceData.parent, sourceData.text, treeCtrl.GetItemText(destNode))
         # First, load the Collection
         tempCollection = Collection.Collection(targetRecNum, targetParent)
-        # Lock the Collection Record, just to be on the safe side (Is this necessary??  I don't think so, but maybe that can confirm that all Clips are available.)
-        tempCollection.lock_record()
-        # Now load a list of all the Clips in the Collection and iterate through them
-        for tempClipNum, tempClipID, tempCollectNum in DBInterface.list_of_clips_by_collection(tempCollection.id, tempCollection.parent):
-            # Load the Clip
-            tempClip = Clip.Clip(id_or_num=tempClipNum)
-            # Lock the Clip
-            tempClip.lock_record()
-            # Add the Keyword to the Clip
-            tempClip.add_keyword(sourceData.parent, sourceData.text)
-            # Save the Clip
-            tempClip.db_save()
-            # Unlock the Clip
-            tempClip.unlock_record()
-        # Unlock the Collection Record
-        tempCollection.unlock_record()
+        try:
+            # Lock the Collection Record, just to be on the safe side (Is this necessary??  I don't think so, but maybe that can confirm that all Clips are available.)
+            tempCollection.lock_record()
+            # Now load a list of all the Clips in the Collection and iterate through them
+            for tempClipNum, tempClipID, tempCollectNum in DBInterface.list_of_clips_by_collection(tempCollection.id, tempCollection.parent):
+                # Load the Clip
+                tempClip = Clip.Clip(id_or_num=tempClipNum)
+                try:
+                    # Lock the Clip
+                    tempClip.lock_record()
+                    # Add the Keyword to the Clip
+                    tempClip.add_keyword(sourceData.parent, sourceData.text)
+                    # Save the Clip
+                    tempClip.db_save()
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        msg = 'Clip %d' % tempClip.number
+                        if DEBUG:
+                            print 'Message to send = "UKL %s"' % msg
+                        if TransanaGlobal.chatWindow != None:
+                            # Send the "Update Keyword List" message
+                            TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                    # Unlock the Clip
+                    tempClip.unlock_record()
+                # Handle "RecordLockedError" exception
+                except TransanaExceptions.RecordLockedError, e:
+                    TransanaExceptions.ReportRecordLockedException(_("Clip"), tempClip.id, e)
+            # Unlock the Collection Record
+            tempCollection.unlock_record()
+        # Handle "RecordLockedError" exception
+        except TransanaExceptions.RecordLockedError, e:
+            TransanaExceptions.ReportRecordLockedException(_("Collection"), tempCollection.id, e)
     
     elif targetType == 'Clip':
         # Get user confirmation of the Keyword Add request
@@ -790,33 +838,45 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
         dlg.Destroy()
         if result == wx.ID_NO:
             return
-        # If confirmed, copy the Keyword to the Clip
-        # First, load the Clip
-        tempClip = Clip.Clip(id_or_num=targetRecNum)
-        # Lock the Clip Record
-        tempClip.lock_record()
-        # Add the Keyword to the Clip Record
-        tempClip.add_keyword(sourceData.parent, sourceData.text)
-
         try:
+            # If confirmed, copy the Keyword to the Clip
+            # First, load the Clip
+            tempClip = Clip.Clip(id_or_num=targetRecNum)
+            # Lock the Clip Record
+            tempClip.lock_record()
+            # Add the Keyword to the Clip Record
+            tempClip.add_keyword(sourceData.parent, sourceData.text)
+
             # Save the Clip Record
             tempClip.db_save()
-
+            # Now let's communicate with other Transana instances if we're in Multi-user mode
+            if not TransanaConstants.singleUserVersion:
+                msg = 'Clip %d' % tempClip.number
+                if DEBUG:
+                    print 'Message to send = "UKL %s"' % msg
+                if TransanaGlobal.chatWindow != None:
+                    # Send the "Update Keyword List" message
+                    TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+            # Unlock the Clip Record
+            tempClip.unlock_record()
+        except TransanaExceptions.RecordLockedError, e:
+            TransanaExceptions.ReportRecordLockedException(_("Clip"), tempClip.id, e)
         # Handle "SaveError" exception
-        except SaveError:
+        except TransanaExceptions.SaveError:
             # Display the Error Message, allow "continue" flag to remain true
             errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
             errordlg.ShowModal()
             errordlg.Destroy()
+            # Unlock the Clip Record
+            tempClip.unlock_record()
         # Handle other exceptions
         except:
             # Display the Exception Message, allow "continue" flag to remain true
             errordlg = Dialogs.ErrorDialog(None, "%s" % (sys.exc_info()[:2]))
             errordlg.ShowModal()
             errordlg.Destroy()
-
-        # Unlock the Clip Record
-        tempClip.unlock_record()
+            # Unlock the Clip Record
+            tempClip.unlock_record()
 
 def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
    """ This method processes a "Paste" or "Drop" request for the Transana Database Tree.
@@ -963,6 +1023,7 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
                
             if TransanaGlobal.chatWindow != None:
                TransanaGlobal.chatWindow.SendMessage("AKE %d >|< %s >|< %s >|< %s" % (sourceData.recNum, kwg, kw, sourceData.text))
+               TransanaGlobal.chatWindow.SendMessage("UKL Clip %d" % sourceData.recNum)
 
    # Drop a Keyword on a Series
    elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'SeriesNode'):
@@ -1724,3 +1785,151 @@ def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
       # If not, load the next Child record
       else:
          (tempNode, cookie) = treeCtrl.GetNextChild(parentNode, cookie)
+
+def CreateQuickClip(clipData, kwg, kw, dbTree):
+    """ Create a "Quick Clip", which is the implementation of a simplified form of Clip Creation """
+    # We need to error check to make sure we have a legal Clip spec
+    if (clipData.clipStart >= clipData.clipStop) or (clipData.text == ""):
+        msg = _("You must select some text in the Transcript to be able to create a Quick Clip.")
+        errorDlg = Dialogs.ErrorDialog(None, msg)
+        errorDlg.ShowModal()
+        errorDlg.Destroy()
+    else:
+        # First, let's check to see if there's an appropriate Collection for the Quick Clips
+        (collectNum, collectName, newCollection) = DBInterface.locate_quick_clips_collection()
+        # If a new collection was created, ...
+        if newCollection:
+            # ... we need to add it to the database tree.
+            # Build the node data needed to add the collection.
+            nodeData = (_('Collections'), collectName)
+            # Add the new Collection to the data tree
+            dbTree.add_Node('CollectionNode', nodeData, collectNum, 0)
+            # If in multi-user mode ...
+            if not TransanaConstants.singleUserVersion:
+                # ... inform the Message Server that a Collection has been added
+                msg = "AC %s"
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage(msg % collectName)
+
+        # Load the Episode that is the source of the current selection.
+        sourceEpisode = Episode.Episode(clipData.episodeNum)
+        # Check to see if a Quick Clip for this selection in this Transcript in this Episode has already been created.
+        dupClipNum = DBInterface.CheckForDuplicateQuickClip(collectNum, clipData.episodeNum, clipData.transcriptNum, clipData.clipStart, clipData.clipStop)
+        # -1 indicates no duplicate Quick Clip.  If there IS a duplicate ...
+        if dupClipNum > -1:
+            # ... load the existing Quick Clip
+            quickClip = Clip.Clip(dupClipNum)
+            # Inform the user of the duplication.
+            msg = _('A Quick Clip matching this selection already exists.\nKeyword "%s : %s" will be added to\nQuick Clip "%s".')
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                msg = unicode(msg, 'utf8')
+            tempDlg = Dialogs.InfoDialog(None, msg % (kwg, kw, quickClip.id))
+            tempDlg.ShowModal()
+            tempDlg.Destroy()
+            # Attempt to add the selected keyword to the existing Quick Clip
+            try:
+                # Attempt to get a record lock
+                quickClip.lock_record()
+                # Add the keyword to the Clip record
+                quickClip.add_keyword(kwg, kw)
+                # Save the Clip Record
+                quickClip.db_save()
+                # Now let's communicate with other Transana instances if we're in Multi-user mode
+                if not TransanaConstants.singleUserVersion:
+                    msg = 'Clip %d' % quickClip.number
+                    if DEBUG:
+                        print 'Message to send = "UKL %s"' % msg
+                    if TransanaGlobal.chatWindow != None:
+                        # Send the "Update Keyword List" message
+                        TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                # Unlock the record
+                quickClip.unlock_record()
+            # Handle "RecordLockedError" exception
+            except TransanaExceptions.RecordLockedError, e:
+                TransanaExceptions.ReportRecordLockedException(_("Clip"), quickClip.id, e)
+            # Handle "SaveError" exception
+            except TransanaExceptions.SaveError:
+                # Display the Error Message
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+            # Handle other exceptions
+            except:
+                errordlg = Dialogs.ErrorDialog(None, "%s %s" % (sys.exc_info()[0], sys.exc_info()[1]))
+                errordlg.ShowModal()
+                errordlg.Destroy()
+        # If there is NO duplicate Quick Clip record ...
+        else:
+            # Determine the next Quick Clip Name
+            # Establish the base Clip Name.  Limit the size of the Episode Name so we don't overflow
+            # the Clip ID field length in any language.
+            # Start with the i18n version of "Quick Clip"
+            baseName = _('Quick Clip') + ' '
+            # If multi-user ...
+            if not TransanaConstants.singleUserVersion:
+                # ... then pre-pend the username
+                baseName = '- ' + TransanaGlobal.userName + ' - ' + baseName
+            # pre-pent as much of the Episode name as will fit.
+            baseName = sourceEpisode.id[:94 - len(baseName)] + ' ' + baseName
+            # Start numbering at 1
+            baseNum = 1
+            # Get a list of all QuickClips
+            clipList = DBInterface.list_of_clips_by_collectionnum(collectNum)
+            # Iterate through the list
+            for clipItem in clipList:
+                # Isolate the Clip Name
+                clipName = clipItem[1]
+                # We can ignore errors in converting clip names to integers, but we have to trap it.
+                try:
+                    # Get the integer portion of the Clip Name that follows the base Clip Name
+                    clipNum = int(clipName[len(baseName):])
+                    # We're looking for the largest value.
+                    if clipNum >= baseNum:
+                        # The base number value should always be 1 larger than the largest used value.
+                        baseNum = clipNum + 1
+                except:
+                    pass
+
+            # Create a Clip Object and populate it with the proper data
+            quickClip = Clip.Clip()
+            quickClip.id = baseName + str(baseNum)
+            quickClip.collection_num = collectNum
+            quickClip.episode_num = clipData.episodeNum
+            quickClip.transcript_num = clipData.transcriptNum
+            quickClip.media_filename = sourceEpisode.media_filename
+            quickClip.clip_start = clipData.clipStart
+            quickClip.clip_stop = clipData.clipStop
+            quickClip.sort_order = DBInterface.getMaxSortOrder(collectNum) + 1
+            quickClip.text = clipData.text
+
+            # Add the Episode Keywords as default Clip Keywords
+            quickClip.keyword_list = sourceEpisode.keyword_list
+            # Add the keyword that initiated the Quick Clip
+            quickClip.add_keyword(kwg, kw)
+            
+            # If we're in multi-user mode ...
+            if not TransanaConstants.singleUserVersion:
+                # ... determine if the Username is already a Keyword
+                if DBInterface.check_username_as_keyword():
+                    # Add the new Keyword to the data tree
+                    dbTree.add_Node('KeywordNode', (_('Keywords'), _("Transana Users"), TransanaGlobal.userName), 0, _("Transana Users"))
+                    # Inform the Message Server of the added Keyword
+                    msg = "AK %s >|< %s"
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage(msg % (_("Transana Users"), TransanaGlobal.userName))
+                # Add the keyword to the Quick Clip
+                quickClip.add_keyword(_("Transana Users"), TransanaGlobal.userName)
+            # Save the Quick Clip
+            quickClip.db_save()
+
+            # We need to add the Clip to the database tree.
+            # Build the node data needed to add the clip.
+            nodeData = (_('Collections'), collectName, quickClip.id)
+            # Add the new Collection to the data tree
+            dbTree.add_Node('ClipNode', nodeData, quickClip.number, quickClip.collection_num)
+            # Inform the Message Server of the added Clip
+            if not TransanaConstants.singleUserVersion:
+                msg = "ACl %s >|< %s"
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage(msg % (collectName, quickClip.id))

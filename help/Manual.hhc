@@ -116,6 +116,11 @@
            <param name="Local" value="KeywordMap.htm">
        </object>
   <li> <object type="text/sitemap">
+           <param name="Name" value="Filter Dialog">
+           <param name="ID" value=107>
+           <param name="Local" value="FilterDialog.htm">
+       </object>
+  <li> <object type="text/sitemap">
            <param name="Name" value="Search">
            <param name="ID" value=110>
            <param name="Local" value="Search.htm">

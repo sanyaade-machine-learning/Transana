@@ -95,6 +95,12 @@ def InitializeSingleUserDatabase():
     # Dutch
     elif (TransanaGlobal.configData.language == 'nl'):
         lang = '--language=./share/dutch'
+    # Norwegian Bokmal
+    elif (TransanaGlobal.configData.language == 'nb'):
+        lang = '--language=./share/norwegian'
+    # Norwegian Ny-norsk
+    elif (TransanaGlobal.configData.language == 'nn'):
+        lang = '--language=./share/norwegian-ny'
     # Polish
     elif (TransanaGlobal.configData.language == 'pl'):
         lang = '--language=./share/polish'
@@ -367,6 +373,29 @@ def establish_db_exists():
         query = SetTableType(hasInnoDB, query)
         # Execute the Query
         dbCursor.execute(query)
+
+        # Filters Table: Test for existence and create if needed
+        query = """
+                  CREATE TABLE IF NOT EXISTS Filters2
+                    (ReportType      INTEGER, 
+                     ReportScope     INTEGER, 
+                     ConfigName      VARCHAR(100),
+                     FilterDataType  INTEGER,
+                     FilterData      BLOB,
+                     PRIMARY KEY (ReportType, ReportScope, ConfigName, FilterDataType))
+                """
+        # ReportTypes:     1 = Keyword Map
+        #                  2 = Keyword Visualization
+        #                  3 = Keyword Comparison
+        # FilterDataType:  1 = Episode
+        #                  2 = Clip
+        #                  3 = Keyword
+        
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(hasInnoDB, query)
+        # Execute the Query
+        dbCursor.execute(query)
+
         # If we've gotten this far, return "true" to indicate success.
         return True
 
@@ -662,7 +691,31 @@ def list_of_series():
         l.append((row['SeriesNum'], id))
     DBCursor.close()
     return l
-    
+
+def list_of_episodes():
+    """ Get a list of all Episode records. """
+    # Create an empty list to hold results
+    l = []
+    # Define the Query
+    query = "SELECT EpisodeNum, EpisodeID, SeriesNum FROM Episodes2 ORDER BY EpisodeID"
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Execute the Query
+    DBCursor.execute(query)
+    # Iterate through the Results set
+    for row in fetchall_named(DBCursor):
+        # Get the Episode ID
+        id = row['EpisodeID']
+        # If we're using Unicode ...
+        if 'unicode' in wx.PlatformInfo:
+            # ... we need to handle the Unicode decoding
+            id = ProcessDBDataForUTF8Encoding(id)
+        # Add the results to the list
+        l.append((row['EpisodeNum'], id, row['SeriesNum']))
+    # Close the Database Cursor
+    DBCursor.close()
+    # Return the list as the function result
+    return l
 
 def list_of_episodes_for_series(SeriesName):
     """Get a list of all Episodes contained within a named Series."""
@@ -686,6 +739,31 @@ def list_of_episodes_for_series(SeriesName):
     DBCursor.close()
     return l
 
+def list_of_episode_transcripts():
+    """ Get a list of all Episode Transcript records. """
+    # Create an empty list
+    l = []
+    # Define the Query.  We only want Episode Transcripts, not Clip Transcripts.
+    query = "SELECT TranscriptNum, TranscriptID, EpisodeNum FROM Transcripts2 WHERE ClipNum = 0 ORDER BY TranscriptID"
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Execute the Query
+    DBCursor.execute(query)
+    # Iterate through the Results Set
+    for row in fetchall_named(DBCursor):
+        # Get the Transcript ID
+        id = row['TranscriptID']
+        # If we're using Unicode ...
+        if 'unicode' in wx.PlatformInfo:
+            # ... then we need to decode the Transcript ID
+            id = ProcessDBDataForUTF8Encoding(id)
+        # Add the results to the list
+        l.append((row['TranscriptNum'], id, row['EpisodeNum']))
+    # Close the Database Cursor
+    DBCursor.close()
+    # Return the list as the function results
+    return l
+    
 def list_transcripts(SeriesName, EpisodeName):
     """Get a list of all Transcripts for the named Episode within the
     named Series."""
@@ -741,6 +819,87 @@ def list_of_collections(ParentNum=0):
             id = ProcessDBDataForUTF8Encoding(id)
         l.append((row['CollectNum'], id, row['ParentCollectNum']))
     DBCursor.close()
+    return l
+
+def list_of_all_collections():
+    """Get a list of all collections."""
+    # Create an empty list
+    l = []
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Define the Query
+    query = """ SELECT CollectNum, CollectID, ParentCollectNum FROM Collections2
+                  ORDER BY ParentCollectNum, CollectID """
+    # Execute the Query
+    DBCursor.execute(query)
+    # The results set returns Collection Number, Collection ID, and Parent Collection Number.
+    # Iterate through the Results Set
+    for row in fetchall_named(DBCursor):
+        # Get the Collection ID
+        id = row['CollectID']
+        # If we're using Unicode ...
+        if 'unicode' in wx.PlatformInfo:
+            # ... we need to decode the Collection ID
+            id = ProcessDBDataForUTF8Encoding(id)
+        # Add the results to the list
+        l.append((row['CollectNum'], id, row['ParentCollectNum']))
+    # Close the Database Cursor
+    DBCursor.close()
+    # Return the List as the function result
+    return l
+
+def locate_quick_clips_collection():
+    """ Determine the collection number of the Quick Clips Collection, creating it if necessary. """
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Create a query to get the Collection Number for the QuickClips Collection
+    query = "SELECT CollectNum from Collections2 where CollectID = %s"
+    # Determine the appropriate name for the QuickClips Collection
+    collectionName = _("Quick Clips")
+    if not TransanaConstants.singleUserVersion:
+        collectionName += " - %s" % get_username()
+    # Execute the query
+    DBCursor.execute(query, collectionName)
+    # See if the Quick Clips Collection already exists.  If so, return the Collection Number and False to indicate we didn't create
+    # a new collection.
+    if DBCursor.rowcount == 1:
+        return (DBCursor.fetchone()[0], collectionName, False)
+    # If not, we need to create it!
+    else:
+        import Collection
+        tempCollection = Collection.Collection()
+        tempCollection.id = collectionName
+        tempCollection.parent = 0
+        tempCollection.comment = _('This collection was created automatically to accept Quick Clips.')
+        if not TransanaConstants.singleUserVersion:
+            tempCollection.owner = get_username()
+        tempCollection.db_save()
+        return (tempCollection.number, collectionName, True)    
+
+def list_of_clips():
+    """ Get a list of all Clips, regardless of collection. """
+    # Create an empty list
+    l = []
+    # Define the Query
+    query = """ SELECT ClipNum, ClipID, CollectNum FROM Clips2
+                  ORDER BY SortOrder, ClipID """
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Execute the Query
+    DBCursor.execute(query)
+    # Iterate through the Results
+    for row in fetchall_named(DBCursor):
+        # Get the Clip ID
+        id = row['ClipID']
+        # If we're using Unicode ...
+        if 'unicode' in wx.PlatformInfo:
+            # ... we need to decode the ClipID
+            id = ProcessDBDataForUTF8Encoding(id)
+        # Add the results to the list
+        l.append((row['ClipNum'], id, row['CollectNum']))
+    # Close the Database Cursor
+    DBCursor.close()
+    # Return the list as the funtion results
     return l
 
 def list_of_clips_by_collection(CollectionID, ParentNum):
@@ -828,6 +987,36 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
     DBCursor.close()
     return l
 
+def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart, clipStop):
+    """ Check to see if there is already a Quick Clip for this video segment. """
+    # Get a database cursor
+    DBCursor = get_db().cursor()
+    # Design a query to identify Quick Clips which match the data passed in
+    query = """SELECT ClipNum FROM Clips2
+                 WHERE CollectNum = %s AND
+                       EpisodeNum = %s AND
+                       TranscriptNum = %s AND
+                       ClipStart = %s AND
+                       ClipStop = %s"""
+    # Put the data passed in into a compatible data structure
+    data = (collectNum, episodeNum, transcriptNum, clipStart, clipStop)
+    # Execute the query
+    DBCursor.execute(query, data)
+    # If no rows are returned ...
+    if DBCursor.rowcount == 0:
+        # ... close the database cursor ...
+        DBCursor.close()
+        # ... and return -1 to indicate that no duplicate clips were found
+        return -1
+    # If duplicate clip(s) are found ...
+    else:
+        # ... get the Clip Number of the first one ...
+        clipNum = DBCursor.fetchone()[0]
+        # ... close the database cursor ...
+        DBCursor.close()
+        # ... and return the Clip Number of the offending clip.
+        return clipNum
+
 def getMaxSortOrder(collNum):
     """Get the largest Sort Order value for all the Clips in a Collection."""
     DBCursor = get_db().cursor()
@@ -899,7 +1088,51 @@ def list_of_notes(** kwargs):
         notelist.append(id)
     DBCursor.close()
     return notelist
-   
+
+def list_of_node_notes(** kwargs):
+    """ Get a list of all Notes for the given Series or Collection node, including sub-nodes.
+        Valid parameters are SeriesNode=True or CollectionNode=True."""
+    # Create an empty list
+    notelist = []
+    # Start building the Query
+    query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum
+                 FROM Notes2 """
+    # If we're looking for Series Node Notes ...
+    if kwargs.has_key("SeriesNode"):
+        # ... we need to build a query for Series, Episode, or Transcript Notes
+        query += """WHERE   SeriesNum <> 0 OR
+                            EpisodeNum <> 0 OR
+                            TranscriptNum <> 0"""
+    # If we're looking for Collection Node Notes ...
+    elif kwargs.has_key("CollectionNode"):
+        # ... we need to build a query for Collection or Clip Notes
+        query += """WHERE   CollectNum <> 0 OR
+                            ClipNum <> 0"""
+    # If neither SeriesNode nor CollectionNode is defined, we've got a programming error.
+    else:
+        return []   # Should we raise an exception?
+    # Finish the Query
+    query = query + "   ORDER BY NoteID\n"
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Execute the Query
+    DBCursor.execute(query)
+    # Get the results set
+    r = DBCursor.fetchall()
+    # Iterate through the Results Set
+    for tup in r:
+        # Get the Note ID
+        id = tup[1]
+        # If we're working with Unicode ...
+        if 'unicode' in wx.PlatformInfo:
+            # ... we need to decode the Note ID
+            id = ProcessDBDataForUTF8Encoding(id)
+        # Add the results to the list
+        notelist.append((tup[0], id) + tup[2:])
+    # Close the Database Cursor
+    DBCursor.close()
+    # Return the list as the function results
+    return notelist
 
 def list_of_keyword_groups():
     """Get a list of all keyword groups."""
@@ -914,7 +1147,6 @@ def list_of_keyword_groups():
         l.append(id)
     DBCursor.close()
     return l
-
 
 def list_of_keywords_by_group(KeywordGroup):
     """Get a list of all keywords for the named Keyword group."""
@@ -935,20 +1167,32 @@ def list_of_keywords_by_group(KeywordGroup):
 
 def list_of_all_keywords():
     """Get a list of all keywords in the Transana database."""
+    # Create an empty list
     l = []
-    query = \
-    "SELECT Keyword FROM Keywords2 ORDER BY Keyword\n"
+    # Define the Query
+    query = "SELECT KeywordGroup, Keyword FROM Keywords2 ORDER BY KeywordGroup, Keyword"
+    # Get a Database Cursor
     DBCursor = get_db().cursor()
+    # Execute the Query
     DBCursor.execute(query)
+    # Iterate through the results
     for row in fetchall_named(DBCursor):
-        id = row['Keyword']
+        # Get the Keyword Group
+        kwg = row['KeywordGroup']
+        # Get the Keyword
+        kw = row['Keyword']
+        # If we're using Unicode ...
         if 'unicode' in wx.PlatformInfo:
-            id = ProcessDBDataForUTF8Encoding(id)
-        l.append(id)
+            # ... we need to decode the Keyword Group and Keyword
+            kwg = ProcessDBDataForUTF8Encoding(kwg)
+            kw = ProcessDBDataForUTF8Encoding(kw)
+        # Add the results to the list
+        l.append((kwg, kw))
+    # Close the database cursor
     DBCursor.close()
+    # return the list as the function results
     return l
    
-
 def list_of_keywords(** kwargs):
     """Get a list of all keywordgroup/keyword pairs for the specified
     qualifiers (Episode, Clip numbers).  Result is a list of tuples,
@@ -1033,6 +1277,30 @@ def SetKeywordExampleStatus(kwg, kw, clipNum, exampleValue):
     if dbCursor.rowcount == 0:
         insert_clip_keyword(0, clipNum, kwg, kw, 1)
     dbCursor.close()
+
+
+def check_username_as_keyword():
+    """ Determine if the username is already a keyword, creating it if necessary. """
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Create a query to get the Collection Number for the QuickClips Collection
+    query = "SELECT * from Keywords2 where KeywordGroup = %s AND Keyword = %s"
+    # Determine the appropriate Keyword Group and Keyword
+    data = (_("Transana Users"), get_username())
+    # Execute the query
+    DBCursor.execute(query, data)
+    # See if the keyword already exists.  If not, we need to create it.
+    if DBCursor.rowcount == 0:
+        import Keyword
+        tempKeyword = Keyword.Keyword()
+        tempKeyword.keywordGroup = _("Transana Users")
+        tempKeyword.keyword = get_username()
+        tempKeyword.db_save()
+        # Return True to indicate that a keyword was created
+        return True
+    else:
+        # Return False to indicate that no keyword was created
+        return False
 
 
 def VideoFilePaths(filePath, update=False):
@@ -1169,8 +1437,10 @@ def VideoFilePaths(filePath, update=False):
                     # Catch failed record locks or Saves
                     except:
                         # TODO:  Detect exception type and customize the error message below.
-                        print sys.exc_info()[0], sys.exc_info[1]
-                        
+                        print sys.exc_info()[0], sys.exc_info()[1]
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+
                         # If it fails, set the transactionStatus Flag to False
                         transactionStatus = False
                         # and stop processing records.

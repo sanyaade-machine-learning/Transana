@@ -75,7 +75,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form right
         lay.height.AsIs()
-        title_edit = self.new_edit_box(_("Title"), lay, self.obj.title)
+        title_edit = self.new_edit_box(_("Title"), lay, self.obj.title, maxLen=255)
 
         # Creator layout
         lay = wx.LayoutConstraints()
@@ -83,7 +83,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form Left
         lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
         lay.height.AsIs()
-        creator_edit = self.new_edit_box(_("Creator"), lay, self.obj.creator)
+        creator_edit = self.new_edit_box(_("Creator"), lay, self.obj.creator, maxLen=255)
 
         # Subject layout
         lay = wx.LayoutConstraints()
@@ -91,7 +91,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
         lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
         lay.height.AsIs()
-        subject_edit = self.new_edit_box(_("Subject"), lay, self.obj.subject)
+        subject_edit = self.new_edit_box(_("Subject"), lay, self.obj.subject, maxLen=255)
 
         # Description layout
         lay = wx.LayoutConstraints()
@@ -99,7 +99,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
         lay.height.AsIs()
-        self.description_edit = self.new_edit_box(_("Description"), lay, self.obj.description, style=wx.TE_MULTILINE)
+        self.description_edit = self.new_edit_box(_("Description"), lay, self.obj.description, style=wx.TE_MULTILINE, maxLen=255)
 
         # Publisher layout
         lay = wx.LayoutConstraints()
@@ -107,7 +107,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
         lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
         lay.height.AsIs()
-        publisher_edit = self.new_edit_box(_("Publisher"), lay, self.obj.publisher)
+        publisher_edit = self.new_edit_box(_("Publisher"), lay, self.obj.publisher, maxLen=255)
 
         # Contributor layout
         lay = wx.LayoutConstraints()
@@ -115,7 +115,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
         lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
         lay.height.AsIs()
-        contributor_edit = self.new_edit_box(_("Contributor"), lay, self.obj.contributor)
+        contributor_edit = self.new_edit_box(_("Contributor"), lay, self.obj.contributor, maxLen=255)
 
         # Dialogs.GenForm does not provide a Masked text control, so the Date
         # Field is handled differently than other fields.
@@ -186,7 +186,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
         lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
         lay.height.AsIs()
-        source_edit = self.new_edit_box(_("Source"), lay, self.obj.source)
+        source_edit = self.new_edit_box(_("Source"), lay, self.obj.source, maxLen=255)
 
         # Language layout
         lay = wx.LayoutConstraints()
@@ -194,7 +194,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
         lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
         lay.height.AsIs()
-        language_edit = self.new_edit_box(_("Language"), lay, self.obj.language)
+        language_edit = self.new_edit_box(_("Language"), lay, self.obj.language, maxLen=25)
 
         # Relation layout
         lay = wx.LayoutConstraints()
@@ -202,7 +202,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
         lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
         lay.height.AsIs()
-        relation_edit = self.new_edit_box(_("Relation"), lay, self.obj.relation)
+        relation_edit = self.new_edit_box(_("Relation"), lay, self.obj.relation, maxLen=255)
 
         # Coverage layout
         lay = wx.LayoutConstraints()
@@ -210,7 +210,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from Form left
         lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
         lay.height.AsIs()
-        coverage_edit = self.new_edit_box(_("Coverage"), lay, self.obj.coverage)
+        coverage_edit = self.new_edit_box(_("Coverage"), lay, self.obj.coverage, maxLen=255)
 
         # Rights layout
         lay = wx.LayoutConstraints()
@@ -218,7 +218,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from Form Right
         lay.width.PercentOf(self.panel, wx.Width, 47)  # 47% width, allows for two across positioning
         lay.height.AsIs()
-        rights_edit = self.new_edit_box(_("Rights"), lay, self.obj.rights)
+        rights_edit = self.new_edit_box(_("Rights"), lay, self.obj.rights, maxLen=255)
 
         self.Layout()
         self.SetAutoLayout(True)

@@ -82,7 +82,7 @@ class NotePropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
-        id_edit = self.new_edit_box(_("Note ID"), lay, self.obj.id)
+        id_edit = self.new_edit_box(_("Note ID"), lay, self.obj.id, maxLen=100)
 
         # Series ID layout
         lay = wx.LayoutConstraints()
@@ -150,7 +150,7 @@ class NotePropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
-        noteTaker_edit = self.new_edit_box(_("Note Taker"), lay, self.obj.author)
+        noteTaker_edit = self.new_edit_box(_("Note Taker"), lay, self.obj.author, maxLen=100)
 
         self.Layout()
         self.SetAutoLayout(True)

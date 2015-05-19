@@ -29,7 +29,7 @@ else:
     MULTI_USER = False
 
 # Some globals
-wxPythonLib = '/usr/local/lib/wxPython-unicode-2.6.1.0/lib/'
+wxPythonLib = '/usr/local/lib/wxPython-unicode-2.6.3.2/lib/'
 resourceDir = 'Contents/Resources'
 
 # Add all dylibs not added automatically
@@ -45,6 +45,8 @@ allfiles = [('locale/en/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'loc
             ('locale/es/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/es/LC_MESSAGES/Transana.mo')),
             ('locale/fr/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/fr/LC_MESSAGES/Transana.mo')),
             ('locale/it/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/it/LC_MESSAGES/Transana.mo')),
+            ('locale/nb/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/nb/LC_MESSAGES/Transana.mo')),
+            ('locale/nn/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/nn/LC_MESSAGES/Transana.mo')),
             ('locale/nl/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/nl/LC_MESSAGES/Transana.mo')),
             ('locale/sv/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/sv/LC_MESSAGES/Transana.mo')) ]
 allfiles = allfiles + \
@@ -63,14 +65,17 @@ buildapp (
     libs = [
 #            wxPythonLib + 'libwx_macd_core-2.5.1.dylib',
             wxPythonLib + 'libwx_macud-2.6.0.dylib',
+            wxPythonLib + 'libwx_macud-2.6.0.3.1.dylib',
 #            wxPythonLib + 'libwx_macd_adv-2.5.1.dylib',
 #            wxPythonLib + 'libwx_macd_gizmos-2.5.1.dylib',
             wxPythonLib + 'libwx_macud_gizmos-2.6.0.dylib',
+            wxPythonLib + 'libwx_macud_gizmos-2.6.0.3.1.dylib',
 #            wxPythonLib + 'libwx_macd_gl-2.5.1.dylib',
 #            wxPythonLib + 'libwx_macd_html-2.5.1.dylib',
 #            wxPythonLib + 'libwx_macd_ogl-2.5.1.dylib',
 #            wxPythonLib + 'libwx_macd_stc-2.5.1.dylib',
             wxPythonLib + 'libwx_macud_stc-2.6.0.dylib',
+            wxPythonLib + 'libwx_macud_stc-2.6.0.3.1.dylib',
 #            wxPythonLib + 'libwx_macd_xrc-2.5.1.dylib',
 #            wxPythonLib + 'libwx_macd-2.5.1.rsrc',
 #            wxPythonLib + 'libwx_macd-2.5.3.rsrc'
@@ -90,14 +95,17 @@ buildapp (
     libs = [
 #            wxPythonLib + 'libwx_macd_core-2.5.1.dylib',
             wxPythonLib + 'libwx_macud-2.6.0.dylib',
+            wxPythonLib + 'libwx_macud-2.6.0.3.1.dylib',
 #            wxPythonLib + 'libwx_macd_adv-2.5.1.dylib',
 #            wxPythonLib + 'libwx_macd_gizmos-2.5.1.dylib',
             wxPythonLib + 'libwx_macud_gizmos-2.6.0.dylib',
+            wxPythonLib + 'libwx_macud_gizmos-2.6.0.3.1.dylib',
 #            wxPythonLib + 'libwx_macd_gl-2.5.1.dylib',
 #            wxPythonLib + 'libwx_macd_html-2.5.1.dylib',
 #            wxPythonLib + 'libwx_macd_ogl-2.5.1.dylib',
 #            wxPythonLib + 'libwx_macd_stc-2.5.1.dylib',
             wxPythonLib + 'libwx_macud_stc-2.6.0.dylib',
+            wxPythonLib + 'libwx_macud_stc-2.6.0.3.1.dylib',
 #            wxPythonLib + 'libwx_macd_xrc-2.5.1.dylib',
 #            wxPythonLib + 'libwx_macd-2.5.1.rsrc',
 #            wxPythonLib + 'libwx_macd-2.5.3.rsrc'

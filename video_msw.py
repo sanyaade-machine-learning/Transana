@@ -34,7 +34,10 @@ import TransanaGlobal
 try:
     import WindowsMediaPlayer
 except:
-    raise ImportError("Can't load Windows Media Player")
+    import sys
+    tb = traceback.format_exc()
+    errormsg = "%s %s\n%s" %  (sys.exc_info()[0], sys.exc_info()[1], tb)
+    raise ImportError(errormsg)   # "Can't load Windows Media Player")
 
 class VideoFrame(wx.Dialog):
     """Video player dialog. Use the 'public' methods to control the player."""
@@ -230,6 +233,9 @@ class VideoFrame(wx.Dialog):
 
         self.ax.currentposition = TimeCode/1000.0
 
+    def GetPlayBackSpeed(self):
+        return self.Rate
+
     def SetPlayBackSpeed(self, playBackSpeed):
         """ Sets the play back speed. Divide by 10 to get correct units 
         for Windows Media Player"""
@@ -320,6 +326,13 @@ class VideoFrame(wx.Dialog):
         """If playing checks the axm.CurrentPosition property ever 10ms and 
         passes information to VideoWindow"""
         if (self.IsPlaying()):
+            # If playing, check to see if the current segment has ended.
+            if self.ax.selectionend and (self.ax.currentposition >= self.ax.selectionend):
+                self.Stop()
+                # If we're NOT in PlayAllClips mode, ...
+                if self.parentVideoWindow.ControlObject.PlayAllClipsWindow == None:
+                    # ... reset the video to the original start point.  (This will break PlayAllClips, though.)    
+                    self.SetVideoStartPoint(self.GetVideoStartPoint())
             self.PostPos()
         else:
             self.ProgressNotification.Stop()

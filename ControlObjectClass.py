@@ -85,6 +85,9 @@ class ControlObject(object):
         self.WindowPositions = []       # Initial Screen Positions for all Windows, used for Presentation Mode
         self.TranscriptNum = -1         # Transcript record # loaded
         self.currentObj = None          # Currently loaded Object (Episode or Clip)
+        self.shuttingDown = False       # We need to signal when we want to shut down to prevent problems
+                                        # with the Visualization Window's IDLE event trying to call the
+                                        # VideoWindow after it's been destroyed.
         
     def Register(self, Menu='', Video='', Transcript='', Data='', Visualization='', PlayAllClips='', Chat=''):
         """ The ControlObject can extert control only over those objects it knows about.  This method
@@ -300,7 +303,12 @@ class ControlObject(object):
         # Clear the currently loaded object, as there is none
         self.currentObj = None
         # Force the screen updates
-        wx.Yield()
+        # there can be an issue with recursive calls to wxYield, so trap the exception ...
+        try:
+            wx.Yield()
+        # ... and ignore it!
+        except:
+            pass
 
     def GetNewDatabase(self):
         """ Close the old database and open a new one. """
@@ -750,6 +758,27 @@ class ControlObject(object):
         """ Returns a Transcript Object for the Transcript currently loaded in the Transcript Editor """
         return self.TranscriptWindow.GetCurrentTranscriptObject()
 
+    def GetTranscriptSelectionInfo(self):
+        """ Returns information about the current selection in the transcript editor """
+        # We need to know the time codes that bound the current selection
+        (startTime, endTime) = self.TranscriptWindow.dlg.editor.get_selected_time_range()
+        # we need to know the text of the current selection
+        # If it's blank, we need to send a blank rather than RTF for nothing
+        (startPos, endPos) = self.TranscriptWindow.dlg.editor.GetSelection()
+        if startPos == endPos:
+            text = ''
+        else:
+            text = self.TranscriptWindow.dlg.editor.GetRTFBuffer(select_only=1)
+        # We also need to know the number of the original Transcript Record
+        if self.TranscriptWindow.dlg.editor.TranscriptObj.clip_num == 0:
+            # If we have an Episode Transcript, we need the Transcript Number
+            originalTranscriptNum = self.TranscriptWindow.dlg.editor.TranscriptObj.number
+        else:
+            # If we have a Clip Transcript, we need the original Transcript Number, not the Clip Transcript Number.
+            # We can get that from the ControlObject's "currentObj", which in this case will be the Clip!
+            originalTranscriptNum = self.currentObj.transcript_num
+        return (originalTranscriptNum, startTime, endTime, text)
+
     def GetDatabaseTreeTabObjectNodeType(self):
         return self.DataWindow.DBTab.tree.GetObjectNodeType()
 
@@ -784,17 +813,21 @@ class ControlObject(object):
         
     def GetMediaLength(self, entire = False):
         """ This method returns the length of the entire video/media segment """
-        if not(entire): # Return segment length
-            if self.VideoEndPoint == 0:
-                mediaLength = self.VideoWindow.GetMediaLength() - self.VideoStartPoint
-            else:
-                if self.VideoEndPoint - self.VideoStartPoint > 0:
-                    mediaLength = self.VideoEndPoint - self.VideoStartPoint
-                else:
+        try:
+            if not(entire): # Return segment length
+                if self.VideoEndPoint == 0:
                     mediaLength = self.VideoWindow.GetMediaLength() - self.VideoStartPoint
-            return mediaLength
-        else: # Return length of entire video 
-            return self.VideoWindow.GetMediaLength()
+                else:
+                    if self.VideoEndPoint - self.VideoStartPoint > 0:
+                        mediaLength = self.VideoEndPoint - self.VideoStartPoint
+                    else:
+                        mediaLength = self.VideoWindow.GetMediaLength() - self.VideoStartPoint
+                return mediaLength
+            else: # Return length of entire video 
+                return self.VideoWindow.GetMediaLength()
+        except:
+            # If an exception is raised, most likely we're shutting down and have lost the VideoWindow.  Just return 0.
+            return 0
         
     def UpdateVideoWindowPosition(self, left, top, width, height):
         """ This method receives screen position and size information from the Video Window and adjusts all other windows accordingly """
@@ -969,6 +1002,10 @@ class ControlObject(object):
         self.DataWindow.ChangeLanguages()
         # Updating the Data Window automatically updates the Headers on the Video and Transcript windows!
         self.TranscriptWindow.ChangeLanguages()
+        # If we're in multi-user mode ...
+        if not TransanaConstants.singleUserVersion:
+            # We need to update the ChatWindow too
+            self.ChatWindow.ChangeLanguages()
 
     def AdjustIndexes(self, adjustmentAmount):
         """ Adjust Transcript Time Codes by the specified amount """

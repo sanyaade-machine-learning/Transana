@@ -106,3 +106,6 @@ if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
 
 # Create a variable for the global User Name information
 userName = ''
+
+# We need to know the maximum length of the Keyword Group field in a couple of places
+maxKWGLength = 50

@@ -122,10 +122,12 @@ class Transcript(DataObject):
     def db_load_by_num(self, num):
         """Load a record by record number."""
         db = DBInterface.get_db()
-        query = """SELECT a.*, b.EpisodeID, c.SeriesID FROM Transcripts2 a, Episodes2 b, Series2 c
-            WHERE   TranscriptNum = %s AND
-                    a.EpisodeNum = b.EpisodeNum AND
-                    b.SeriesNum = c.SeriesNum"""
+# This query doesn't work for loading a Clip Transcript, of course!
+#        query = """SELECT a.*, b.EpisodeID, c.SeriesID FROM Transcripts2 a, Episodes2 b, Series2 c
+#            WHERE   TranscriptNum = %s AND
+#                    a.EpisodeNum = b.EpisodeNum AND
+#                    b.SeriesNum = c.SeriesNum"""
+        query = """SELECT * FROM Transcripts2 WHERE   TranscriptNum = %s"""
         c = db.cursor()
         c.execute(query, num)
         n = c.rowcount
@@ -136,7 +138,6 @@ class Transcript(DataObject):
         else:
             r = DBInterface.fetch_named(c)
             self._load_row(r)
-        
         c.close()
 
     def db_load_by_clipnum(self, clip):
@@ -173,8 +174,16 @@ class Transcript(DataObject):
             # variables for the data.  We don't want to change the underlying object values.  Also, this way,
             # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
             id = self.id.encode(TransanaGlobal.encoding)
-            transcriber = self.transcriber.encode(TransanaGlobal.encoding)
-            comment = self.comment.encode(TransanaGlobal.encoding)
+            # If the transcriber is None in the database, we can't encode that!  Otherwise, we should encode.
+            if self.transcriber != None:
+                transcriber = self.transcriber.encode(TransanaGlobal.encoding)
+            else:
+                transcriber = self.transcriber
+            # If the comment is None in the database, we can't encode that!  Otherwise, we should encode.
+            if self.comment != None:
+                comment = self.comment.encode(TransanaGlobal.encoding)
+            else:
+                comment = self.comment
         else:
             # If we don't need to encode the string values, we still need to copy them to our local variables.
             id = self.id

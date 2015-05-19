@@ -16,7 +16,7 @@
            <param name="Local" value="StartingTransana.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Transana Main Window">
+           <param name="Name" value="Transana Main Screen">
            <param name="ID" value=35>
            <param name="Local" value="TransanaWindow.htm">
        </object>
@@ -97,13 +97,18 @@
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Create Another Clip">
-           <param name="ID" value=195>
+           <param name="ID" value=185>
            <param name="Local" value="CreateAnotherClip.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Create More Clips">
            <param name="ID" value=190>
            <param name="Local" value="CreateMoreClips.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Quick Clips">
+           <param name="ID" value=195>
+           <param name="Local" value="QuickClips.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Working with Collections">

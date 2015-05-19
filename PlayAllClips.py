@@ -19,6 +19,10 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
+DEBUG = False
+if DEBUG:
+    print "PlayAllClips DEBUG is ON!!"
+
 # Import wxPython
 import wx
 # Import the Transana Collection Object
@@ -263,8 +267,16 @@ class PlayAllClips(wx.Dialog):
         # clips get skipped
 
         # Check to see if the video is NOT playing and NOT paused ...
-        if (not self.ControlObject.IsPlaying()) and (not self.ControlObject.IsPaused()):
-            # If it is neither playing nor paused, see if we have reached the end of the list 
+
+        # On the Mac, sometimes IsPaused() returns True even when it shouldn't.  Apparently the QuickTime Player on the Mac
+        # has some difficulty distinguishing between Paused and Stopped.  Therefore, part of the test to see if we're Paused
+        # has to include the label on the Pause button, which only changes when we mean to Pause.
+
+        if (not self.ControlObject.IsLoading()) and \
+           (not self.ControlObject.IsPlaying()) and \
+           (not self.ControlObject.IsPaused() or self.btnPlayPause.GetLabel() != _("Play")):
+            # If it is neither playing nor paused, see if we have reached the end of the list
+
             if self.clipNowPlaying >= len(self.clipList):
                 # If so, close the PlayAllClips window.
                 self.OnClose(event)
@@ -301,7 +313,6 @@ class PlayAllClips(wx.Dialog):
                     self.ControlObject.Play()
                     # Increment the pointer to the next clip
                     self.clipNowPlaying = self.clipNowPlaying + 1
-                    
                     self.HasStartedPlaying = False
                 # If a Clip cannot be found ...  (This should only happen in MU if a clip is deleted by another user.)
                 except TransanaExceptions.RecordNotFoundError:
@@ -326,13 +337,19 @@ class PlayAllClips(wx.Dialog):
     def OnPlayPause(self, event):
         """ If playing, then pause.  If paused, then play. """
         if self.btnPlayPause.GetLabel() == _("Pause"):
+            # Stop the time when we pause.  This is necessary to prevent clips from sometimes being dropped when we re-start.
+            self.playAllClipsTimer.Stop()
+            # Pause the video
             self.ControlObject.Pause()
             # Change the label on the button
             self.btnPlayPause.SetLabel(_("Play"))
         else:
+            # Play the video
             self.ControlObject.Play()
             # Change the label on the button
             self.btnPlayPause.SetLabel(_("Pause"))
+            # Restart the timer.
+            wx.CallAfter(self.playAllClipsTimer.Start, 500)
 
     def OnMove(self, event):
         """ Detect attempts to move the Play All Windows dialog, and block it if appropriate. """

@@ -617,12 +617,6 @@ class TranscriptEditor(RichTextEditCtrl):
         # NOTE:  Removed because this was preventing the first segment of a transcript selection from being
         #        highlighted during transcript selection playback.
         
-        # If timecode position hasn't changed and a selection is highlighted rather than a cursor being displayed,
-        # we don't need to change the current selection.
-#        if (closest_time == self.current_timecode) and (start != end):
-            # Do nothing if the closest timecode hasn't changed
-#            return False
-      
         self.current_timecode = closest_time
 
         # Update cursor position and select text up until the next timecode
@@ -664,7 +658,7 @@ class TranscriptEditor(RichTextEditCtrl):
             if pos >= 0:
                 # If using Unicode, we need to move one position to the right.
                 if 'unicode' in wx.PlatformInfo:
-                    pos += 2                          # DKW ****************************
+                    pos += 2
                 self.GotoPos(pos)
 
     def select_find(self, text):
@@ -686,55 +680,16 @@ class TranscriptEditor(RichTextEditCtrl):
         except:
             pass
         
-        curpos = self.GetCurrentPos()
+        # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
+        # can happen.
+        self.CheckTimeCodesAtSelectionBoundaries()
+
+        curpos = self.GetSelectionStart()  # self.GetCurrentPos()
         endpos = self.FindText(curpos + 1, self.GetLength()-1, text)
 
         # If not found, select until the end of the document
         if endpos ==  -1:
             endpos = self.GetLength()-1
-
-        # The selection process should not include the initial time code.
-        # Set a flag to indicate whether we are in the midst of a time code indicator, which is intially false
-        inTimeCode = False
-        # Set a flag to signal that we are not yet done, which initially is true
-        contin = True
-        # While we're either not done or we're inside a time code ...
-        while contin or inTimeCode:
-            # Assume that we are finished unless it is proven otherwise
-            contin = False
-            if 'unicode' in wx.PlatformInfo:
-                if 'wxMac' in wx.PlatformInfo:
-                    evaluation = ((self.GetCharAt(curpos) == 194) and (self.GetCharAt(curpos + 1) == 167)) or \
-                                 ((self.GetCharAt(curpos - 1) == 194) and (self.GetCharAt(curpos) == 167))
-                else:
-                    evaluation = ((self.GetCharAt(curpos) == 194) and (self.GetCharAt(curpos + 1) == 164)) or \
-                                 ((self.GetCharAt(curpos - 1) == 194) and (self.GetCharAt(curpos) == 164))
-            else:
-                evaluation = (self.GetCharAt(curpos) == ord(TIMECODE_CHAR))
-            # If the current character is the Time Code itself ...
-            if evaluation:
-                # ... move on to the next character ...
-                curpos += 1
-                # ... and indicate that we're not done yet.
-                contin = True
-            # if we are at the character signalling the start of a time code ...
-            elif self.GetCharAt(curpos) == ord('<'):
-                # ... move on to the next character ...
-                curpos += 1
-                # ... and indicate that we are within a time code
-                inTimeCode = True
-            # If we are at the character signalling the end of a time code ...
-            elif self.GetCharAt(curpos) == ord('>'):
-                # ... move on to the next character ...
-                curpos += 1
-                # ... and only if we are currently within the time code ...
-                if inTimeCode:
-                    # ... indicate that the time code is over.
-                    inTimeCode = False
-            # If we're inside a time code but not at the end of it ...
-            elif inTimeCode:
-                # ... move on to the next character.
-                curpos += 1
 
         # When searching for time codes for positioning of the selection, we end up selecting
         # the time code symbol and "<" that starts the time code.  We don't want to do that.
@@ -762,9 +717,8 @@ class TranscriptEditor(RichTextEditCtrl):
             if DEBUG:
                 print "TranscriptEditor.select_find():  TimeCode List:", tcList
                 
-            # If any of these characters in where the cursor is or is right in front of the cursor, move the
-            # cursor back 1 position
-            while (endpos > 1) and ((self.GetCharAt(endpos-1) in tcList) or (self.GetCharAt(endpos) in tcList)):
+            # If any of these characters is just to the left of where the end position is, move the end position to the left by 1 position
+            while (endpos > 1) and (self.GetCharAt(endpos-1) in tcList):
                 endpos -= 1
 
                 if DEBUG:
@@ -780,7 +734,6 @@ class TranscriptEditor(RichTextEditCtrl):
 
         # NOTE:  Calling SetSelection only caused the loss of the highlight for Locate Clip in Episode.
         # Calling SetCurrentPos() and SetAnchor maintains the highlight correctly.
-        #self.SetSelection(curpos, endpos)
         self.SetCurrentPos(curpos)
         self.SetAnchor(endpos)
 
@@ -821,7 +774,6 @@ class TranscriptEditor(RichTextEditCtrl):
                   startline, endline, self.GetFirstVisibleLine(), \
                   self.GetFirstVisibleLine() + self.LinesOnScreen()
         
-
     def spell_check(self):
         """Interactively spell-check document."""
     
@@ -1219,6 +1171,11 @@ class TranscriptEditor(RichTextEditCtrl):
                                 if (nextTimeCode == -1) or \
                                    (nextTimeCode >= self.timecodes[len(self.timecodes)-1]):
                                     endIndex = len(self.timecodes)
+                                # If we get here, I don't know what's going wrong.  Let's just assume we've only got one time
+                                # code highlighted.  This is probably a BAD assumption, but we shouldn't get here unless there's
+                                # a rather serious problem anyway.
+                                else:
+                                    endIndex = startIndex + 1
                             # ... then we remove items from the list that fall between them.
                             self.timecodes = self.timecodes[:startIndex + 1] + self.timecodes[endIndex:]
                             # Now we reset the Text Cursor
@@ -1363,6 +1320,11 @@ class TranscriptEditor(RichTextEditCtrl):
                         # Now we need to destroy the dialog box
                         dlg.Destroy()
 
+            elif c == wx.WXK_F12:
+                # F12 is Quick Save
+                self.save_transcript()
+                blockSkip = True
+
         if not(blockSkip):
             event.Skip()
             
@@ -1401,12 +1363,8 @@ class TranscriptEditor(RichTextEditCtrl):
         if not(blockSkip):
             event.Skip()
 
-    def OnStartDrag(self, event):
-        """Called on the initiation of a Drag within the Transcript."""
-        if not self.TranscriptObj:
-            # No transcript loaded, abort
-            return
-
+    def CheckTimeCodesAtSelectionBoundaries(self):
+        """ Check the start and end of a selection and make sure neither is in the middle of a time code """
         # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
         # can happen.  Preventing this is the sole function of this section of this method.
 
@@ -1415,6 +1373,9 @@ class TranscriptEditor(RichTextEditCtrl):
         #          2.  TranscriptEditor.OnStartDrag
         #          3.  RichTextEditCtrl.__ProcessDocAsRTF
         #        I just added the third, as the first two weren't adequate under Unicode
+        #   *** Better look at select_find() too!!
+        #        DKW, 5/8/2006.  I'm going with the theory that I don't need to evaluate in RichTextEditCtrl any more,
+        #                        since I think I just corrected the Unicode problem here.
 
         # First, see if we have a click Position or a click-drag Selection.
         if (self.GetSelectionStart() != self.GetSelectionEnd()):
@@ -1430,15 +1391,17 @@ class TranscriptEditor(RichTextEditCtrl):
             if 'unicode' in wx.PlatformInfo:
                 if 'wxMac' in wx.PlatformInfo:
                     evaluation = (self.GetCharAt(selStart - 1) == 194) and (self.GetCharAt(selStart) == 167)
-                    evaluation2 = (self.GetCharAt(selStart) == 194) and (self.GetCharAt(selStart + 1) == 167)
+                    evaluation2 = (self.GetCharAt(selStart - 2) == 194) and (self.GetCharAt(selStart - 1) == 167)
+                    evaluation = evaluation or evaluation2
                 else:
                     evaluation = (self.GetCharAt(selStart - 1) == 194) and (self.GetCharAt(selStart) == 164)
-                    evaluation2 = (self.GetCharAt(selStart) == 194) and (self.GetCharAt(selStart + 1) == 164)
+                    evaluation2 = (self.GetCharAt(selStart - 2) == 194) and (self.GetCharAt(selStart - 1) == 164)
+                    evaluation = evaluation or evaluation2
+                        
             else:
                 evaluation = (self.GetCharAt(selStart - 1) == ord(TIMECODE_CHAR)) and (chr(self.GetCharAt(selStart)) == '<')
-                evaluation2 = self.GetCharAt(selStart) == ord(TIMECODE_CHAR)
                 
-            if (selStart > 0) and (evaluation or evaluation2):
+            if (selStart > 0) and evaluation:
                 # If so, we have a change
                 selChanged = True
                 # Let's find the position of the end of the Time Code
@@ -1452,14 +1415,18 @@ class TranscriptEditor(RichTextEditCtrl):
             # Let's see if the end of the selection falls between a Time Code and its data
             if 'unicode' in wx.PlatformInfo:
                 if 'wxMac' in wx.PlatformInfo:
-                    evaluation = ((self.GetCharAt(selEnd - 1) == 194) and (self.GetCharAt(selEnd) == 167) and (chr(self.GetCharAt(selEnd + 1)) == '<')) or \
-                                 ((self.GetCharAt(selEnd) == 194) and (self.GetCharAt(selEnd + 1) == 167) and (chr(self.GetCharAt(selEnd + 2)) == '<'))
+                    evaluation = (self.GetCharAt(selEnd - 1) == 194) and (self.GetCharAt(selEnd) == 167)
+                    evaluation2 = (self.GetCharAt(selEnd) == 194) and (self.GetCharAt(selEnd + 1) == 167)
+                    evaluation3 = (self.GetCharAt(selEnd - 2) == 194) and (self.GetCharAt(selEnd - 1) == 167)
+                    evaluation = evaluation or evaluation2 or evaluation3
                 else:
-                    evaluation = ((self.GetCharAt(selEnd - 1) == 194) and (self.GetCharAt(selEnd) == 164) and (chr(self.GetCharAt(selEnd + 1)) == '<')) or \
-                                 ((self.GetCharAt(selEnd) == 194) and (self.GetCharAt(selEnd + 1) == 164) and (chr(self.GetCharAt(selEnd + 2)) == '<'))
+                    evaluation = (self.GetCharAt(selEnd - 1) == 194) and (self.GetCharAt(selEnd) == 164)
+                    evaluation2 = (self.GetCharAt(selEnd) == 194) and (self.GetCharAt(selEnd + 1) == 164)
+                    evaluation3 = (self.GetCharAt(selEnd - 2) == 194) and (self.GetCharAt(selEnd - 1) == 164)
+                    evaluation = evaluation or evaluation2 or evaluation3
             else:
                 evaluation = (self.GetCharAt(selEnd - 1) == ord(TIMECODE_CHAR)) and (chr(self.GetCharAt(selEnd)) == '<')
-                
+
             if (selEnd > 0) and ((evaluation) or ((chr(self.GetCharAt(selEnd - 1)) == '>') and (self.STYLE_HIDDEN == self.GetStyleAt(selEnd - 1)))):
                 # If so, we have a change
                 selChanged = True
@@ -1472,12 +1439,57 @@ class TranscriptEditor(RichTextEditCtrl):
                     selEnd -= 1
 
                     if DEBUG:
-                        print "TranscriptEditor.OnStartDrag end shift ... "
-                    
+                        print "TranscriptEditor.CheckTimeCodesAtSelectionBoundaries end shift ... "
 
-        self.selection = (selStart, selEnd)
-        self.SetSelectionAfter()
+        else:
+            selChanged = False
+            # We have a click Position.  We just need to check the current position.
+            curPos = self.GetCurrentPos()
+            # Let's see if we are between a Time code and its Data
+            if 'unicode' in wx.PlatformInfo:
 
+                if DEBUG:
+                    print "TranscriptEditor.CheckTimeCodesAtSelectionBoundaries():"
+                    print curPos, (curPos > 0)
+                    print self.GetCharAt(curPos - 1), (self.GetCharAt(curPos - 1) == 194)
+                    print self.GetCharAt(curPos), (self.GetCharAt(curPos) == 164)
+                    print chr(self.GetCharAt(curPos + 1)), (chr(self.GetCharAt(curPos + 1)) == '<')
+
+                if 'wxMac' in wx.PlatformInfo:
+                    evaluation = (self.GetCharAt(curPos - 1) == 194) and (self.GetCharAt(curPos) == 167)
+                    evaluation2 = (self.GetCharAt(curPos - 2) == 194) and (self.GetCharAt(curPos - 1) == 167)
+                    evaluation = evaluation or evaluation2
+                else:
+                    evaluation = (self.GetCharAt(curPos - 1) == 194) and (self.GetCharAt(curPos) == 164)
+                    evaluation2 = (self.GetCharAt(curPos - 2) == 194) and (self.GetCharAt(curPos - 1) == 164)
+                    evaluation = evaluation or evaluation2
+
+            else:
+                evaluation = (curPos > 0) and (self.GetCharAt(curPos - 1) == ord(TIMECODE_CHAR)) and (chr(self.GetCharAt(curPos)) == '<') 
+
+            if evaluation:
+                # Let's find the position of the end of the Time Code
+                while chr(self.GetCharAt(curPos - 1)) != '>':
+                    curPos += 1
+
+                self.GotoPos(curPos)
+
+                self.SetAnchor(curPos)
+                self.SetCurrentPos(curPos)
+
+        if selChanged:
+            self.SetSelection(selStart, selEnd)
+
+    def OnStartDrag(self, event):
+        """Called on the initiation of a Drag within the Transcript."""
+        if not self.TranscriptObj:
+            # No transcript loaded, abort
+            return
+
+        # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
+        # can happen.  Preventing this is the sole function of this section of this method.
+        self.CheckTimeCodesAtSelectionBoundaries()
+        
         (start_time, end_time) = self.get_selected_time_range()
 
         if end_time == -1:
@@ -1530,10 +1542,6 @@ class TranscriptEditor(RichTextEditCtrl):
 
     def PositionAfter(self):
         self.ScrollToLine(self.FVL)
-
-        if DEBUG:
-            print "TranscriptEditor.ScrollToLine(%s) 4" % self.FVL
-
         self.GotoPos(self.pos)
 
     def SetSelectionAfter(self):
@@ -1541,142 +1549,19 @@ class TranscriptEditor(RichTextEditCtrl):
 
     def OnLeftUp(self, event):
         """ Left Mouse Button Up event """
+
+        # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
+        # can happen.
+        self.CheckTimeCodesAtSelectionBoundaries()
+
         # Save the original Cursor Position / Selection so it can be restored later.  Otherwise, we occasionally can't
         # make a new selection.
         self.cursorPosition = (self.GetCurrentPos(), self.GetSelection())
+
         # Note the current Position of if PositionAfter needs to be called
         self.pos = self.GetCurrentPos()
         # Remember the first visible line
         self.FVL = self.GetFirstVisibleLine()
-        
-        # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
-        # can happen.
-
-        # NOTE:  This sort of code seems to appear in at least 3 spots.
-        #          1.  TranscriptEditor.OnLeftUp
-        #          2.  TranscriptEditor.OnStartDrag
-        #          3.  RichTextEditCtrl.__ProcessDocAsRTF
-        #        I just added the third, as the first two weren't adequate under Unicode
-
-        # First, see if we have a click Position or a click-drag Selection.
-        if (self.GetSelectionStart() == self.GetSelectionEnd()):
-            # We have a click Position.  We just need to check the current position.
-            curPos = self.GetCurrentPos()
-            # Let's see if we are between a Time code and its Data
-            if 'unicode' in wx.PlatformInfo:
-
-                if DEBUG:
-                    print "TranscriptEditor.OnLeftUp():"
-                    print curPos, (curPos > 0)
-                    print self.GetCharAt(curPos - 1), (self.GetCharAt(curPos - 1) == 194)
-                    print self.GetCharAt(curPos), (self.GetCharAt(curPos) == 164)
-                    print chr(self.GetCharAt(curPos + 1)), (chr(self.GetCharAt(curPos + 1)) == '<')
-
-                if 'wxMac' in wx.PlatformInfo:
-                    evaluation = (curPos > 0) and \
-                                 (self.GetCharAt(curPos - 1) == 194) and \
-                                 (self.GetCharAt(curPos) == 167) and \
-                                 (chr(self.GetCharAt(curPos + 1)) == '<')
-                else:
-                    evaluation = (curPos > 0) and \
-                                 (self.GetCharAt(curPos - 1) == 194) and \
-                                 (self.GetCharAt(curPos) == 164) and \
-                                 (chr(self.GetCharAt(curPos + 1)) == '<')
-
-
-                if DEBUG:
-                    print "evaluation =", evaluation
-                    print
-
-            else:
-                evaluation = (curPos > 0) and (self.GetCharAt(curPos - 1) == ord(TIMECODE_CHAR)) and (chr(self.GetCharAt(curPos)) == '<') 
-            if evaluation:
-                # Let's find the position of the end of the Time Code
-                while chr(self.GetCharAt(curPos - 1)) != '>':
-                    curPos += 1
-
-                # THE FOLLOWING DON'T WORK!
-                # self.GotoPos(curPos) # Cursor right fails once, and backspace doesn't get trapped properly.
-                # self.SetAnchor(curPos) and self.SetCurrentPos(curPos)
-                # We apparently can't change the Anchor here, so we need to use a wx.CallAfter method to
-                # position the cursor later.  I'm not sure WHY, but it works.
-
-                # use CallAfter to set the cursor to the designated position
-                # Since it's changed, save the updated Cursor Position / Selection so it can be restored later.  
-                # Otherwise, we occasionally can't make a new selection.
-                self.cursorPosition = (curPos, (curPos, curPos))
-                # Note the current Position of if PositionAfter needs to be called
-                self.pos = curPos
-                wx.CallAfter(self.PositionAfter)
-        else:
-            # We have a click-drag Selection.  We need to check the start and the end points.
-            selStart = self.GetSelectionStart()
-            selEnd = self.GetSelectionEnd()
-
-            # Let's see if any change is made.
-            selChanged = False
-            # Let's see if the start of the selection falls between a Time Code and its data
-            if 'unicode' in wx.PlatformInfo:
-
-                if DEBUG:
-                    print "TranscriptEditor.OnLeftUp():"
-                    print self.GetCharAt(selStart - 1), (self.GetCharAt(selStart - 1) == 194)
-                    print self.GetCharAt(selStart), (self.GetCharAt(selStart) == 164)
-
-                if 'wxMac' in wx.PlatformInfo:
-                    evaluation = (self.GetCharAt(selStart - 1) == 194) and (self.GetCharAt(selStart) == 167)
-                else:
-                    evaluation = (self.GetCharAt(selStart - 1) == 194) and (self.GetCharAt(selStart) == 164)
-
-                if DEBUG:
-                    print "evaluation =", evaluation
-                    print
-                    
-            else:
-                evaluation = (self.GetCharAt(selStart - 1) == ord(TIMECODE_CHAR)) and (chr(self.GetCharAt(selStart)) == '<')
-            if (selStart > 0) and evaluation:
-                # If so, we have a change
-                selChanged = True
-                # Let's find the position of the end of the Time Code
-                while chr(self.GetCharAt(selStart - 1)) != '>':
-
-                    if DEBUG:
-                        print "shifting (2) ...", chr(self.GetCharAt(selStart + 1)), selStart + 1
-                        
-                    selStart += 1
-            # Let's see if the end of the selection falls between a Time Code and its data
-            if 'unicode' in wx.PlatformInfo:
-                if 'wxMac' in wx.PlatformInfo:
-                    evaluation = (self.GetCharAt(selEnd - 1) == 194) and (self.GetCharAt(selEnd) == 167)
-                else:
-                    evaluation = (self.GetCharAt(selEnd - 1) == 194) and (self.GetCharAt(selEnd) == 164)
-            else:
-                evaluation = (self.GetCharAt(selEnd - 1) == ord(TIMECODE_CHAR))
-            if (selEnd > 0) and evaluation and (chr(self.GetCharAt(selEnd)) == '<'):
-                # If so, we have a change
-                selChanged = True
-                # Let's find the position of the end of the Time Code
-                while chr(self.GetCharAt(selEnd - 1)) != '>':
-                    selEnd += 1
-
-            # self.SetSelection(selStart, selEnd) does not work if selEnd is between the timecode and the data.  We must use
-            # CallAfter to position this correctly.  I'm not sure WHY, but it works.
-            # We only need to change the Selection if one of the ends was between a Time Code and its data.
-            if selChanged:
-                # Remember the new Selection points
-                self.selection = (selStart, selEnd)
-                # Use CallAfter to set the Selection to the designated positions
-                wx.CallAfter(self.SetSelectionAfter)
-            else:
-                # The transcript has a nasty tendency to display a selection from the point clicked to the
-                # following time code marker in read-only mode if the following code is removed.
-                if self.get_read_only():
-                    # Remember the new Selection points
-                    self.selection = (selStart, selEnd)
-                    wx.CallAfter(self.SetSelectionAfter)
-
-        # Let's see if we can trigger the CallAfter and PositionAfter calls with this. 
-        # wx.Yield()
 
         # Get the Start and End times from the time codes on either side of the cursor
         (segmentStartTime, segmentEndTime) = self.get_selected_time_range()
@@ -1705,10 +1590,6 @@ class TranscriptEditor(RichTextEditCtrl):
                 wx.CallAfter(self.PositionAfter)
             else:
                 self.ScrollToLine(self.FVL)
-
-                if DEBUG:
-                    print "TranscriptEditor.ScrollToLine(%s) 5" % self.FVL
-
                 self.SetSelection(self.cursorPosition[1][0], self.cursorPosition[1][1])
 
         # Okay, now let the RichTextEditCtrl have the LeftUp event
@@ -1808,62 +1689,29 @@ class TranscriptEditor(RichTextEditCtrl):
         # POSITION rather than the VALUE of the "timecodes" list, as we need to change that
         # list as we go too!
         for loop in range(0, len(self.timecodes)):
-            self.cursor_find('%s' % TIMECODE_CHAR)
-            self.select_find('%s>' % self.timecodes[loop])
-
-            # For some reason, the time code character doesn't get selected at the beginning of the document.
-            # Therefore, we need to check for it and exclude it if it is not present, include it if it is.
-
-            if DEBUG:
-                str = self.GetSelectedText()
-                str = "TranscriptEditor.AdjustIndexes(): %s" % (str)
-                tmpDlg = wx.MessageDialog(self.parent, str)
-                tmpDlg.ShowModal()
-                tmpDlg.Destroy()
-
-            # The old method didn't work with Unicode.  Some weird things were happening both
-            # with show/hide and with cross-platform compatibility.  Therefore, let's just
-            # replace the number portion of the time code and leave the rest untouched.
-
-            # First, get the start and end of the current selection, which should be the time code
-            # and time code data only.
-            (start, end) = self.GetSelection()
+            # Find the time code
+            self.cursor_find("%s<%d>" % (TIMECODE_CHAR, self.timecodes[loop]))
+            # Remember the starting position
+            start = self.GetCurrentPos()
             # Now remove characters from the front until we get to the "<", chr(60)
-            while (self.GetCharAt(start - 1) != 60) and (start < end - 2):
+            while (self.GetCharAt(start - 1) != 60):
                 start += 1
-            # Now remove the ">" from the end of the selection
-            end -= 1
-            # Now select the smaller selection
-            self.SetSelection(start, end)
-            # Finally, replace the old time code data with the new time code data
-            self.ReplaceSelection("")
-            self.InsertHiddenText("%d" % (self.timecodes[loop] + int(adjustmentAmount* 1000)))
+            # We need to determine the end position the hard way.  select_find() was giving the wrong
+            # answer because of the CheckTimeCodesAtSelectionBoundaries() call.
+            # So start at the beginning of the time code ...
+            end = start
+            # ... and keep moving until we find the first ">" character, which closes the time code.
+            while self.GetCharAt(end) != ord('>'):
+                end += 1
 
-            if DEBUG:
-                str = self.GetSelectedText()
-                tmpDlg = wx.MessageDialog(self.parent, str)
-                tmpDlg.ShowModal()
-                tmpDlg.Destroy()
-            
-#            if self.GetSelectedText()[:len(TIMECODE_CHAR)] == TIMECODE_CHAR:
-#                self.ReplaceSelection('')
-#                if codes_vis:
-#                    tempStyle = self.style
-#                    self.style = self.STYLE_TIMECODE
-#                    self.InsertStyledText("%s" % TIMECODE_CHAR)
-#                    self.InsertHiddenText("<%d>" % (self.timecodes[loop] + int(adjustmentAmount* 1000)))
-#                    self.style = tempStyle
-#                else:
-#                    self.InsertHiddenText("%s<%d>" % (TIMECODE_CHAR, self.timecodes[loop] + int(adjustmentAmount* 1000)))
-#            else:
-#                self.ReplaceSelection('')
-#                if codes_vis:
-#                    tempStyle = self.style
-#                    self.style = self.STYLE_TIMECODE
-#                    self.InsertHiddenText("<%d>" % (self.timecodes[loop] + int(adjustmentAmount * 1000)))
-#                    self.style = tempStyle
-#                else:
-#                    self.InsertHiddenText("<%d>" % (self.timecodes[loop] + int(adjustmentAmount* 1000)))
+            # Now select the smaller selection, which should just be the Time Code Data
+            self.SetSelection(start, end)
+            # Finally, replace the old time code data with the new time code data.
+            # First delete the old data
+            self.ReplaceSelection("")
+            # Then insert the new data as hidden text (which is why we can't just plug it in above.)
+            self.InsertHiddenText("%d" % (self.timecodes[loop] + int(adjustmentAmount* 1000)))
+            # Adjust the local list of Transcript time codes too!
             self.timecodes[loop] = self.timecodes[loop] + int(adjustmentAmount * 1000)
        
 
@@ -1923,36 +1771,63 @@ class TranscriptEditorDropTarget(wx.PyDropTarget):
     # do something with it.
     def OnData(self, x, y, d):
         # copy the data from the drag source to our data object
-        if self.GetData():
+        if (self.editor.TranscriptObj != None) and self.GetData():
             # Extract actual data passed by DataTreeDropSource
             sourceData = cPickle.loads(self.data.GetData())
-            # Now you can do sourceData.recNum, sourceData.text,
-            # sourceData.nodetype should be 'KeywordNode'
-            # Determine where the Transcript was loaded from
-            if self.editor.TranscriptObj:
-                if self.editor.TranscriptObj.clip_num != 0:
-                    targetType = 'Clip'
-                    targetRecNum = self.editor.TranscriptObj.clip_num
-                    clipObj = Clip.Clip(targetRecNum)
-                    targetName = clipObj.id
+
+            # See if we're creating a QuickClip
+            if TransanaGlobal.configData.quickClipMode:
+                (startTime, endTime) = self.editor.get_selected_time_range()
+                # Determine whether we're creating a Clip from an Episode Transcript
+                if self.editor.TranscriptObj.clip_num == 0:
+                    transcriptNum = self.editor.TranscriptObj.number
+                    episodeNum = self.editor.TranscriptObj.episode_num
                 else:
-                    targetType = 'Episode'
-                    targetRecNum = self.editor.TranscriptObj.episode_num
-                    epObj = Episode.Episode(targetRecNum)
-                    targetName = epObj.id
-                DragAndDropObjects.DropKeyword(self.editor, sourceData, \
-                    targetType, targetName, targetRecNum, 0)
+                    tempClip = Clip.Clip(self.editor.TranscriptObj.clip_num)
+                    transcriptNum = tempClip.transcript_num
+                    episodeNum = tempClip.episode_num
+                    if startTime == 0:
+                        startTime = tempClip.clip_start
+                    if endTime <= 0:
+                        endTime = tempClip.clip_stop
+                # If the text selection is blank, we need to send a blank rather than RTF for nothing
+                (startPos, endPos) = self.editor.GetSelection()
+                if startPos == endPos:
+                    text = ''
+                else:
+                    text = self.editor.GetRTFBuffer(select_only=1)
+
+                clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text)
+                # I'm sure this is horrible form, but I don't know how else to do this from here!
+                dbTree = self.editor.parent.ControlObject.DataWindow.DBTab.tree
+                DragAndDropObjects.CreateQuickClip(clipData, sourceData.parent, sourceData.text, dbTree)
             else:
-                # No transcript Object loaded, do nothing
-                pass
+            
+                # Now you can do sourceData.recNum, sourceData.text,
+                # sourceData.nodetype should be 'KeywordNode'
+                # Determine where the Transcript was loaded from
+                if self.editor.TranscriptObj:
+                    if self.editor.TranscriptObj.clip_num != 0:
+                        targetType = 'Clip'
+                        targetRecNum = self.editor.TranscriptObj.clip_num
+                        clipObj = Clip.Clip(targetRecNum)
+                        targetName = clipObj.id
+                    else:
+                        targetType = 'Episode'
+                        targetRecNum = self.editor.TranscriptObj.episode_num
+                        epObj = Episode.Episode(targetRecNum)
+                        targetName = epObj.id
+                    DragAndDropObjects.DropKeyword(self.editor, sourceData, \
+                        targetType, targetName, targetRecNum, 0)
+                else:
+                    # No transcript Object loaded, do nothing
+                    pass
         return d  # what is returned signals the source what to do
                   # with the original data (move, copy, etc.)  In this
                   # case we just return the suggested value given to us.
 
 
-# TODO: Be a Drag/Drop source for text and for creating Clips.
 # To create Clips, you need to populate and send a ClipDragDropData object.
-
 class TranscriptDropSource(wx.DropSource):
     """This is a custom DropSource object to drag text from the Transcript
     onto the Data Tree tab."""

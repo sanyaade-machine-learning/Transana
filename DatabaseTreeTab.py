@@ -89,13 +89,15 @@ class DatabaseTreeTab(wx.Panel):
         # For Copy and Paste to work on the Mac, we need to open the Clipboard once on application startup
         # rather than opening and closing it repeatedly
         wx.TheClipboard.Open()
+        # Clear the Clipboard.  (This prevents an odd Clipboard error message on the Mac.)
+        DragAndDropObjects.ClearClipboard()
 
         self.Layout()
         self.SetAutoLayout(True)
         
 
     def Register(self, ControlObject=None):
-        """ Register a ControlObject  for the DatabaseTreeTab to interact with. """
+        """ Register a ControlObject  for the DataaseTreeTab to interact with. """
         self.ControlObject=ControlObject
 
 
@@ -361,6 +363,15 @@ class DatabaseTreeTab(wx.Panel):
                                 # Send the Rename Node message
                                 if TransanaGlobal.chatWindow != None:
                                     TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            msg = 'Episode %d' % episode.number
+                            if DEBUG:
+                                print 'Message to send = "UKL %s"' % msg
+                            if TransanaGlobal.chatWindow != None:
+                                # Send the "Update Keyword List" message
+                                TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
 
                         # If we do all this, we don't need to continue any more.
                         contin = False
@@ -889,6 +900,15 @@ class DatabaseTreeTab(wx.Panel):
                                 if TransanaGlobal.chatWindow != None:
                                     TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
 
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            msg = 'Clip %d' % clip.number
+                            if DEBUG:
+                                print 'Message to send = "UKL %s"' % msg
+                            if TransanaGlobal.chatWindow != None:
+                                # Send the "Update Keyword List" message
+                                TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+
                         # If we do all this, we don't need to continue any more.
                         contin = False
                     # If the user pressed Cancel ...
@@ -1310,18 +1330,7 @@ class DatabaseTreeTab(wx.Panel):
 
     def handle_locked_record(self, e, rtype, id):
         """Handle the RecordLockedError exception."""
-        msg = _('You cannot proceed because you cannot obtain a lock on %s "%s"' + \
-                '.\nThe record is currently locked by %s.\nPlease try again later.')
-        if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            msg = unicode(msg, 'utf8')
-            if isinstance(rtype, str):
-                rtype = unicode(rtype, 'utf8')
-            if isinstance(id, str):
-                id = unicode(id, 'utf8')
-        dlg = Dialogs.ErrorDialog(self.parent, msg % (rtype, id, e.user))
-        dlg.ShowModal()
-        dlg.Destroy()
+        ReportRecordLockedException(rtype, id, e)
 
 
 class MenuIDError(exceptions.Exception):
@@ -1427,8 +1436,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
     def refresh_tree(self, evt=None):
         """Load information from database and re-create the tree."""
         self.DeleteAllItems()
-        self.transcripts = []
-        self.notes = []
         self.create_root_node()
         self.create_series_node()
         self.create_collections_node()
@@ -1578,6 +1585,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
 
     def create_root_node(self):
+        """ Build the entire Database Tree """
         # Include the Database Name as part of the Database Root
         prompt = _('Database: %s')
         # Note:  French was having trouble with UTF-8 prompts without the following line.
@@ -1586,205 +1594,265 @@ class _DBTreeCtrl(wx.TreeCtrl):
         if ('unicode' in wx.PlatformInfo) and (type(prompt).__name__ == 'str'):
             prompt = unicode(prompt, 'utf8')  # TransanaGlobal.encoding)
         prompt = prompt % TransanaGlobal.configData.database
+        # Add the Tree's root node
         self.root = self.AddRoot(prompt)
+        # Add the node's image and node data
         self.set_image(self.root, "db")
         nodedata = _NodeData(nodetype='Root')                    # Identify this as the Root node
         self.SetPyData(self.root, nodedata)                      # Associate this data with the node
       
-    def add_note_nodes(self, note_ids, item, **parent_num):
-        if len(note_ids) > 0:
-            for n in note_ids:
-                noteitem = self.AppendItem(item, n)
-                self.set_image(noteitem, "Note16")
-                self.notes.append(noteitem)
-                note = Note.Note(n, **parent_num)
-                nodedata = _NodeData(nodetype='NoteNode', recNum=note.number)  # Identify this as a Note node
-                self.SetPyData(noteitem, nodedata)                          # Associate this data with the node
-                del note
-
     def create_series_node(self):
-        self.series = []
-        self.episodes = []
-        # The 'Series' node itself is always item 0 in the series node list
+        """ Create the Series node and populate it with all appropriate data """
+        # We need to keep track of the nodes so we can add sub-nodes quickly.  A dictionary of dictionaries will do this well. 
+        mapDict = {'Series' : {}, 'Episode' : {}, 'Transcript' : {}}                 
+        # Add the root 'Series' node
         root_item = self.AppendItem(self.root, _("Series"))
+        # Add the node's image and node data
         nodedata = _NodeData(nodetype='SeriesRootNode')          # Idenfify this as the Series Root node
         self.SetPyData(root_item, nodedata)                      # Associate this data with the node
         self.set_image(root_item, "SeriesRoot16")
-        self.series.append(root_item)
 
+        # The following code is RADICALLY faster than the original version, like 1000% faster.  It accomplishes this by
+        # minimizing the number of database calls and tracking the tree nodes with a map dictionary so that we can
+        # easily locate the node we want to add a child node to.
+
+        # Populate the tree with all Series records
         for (seriesNo, seriesID) in DBInterface.list_of_series():
-            # Add children of this series to the series node list
-            item = self.AppendItem(self.series[0], seriesID)
+            # Create the tree node
+            item = self.AppendItem(root_item, seriesID)
+            # Add the node's image and node data
             nodedata = _NodeData(nodetype='SeriesNode', recNum=seriesNo)          # Identify this as a Series node
             self.SetPyData(item, nodedata)                       # Associate this data with the node
             self.set_image(item, "Series16")
-            self.series.append(item)
-           
-            for (episodeNo, episodeID, episodeSeriesNo) in DBInterface.list_of_episodes_for_series(seriesID):
-                epitem = self.AppendItem(self.series[-1], episodeID)
-                nodedata = _NodeData(nodetype='EpisodeNode', recNum=episodeNo, parent=episodeSeriesNo)     # Identify this as an Episode node
-                self.SetPyData(epitem, nodedata)                 # Associate this data with the node
-                self.set_image(epitem, "Episode16")
-                self.episodes.append(epitem)
-                for (transcriptNo, transcriptID, transcriptEpisodeNo) in DBInterface.list_transcripts(seriesID, episodeID):
-                    titem = self.AppendItem(epitem, transcriptID)
-                    nodedata = _NodeData(nodetype='TranscriptNode', recNum=transcriptNo, parent=transcriptEpisodeNo)  # Identify this as a Transcript node
-                    self.SetPyData(titem, nodedata)                  # Associate this data with the node
-                    self.set_image(titem, "Transcript16")
-                    self.transcripts.append(titem)
-                    # NOTE:  This call passes the Transcript NUMBER rather than strings.
-                    notes = DBInterface.list_of_notes(Transcript=transcriptNo)
-                    if len(notes) > 0:
-                        self.add_note_nodes(notes, titem, Transcript=transcriptNo)
+            # Add the new node to the map dictionary
+            mapDict['Series'][seriesNo] = item
 
-                notes = DBInterface.list_of_notes(Episode=episodeNo)
-                if len(notes) > 0:
-                    # ep = Episode.Episode(series=s, episode=e)
-                    self.add_note_nodes(notes, epitem, Episode=episodeNo)
-    
-            notes = DBInterface.list_of_notes(Series=seriesNo)
-            if len(notes) > 0:
-                # series = Series.Series(s)
-                self.add_note_nodes(notes, item, Series=seriesNo)
+        # Populate the tree with all Episode records
+        for (episodeNo, episodeID, episodeSeriesNo) in DBInterface.list_of_episodes():
+            # Find the correct Series node using the map dictionary
+            item = mapDict['Series'][episodeSeriesNo]
+            # Create the tree node
+            epitem = self.AppendItem(item, episodeID)
+            # Add the node's image and node data
+            nodedata = _NodeData(nodetype='EpisodeNode', recNum=episodeNo, parent=episodeSeriesNo)     # Identify this as an Episode node
+            self.SetPyData(epitem, nodedata)                 # Associate this data with the node
+            self.set_image(epitem, "Episode16")
+            # Add the new node to the map dictionary
+            mapDict['Episode'][episodeNo] = epitem
 
-    def create_collection_node(self, collNo, collID, parentCollNo, root_item):
-        """Recursively add a Collection node to a tree."""
-        # A certain bit of trickery is involved here to put Collection Contents in the order of
-        # Nested Collections, then Clips, then Notes.
-        # If the current collection has no children, simply put the new collection on the end.
-        if not(self.ItemHasChildren(root_item)):
-            # Add the Collection node
-            item = self.AppendItem(root_item, collID)
-        else:
-            # Otherwise, let's look through the children and find the proper place for the new Collection.
-            # first find the first child.
-            (child, cookieVal) = self.GetFirstChild(root_item)
-            # to insert, we need to track the POSITION of our nodes in the tree.
-            nodeCounter = 0
-            # As long as we have a valid child, we have not exceeded our alphabetic position, and we still are looking at
-            # Nested Collections, we keep looking through the children as we have not yet found the right place for the new node.
-            while child.IsOk() and (collID > self.GetItemText(child)) and (self.GetPyData(child).nodetype == 'CollectionNode'):
-                # Get the next child
-                (child, cookieVal) = self.GetNextChild(root_item, cookieVal)
-                # and increment our position counter
-                nodeCounter += 1
-            # If we did not reach the end of the list ...
-            if child.IsOk():
-                # ... insert the new item before the one that caused us to stop ...
-                item = self.InsertItemBefore(root_item, nodeCounter, collID)
-            else:
-                # ... otherwise, just stick it on the end.
-                item = self.AppendItem(root_item, collID)
-        # Identify this as a Collection node with the proper Node Data
-        nodedata = _NodeData(nodetype='CollectionNode', recNum=collNo, parent=parentCollNo)
-        # Associate this data with the node
-        self.SetPyData(item, nodedata)
-        # Select the proper image
-        self.set_image(item, "Collection16")
-        # Add this item to our Collections list
-        self.collections.append(item)
+        # Populate the tree with all Episode Transcripts
+        for (transcriptNo, transcriptID, transcriptEpisodeNo) in DBInterface.list_of_episode_transcripts():
+            # Find the correct Series node using the map dictionary
+            epitem = mapDict['Episode'][transcriptEpisodeNo]
+            # Create the tree node
+            titem = self.AppendItem(epitem, transcriptID)
+            # Add the node's image and node data
+            nodedata = _NodeData(nodetype='TranscriptNode', recNum=transcriptNo, parent=transcriptEpisodeNo)  # Identify this as a Transcript node
+            self.SetPyData(titem, nodedata)                  # Associate this data with the node
+            self.set_image(titem, "Transcript16")
+            # Add the new node to the map dictionary
+            mapDict['Transcript'][transcriptNo] = titem
 
-        # Add its Clips as children.
-        # Each Clip Record consist of Clip Number in the Clips Table, Clip ID, and parent Collection Number
-        for (clipNo, clipID, collNo) in DBInterface.list_of_clips_by_collection(collID, parentCollNo):
-            # Display the Clip ID
-            clip_item = self.AppendItem(item, clipID)
-            # Store both Node Type and Record Number in the Node Data.  
-            nodedata = _NodeData(nodetype='ClipNode', recNum=clipNo, parent=collNo)       # Identify this as a Clip node
-            self.SetPyData(clip_item, nodedata)                           # Associate this data with the node
-            self.set_image(clip_item, "Clip16")
-            self.clips.append(clip_item)
-            notes = DBInterface.list_of_notes(Clip=clipNo)
-            if len(notes) > 0:
-                # clip = Clip.Clip(c, name, root_rec)
-                self.add_note_nodes(notes, clip_item, Clip=clipNo)
-   
-        notes = DBInterface.list_of_notes(Collection=collNo)
-        if len(notes) > 0:
-            self.add_note_nodes(notes, item, Collection=collNo)
-
-        # Add its Collections as children.  This must be done LAST because the recursive call to
-        # create_collection_node causes problems for our "item" variable, which does not return from
-        # the recursive call in the correct state.
-        for (collNo, collID, parentCollNo) in DBInterface.list_of_collections(collNo):
-            self.create_collection_node(collNo, collID, parentCollNo, item)
+        # Now add all the Notes to the objects in the Series node of the database tree
+        for (noteNum, noteID, seriesNum, episodeNum, transcriptNum, collectNum, clipNum) in DBInterface.list_of_node_notes(SeriesNode=True):
+            # Find the correct Series, Episode, or Transcript node using the map dictionary
+            if seriesNum > 0:
+                item = mapDict['Series'][seriesNum]
+            elif episodeNum > 0:
+                item = mapDict['Episode'][episodeNum]
+            elif transcriptNum > 0:
+                item = mapDict['Transcript'][transcriptNum]
+            # Create the tree node
+            noteitem = self.AppendItem(item, noteID)
+            # Add the node's image and node data
+            nodedata = _NodeData(nodetype='NoteNode', recNum=noteNum)  # Identify this as a Note node
+            self.SetPyData(noteitem, nodedata)                  # Associate this data with the node
+            self.set_image(noteitem, "Note16")
 
     def create_collections_node(self):
-        self.collections = []
-        # The 'Collections' node itself is always item 0 in the node list
-        self.collections.append(self.AppendItem(self.root, _("Collections")))
+        """ Create the Collections node and populate it with all appropriate data """
+        # We need to keep track of the nodes so we can add sub-nodes quickly.  A dictionary of dictionaries will do this well. 
+        mapDict = {'Collection' : {}, 'Clip' : {}}
+        # Because of the way data is returned from the database, we will occasionally run into a nested collection
+        # whose parent has not yet been added to the tree.  We need a place to store these records for later processing
+        # after their parent has been added.
+        deferredItems = []
 
-        self.clips = []
-        root_item = self.collections[0]
+        # Add the root 'Collections' node
+        root_item = self.AppendItem(self.root, _("Collections"))
+        # Add the node's image and node data
         nodedata = _NodeData(nodetype='CollectionsRootNode')     # Identify this as the Collections Root node
         self.SetPyData(root_item, nodedata)                      # Associate this data with the node
         self.set_image(root_item, "Collection16")
-        
-        for (collNo, collID, parentCollNo) in DBInterface.list_of_collections(0):
-            self.create_collection_node(collNo, collID, parentCollNo, root_item)
+        # Because of the nature of nested collections, we should put the Collections Root into the map dictionary
+        # so that first-level nodes can find it as their parent
+        mapDict['Collection'][0] = root_item
+
+        # The following code is RADICALLY faster than the original version, like 1000% faster.  It accomplishes this by
+        # minimizing the number of database calls and tracking the tree nodes with a map dictionary so that we can
+        # easily locate the node we want to add a child node to.
+
+        # Populate the tree with all Collection records
+        for (collNo, collID, parentCollNo) in DBInterface.list_of_all_collections():
+            # First, let's see if the parent collection is in the map dictionary.
+            if mapDict['Collection'].has_key(parentCollNo):
+                # If so, we can identify the parent collection node (including the root node for parentless Collections)
+                # using the map dictionary
+                parentItem = mapDict['Collection'][parentCollNo]
+                # Create the tree node
+                item = self.AppendItem(parentItem, collID)
+                # Identify this as a Collection node with the proper Node Data
+                nodedata = _NodeData(nodetype='CollectionNode', recNum=collNo, parent=parentCollNo)
+                # Associate this data with the node
+                self.SetPyData(item, nodedata)
+                # Select the proper image
+                self.set_image(item, "Collection16")
+                # Add the new node to the map dictionary
+                mapDict['Collection'][collNo] = item
+
+                # We need to check the items waiting to be processed to see if we've just added the parent
+                # collection for any of the items in the list.  If the list is empty, though, we don't need to bother.
+                placementMade = (len(deferredItems) > 0)
+                # We do this in a while loop, as each item from the list that gets added to the tree could be the
+                # parent of other items in the list.
+                while placementMade:
+                    # Re-initialize the while loop variable, assuming that no items will be found
+                    placementMade = False
+                    # Now see if any of the deferred items can be added!  Loop through the list ...
+                    for index in range(len(deferredItems)):
+                        # Get the data from the list item
+                        (dCollNo, dCollID, dParentCollNo) = deferredItems[index]
+                        # See if the parent collection has now been added to the tree and to the map dictionary
+                        if mapDict['Collection'].has_key(dParentCollNo):
+                            # We can identify the parent node using the map dictionary
+                            parentItem = mapDict['Collection'][dParentCollNo]
+                            # Create the tree node
+                            item = self.AppendItem(parentItem, dCollID)
+                            # Identify this as a Collection node with the proper Node Data
+                            nodedata = _NodeData(nodetype='CollectionNode', recNum=dCollNo, parent=dParentCollNo)
+                            # Associate this data with the node
+                            self.SetPyData(item, nodedata)
+                            # Select the proper image
+                            self.set_image(item, "Collection16")
+                            # Add the new node to the map dictionary
+                            mapDict['Collection'][dCollNo] = item
+                            # We need to indicate to the while loop that we found an entry that could be the parent of other entries
+                            placementMade = True
+                            # We need to remove the item we just added to the tree from the deferred items list
+                            del deferredItems[index]
+            # If the Collection's parent is not yet in the database tree or the Map dictionary ...
+            else:
+                # ... we need to place that collection in the list of items to process later, once the parent Collection
+                # has been added to the database tree
+                deferredItems.append((collNo, collID, parentCollNo))
+                
+        # Populate the tree with all Clip records
+        for (clipNo, clipID, collNo) in DBInterface.list_of_clips():
+            # Check to see if the Clip's parent collection is in the tree.  It should be there, but I did
+            # have a testing database where one collection was missing, despite the presence of Clips and Notes.
+            if mapDict['Collection'].has_key(collNo):
+                # First, let's see if the parent collection is in the map dictionary.
+                item = mapDict['Collection'][collNo]
+                # Create the tree node
+                clip_item = self.AppendItem(item, clipID)
+                # Create the node data and assign the node's image
+                nodedata = _NodeData(nodetype='ClipNode', recNum=clipNo, parent=collNo)       # Identify this as a Clip node
+                self.SetPyData(clip_item, nodedata)                           # Associate this data with the node
+                self.set_image(clip_item, "Clip16")
+                # Add the new node to the map dictionary
+                mapDict['Clip'][clipNo] = clip_item
+            # This shouldn't happen to anyone but me.  God, I hope not, anyway.
+            else:
+                print "ABANDONED CLIP RECORD!" , clipNo, clipID, collNo
+
+        # Now add all the Notes to the objects in the Collection node of the database tree
+        for (noteNum, noteID, seriesNum, episodeNum, transcriptNum, collectNum, clipNum) in DBInterface.list_of_node_notes(CollectionNode=True):
+            # Find the correct Collection or Clip node using the map dictionary
+            if collectNum > 0:
+                item = mapDict['Collection'][collectNum]
+            elif clipNum > 0:
+                item = mapDict['Clip'][clipNum]
+            # Create the tree node
+            noteitem = self.AppendItem(item, noteID)
+            # Add the node's image and node data
+            nodedata = _NodeData(nodetype='NoteNode', recNum=noteNum)  # Identify this as a Note node
+            self.SetPyData(noteitem, nodedata)                  # Associate this data with the node
+            self.set_image(noteitem, "Note16")
             
     def create_kwgroups_node(self):
-        # The "Keywords" node itself is always item 0 in the node list
+        """ Create the Keywords node and populate it with all appropriate data """
+        # Add the root 'Keywords' node
         kwg_root = self.AppendItem(self.root, _("Keywords"))
+        # Add the node's image and node data
         nodedata = _NodeData(nodetype='KeywordRootNode')         # Identify this as the Keywords Root node
         self.SetPyData(kwg_root, nodedata)                       # Associate this data with the node
         self.set_image(kwg_root, "KeywordRoot16")
-
+        # Since there are times when we need to refresh the Keywords node but not the whole tree, a separate
+        # method has been created for populating an existing Keywords Node.  We can just call it.
         self.refresh_kwgroups_node()
         
     def refresh_kwgroups_node(self):
+        """ Refresh the Keywords Node of the Database Tree """
         # remember the current selection in the tree
         sel = self.GetSelection()
-        # Initialize keyword groups to an empty list
+        # Initialize keyword groups to an empty list.  This list keeps track of the defined Keyword Groups for use elsewhere
         self.kwgroups = []
-        # The "Keywords" node itself is always item 0 in the node list
+        # We need to keep track of the nodes so we can add sub-nodes quickly.  A dictionary of dictionaries will do this well. 
+        mapDict = {}
+        # We need to locate the existing Kewords Root Node
         kwg_root = self.select_Node((_("Keywords"),), 'KeywordRootNode')
+        # Now, we can clear out the Keywords Node completely to start over.
         self.DeleteChildren(kwg_root)
+        # Let's add the root node to our Keyword List
         self.kwgroups.append(kwg_root)
-        for s in DBInterface.list_of_keyword_groups():
-            # Add children in this Keyword group to the kwgroups node list
-            kwg_item = self.AppendItem(self.kwgroups[0], s)
-            nodedata = _NodeData(nodetype='KeywordGroupNode')    # Identify this as a Keyword Group node
-            self.SetPyData(kwg_item, nodedata)                   # Associate this data with the node
-            self.set_image(kwg_item, "KeywordGroup16")
-            self.kwgroups.append(kwg_item)
-            for kw in DBInterface.list_of_keywords_by_group(s):
-                kw_item = self.AppendItem(self.kwgroups[-1], kw)
-                nodedata = _NodeData(nodetype='KeywordNode', parent=s)     # Identify this as a Keyword node
-                self.SetPyData(kw_item, nodedata)                # Associate this data with the node
-                self.set_image(kw_item, "Keyword16")
-        self.addKeywordExamples()
+        # Get all Keyword Group : Keyword pairs from the database
+        for (kwg, kw) in DBInterface.list_of_all_keywords():
+            # Check to see if the Keyword Group has already been added to the Database Tree and the Map dictionary 
+            if not mapDict.has_key(kwg.upper()):
+                # If not, add the Keyword Group to the Tree
+                kwg_item = self.AppendItem(kwg_root, kwg)
+                # Specify the Keyword Group's node data and image
+                nodedata = _NodeData(nodetype='KeywordGroupNode')    # Identify this as a Keyword Group node
+                self.SetPyData(kwg_item, nodedata)                   # Associate this data with the node
+                self.set_image(kwg_item, "KeywordGroup16")
+                # Add the Keyword Group to our Keyword Groups List
+                self.kwgroups.append(kwg_item)
+                # Add the Keyword Group to our map dictionary, and note the associated tree node as "item"
+                mapDict[kwg.upper()] = {'item' : kwg_item}
+            # If the Keyword Group IS in the tree and map already ...
+            else:
+                # ... we can identify the corresponding tree node from the map dictionary
+                kwg_item = mapDict[kwg.upper()]['item']
+            # Add the Keyword to the database tree
+            kw_item = self.AppendItem(kwg_item, kw)
+            # Specify the Keyword's node data and image
+            nodedata = _NodeData(nodetype='KeywordNode', parent=kwg)     # Identify this as a Keyword node
+            self.SetPyData(kw_item, nodedata)                # Associate this data with the node
+            self.set_image(kw_item, "Keyword16")
+            # Add the Keyword to the map dictionary, pointing to the keyword's tree node
+            mapDict[kwg.upper()][kw] = kw_item
+
+        # Get all Keyword Examples from the database
+        keywordExamples = DBInterface.list_of_keyword_examples()
+
+        # NOTE:  This would be more efficient if the DBInterface.list_of_keyword_examples() method passed all necessary
+        #        information from the database rather than requiring that we load each Clip to determine its ID and parent
+        #        Collection.  However, I suspect that Keyword Examples are rare enough that it's not a major issue.
+        
+        # Iterate through the examples
+        for (episodeNum, clipNum, kwg, kw, example) in keywordExamples:
+            # Load the indicated clip
+            exampleClip = Clip.Clip(clipNum)
+            # Determine where it should be displayed in the Node Structure.
+            # (Keyword Root, Keyword Group, Keyword, Example Clip Name)
+            nodeData = (_('Keywords'), kwg, kw, exampleClip.id)
+            # Add the Keyword Example Node to the Database Tree Tab, but don't expand the nodes
+            self.add_Node("KeywordExampleNode", nodeData, exampleClip.number, exampleClip.collection_num, False)
+
         # Reset the selection in the Tree to what it was before we called this method
         self.SelectItem(sel)
         # Refresh the Tree Node so that changes are displayed appropriately (such as new children are indicated if the node was empty)
         self.Refresh()
-
-    def addKeywordExamples(self):
-        """ Get a list of all Keyword Examples and insert them into the tree """
-        # NOTE:  The Delphi version of Transana checked every KWG:KW combination as it was building the
-        #        tree and inserted Keyword Examples as it went.  I think that was a very inefficient strategy,
-        #        as I imagine Keyword Examples are probably fairly rare.  This method of calling up all the
-        #        Keyword Examples at once and inserting nodes in the tree should be more efficient and cause
-        #        MANY fewer database calls on startup.
-        #        Since this is called on Program Startup, no MU Messaging is required.
-
-        # Get a list of all Keyword Examples from the Database
-        keywordExamples = DBInterface.list_of_keyword_examples()
-
-        # Iterate through the examples
-        for rowData in keywordExamples:
-
-            if DEBUG:
-                print "DatabaseTreeTab.AddKeywordExamples:", rowData
-                print
-            
-            # Load the indicated clip
-            exampleClip = Clip.Clip(rowData[1])
-            # Determine where it should be displayed in the Node Structure.
-            # (Keyword Root, Keyword Group, Keyword, Example Clip Name)
-            nodeData = (_('Keywords'), rowData[2], rowData[3], exampleClip.id)
-            # Add the Keyword Example Node to the Database Tree Tab, but don't expand the nodes
-            self.add_Node("KeywordExampleNode", nodeData, exampleClip.number, exampleClip.collection_num, False)
 
     def create_search_node(self):
         self.searches = []
@@ -1847,14 +1915,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
     def Evaluate(self, node, nodeType, child, childData):
         allNoteNodeTypes = ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']
 
-#        if child.IsOk():
-#            print '"%s", %s, "%s", %s' % (node, nodeType, self.GetItemText(child), childData.nodetype)
-#        else:
-#            print '"%s", %s, last node entry' % (node, nodeType)
-#        print child.IsOk()
-#        if child.IsOk():
-#            print '((',node > self.GetItemText(child), 'and '
-
         # We continue moving down the list of nodes if...
         #   ... we are not yet at the end of the list AND ...
         # ((we're not past our alpha place and (nodetypes are the same or (both are at least Notes)) or
@@ -1870,16 +1930,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                                 (childData.nodetype == 'ClipNode'))) or \
                  ((nodeType == 'SearchCollectionNode') and (childData.nodetype == 'SearchSeriesNode')) or \
                  ((nodeType == 'SearchClipNode') and (childData.nodetype == 'SearchClipNode') and (True))
-        # ******************************************************************************************************
-        # IF THIS IS NOT ADEQUATE, True must be replaced by a comparison of SortOrders!!  BUT THIS MIGHT WORK!!!
-        # ******************************************************************************************************
-
-#         print '=', result
-#         print
-
-#        if (nodeType == 'SearchClipNode') and (childData.nodetype == 'SearchClipNode'):
-#            print 'self.GetPyData(node)', childData
-
         return result
         
     def add_Node(self, nodeType, nodeData, nodeRecNum, nodeParent, expandNode = True, insertPos = None, avoidRecursiveYields = False):
@@ -1994,7 +2044,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 
                 if  (childNode.IsOk()) and \
                     \
-                    (itemText == tmpNode) and \
+                    (itemText.upper() == tmpNode.upper()) and \
                     \
                     (childNodeData.nodetype in expectedNodeType) and \
                     \
@@ -2213,7 +2263,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
         self.Refresh()
         # Calls from the MessagePost method of the Chat Window have caused exceptions.  This attempts to prevent that.
         if not avoidRecursiveYields:
-            wx.Yield()
+            # There can be an issue with recursive calls to wxYield, so trap the exception ...
+            try:
+                wx.Yield()
+            # ... and ignore it!
+            except:
+                pass
 
     def select_Node(self, nodeData, nodeType):
         """ This method is used to select nodes in the tree.
@@ -2286,13 +2341,9 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                 if  (childNode.IsOk()) and \
                     \
-                    (itemText == tmpNode) and \
+                    (itemText.upper() == tmpNode.upper()) and \
                     \
-                    (childNodeData.nodetype in expectedNodeType):    # and \
-#                    \
-#                    ((childNodeData.nodetype != 'KeywordExampleNode') or (childNodeData.recNum == nodeRecNum)):
-
-                    # print "In %s, %s = %s.  Climbing on." % (self.GetItemText(currentNode), itemText, node)
+                    (childNodeData.nodetype in expectedNodeType):
 
                     # We've found the next node.  Increment the nodeListPos counter.
                     nodeListPos += 1
@@ -2311,9 +2362,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     (childNode, cookieItem) = self.GetNextChild(currentNode, cookieItem)
                 
         if currentNode != None:
-
-            # print "Need to select and display %s" % self.GetItemText(currentNode)
-
             self.SelectItem(currentNode)
             self.EnsureVisible(currentNode)
         return currentNode
@@ -2399,7 +2447,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 #  4) Is it a Keyword Example OR the correct record number
                 if  (childNode.IsOk()) and \
                     \
-                    (itemText == node) and \
+                    (itemText.upper() == node.upper()) and \
                     \
                     (childNodeData.nodetype in expectedNodeType) and \
                     \
@@ -2498,7 +2546,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Keyword Menu
         self.create_menu("kw",
                         (_("Cut"), _("Copy"), _("Paste"),
-                         _("Delete Keyword"), _("Keyword Properties")),
+                         _("Delete Keyword"), _("Create Quick Clip"), _("Keyword Properties")),
                         self.OnKwCommand)
 
         # Keyword Example Menu
@@ -2572,8 +2620,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
         
         if n == 0:      # Add Series
             self.parent.add_series()
-#        elif n == 1:    # Update Database Window
-#            self.refresh_tree()
         else:
             raise MenuIDError
  
@@ -2782,7 +2828,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.Destroy()
                 
         elif n == 4:    # Keyword Map Report
-            self.KeywordMapReport(series_name, episode_name)
+            self.KeywordMapReport(selData.recNum, series_name, episode_name)
 
         elif n == 5:    # Keyword Usage Report
             KeywordUsageReport.KeywordUsageReport(seriesName = series_name, episodeName = episode_name)
@@ -2880,9 +2926,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         if n == 0:      # Add Collection
             self.parent.add_collection(0)
-
-#        elif n == 1:    # Update Database Window
-#            self.refresh_tree()
 
         else:
             raise MenuIDError
@@ -3344,8 +3387,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # This data structure is used to ensure that empty keyword groups still show up in the Keyword Properties dialog.
         # Initialize keyword groups to an empty list
 
-        # NOTE:  From what I can tell, this doesn't actually do ANYTHING.  DKW 6/1/2005
-        
         self.kwgroups = []
         # The "Keywords" node itself is always item 0 in the node list
         kwg_root = self.select_Node((_("Keywords"),), 'KeywordRootNode')
@@ -3372,18 +3413,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
      
             kwg = Dialogs.add_kw_group_ui(self, kwg_names)
             if kwg:
-                # Make sure parenthesis characters are not allowed in Keyword Group
-                if (string.find(kwg, '(') > -1) or (string.find(kwg, ')') > -1):
-                    kwg = string.replace(kwg, '(', '')
-                    kwg = string.replace(kwg, ')', '')
-                    if 'unicode' in wx.PlatformInfo:
-                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                        prompt = unicode(_('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".'), 'utf8')
-                    else:
-                        prompt = _('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".')
-                    dlg = Dialogs.ErrorDialog(None, prompt % kwg)
-                    dlg.ShowModal()
-                    dlg.Destroy()
                 nodeData = (_('Keywords'), kwg)
                 # Add the new Keyword Group to the data tree
                 self.add_Node('KeywordGroupNode', nodeData, 0, 0)
@@ -3396,18 +3425,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         TransanaGlobal.chatWindow.SendMessage("AKG %s" % nodeData[-1])
 
                 self.updateKWGroupsData()
-
-                # Since we've just inserted a new Keyword Group, we need to rebuild the self.kwgroups data structure.
-                # This data structure is used to ensure that empty keyword groups still show up in the Keyword Properties dialog.
-                # Initialize keyword groups to an empty list
-#                self.kwgroups = []
-                # The "Keywords" node itself is always item 0 in the node list
-#                kwg_root = self.select_Node((_("Keywords"),), 'KeywordRootNode')
-#                self.kwgroups.append(kwg_root)
-#                (child, cookieVal) = self.GetFirstChild(kwg_root)
-#                while child.IsOk():
-#                    self.kwgroups.append(child)
-#                    (child, cookieVal) = self.GetNextChild(kwg_root, cookieVal)
 
         elif n == 1:    # KW Management
             # Call up the Keyword Management dialog
@@ -3423,9 +3440,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 dlg = Dialogs.ErrorDialog(None, _('The requested Keyword Summary Report contains no data to display.'))
                 dlg.ShowModal()
                 dlg.Destroy()
-
-#        elif n == 3:    # Update Database Window
-#            self.refresh_tree()
 
         else:
             raise MenuIDError
@@ -3469,9 +3483,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 try:
                     # Delete the Keyword group
                     DBInterface.delete_keyword_group(kwg_name)
-                    # We maintain a list of keyword groups so that empty ones don't get lost.  We need to remove the deleted keyword group form 
-                    # this list as well
-                    self.kwgroups.remove(sel)
                     # Remove the Keyword Group from the tree
                     # Get the full Node Branch by climbing it to one level above the root
                     nodeList = (self.GetItemText(sel),)
@@ -3480,6 +3491,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         nodeList = (self.GetItemText(sel),) + nodeList
                     # Call the DB Tree's delete_Node method.
                     self.delete_Node(nodeList, 'KeywordGroupNode')
+                    # We maintain a list of keyword groups so that empty ones don't get lost.  We need to remove the deleted keyword group from 
+                    # this list as well
+                    # NOTE: "self.kwgroups.remove(sel)" doesn't work if we've been messing with KWG capitalization ("Test : 1" and "test : 2" appear in the same KWG.)
+                    self.updateKWGroupsData()
                 except RecordLockedError, e:
                     # Display the Exception Message, allow "continue" flag to remain true
                     if 'unicode' in wx.PlatformInfo:
@@ -3594,7 +3609,35 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
 
-        elif n == 4:    # Keyword Properties
+        elif n == 4:    # Create Quick Clip
+            # Get the Transcript Selection information from the ControlObject, since we can't communicate with the
+            # TranscriptEditor directly.
+            (transcriptNum, startTime, endTime, text) = self.parent.ControlObject.GetTranscriptSelectionInfo()
+            # Initialize the Episode Number to 0
+            episodeNum = 0
+            # If our source is an Episode ...
+            if isinstance(self.parent.ControlObject.currentObj, Episode.Episode):
+                # ... we can just use the ControlObject's currentObj's object number
+                episodeNum = self.parent.ControlObject.currentObj.number
+            # If our source is a Clip ...
+            elif isinstance(self.parent.ControlObject.currentObj, Clip.Clip):
+                # ... we need the ControlObject's currentObj's originating episode number
+                episodeNum = self.parent.ControlObject.currentObj.episode_num
+                # Sometimes with a clip, we get a startTime of 0 from the TranscriptSelectionInfo() method.
+                # This is, of course, incorrect, and we must replace it with the Clip Start Time.
+                if startTime == 0:
+                    startTime = self.parent.ControlObject.currentObj.clip_start
+                # Sometimes with a clip, we get an endTime of 0 from the TranscriptSelectionInfo() method.
+                # This is, of course, incorrect, and we must replace it with the Clip Stop Time.
+                if endTime <= 0:
+                    endTime = self.parent.ControlObject.currentObj.clip_stop
+            # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
+            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text)
+            # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
+            # because drag and drop is an alternate way to create a Quick Clip.
+            DragAndDropObjects.CreateQuickClip(clipData, kw_group, kw_name, self)
+            
+        elif n == 5:    # Keyword Properties
             kw = Keyword.Keyword(kw_group, kw_name)
             self.parent.edit_keyword(kw)
 
@@ -3657,9 +3700,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
             self.searchCount = search.GetSearchCount()
             self.EnsureVisible(sel)
             
-#        elif n == 2:    # Update Database Window
-#            self.refresh_tree()
-            
         else:
             raise MenuIDError
 
@@ -3713,7 +3753,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             self.DropSearchResult(sel)
 
         elif n == 1:      # Keyword Map Report
-            self.KeywordMapReport(series_name, episode_name)
+            selData = self.GetPyData(sel)
+            self.KeywordMapReport(selData.recNum, series_name, episode_name)
             
         elif n == 2:    # Keyword Usage Report
             msg = _('Please note that even though you are requesting this report based on Search Results, the data in \nthe report includes only Clips that are in Collections.  It does not include Search Results Clips.')
@@ -3879,8 +3920,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
             nodeList = (self.GetItemText(selection),) + nodeList
         # Call the DB Tree's delete_Node method.
         self.delete_Node(nodeList, originalNodeType)
-        
-        
 
     def OnRightDown(self, event):
         """Called when the right mouse button is pressed."""
@@ -4015,7 +4054,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 menu = self.menu["kw_root"]
             elif sel_item_data.nodetype == 'KeywordGroupNode':
                 menu = self.menu["kw_group"]
-                # Determine if the Paste menu item should be enabled 
+                # Determine if the Paste menu item should be enabled
                 if DragAndDropObjects.DragDropEvaluation(source_item_data, sel_item_data):
                     menu.Enable(menu.FindItem(_('Paste')), True)
                 else:
@@ -4027,6 +4066,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     menu.Enable(menu.FindItem(_('Paste')), True)
                 else:
                     menu.Enable(menu.FindItem(_('Paste')), False)
+                # Determine if the Create Quick Clip item should be enabled
+                if (self.parent.ControlObject.currentObj != None) and \
+                   TransanaGlobal.configData.quickClipMode:
+                    menu.Enable(menu.FindItem(_('Create Quick Clip')), True)
+                else:
+                    menu.Enable(menu.FindItem(_('Create Quick Clip')), False)
             elif sel_item_data.nodetype == 'KeywordExampleNode':
                 menu = self.menu["kw_example"]
             elif sel_item_data.nodetype == 'NoteNode':
@@ -4142,7 +4187,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # If the item is a Keyword, Display its properties (?)
             elif sel_item_data.nodetype == 'KeywordNode':
                 # Change the eventID to match "Properties"
-                event.SetId(self.cmd_id_start["kw"] + 4)
+                event.SetId(self.cmd_id_start["kw"] + 5)
                 # Call the Keyword Event Processor
                 self.OnKwCommand(event)
 
@@ -4171,13 +4216,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # Get the new searchCount Value (which may or may not be changed)
                 self.searchCount = search.GetSearchCount()
 
-            # TODO:  Delete this!!
-#            else:
-#                tempstr = "Double-click processing for Selected Item = '%s', %s, has not been implemented" % (self.GetItemText(sel_item), sel_item_data)
-#                dlg = wx.MessageDialog(self, tempstr, "Data Window", wx.OK | wx.ICON_EXCLAMATION)
-#                dlg.ShowModal()
-#                dlg.Destroy()
-                
         # Make sure the selected object is expanded!
         self.Collapse(sel_item)
         
@@ -4366,7 +4404,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                         if TransanaGlobal.chatWindow != None:
                                             TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
 
-                        
             self.Refresh()
 
         except:
@@ -4388,10 +4425,33 @@ class _DBTreeCtrl(wx.TreeCtrl):
             dlg.Destroy()
             
 
-    def KeywordMapReport(self, seriesName, episodeName):
+    def KeywordMapReport(self, episodeNum, seriesName, episodeName):
         """ Produce a Keyword Map Report for the specified Series & Episode """
-        frame = KeywordMapClass.KeywordMap(None, -1, _("Transana Keyword Map Report"))
-        frame.Setup(seriesName = seriesName, episodeName = episodeName)
+        # Create a Keyword Map
+        frame = KeywordMapClass.KeywordMap(self, -1, _("Transana Keyword Map Report"))
+        # Now set it up, passing in the Series and Episode to be displayed
+        frame.Setup(episodeNum = episodeNum, seriesName = seriesName, episodeName = episodeName)
+
+    def KeywordMapLoadClip(self, clipNum):
+        """ This method is called FROM the Keyword Map and causes a specified Clip to be loaded. """
+        # Load the specified Clip
+        self.parent.ControlObject.LoadClipByNumber(clipNum)
+        # Get the Clip Object
+        tempClip = self.parent.ControlObject.currentObj
+        # Get the parent Collection
+        tempCollection = Collection.Collection(tempClip.collection_num)
+        # Initialize a List for the node list to point to the collection in the database tree
+        collectionList = [tempCollection.id]
+        # While the collection has a parent ...
+        while tempCollection.parent != 0:
+            # ... load the parent ...
+            tempCollection = Collection.Collection(tempCollection.parent)
+            # ... and add it to the node list
+            collectionList.insert(0, tempCollection.id)
+        # Add the Collection Root and the Clip to the node list
+        nodeList = [_('Collections')] + collectionList + [tempClip.id]
+        # Now signal the DB Tree to select / display the selected Clip
+        self.select_Node(nodeList, 'ClipNode')
 
     def ConvertSearchToCollection(self, sel, selData):
         """ Converts all the Collections and Clips in a Search Result node to a Collection. """

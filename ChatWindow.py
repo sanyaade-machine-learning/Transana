@@ -238,6 +238,8 @@ class ChatWindow(wx.Frame):
     def __init__(self,parent,id,title, socketObj):
         # Remember the parent window
         self.parent = parent
+        # Remember the window title
+        self.title = title
         # remember the Socket object
         self.socketObj = socketObj
         # Get the username from the TransanaGlobal module
@@ -262,9 +264,9 @@ class ChatWindow(wx.Frame):
         # Create a Sizer for the Memo section
         boxMemo = wx.BoxSizer(wx.VERTICAL)
         # Create a label for the Memo section
-        txtMemo = wx.StaticText(self, -1, _("Messages"))
+        self.txtMemo = wx.StaticText(self, -1, _("Messages"))
         # Put the label in the Memo Sizer, with a little padding below
-        boxMemo.Add(txtMemo, 0, wx.BOTTOM, 3)
+        boxMemo.Add(self.txtMemo, 0, wx.BOTTOM, 3)
         # Add a TextCtrl for the chat text.  This is read only, as it is filled programmatically.
         self.memo = wx.TextCtrl(self, -1, style = wx.TE_MULTILINE | wx.TE_WORDWRAP | wx.TE_READONLY)
         # Put the Memo control in the Memo Sizer
@@ -275,9 +277,9 @@ class ChatWindow(wx.Frame):
         # Create a Sizer for the User section
         boxUser = wx.BoxSizer(wx.VERTICAL)
         # Create a label for the User section
-        txtUser = wx.StaticText(self, -1, _("Current Users"))
+        self.txtUser = wx.StaticText(self, -1, _("Current Users"))
         # Put the label in the User Sizer with a little padding below
-        boxUser.Add(txtUser, 0, wx.BOTTOM, 3)
+        boxUser.Add(self.txtUser, 0, wx.BOTTOM, 3)
         # Add a ListBox to hold the names of active users
         self.userList = wx.ListBox(self, -1, choices=[self.userName], style=wx.LB_SINGLE)
         boxUser.Add(self.userList, 1, wx.EXPAND)
@@ -463,6 +465,7 @@ class ChatWindow(wx.Frame):
                     self.Show(True)
                 # ... display the message (minus the Message Prefix) on the screen
                 self.memo.AppendText("%s\n" % event.data[2:])
+                
             # Connection Message ?
             elif messageHeader == 'C':
                 # This signals that a UserName should be added to the list of current users.
@@ -475,6 +478,7 @@ class ChatWindow(wx.Frame):
                 # from occurring.)
                 if st != self.userName:
                     self.userList.Append(st)
+                    
             # Rename Message ?
             elif messageHeader == 'R':
                 # If a user name is duplicated, the Message Server renames it to prevent confusion.
@@ -490,6 +494,7 @@ class ChatWindow(wx.Frame):
                     self.userName = st
                 # self.SetStatusText(_('Transana Message Server "%s" on port %d.  User "%s" on Database Server "%s", Database "%s".') % (SERVERHOST, SERVERPORT, self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
                 self.userList.Append(st)
+                
             # Import Message
             elif messageHeader == 'I':
                 # Another user has imported a database.  We need to refresh the whole Database Tree!
@@ -497,34 +502,45 @@ class ChatWindow(wx.Frame):
                 if self.ControlObject != None:
                     # Update the Data Window via the Control Object
                     self.ControlObject.UpdateDataWindow()
+                    
             # Server Validation ?
             elif messageHeader == 'V':
                 # Indicate that the server has been validated.  The Validation Timer processes this later.
                 self.serverValidation = True
+                
             # Disconnect Message ?
             elif messageHeader == 'D':
                 # Remove the Message Prefix.
                 st = event.data[2:]
                 # The remainder of the message is the username to be removed.  Delete it from the User List.
                 self.userList.Delete(self.userList.FindString(st))
+                
             else:
+                # The remaining messages should not be processed if this user was the message sender
                 if self.userName != messageSender:
+                    # We can't have the tree selection changing because of the activity of other users.  That creates all kinds of
+                    # problems if we're in the middle of editing something.  So let's note the current selection
+                    currentSelection = self.ControlObject.DataWindow.DBTab.tree.GetSelection()
+                    # The Control Object MUST be defined (and always will be)
                     if self.ControlObject != None:
                         # Add Series Message
                         if messageHeader == 'AS':
                             tempSeries = Series.Series(message)
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('SeriesNode', (_('Series'), message), tempSeries.number, None, False, avoidRecursiveYields = True)
+                            
                         # Add Episode Message
                         elif messageHeader == 'AE':
                             nodelist = ConvertMessageToNodeList(message)
                             tempEpisode = Episode.Episode(series=nodelist[0], episode=nodelist[1])
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('EpisodeNode', (_('Series'),) + nodelist, tempEpisode.number, tempEpisode.series_num, False, avoidRecursiveYields = True)
+
                         # Add Transcript Message
                         elif messageHeader == 'AT':
                             nodelist = ConvertMessageToNodeList(message)
                             tempEpisode = Episode.Episode(series=nodelist[0], episode=nodelist[1])
                             tempTranscript = Transcript.Transcript(nodelist[-1], ep=tempEpisode.number)
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('TranscriptNode', (_('Series'),) + nodelist, tempTranscript.number, tempEpisode.number, False, avoidRecursiveYields = True)
+
                         # Add Collection Message
                         elif messageHeader == 'AC':
                             nodelist = ConvertMessageToNodeList(message)
@@ -534,6 +550,7 @@ class ChatWindow(wx.Frame):
                                 parentNum = tempCollection.number
                             # avoidRecursiveYields added to try to prevent a problem on the Mac when converting Searches
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('CollectionNode', (_('Collections'),) + nodelist, tempCollection.number, tempCollection.parent, False, avoidRecursiveYields=True)
+
                         # Add Clip Message
                         elif messageHeader == 'ACl':
                             nodelist = ConvertMessageToNodeList(message)
@@ -577,6 +594,7 @@ class ChatWindow(wx.Frame):
                                 # We accomplish this using the TreeCtrl's "add_note_nodes" method
                                 self.ControlObject.DataWindow.DBTab.tree.add_note_nodes(noteList, insertNode, Clip=tempClip.number)
                                 self.ControlObject.DataWindow.DBTab.tree.Refresh()
+
                         # Add Note Message
                         elif messageHeader in ['ASN', 'AEN', 'ATN', 'ACN', 'AClN']:
                             nodelist = ConvertMessageToNodeList(message)
@@ -636,21 +654,26 @@ class ChatWindow(wx.Frame):
                                 tempNote = Note.Note(nodelist[-1], Clip=tempObj.number)
 
                             self.ControlObject.DataWindow.DBTab.tree.add_Node(nodeType, nodelist, tempNote.number, tempObj.number, False, avoidRecursiveYields = True)
+
                         # Add Keyword Group Message
                         elif messageHeader == 'AKG':
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('KeywordGroupNode', (_('Keywords'),) + (message, ), 0, 0, False, avoidRecursiveYields = True)
                             # Once we've added the Keyword Group, we need to update the Keyword Groups Data Structure
                             self.ControlObject.DataWindow.DBTab.tree.updateKWGroupsData()
+
                         # Add Keyword Message
                         elif messageHeader == 'AK':
                             nodelist = ConvertMessageToNodeList(message)
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('KeywordNode', (_('Keywords'),) + nodelist, 0, nodelist[0], False, avoidRecursiveYields = True)
+
                         # Add Keyword Example Message
                         elif messageHeader == 'AKE':
                             # The first message parameter for a Keyword Example is the Clip Number
                             nodelist = ConvertMessageToNodeList(message)
                             tempClip = Clip.Clip(int(nodelist[0]))
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('KeywordExampleNode', (_('Keywords'),) + nodelist[1:], tempClip.number, tempClip.collection_num, False, avoidRecursiveYields = True)
+
+                        # Rename a Node
                         elif messageHeader == 'RN':
                             nodelist = ConvertMessageToNodeList(message)
                             # The first element in the nodelist is the nodeType, which we need for the rename_Node call.
@@ -663,10 +686,28 @@ class ChatWindow(wx.Frame):
                                 print "Calling rename_Node(%s, %s, %s)" % (nodelist[1:-1], nodelist[0], nodelist[-1])
                                 
                             self.ControlObject.DataWindow.DBTab.tree.rename_Node(nodelist[1:-1], nodelist[0], nodelist[-1])
+                            
                             # If we're removing a Keyword Group ...
                             if nodelist[0] == 'KeywordGroupNode':
                                 # ... we need to update the Keyword Groups Data Structure
                                 self.ControlObject.DataWindow.DBTab.tree.updateKWGroupsData()
+
+                            # If we're renaming  a Keyword ...
+                            if nodelist[0] == 'KeywordNode':
+                                # ... see if we have an Episode or Clip object currently loaded ...
+                                if isinstance(self.ControlObject.currentObj, Episode.Episode) or isinstance(self.ControlObject.currentObj, Clip.Clip):
+                                    # ... let's see if the Keywords Tab is being shown ...
+                                    if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == _('Keywords'):
+                                        # ... and if so, iterate through its keywords ...
+                                        for kw in self.ControlObject.currentObj.keyword_list:
+                                            # ... and see if it contains the keyword that was changed.
+                                            if (nodelist[-3].upper() == kw.keywordGroup.upper()) and (nodelist[-2].upper() == kw.keyword.upper()):
+                                                # If so, update it.  (Its Refresh() method updates data from the database.)
+                                                self.ControlObject.DataWindow.KeywordsTab.Refresh()
+                                                # ... and refresh the keyword list
+                                                self.ControlObject.currentObj.refresh_keywords()
+                                                break
+                                
                         # Delete Node
                         elif messageHeader == 'DN':
                             nodelist = ConvertMessageToNodeList(message)
@@ -679,6 +720,54 @@ class ChatWindow(wx.Frame):
                             if nodelist[0] == 'KeywordGroupNode':
                                 # ... we need to update the Keyword Groups Data Structure
                                 self.ControlObject.DataWindow.DBTab.tree.updateKWGroupsData()
+                                
+                                # ... see if we have an Episode or Clip object currently loaded ...
+                                if isinstance(self.ControlObject.currentObj, Episode.Episode) or isinstance(self.ControlObject.currentObj, Clip.Clip):
+                                    # ... let's see if the Keywords Tab is being shown ...
+                                    if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == _('Keywords'):
+                                        # ... and if so, iterate through its keywords ...
+                                        for kw in self.ControlObject.currentObj.keyword_list:
+                                            # ... and see if it contains the keyword that was changed.
+                                            if (nodelist[-1].upper() == kw.keywordGroup.upper()):
+                                                # If so, update it.  (Its Refresh() method updates data from the database.)
+                                                self.ControlObject.DataWindow.KeywordsTab.Refresh()
+                                                # ... and refresh the keyword list
+                                                self.ControlObject.currentObj.refresh_keywords()
+                                                break
+
+                            # If we're deleting  a Keyword ...
+                            if nodelist[0] == 'KeywordNode':
+                                # ... see if we have an Episode or Clip object currently loaded ...
+                                if isinstance(self.ControlObject.currentObj, Episode.Episode) or isinstance(self.ControlObject.currentObj, Clip.Clip):
+                                    # ... let's see if the Keywords Tab is being shown ...
+                                    if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == _('Keywords'):
+                                        # ... and if so, iterate through its keywords ...
+                                        for kw in self.ControlObject.currentObj.keyword_list:
+                                            # ... and see if it contains the keyword that was changed.
+                                            if (nodelist[-2].upper() == kw.keywordGroup.upper()) and (nodelist[-1].upper() == kw.keyword.upper()):
+                                                # If so, update it.  (Its Refresh() method updates data from the database.)
+                                                self.ControlObject.DataWindow.KeywordsTab.Refresh()
+                                                # ... and refresh the keyword list
+                                                self.ControlObject.currentObj.refresh_keywords()
+                                                break
+                                                
+                        # Update Keyword List
+                        elif messageHeader == 'UKL':
+                            # Parse the message at the space into object type and object number
+                            msgData = message.split(' ')
+                            # See if the currently loaded object matches the object described in the message.
+                            if ((isinstance(self.ControlObject.currentObj, Episode.Episode) and \
+                                 (msgData[0] == 'Episode')) or \
+                                (isinstance(self.ControlObject.currentObj, Clip.Clip) and \
+                                 (msgData[0] == 'Clip'))) and \
+                               (self.ControlObject.currentObj.number == int(msgData[1])):
+                                # Let's see if the Keywords Tab is being shown
+                                if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == _('Keywords'):
+                                    # If so, update it.  (Its Refresh() method updates data from the database.)
+                                    self.ControlObject.DataWindow.KeywordsTab.Refresh()
+                                    # ... and refresh the keyword list
+                                    self.ControlObject.currentObj.refresh_keywords()
+                            
                         else:
                             if DEBUG:
                                 print "Unprocessed Message: ", event.data
@@ -694,6 +783,8 @@ class ChatWindow(wx.Frame):
                         if DEBUG:
                             print "ChatWindow has NO CONTROLOBJECT *********************************************"
 
+                    # Now that we're done, we should re-select the originally-selected tree item
+                    self.ControlObject.DataWindow.DBTab.tree.SelectItem(currentSelection)
                 else:
                     if DEBUG:
                         print "We DON'T need to add an object, as we created it in the first place."
@@ -779,6 +870,17 @@ class ChatWindow(wx.Frame):
         # Go on and close the form.
         self.Close()
 
+    def ChangeLanguages(self):
+        """ Handles the change of languages """
+        # Change the Window Title
+        self.SetTitle(_(self.title))
+        # Change the prompts
+        self.txtMemo.SetLabel(_("Messages"))
+        self.txtUser.SetLabel(_("Current Users"))
+        # Change the Buttons
+        self.btnSend.SetLabel(_("Send"))
+        self.btnClear.SetLabel(_("Clear"))
+
 
 def ConnectToMessageServer():
     """ Create a connection to the Transana Message Server.
@@ -795,7 +897,12 @@ def ConnectToMessageServer():
         # ... close the Chat Form, which will in turn break the socket connection.
         TransanaGlobal.chatWindow.OnFormClose(None)
         # Allow the final messages to be processed.
-        wx.Yield()
+        # There can be an issue with recursive calls to wxYield, so trap the exception ...
+        try:
+            wx.Yield()
+        # ... and ignore it!
+        except:
+            pass
         # Destroy the Chat Window
         TransanaGlobal.chatWindow.Destroy()
         TransanaGlobal.chatWindow = None

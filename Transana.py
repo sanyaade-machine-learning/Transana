@@ -132,9 +132,6 @@ class Transana(wx.App):
                 traceback.print_exc(file=sys.stdout)
                 
             msg = _('Transana is unable to access any Database at "%s".\nPlease check to see if this path is available.\nWould you like to restore the default Database path?')
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                msg = unicode(msg, 'utf8')
             msg = msg % TransanaGlobal.configData.databaseDir
 
         if connectionEstablished:
@@ -261,9 +258,6 @@ def transana_excepthook(type, value, trace):
     sys.__excepthook__(type, value, trace)
     # Now accomodate for the GUI
     msg = _("An unhandled %s exception occured")
-    if 'unicode' in wx.PlatformInfo:
-        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-        msg = unicode(msg, 'utf8')
     try:
         msg = msg + ": " + str(value)
     except exceptions.AttributeError, e:

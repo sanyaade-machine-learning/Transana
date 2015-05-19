@@ -58,6 +58,7 @@ class ConfigData(object):
         str = str + 'transcriptionSetback = %s\n' % self.transcriptionSetback
         str = str + 'videoSpeed = %s\n' % self.videoSpeed
         str = str + 'videoSize = %s\n' % self.videoSize
+        str = str + 'quickClipMode = %s\n' % self.quickClipMode
         str = str + 'wordTracking = %s\n' % self.wordTracking
         str = str + 'autoArrange = %s\n' % self.autoArrange
         str = str + 'QuickLoad = %s\n' % self.waveformQuickLoad
@@ -132,6 +133,8 @@ class ConfigData(object):
             self.transcriptionSetback = config.ReadInt('/2.0/TranscriptionSetback', 2)
             # Load Video Size setting
             self.videoSize = config.ReadInt('/2.0/VideoSize', 100)
+            # Load Quick Clip Mode setting
+            self.quickClipMode = config.ReadInt('/2.0/QuickClipMode', False)
             # Load Auto Word-Tracking setting
             self.wordTracking = config.ReadInt('/2.0/WordTracking', True)
             # Load Message Server Host Setting
@@ -180,6 +183,8 @@ class ConfigData(object):
             self.transcriptionSetback = 2
             # Default Video Size is 100%
             self.videoSize = 100
+            # Quick Clip Mode should be disabled by default
+            self.quickClipMode = False
             # Auto Word Tracking is enabled by default
             self.wordTracking = True
             # Language setting
@@ -271,6 +276,8 @@ class ConfigData(object):
         config.WriteInt('/2.0/TranscriptionSetback', self.transcriptionSetback)
         # Save the Video Size setting
         config.WriteInt('/2.0/VideoSize', self.videoSize)
+        # Save the Quick Clip Mode setting
+        config.WriteInt('/2.0/QuickClipMode', self.quickClipMode)
         # Save the Auto Word Tracking setting
         config.WriteInt('/2.0/WordTracking', self.wordTracking)
         # Save the Message Server Host

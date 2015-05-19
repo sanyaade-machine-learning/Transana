@@ -327,11 +327,7 @@ class KWManager(wx.Dialog):
             kw.lock_record()
         # Handle the exception if the record is locked
         except RecordLockedError, e:
-            msg = _('You cannot proceed because you cannot obtain a lock on Keyword "%s".\nThe record is currently locked by %s.\nPlease try again later.')
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                msg = unicode(msg, 'utf8')
-            wx.MessageDialog(self, msg % (kw.keywordGroup + ':' + kw.keyword, e.user)).ShowModal()
+            ReportRecordLockedException(_("Keyword"), kw.keywordGroup + ' : ' + kw.keyword, e)
         # If the record is not locked, keep going.
         else:
             if self.deleteEnabled:

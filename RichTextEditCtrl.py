@@ -30,6 +30,7 @@ if SHOWHIDDEN:
 
 import TransanaConstants        # import Transana's Constants
 import TransanaGlobal           # import Transana's Globals
+import Dialogs                  # import Transana's Dialogs for the ErrorDialog
 import sys, os, string, re      # import Python modules that are needed
 import pickle                   # the pickle module enables us to fast-save
 
@@ -206,7 +207,7 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
 
             # NOTE:  This is really messed up.  Given the current (Aug. 11, 2005) infrastructure, specifying a new
             #        style can cause multiple styles to be created along the way.  Saving and reloading a document
-            #        can the number of styles to change, as some unused styles created above get dropped, but some
+            #        can cause the number of styles to change, as some unused styles created above get dropped, but some
             #        style combinations that aren't used and weren't created above get created after a save.  And
             #        saving a second time seems to have the effect of reducing the number of styles considerably.
             #        In one experiment, I had 31 defined styles.  I added 5 styles, which took my total up to 45.
@@ -238,11 +239,12 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
             # Essentially, what this code does is insert the appropriate style when we get to this point in the
             # style array.  Apparently, the information is stored internally in the wxSTC until this 33rd style is created.
             # This is necessary because we are using 7 style bits instead of 5, which is the wx.STC default.
-            if (self.num_styles == stc.STC_STYLE_LINENUMBER) or (self.num_styles == stc.STC_STYLE_DEFAULT):
+            while (self.num_styles == stc.STC_STYLE_LINENUMBER) or (self.num_styles == stc.STC_STYLE_DEFAULT):
                 
                 if DEBUG:
                     print "Skipping %d because it equals %d (stc.STC_STYLE_LINENUMBER) or %s (stc.STC_STYLE_DEFAULT)" % (self.num_styles, stc.STC_STYLE_LINENUMBER, stc.STC_STYLE_DEFAULT)
 
+                attr = StyleSettings()
                 if (self.num_styles == stc.STC_STYLE_LINENUMBER):
                     # Define the StyleSpec appropriate for stc.STC_STYLE_LINENUMBER
                     self.StyleSetSpec(self.num_styles, "size:10,face:" + TransanaGlobal.configData.defaultFontFace+',fore:#000000,back:#ffffff')
@@ -251,12 +253,11 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                     attr.font_size = 10
                 else:
                     # Define the StyleSpec appropriate for stc.STC_STYLE_DEFAULT
-                    self.StyleSetSpec(self.num_styles, "size:" + TransanaGlobal.configData.defaultFontSize + ",face:" + TransanaGlobal.configData.defaultFontFace+',fore:#000000,back:#ffffff')
+                    self.StyleSetSpec(self.num_styles, 'size:%s,face:%s,fore:#000000,back:#ffffff' % (TransanaGlobal.configData.defaultFontSize, TransanaGlobal.configData.defaultFontFace))
                     # Also place that style in style_specs
-                    self.style_specs.append("size:" + TransanaGlobal.configData.defaultFontSize + ",face:" + TransanaGlobal.configData.defaultFontFace+',fore:#000000,back:#ffffff')
+                    self.style_specs.append('size:%s,face:%s,fore:#000000,back:#ffffff' % (TransanaGlobal.configData.defaultFontSize, TransanaGlobal.configData.defaultFontFace))
                     attr.font_size = TransanaGlobal.configData.defaultFontSize
                 # And also define the Attributes for the style ...
-                attr = StyleSettings()
                 attr.font_face = TransanaGlobal.configData.defaultFontFace
                 attr.font_size = 10
                 attr.font_fg = 0x000000
@@ -850,6 +851,9 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         """Process the document data for output as a RTF document.
         If select_only=1, then it will only process the current selection
         instead of the whole document."""
+
+        # print "RichTextEditCtrl.__ProcessDocAsRTF():  A ", self.GetCurrentPos(), self.GetSelectionStart(), self.GetSelectionEnd(), self.GetSelection()
+
         doc.start_paragraph("Default")
         
         if select_only:
@@ -859,67 +863,6 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
             else:
                 # You need the "-1" here to prevent an extra character from being included in the Clip Transcript.
                 end = self.GetSelectionEnd() - 1
-
-
-            # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
-            # can happen.
-
-            # NOTE:  This sort of code seems to appear in at least 3 spots.
-            #          1.  TranscriptEditor.OnLeftUp
-            #          2.  TranscriptEditor.OnStartDrag
-            #          3.  RichTextEditCtrl.__ProcessDocAsRTF
-            #        I just added the third, as the first two weren't adequate under Unicode
-
-            # First, see if we have a click Position or a click-drag Selection.
-            if (start != end):
-                
-                # Let's see if any change is made.
-                selChanged = False
-                # Let's see if the start of the selection falls between a Time Code and its data.
-                # We can also check to see if the first character is a time code, in which case it should be excluded too!
-                if 'unicode' in wx.PlatformInfo:
-                    if 'wxMac' in wx.PlatformInfo:
-                        evaluation = (self.GetCharAt(start - 1) == 194) and (self.GetCharAt(start) == 167)
-                        evaluation2 = (self.GetCharAt(start) == 194) and (self.GetCharAt(start + 1) == 167)
-                    else:
-                        evaluation = (self.GetCharAt(start - 1) == 194) and (self.GetCharAt(start) == 164)
-                        evaluation2 = (self.GetCharAt(start) == 194) and (self.GetCharAt(start + 1) == 164)
-                else:
-                    evaluation = (self.GetCharAt(start - 1) == ord(TIMECODE_CHAR)) and (chr(self.GetCharAt(start)) == '<')
-                    evaluation2 = self.GetCharAt(start) == ord(TIMECODE_CHAR)
-                    
-                if (start > 0) and (evaluation or evaluation2):
-                    # If so, we have a change
-                    selChanged = True
-                    # Let's find the position of the end of the Time Code
-                    while chr(self.GetCharAt(start - 1)) != '>':
-
-                        if DEBUG:
-                            print "shifting (3) ...", chr(self.GetCharAt(start + 1)), start + 1
-
-                        start += 1
-
-                # Let's see if the end of the selection falls between a Time Code and its data
-                if 'unicode' in wx.PlatformInfo:
-                    if 'wxMac' in wx.PlatformInfo:
-                        evaluation = ((self.GetCharAt(end - 1) == 194) and (self.GetCharAt(end) == 167) and (chr(self.GetCharAt(end + 1)) == '<')) or \
-                                     ((self.GetCharAt(end) == 194) and (self.GetCharAt(end + 1) == 167) and (chr(self.GetCharAt(end + 2)) == '<'))
-                    else:
-                        evaluation = ((self.GetCharAt(end - 1) == 194) and (self.GetCharAt(end) == 164) and (chr(self.GetCharAt(end + 1)) == '<')) or \
-                                     ((self.GetCharAt(end) == 194) and (self.GetCharAt(end + 1) == 164) and (chr(self.GetCharAt(end + 2)) == '<'))
-                else:
-                    evaluation = (self.GetCharAt(end - 1) == ord(TIMECODE_CHAR)) and (chr(self.GetCharAt(end)) == '<')
-                    
-                if (end > 0) and ((evaluation) or ((chr(self.GetCharAt(end - 1)) == '>') and (self.STYLE_HIDDEN == self.GetStyleAt(end - 1)))):
-                    # If so, we have a change
-                    selChanged = True
-                    # Let's find the position before the Time Code
-                    if 'unicode' in wx.PlatformInfo:
-                        endChar = 194
-                    else:
-                        endChar = ord(TIMECODE_CHAR)
-                    while self.GetCharAt(end) != endChar:
-                        end -= 1
 
         else:
             start = 0
@@ -956,7 +899,16 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                     if ord(text[x]) > 127:
                         
                         if DEBUG:
-                            print "RichTextEditCtrl.__ProcessDocasRTF(): ord(%s) > 128 (%d) ..." % (text[x], ord(text[x])),
+                            print "RichTextEditCtrl.__ProcessDocasRTF(): ord(%s) > 128 (%d) ..." % (text[x], ord(text[x]))
+
+                            print "x =", x
+                            if text > 100:
+                                print "text="
+                                print text[x-100:x-50]
+                                print text[x-49:x]
+                                print " =>", text[x],"<=="
+                                print text[x:x+50]
+                                print text[x+51:x+100]
 
                         # UTF-8 characters are variable length.  We need to figure out the correct number of bytes.
 
@@ -984,6 +936,9 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                                     c = chr(194) + chr(173)
                                 elif (len(c) == 2) and (ord(c[0]) == 195) and (ord(c[1]) == 152):
                                     c = chr(194) + chr(175)
+				# We also need to substitute the time code character here
+                                elif (len(c) == 2) and (ord(c[0]) == 194) and (ord(c[1]) == 167):
+                                    c = chr(194) + chr(164)
 
                             # Note the style of the current character.  Multi-byte characters should always have
                             # the same style.
@@ -1067,8 +1022,14 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                                 print
                             pass
                         else:
-                            # Convert the text to Unicode
-                            doc.write_text(unicode(c, 'utf8'))
+                            try:
+                                doc.write_text(unicode(c, 'utf8'))
+                            except UnicodeDecodeError:
+                                doc.write_text(c)
+                                msg = _("Encoding error during RTF Export.  Some transcript encoding may incorrect.")
+                                errDlg = Dialogs.ErrorDialog(self, msg)
+                                errDlg.ShowModal()
+                                errDlg.Destroy()
 
                         if DEBUG:
                             print "RichTextEditCtrl.__ProcessDocAsRTF(): write_text called with UTF-8"

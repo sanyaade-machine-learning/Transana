@@ -27,7 +27,11 @@
                size=(800, 600),          Size within Parent (Will be full frame if only control)
                canvassize=(999, 999),    Size of the underlying graphics canvas (Visual control will shrink to fit)
                drawEnabled=false,        Is free-hand drawing enabled?
-               transanaMode=false)       Is this used in Transana?  (Cannot be used with drawEnabled, as both options specify how to process mouse events.)
+               transanaMode=false,       Is this used in Transana?  (Cannot be used with drawEnabled, as both options specify how to process mouse events.)
+               passMouseEvents=false)    Should the GraphicsControlClass pass MouseEvents back up to the parent?
+                                            Currently supported events for this are:
+                                              OnLeftDown()
+                                              OnLeftUp()
 
       SetColour(colour)                  Sets Drawing Color (using wxNamedColours)
       SetFontColour(colour)              Sets Text Color (using wxNamedColours)
@@ -55,7 +59,8 @@ import os
 class GraphicsControl(wx.ScrolledWindow):
     """ Graphics Control Class implements a Graphic Control used for doing some
         low-level drawing in the Visualization Window and the Keyword Map """
-    def __init__(self, parent, ID, pos=wx.Point(100, 100), size=(800, 600), canvassize=(999, 999), drawEnabled = False, transanaMode = False):
+    def __init__(self, parent, ID, pos=wx.Point(100, 100), size=(800, 600), canvassize=(999, 999),
+                 drawEnabled=False, transanaMode=False, passMouseEvents=False):
         self.parent = parent
         self.drawEnabled = drawEnabled
         self.transanaMode = transanaMode
@@ -126,6 +131,13 @@ class GraphicsControl(wx.ScrolledWindow):
             wx.EVT_MOTION(self, self.TransanaOnMotion)
             wx.EVT_RIGHT_UP(self, self.TransanaOnRightUp)
             self.endTime = self.parent.TimeCodeFromPctPos(1.0) #Timecode of 100% == Duration
+        # Some reports, such as the Keyword Map, need to be able to process Mouse information.
+        # Without this code, mouse clicks were not getting passed up to the GraphicControlClass' parent object as needed.
+        elif passMouseEvents:
+            self.Bind(wx.EVT_LEFT_DOWN, self.OnPassMouseLeftDown)
+            self.Bind(wx.EVT_LEFT_UP, self.OnPassMouseLeftUp)
+            # We should pass RightUp too.  There's a subtle difference between LeftUp and RightUp in the Keyword Map
+            self.Bind(wx.EVT_RIGHT_UP, self.OnPassMouseLeftUp)
 
         # Resize Event
         wx.EVT_SIZE(self, self.OnSize)
@@ -167,11 +179,6 @@ class GraphicsControl(wx.ScrolledWindow):
         # Remove all lines (the Selection and the Cursor)
         self.lines = []
 
-        # self.SetColour("CYAN")
-        # self.SetThickness(2)
-        # self.AddLines([(0, 0, self.getWidth(), 0), (self.getWidth(), 0, self.getWidth(), self.getHeight()), (self.getWidth(), self.getHeight(), 0, self.getHeight()), (0, 0, 0, 0)])
-        # print "CYAN"
-
         # Clear the Cursor Position
         self.cursorPosition = None
 
@@ -180,8 +187,13 @@ class GraphicsControl(wx.ScrolledWindow):
 
     def SetColour(self, colour):
         """ Set color and create the appropriate Pen """
-        self.colour = colour
-        self.pen = wx.Pen(wx.NamedColour(self.colour), self.thickness, self.linepattern)
+        if isinstance(colour, str):
+            self.colour = colour
+            self.colourDef = wx.NamedColour(self.colour)
+        else:
+            self.colour = colour
+            self.colourDef = wx.Colour(colour[0], colour[1], colour[2])
+        self.pen = wx.Pen(self.colourDef, self.thickness, self.linepattern)
 
     def SetFontColour(self, colour):
         """ Set text color """
@@ -190,7 +202,7 @@ class GraphicsControl(wx.ScrolledWindow):
     def SetThickness(self, thickness):
         """ Set Line Thickness """
         self.thickness = thickness
-        self.pen = wx.Pen(wx.NamedColour(self.colour), self.thickness, self.linepattern)
+        self.pen = wx.Pen(self.colourDef, self.thickness, self.linepattern)
 
     def SetFontSize(self, size):
         """ Set Font Size """
@@ -246,7 +258,7 @@ class GraphicsControl(wx.ScrolledWindow):
             dc.Clear()  
 
         # Set the Pen to the defined Color, thickness, and pattern
-        self.pen = wx.Pen(wx.NamedColour(self.colour), self.thickness, self.linepattern)
+        self.pen = wx.Pen(self.colourDef, self.thickness, self.linepattern)
         # Draw lines based on timecodes
         # You can choose two different methods. 
         #   a. DrawRect: Very responsive, covers selection with grey diagonal lines
@@ -284,7 +296,8 @@ class GraphicsControl(wx.ScrolledWindow):
         # For each line, determine the color, line thickness, and line list
         for colour, thickness, line in self.lines:
             # Create a Pen
-            pen = wx.Pen(wx.NamedColour(colour), thickness, self.linepattern)
+            self.SetColour(colour)
+            pen = wx.Pen(self.colourDef, thickness, self.linepattern)
             # Set the Pen for the Device Context
             dc.SetPen(pen)
             # Draw the lines in the line list
@@ -300,7 +313,8 @@ class GraphicsControl(wx.ScrolledWindow):
             # Set the Font for the Device Context
             dc.SetFont(font)
             # Set the Text Color
-            dc.SetTextForeground(wx.NamedColour(colour))
+            self.SetColour(colour)
+            dc.SetTextForeground(self.colourDef)
             # Determine the size the string will be when drawn
             (w, h) = dc.GetTextExtent(text)
             # Alter the position values based on alignment
@@ -351,6 +365,7 @@ class GraphicsControl(wx.ScrolledWindow):
 
     # if drawEnabled is true, the following events will cause lines to be drawn
     def OnLeftDown(self, event):
+        event.Skip()
         self.SetFocus()
         self.drawing = True
         self.curLine = []
@@ -389,46 +404,104 @@ class GraphicsControl(wx.ScrolledWindow):
     # drawEnabled is false and transanaMode is true
     def TransanaOnLeftDown(self, event):
         """ Left Mouse Button pressed, transanaMode == true """
-        self.lines = []              # Clear any existing Selection and Cursor
-        self.cursorPosition = None   # That wiped out the cursor too, which is okay, but let's remember that.
-        self.SetFocus()
-        self.drawing = True
-        self.x = event.GetX() + (self.GetViewStart()[0] * self.GetScrollPixelsPerUnit()[0])
-        self.y = event.GetY() + (self.GetViewStart()[1] * self.GetScrollPixelsPerUnit()[1])
-        self.CaptureMouse()
-        # Return the position and event to the Parent control
-        self.parent.OnLeftDown(self.x, self.y, float(self.x)/self.canvassize[0], float(self.y)/self.canvassize[1])
-        self.lastX = self.x
-        # Track the starting of selection and store it as a timecode
-        self.startX = self.x
-        self.startTime = self.parent.TimeCodeFromPctPos(float(self.startX)/self.canvassize[0])
-        self.isDragging = True
+        # Allow the underlying control to fire it's LeftDown method.
+        event.Skip()
+        # Left-click behavior in the Visualization Window is as follows:
+        #    Left-click positions a video according to the Visualization timeline position
+        #    Left-click-drag creates a selection in the Visualization
+        #    Left-click followed by Shift-Left-Click also creates such a selection.
+
+        # To make Shift-Left-Click selection work properly, we do NOTHING on LeftDown if Shift is pressed.
+        if not event.ShiftDown():
+            # Clear any existing Selection and Cursor
+            self.lines = []
+            # That wiped out the cursor too, which is okay, but let's remember that.
+            self.cursorPosition = None
+            # Put the focus on the Graphic
+            self.SetFocus()
+            # If we're click-dragging, we need visible feedback.  Therefore, let's start drawing until the mouse button is released.
+            # (Used in OnMotion.  Release by TransanaOnLeftUp.)
+            self.drawing = True
+            # Record the current mouse position
+            self.x = event.GetX() + (self.GetViewStart()[0] * self.GetScrollPixelsPerUnit()[0])
+            self.y = event.GetY() + (self.GetViewStart()[1] * self.GetScrollPixelsPerUnit()[1])
+            # We need to limit the mouse feedback to this widget only during this operation.  Therefore, we need to
+            # capture the Mouse activity, preventing other windows from coming into play even if the user drags off this control.
+            self.CaptureMouse()
+            # Return the position and event to the Parent control
+            self.parent.OnLeftDown(self.x, self.y, float(self.x)/self.canvassize[0], float(self.y)/self.canvassize[1])
+            # We need to remember the last horizontal position for the purpose of drawing and redrawing the selection box during drag
+            self.lastX = self.x
+            # Track the starting of selection and store it as a timecode
+            self.startX = self.x
+            self.startTime = self.parent.TimeCodeFromPctPos(float(self.startX)/self.canvassize[0])
+            # Indicate that we have started dragging on left-mouse-down
+            self.isDragging = True
 
     def TransanaOnLeftUp(self, event):
         """ Left Mouse Button released, transanaMode == true """
-        if self.HasCapture():
-            self.drawing = False
-            self.x = event.GetX() + (self.GetViewStart()[0] * self.GetScrollPixelsPerUnit()[0])
-            self.y = event.GetY() + (self.GetViewStart()[1] * self.GetScrollPixelsPerUnit()[1])
-            self.ReleaseMouse()
-            # If the release occurs off the canvas, reset the position to the canvas edge
-            self.x = min(self.x, self.canvassize[0])
-            self.x = max(self.x, 0)
-            self.y = min(self.y, self.canvassize[1])
-            self.y = max(self.y, 0)
-            # Return the position and event to the Parent control
-            self.parent.OnLeftUp(self.x, self.y, float(self.x)/self.canvassize[0], float(self.y)/self.canvassize[1])
-            # Draw a grey marker at x if left click has been made
-            if self.x == self.lastX:
-                self.SetStartMarker(self.x)
-            # We need to track the  position where we started this drag.  (see TransanaOnMotion below)
-            self.lastX = None
-            # Track the ending of a selection and store it as a timecode
+        # If Shift is pressed, that means we're making a selection, just as dragging does.
+        if event.ShiftDown():
+            # Note the current mouse position
             self.endX = self.x
+            # Translate Mouse Position into video time data
             self.endTime = self.parent.TimeCodeFromPctPos(float(self.endX)/self.canvassize[0])
-        if self.isDragging:
+            # Communicate with the Visualization Window to set the video selection values for Transana as a whole
+            self.parent.OnLeftUp(self.x, self.y, float(self.x)/self.canvassize[0], float(self.y)/self.canvassize[1])
+            # Signal that we need to re-draw the Visualization graphic buffer
+            self.reInitBuffer = True
+            # Incidate that we need to update the selection when we redraw the graphic
             self.reSetSelection = True
+        # If shift is not pressed, we've been dragging or have clicked a selection
+        else:
+            if self.HasCapture():
+                # We should turn off the redraw that updates the visual feedback regarding the Visualization selection
+                self.drawing = False
+                # Get the mouse position
+                self.x = event.GetX() + (self.GetViewStart()[0] * self.GetScrollPixelsPerUnit()[0])
+                self.y = event.GetY() + (self.GetViewStart()[1] * self.GetScrollPixelsPerUnit()[1])
+                # We can now release the mouse, making it accessible to other widgets again.
+                self.ReleaseMouse()
+                # If the release occurs off the graphic canvas, reset the position to the canvas edge
+                self.x = min(self.x, self.canvassize[0])
+                self.x = max(self.x, 0)
+                self.y = min(self.y, self.canvassize[1])
+                self.y = max(self.y, 0)
+                # Return the position and event to the Parent control
+                self.parent.OnLeftUp(self.x, self.y, float(self.x)/self.canvassize[0], float(self.y)/self.canvassize[1])
+                # Draw a grey marker at x if left click has been made
+                if self.x == self.lastX:
+                    self.SetStartMarker(self.x)
+                # We need to track the  position where we started this drag.  (see TransanaOnMotion below)
+                self.lastX = None
+                # Track the ending of a selection and store it as a timecode
+                self.endX = self.x
+                # Determine the end Time based on the mouse position
+                self.endTime = self.parent.TimeCodeFromPctPos(float(self.endX)/self.canvassize[0])
+            # If we've been dragging ...
+            if self.isDragging:
+                # ... We need to update the Visualization to indicate the selection
+                self.reSetSelection = True
+        # We need to indicate that we're not dragging any more.
         self.isDragging = False
+
+    def OnPassMouseLeftDown(self, event):
+        """ Enables passing the Left Mouse Down event up to the parent object """
+        # Allow the event to be processed by the control
+        event.Skip()
+        # If a parent object exists ...
+        if self.parent != None:
+            # ... pass the event to the parent's OnLeftDown handler
+            self.parent.OnLeftDown(event)
+
+    def OnPassMouseLeftUp(self, event):
+        """ Enables passing the Left and Right Mouse Up event up to the parent object """
+        # Allow the event to be processed by the control
+        event.Skip()
+        # If a parent object exists ...
+        if self.parent != None:
+            # ... pass the event to the parent's OnLeftUp handler
+            self.parent.OnLeftUp(event)
     
     def SetStartMarker(self, x):
         """ Add a grey line in lines[] at x """
@@ -522,8 +595,9 @@ class GraphicsControl(wx.ScrolledWindow):
 
     def OnPaint(self, event):
         """ Repaint Event """
-        # Simply push the buffered DC to the control's CD
-        dc = wx.BufferedPaintDC(self, self.bmpBuffer)
+        # Simply push the buffered DC to the control's CD.  The style parameter was added
+        # with wxPython 2.5.4 and is necessary to allow scrolling to work right.
+        dc = wx.BufferedPaintDC(self, self.bmpBuffer, style=wx.BUFFER_VIRTUAL_AREA)
 
     def GetMaxWidth(self, start=0):
         """ returns the width of the widest label in the text labels """
@@ -612,6 +686,8 @@ class GraphicsControl(wx.ScrolledWindow):
         self.AddLines([(int(y), 0, int(y), int(height-6))])
         # Remember the cursor position in the "lines" structure so that it can be removed
         self.cursorPosition = len(self.lines) - 1
+        
+        self.reInitBuffer = True
  
 
 

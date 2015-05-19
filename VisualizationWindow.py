@@ -35,6 +35,7 @@ import locale                 # import locale so we can get the default system e
 import os
 import sys
 import string
+import time
 import ctypes                 # used to access wceraudio DLL/Shared Library
 
 class VisualizationWindow(wx.Dialog):
@@ -76,6 +77,8 @@ class VisualizationWindow(wx.Dialog):
 
         # redrawWhenIdle signals that the Waveform picture needs to be drawn when the CPU has time
         self.redrawWhenIdle = False
+        # Let's keep track of time since last redraw too
+        self.lastRedrawTime = time.time()
         # If the video position needs to be set after a waveform redraw, set this value
         self.resetVideoPosition = 0
 
@@ -320,10 +323,11 @@ class VisualizationWindow(wx.Dialog):
 
     def OnIdle(self, event):
         """ Use Idle Time to handle the drawing in this control """
-        # Check to see if the waveform control needs to be redrawn
-        if self.redrawWhenIdle:
+        # Check to see if the waveform control needs to be redrawn.  Under the new Media Player, GetMediaLength takes a while to
+        # be set, so we should wait for that too.
+        if self.redrawWhenIdle  and (not self.ControlObject.shuttingDown) and (self.ControlObject.GetMediaLength() > 0):
             # Create the appropriate Waveform Graphic
-            if self.waveformFilename != '':
+            if (self.waveformFilename != ''):
                 try:
                     
                     # The Mac can't handle Unicode WaveFilenames at this point.  We need to upgrade to Python 2.4 for that.
@@ -362,7 +366,12 @@ class VisualizationWindow(wx.Dialog):
                     self.ClearVisualization()
                     self.redrawWhenIdle = False
                     if DEBUG:
-                        wx.Yield()
+                        # Beware of recursive Yields; trap the exception ...
+                        try:
+                            wx.Yield()
+                        # ... and ignore it!
+                        except:
+                            pass
                         print sys.exc_info()[0], sys.exc_info()[1]
                         import traceback
                         traceback.print_exc(file=sys.stdout)
@@ -389,37 +398,92 @@ class VisualizationWindow(wx.Dialog):
 
     def OnKeyDown(self, event):
         """ Captures Key Events to allow this window to control video playback during transcription. """
-        if event.ControlDown():
-            try:
-                c = event.GetKeyCode()
+        # Get the Key Code
+        c = event.GetKeyCode()
+
+        try:
+
+            # If Shift is Down ...
+            if event.ShiftDown():
+                # ... we move 1 second
+                timePerPixel = 1000.0
+            # if Alt is down ...
+            elif event.AltDown():
+                # ... we move 1/2 second
+                timePerPixel = 500.0
+            # If Ctrl is Down ...
+            elif event.ControlDown():
+                # ... we move 1 frame only
+                timePerPixel = 33.3667
+            # If no modifier key is down ...
+            else:
+                # We move 1 pixel rather than 1 frame.
+                # Determine the size of the waveform diagram
+                (width, height) = self.waveform.GetSizeTuple()
+                # Adjust for size of widget frame
+                width = width - 6
+                # Now calculate the amount of TIME a single pixel represents
+                timePerPixel = (self.waveformUpperLimit - self.waveformLowerLimit) / width
+                # Video Frame size is 1/29.97 of a second, or 33.3667 milliseconds.  1 frame is the minimum size to be moved here!
+                timePerPixel = max(timePerPixel, 33.3667)
+            # Determine the current position (in milliseconds) of the video
+            currentPos = self.ControlObject.GetVideoPosition()
+
+            if DEBUG:
+                print "Current Position:", currentPos
+                print "Lower Limit:", self.waveformLowerLimit
+                print "Upper Limit:", self.waveformUpperLimit
+                print "timePerPixel:", timePerPixel, width
+
+            # Ctrl-A -- Rewind video by 10 seconds
+            if (c == ord("A")) and event.ControlDown():
+                vpos = self.ControlObject.GetVideoPosition()
+                self.ControlObject.SetVideoStartPoint(vpos-10000)
+                self.ControlObject.SetVideoEndPoint(0)
+                # Play should always be initiated on Ctrl-A
+                self.ControlObject.Play(0)
+
+            # Ctrl-D -- Start / Pause without setback
+            elif (c == ord("D")) and event.ControlDown():
+                self.ControlObject.SetVideoEndPoint(0)
+                self.ControlObject.PlayPause(0)
+
+            # CTRL-F -- Advance video by 10 seconds
+            elif (c == ord("F")) and event.ControlDown():
+                vpos = self.ControlObject.GetVideoPosition()
+                self.ControlObject.SetVideoStartPoint(vpos+10000)
+                self.ControlObject.SetVideoEndPoint(0)
+                # Play should always be initiated on Ctrl-F
+                self.ControlObject.Play(0)
+
+            # Ctrl-S -- Start / Pause with setback
+            elif (c == ord("S")) and event.ControlDown():
+                self.ControlObject.SetVideoEndPoint(0)
+                self.ControlObject.PlayPause(1)
                 
-                # Ctrl-T -- Insert Time Code
-                if chr(c) == "T":
-                    self.OnCurrent(event)
+            # Ctrl-T -- Insert Time Code
+            elif (c == ord("T")) and event.ControlDown():
+                self.OnCurrent(event)
                     
-                # Ctrl-S -- Start / Pause with setback
-                elif chr(c) == "S":
-                    self.ControlObject.PlayPause(1)
-                    
-                # Ctrl-D -- Start / Pause without setback
-                elif chr(c) == "D":
-                    self.ControlObject.PlayPause(0)
+            # Cursor Left ...
+            elif c in [wx.WXK_LEFT, wx.WXK_NUMPAD_LEFT]:
+                # ... moves the video the equivalent of 1 pixel earlier in the video
+                if currentPos > self.waveformLowerLimit - timePerPixel:
+                    self.ControlObject.SetVideoStartPoint(currentPos - timePerPixel)
 
-                # Ctrl-A -- Rewind video by 10 seconds
-                elif chr(c) == "A":
-                    vpos = self.ControlObject.GetVideoPosition()
-                    self.ControlObject.SetVideoStartPoint(vpos-10000)
-                    # Play should always be initiated on Ctrl-A
-                    self.ControlObject.Play(0)
+            # Cursor Right ...
+            elif c in [wx.WXK_RIGHT, wx.WXK_NUMPAD_RIGHT]:
+                # ... moves the video the equivalent of 1 pixel later in the video
+                if currentPos < self.waveformUpperLimit + timePerPixel:
+                    self.ControlObject.SetVideoStartPoint(currentPos + timePerPixel)
 
-                # CTRL-F -- Advance video by 10 seconds
-                elif chr(c) == "F":
-                    vpos = self.ControlObject.GetVideoPosition()
-                    self.ControlObject.SetVideoStartPoint(vpos+10000)
-                    # Play should always be initiated on Ctrl-F
-                    self.ControlObject.Play(0)
+        except:
 
-            except:
+            if DEBUG:
+                print sys.exc_info()[0], sys.exc_info()[1]
+                import traceback
+                traceback.print_exc(file=sys.stdout)
+            else:
                 pass
 
     def OnZoomIn(self, event):
@@ -948,6 +1012,20 @@ class VisualizationWindow(wx.Dialog):
             self.waveformUpperLimit = self.waveformUpperLimit + 1
         pos = ((float(currentPosition - self.waveformLowerLimit)) / (self.waveformUpperLimit - self.waveformLowerLimit))
         self.waveform.DrawCursor(pos)
+        # Force a redraw at least every 0.2 seconds while the video is playing.  (Mostly for slow Macs)
+        if (self.ControlObject.IsPlaying()) and (time.time() - self.lastRedrawTime > 0.2):
+            self.waveform.reInitBuffer = True
+            self.waveform.OnIdle(None)
+            # While we're at it, let's see if we need to Yield().  This makes the app MUCH more responsive on slow systems. 
+            # There is an issue with recursive calls to wxYield, so trap the exception ...
+            try:
+                wx.YieldIfNeeded()
+            # ... and ignore it!
+            except:
+                pass
+            # Let's keep track of time since last redraw
+            self.lastRedrawTime = time.time()
+            
         # print '(%s-%s)/%s = Pos = %s' % (currentPosition, self.waveformLowerLimit, (self.waveformUpperLimit - self.waveformLowerLimit), pos)
 
     def OnLeftDown(self, x, y, xpct, ypct):

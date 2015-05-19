@@ -75,6 +75,12 @@ else:
     FRENCH_LABEL = 'Francais'
 ITALIAN_LABEL = 'Italiano'
 DUTCH_LABEL = 'Nederlands'
+if 'unicode' in wx.PlatformInfo:
+    NORWEGIAN_BOKMAL_LABEL = u'Norv\u00e9gien Bokm\u00e5l'
+    NORWEGIAN_NYNORSK_LABEL = u'Norv\u00e9gien Ny-norsk'
+else:
+    NORWEGIAN_BOKMAL_LABEL = 'Norvegien Bokmal'
+    NORWEGIAN_NYNORSK_LABEL = 'Norvegien Ny-norsk'
 POLISH_LABEL = 'Polish'
 if 'unicode' in wx.PlatformInfo:
     RUSSIAN_LABEL = u'\u0420\u0443\u0441\u0441\u043a\u0438\u0439'
@@ -145,6 +151,10 @@ class MenuWindow(wx.Frame):
                 TransanaGlobal.configData.language = 'it'
             elif initialLanguage == DUTCH_LABEL:
                 TransanaGlobal.configData.language = 'nl'
+            elif initialLanguage == NORWEGIAN_BOKMAL_LABEL:
+                TransanaGlobal.configData.language = 'nb'
+            elif initialLanguage == NORWEGIAN_NYNORSK_LABEL:
+                TransanaGlobal.configData.language = 'nn'
             elif initialLanguage == POLISH_LABEL:
                 TransanaGlobal.configData.language = 'pl'
             elif initialLanguage == RUSSIAN_LABEL:
@@ -232,6 +242,14 @@ class MenuWindow(wx.Frame):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'nl', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.presLan_nl = gettext.translation('Transana', 'locale', languages=['nl']) # Dutch
+        # Norwegian Bokmal
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'nb', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.presLan_nb = gettext.translation('Transana', 'locale', languages=['nb']) # Norwegian Bokmal
+        # Norwegian Ny-norsk
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'nn', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.presLan_nn = gettext.translation('Transana', 'locale', languages=['nn']) # Norwegian Ny-norsk
         # Polish
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'pl', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -290,6 +308,16 @@ class MenuWindow(wx.Frame):
         elif (TransanaGlobal.configData.language == 'nl'):
             lang = wx.LANGUAGE_DUTCH
             self.presLan_nl.install()
+
+        # Norwegian Bokmal
+        elif (TransanaGlobal.configData.language == 'nb'):
+            lang = wx.LANGUAGE_NORWEGIAN_BOKMAL
+            self.presLan_nb.install()
+            
+        # Norwegian Ny-norsk
+        elif (TransanaGlobal.configData.language == 'nn'):
+            lang = wx.LANGUAGE_NORWEGIAN_NYNORSK
+            self.presLan_nn.install()
 
         # Polish
         elif (TransanaGlobal.configData.language == 'pl'):
@@ -387,6 +415,8 @@ class MenuWindow(wx.Frame):
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_SETTINGS, self.OnOptionsSettings)
         # Define handler for Options > Language changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_LANGUAGE_EN, MenuSetup.MENU_OPTIONS_LANGUAGE_ZH, self.OnOptionsLanguage)
+        # Define handler for Options > Quick Clip Mode
+        wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_SIMPLE_CLIPS, self.OnOptionsQuickClipMode)
         # Define handler for Options > Auto Word-tracking
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_WORDTRACK, self.OnOptionsWordTrack)
         # Define handler for Options > Auto-Arrange
@@ -745,8 +775,10 @@ class MenuWindow(wx.Frame):
             messageServerPort = TransanaGlobal.configData.messageServerPort
         # Open the Options Settings Dialog Box
         OptionsSettings.OptionsSettings(self)
-        # Change video speed here
-        self.ControlObject.VideoWindow.SetPlayBackSpeed(TransanaGlobal.configData.videoSpeed)
+        # If the video speed was changed ...
+        if self.ControlObject.VideoWindow.GetPlayBackSpeed() != TransanaGlobal.configData.videoSpeed/10.0:
+            # Change video speed here
+            self.ControlObject.VideoWindow.SetPlayBackSpeed(TransanaGlobal.configData.videoSpeed)
         # If MU, if Message Server or Message Server Port is changed, we need to
         # reset the Message Server.
         if not TransanaConstants.singleUserVersion:
@@ -806,6 +838,16 @@ class MenuWindow(wx.Frame):
             TransanaGlobal.configData.language = 'nl'
             self.presLan_nl.install()
 
+        # Norwegian Bokmal
+        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NB:
+            TransanaGlobal.configData.language = 'nb'
+            self.presLan_nb.install()
+
+        # Norwegian Ny-norsk
+        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NN:
+            TransanaGlobal.configData.language = 'nn'
+            self.presLan_nn.install()
+
         # Polish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_PL:
             TransanaGlobal.configData.language = 'pl'
@@ -848,6 +890,11 @@ class MenuWindow(wx.Frame):
         infodlg.Destroy()
         
         self.ControlObject.ChangeLanguages()
+
+    def OnOptionsQuickClipMode(self, event):
+        """ Handler for Options > Quick Clip Mode """
+        # All we need to do is toggle the global value when teh menu option is changed
+        TransanaGlobal.configData.quickClipMode = event.IsChecked()
 
     def OnOptionsAutoArrange(self, event):
         """ Handler for Options > Auto-Arrange """
@@ -967,12 +1014,17 @@ class MenuWindow(wx.Frame):
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_IT, _("&Italian"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_NL) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_NL, _("D&utch"))
+        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_NB) != None:
+            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_NB, _("Norwegian Bokmal"))
+        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_NN) != None:
+            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_NN, _("Norwegian Ny-norsk"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_PL) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_PL, _("&Polish"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_RU) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_RU, _("&Russian"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_SV) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_SV, _("S&wedish"))
+        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_SIMPLE_CLIPS, _("Quick Clip Mode"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_WORDTRACK, _("Auto &Word-tracking"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_WAVEFORMQUICKLOAD, _("&Waveform Quick-load"))
@@ -1028,6 +1080,14 @@ class MenuWindow(wx.Frame):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'nl', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             languages.append(DUTCH_LABEL)
+        # Norwegian Bokmal
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'nb', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            languages.append(NORWEGIAN_BOKMAL_LABEL)
+        # Norwegian Ny-norsk
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'nn', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            languages.append(NORWEGIAN_NYNORSK_LABEL)
         # Polish
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'pl', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):

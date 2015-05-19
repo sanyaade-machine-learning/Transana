@@ -122,6 +122,8 @@ class AboutBox(wx.Dialog):
             str = _("Italian translation provided by\nPeri Weingrad, University of Michigan & Terenziano Speranza, Rome, Italy")
         elif TransanaGlobal.configData.language == 'nl':
             str = _("Dutch translation provided by\nFleur van der Houwen.")
+        elif TransanaGlobal.configData.language in ['nb', 'nn']:
+            str = _("Norwegian translations provided by\nDr. Dan Yngve Jacobsen, Department of Psychology,\nNorwegian University of Science and Technology, Trondheim")
         elif TransanaGlobal.configData.language == 'pl':
             str = _("Polish translation provided by\n.")
         elif TransanaGlobal.configData.language == 'ru':

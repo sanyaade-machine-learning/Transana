@@ -33,13 +33,13 @@ import threading
 import time
 
 # Indicate whether DEBUG messages should be shown or not.
-DEBUG = False
+DEBUG = True
 if DEBUG:
     print "MessageServer200 DEBUG is ON!"
 
 # We can run the MessageServer as a Stand-alone utility program for debugging
 # or it can run as a Service on Windows.
-RUNASWINSERVICE = True and (sys.platform == 'win32')
+RUNASWINSERVICE = True and (sys.platform == 'win32') and (not DEBUG)
 
 # NOTE:  DEBUG cannot be used if running as a Service
 if DEBUG and RUNASWINSERVICE:
@@ -346,12 +346,6 @@ class connectionThread(threading.Thread):
             Service is unable to Stop. """
         # How do we kill the thread?  I'm trying this!  It should signal the thread to quit.
         self.keepRunning = False
-        # Remove this address from our connections list
-#        del(self.parent.connections[self.address])
-      
-        # Close the socket connection
-#        self.connection.close()
-
 
 
 class dispatcher(object):
@@ -363,7 +357,6 @@ class dispatcher(object):
         self.connections = {}
 
         if DEBUG:
-            self.reportCounter = 0
             self.Report()
 
         # Create a TCP Socket object
@@ -401,45 +394,18 @@ class dispatcher(object):
         print
         t = threading.Timer(30.0, self.Report)
         t.start()
-        self.reportCounter += 1
 
-        print "reportCounter =", self.reportCounter,
-        
-        if self.reportCounter == 4:
-
-            print "Killing all threads."
-                
-            self.KillAllThreads()
-            self.reportCounter = 0
-        else:
-            print
 
     def KillAllThreads(self):
         for thr in threading.enumerate():
             if isinstance(thr, connectionThread):
                 # Tell the threads they should kill themselves when they get their next message
                 thr.CommitSuicide()
-        # The above only tells the threads to quit after the next message, so let's send a message to finish the task.
-#        for thr in threading.enumerate():
-            # This "if" ensures that only communication threads are processed, not the main program thread
-#            if isinstance(thr, connectionThread):
-#                try:
-                    # pass the message to other threads.
-#                    thr.BroadcastMessage('D %s' % self.connections[thr.address]['name'], self.connections[thr.address]['name'], self.connections[thr.address]['dbHost'], self.connections[thr.address]['dbName'])
-                    
-#                    if DEBUG:
-#                        print "KillAllThreads(): 'D %s'" % self.connections[thr.address]['name']
-                        
-#                except:
-#                    if DEBUG:
-#                        print "Key Error??"
-#                    continue
         
     if DEBUG:
         print "Starting MessageServer on port %d" % myPort
 
 if RUNASWINSERVICE:
-    # print "Running as a service?"
 
     # See Chapter 18 of Hammond and Robinson's "Python Programming on Win32"
 

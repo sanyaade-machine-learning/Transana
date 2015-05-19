@@ -26,9 +26,12 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas A. Sambhare, Nathaniel C
 
 import wx
 from TransanaExceptions import *
+import TransanaConstants
 import TransanaGlobal
 
-if wx.Platform == "__WXMSW__":
+if TransanaConstants.NEWVIDEOPLAYER:
+    from video_player import *
+elif wx.Platform == "__WXMSW__":
     from video_msw import *
 elif wx.Platform == "__WXMAC__":
     from video_mac import *
@@ -73,9 +76,6 @@ class VideoWindow(object):
     def open_media_file(self, video_file):
         """Open a media file for playback and reset media."""
         self.frame.SetFilename(video_file)
-        
-    def close_media_file(self):
-        """Clear the media display, unload media file."""
         
     def Play(self):
         """Start playback."""
@@ -152,40 +152,11 @@ class VideoWindow(object):
     def SetDims(self, left, top, width, height):
         self.frame.SetDimensions(left, top, width, height)
 
-    def play_pause_gb(self):
-        """Play if paused, pause if playing. Implicit go-back by 2 seconds, 
-        for easy transcription."""
-            
-    def fast_forward(self):
-        """Start playback in fast forward mode if supported by media."""
-    def slow_motion(self):
-        """Start playback in slow motion mode if supported by media.""" 
-    def seek(self, media_position):
-        """Update the seekbar position to given value, or return current seek
-        position if called with -1."""
-    def original_size_screen(self):
-        """Set display size to 100%."""
-    def onepointfive_size_screen(self):
-        """Set display size to 150%."""
-    def double_size_screen(self):
-        """Set display size to 200%."""
-    def full_size_screen(self):
-        """Set fullscreen display."""
-    def video_and_transcript_screen(self):
-        """Set display to presentation mode size."""
-    def audio_only_screen(self):
-        """Set display for audio only."""
-    def set_volume(self):
-        """Set volume for playback."""
-    def mute_unmute(self):
-        """Toggle the mute setting."""
-    def supported_media_types(self):
-        """Return a list of supported media types."""
-        # FIXME: This is just a hardcoded placeholder for now
-        return ["mpg", "mp3", "wav"]
-
     def close(self):
         """ Close the Video Frame """
+        # Signal to the Control Object that we're shutting down.  This indicates that the Video Window is no longer available.
+        if self.ControlObject != None:
+            self.ControlObject.shuttingDown = True
         self.frame.Close()
 
     def ReadyState(self):

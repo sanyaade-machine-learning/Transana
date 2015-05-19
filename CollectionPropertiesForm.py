@@ -44,7 +44,7 @@ class CollectionPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.width.PercentOf(self.panel, wx.Width, 40)  # 40% width
         lay.height.AsIs()
-        id_edit = self.new_edit_box(_("Collection ID"), lay, self.obj.id)
+        id_edit = self.new_edit_box(_("Collection ID"), lay, self.obj.id, maxLen=100)
 
         # Owner layout
         lay = wx.LayoutConstraints()
@@ -52,7 +52,7 @@ class CollectionPropertiesForm(Dialogs.GenForm):
         lay.left.RightOf(id_edit, 10)           # 10 right of series ID
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
-        owner_edit = self.new_edit_box(_("Owner"), lay, self.obj.owner)
+        owner_edit = self.new_edit_box(_("Owner"), lay, self.obj.owner, maxLen=100)
 
         # Title/Comment layout
         lay = wx.LayoutConstraints()
@@ -60,7 +60,7 @@ class CollectionPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
-        comment_edit = self.new_edit_box(_("Title/Comment"), lay, self.obj.comment)
+        comment_edit = self.new_edit_box(_("Title/Comment"), lay, self.obj.comment, maxLen=255)
 
         # Default KW Group Layout
         lay = wx.LayoutConstraints()

@@ -74,6 +74,8 @@ MENU_OPTIONS_LANGUAGE_IT        =  wx.NewId()  # Italian
 MENU_OPTIONS_LANGUAGE_JA        =  wx.NewId()  # Japanese
 MENU_OPTIONS_LANGUAGE_KO        =  wx.NewId()  # Korean
 MENU_OPTIONS_LANGUAGE_NL        =  wx.NewId()  # Dutch
+MENU_OPTIONS_LANGUAGE_NB        =  wx.NewId()  # Norwegian Bokmal
+MENU_OPTIONS_LANGUAGE_NN        =  wx.NewId()  # Norwegian Ny-norsk
 MENU_OPTIONS_LANGUAGE_PL        =  wx.NewId()  # Polish
 MENU_OPTIONS_LANGUAGE_RU        =  wx.NewId()  # Russian
 MENU_OPTIONS_LANGUAGE_SV        =  wx.NewId()  # Swedish
@@ -82,6 +84,7 @@ MENU_OPTIONS_LANGUAGE_ZH        =  wx.NewId()  # Chinese
 #        If you scan through MenuSetup.py and MenuWindow.py for language code and add the language for MySQL
 #        in DBInterface.InitializeSingleUserDatabase(), you should be all set.
 
+MENU_OPTIONS_SIMPLE_CLIPS       =  wx.NewId()
 MENU_OPTIONS_WORDTRACK          =  wx.NewId()
 MENU_OPTIONS_AUTOARRANGE        =  wx.NewId()
 MENU_OPTIONS_WAVEFORMQUICKLOAD  =  wx.NewId()
@@ -198,6 +201,14 @@ class MenuSetup(wx.MenuBar):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'nl', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_NL, _("D&utch"), kind=wx.ITEM_RADIO)
+        # Norwegian Bokmal
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'nb', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_NB, _("Norwegian Bokmal"), kind=wx.ITEM_RADIO)
+        # Norwegian Ny-norsk
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'nn', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_NN, _("Norwegian Ny-norsk"), kind=wx.ITEM_RADIO)
         # Polish
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'pl', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -218,6 +229,7 @@ class MenuSetup(wx.MenuBar):
             # self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_KO, _("English prompts, Korean data"), kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_LANGUAGE, _("&Language"), self.optionslanguagemenu)
         self.optionsmenu.AppendSeparator()
+        self.optionsmenu.Append(MENU_OPTIONS_SIMPLE_CLIPS, _("Quick Clip Mode"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_WORDTRACK, _("Auto Word-&tracking"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_WAVEFORMQUICKLOAD, _("&Waveform Quick-load"), kind=wx.ITEM_CHECK)
@@ -253,6 +265,10 @@ class MenuSetup(wx.MenuBar):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_IT, True)
         elif TransanaGlobal.configData.language == 'nl':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_NL, True)
+        elif TransanaGlobal.configData.language == 'nb':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_NB, True)
+        elif TransanaGlobal.configData.language == 'nn':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_NN, True)
         elif TransanaGlobal.configData.language == 'pl':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_PL, True)
         elif TransanaGlobal.configData.language == 'ru':
@@ -267,6 +283,7 @@ class MenuSetup(wx.MenuBar):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_KO, True)
             
         # Set Options Menu items to their initial values based on Configuration Data
+        self.optionsmenu.Check(MENU_OPTIONS_SIMPLE_CLIPS, TransanaGlobal.configData.quickClipMode)
         self.optionsmenu.Check(MENU_OPTIONS_WORDTRACK, TransanaGlobal.configData.wordTracking)
         self.optionsmenu.Check(MENU_OPTIONS_AUTOARRANGE, TransanaGlobal.configData.autoArrange)
         self.optionsmenu.Check(MENU_OPTIONS_WAVEFORMQUICKLOAD, TransanaGlobal.configData.waveformQuickLoad)

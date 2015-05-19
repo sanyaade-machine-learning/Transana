@@ -354,7 +354,17 @@ class RTFParser:
 
                         if DEBUG:
                             print "after:", self.buf[self.index - 10:self.index + 10]
+                    elif (val == 164) and ('wxMac' in wx.PlatformInfo):
+
+                        if DEBUG:
+                            print "OLD STYLE TIME CODE detected.  before:", self.buf[self.index - 10:self.index + 10],
+                            
+                        # We need to replace them in the self.buf text.  
+                        self.buf = self.buf[:self.index+2] + 'a7' + self.buf[self.index+4:]
                         
+                        if DEBUG:
+                            print "OLD STYLE TIME CODE detected.  after:", self.buf[self.index - 10:self.index + 10],
+
                     s = unicode(chr(val), 'latin1')
                     # s = u'%s' % self.buf[self.index:self.index+4]
 
