@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -115,7 +115,7 @@ class KeywordListEditForm(Dialogs.GenForm):
         lay.width.SameAs(txt, wx.Width)          # width same as label
         lay.bottom.SameAs(self.panel, wx.Height, 45)   # 45 from bottom
         
-        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list)
+        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list, style=wx.LB_EXTENDED)
         self.kw_lb.SetConstraints(lay)
 
         wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnAddKW)
@@ -168,7 +168,7 @@ class KeywordListEditForm(Dialogs.GenForm):
         lay.bottom.SameAs(self.panel, wx.Height, 45)   # 45 from bottom
         
         # Create an empty ListBox
-        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize)
+        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, style=wx.LB_EXTENDED)
         # Populate the ListBox
         for clipKeyword in self.keywords:
             self.ekw_lb.Append(clipKeyword.keywordPair)
@@ -217,39 +217,46 @@ class KeywordListEditForm(Dialogs.GenForm):
         
     def OnAddKW(self, evt):
         """Invoked when the user activates the Add Keyword (>>) button."""
-        kw_name = self.kw_lb.GetStringSelection()
-        if not kw_name:
-            return
-        kwg_name = self.kw_group_lb.GetStringSelection()
-        if not kwg_name:
-            # This shouldn't really happen anymore though
-            return
-        ep_kw = "%s : %s" % (kwg_name, kw_name)
-
-        # We need to check to see if the keyword is already in the keyword list
-        keywordFound = False
-        # Iterate through the list
-        for clipKeyword in self.keywords:
-            # If we find a match, set the flag and quit looking.
-            if (clipKeyword.keywordGroup == kwg_name) and (clipKeyword.keyword == kw_name):
-                keywordFound = True
-                break
-
-        # If the keyword is not found, add it.  (If it's already there, we don't need to do anything!)
-        if not keywordFound:
-            # Create an appropriate ClipKeyword Object
-            tempClipKeyword = ClipKeywordObject.ClipKeyword(kwg_name, kw_name)
-            # Add it to the Keyword List
-            self.keywords.append(tempClipKeyword)
-            self.ekw_lb.Append(ep_kw)
-            
+        # For each selected Keyword ...
+        for item in self.kw_lb.GetSelections():
+            # ... get the keyword group name ...
+            kwg_name = self.kw_group_lb.GetStringSelection()
+            # ... get the keyword name ...
+            kw_name = self.kw_lb.GetString(item)
+            # ... build the kwg : kw combination ...
+            ep_kw = "%s : %s" % (kwg_name, kw_name)
+     
+            # We need to check to see if the keyword is already in the keyword list
+            keywordFound = False
+            # Iterate through the list
+            for clipKeyword in self.keywords:
+                # If we find a match, set the flag and quit looking.
+                if (clipKeyword.keywordGroup == kwg_name) and (clipKeyword.keyword == kw_name):
+                    keywordFound = True
+                    break
+     
+            # If the keyword is not found, add it.  (If it's already there, we don't need to do anything!)
+            if not keywordFound:
+                # Create an appropriate ClipKeyword Object
+                tempClipKeyword = ClipKeywordObject.ClipKeyword(kwg_name, kw_name)
+                # Add it to the Keyword List
+                self.keywords.append(tempClipKeyword)
+                self.ekw_lb.Append(ep_kw)
         
     def OnRemoveKW(self, evt):
         """Invoked when the user activates the Remove Keyword (<<) button."""
-        sel = self.ekw_lb.GetSelection()
-        if sel > wx.NOT_FOUND:
+        # Get the selection(s) from the Episode Keywords list box
+        kwitems = self.ekw_lb.GetSelections()
+        # The items are returned as an immutable tuple.  Convert this to a list.
+        kwitems = list(kwitems)
+        # Now sort the list.  For reasons that elude me, the list is arbitrarily ordered on the Mac, which causes
+        # deletes to be done out of order so the wrong elements get deleted, which is BAD.
+        kwitems.sort()
+        # We have to go through the list items BACKWARDS so that item numbers don't change on us as we delete items!
+        for item in range(len(kwitems), 0, -1):
+            sel = kwitems[item - 1]
             # Separate out the Keyword Group and the Keyword
-            kwlist = string.split(self.ekw_lb.GetStringSelection(), ':')
+            kwlist = string.split(self.ekw_lb.GetString(sel), ':')
             kwg = string.strip(kwlist[0])
             kw = ':'.join(kwlist[1:]).strip()
             for index in range(len(self.keywords)):
@@ -278,7 +285,6 @@ class KeywordListEditForm(Dialogs.GenForm):
                             self.ekw_lb.Delete(sel)
                     break
 
- 
     def OnKWManage(self, evt):
         """Invoked when the user activates the Keyword Management button."""
         # Create and display the Keyword Management Dialog

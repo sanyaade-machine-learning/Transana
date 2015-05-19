@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -180,7 +180,7 @@ class TranscriptToolbar(wx.ToolBar):
         # Set the Initial State of the Editing Buttons to "False"
         for x in (self.CMD_UNDO_ID, self.CMD_BOLD_ID, self.CMD_ITALIC_ID, self.CMD_UNDERLINE_ID, \
                     self.CMD_RISING_INT_ID, self.CMD_FALLING_INT_ID, \
-                    self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID):
+                    self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID, self.CMD_PROPAGATE_ID):
             self.EnableTool(x, False)
 
     def GetNextId(self):
@@ -199,7 +199,6 @@ class TranscriptToolbar(wx.ToolBar):
         self.ToggleTool(self.CMD_SHOWHIDE_ID, False)
         self.ToggleTool(self.CMD_SHOWHIDETIME_ID, False)
         self.UpdateEditingButtons()
-        self.EnableTool(self.CMD_PROPAGATE_ID, False)
         # Clear the Search Text
         self.parent.ClearSearch()
         
@@ -263,7 +262,7 @@ class TranscriptToolbar(wx.ToolBar):
         can_edit = self.GetToolState(self.CMD_READONLY_ID)
         # If leaving edit mode, prompt for save if necessary.
         if not can_edit:
-            if not self.parent.ControlObject.SaveTranscript(1):
+            if not self.parent.ControlObject.SaveTranscript(1, transcriptToSave=self.parent.transcriptWindowNumber):
                 # Reset the Toolbar
                 self.ClearToolbar()
                 # User chose to not save, revert back to database version
@@ -384,7 +383,7 @@ class TranscriptToolbar(wx.ToolBar):
         can_edit = not self.parent.editor.get_read_only()
         for x in (self.CMD_UNDO_ID, self.CMD_BOLD_ID, self.CMD_ITALIC_ID, self.CMD_UNDERLINE_ID, \
                     self.CMD_RISING_INT_ID, self.CMD_FALLING_INT_ID, \
-                    self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID):
+                    self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID, self.CMD_PROPAGATE_ID):
             self.EnableTool(x, can_edit)
         # Enable/Disable Transcript menu Items
         self.parent.ControlObject.SetTranscriptEditOptions(can_edit)
@@ -399,24 +398,24 @@ class TranscriptToolbar(wx.ToolBar):
         # Determine if a Transcript is loaded, and if so, what kind
         if self.parent.editor.TranscriptObj != None:
             # Initialize a list where we can keep track of clip transcripts that are locked because they are in Edit mode.
-            clipTranscriptLocked = []
+            TranscriptLocked = []
             try:
+                # If an episode/clip has multiple transcripts, we could run into lock problems.  Let's try to detect that.
+                # (This is probably poor form from an object-oriented standpoint, but I don't know a better way.)
+                # For each currently-open Transcript window ...
+                for trWin in self.parent.ControlObject.TranscriptWindow:
+                    # ... note if the transcript is currently locked.
+                    TranscriptLocked.append(trWin.dlg.editor.TranscriptObj.isLocked)
+                    # If it is locked ...
+                    if trWin.dlg.editor.TranscriptObj.isLocked:
+                        # Leave Edit Mode, which will prompt about saving the Transcript.
+                        # a) toggle the button
+                        trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_READONLY_ID, not trWin.dlg.toolbar.GetToolState(trWin.dlg.toolbar.CMD_READONLY_ID))
+                        # b) call the event that responds to the button state change
+                        trWin.dlg.toolbar.OnReadOnlySelect(evt)
+
                 # If the underlying Transcript object has a clip number, we're working with a CLIP.
                 if self.parent.editor.TranscriptObj.clip_num > 0:
-                    # If a clip has multiple transcripts, we could run into lock problems.  Let's try to detect that.
-                    # (This is probably poor form from an object-oriented standpoint, but I don't know a better way.)
-                    # For each currently-open Transcript window ...
-                    for trWin in self.parent.ControlObject.TranscriptWindow:
-                        # ... note if the clip transcript is currently locked.
-                        clipTranscriptLocked.append(trWin.dlg.editor.TranscriptObj.isLocked)
-                        # If it is locked ...
-                        if trWin.dlg.editor.TranscriptObj.isLocked:
-                            # Leave Edit Mode, which will prompt about saving the Transcript.
-                            # a) toggle the button
-                            trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_READONLY_ID, not trWin.dlg.toolbar.GetToolState(trWin.dlg.toolbar.CMD_READONLY_ID))
-                            # b) call the event that responds to the button state change
-                            trWin.dlg.toolbar.OnReadOnlySelect(evt)
-
                     # Finally, we can load the Clip object
                     obj = Clip.Clip(self.parent.editor.TranscriptObj.clip_num)
                 # Otherwise ...
@@ -532,8 +531,8 @@ class TranscriptToolbar(wx.ToolBar):
 
                     # If the Transcript Object was updated during this reload (due to having been
                     # edited in the interim by another user) we need to refresh the editor!
-                    # Check the new LastSaveTime with the original one.
-                    if not msgShown and (oldLastSaveTime[cnt] != trWin.dlg.editor.TranscriptObj.lastsavetime):
+                    # Check that we had a record lock and check the new LastSaveTime with the original one.
+                    if not TranscriptLocked[cnt] and (not msgShown and (oldLastSaveTime[cnt] != trWin.dlg.editor.TranscriptObj.lastsavetime)):
                         msg = _('This Transcript has been updated since you originally loaded it!\nYour copy of the record will be refreshed to reflect the changes.')
                         dlg = Dialogs.InfoDialog(trWin.dlg, msg)
                         dlg.ShowModal()
@@ -569,14 +568,12 @@ class TranscriptToolbar(wx.ToolBar):
                             trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_SHOWHIDETIME_ID, True)
                             trWin.dlg.toolbar.OnShowHideValues(evt)
 
-                    # If we are in a clip that used to be in Edit Mode (flagged earlier) ...
-                    if (self.parent.editor.TranscriptObj.clip_num > 0) and clipTranscriptLocked[cnt]:
-                        # ... update the transcript window's Last Save Time, so we don't get error messages about loading new transcripts ...
-                        trWin.dlg.editor.TranscriptObj.lastsavetime = self.parent.editor.TranscriptObj.lastsavetime
+                    # If we have locked transcripts (flagged earlier) ...
+                    if TranscriptLocked[cnt]:
                         # ... toggle the Edit Mode button ...
                         trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_READONLY_ID, not trWin.dlg.toolbar.GetToolState(trWin.dlg.toolbar.CMD_READONLY_ID))
                         # ... and call the event associated with toggling the button.  This puts us back in Edit
-                        # mode and re-locks the Clip Transcript.
+                        # mode and re-locks the Transcript.
                         trWin.dlg.toolbar.OnReadOnlySelect(evt)
 
             except TransanaExceptions.RecordLockedError, e:

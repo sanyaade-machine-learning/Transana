@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -81,6 +81,8 @@ class VideoWindow(wx.Dialog):
         # Create a variable to hold the offset for all media files, needed if we have a CLIP that does not include
         # the FIRST Episode Video!
         self.globalOffset = 0
+        # Initialize the maximum offset
+        self.maxOffset = 0
         # We need to know which player starts FIRST, to be used as the reference for all others
         self.referencePlayer = 0
         # Create a vertical box sizer as the main sizer
@@ -336,6 +338,7 @@ class VideoWindow(wx.Dialog):
                 # ... DON'T play it, but signal that is has NOT been played yet.  (When the current position
                 # catches up, the media file will start playing automatically.)
                 self.hasPlayed[mp.playerNum - 1] = False
+        # Change the button image
         img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Pause.xpm"), wx.BITMAP_TYPE_XPM)
         self.btnPlayPause.SetBitmapLabel(img)
                 
@@ -345,6 +348,9 @@ class VideoWindow(wx.Dialog):
         for mp in self.mediaPlayers:
             # ... tell it to Pause!
             mp.Pause()
+        # Change the button image
+        img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
+        self.btnPlayPause.SetBitmapLabel(img)
 
     def Stop(self):
         """Reset media, stop playback or pause mode, set seek to start."""
@@ -352,6 +358,9 @@ class VideoWindow(wx.Dialog):
         for mp in self.mediaPlayers:
             # ... tell it to Stop!
             mp.Stop()
+        # Change the button image
+        img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
+        self.btnPlayPause.SetBitmapLabel(img)
 
     def SetVideoStartPoint(self, TimeCode):
         """ Sets the Video Starting Point. """
@@ -730,7 +739,7 @@ class VideoWindow(wx.Dialog):
             # If there is a current object in the main interface ...
             else:
                 #  Establish the minimum size of the media player control (if media is audio-only, for example)
-                (sizeX, sizeY) = (220, 0)
+                (sizeX, sizeY) = (300, 0)
                 # Check the media players
                 for mp in self.mediaPlayers:
                     # Get the size of the video 

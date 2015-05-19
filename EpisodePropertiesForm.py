@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -123,7 +123,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         lay = wx.LayoutConstraints()
         lay.top.Below(txt, 3)                          # 3 under prompt
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 80)  # 80% width
+        lay.width.PercentOf(self.panel, wx.Width, 75)  # 80% width
         lay.height.AsIs()
         # If the media filename path is not empty, we should normalize the path specification
         if self.obj.media_filename == '':
@@ -136,7 +136,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         for vid in self.obj.additional_media_files:
             # ... add it to the filename list
             self.filenames.append(vid['filename'])
-        self.fname_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.Size(200, 60), self.filenames)
+        self.fname_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.Size(180, 60), self.filenames)
         self.fname_lb.SetConstraints(lay)
         self.fname_lb.SetDropTarget(ListBoxFileDropTarget(self.fname_lb))
         
@@ -232,7 +232,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         lay.width.SameAs(txt, wx.Width)                # width same as label
         lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
         
-        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list)
+        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list, style=wx.LB_EXTENDED)
         self.kw_lb.SetConstraints(lay)
 
         wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnAddKW)
@@ -285,7 +285,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
         
         # Create an empty ListBox
-        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize)
+        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, style=wx.LB_EXTENDED)
         # Populate the ListBox
         for episodeKeyword in self.obj.keyword_list:
             self.ekw_lb.Append(episodeKeyword.keywordPair)
@@ -351,8 +351,8 @@ class EpisodePropertiesForm(Dialogs.GenForm):
             (fn, ext) = os.path.splitext(self.obj.media_filename)
             # If we have a known File Type or if blank, use "All Media Files".
             # If it's an unrecognized type, go to "All Files"
-            if ext.lower() in ['.mpg', '.avi', '.mov', '.mp4', '.m4v', '.wmv', '.mp3', '.wav', '.wma', '']:
-                fileType =  '*.mpg;*.avi;*.mov;*.mp4;*.m4v;*.wmv;*.mp3;*.wav;*.wma'
+            if ext.lower() in ['.mpg', '.avi', '.mov', '.mp4', '.m4v', '.wmv', '.mp3', '.wav', '.wma', '.aac', '']:
+                fileType =  '*.mpg;*.avi;*.mov;*.mp4;*.m4v;*.wmv;*.mp3;*.wav;*.wma;*.aac'
             else:
                 fileType = ''
             # Invoke the File Selector with the proper default directory, filename, file type, and style
@@ -474,8 +474,8 @@ class EpisodePropertiesForm(Dialogs.GenForm):
                 # Get the data from the Synchronize Dialog and assign it to the second media file's "offset" property
                 self.obj.additional_media_files[indx - 1]['offset'] = offsetVal
                 self.obj.additional_media_files[indx - 1]['length'] = lengthVal
-            # Destroy the Synchronize Dialog
-            synchDlg.Destroy()
+                # Destroy the Synchronize Dialog
+                synchDlg.Destroy()
         # If there is no selection ...
         else:
             # Create and display an error message
@@ -553,31 +553,45 @@ class EpisodePropertiesForm(Dialogs.GenForm):
 
     def OnAddKW(self, evt):
         """Invoked when the user activates the Add Keyword (>>) button."""
-        kw_name = self.kw_lb.GetStringSelection()
-        if not kw_name:
-            return
-        kwg_name = self.kw_group_lb.GetStringSelection()
-        if not kwg_name:
-            # This shouldn't really happen anymore though
-            return
-        ep_kw = "%s : %s" % (kwg_name, kw_name)
-        if self.ekw_lb.FindString(ep_kw) == -1:
-            self.obj.add_keyword(kwg_name, kw_name)
-            self.ekw_lb.Append(ep_kw)
-            
+        # For each selected Keyword ...
+        for item in self.kw_lb.GetSelections():
+            # ... get the keyword group name ...
+            kwg_name = self.kw_group_lb.GetStringSelection()
+            # ... get the keyword name ...
+            kw_name = self.kw_lb.GetString(item)
+            # ... build the kwg : kw combination ...
+            ep_kw = "%s : %s" % (kwg_name, kw_name)
+            # ... and if it's NOT already in the Episode Keywords list ...
+            if self.ekw_lb.FindString(ep_kw) == -1:
+                # ... add the keyword to the Episode object ...
+                self.obj.add_keyword(kwg_name, kw_name)
+                # ... and add it to the Episode Keywords list box
+                self.ekw_lb.Append(ep_kw)
         
     def OnRemoveKW(self, evt):
         """Invoked when the user activates the Remove Keyword (<<) button."""
-        sel = self.ekw_lb.GetSelection()
-        if sel > -1:
+        # Get the selection(s) from the Episode Keywords list box
+        kwitems = self.ekw_lb.GetSelections()
+        # The items are returned as an immutable tuple.  Convert this to a list.
+        kwitems = list(kwitems)
+        # Now sort the list.  For reasons that elude me, the list is arbitrarily ordered on the Mac, which causes
+        # deletes to be done out of order so the wrong elements get deleted, which is BAD.
+        kwitems.sort()
+        # We have to go through the list items BACKWARDS so that item numbers don't change on us as we delete items!
+        for item in range(len(kwitems), 0, -1):
+            # Get the STRING of the keyword to delete
+            sel = self.ekw_lb.GetString(kwitems[item - 1])
             # Separate out the Keyword Group and the Keyword
-            kwlist = string.split(self.ekw_lb.GetStringSelection(), ':')
-            kwg = string.strip(kwlist[0])
+            kwlist = sel.split(':')
+            kwg = kwlist[0].strip()
+            # If the keyword contained a colon, we need to re-construct it!
             kw = ':'.join(kwlist[1:]).strip()
+            # Try to delete the keyword
             delResult = self.obj.remove_keyword(kwg, kw)
-            if delResult and (sel >= 0):
-                self.ekw_lb.Delete(sel)
-
+            # If successful ...
+            if delResult:
+                # ... remove the item from the Episode Keywords list box.
+                self.ekw_lb.Delete(kwitems[item - 1])
  
     def OnKWManage(self, evt):
         """Invoked when the user activates the Keyword Management button."""

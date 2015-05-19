@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2009  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2010  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -450,7 +450,6 @@ class KeywordMap(wx.Frame):
                     if checked:
                         # Only the checked ones go into the filtered keyword list.
                         self.filteredKeywordList.append((kwg, kw))
-
                 # If we had an Options Tab, extract that data.
                 if options:
                     # If we're in the Keyword Map ...
@@ -800,8 +799,7 @@ class KeywordMap(wx.Frame):
             EpisodeNum = self.episodeNum
             # ... and we can set the MediaLength to the end time passed in.
             self.MediaLength = self.endTime
-
-        if self.filteredKeywordList == []:
+        if (self.filteredKeywordList == []) and (self.unfilteredKeywordList == []):
             # If we deleted the last keyword in a filtered list, the Filter Dialog ended up with
             # duplicate entries.  This should prevent it!!
             self.unfilteredKeywordList = []
@@ -1150,7 +1148,6 @@ class KeywordMap(wx.Frame):
             # NOTE:  This is ONLY to be used for testing the mouse-overs, not in production!
             if self.embedded and self.showEmbeddedLabels:
                 self.graphic.AddText("%s : %s" % (KWG, KW), 2, self.CalcY(self.filteredKeywordList.index((KWG, KW))) - 7)
-
         for (KWG, KW, Start, Stop, ClipNum, ClipName, CollectNum) in self.clipList:
             if ((ClipName, CollectNum, True) in self.clipFilterList) and ((KWG, KW) in self.filteredKeywordList):
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -76,7 +76,7 @@ class ReportGenerator(wx.Object):
 
         # Create the TextReport object, which forms the basis for text-based reports.
         self.report = TextReport.TextReport(None, title=self.title, displayMethod=self.OnDisplay,
-                                            filterMethod=self.OnFilter, helpContext="Notes Report")
+                                            filterMethod=self.OnFilter, helpContext="Series, Episode, Collection, and Notes Reports")
 
         # Define the Filter List
         self.filterList = []

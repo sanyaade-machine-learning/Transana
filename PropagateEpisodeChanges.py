@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -273,12 +273,18 @@ class PropagateEpisodeChanges(wx.Dialog):
 class PropagateClipChanges(wx.Dialog):
     """ This window displays the Propagate Clip Changes report form. """
     def __init__(self, parent, originalClip, sourceTranscriptIndex, newTranscriptText, newClipID=None, newKeywordList=None):
-        # Clear the interface when Clip Propagation is selected if a Clip is loaded.  This prevents problems caused by changes 
-        # being propagated to the Clip currently loaded in the interface.
-        # So if we have a Clip loaded in the main interface ...
-        if isinstance(parent.ControlObject.currentObj, Clip.Clip):
-            # ... clear all windows before proceeding with propagation
-            parent.ControlObject.ClearAllWindows()
+        # If changes get propagated to the currently loaded clip, the data can get stale, which can cause problems.
+        # So if we have a Clip loaded in the main interface, it shares a name with the clip data being propagated,
+        # and it's not the CURRENT clip ...
+        if isinstance(parent.ControlObject.currentObj, Clip.Clip) and \
+           (originalClip.id == parent.ControlObject.currentObj.id) and \
+           (originalClip.number != parent.ControlObject.currentObj.number):
+            # ... not the clip's number so the data can be updated at the end of this process
+            CurrentClipToUpdate = parent.ControlObject.currentObj.number
+        # If we don't meet those criteria ...
+        else:
+            # ... then we don't need to update the current clip.
+            CurrentClipToUpdate = 0
             
         # Define the main Frame for the Propagate Changes report Window
         wx.Dialog.__init__(self, parent, -1, _("Clip Change Propagation"), size = (710,650), style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER|wx.NO_FULL_REPAINT_ON_RESIZE)
@@ -731,6 +737,10 @@ class PropagateClipChanges(wx.Dialog):
                 for message in messageCache:
                     # Send the messages one at a time
                     TransanaGlobal.chatWindow.SendMessage(message)
+            # If the current clip needs to be updated ...
+            if CurrentClipToUpdate != 0:
+                # ... then update the current clip to the latest data
+                parent.ControlObject.LoadClipByNumber(CurrentClipToUpdate)
                     
         # Update the contents of the memo
         self.memo.Update()

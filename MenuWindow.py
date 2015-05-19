@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -300,106 +300,119 @@ class MenuWindow(wx.Frame):
         # We're starting to face the situation where not all the translations may be up-to-date.  Let's build some checks.
         # Initialize an empty variable
         outofdateLanguage = ''
+        # Set the default prompt, which might get changed
+        languageErrorPrompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
 
-        # Install English as the initial language if no language has been specified
-        # NOTE:  Eastern European Encoding, Greek, Japanese, Korean will use English prompts
-        if (TransanaGlobal.configData.language in ['', 'en', 'easteurope', 'el', 'ja', 'ko']) :
+        # Start exception handling to deal with lost languages
+        try:
+
+            # Install English as the initial language if no language has been specified
+            # NOTE:  Eastern European Encoding, Greek, Japanese, Korean will use English prompts
+            if (TransanaGlobal.configData.language in ['', 'en', 'easteurope', 'el', 'ja', 'ko']) :
+                lang = wx.LANGUAGE_ENGLISH
+                self.presLan_en.install()
+
+            # Danish
+            elif (TransanaGlobal.configData.language == 'da'):
+                outofdateLanguage = 'Danish'
+                lang = wx.LANGUAGE_DANISH
+                self.presLan_da.install()
+
+            # German
+            elif (TransanaGlobal.configData.language == 'de'):
+                outofdateLanguage = 'German'
+                lang = wx.LANGUAGE_GERMAN
+                self.presLan_de.install()
+
+            # Greek
+#            elif (TransanaGlobal.configData.language == 'el'):
+#                outofdateLanguage = 'Greek'
+#                lang = wx.LANGUAGE_GREEK
+#                self.presLan_el.install()
+
+            # Spanish
+            elif (TransanaGlobal.configData.language == 'es'):
+                outofdateLanguage = 'Spanish'
+                lang = wx.LANGUAGE_SPANISH
+                self.presLan_es.install()
+
+            # Finnish
+            elif (TransanaGlobal.configData.language == 'fi'):
+                outofdateLanguage = 'Finnish'
+                lang = wx.LANGUAGE_FINNISH
+                self.presLan_fi.install()
+
+            # French
+            elif (TransanaGlobal.configData.language == 'fr'):
+                outofdateLanguage = 'French'
+                lang = wx.LANGUAGE_FRENCH
+                self.presLan_fr.install()
+
+            # Italian
+            elif (TransanaGlobal.configData.language == 'it'):
+                outofdateLanguage = 'Italian'
+                lang = wx.LANGUAGE_ITALIAN
+                self.presLan_it.install()
+
+            # Dutch
+            elif (TransanaGlobal.configData.language == 'nl'):
+                outofdateLanguage = 'Dutch'
+                lang = wx.LANGUAGE_DUTCH
+                self.presLan_nl.install()
+
+            # Norwegian Bokmal
+            elif (TransanaGlobal.configData.language == 'nb'):
+                outofdateLanguage = 'Norwegian Bokmal'
+                # There seems to be a bug in GetText on the Mac when the wxLANGUAGE is set to Bokmal.
+                # Setting this to English seems to make little practical difference.
+                if 'wxMac' in wx.PlatformInfo:
+                    lang = wx.LANGUAGE_ENGLISH
+                else:
+                    lang = wx.LANGUAGE_NORWEGIAN_BOKMAL
+                self.presLan_nb.install()
+                
+            # Norwegian Ny-norsk
+            elif (TransanaGlobal.configData.language == 'nn'):
+                outofdateLanguage = 'Norwegian Nynorsk'
+                # There seems to be a bug in GetText on the Mac when the wxLANGUAGE is set to Nynorsk.
+                # Setting this to English seems to make little practical difference.
+                if 'wxMac' in wx.PlatformInfo:
+                    lang = wx.LANGUAGE_ENGLISH
+                else:
+                    lang = wx.LANGUAGE_NORWEGIAN_NYNORSK
+                self.presLan_nn.install()
+
+            # Polish
+            elif (TransanaGlobal.configData.language == 'pl'):
+                outofdateLanguage = 'Polish'
+                lang = wx.LANGUAGE_POLISH    # Polish spec causes an error message on my computer
+                self.presLan_pl.install()
+
+            # Russian
+            elif (TransanaGlobal.configData.language == 'ru'):
+                outofdateLanguage = 'Russian'
+                lang = wx.LANGUAGE_RUSSIAN   # Russian spec causes an error message on my computer
+                self.presLan_ru.install()
+
+            # Swedish
+            elif (TransanaGlobal.configData.language == 'sv'):
+                outofdateLanguage = 'Swedish'
+                lang = wx.LANGUAGE_SWEDISH
+                self.presLan_sv.install()
+
+            # Chinese
+            elif (TransanaGlobal.configData.language == 'zh'):
+                outofdateLanguage = 'Chinese - Simplified'
+                lang = wx.LANGUAGE_CHINESE
+                self.presLan_zh.install()
+
+        except:
+            TransanaGlobal.configData.language = 'en'
+            TransanaGlobal.configData.SaveConfiguration()
             lang = wx.LANGUAGE_ENGLISH
             self.presLan_en.install()
-
-        # Danish
-        elif (TransanaGlobal.configData.language == 'da'):
-            lang = wx.LANGUAGE_DANISH
-            self.presLan_da.install()
-            outofdateLanguage = 'Danish'
-
-        # German
-        elif (TransanaGlobal.configData.language == 'de'):
-            lang = wx.LANGUAGE_GERMAN
-            self.presLan_de.install()
-            outofdateLanguage = 'German'
-
-        # Greek
-#        elif (TransanaGlobal.configData.language == 'el'):
-#            lang = wx.LANGUAGE_GREEK     # Greek spec causes an error message on my computer
-#            self.presLan_el.install()
-#            outofdateLanguage = 'Greek'
-
-        # Spanish
-        elif (TransanaGlobal.configData.language == 'es'):
-            lang = wx.LANGUAGE_SPANISH
-            self.presLan_es.install()
-            outofdateLanguage = 'Spanish'
-
-        # Finnish
-        elif (TransanaGlobal.configData.language == 'fi'):
-            lang = wx.LANGUAGE_FINNISH
-            self.presLan_fi.install()
-            outofdateLanguage = 'Finnish'
-
-        # French
-        elif (TransanaGlobal.configData.language == 'fr'):
-            lang = wx.LANGUAGE_FRENCH
-            self.presLan_fr.install()
-            outofdateLanguage = 'French'
-
-        # Italian
-        elif (TransanaGlobal.configData.language == 'it'):
-            lang = wx.LANGUAGE_ITALIAN
-            self.presLan_it.install()
-            outofdateLanguage = 'Italian'
-
-        # Dutch
-        elif (TransanaGlobal.configData.language == 'nl'):
-            lang = wx.LANGUAGE_DUTCH
-            self.presLan_nl.install()
-            outofdateLanguage = 'Dutch'
-
-        # Norwegian Bokmal
-        elif (TransanaGlobal.configData.language == 'nb'):
-            # There seems to be a bug in GetText on the Mac when the wxLANGUAGE is set to Bokmal.
-            # Setting this to English seems to make little practical difference.
-            if 'wxMac' in wx.PlatformInfo:
-                lang = wx.LANGUAGE_ENGLISH
-            else:
-                lang = wx.LANGUAGE_NORWEGIAN_BOKMAL
-            self.presLan_nb.install()
-            outofdateLanguage = 'Norwegian Bokmal'
-            
-        # Norwegian Ny-norsk
-        elif (TransanaGlobal.configData.language == 'nn'):
-            # There seems to be a bug in GetText on the Mac when the wxLANGUAGE is set to Nynorsk.
-            # Setting this to English seems to make little practical difference.
-            if 'wxMac' in wx.PlatformInfo:
-                lang = wx.LANGUAGE_ENGLISH
-            else:
-                lang = wx.LANGUAGE_NORWEGIAN_NYNORSK
-            self.presLan_nn.install()
-            outofdateLanguage = 'Norwegian Nynorsk'
-
-        # Polish
-        elif (TransanaGlobal.configData.language == 'pl'):
-            lang = wx.LANGUAGE_POLISH    # Polish spec causes an error message on my computer
-            self.presLan_pl.install()
-            outofdateLanguage = 'Polish'
-
-        # Russian
-        elif (TransanaGlobal.configData.language == 'ru'):
-            lang = wx.LANGUAGE_RUSSIAN   # Russian spec causes an error message on my computer
-            self.presLan_ru.install()
-            outofdateLanguage = 'Russian'
-
-        # Swedish
-        elif (TransanaGlobal.configData.language == 'sv'):
-            lang = wx.LANGUAGE_SWEDISH
-            self.presLan_sv.install()
-            outofdateLanguage = 'Swedish'
-
-        # Chinese
-        elif (TransanaGlobal.configData.language == 'zh'):
-            lang = wx.LANGUAGE_CHINESE
-            self.presLan_zh.install()
-            outofdateLanguage = 'Chinese - Simplified'
+            # Change the Language Error Message
+            languageErrorPrompt = "Transana's %s translation is no longer up-to-date or available.\nAll prompts will be displayed in English.\n\nIf you are willing to update this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
 
         # Due to a problem with wx.Locale on the Mac (It won't load anything but English), I'm disabling 
         # i18n functionality of the wxPython layer on the Mac.  This code accomplishes that.
@@ -418,13 +431,12 @@ class MenuWindow(wx.Frame):
 
         # Check to see if we have a translation, and if it is up-to-date.
         
-        # NOTE:  "Include in Clip" works for version 2.40.  If you update this, also update the phrase
+        # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  If you update this, also update the phrase
         # below in the OnOptionsLanguage method.)
         
-        if (outofdateLanguage != '') and ("Include in Clip" == _("Include in Clip")):
+        if (outofdateLanguage != '') and ("Fixed-Increment Time Codes" == _("Fixed-Increment Time Codes")):
             # If not, display an information message.
-            prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
-            dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
+            dlg = wx.MessageDialog(None, languageErrorPrompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
             dlg.ShowModal()
             dlg.Destroy()
 
@@ -474,6 +486,8 @@ class MenuWindow(wx.Frame):
         # Let's just disable it completely for now.
         # wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_CHARACTERMAP, self.OnCharacterMap)
 
+        # Define handler for Transcript > Fixed-Increment Time Codes
+        wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, self.OnAutoTimeCode)
         # Define handler for Transcript > Adjust Indexes
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, self.OnAdjustIndexes)
 
@@ -570,6 +584,10 @@ class MenuWindow(wx.Frame):
         if result == wx.ID_YES:
             # Signal that we're closing Transana.  This allows us to avoid a problem or two on shutdown.
             self.ControlObject.shuttingDown = True
+            # See if there's a Notes Browser open
+            if self.ControlObject.NotesBrowserWindow != None:
+                # If so, close it, which saves anything being edited.
+                self.ControlObject.NotesBrowserWindow.Close()
             # unlock the Transcript Records, if any are locked
             for x in range(len(self.ControlObject.TranscriptWindow)):
                 if self.ControlObject.TranscriptWindow[x].TranscriptModified():
@@ -652,6 +670,10 @@ class MenuWindow(wx.Frame):
         #     with Unicode at this point.
         # Let's just disable it completely for now.
         # self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_CHARACTERMAP, enable)
+        if enable and self.ControlObject.AutoTimeCodeEnableTest():
+            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, enable)
+        else:
+            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, False)
         self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, enable)
 
     def OnFileNew(self, event):
@@ -668,10 +690,6 @@ class MenuWindow(wx.Frame):
         # Check to see if there are Search Results Nodes
         if self.ControlObject.DataWindowHasSearchNodes():
             # If so, prompt the user about if they really want to exit.
-            # Define the Message Dialog
-#            dlg = wx.MessageDialog(self, _('You have unsaved Search Results.  Are you sure you want to close this database without converting them to Collections?'), _('Transana Confirmation'), wx.YES_NO | wx.ICON_QUESTION)
-            # Display the Message Dialog and capture the response
-#            result = dlg.ShowModal()
             dlg = Dialogs.QuestionDialog(self, _('You have unsaved Search Results.  Are you sure you want to close this database without converting them to Collections?'))
             result = dlg.LocalShowModal()
             # Destroy the Message Dialog
@@ -681,6 +699,10 @@ class MenuWindow(wx.Frame):
             result = wx.ID_YES
         # If the user wants to exit (or if there are no Search Results) ...
         if result == wx.ID_YES:
+            # ... if a NotesBrowser window is open ...
+            if self.ControlObject.NotesBrowserWindow != None:
+                # ... close the Notes Browser Window ...
+                self.ControlObject.NotesBrowserWindow.Close()
             # ... tell it to load a new database
             self.ControlObject.GetNewDatabase()
             # if using MU and we're successfully connected to the database, re-connect to the MessageServer.  
@@ -811,6 +833,13 @@ class MenuWindow(wx.Frame):
             errordlg.ShowModal()
             errordlg.Destroy()
 
+    def OnAutoTimeCode(self, event):
+        """ Handler for Transcript > Fixed-Increment Time Codes """
+        # Ask the Control Object to process AutoTimeCoding and let us know if it worked.
+        if self.ControlObject.AutoTimeCode():
+            # If it worked, disable the menu item!
+            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, False)
+
     def OnAdjustIndexes(self, event):
         """ Handler for Transcript > Adjust Indexes menu command """
         msg = _('Please enter the number of seconds by which to adjust the indexes for this transcript.\nValues are accurate to 1/1000 of a second (3 decimal places).')
@@ -836,20 +865,36 @@ class MenuWindow(wx.Frame):
 
     def OnNotesBrowser(self, event):
         """ Notes Browser """
-        # Instantiate a Notes Browser window
-        notesBrowser = NotesBrowser.NotesBrowser(self, -1, _("Notes Browser"))
-        # Register the Control Object with the Notes Browser
-        notesBrowser.Register(self.ControlObject)
-        # Display the Notes Browser
-        notesBrowser.ShowModal()
-        # Destroy the notesBrowser dialog here.
-        notesBrowser.Destroy()
+        # If the Notes Browser is NOT already open ...
+        if self.ControlObject.NotesBrowserWindow == None:
+            # Instantiate a Notes Browser window
+            notesBrowser = NotesBrowser.NotesBrowser(self, -1, _("Notes Browser"))
+            # Register the Control Object with the Notes Browser
+            notesBrowser.Register(self.ControlObject)
+            # Display the Notes Browser
+            notesBrowser.Show()
+        # If the Notes Browswer IS already open ...
+        else:
+            # ... bring it to the front.
+            self.ControlObject.NotesBrowserWindow.Raise()
+            # If the window has been minimized ...
+            if self.ControlObject.NotesBrowserWindow.IsIconized():
+                # ... then restore it to its proper size!
+                self.ControlObject.NotesBrowserWindow.Iconize(False)
 
     def OnImportDatabase(self, event):
         """ Import Database """
+        # Create an Import Database dialog
         temp = XMLImport.XMLImport(self, -1, _('Transana XML Import'))
+        # Get the User Input
         result = temp.get_input()
+        # If the user gave a valid response ...
         if (result != None) and (result[_("Transana-XML Filename")] != ''):
+            # See if there's a Notes Browser open
+            if self.ControlObject.NotesBrowserWindow != None:
+                # If so, close it, which saves anything being edited.
+                self.ControlObject.NotesBrowserWindow.Close()
+            # ... Import the requested data!
             temp.Import()
             # If MU, we need to signal other copies that we've imported a database!
             # First, test to see if we're in the Multi-user version.
@@ -858,28 +903,40 @@ class MenuWindow(wx.Frame):
                 if TransanaGlobal.chatWindow != None:
                     # Now send the "Import" message
                     TransanaGlobal.chatWindow.SendMessage("I ")
-                
+        # Close the Import Database dialog
         temp.Close()
 
     def OnExportDatabase(self, event):
         """ Export Database """
+        # Create an Export Database dialog
         temp = XMLExport.XMLExport(self, -1, _('Transana XML Export'))
+        # Get User Input
         result = temp.get_input()
+        # If the user requests it ...
         if (result != None) and (result[_("Transana-XML Filename")] != ''):
+            # ... export the data
             temp.Export()
+        # Close the Export Database dialog
         temp.Close()
 
     def OnColorConfig(self, event):
         """ Graphics Color Configuration """
+        # Create a Color Configuration Dialog
         temp = ColorConfig.ColorConfig(self)
+        # Show the Dialog
         temp.ShowModal()
+        # Destroy the Dialog
         temp.Destroy()
 
     def OnBatchWaveformGenerator(self, event):
         """ Batch Waveform Generator """
+        # Create a Batch Waveform Dialog
         temp = BatchFileProcessor.BatchFileProcessor(self, mode="waveform")
+        # Get User input
         temp.get_input()
+        # Close the Dialog
         temp.Close()
+        # Destroy the Dialog
         temp.Destroy()
 
     def OnChat(self, event):
@@ -888,6 +945,12 @@ class MenuWindow(wx.Frame):
         if TransanaGlobal.chatWindow != None:
             # ... show it!
             TransanaGlobal.chatWindow.Show()
+            # Call Raise to bring the Chat Window to the top.
+            TransanaGlobal.chatWindow.Raise()
+            # If the Chat Window is minimized ...
+            if TransanaGlobal.chatWindow.IsIconized():
+                # ... then restore it to its proper size!
+                TransanaGlobal.chatWindow.Iconize(False)
         else:
             dlg = Dialogs.ErrorDialog(None, _("Your connection to the Message Server has been lost.\nYou may have lost your connection to the network, or there may be a problem with the Server.\nPlease quit Transana immediately and resolve the problem."))
             dlg.ShowModal()
@@ -899,6 +962,10 @@ class MenuWindow(wx.Frame):
         if self.ControlObject != None:
             # ... it should know how to clear all the Windows!
             self.ControlObject.ClearAllWindows()
+            # If the Notes Browser Window is open ...
+            if self.ControlObject.NotesBrowserWindow != None:
+                # ... close it, thus releasing any records that might be locked there.
+                self.ControlObject.NotesBrowserWindow.Close()
         # Create a Record Lock Utility window
         recordLockWindow = RecordLock.RecordLock(self, -1, _("Transana Record Lock Utility"))
         recordLockWindow.ShowModal()
@@ -954,87 +1021,87 @@ class MenuWindow(wx.Frame):
             
         # Danish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DA:
+            outofdateLanguage = 'Danish'
             TransanaGlobal.configData.language = 'da'
             self.presLan_da.install()
-            outofdateLanguage = 'Danish'
             
         # German
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DE:
+            outofdateLanguage = 'German'
             TransanaGlobal.configData.language = 'de'
             self.presLan_de.install()
-            outofdateLanguage = 'German'
 
         # Greek
 #        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
+#            outofdateLanguage = 'Greek'
 #            TransanaGlobal.configData.language = 'el'
 #            self.presLan_el.install()
-#            outofdateLanguage = 'Greek'
 
         # Spanish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ES:
+            outofdateLanguage = 'Spanish'
             TransanaGlobal.configData.language = 'es'
             self.presLan_es.install()
-            outofdateLanguage = 'Spanish'
 
         # Finnish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_FI:
+            outofdateLanguage = 'Finnish'
             TransanaGlobal.configData.language = 'fi'
             self.presLan_fi.install()
-            outofdateLanguage = 'Finnish'
 
         # French
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_FR:
+            outofdateLanguage = 'French'
             TransanaGlobal.configData.language = 'fr'
             self.presLan_fr.install()
-            outofdateLanguage = 'French'
 
         # Italian
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_IT:
+            outofdateLanguage = 'Italian'
             TransanaGlobal.configData.language = 'it'
             self.presLan_it.install()
-            outofdateLanguage = 'Italian'
 
         # Dutch
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NL:
+            outofdateLanguage = 'Dutch'
             TransanaGlobal.configData.language = 'nl'
             self.presLan_nl.install()
-            outofdateLanguage = 'Dutch'
 
         # Norwegian Bokmal
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NB:
+            outofdateLanguage = 'Norwegian Bokmal'
             TransanaGlobal.configData.language = 'nb'
             self.presLan_nb.install()
-            outofdateLanguage = 'Norwegian Bokmal'
 
         # Norwegian Ny-norsk
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NN:
+            outofdateLanguage = 'Norwegian Nynorsk'
             TransanaGlobal.configData.language = 'nn'
             self.presLan_nn.install()
-            outofdateLanguage = 'Norwegian Nynorsk'
 
         # Polish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_PL:
+            outofdateLanguage = 'Polish'
             TransanaGlobal.configData.language = 'pl'
             self.presLan_pl.install()
-            outofdateLanguage = 'Polish'
 
         # Russian
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_RU:
+            outofdateLanguage = 'Russian'
             TransanaGlobal.configData.language = 'ru'
             self.presLan_ru.install()
-            outofdateLanguage = 'Russian'
 
         # Swedish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_SV:
+            outofdateLanguage = 'Swedish'
             TransanaGlobal.configData.language = 'sv'
             self.presLan_sv.install()
-            outofdateLanguage = 'Swedish'
 
         # Chinese (English prompts)
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ZH:
+            outofdateLanguage = 'Chinese - Simplified'
             TransanaGlobal.configData.language = 'zh'
             self.presLan_zh.install()
-            outofdateLanguage = 'Chinese - Simplified'
 
         # Eastern Europe Encoding (English prompts)
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EASTEUROPE:
@@ -1064,10 +1131,10 @@ class MenuWindow(wx.Frame):
 
         # Check to see if we have a translation, and if it is up-to-date.
         
-        # NOTE:  "Include in Clip" works for version 2.40.  If you update this, also update the phrase
+        # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  If you update this, also update the phrase
         # above in the __init__ method.)
         
-        if (outofdateLanguage != '') and ("Include in Clip" == _("Include in Clip")):
+        if (outofdateLanguage != '') and ("Fixed-Increment Time Codes" == _("Fixed-Increment Time Codes")):
             # If not, display an information message.
             prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
             dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
@@ -1147,9 +1214,6 @@ class MenuWindow(wx.Frame):
         self.ControlObject.ChangeVisualization()
 
     def OnOptionsVideoSize(self, event):
-        # TODO:  Macintosh needs other options to be explicitly "unchecked" when something here is selected,
-        #        and perhaps to have "uncheck current item" blocked.
-
         # Translate the Menu Selection into the size value Global Variable
         if event.GetId() == MenuSetup.MENU_OPTIONS_VIDEOSIZE_50:
             TransanaGlobal.configData.videoSize = 50
@@ -1218,6 +1282,7 @@ class MenuWindow(wx.Frame):
         #     with Unicode at this point.
         # Let's just disable it completely for now.
         # self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_CHARACTERMAP, _("&Character Map"))
+        self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, _("F&ixed-Increment Time Codes"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, _("&Adjust Indexes"))
 
         self.menuBar.SetLabelTop(2, _("Too&ls"))
@@ -1296,6 +1361,8 @@ class MenuWindow(wx.Frame):
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_ABOUT, _("&About"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_WEBSITE, _("&www.transana.org"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_FUND, _("&Fund Transana"))
+
+        wx.App_SetMacHelpMenuTitleName(_("&Help"))
 
         # print "Menu Language Changed (%s)" % _("&File")
 

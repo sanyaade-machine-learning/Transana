@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -36,9 +36,15 @@ singleUserVersion = TransanaConfigConstants.singleUserVersion
 labVersion = TransanaConfigConstants.labVersion
 # Set this flag to "True" to create the Demonstration version.  (But don't mix this with MU!)
 demoVersion = TransanaConfigConstants.demoVersion
+workshopVersion = TransanaConfigConstants.workshopVersion
+if workshopVersion:
+    startdate = TransanaConfigConstants.stdt
+    expirationdate = TransanaConfigConstants.xpdt
 
 # Program Version Number
-versionNumber = '2.41'
+versionNumber = '2.42b'
+# Build Number
+buildNumber = '242b'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
@@ -63,6 +69,11 @@ if demoVersion:
     maxEpisodeTranscripts = 5
     maxClips = 30
     maxKeywords = 15
+
+# If this is the Workshop Version ...
+if workshopVersion:
+    # ... note that on the Version Number
+    versionNumber += ' Workshop'
 
 # Allow Drag and Drop on the Mac?  (There's a bug, but it could be fixed!)
 macDragDrop = True
@@ -102,11 +113,11 @@ MEDIA_PLAYSTATE_PAUSE              =  wx.media.MEDIASTATE_PAUSED
 MEDIA_PLAYSTATE_PLAY               =  wx.media.MEDIASTATE_PLAYING
 
 # Define the Media File type strings to be used throughout Transana
-fileTypesString = _("""All files (*.*)|*.*|All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv, *.mp3, *.wav, *.wma)|*.mpg;*.avi;*.mov;*.mp4;*.m4v;*.wmv;*.mp3;*.wav;*.wma|All video files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv)|*.mpg;*.mpeg;*.avi;*.mov;*.mp4;*.m4v;*.wmv|All audio files (*.mp3, *.wav, *.wma, *.au, *.snd)|*.mp3;*.wav;*.wma;*.au;*.snd|MPEG files (*.mpg)|*.mpg;*.mpeg|AVI files (*.avi)|*.avi|QuickTime files (*.mov, *.mp4, *.m4v)|*.mov;*.mp4;*.m4v|Windows Media Video (*.wmv)|*wmv|MP3 files (*.mp3)|*.mp3|WAV files (*.wav)|*.wav|Windows Media Audio (*.wma)|*.wma""")
+fileTypesString = _("""All files (*.*)|*.*|All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv, *.mp3, *.wav, *.wma, *.aac)|*.mpg;*.avi;*.mov;*.mp4;*.m4v;*.wmv;*.mp3;*.wav;*.wma;*.aac|All video files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv)|*.mpg;*.mpeg;*.avi;*.mov;*.mp4;*.m4v;*.wmv|All audio files (*.mp3, *.wav, *.wma, *.aac, *.au, *.snd)|*.mp3;*.wav;*.wma;*.aac;*.au;*.snd|MPEG files (*.mpg)|*.mpg;*.mpeg|AVI files (*.avi)|*.avi|QuickTime files (*.mov, *.mp4, *.m4v)|*.mov;*.mp4;*.m4v|Windows Media Video (*.wmv)|*wmv|MP3 files (*.mp3)|*.mp3|WAV files (*.wav)|*.wav|Windows Media Audio (*.wma)|*.wma|AAC Audio (*.aac)|*.aac""")
 fileTypesList = [_("All files (*.*)"),
-                 _("All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv, *.mp3, *.wav, *.wma)"),
+                 _("All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv, *.mp3, *.wav, *.wma, *.aac)"),
                  _("All video files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv)"),
-                 _("All audio files (*.mp3, *.wav, *.wma, *.au, *.snd)"),
+                 _("All audio files (*.mp3, *.wav, *.wma, *.aac, *.au, *.snd)"),
                  _("MPEG files (*.mpg, *.mpeg)"),
                  _("AVI files (*.avi)"),
                  _("QuickTime files (*.mov, *.mp4, *.m4v)"),
@@ -114,9 +125,10 @@ fileTypesList = [_("All files (*.*)"),
                  _("MP3 files (*.mp3)"),
                  _("WAV files (*.wav)"),
                  _("Windows Media Audio files (*.wma)"),
+                 _("AAC files (*.aac)"),
                  _("Rich Text Format files (*.rtf)"),
                  _("BMP, PNG, and WAV files (*.bmp, *.png, *.wav)")]
-mediaFileTypes = ['mpg', 'mpeg', 'avi', 'mov', 'mp4', 'm4v', 'wmv', 'mp3', 'wav', 'wma']
+mediaFileTypes = ['mpg', 'mpeg', 'avi', 'mov', 'mp4', 'm4v', 'wmv', 'mp3', 'wav', 'wma', 'aac']
 
 # We need to know what characters are legal in a file name!
 legalFilenameCharacters = string.ascii_letters + string.digits + ":. -_$&@!%(){}[]~'#^+=/" 

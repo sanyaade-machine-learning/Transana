@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -93,7 +93,7 @@ class KeywordsTab(wx.Panel):
         lay.top.SameAs(self, wx.Top, 1)
         lay.right.SameAs(self, wx.Right, 1)
         lay.bottom.SameAs(self, wx.Bottom, 1)
-        self.lbKeywordsList = wx.ListCtrl(self, -1, style=wx.LC_REPORT | wx.LC_NO_HEADER | wx.LC_SINGLE_SEL)
+        self.lbKeywordsList = wx.ListCtrl(self, -1, style=wx.LC_REPORT | wx.LC_NO_HEADER)
         self.lbKeywordsList.InsertColumn(0, 'Keywords')
         self.lbKeywordsList.SetConstraints(lay)
 
@@ -330,92 +330,83 @@ class KeywordsTab(wx.Panel):
         # NOTE:  Because self.kwlist is just a pointer to the keyword list in the appropriate object,
         #        removing the keyword from the object also removes it from the local kwlist!
 
-        # We must first determine what item has been selected.  ListCtrl makes this a bit awkward.
-        # First, let's initialize a variable to a value that can't be gotten from the ListCtrl.
-        selItem = -1
-        # Now let's iterate through the ListCtrl ...
-        for loop in range(self.lbKeywordsList.GetItemCount()):
+        # Let's iterate through the ListCtrl FROM THE BOTTOM UP (since as items get deleted, the list gets shorter!) ...
+        for selItem in range(self.lbKeywordsList.GetItemCount() - 1, -1, -1):
             # ... looking for an item that is selected ...
-            if self.lbKeywordsList.GetItemState(loop, wx.LIST_STATE_SELECTED) > 0:
-                # ... and if we find one, remember its number and stop looking
-                selItem = loop
-                break
-        # If we find a selected item ...
-        if selItem > -1:
-            # ... separate out the Keyword Group and the Keyword
-            kwlist = string.split(self.lbKeywordsList.GetItemText(selItem), ':')
-            kwg = string.strip(kwlist[0])
-            kw = ':'.join(kwlist[1:]).strip()
+            if self.lbKeywordsList.GetItemState(selItem, wx.LIST_STATE_SELECTED) > 0:
+                # ... separate out the Keyword Group and the Keyword
+                kwlist = string.split(self.lbKeywordsList.GetItemText(selItem), ':')
+                kwg = string.strip(kwlist[0])
+                kw = ':'.join(kwlist[1:]).strip()
 
-            try:
-                # Initialize the MU Chat Message
-                msg = ''
-                # NOTE:  If a Clip is defined use it (whether an episode is defined or not.)  If
-                #        no clip is defined but an episode is defined, use that.
-                if self.clipObj != None:
-                    # Lock the record
-                    self.clipObj.lock_record()
-                    # Remove the keyword from the object
-                    delResult = self.clipObj.remove_keyword(kwg, kw)
-                    if delResult != 0:
+                try:
+                    # Initialize the MU Chat Message
+                    msg = ''
+                    # NOTE:  If a Clip is defined use it (whether an episode is defined or not.)  If
+                    #        no clip is defined but an episode is defined, use that.
+                    if self.clipObj != None:
+                        # Lock the record
+                        self.clipObj.lock_record()
+                        # Remove the keyword from the object
+                        delResult = self.clipObj.remove_keyword(kwg, kw)
+                        if delResult != 0:
+                            # Save the object
+                            self.clipObj.db_save()
+                            # If we are deleting a Keyword Example, we need to removed the node from the Database Tree Tab
+                            if delResult == 2:
+                                nodeList = (_('Keywords'), kwg, kw, self.clipObj.id)
+                                self.parent.GetPage(0).tree.delete_Node(nodeList, 'KeywordExampleNode', self.clipObj.number)
+                            # Define the MU Chat Message
+                            msg = 'Clip %d' % self.clipObj.number
+
+                        # Unlock the record
+                        self.clipObj.unlock_record()
+                    elif self.episodeObj != None:
+                        # Lock the record
+                        self.episodeObj.lock_record()
+                        # Remove the keyword from the object
+                        delResult = self.episodeObj.remove_keyword(kwg, kw)
                         # Save the object
-                        self.clipObj.db_save()
-                        # If we are deleting a Keyword Example, we need to removed the node from the Database Tree Tab
-                        if delResult == 2:
-                            nodeList = (_('Keywords'), kwg, kw, self.clipObj.id)
-                            self.parent.GetPage(0).tree.delete_Node(nodeList, 'KeywordExampleNode', self.clipObj.number)
+                        self.episodeObj.db_save()
                         # Define the MU Chat Message
-                        msg = 'Clip %d' % self.clipObj.number
+                        msg = 'Episode %d' % self.episodeObj.number
+                        # Unlock the record
+                        self.episodeObj.unlock_record()
 
-                    # Unlock the record
-                    self.clipObj.unlock_record()
-                elif self.episodeObj != None:
-                    # Lock the record
-                    self.episodeObj.lock_record()
-                    # Remove the keyword from the object
-                    delResult = self.episodeObj.remove_keyword(kwg, kw)
-                    # Save the object
-                    self.episodeObj.db_save()
-                    # Define the MU Chat Message
-                    msg = 'Episode %d' % self.episodeObj.number
-                    # Unlock the record
-                    self.episodeObj.unlock_record()
-
-                # Update the display to reflect changes in the Keyword List
-                self.UpdateKeywords()
-                
-                # If there's an MU Chat Message ...
-                if (not TransanaConstants.singleUserVersion) and (msg != ''):
-                    if DEBUG:
-                        print 'Message to send = "UKL %s"' % msg
-                    # ... and there's a chat window ...
-                    if TransanaGlobal.chatWindow != None:
-                        # ... then send the "Update Keyword List" message
-                        TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
-                        
-            except TransanaExceptions.RecordLockedError, e:
-                self.handleRecordLock(e)
-            # Process TypeError exception, which probably indicates that the underlying object has been deleted.
-            except TypeError, e:
-                if self.clipObj != None:
-                    obj = self.clipObj
-                    tempObjType = _('Clip')
-                else:
-                    obj = self.episodeObj
-                    tempObjType = _('Episode')
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    msg = unicode(_('You cannot proceed because %s "%s" cannot be found.'), 'utf8') + \
-                          unicode(_('\nIt may have been deleted by another user.'), 'utf8')
-                    msg = msg % (unicode(tempObjType, 'utf8'), obj.id)
-                else:
-                    msg = _('You cannot proceed because %s "%s" cannot be found.') + \
-                          _('\nIt may have been deleted by another user.') % (tempObjType, obj.id)
-                dlg = Dialogs.ErrorDialog(self.parent, msg)
-                dlg.ShowModal()
-                dlg.Destroy()
-                # Clear the deleted objects from the Transana Interface.  Otherwise, problems arise.
-                wx.CallAfter(self.parent.parent.ControlObject.ClearAllWindows)
+                    # If there's an MU Chat Message ...
+                    if (not TransanaConstants.singleUserVersion) and (msg != ''):
+                        if DEBUG:
+                            print 'Message to send = "UKL %s"' % msg
+                        # ... and there's a chat window ...
+                        if TransanaGlobal.chatWindow != None:
+                            # ... then send the "Update Keyword List" message
+                            TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                            
+                except TransanaExceptions.RecordLockedError, e:
+                    self.handleRecordLock(e)
+                # Process TypeError exception, which probably indicates that the underlying object has been deleted.
+                except TypeError, e:
+                    if self.clipObj != None:
+                        obj = self.clipObj
+                        tempObjType = _('Clip')
+                    else:
+                        obj = self.episodeObj
+                        tempObjType = _('Episode')
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        msg = unicode(_('You cannot proceed because %s "%s" cannot be found.'), 'utf8') + \
+                              unicode(_('\nIt may have been deleted by another user.'), 'utf8')
+                        msg = msg % (unicode(tempObjType, 'utf8'), obj.id)
+                    else:
+                        msg = _('You cannot proceed because %s "%s" cannot be found.') + \
+                              _('\nIt may have been deleted by another user.') % (tempObjType, obj.id)
+                    dlg = Dialogs.ErrorDialog(self.parent, msg)
+                    dlg.ShowModal()
+                    dlg.Destroy()
+                    # Clear the deleted objects from the Transana Interface.  Otherwise, problems arise.
+                    wx.CallAfter(self.parent.parent.ControlObject.ClearAllWindows)
+        # Update the display to reflect changes in the Keyword List
+        self.UpdateKeywords()
 
     def handleRecordLock(self, e):
         """ Handles Record Lock exceptions """

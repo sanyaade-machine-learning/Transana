@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -187,7 +187,7 @@ class ListenerThread(threading.Thread):
                     print "ChatWindow.ListenerThread.run() other error"
 
             if DEBUG:
-                print self.socketObj, 'received "%s"' % data.encode('latin1')
+                print '"%s"' % data.encode('latin1')
 
             # As long as data should be processed, and the data is not blank ...
             if not self._want_abort and (data != ''):
@@ -532,9 +532,13 @@ class ChatWindow(wx.Frame):
                 # Another user has imported a database.  We need to refresh the whole Database Tree!
                 # See if a Control Object has been defined.
                 if self.ControlObject != None:
+                    # See if there's a Notes Browser open
+                    if self.ControlObject.NotesBrowserWindow != None:
+                        # If so, close it.
+                        self.ControlObject.NotesBrowserWindow.Close()
                     # Update the Data Window via the Control Object
                     self.ControlObject.UpdateDataWindow()
-                    
+
             # Server Validation ?
             elif messageHeader == 'V':
                 # Indicate that the server has been validated.  The Validation Timer processes this later.
@@ -552,7 +556,7 @@ class ChatWindow(wx.Frame):
                 if self.userName != messageSender:
                     # We can't have the tree selection changing because of the activity of other users.  That creates all kinds of
                     # problems if we're in the middle of editing something.  So let's note the current selection
-                    currentSelection = self.ControlObject.DataWindow.DBTab.tree.GetSelection()
+                    currentSelection = self.ControlObject.DataWindow.DBTab.tree.GetSelections()
                     # The Control Object MUST be defined (and always will be)
                     if self.ControlObject != None:
                         # Add Series Message
@@ -751,7 +755,7 @@ class ChatWindow(wx.Frame):
                                 tmpRootNode = _(nodelist[1])
                             else:
                                 tmpRootNode = unicode(_(nodelist[1]), 'utf8')
-                            
+                            # Encode the first-level node name for the LOCAL language
                             nodelist = (nodelist[0], tmpRootNode) + nodelist[2:]
                             
                             if DEBUG:
@@ -759,8 +763,20 @@ class ChatWindow(wx.Frame):
                                          type(nodelist[0]), type(nodelist[-1]))
                                 print tmpstr.encode('latin1')
                                 print
-                                
+
+                            # Rename the tree node
                             self.ControlObject.DataWindow.DBTab.tree.rename_Node(nodelist[1:-1], nodelist[0], nodelist[-1])
+
+                            # If a CLIP gets renamed, check to see if that clip is currently loaded in the interface.
+                            if isinstance(self.ControlObject.currentObj, Clip.Clip) and \
+                               (nodelist[0] == 'ClipNode') and \
+                               (self.ControlObject.currentObj.GetNodeData() == nodelist[2:-1]):
+                                # If that clip is loaded (but not locked, as RN NEVER gets called on a locked clip),
+                                # remember its clip number
+                                tmpClipNum = self.ControlObject.currentObj.number
+                                # Re-load that clip.  The currently-loaded version is out of date, and needs to be updated
+                                # in case the local user wants to propagate changes.
+                                self.ControlObject.LoadClipByNumber(tmpClipNum)
                             
                             # If we're removing a Keyword Group ...
                             if nodelist[0] == 'KeywordGroupNode':
@@ -866,8 +882,34 @@ class ChatWindow(wx.Frame):
                                     # Rename the Note in the Database Tree
                                     self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('R', tempNote, oldName=nodelist[-2])
 
+                        # Move Collection Node
+                        elif messageHeader == 'MCN':
+                            # Get the Node List to the MOVED collection, extracting it from the Chat Message
+                            nodelist = ConvertMessageToNodeList(message)
+                            # The first element in the node list needs translation.  Check it's type.
+                            if type(_(nodelist[0])).__name__ == 'str':
+                                # If string, translate it and convert it to unicode
+                                nodelist = (unicode(_(nodelist[0]), 'utf8'),) + nodelist[1:]
+                            # If not string, it's already unicode!
+                            else:
+                                # ... in which case, we just translate it.
+                                nodelist = (_(nodelist[0]),) + nodelist[1:]
+                            # Get a pointer to the Tree Control
+                            tree = self.ControlObject.DataWindow.DBTab.tree
+                            # Get the Collection node that has been moved
+                            tmpNode = tree.select_Node(nodelist, 'CollectionNode', ensureVisible=False)
+                            # Get the data underlying the tree node.
+                            tmpPyData = tree.GetPyData(tmpNode)
+                            # Load the collection underlying the node that has been moved
+                            tmpCollection = Collection.Collection(tmpPyData.recNum)
+                            # Now that we have the collection, we can build the node data for where it should be!
+                            destNodeList = (_('Collections'),) + tmpCollection.GetNodeData()[:-1]
+                            # Move the local copy of the node without sending MU Messaging
+                            tree.copy_Node('CollectionNode', nodelist, destNodeList, True, sendMessage=False)
+
                         # Delete Node
                         elif messageHeader == 'DN':
+                            # Extract the node list from the message
                             nodelist = ConvertMessageToNodeList(message)
                             # Check the TYPE of the translated second element.
                             if type(_(nodelist[1])).__name__ == 'str':
@@ -877,7 +919,18 @@ class ChatWindow(wx.Frame):
                             else:
                                 # ... in which case, we just translate it.
                                 nodelist = (nodelist[0],) + (_(nodelist[1]),) + nodelist[2:]
-                            self.ControlObject.DataWindow.DBTab.tree.delete_Node(nodelist[1:], nodelist[0], sendMessage=False)
+                            # Keyword Examples need a bit of extra processing.  If we have a keyword example ...
+                            if nodelist[0] == 'KeywordExampleNode':
+                                # ... pull the clip number off the end of the node list ...
+                                exampleClipNum = int(nodelist[-1])
+                                # ... remove the clip number from the node list ...
+                                nodelist = nodelist[:-1]
+                                # ... and call delete_Node, passing the clip number.  We don't want messages sent further.
+                                self.ControlObject.DataWindow.DBTab.tree.delete_Node(nodelist[1:], nodelist[0], exampleClipNum = exampleClipNum, sendMessage=False)
+                            # If we DON'T have a Keyword Example ...
+                            else:
+                                # ... delete the node without passing further messages
+                                self.ControlObject.DataWindow.DBTab.tree.delete_Node(nodelist[1:], nodelist[0], sendMessage=False)
                             # If we're removing a Keyword Group ...
                             if nodelist[0] == 'KeywordGroupNode':
                                 # ... we need to update the Keyword Groups Data Structure
@@ -929,11 +982,10 @@ class ChatWindow(wx.Frame):
                                         nodeType = 'Clip'
                                     else:
                                         nodeType = None
-                                    # The Note Object has already been DELETED, so we can't load the Note itself!
-                                    # Therefore, we must build its NodeList here and pass it!  We pass the UNTRANSLATED
-                                    # object type.
+                                    # Signal the Notes Browser to delete the Note.  Shorten the node list by 1 element
+                                    # so it does not conflict with DatabaseTreeTab.py calls.
                                     if nodeType != None:
-                                        self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('D', (nodeType, nodelist[-1]))
+                                        self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('D', (nodeType, nodelist[1:]))
                             # Otherwise, if a Series, Episode, Transcript, Collection, or Clip node is deleted ...
                             elif nodelist[0] in ['SeriesNode', 'EpisodeNode', 'TranscriptNode', 'CollectionNode', 'ClipNode']:
                                 # ... and if the Notes Browser is open, ...
@@ -998,8 +1050,11 @@ class ChatWindow(wx.Frame):
 
                     # Unless we've just deleted it ...
                     if messageHeader != 'DN':
-                        # ... now that we're done, we should re-select the originally-selected tree item
-                        self.ControlObject.DataWindow.DBTab.tree.SelectItem(currentSelection)
+                        # First, de-select all items
+                        self.ControlObject.DataWindow.DBTab.tree.UnselectAll()
+                        for currNode in currentSelection:
+                            # ... now that we're done, we should re-select the originally-selected tree item
+                            self.ControlObject.DataWindow.DBTab.tree.SelectItem(currNode)
                 else:
                     if DEBUG:
                         print "We DON'T need to add an object, as we created it in the first place."

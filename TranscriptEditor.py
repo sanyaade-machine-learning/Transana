@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -26,22 +26,41 @@ SHOWHIDDEN = False
 if SHOWHIDDEN:
     print "TranscriptEditor SHOWHIDDEN is ON."
 
+# Import wxPython
 import wx
+# Import the Rich Text Control
 from RichTextEditCtrl import RichTextEditCtrl
+# Import the Transana Font Dialog
 import TransanaFontDialog
+# Import the Transana Transcript Object
 import Transcript
+# Import the Transana Drag and Drop infrastructure
 import DragAndDropObjects
+# Import Transana's Dialogs
 import Dialogs
+# Import Transana's Episode and Clip Objects 
 import Episode, Clip
+# Import Transana's Constants
 import TransanaConstants
+# Import Transana's Global variables
 import TransanaGlobal
+# Import Transana's Miscellaneous functions
 import Misc
+# Import Python's Regular Expression handler
 import re
+# Import Python's cPickle module
 import cPickle
+# Import Python's pickle module
 import pickle
+# Import Python's os module
 import os
+# Import Python's string module
 import string
+# Import Python's sys module
+import sys
+# Import Python's time module
 import time
+# Import Python's types module
 import types
 
 # This character is interpreted as a timecode marker in transcripts
@@ -355,8 +374,6 @@ class TranscriptEditor(RichTextEditCtrl):
         self.show_codes()
 
         self.parent.toolbar.ToggleTool(self.parent.toolbar.CMD_SHOWHIDE_ID, True)
-        # Enable the Change Propagation button on the Tool Bar
-        self.parent.toolbar.EnableTool(self.parent.toolbar.CMD_PROPAGATE_ID, True)
 
 	# Set save point
         self.SetSavePoint()
@@ -492,6 +509,11 @@ class TranscriptEditor(RichTextEditCtrl):
 
     def show_timecodevalues(self, visible):
         """ Make Time Code value in Human Readable form visible or hidden """
+        # If the current style is the Time Code style ...
+        if self.style_specs[self.style] == 'timecode':
+            # ... reset it to the default style.  This prevents the time code data from
+            # being displayed in red.
+            self.style = 0
         # Just passing through.
         self.changeTimeCodeValueStatus(visible)
 
@@ -1045,6 +1067,8 @@ class TranscriptEditor(RichTextEditCtrl):
             endTimeCode = endTime
         # If the End Time does NOT exactly match an existing time code ...
         else:
+            # Default endTimeCode to 0 in order to avoid problems for transcripts that totally lack time codes
+            endTimeCode = 0
             # ... iterate through the existing time codes ...
             for time in self.timecodes:
                 # ... and find the time code immediately AFTER the End Time
@@ -1470,6 +1494,14 @@ class TranscriptEditor(RichTextEditCtrl):
                     if not(self.codes_vis):
                         curpos += 1
 
+                    # Check the formatting and update if needed, so the formatting will be correct, not time-code red.
+                    # if the current styling is HIDDEN ...
+                    if self.GetStyleAt(curpos) == self.STYLE_HIDDEN:
+                        # ... and the style spec is for time codes ...
+                        if self.style_specs[self.style] == 'timecode':
+                            # ... then reset to the default style
+                            self.style = 0
+
                     # If time code data is visible ...
                     if self.timeCodeDataVisible and self.GetCharAt(curpos+1) == ord('('):
                         # ... then as long as we're inside the time code data ...
@@ -1606,22 +1638,39 @@ class TranscriptEditor(RichTextEditCtrl):
                             # deleted segment.
                             (prevTimeCode, nextTimeCode) = self.get_selected_time_range()
                             # First we locate the indexes for the previous and next time codes
-                            startIndex = self.timecodes.index(prevTimeCode)
-                            # We're getting an error here if we delete a section (including time codes) that goes
-                            # past the last time code.  This should fix that.
-                            if nextTimeCode in self.timecodes:
-                                endIndex= self.timecodes.index(nextTimeCode)
-                            else:
-                                if (nextTimeCode == -1) or \
-                                   (nextTimeCode >= self.timecodes[len(self.timecodes)-1]):
-                                    endIndex = len(self.timecodes)
-                                # If we get here, I don't know what's going wrong.  Let's just assume we've only got one time
-                                # code highlighted.  This is probably a BAD assumption, but we shouldn't get here unless there's
-                                # a rather serious problem anyway.
+                            # We only need to do this if self.timecodes has data.  Otherwise, we're in a report and can skip this.
+                            if len(self.timecodes) > 0:
+                                # If the prevTimeCode is defined in the timecodes data structure ...
+                                if prevTimeCode in self.timecodes:
+                                    # ... we have a known start Index
+                                    startIndex = self.timecodes.index(prevTimeCode)
+                                # Otherwise, we're probably starting BEFORE the first defined time codes ...
                                 else:
-                                    endIndex = startIndex + 1
-                            # ... then we remove items from the list that fall between them.
-                            self.timecodes = self.timecodes[:startIndex + 1] + self.timecodes[endIndex:]
+                                    # ... and should signal that with a startIndex of -1.
+                                    startIndex = -1
+                                # We're getting an error here if we delete a section (including time codes) that goes
+                                # past the last time code.  This should fix that.
+                                if nextTimeCode in self.timecodes:
+                                    endIndex= self.timecodes.index(nextTimeCode)
+                                else:
+                                    if (nextTimeCode == -1) or \
+                                       (nextTimeCode >= self.timecodes[len(self.timecodes)-1]):
+                                        endIndex = len(self.timecodes)
+                                    # If we get here, I don't know what's going wrong.  Let's just assume we've only got one time
+                                    # code highlighted.  This is probably a BAD assumption, but we shouldn't get here unless there's
+                                    # a rather serious problem anyway.
+                                    else:
+                                        endIndex = startIndex + 1
+
+                                # ... then we remove items from the list that fall between them.
+                                # If the startIndex was found ...
+                                if startIndex > -1:
+                                    # ... we can extract from the middle like this
+                                    self.timecodes = self.timecodes[:startIndex + 1] + self.timecodes[endIndex:]
+                                # If the startIndex was NOT found ...
+                                else:
+                                    # ... we drop the start of the list
+                                    self.timecodes = self.timecodes[endIndex:]
                             # Now we reset the Text Cursor
                             self.SetCurrentPos(selStart)
                             # We better hide all the hidden text for the time code data again                           
@@ -1803,7 +1852,16 @@ class TranscriptEditor(RichTextEditCtrl):
                 self.save_transcript()
                 blockSkip = True
 
+            # If anything not explicitly handled is entered ...
+            else:
+                # See if the styling is for a time code.
+                if self.style_specs[self.style] == 'timecode':
+                    # If so, reset the style to the Default style
+                    self.style = 0
+
+        # if the Skip() call should not be blocked ...
         if not(blockSkip):
+            # ... skip to the next (parent) level event handler.
             event.Skip()
 
     def OnKeyUp(self, event):
@@ -1887,7 +1945,6 @@ class TranscriptEditor(RichTextEditCtrl):
                     evaluation = (self.GetCharAt(selStart - 1) == 194) and (self.GetCharAt(selStart) == 164)
                     evaluation2 = (self.GetCharAt(selStart - 2) == 194) and (self.GetCharAt(selStart - 1) == 164)
                     evaluation = evaluation or evaluation2
-                        
             else:
                 evaluation = (self.GetCharAt(selStart - 1) == ord(TIMECODE_CHAR)) and (chr(self.GetCharAt(selStart)) == '<')
                 
@@ -2114,9 +2171,15 @@ class TranscriptEditor(RichTextEditCtrl):
         # self.pos is the start of the selection.  We may also need to know the CURSOR click point if
         # the user clicks inside a selection.
         clickPos = self.PositionFromPoint(event.GetPosition())
-        
         # Set the selection in case SetSelectionAfter gets called later
         self.selection = self.GetSelection()
+        # if clickPos is outside of the self.selection range, that indicates that the user clicked ON
+        # a time code and that the position was adjusted due to the cursor getting stuck between the
+        # time code symbol and the time code data, but was then corrected by CheckTimeCodesAtSelectionBoundaries().
+        # If this happens ...
+        if (clickPos < self.selection[0]) or (clickPos > self.selection[1]):
+            # ... we need to adjust clickPos to match self.pos, as we don't have a click-within-selection scenario.
+            clickPos = self.pos
         # Remember the first visible line
         self.FVL = self.GetFirstVisibleLine()
         # The code that is now indented was causing an error if you tried to edit the Transcript from the
@@ -2155,6 +2218,7 @@ class TranscriptEditor(RichTextEditCtrl):
                 self.pos = clickPos
             # We need to restore the cursor position later
             wx.CallAfter(self.PositionAfter)
+
         # Okay, now let the RichTextEditCtrl have the LeftUp event
         event.Skip()
 
@@ -2234,6 +2298,68 @@ class TranscriptEditor(RichTextEditCtrl):
             # Once the cursor position has been reset, we need to clear out the Cursor Position Data
             self.cursorPosition = 0
 
+    def AutoTimeCode(self):
+        """ Auto-timecode a transcript with fixed interval time codes """
+        # Prepare a message for the user
+        msg = _('Please enter the desired time-code interval in seconds.')
+        # Create a text entry dialog box
+        dlg = wx.TextEntryDialog(self, msg, _('Fixed-Increment Time Codes'), '')
+        # Center the dialog on the screen, not the transcript window
+        dlg.CentreOnScreen()
+        # Get input from the user
+        result = dlg.ShowModal()
+        # If the user presses OK ...
+        if result == wx.ID_OK:
+            # Start exception handling
+            try:
+                # Convert the text input to a real number
+                adjustValue = float(dlg.GetValue())
+                # If the input is <= 0, exit, signalling failure
+                if adjustValue <= 0:
+                    return False
+                # If we have an Episode loaded ...
+                if type(self.parent.ControlObject.currentObj) == type(Episode.Episode()):
+                    # ... then we will time code from the beginning (zero) to the end of the media file
+                    start = 0
+                    end = self.parent.ControlObject.currentObj.tape_length
+                # If we have a Clip ...
+                else:
+                    # ... then we will time code from the clip start to the clip end.
+                    # (It's unlikely this will get called, as Clips generally already have transcripts!)
+                    start = self.parent.ControlObject.currentObj.clip_start
+                    end = self.parent.ControlObject.currentObj.clip_stop
+                # For the specified time range, using the specified interval ...
+                for tc in range(start, end, int(adjustValue * 1000)):
+                    # ... go to the end of the document (which keeps moving!) ...
+                    self.GotoPos(self.GetLength())
+                    # ... insert the appropriate time code ...
+                    self.insert_timecode(tc)
+                    # ... and insert a couple of blank lines at the end
+                    self.InsertText(self.GetLength(), ' \n\n')
+
+                # Now that we've placed the time codes, go to the beginning of the document
+                self.GotoPos(0)
+
+            # Exception handling
+            except:
+                if DEBUG:
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+                # Build the error message
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Error in Time Code increment.\n%s\n%s'), 'utf8')
+                else:
+                    prompt = _('Error in Time Code increment.\n%s\n%s')
+                # Display the error message
+                errordlg = Dialogs.ErrorDialog(self, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                errordlg.ShowModal()
+                errordlg.Destroy()
+        # Destroy the prompt dialog
+        dlg.Destroy()
+        # Signal the calling routine whether the user entered a legal value
+        return ((result == wx.ID_OK) and (adjustValue > 0))
+    
     def AdjustIndexes(self, adjustmentAmount):
         """ Adjust Transcript Time Codes by the specified amount """
         # Let's try to remember the cursor position
@@ -2547,29 +2673,61 @@ class TranscriptEditorDropTarget(wx.PyDropTarget):
     def OnData(self, x, y, d):
         # copy the data from the drag source to our data object
         if (self.editor.TranscriptObj != None) and self.GetData():
-
             # Extract actual data passed by DataTreeDropSource
             sourceData = cPickle.loads(self.data.GetData())
+            # With the addition of multi-select in the Database Tree, we might get a single item here in the sourceData,
+            # or we might get a list of node data elements.  Let's create a List for all elements to go into (to keep
+            # everything parallel)
+            # Create an empty list to hold the sourceData items
+            sourceList = []
+            # If we have received a list ...
+            if isinstance(sourceData, list):
+                # ... add each element from sourceData ...
+                for element in sourceData:
+                    # ... to our sourceList list
+                    sourceList.append(element)
+                # ... and catch the FIRST element as if it were a single-item sourceData object
+                sourceData = sourceList[0]
+            # If we have received a single element from sourceData ...
+            else:
+                # ... add that element to our sourceList list
+                sourceList.append(sourceData)
 
             # If a Keyword Node is dropped ...
             if sourceData.nodetype == 'KeywordNode':
-
                 # See if we're creating a QuickClip
                 if (TransanaConstants.macDragDrop or ('wxMac' in wx.PlatformInfo)) and TransanaGlobal.configData.quickClipMode:
+                    # Get the clip start and stop times from the transcript
                     (startTime, endTime) = self.editor.get_selected_time_range()
+                    # Initialize the Keyword List
+                    kwList = []
+                    # Iterate through the sourceLIst list ...
+                    for element in sourceList:
+                        # ... and extract the keyword data for each element
+                        kwList.append((element.parent, element.text))
                     # Determine whether we're creating a Clip from an Episode Transcript
                     if self.editor.TranscriptObj.clip_num == 0:
+                        # If so, get the Episode data
                         transcriptNum = self.editor.TranscriptObj.number
                         episodeNum = self.editor.TranscriptObj.episode_num
+                        # If thre's no specified end time ...
                         if endTime <= 0:
+                            # ... then the end of the Episode is the end of the clip!
                             endTime = self.editor.parent.ControlObject.currentObj.tape_length
+                    # If we are not working from an Episode, we're working from a Clip and are sub-clipping.
                     else:
+                        # Get the source Clip data
                         tempClip = Clip.Clip(self.editor.TranscriptObj.clip_num)
-                        transcriptNum = tempClip.transcript_num
+                        # This gets the CORRECT Trancript Record, even with multiple transcripts
+                        transcriptNum = self.editor.TranscriptObj.source_transcript
                         episodeNum = tempClip.episode_num
+                        # If the sub-clip starts at the start of the parent clip ... 
                         if startTime == 0:
+                            # ... we need to grab the parent clip's start time
                             startTime = tempClip.clip_start
+                        # if the sub-clip ends at the end of the parent clip ...
                         if endTime <= 0:
+                            # ... we need to grab the parent clip's end time
                             endTime = tempClip.clip_stop
                     # If the text selection is blank, we need to send a blank rather than RTF for nothing
                     (startPos, endPos) = self.editor.GetSelection()
@@ -2577,29 +2735,57 @@ class TranscriptEditorDropTarget(wx.PyDropTarget):
                         text = ''
                     else:
                         text = self.editor.GetRTFBuffer(select_only=1)
+                    # Get the Clip Data assembled for creating the Quick Clip
                     clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, self.editor.GetSelectedText(), self.editor.parent.ControlObject.GetVideoCheckboxDataForClips(startTime))
                     # I'm sure this is horrible form, but I don't know how else to do this from here!
                     dbTree = self.editor.parent.ControlObject.DataWindow.DBTab.tree
                     # Create the Quick Clip
-                    DragAndDropObjects.CreateQuickClip(clipData, sourceData.parent, sourceData.text, dbTree)
+                    DragAndDropObjects.CreateQuickClip(clipData, sourceData.parent, sourceData.text, dbTree, extraKeywords=kwList[1:])
+                # If we're NOT creating a Quick Clip, we're adding a keyword to the current Episode or Clip
                 else:
-                
-                    # Now you can do sourceData.recNum, sourceData.text,
-                    # sourceData.nodetype should be 'KeywordNode'
                     # Determine where the Transcript was loaded from
                     if self.editor.TranscriptObj:
+                        # If we've got a Clip loaded ...
                         if self.editor.TranscriptObj.clip_num != 0:
+                            # ... assemble Clip data
                             targetType = 'Clip'
+                            targetLabel = _('Clip')
                             targetRecNum = self.editor.TranscriptObj.clip_num
                             clipObj = Clip.Clip(targetRecNum)
                             targetName = clipObj.id
+                        # Otherwise, we have an Episode loaded ...
                         else:
+                            # ... so assemble Episode data
                             targetType = 'Episode'
+                            targetLabel = _('Episode')
                             targetRecNum = self.editor.TranscriptObj.episode_num
                             epObj = Episode.Episode(targetRecNum)
                             targetName = epObj.id
-                        DragAndDropObjects.DropKeyword(self.editor, sourceData, \
-                            targetType, targetName, targetRecNum, 0)
+                        # If there's more than one keyword in the drop list ...
+                        if len(sourceList) > 1:
+                            # Get user confirmation of the Keyword Add request
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_('Do you want to add multiple Keywords to %s "%s"?'), 'utf8')
+                                targetLabel = unicode(targetLabel, 'utf8')
+                            else:
+                                prompt = _('Do you want to add multiple Keywords to %s "%s"?')
+                            # Assemble the prompt data
+                            data = (targetLabel, targetName)
+                            # Display the prompt and get user feedback
+                            dlg = Dialogs.QuestionDialog(None, prompt % data)
+                            result = dlg.LocalShowModal()
+                            dlg.Destroy()
+                        # If there's only one keyword, we'll let DropKeyword handle the confirmation ...
+                        else:
+                            # ... so can just act like the user said Yes here.
+                            result = wx.ID_YES
+                        # If the user said Yes or we skipped the prompts ...
+                        if result == wx.ID_YES:
+                            # For each keyword in the sourceList list ...
+                            for element in sourceList:
+                                # ... add the keyword to the current element by simulating a keyword drop on the appropriate target
+                                DragAndDropObjects.DropKeyword(self.editor, element, targetType, targetName, targetRecNum, 0, confirmations=(len(sourceList) == 1))
                     else:
                         # No transcript Object loaded, do nothing
                         pass

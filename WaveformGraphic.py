@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -30,7 +30,11 @@ import sys
 # Import Python's wave module for processing Wave files
 import wave
 
-def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLength, graphicSize):
+
+# import numpy
+
+
+def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLength, graphicSize, colors = (wx.CYAN, wx.GREEN, wx.BLUE, wx.RED), style='waveform'):
     try:
         # Create an Empty Bitmap
         theBitmap = wx.EmptyBitmap(graphicSize[0], graphicSize[1])
@@ -49,9 +53,12 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
         dc.BeginDrawing()
 
         # Define the waveform colors, selecting just the number needed from the list, right-justified
-        waveformColors = (wx.CYAN, wx.GREEN, wx.BLUE, wx.RED)[-len(waveFilename):]
+        waveformColors = colors[-len(waveFilename):]
         # Initialize the Color Index
         colorIndex = 0
+
+#        print "START"
+        
         # Iterate through the wave files to be processed, in reverse order
         for wavFileIndex in range(len(waveFilename) - 1, -1, -1):
             # If the waveFilename entry doesn't HAVE a "Show" value, or if it has one that is set to True,
@@ -87,7 +94,12 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
 
                     # Hmmmm.  I don't understand this.  If the offset is negative, we need to ignore it, as it shifts the
                     # waveform, but if it's positive, we need to compensate for it.
-                    indent = max(0, wavFile['offset']) - startPoint
+
+                    if wavFile['offset'] < 0:
+                        print "***********     ALERT     WaveformGraphic.OnIdle() change     ALERT     ****************"
+                        
+#                    indent = max(0, wavFile['offset']) - startPoint
+                    indent = wavFile['offset'] - startPoint
 
                     # If we have a positive value ...
                     if indent >= 0:
@@ -104,6 +116,8 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
                         # Indent the wave file the appropriate number of frames to get to the right part of the wave file
                         frames = waveFile.readframes(float(abs(indent)) / 1000.0 * waveFile.getframerate())
 
+#                        print "**", startPoint, indent, float(abs(indent)) / 1000.0 * waveFile.getframerate(), float(indent) / 1000.0 * waveFile.getframerate()
+
                     # If we're in a clip, the ending point can be determined by looking at the waveform's WIDTH!!
                     ep = graphicSize[0] - 1
 
@@ -117,6 +131,9 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
                 if DEBUG and (totalFramesToRead / graphicSize[0] < 1):
                     print "\n\nTODO:  Zoomed in so that Number of Lines is less than Graphic Width!!\n\n"
 
+
+                max1 = min1 = 0
+                
                 # Draw the actual WaveForm
                 # for each pixel position in the graphic's width ...
                 for loop in range(sp, ep):
@@ -131,24 +148,77 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
                     frame = max(frames)
                     # Process the data differently based on the Bytes Per Sample value of the Wave File
                     if waveFile.getsampwidth() == 1:
-                        #This is for the 8-bit Bytes per Sample setting
-                        # The byte value represents sound, with 128 being silence and deviation from it being louder.
-                        # Therefore, determine the distance the Byte Value (frame) differs from silence.
-                        if ord(frame) > 128:
-                           amplitude = ord(frame) - 128
-                        else:
-                           amplitude = 128 - ord(frame)
-                        # Adjust the raw amplitude (0 .. 255 range) for the size of the graphic canvas
-                        amplitude = round(amplitude * graphicSize[1] / 256.0)
-                        # Determine the coordinates for drawing the amplitude line on the Device Context
-                        # The horizontal value equals the value of the loop
-                        x = loop
-                        # The vertical values represent the divergence of amplitude from the center of the graphic
-                        y1 = round((graphicSize[1]/2.0 - amplitude))
-                        y2 = round((graphicSize[1]/2.0 + amplitude))
+                        if style == 'waveform':
+                            #This is for the 8-bit Bytes per Sample setting
+                            # The byte value represents sound, with 128 being silence and deviation from it being louder.
+                            # Therefore, determine the distance the Byte Value (frame) differs from silence.
+                            if ord(frame) > 128:
+                               amplitude = ord(frame) - 128
+                            else:
+                               amplitude = 128 - ord(frame)
+                            # Adjust the raw amplitude (0 .. 255 range) for the size of the graphic canvas
+                            amplitude = round(amplitude * graphicSize[1] / 256.0)
+                            # Determine the coordinates for drawing the amplitude line on the Device Context
+                            # The horizontal value equals the value of the loop
+                            x = loop
+                            # The vertical values represent the divergence of amplitude from the center of the graphic
+                            y1 = round((graphicSize[1]/2.0 - amplitude))
+                            y2 = round((graphicSize[1]/2.0 + amplitude))
 
-                        # draw the line on the Device Context
-                        dc.DrawLine(int(x), int(y1), int(x), int(y2))
+                            # draw the line on the Device Context
+                            dc.DrawLine(int(x), int(y1), int(x), int(y2))
+                        elif style == 'spectrogram':
+
+#                            print "Waveform style = spectrogram", sp, ep, ep-sp
+
+#                            print frames, type(frames), len(frames)
+#                            print
+
+                            sigList = []
+                            for loop2 in range(len(frames)):
+
+                                val = ord(frames[loop2])
+                                if val > 128:
+                                    sigList.append(val - 128)
+                                else:
+                                    sigList.append(128 - val)
+
+#                            print sigList
+#                            print
+
+                            max1 = max(max1, max(sigList))
+                            min1 = min(min1, min(sigList))
+
+                            sig = numpy.array(sigList)
+                            
+#                            print sig
+#                            print
+
+                            spectrum = 10*numpy.log10(abs(numpy.fft.rfft(sig)))
+
+#                            print spectrum, len(spectrum)
+
+#                            print "Max =", max1, "Min =", min1
+
+                            x = loop
+                            for loop2 in range(len(spectrum)):
+
+#                                print loop2, spectrum[loop2], type(spectrum[loop2]),
+
+                                if spectrum[loop2] in [numpy.inf, -numpy.inf]:
+                                    n = 0
+                                else:
+                                    n = max(0, int(5 * spectrum[loop2]))
+
+#                                    print 5 * spectrum[loop2], n
+
+                                    n = max(0, int(5 * spectrum[loop2]))
+                                
+                                pen.SetColour(wx.Colour(255-n, 255-n, 255-n))
+                                dc.SetPen(pen)
+                                dc.DrawPoint(x, loop2)
+                                              
+                        
                     else:
                         #This is for the 16-bit Bytes per Sample setting
                         print "Waveform for 16-bit wave files not yet implemented."
@@ -169,6 +239,9 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
         # Signal that drawing is complete
         dc.EndDrawing()
 
+
+#        print "END"
+        
         # If the waveformFilename is ":memory:", we return an Image
         if waveformFilename == ':memory:':
             # If we have a good Bitmap ...

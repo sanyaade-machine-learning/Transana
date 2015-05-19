@@ -1,4 +1,4 @@
-# Copyright (C) 2007-2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2007-2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -118,7 +118,7 @@ class NotesBrowser(wx.Dialog):
         # Create a Sizer for the Notes Tab
         noteTreeCtrlSizer = wx.BoxSizer(wx.HORIZONTAL)
         # Create a Tree Control and place it on the Notes Tab Panel
-        self.treeNotebookNotesTabTreeCtrl = wx.TreeCtrl(self.treeNotebookNotesTab, -1, style = wx.TR_HAS_BUTTONS | wx.TR_EDIT_LABELS )
+        self.treeNotebookNotesTabTreeCtrl = wx.TreeCtrl(self.treeNotebookNotesTab, -1, style = wx.TR_HAS_BUTTONS)  # | wx.TR_EDIT_LABELS )
         # Populate the Tree Control with all the Nodes and Notes it needs!
         self.notesRoot = self.PopulateTreeCtrl(self.treeNotebookNotesTabTreeCtrl)
         # Place the TreeCtrl on the Notes Tab Sizer
@@ -130,8 +130,8 @@ class NotesBrowser(wx.Dialog):
         # Capture selection event for the Notes Tree Control
         self.treeNotebookNotesTabTreeCtrl.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnTreeItemSelected)
         # Add methods to handle the editing of labels in the Notes Tree
-        self.treeNotebookNotesTabTreeCtrl.Bind(wx.EVT_TREE_BEGIN_LABEL_EDIT, self.OnBeginLabelEdit)
-        self.treeNotebookNotesTabTreeCtrl.Bind(wx.EVT_TREE_END_LABEL_EDIT, self.OnEndLabelEdit)
+        # self.treeNotebookNotesTabTreeCtrl.Bind(wx.EVT_TREE_BEGIN_LABEL_EDIT, self.OnBeginLabelEdit)
+        # self.treeNotebookNotesTabTreeCtrl.Bind(wx.EVT_TREE_END_LABEL_EDIT, self.OnEndLabelEdit)
         # Add a method to handle right-mouse-down, which should cause a popup menu
         self.treeNotebookNotesTabTreeCtrl.Bind(wx.EVT_RIGHT_DOWN, self.OnTreeCtrlRightDown)
 
@@ -170,14 +170,14 @@ class NotesBrowser(wx.Dialog):
         # Add a spacer to the Note Search Tab sizer
         noteTreeCtrlSizer2.AddSpacer((0, 10))
         # Create a Tree Control and place it on the Notes Search Tab Panel
-        self.treeNotebookSearchTabTreeCtrl = wx.TreeCtrl(self.treeNotebookSearchTab, -1, style = wx.TR_HAS_BUTTONS | wx.TR_EDIT_LABELS )
+        self.treeNotebookSearchTabTreeCtrl = wx.TreeCtrl(self.treeNotebookSearchTab, -1, style = wx.TR_HAS_BUTTONS)  # | wx.TR_EDIT_LABELS )
         # Place the TreeCtrl on the Notes Search Tab Sizer
         noteTreeCtrlSizer2.Add(self.treeNotebookSearchTabTreeCtrl, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 2)
         # Capture selection event for the Notes Tree Control
         self.treeNotebookSearchTabTreeCtrl.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnTreeItemSelected)
         # Add methods to handle the editing of labels in the Notes Tree
-        self.treeNotebookSearchTabTreeCtrl.Bind(wx.EVT_TREE_BEGIN_LABEL_EDIT, self.OnBeginLabelEdit)
-        self.treeNotebookSearchTabTreeCtrl.Bind(wx.EVT_TREE_END_LABEL_EDIT, self.OnEndLabelEdit)
+        # self.treeNotebookSearchTabTreeCtrl.Bind(wx.EVT_TREE_BEGIN_LABEL_EDIT, self.OnBeginLabelEdit)
+        # self.treeNotebookSearchTabTreeCtrl.Bind(wx.EVT_TREE_END_LABEL_EDIT, self.OnEndLabelEdit)
         # Add a method to handle right-mouse-down, which should cause a popup menu
         self.treeNotebookSearchTabTreeCtrl.Bind(wx.EVT_RIGHT_DOWN, self.OnTreeCtrlRightDown)
         # Set the Sizer on the Notes Search Tab
@@ -342,6 +342,47 @@ class NotesBrowser(wx.Dialog):
         # Return the root node.
         return root
 
+    def FindTreeNode(self, note):
+        """ Find the NODE for a specific Note Object """
+        # Get the Node Data for the Note Object passed in.
+        (nodeData, nodeType) = self.GetNodeData(note)
+        # Initialize that we want to continue looking for the right node
+        contin = True
+        # Start at the Root Node of the Notes Tab
+        rootNode = self.treeNotebookNotesTabTreeCtrl.GetRootItem()
+        # Get the first child from the Root
+        (childNode, cookie) = self.treeNotebookNotesTabTreeCtrl.GetFirstChild(rootNode)
+        # While we have valid child nodes and have not yet found what we're looking for ...
+        while childNode.IsOk() and contin:
+            # Get the Node Data for the child we're currently examining
+            childNodeData = self.treeNotebookNotesTabTreeCtrl.GetPyData(childNode)
+            # See if the Node Type for the Note matches the Node Type for the node we're looking at ...
+            if ((nodeType == 'SeriesNoteNode') and (childNodeData.nodetype == 'SeriesNode')) or \
+               ((nodeType == 'EpisodeNoteNode') and (childNodeData.nodetype == 'EpisodeNode')) or \
+               ((nodeType == 'TranscriptNoteNode') and (childNodeData.nodetype == 'TranscriptNode')) or \
+               ((nodeType == 'CollectionNoteNode') and (childNodeData.nodetype == 'CollectionNode')) or \
+               ((nodeType == 'ClipNoteNode') and (childNodeData.nodetype == 'ClipNode')):
+                # ... if so, start looking at the children of this node ...
+                (noteNode, cookie2) = self.treeNotebookNotesTabTreeCtrl.GetFirstChild(childNode)
+                # While we have valid grandchild nodes and have not yet found what we're looking for ...
+                while noteNode.IsOk() and contin:
+                    # ... see if the node text matches the Note's OLD name (a parameter used only for renaming!)
+                    #     AND has the correct Note Number
+                    if (self.treeNotebookNotesTabTreeCtrl.GetItemText(noteNode) == note.id) and \
+                       (self.treeNotebookNotesTabTreeCtrl.GetPyData(noteNode).recNum == note.number):
+                        # If it matches, we've found the node!.
+                        return noteNode
+                    # If the text is NOT a match ...
+                    else:
+                        # ... continue on to the next grandchild node
+                        (noteNode, cookie2) = self.treeNotebookNotesTabTreeCtrl.GetNextChild(childNode, cookie2)
+            # if we have NOT found what we're looking for ...
+            else:
+                # ... then look at the next child node.
+                (childNode, cookie) = self.treeNotebookNotesTabTreeCtrl.GetNextChild(rootNode, cookie)
+        # If the node is not found, return None
+        return None
+
     def UpdateTreeCtrl(self, action, note=None, oldName=''):
         """ Update the Tree Control based on an external event, such as multi-user communication """
         # If we're on the Notes tab, not the Note Search tab ...
@@ -399,8 +440,12 @@ class NotesBrowser(wx.Dialog):
                         (noteNode, cookie2) = self.treeNotebookNotesTabTreeCtrl.GetFirstChild(childNode)
                         # While we have valid grandchild nodes and have not yet found what we're looking for ...
                         while noteNode.IsOk() and contin:
-                            # ... see if the node text matches the Note's OLD name (a parameter used only for renaming!)
-                            if self.treeNotebookNotesTabTreeCtrl.GetItemText(noteNode) == oldName:
+                            # Get the Node Data for the NOTE we're currently examining ...
+                            noteNodeData = self.treeNotebookNotesTabTreeCtrl.GetPyData(noteNode)
+                            # ... see if the node text matches the Note's OLD name (a parameter used only for renaming!) AND
+                            # make sure the note's Number matches correctly so the wrong entry (with duplicate name) doesn't get renamed!
+                            if (self.treeNotebookNotesTabTreeCtrl.GetItemText(noteNode) == oldName) and \
+                               (noteNodeData.recNum == note.number):
                                 # If it matches, update the Node's text to the Note's NEW name ...
                                 self.treeNotebookNotesTabTreeCtrl.SetItemText(noteNode, note.id)
                                 # ... and signal that we're done.
@@ -431,8 +476,11 @@ class NotesBrowser(wx.Dialog):
                         (noteNode, cookie2) = self.treeNotebookNotesTabTreeCtrl.GetFirstChild(childNode)
                         # While we have valid grandchild nodes and have not yet found what we're looking for ...
                         while noteNode.IsOk() and contin:
-                            # ... see if the node text matches the Note's ID (passed as the second part of the "note" tuple!)
-                            if self.treeNotebookNotesTabTreeCtrl.GetItemText(noteNode) == note[1]:
+                            (pathNode, cookie3) = self.treeNotebookNotesTabTreeCtrl.GetFirstChild(noteNode)
+                            # ... see if the node text matches the Note's ID (passed in the second part of the "note" tuple)
+                            # AND make sure the note's full object path matches correctly
+                            if (self.treeNotebookNotesTabTreeCtrl.GetItemText(noteNode) == note[1][-1]) and \
+                               (list(note[1][1:-1]) == self.treeNotebookNotesTabTreeCtrl.GetItemText(pathNode).split(' > ')):
                                 # If so, remove that node from the tree ...
                                 self.treeNotebookNotesTabTreeCtrl.Delete(noteNode)
                                 # ... and signal that we're done.
@@ -441,6 +489,10 @@ class NotesBrowser(wx.Dialog):
                             else:
                                 # ... continue on to the next grandchild node
                                 (noteNode, cookie2) = self.treeNotebookNotesTabTreeCtrl.GetNextChild(childNode, cookie2)
+                                # This shouldn't happen, but if we don't find the Note node, get the next CHILD node!
+                                if not noteNode.IsOk():
+                                    # ... then look at the next child node.
+                                    (childNode, cookie) = self.treeNotebookNotesTabTreeCtrl.GetNextChild(rootNode, cookie)
                     # If the text is NOT a match ...
                     else:
                         # ... then look at the next child node.
@@ -548,6 +600,78 @@ class NotesBrowser(wx.Dialog):
             # ... and signal that it's a Clip Note.
             nodeType = 'ClipNoteNode'
         return (nodeData, nodeType)
+
+    def OpenNote(self, noteNum):
+        """ Open the specified Note (a note number is passed in) in the Note Browser """
+        # If there is already an open Note ...
+        if self.activeNote != None:
+            # If the open note is a different number than the new note ...
+            if self.activeNote.number != noteNum:
+                # ... save the Active Note
+                self.SaveNoteAndClear()
+            # If the new note is already open ...
+            else:
+                # ... there's nothing more to do!
+                return
+        # We need exception handling here 
+        try:
+            # Make sure the Notes page is showing
+            self.treeNotebook.SetSelection(0)
+            # Create a Note object and populated it for the selected note
+            self.activeNote = Note.Note(noteNum)
+            # Get the note's Tree Node
+            sel_item = self.FindTreeNode(self.activeNote)
+            # So long as the tree node is found ...
+            if sel_item != None:
+                # Try to lock the note
+                self.activeNote.lock_record()
+                # Remember the note's ID so we can tell later if it's changed.
+                self.originalNoteID = self.activeNote.id
+                # If successful, enable the Note Editor controls ...
+                self.noteEdit.EnableControls(True)
+                # ... and populate the Note Editor with the note's text
+                self.noteEdit.set_text(self.activeNote.text)
+                # Make sure the new note is Selected
+                self.treeNotebookNotesTabTreeCtrl.SelectItem(sel_item)
+                # Make sure the new node is Visible
+                self.treeNotebookNotesTabTreeCtrl.EnsureVisible(sel_item)
+                # Make sure the selected object is expanded
+                self.treeNotebookNotesTabTreeCtrl.Expand(sel_item)
+                # If we're on the Note Search tab ...
+                if (self.treeNotebookNotesTabTreeCtrl == self.treeNotebookSearchTabTreeCtrl):
+                    # ... then take the search text and stick it in the Note Search Text box too!
+                    self.noteEdit.SetSearchText(self.noteSearch.GetValue())
+        # Trap Record Lock exceptions
+        except TransanaExceptions.RecordLockedError, err:
+            # If the note is locked, we need to inform the user of that fact.  First create a prompt
+            # and encode it as needed.
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Note "%s" is locked by %s\n'), 'utf8')
+            else:
+                prompt = _('Note "%s" is locked by %s\n')
+            # Populate the read-only Note Editor with the lock prompt and the note text.
+            self.noteEdit.set_text(prompt % (self.activeNote.id, self.activeNote.record_lock) +
+                                   '\n\n%s' % self.activeNote.text)
+            # Since the record is locked and the control read-only, we can immediately forget that we
+            # have an active note.
+            self.activeNote = None
+            # Make sure the new note is Selected (which does NOT cause lock problems now that activeNote is None)
+            self.treeNotebookNotesTabTreeCtrl.SelectItem(sel_item)
+            # Make sure the new node is Visible
+            self.treeNotebookNotesTabTreeCtrl.EnsureVisible(sel_item)
+            # Make sure the selected object is expanded
+            self.treeNotebookNotesTabTreeCtrl.Expand(sel_item)
+        # Trap Record Not Found exception, which is triggered if a different user deletes a Note's Parent, grandparent, etc.
+        # while this user has the Notes Browser open, then this user selects the deleted Note.  (Deleting the note itself
+        # causes it to be removed form the Notes Browser, but not deleting its ancestors.)
+        except TransanaExceptions.RecordNotFoundError, err:
+            # We can immediately forget that we have an active note, since the note doesn't exist!
+            self.activeNote = None
+            # Display an error message to the user
+            errordlg = Dialogs.ErrorDialog(None, err.explanation)
+            errordlg.ShowModal()
+            errordlg.Destroy()
 
     def SaveNoteAndClear(self):
         # Let's check to see if we have a note that is already open.
@@ -657,93 +781,102 @@ class NotesBrowser(wx.Dialog):
 
     def OnBeginLabelEdit(self, event):
         """ Handle the start of editing Tree Labels """
-        # Determine which tree is the source of the selection, the Notes tree or the Note Search tree
-        if event.GetId() == self.treeNotebookNotesTabTreeCtrl.GetId():
-            tree = self.treeNotebookNotesTabTreeCtrl
-        elif event.GetId() == self.treeNotebookSearchTabTreeCtrl.GetId():
-            tree = self.treeNotebookSearchTabTreeCtrl
-        else:
-            tree = None
-        # If we know the source of the selection ...
-        if tree != None:
-            # Get the current selected item.
-            sel_item = tree.GetSelection()
-            # Get the item data for the current selection
-            sel_item_data = tree.GetPyData(sel_item)
-            # If the item data is None or not a Note Node or the note is locked by someone else ...
-            if (sel_item_data == None) or (sel_item_data.nodetype != 'NoteNode') or (self.activeNote == None) or \
-               (not self.activeNote.isLocked):
-                # ... we need to cancel the Label Edit
-                event.Veto()
-        # If we don't have a known tree ...
-        else:
-            # ... we need to cancel the Label Edit
-            event.Veto()
+        # LABEL EDITING disabled due to problems.  If you start editing a label, but click elsewhere
+        # before completing the edit, bad things happen.  For example, start editing a label, and before
+        # you press ENTER to complete the edit, right-click a DIFFERENT note.  The WRONG note gets renamed!
+        # Or click on the "Export Note to Text" button.  The edit just gets lost, and Transana-MU gets
+        # out of synch.
+
+        # Don't allow label editing!
+        event.Veto()
+
+##        # Determine which tree is the source of the selection, the Notes tree or the Note Search tree
+##        if event.GetId() == self.treeNotebookNotesTabTreeCtrl.GetId():
+##            tree = self.treeNotebookNotesTabTreeCtrl
+##        elif event.GetId() == self.treeNotebookSearchTabTreeCtrl.GetId():
+##            tree = self.treeNotebookSearchTabTreeCtrl
+##        else:
+##            tree = None
+##        # If we know the source of the selection ...
+##        if tree != None:
+##            # Get the current selected item.
+##            sel_item = tree.GetSelection()
+##            # Get the item data for the current selection
+##            sel_item_data = tree.GetPyData(sel_item)
+##            # If the item data is None or not a Note Node or the note is locked by someone else ...
+##            if (sel_item_data == None) or (sel_item_data.nodetype != 'NoteNode') or (self.activeNote == None) or \
+##               (not self.activeNote.isLocked):
+##                # ... we need to cancel the Label Edit
+##                event.Veto()
+##        # If we don't have a known tree ...
+##        else:
+##            # ... we need to cancel the Label Edit
+##            event.Veto()
         
 
-    def OnEndLabelEdit(self, event):
-        """ Handle the end of editing Tree Labels """
-        # Determine which tree is the source of the selection, the Notes tree or the Note Search tree
-        if event.GetId() == self.treeNotebookNotesTabTreeCtrl.GetId():
-            tree = self.treeNotebookNotesTabTreeCtrl
-        elif event.GetId() == self.treeNotebookSearchTabTreeCtrl.GetId():
-            tree = self.treeNotebookSearchTabTreeCtrl
-        else:
-            tree = None
-        # If we know the source of the selection ...
-        if tree != None:
-            # Get the current selected item.
-            sel_item = tree.GetSelection()
-            # Get the item data for the current selection
-            sel_item_data = tree.GetPyData(sel_item)
-            # If there is an active Note and we have it locked and the user didn't cancel the edit...
-            if (self.activeNote != None) and self.activeNote.isLocked and not event.IsEditCancelled():
-                # ... update the note ID to match the changed Label
-                self.activeNote.id = event.GetLabel().strip()
-                # Start exception handling
-                try:
-                    # We need to save here, so we can still veto the change if there's a save error!
-                    self.activeNote.db_save()
-                    # If we've changed the Note ID ...
-                    if self.activeNote.id != self.originalNoteID:
-                        # ... and we have a known ControlObject ...
-                        if self.ControlObject != None:
-                            # ... determine what type of note we have and set the appropriate data.  It's LIKELY
-                            # that the node ID has changed here.
-                            (nodeData, nodeType) = self.GetNodeData(self.activeNote, idChanged=True)
-                            # As long as we have good data ...
-                            if nodeData != '':
-                                # inform the Database tree of the Note ID change.  (We need to translate the Root node.)
-                                self.ControlObject.DataWindow.DBTab.tree.rename_Node((unicode(_(nodeData[0]), 'utf8'),) + nodeData[1:], nodeType, self.activeNote.id)
-                                # If we have a Chat Window (and thus are in MU) ...
-                                if TransanaGlobal.chatWindow != None:
-                                    # Start building a Rename message with the Rename header and the node type.
-                                    msg = "RN %s >|< " % nodeType
-                                    # Add all the nodes, which we already have assembled ...
-                                    for node in nodeData:
-                                        msg += node + ' >|< '
-                                    # ... and finish the message with the new name.
-                                    msg += self.activeNote.id
-                                    # Now send the message via the Chat Window.
-                                    TransanaGlobal.chatWindow.SendMessage(msg)
-                # Duplicate Note IDs or other problems can cause SaveError exceptions
-                except TransanaExceptions.SaveError:
-                    # Display the Error Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-                    # Veto the Label Edit, since it was rejected
-                    event.Veto()
-                    # Restore the ActiveNote's ID to the original value
-                    self.activeNote.id = self.originalNoteID
-            # If there's a problem ...
-            else:
-                # ... we need to cancel the Label Edit
-                event.Veto()
-        # if we don't have a known tree ...
-        else:
-            # ... we need to cancel the Label Edit.  (We should never get here!)
-            event.Veto()
+##    def OnEndLabelEdit(self, event):
+##        """ Handle the end of editing Tree Labels """
+##        # Determine which tree is the source of the selection, the Notes tree or the Note Search tree
+##        if event.GetId() == self.treeNotebookNotesTabTreeCtrl.GetId():
+##            tree = self.treeNotebookNotesTabTreeCtrl
+##        elif event.GetId() == self.treeNotebookSearchTabTreeCtrl.GetId():
+##            tree = self.treeNotebookSearchTabTreeCtrl
+##        else:
+##            tree = None
+##        # If we know the source of the selection ...
+##        if tree != None:
+##            # Get the current selected item.
+##            sel_item = tree.GetSelection()
+##            # Get the item data for the current selection
+##            sel_item_data = tree.GetPyData(sel_item)
+##            # If there is an active Note and we have it locked and the user didn't cancel the edit...
+##            if (self.activeNote != None) and self.activeNote.isLocked and not event.IsEditCancelled():
+##                # ... update the note ID to match the changed Label
+##                self.activeNote.id = event.GetLabel().strip()
+##                # Start exception handling
+##                try:
+##                    # We need to save here, so we can still veto the change if there's a save error!
+##                    self.activeNote.db_save()
+##                    # If we've changed the Note ID ...
+##                    if self.activeNote.id != self.originalNoteID:
+##                        # ... and we have a known ControlObject ...
+##                        if self.ControlObject != None:
+##                            # ... determine what type of note we have and set the appropriate data.  It's LIKELY
+##                            # that the node ID has changed here.
+##                            (nodeData, nodeType) = self.GetNodeData(self.activeNote, idChanged=True)
+##                            # As long as we have good data ...
+##                            if nodeData != '':
+##                                # inform the Database tree of the Note ID change.  (We need to translate the Root node.)
+##                                self.ControlObject.DataWindow.DBTab.tree.rename_Node((unicode(_(nodeData[0]), 'utf8'),) + nodeData[1:], nodeType, self.activeNote.id)
+##                                # If we have a Chat Window (and thus are in MU) ...
+##                                if TransanaGlobal.chatWindow != None:
+##                                    # Start building a Rename message with the Rename header and the node type.
+##                                    msg = "RN %s >|< " % nodeType
+##                                    # Add all the nodes, which we already have assembled ...
+##                                    for node in nodeData:
+##                                        msg += node + ' >|< '
+##                                    # ... and finish the message with the new name.
+##                                    msg += self.activeNote.id
+##                                    # Now send the message via the Chat Window.
+##                                    TransanaGlobal.chatWindow.SendMessage(msg)
+##                # Duplicate Note IDs or other problems can cause SaveError exceptions
+##                except TransanaExceptions.SaveError:
+##                    # Display the Error Message, allow "continue" flag to remain true
+##                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+##                    errordlg.ShowModal()
+##                    errordlg.Destroy()
+##                    # Veto the Label Edit, since it was rejected
+##                    event.Veto()
+##                    # Restore the ActiveNote's ID to the original value
+##                    self.activeNote.id = self.originalNoteID
+##            # If there's a problem ...
+##            else:
+##                # ... we need to cancel the Label Edit
+##                event.Veto()
+##        # if we don't have a known tree ...
+##        else:
+##            # ... we need to cancel the Label Edit.  (We should never get here!)
+##            event.Veto()
 
     def OnAllNotesSearch(self, event):
         """ "Search All Notes" has been activated.  We search for a string across all notes. """
@@ -769,6 +902,11 @@ class NotesBrowser(wx.Dialog):
             self.activeTree = None
         # If we know the source of the selection ...
         if self.activeTree != None:
+            # See if the label is being edited ...
+            # if (self.activeTree.GetEditControl() != None) and not ('wxMac' in wx.PlatformInfo):
+                # If a label is being edited, we need to finish that before doing anything else!
+                # self.activeTree.EndEditLabel(self.activeTree.GetSelection(), False)
+            
             # Items in the tree are not automatically selected with a right click.
             # We must select the item that is initially clicked manually!!
             # We do this by looking at the screen point clicked and applying the tree's
@@ -867,16 +1005,21 @@ class NotesBrowser(wx.Dialog):
                     menu.Append(id, _("Locate Note"))
                     # Link the appropriate method to the menu item
                     wx.EVT_MENU(self, id, self.OnMenuLocate)
+                    
+                    # RENAME disabled due to problems.  If you start editing a label, but click elsewhere
+                    # before completing the edit, bad things happen.
+                    
                     # Create a new Id for a menu item
-                    id = wx.NewId()
+                    # id = wx.NewId()
                     # Add a menu item for renaming the Note
-                    menu.Append(id, _("Rename"))
+                    # menu.Append(id, _("Rename"))
                     # Link the appropriate method to the menu item
-                    wx.EVT_MENU(self, id, self.OnMenuRename)
+                    # wx.EVT_MENU(self, id, self.OnMenuRename)
                     # If there is no activeNote (i.e. the note is locked by someone else) ...
-                    if (self.activeNote == None):
+                    # if (self.activeNote == None):
                         # ... then Note Properties should not be available as a menu option
-                        menu.Enable(id, False)
+                        # menu.Enable(id, False)
+
                     # Create a new Id for a menu item
                     id = wx.NewId()
                     # Add a menu item for Note Properties
@@ -891,6 +1034,7 @@ class NotesBrowser(wx.Dialog):
                 if menu != None:
                     # ... show the menu!  (We have to adjust the position of the popup for the position of the tree control.)
                     self.PopupMenu(menu, (event.GetPosition()[0], event.GetPosition()[1] + self.activeTree.GetPositionTuple()[1] + 15))
+
 
     def OnMenuReport(self, event):
         """ Implement the Notes Report function from the right-click menus """
@@ -957,12 +1101,12 @@ class NotesBrowser(wx.Dialog):
         # Tell the Database Tree to display that note.  (We need to translate the Root node.)
         self.ControlObject.DataWindow.DBTab.tree.select_Node((unicode(_(nodeData[0]), 'utf8'),) + nodeData[1:], nodeType)
         
-    def OnMenuRename(self, event):
-        """ Implement the Rename function from the right-click menu """
-        # Get the current selection from the active Tree Ctrl
-        sel_item = self.activeTree.GetSelection()
-        # Tell that Tree Ctrl to initiate Editing the Label!
-        self.activeTree.EditLabel(sel_item)
+##    def OnMenuRename(self, event):
+##        """ Implement the Rename function from the right-click menu """
+##        # Get the current selection from the active Tree Ctrl
+##        sel_item = self.activeTree.GetSelection()
+##        # Tell that Tree Ctrl to initiate Editing the Label!
+##        self.activeTree.EditLabel(sel_item)
 
     def OnMenuProperties(self, event):
         """ Implement the Note Properties function from the right-click menu """
@@ -1008,6 +1152,8 @@ class NotesBrowser(wx.Dialog):
                                     # Send the Rename Node message
                                     if TransanaGlobal.chatWindow != None:
                                         TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+                            # Update the original Note ID
+                            self.originalNoteID = self.activeNote.id
                         # See if the Author has changed.  If so, we need to reflect it in the Notes Tree.
                         if self.activeNote.author != originalNoteAuthor:
                             # Initialize that the change has not yet been made.

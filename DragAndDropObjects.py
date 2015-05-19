@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -54,7 +54,6 @@ DEBUG = False
 if DEBUG:
     print "DragAndDropObjects DEBUG is ON!!"
 
-
 import wx                           # Import wxPython
 import cPickle                      # use Python's fast cPickle tool instead of the regular Pickle
 import sys                          # import Python's sys module
@@ -89,10 +88,12 @@ def DragDropEvaluation(source, destination):
     # Next, either the record numbers or the nodetype must be different, so you can't drop a node on itself.
     if (source != None) and \
        (destination != None) and \
-       (type(source) != type(ClipDragDropData())) and \
-       ((source.nodetype == 'EpisodeNode'          and destination.nodetype == 'SeriesNode') or \
-        (source.nodetype == 'CollectionNode'       and destination.nodetype == 'CollectionNode') or \
-        (source.nodetype == 'ClipNode'             and destination.nodetype == 'CollectionNode') or \
+       (not isinstance(source, ClipDragDropData)) and \
+       (not isinstance(source, list)) and \
+       ((source.nodetype == 'EpisodeNode'          and destination.nodetype == 'SeriesNode'           and source.parent != destination.recNum) or \
+        (source.nodetype == 'CollectionNode'       and destination.nodetype == 'CollectionNode'       and source.parent != destination.recNum) or \
+        (source.nodetype == 'CollectionNode'       and destination.nodetype == 'CollectionsRootNode') or \
+        (source.nodetype == 'ClipNode'             and destination.nodetype == 'CollectionNode'       and source.parent != destination.recNum) or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'ClipNode') or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'KeywordNode') or \
         (source.nodetype == 'KeywordNode'          and destination.nodetype == 'SeriesNode') or \
@@ -105,19 +106,49 @@ def DragDropEvaluation(source, destination):
         (source.nodetype == 'TranscriptNoteNode'   and destination.nodetype == 'TranscriptNode') or \
         (source.nodetype == 'CollectionNoteNode'   and destination.nodetype == 'CollectionNode') or \
         (source.nodetype == 'ClipNoteNode'         and destination.nodetype == 'ClipNode') or \
-        (source.nodetype == 'SearchCollectionNode' and destination.nodetype == 'SearchCollectionNode') or \
-        (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode') or \
+        (source.nodetype == 'SearchCollectionNode' and destination.nodetype == 'SearchResultsNode') or \
+        (source.nodetype == 'SearchCollectionNode' and destination.nodetype == 'SearchCollectionNode' and source.parent != destination.recNum) or \
+        (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode' and source.parent != destination.recNum) or \
         (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchClipNode')) and \
        ((source.recNum != destination.recNum) or (source.nodetype != destination.nodetype)):
         return True
-    # If we have a Clip (type == ClipDragDropData), then we can drop it on a Collection or a Clip or a Keyword only.
+    # If we have a Clip Creation Object (dragged transcript text, type == ClipDragDropData), then we can drop it
+    # on a Collection or a Clip or a Keyword only.
     elif (source != None) and \
          (destination != None) and \
-         (type(source) == type(ClipDragDropData())) and \
+         (isinstance(source, ClipDragDropData)) and \
          ((destination.nodetype == 'CollectionNode') or \
 	  (destination.nodetype == 'ClipNode') or \
           (destination.nodetype == 'KeywordNode')):
         return True
+    # If the source data is a LIST, we have multiple selections!
+    elif (source != None) and \
+         (destination != None) and \
+         (isinstance(source, list)) and \
+         ((source[0].nodetype == 'EpisodeNode'          and destination.nodetype == 'SeriesNode') or \
+          (source[0].nodetype == 'ClipNode'             and destination.nodetype == 'CollectionNode') or \
+          (source[0].nodetype == 'ClipNode'             and destination.nodetype == 'ClipNode') or \
+          (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'SeriesNode') or \
+          (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'EpisodeNode') or \
+          (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'CollectionNode') or \
+          (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'ClipNode') or \
+          (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'KeywordGroupNode') or \
+          (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode') or \
+          (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode') or \
+          (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchClipNode')):
+        # Assume success
+        result = True
+        # Iterate through the source list
+        for src in source:
+            # Check to see if the destination node is IN the source list.  (NODETYPES MUST MATCH TOO!!  recNums aren't enough.)
+            if ((src.recNum == destination.recNum) and (source[0].nodetype == destination.nodetype)) and \
+                (src.recNum != 0):
+                # If so, the evaluation FAILS
+                result = False
+                # ... and we can stop looking
+                break
+        # return the result
+        return result
     else:
         return False
 
@@ -380,32 +411,102 @@ class DataTreeDropTarget(wx.PyDropTarget):
                 # Try to unPickle the Tree Node Data Object.  If the first Drag is for Clip Creation, this
                 # will raise an exception.  If there is a good Tree Node Data Object being dragged, or if
                 # one from a previous drag has been Cleared, this will be successful.
-                sourceData = cPickle.loads(self.sourceNodeData.GetData())
+                sourceDataList = cPickle.loads(self.sourceNodeData.GetData())
+                # This line compares the data being dragged (sourceData) to the drop site determined in OnDrop and
+                # passed here as self.dropData.  
+                if DragDropEvaluation(sourceDataList, self.dropData):
+                    # if the sourceDataList is NOT a list (i.e. a single tree node item instead of mulitple selections) ...
+                    if not isinstance(sourceDataList, list):
+                        # ... then make it into a list so we can iterate through it
+                        sourceDataList = [sourceDataList]
+                    # if there's only one item being dropped and we're dealing with Keywords, we want confirmation dialogs
+                    # from the DropKeyword() method
+                    confirmations = (len(sourceDataList) == 1) and (sourceDataList[0].nodetype == 'KeywordNode')
+                    # If we DON'T want confirmation dialogs from within DropKeyword(), we want a single confirmation up front,
+                    # BUT ONLY IF WE ARE DROPPING KEYWORDS!!  AND WE'RE NOT DROPPING ON A KEYWORD GROUP NODE!!!
+                    if not confirmations and (sourceDataList[0].nodetype == 'KeywordNode') and (self.dropData.nodetype != 'KeywordGroupNode'):
+                        # Prepare the prompt information
+                        if self.dropData.nodetype == 'SeriesNode':
+                            # Get user confirmation of the Keyword Add request
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_('Do you want to add multiple Keywords to all %s in %s "%s"?'), 'utf8')
+                                data1 = unicode(_('Episodes'), 'utf8')
+                                data2 = unicode(_('Series'), 'utf8')
+                            else:
+                                prompt = _('Do you want to add multiple Keywords to all %s in %s "%s"?')
+                                data1 = _('Episodes')
+                                data2 = _('Series')
+                            data = (data1, data2, self.tree.GetItemText(self.dropNode))
+                        elif self.dropData.nodetype == 'EpisodeNode':
+                            # Get user confirmation of the Keyword Add request
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_('Do you want to add multiple Keywords to %s "%s"?'), 'utf8')
+                                data1 = unicode(_('Episode'), 'utf8')
+                            else:
+                                prompt = _('Do you want to add multiple Keywords to %s "%s"?')
+                                data1 = _('Episode')
+                            data = (data1, self.tree.GetItemText(self.dropNode))
+                        elif self.dropData.nodetype == 'CollectionNode':
+                            # Get user confirmation of the Keyword Add request
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_('Do you want to add multiple Keywords to all %s in %s "%s"?'), 'utf8')
+                                data1 = unicode(_('Clips'), 'utf8')
+                                data2 = unicode(_('Collection'), 'utf8')
+                            else:
+                                prompt = _('Do you want to add multiple Keywords to all %s in %s "%s"?')
+                                data1 = _('Clips')
+                                data2 = _('Collection')
+                            data = (data1, data2, self.tree.GetItemText(self.dropNode))
+                        elif self.dropData.nodetype == 'ClipNode':
+                            # Get user confirmation of the Keyword Add request
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_('Do you want to add multiple Keywords to %s "%s"?'), 'utf8')
+                                data1 = unicode(_('Clip'), 'utf8')
+                            else:
+                                prompt = _('Do you want to add multiple Keywords to %s "%s"?')
+                                data1 = _('Clip')
+                            data = (data1, self.tree.GetItemText(self.dropNode))
+                        # Display the prompt for user feedback
+                        dlg = Dialogs.QuestionDialog(None, prompt % data)
+                        result = dlg.LocalShowModal()
+                        dlg.Destroy()
+                    # If we will be collecting confirmation later, ...
+                    else:
+                        # ... act as if the user pressed Yes to be able to continue
+                        result = wx.ID_YES
 
-                # If a previous drag of a Tree Node Data Object has been cleared, the sourceData.nodetype
-                # will be "Unknown", which indicated that the current Drag is NOT a node from the Database
-                # Tree Tab, and therefore should be processed elsewhere.  If it is NOT "Unknown", we should
-                # process it here.  The Type comparison was added to get this working on the Mac.
-                if (type(sourceData) == type(DataTreeDragDropData())) and \
-                   (sourceData.nodetype != 'Unknown'):
-                    # This line compares the data being dragged (sourceData) to the drop site determined in OnDrop and
-                    # passed here as self.dropData.  
-                    if DragDropEvaluation(sourceData, self.dropData):
-                        # If we meet the criteria, we process the drop.  We do that here because we have full
-                        # knowledge of the Dragged Data and the Drop Target's data here and nowhere else.
-                        # Determine if we're copying or moving data.  (In some instances, the 'action' is ignored.)
-                        if dragResult == wx.DragCopy:
-                            ProcessPasteDrop(self.tree, sourceData, self.dropNode, 'Copy')
-                        elif dragResult == wx.DragMove:
-                            ProcessPasteDrop(self.tree, sourceData, self.dropNode, 'Move')
+                    # If the user said yes, or we didn't ask anything ...
+                    if result == wx.ID_YES:
+                        # Iterate through the source data list
+                        for sourceData in sourceDataList:
+                            # If a previous drag of a Tree Node Data Object has been cleared, the sourceData.nodetype
+                            # will be "Unknown", which indicated that the current Drag is NOT a node from the Database
+                            # Tree Tab, and therefore should be processed elsewhere.  If it is NOT "Unknown", we should
+                            # process it here.  The Type comparison was added to get this working on the Mac.
+                            if (type(sourceData) == type(DataTreeDragDropData())) and \
+                               (sourceData.nodetype != 'Unknown'):
+                                # If we meet the criteria, we process the drop.  We do that here because we have full
+                                # knowledge of the Dragged Data and the Drop Target's data here and nowhere else.
+                                # Determine if we're copying or moving data.  (In some instances, the 'action' is ignored.)
+                                if dragResult == wx.DragCopy:
+                                    ProcessPasteDrop(self.tree, sourceData, self.dropNode, 'Copy', confirmations=confirmations)
+                                elif dragResult == wx.DragMove:
+                                    ProcessPasteDrop(self.tree, sourceData, self.dropNode, 'Move', confirmations=confirmations)
+                            else:
+                                # If the DragDropEvaluation() test fails, we prevent the drop process by altering the wxDropResult (dragResult)
+                                dragResult = wx.DragNone
                     else:
                         # If the DragDropEvaluation() test fails, we prevent the drop process by altering the wxDropResult (dragResult)
                         dragResult = wx.DragNone
-                    
-                    # Once the drop is done or rejected, we must clear the Tree Node data out of the DropTarget.
-                    # If we don't, this data will still be there if a Clip drag occurs, and there is no way in that
-                    # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
-                    self.ClearSourceNodeData()
+                        
+                # Once the drop is done or rejected, we must clear the Tree Node data out of the DropTarget.
+                # If we don't, this data will still be there if a Clip drag occurs, and there is no way in that
+                # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
+                self.ClearSourceNodeData()
                 # Reset the cursor, regardless of whether the drop succeeded or failed.
                 self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
@@ -443,6 +544,7 @@ class DataTreeDropTarget(wx.PyDropTarget):
 
                 # Dropping Transcript Text onto a Keyword Group creates a Keyword.
                 elif (type(clipData) == type(ClipDragDropData())) and \
+                     (clipData.plainText != '') and \
                      (self.dropData.nodetype == 'KeywordGroupNode'):
                     # Create a new Keyword Object with the desired KWG and KW values
                     kw = Keyword.Keyword()
@@ -467,8 +569,6 @@ class DataTreeDropTarget(wx.PyDropTarget):
 
                                 # Now let's communicate with other Transana instances if we're in Multi-user mode
                                 if not TransanaConstants.singleUserVersion:
-                                    if DEBUG:
-                                        print 'Message to send = "AK %s >|< %s"' % (kw.keywordGroup, kw.keyword)
                                     if TransanaGlobal.chatWindow != None:
                                         TransanaGlobal.chatWindow.SendMessage("AK %s >|< %s" % (kw.keywordGroup, kw.keyword))
 
@@ -500,6 +600,8 @@ class DataTreeDropTarget(wx.PyDropTarget):
                             errordlg.Destroy()
                     # Destroy the Keyword Dialog
                     dlg.Destroy()
+                    # Clear the Clip Data
+                    self.ClearClipData()
 
                 # Dropping Transcript Text onto a Keyword creates a Quick Clip.
                 elif (type(clipData) == type(ClipDragDropData())) and \
@@ -818,9 +920,6 @@ def CreateClip(clipData, dropData, tree, dropNode):
                     # Even if this computer doesn't need to update the keyword visualization others, might need to.
                     if not TransanaConstants.singleUserVersion:
                         # We need to update the Episode Keyword Visualization
-                        if DEBUG:
-                            print 'Message to send = "UKV %s %s %s"' % ('Episode', tempEpisode.number, 0)
-                            
                         if TransanaGlobal.chatWindow != None:
                             TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', tempEpisode.number, 0))
                     
@@ -855,25 +954,27 @@ def CreateClip(clipData, dropData, tree, dropNode):
     dlg.Destroy()
 
 
-def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, targetParent):
+def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, targetParent, confirmations=True):
     """Drop a Keyword onto an Object.  sourceData is from the Keyword.  The
     targetType is one of 'Series', 'Episode', 'Collection', or 'Clip'.
     targetParent is only used for collections."""
     # Trying to deal with a Mac issue temporarily.  Dragging within the Transcript sometimes triggers this method when it shouldn't.  Can't find the cause.
     if not TransanaConstants.macDragDrop and ("__WXMAC__" in wx.PlatformInfo) and (type(sourceData) == type(ClipDragDropData())):
-       return
+        return
     if targetType == 'Series':
-        # Get user confirmation of the Keyword Add request
-        if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_('Do you want to add Keyword "%s:%s" to all the Episodes in\nSeries "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
-        else:
-            prompt = _('Do you want to add Keyword "%s:%s" to all the Episodes in\nSeries "%s"?') % (sourceData.parent, sourceData.text, targetName)
-        dlg = Dialogs.QuestionDialog(parent, prompt)
-        result = dlg.LocalShowModal()
-        dlg.Destroy()
-        if result == wx.ID_NO:
-            return
+        # Prompt for confirmation if that is desired
+        if confirmations:
+            # Get user confirmation of the Keyword Add request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to add Keyword "%s:%s" to all the Episodes in\nSeries "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
+            else:
+                prompt = _('Do you want to add Keyword "%s:%s" to all the Episodes in\nSeries "%s"?') % (sourceData.parent, sourceData.text, targetName)
+            dlg = Dialogs.QuestionDialog(parent, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            if result == wx.ID_NO:
+                return
         # If confirmed, copy the Keyword to all Episodes in the Series
 
         # First, let's load the Series Record
@@ -895,8 +996,6 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
                     # Now let's communicate with other Transana instances if we're in Multi-user mode
                     if not TransanaConstants.singleUserVersion:
                         msg = 'Episode %d' % tempEpisode.number
-                        if DEBUG:
-                            print 'Message to send = "UKL %s"' % msg
                         if TransanaGlobal.chatWindow != None:
                             # Send the "Update Keyword List" message
                             TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
@@ -912,16 +1011,18 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             TransanaExceptions.ReportRecordLockedException(_("Series"), tempSeries.id, e)
     
     elif targetType == 'Episode':
-        if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_('Do you want to add Keyword "%s:%s" to\nEpisode "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
-        else:
-            prompt = _('Do you want to add Keyword "%s:%s" to\nEpisode "%s"?') % (sourceData.parent, sourceData.text, targetName)
-        dlg = Dialogs.QuestionDialog(parent, prompt)
-        result = dlg.LocalShowModal()
-        dlg.Destroy()
-        if result == wx.ID_NO:
-            return
+        # Prompt for confirmation if that is desired
+        if confirmations:
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to add Keyword "%s:%s" to\nEpisode "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
+            else:
+                prompt = _('Do you want to add Keyword "%s:%s" to\nEpisode "%s"?') % (sourceData.parent, sourceData.text, targetName)
+            dlg = Dialogs.QuestionDialog(parent, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            if result == wx.ID_NO:
+                return
         # If confirmed, copy the Keyword to the Episodes
 
         # Load the Episode Record
@@ -936,8 +1037,6 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             # Now let's communicate with other Transana instances if we're in Multi-user mode
             if not TransanaConstants.singleUserVersion:
                 msg = 'Episode %d' % tempEpisode.number
-                if DEBUG:
-                    print 'Message to send = "UKL %s"' % msg
                 if TransanaGlobal.chatWindow != None:
                     # Send the "Update Keyword List" message
                     TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
@@ -948,17 +1047,19 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             TransanaExceptions.ReportRecordLockedException(_("Episode"), tempEpisode.id, e)
     
     elif targetType == 'Collection':
-        # Get user confirmation of the Keyword Add request
-        if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_('Do you want to add Keyword "%s:%s" to all the Clips in\nCollection "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
-        else:
-            prompt = _('Do you want to add Keyword "%s:%s" to all the Clips in\nCollection "%s"?') % (sourceData.parent, sourceData.text, targetName)
-        dlg = Dialogs.QuestionDialog(parent, prompt)
-        result = dlg.LocalShowModal()
-        dlg.Destroy()
-        if result == wx.ID_NO:
-            return
+        # Prompt for confirmation if that is desired
+        if confirmations:
+            # Get user confirmation of the Keyword Add request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to add Keyword "%s:%s" to all the Clips in\nCollection "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
+            else:
+                prompt = _('Do you want to add Keyword "%s:%s" to all the Clips in\nCollection "%s"?') % (sourceData.parent, sourceData.text, targetName)
+            dlg = Dialogs.QuestionDialog(parent, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            if result == wx.ID_NO:
+                return
         # If confirmed, copy the Keyword to all Clips in the Collection
 
         # We need a flag indicating if we need to update the Keyword Visualization
@@ -994,8 +1095,6 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
                     # Now let's communicate with other Transana instances if we're in Multi-user mode
                     if not TransanaConstants.singleUserVersion:
                         msg = 'Clip %d' % tempClip.number
-                        if DEBUG:
-                            print 'Message to send = "UKL %s"' % msg
                         if TransanaGlobal.chatWindow != None:
                             # Send the "Update Keyword List" message
                             TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
@@ -1013,9 +1112,6 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
                 # Even if this computer doesn't need to update the keyword visualization others, might need to.
                 if not TransanaConstants.singleUserVersion:
                     # We need to update the Keyword Visualization no matter what here, when adding a keyword to a Collection
-                    if DEBUG:
-                        print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
-                        
                     if TransanaGlobal.chatWindow != None:
                         TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
         # Handle "RecordLockedError" exception
@@ -1023,17 +1119,19 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             TransanaExceptions.ReportRecordLockedException(_("Collection"), tempCollection.id, e)
     
     elif targetType == 'Clip':
-        # Get user confirmation of the Keyword Add request
-        if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_('Do you want to add Keyword "%s:%s" to\nClip "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
-        else:
-            prompt = _('Do you want to add Keyword "%s:%s" to\nClip "%s"?') % (sourceData.parent, sourceData.text, targetName)
-        dlg = Dialogs.QuestionDialog(parent, prompt)
-        result = dlg.LocalShowModal()
-        dlg.Destroy()
-        if result == wx.ID_NO:
-            return
+        # Prompt for confirmation if that is desired
+        if confirmations:
+            # Get user confirmation of the Keyword Add request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to add Keyword "%s:%s" to\nClip "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
+            else:
+                prompt = _('Do you want to add Keyword "%s:%s" to\nClip "%s"?') % (sourceData.parent, sourceData.text, targetName)
+            dlg = Dialogs.QuestionDialog(parent, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            if result == wx.ID_NO:
+                return
         try:
             # If confirmed, copy the Keyword to the Clip
             # First, load the Clip
@@ -1048,8 +1146,6 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             # Now let's communicate with other Transana instances if we're in Multi-user mode
             if not TransanaConstants.singleUserVersion:
                 msg = 'Clip %d' % tempClip.number
-                if DEBUG:
-                    print 'Message to send = "UKL %s"' % msg
                 if TransanaGlobal.chatWindow != None:
                     # Send the "Update Keyword List" message
                     TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
@@ -1070,9 +1166,6 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             # Even if this computer doesn't need to update the keyword visualization others, might need to.
             if not TransanaConstants.singleUserVersion:
                 # We need to update the Clip Keyword Visualization when adding a keyword to a clip
-                if DEBUG:
-                    print 'Message to send = "UKV %s %s %s"' % ('Clip', tempClip.number, tempClip.episode_num)
-                    
                 if TransanaGlobal.chatWindow != None:
                     TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', tempClip.number, tempClip.episode_num))
 
@@ -1080,7 +1173,7 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             TransanaExceptions.ReportRecordLockedException(_("Clip"), tempClip.id, e)
         # Handle "SaveError" exception
         except TransanaExceptions.SaveError:
-            # Display the Error Message, allow "continue" flag to remain true
+            # Display the Error Message
             errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
             errordlg.ShowModal()
             errordlg.Destroy()
@@ -1088,56 +1181,56 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             tempClip.unlock_record()
         # Handle other exceptions
         except:
-            # Display the Exception Message, allow "continue" flag to remain true
+            # Display the Exception Message
             errordlg = Dialogs.ErrorDialog(None, "%s" % (sys.exc_info()[:2]))
             errordlg.ShowModal()
             errordlg.Destroy()
             # Unlock the Clip Record
             tempClip.unlock_record()
 
-def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
-   """ This method processes a "Paste" or "Drop" request for the Transana Database Tree.
-       Parameters are:
-         treeCtrl   -- the wxTreeCtrl where the Paste or Drop is occurring (the DBTree)
-         sourceData -- the DATA associated with the Cut/Copy or Drag, the _NodeData or the DataTreeDragDropData Object
-         destNode   -- the actual Tree Node selected for Drop or Paste
-         action     -- a string of "Copy" or "Move", indicating whether a Copy or Cut/Move has been requested.
-                       (This value is ignored in some instances where "Move" has no meaning.  """
+def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True):
+    """ This method processes a "Paste" or "Drop" request for the Transana Database Tree.
+        Parameters are:
+          treeCtrl   -- the wxTreeCtrl where the Paste or Drop is occurring (the DBTree)
+          sourceData -- the DATA associated with the Cut/Copy or Drag, the _NodeData or the DataTreeDragDropData Object
+          destNode   -- the actual Tree Node selected for Drop or Paste
+          action     -- a string of "Copy" or "Move", indicating whether a Copy or Cut/Move has been requested.
+                        (This value is ignored in some instances where "Move" has no meaning.  """
 
-   # Since we get the actual destination node as a parameter, let's first extract the Node Data for the Destination
-   destNodeData = treeCtrl.GetPyData(destNode)
-   # Determine whether a Copy or Move is being requested, and set the appropriate Prompt Text
-   if 'unicode' in wx.PlatformInfo:
-       if action == 'Copy':
-          copyMovePrompt = unicode(_('COPY'), 'utf8')
-       elif action == 'Move':
-          copyMovePrompt = unicode(_('MOVE'), 'utf8')
-   else: 
-       if action == 'Copy':
-          copyMovePrompt = _('COPY')
-       elif action == 'Move':
-          copyMovePrompt = _('MOVE')
+    # Since we get the actual destination node as a parameter, let's first extract the Node Data for the Destination
+    destNodeData = treeCtrl.GetPyData(destNode)
+    # Determine whether a Copy or Move is being requested, and set the appropriate Prompt Text
+    if 'unicode' in wx.PlatformInfo:
+        if action == 'Copy':
+            copyMovePrompt = unicode(_('COPY'), 'utf8')
+        elif action == 'Move':
+            copyMovePrompt = unicode(_('MOVE'), 'utf8')
+    else: 
+        if action == 'Copy':
+            copyMovePrompt = _('COPY')
+        elif action == 'Move':
+            copyMovePrompt = _('MOVE')
 
-   # Drop an Episode on a Series (Move an Episode)
-   if (sourceData.nodetype == 'EpisodeNode' and destNodeData.nodetype == 'SeriesNode'):
-       # Get the Episode data
-       tmpEpisode = Episode.Episode(sourceData.recNum)
-       # Get the data for the SOURCE Series
-       oldSeries = Series.Series(sourceData.parent)
-       # Get the data for the Destination Series
-       tmpSeries = Series.Series(destNodeData.recNum)
-       # Let's make sure the drop is on a DIFFERENT Series.  Otherwise, the Episode record disappears from the tree until the
-       # database is refreshed.
-       if oldSeries.number != tmpSeries.number:
-           # Begin Exception Handling for the Lock
-           try:
-               # Try to lock the Episode
-               tmpEpisode.lock_record()
-               # If successful, assign the DESTINATION Series Number and ID to the Episode.
-               tmpEpisode.series_num = tmpSeries.number
-               tmpEpisode.series_id = tmpSeries.id
-               # Start nested Exception Handling for the Save
-               try:
+    # Drop an Episode on a Series (Move an Episode)
+    if (sourceData.nodetype == 'EpisodeNode' and destNodeData.nodetype == 'SeriesNode'):
+        # Get the Episode data
+        tmpEpisode = Episode.Episode(sourceData.recNum)
+        # Get the data for the SOURCE Series
+        oldSeries = Series.Series(sourceData.parent)
+        # Get the data for the Destination Series
+        tmpSeries = Series.Series(destNodeData.recNum)
+        # Let's make sure the drop is on a DIFFERENT Series.  Otherwise, the Episode record disappears from the tree until the
+        # database is refreshed.
+        if oldSeries.number != tmpSeries.number:
+            # Begin Exception Handling for the Lock
+            try:
+                # Try to lock the Episode
+                tmpEpisode.lock_record()
+                # If successful, assign the DESTINATION Series Number and ID to the Episode.
+                tmpEpisode.series_num = tmpSeries.number
+                tmpEpisode.series_id = tmpSeries.id
+                # Start nested Exception Handling for the Save
+                try:
                     # Try to Save the Episode
                     tmpEpisode.db_save()
 
@@ -1145,11 +1238,9 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
                     # Start by building the Episode's new Node List
                     nodeData = (_('Series'), tmpSeries.id, tmpEpisode.id)
                     # Add the Episode node to the data tree
-                    treeCtrl.add_Node('EpisodeNode', nodeData, tmpEpisode.number, tmpSeries.number)
+                    treeCtrl.add_Node('EpisodeNode', nodeData, tmpEpisode.number, tmpSeries.number, expandNode=False)
                     # Now let's communicate with other Transana instances if we're in Multi-user mode
                     if not TransanaConstants.singleUserVersion:
-                        if DEBUG:
-                            print 'Message to send = "AE %s >|< %s"' % (nodeData[-2], nodeData[-1])
                         if TransanaGlobal.chatWindow != None:
                             TransanaGlobal.chatWindow.SendMessage("AE %s >|< %s" % (nodeData[-2], nodeData[-1]))
 
@@ -1182,8 +1273,6 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
                                 # Build the message to be sent
                                 for nd in data[1:]:
                                     msg += " >|< %s"
-                                if DEBUG:
-                                    print 'Message to send =', msg % data
                                 # Send the message
                                 if TransanaGlobal.chatWindow != None:
                                     TransanaGlobal.chatWindow.SendMessage(msg % data)
@@ -1198,11 +1287,9 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
                             # Build the Node List for the new Transcript
                             nodeData = (_('Series'), tmpSeries.id, tmpEpisode.id, transcriptID)
                             # Add the Transcript node to the data tree
-                            treeCtrl.add_Node('TranscriptNode', nodeData, transcriptNum, transcriptEpisodeNum)
+                            treeCtrl.add_Node('TranscriptNode', nodeData, transcriptNum, transcriptEpisodeNum, expandNode=False)
                             # Now let's communicate with other Transana instances if we're in Multi-user mode
                             if not TransanaConstants.singleUserVersion:
-                                if DEBUG:
-                                    print 'Message to send = "AT %s >|< %s >|< %s"' % (nodeData[-3], nodeData[-2], nodeData[-1])
                                 if TransanaGlobal.chatWindow != None:
                                     TransanaGlobal.chatWindow.SendMessage("AT %s >|< %s >|< %s" % (nodeData[-3], nodeData[-2], nodeData[-1]))
                                     
@@ -1228,1288 +1315,1460 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
                                         # Build the message to be sent
                                         for nd in data[1:]:
                                             msg += " >|< %s"
-                                        if DEBUG:
-                                            print 'Message to send =', msg % data
                                         # Send the message
                                         if TransanaGlobal.chatWindow != None:
                                             TransanaGlobal.chatWindow.SendMessage(msg % data)
 
+                # If the Save fails ...
+                except TransanaExceptions.SaveError, e:
+                     # Display the Error Message
+                     msg = _('An Episode named "%s" already exists in Series "%s".')
+                     if 'unicode' in wx.PlatformInfo:
+                         msg = unicode(msg, 'utf8')
+                     errordlg = Dialogs.ErrorDialog(None, msg % (tmpEpisode.id, Series.Series(destNodeData.recNum).id))
+                     errordlg.ShowModal()
+                     errordlg.Destroy()
+                    
+                # If we get this far, unlock the Episode
+                tmpEpisode.unlock_record()
+            # If we are unable to lock the Episode ...
+            except TransanaExceptions.RecordLockedError, e:
+                # Report the Record Lock failure
+                TransanaExceptions.ReportRecordLockedException(_('Episode'), tmpEpisode.id, e)
+       
+    # Drop a Collection on the ROOT Collection (Copy or Move a Collection to the root)
+    # Drop a Collection on a Collection (Copy or Move a Collection to nest it in another collection)
+    elif ((sourceData.nodetype == 'CollectionNode' and destNodeData.nodetype == 'CollectionsRootNode')) or \
+         ((sourceData.nodetype == 'CollectionNode' and destNodeData.nodetype == 'CollectionNode')):
+        # Load the Source Collection
+        sourceCollection = Collection.Collection(sourceData.recNum, sourceData.parent)
+        # If we're dropping on the Collections Root Node ...
+        if destNodeData.nodetype == 'CollectionsRootNode':
+            # ... create an EMPTY collection as the destination.  It has a number of 0, which is what it needs to have!
+            destCollection = Collection.Collection()
+            # Create a prompt for the user
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Collection "%s" \nto the main Collections node?'), 'utf8') % (copyMovePrompt, sourceCollection.id)
+            else:
+                prompt = _('Do you want to %s Collection "%s" \nto the main Collections node?') % (copyMovePrompt, sourceCollection.id)
+        else:
+            # Load the Destination Collection
+            destCollection = Collection.Collection(destNodeData.recNum, destNodeData.parent)
+            # We have to make sure the DESTINATION collection is not a child of the SOURCE collection here.
+            # We can do this by comparing the collection paths, as spelled out in their Node Data
+            if sourceCollection.GetNodeData() == destCollection.GetNodeData()[:len(sourceCollection.GetNodeData())]:
+                # Create a prompt for the user
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_("You cannot nest a Collection in one of its nested collections."), 'utf8')
+                else:
+                    prompt = _("You cannot nest a Collection in one of its nested collections.")
+                # Display the Error Message
+                errordlg = Dialogs.ErrorDialog(None, prompt)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                # We need to exit this method.
+                return
+            
+            # Create a prompt for the user
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Collection "%s" \nso it is nested in Collection "%s"?'), 'utf8') % (copyMovePrompt, sourceCollection.id, destCollection.id)
+            else:
+                prompt = _('Do you want to %s Collection "%s" \nso it is nested in Collection "%s"?') % (copyMovePrompt, sourceCollection.id, destCollection.id)
+        # Get user confirmation of the Collection Copy request
+        dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+        result = dlg.LocalShowModal()
+        dlg.Destroy()
+        # If the user confirms ...
+        if result == wx.ID_YES:
+            # If a COPY is requested ...
+            if action == 'Copy':
+                # Start a List that will track collection being copied, so nested collections can be copied too
+                collectionsToCopy = [(sourceCollection, destCollection)]
+                # As long as there are more collections to copy ...
+                while len(collectionsToCopy) > 0:
+                    # ... note the source and destination collection information for THIS copy ...
+                    (sourceCollection, destCollection) = collectionsToCopy[0]
+                    # ... and remove the first entry 
+                    collectionsToCopy = collectionsToCopy[1:]
+                    # We need a list of all the clips in the Source Collection
+                    clipList = DBInterface.list_of_clips_by_collection(sourceCollection.id, sourceCollection.parent)
+                    # Start exception handling
+                    try:
+                        # Create a new collection
+                        newCollection = Collection.Collection()
+                        # Copy the source collection's information
+                        newCollection.id = sourceCollection.id
+                        # ... except that the parent collection should be the destination collection
+                        newCollection.parent = destCollection.number
+                        newCollection.comment = sourceCollection.comment
+                        newCollection.owner = sourceCollection.owner
+                        newCollection.keyword_group = sourceCollection.keyword_group
+                        # Save the new collection.  This will throw a SaveError if it is a duplicate.
+                        newCollection.db_save()
+                        # Build the Node List for the tree control
+                        nodeList = (_('Collections'), ) + newCollection.GetNodeData()
+                        # Add the new Collection Node to the Tree
+                        treeCtrl.add_Node('CollectionNode', nodeList, newCollection.number, newCollection.parent)
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            # Prepare an Add Collection message
+                            msg = "AC %s"
+                            # Convert the Node List to the form needed for messaging
+                            data = (nodeList[1],)
+                            for nd in nodeList[2:]:
+                                msg += " >|< %s"
+                                data += (nd, )
+                            # Send the message
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage(msg % data)
 
-               # If the Save fails ...
-               except TransanaExceptions.SaveError, e:
-                    # Display the Error Message
-                    msg = _('An Episode named "%s" already exists in Series "%s".')
+                        # Before we do anything else, let's add any nested collections to the list of collections to be processed.
+                        # First, get a list of the current source collection's nested collections
+                        nestedCollections = DBInterface.list_of_collections(sourceCollection.number)
+                        # Iterate through the list of nested collections
+                        for nestedColl in nestedCollections:
+                            # Get the Collection Record for the nested collection
+                            tempColl = Collection.Collection(nestedColl[0], nestedColl[2])
+                            # Add the nested collection to the Copy list, nesting it in the current New collection
+                            collectionsToCopy.append((tempColl, newCollection))
+
+                        # Now it's time to copy the CLIPS. 
+                        # Get the Tree Node for the collection we just added to the tree
+                        newDestNode = treeCtrl.select_Node(nodeList, 'CollectionNode')
+                        # Iterate through the list of Clips
+                        for clip in clipList:
+                           # Load the next Clip from the list
+                           tempClip = Clip.Clip(id_or_num=clip[0])
+                           # Copy or Move the Clip to the Destination Collection
+                           CopyMoveClip(treeCtrl, newDestNode, tempClip, sourceCollection, newCollection, action)
+                        # See if the Keyword visualization needs to be updated.
+                        treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+                        # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                        if not TransanaConstants.singleUserVersion:
+                            # We need to update the Episode Keyword Visualization
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
+
+                        # now let's copy the collection notes
+                        notesList = DBInterface.list_of_notes(Collection=sourceCollection.number, includeNumber=True)
+                        for note in notesList:
+                            srcNote = Note.Note(note[0])
+                            destNote = srcNote.duplicate()
+                            destNote.collection_num = newCollection.number
+                            destNote.db_save()
+                            treeCtrl.add_Node('CollectionNoteNode', nodeList + (destNote.id,), destNote.number, newCollection.number)
+                            # Now let's communicate with other Transana instances if we're in Multi-user mode
+                            if not TransanaConstants.singleUserVersion:
+                                # Construct the message and data to be passed
+                                msg = "ACN %s"
+                                # To avoid problems in mixed-language environments, we need the UNTRANSLATED string here!
+                                data = ('Collections',)
+                                for nd in (nodeList[1:] + (destNote.id,)):
+                                    msg += " >|< %s"
+                                    data += (nd, )
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+                    # Handle "SaveError" exception
+                    except TransanaExceptions.SaveError:
+                        # Get the error message
+                        msg = sys.exc_info()[1].reason
+                        # Get the comparison prompt for Collections
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            comparePrompt = unicode(_('A Collection named "%s" already exists.\nPlease enter a different Collection ID.'), 'utf8')
+                        else:
+                            comparePrompt = _('A Collection named "%s" already exists.\nPlease enter a different Collection ID.')
+                        # If we have a Duplicate Collection error ...
+                        if ('\n' in msg) and (msg.split('\n')[1] == comparePrompt.split('\n')[1]):
+                            # ... only print the first part of the message!
+                            msg = msg.split('\n')[0]
+                        # Display the Error Message
+                        errordlg = Dialogs.ErrorDialog(None, msg)
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                    # Handle all other exceptions
+                    except:
+                        if DEBUG:
+                            import traceback
+                            traceback.print_exc(file=sys.stdout)
+
+                        # Display the Exception Message
+                        prompt = "%s : %s"
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(prompt, 'utf8')
+                        errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                                    
+            # If a MOVE is requested ...
+            elif action == 'Move':
+                # Start Exception handling
+                try:
+                    # Remember the node list for the original source node  
+                    originalNodeList = (_('Collections'),) + sourceCollection.GetNodeData()
+                    # Lock the source collection, if possible.
+                    sourceCollection.lock_record()
+                    # Change the Collection Parent to the NEW parent collection
+                    sourceCollection.parent = destCollection.number
+                    # Save the changes
+                    sourceCollection.db_save()
+                    # Unlock the Collection
+                    sourceCollection.unlock_record()
+                    # Now add the new Tree Node.  Build the Node List for the tree control
+                    nodeList = (_('Collections'), ) + sourceCollection.GetNodeData()
+                    # Move the node, signalling that MU messages SHOULD be sent.
+                    treeCtrl.copy_Node('CollectionNode', originalNodeList, nodeList[:-1], True, sendMessage=True)
+
+                # Handle "SaveError" exception
+                except TransanaExceptions.SaveError:
+                    # Get the error message
+                    msg = sys.exc_info()[1].reason
+                    # Get the comparison prompt for Collections
                     if 'unicode' in wx.PlatformInfo:
-                        msg = unicode(msg, 'utf8')
-                    errordlg = Dialogs.ErrorDialog(None, msg % (tmpEpisode.id, Series.Series(destNodeData.recNum).id))
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        comparePrompt = unicode(_('A Collection named "%s" already exists.\nPlease enter a different Collection ID.'), 'utf8')
+                    else:
+                        comparePrompt = _('A Collection named "%s" already exists.\nPlease enter a different Collection ID.')
+                    # If we have a Duplicate Collection error ...
+                    if ('\n' in msg) and (msg.split('\n')[1] == comparePrompt.split('\n')[1]):
+                        # ... only print the first part of the message!
+                        msg = msg.split('\n')[0]
+                    # Display the Error Message
+                    errordlg = Dialogs.ErrorDialog(None, msg)
                     errordlg.ShowModal()
                     errordlg.Destroy()
-                    
-               # If we get this far, unlock the Episode
-               tmpEpisode.unlock_record()
-           # If we are unable to lock the Episode ...
-           except TransanaExceptions.RecordLockedError, e:
-               # Report the Record Lock failure
-               TransanaExceptions.ReportRecordLockedException(_('Episode'), tmpEpisode.id, e)
-       
-   # Drop a Collection on a Collection (Copy or Move all Clips in a Collection)
-   elif (sourceData.nodetype == 'CollectionNode' and destNodeData.nodetype == 'CollectionNode'):
-      # Load the Source Collection
-      sourceCollection = Collection.Collection(sourceData.recNum, sourceData.parent)
-      # We need a list of all the clips in the Source Collection
-      clipList = DBInterface.list_of_clips_by_collection(sourceCollection.id, sourceCollection.parent)
-      # Load the Destination Collection
-      destCollection = Collection.Collection(destNodeData.recNum, destNodeData.parent)
-
-      # Get user confirmation of the Collection Copy request
-      if 'unicode' in wx.PlatformInfo:
-         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-         prompt = unicode(_('Do you want to %s all Clips from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceCollection.id, destCollection.id)
-      else:
-         prompt = _('Do you want to %s all Clips from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceCollection.id, destCollection.id)
-      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-      result = dlg.LocalShowModal()
-      dlg.Destroy()
-      if result == wx.ID_YES:
-         # If confirmed, iterate through the list of Clips
-         for clip in clipList:
-            # Load the next Clip from the list
-            tempClip = Clip.Clip(id_or_num=clip[0])
-            # Copy or Move the Clip to the Destination Collection
-            CopyMoveClip(treeCtrl, destNode, tempClip, sourceCollection, destCollection, action)
-         # See if the Keyword visualization needs to be updated.
-         treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
-         # Even if this computer doesn't need to update the keyword visualization others, might need to.
-         if not TransanaConstants.singleUserVersion:
-             # We need to update the Episode Keyword Visualization
-             if DEBUG:
-                 print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
-                
-             if TransanaGlobal.chatWindow != None:
-                 TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
-               
-   # Drop a Clip on a Collection (Copy or Move a Clip)
-   elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'CollectionNode'):
-      # Load the Source Clip
-      sourceClip = Clip.Clip(id_or_num=sourceData.recNum)
-      # Load the Source Collection
-      sourceCollection = Collection.Collection(sourceData.parent)
-      # Load the Destination Collection
-      destCollection = Collection.Collection(destNodeData.recNum, destNodeData.parent)
-
-      # Get user confirmation of the Clip Copy/Move request
-      if 'unicode' in wx.PlatformInfo:
-         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-         prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
-      else:
-         prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
-      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-      result = dlg.LocalShowModal()
-      dlg.Destroy()
-      if result == wx.ID_YES:
-          try:
-              # Copy or Move the Clip to the Destination Collection
-              CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action)
-              # See if the Keyword visualization needs to be updated.
-              treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
-              # Even if this computer doesn't need to update the keyword visualization others, might need to.
-              if not TransanaConstants.singleUserVersion:
-                  # We need to update the Episode Keyword Visualization
+                # Handle all other exceptions
+                except:
                   if DEBUG:
-                      print 'Message to send = "UKV %s %s %s"' % ('Clip', sourceClip.number, sourceClip.episode_num)
-                    
-                  if TransanaGlobal.chatWindow != None:
-                      TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', sourceClip.number, sourceClip.episode_num))
-          except TransanaExceptions.RecordLockedError, e:
-              TransanaExceptions.ReportRecordLockedException(_("Clip"), sourceClip.id, e)
-   # Drop a Clip on a Clip (Alter SortOrder, Copy or Move a Clip to a particular place in the SortOrder)
-   elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'ClipNode'):
-      # Load the Source Clip
-      sourceClip = Clip.Clip(id_or_num=sourceData.recNum)
-      # Load the Source Collection
-      sourceCollection = Collection.Collection(sourceData.parent)
-      # Load the Destination (or target) Clip
-      destClip = Clip.Clip(destNodeData.recNum)
-      # Load the Destination (or target) Collection
-      destCollection = Collection.Collection(destClip.collection_num)
+                      import traceback
+                      traceback.print_exc(file=sys.stdout)
 
-      # See if we are in the SAME Collection, and therefore just changing Sort Order
-      if sourceCollection.number == destCollection.number:
-          # If so, change the Sort Order as requested
-          if not ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
-              # This is OKAY.  Nothing needs to be fixed, either locally or remotely if this fails.
-              pass
+                  # Display the Exception Message
+                  prompt = "%s : %s"
+                  if 'unicode' in wx.PlatformInfo:
+                      # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                      prompt = unicode(prompt, 'utf8')
+                  errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
+                  errordlg.ShowModal()
+                  errordlg.Destroy()
               
-          # NOTE:  We can't just use the insertPos parameter of add_Node, as we need to have the Sort Order set in the
-          #        Clip Object as well.
+        # See if the Keyword visualization needs to be updated.
+        treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+        # Even if this computer doesn't need to update the keyword visualization others, might need to.
+        if not TransanaConstants.singleUserVersion:
+            # We need to update the Episode Keyword Visualization
+            if TransanaGlobal.chatWindow != None:
+                TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
 
-      # If not, we are copying/moving a Clip to a place in the SortOrder
-      else:
-         # Get user confirmation of the Clip Copy/Move request
-         if 'unicode' in wx.PlatformInfo:
-             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-             prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
-         else:
-             prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
-         dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-         result = dlg.LocalShowModal()
-         dlg.Destroy()
-         if result == wx.ID_YES:
-             try:
+    # Drop a Clip on a Collection (Copy or Move a Clip)
+    elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'CollectionNode'):
+        # Load the Source Clip
+        sourceClip = Clip.Clip(id_or_num=sourceData.recNum)
+        # Load the Source Collection
+        sourceCollection = Collection.Collection(sourceData.parent)
+        # Load the Destination Collection
+        destCollection = Collection.Collection(destNodeData.recNum, destNodeData.parent)
+
+        # Get user confirmation of the Clip Copy/Move request
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
+        else:
+            prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
+        dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+        result = dlg.LocalShowModal()
+        dlg.Destroy()
+        if result == wx.ID_YES:
+            try:
                 # Copy or Move the Clip to the Destination Collection
-                # If confirmed, copy the Source Clip to the Destination Collection.  CopyClip will place the clip at
-                # end of the list of clips.
-                # We need to work with the COPY of the clip instead of the original from here on, so we get that
-                # value from CopyClip.
-                tempClip = CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action)
-                # If the Copy/Move is cancelled, tempClip will be None
-                if tempClip != None:
-                    # Now change the order of the clips
-                    if not ChangeClipOrder(treeCtrl, destNode, tempClip, destCollection):
-                        # This is OKAY.  Nothing needs to be fixed, either locally or remotely if this fails.
-                        pass
-                        
+                CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action)
                 # See if the Keyword visualization needs to be updated.
                 treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
                 # Even if this computer doesn't need to update the keyword visualization others, might need to.
                 if not TransanaConstants.singleUserVersion:
                     # We need to update the Episode Keyword Visualization
-                    if DEBUG:
-                        print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
-                        
                     if TransanaGlobal.chatWindow != None:
-                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
-             except TransanaExceptions.RecordLockedError, e:
-                 TransanaExceptions.ReportRecordLockedException(_("Clip"), sourceClip.id, e)
-
-   # Drop a Clip on a Keyword (Create Keyword Example)
-   elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'KeywordNode'):
-      # Get the Keyword Group 
-      kwg = treeCtrl.GetItemText(treeCtrl.GetItemParent(destNode))
-      # Get the Keyword
-      kw = treeCtrl.GetItemText(destNode)
-      # Get user confirmation of the Keyword Example Add request
-      if 'unicode' in wx.PlatformInfo:
-         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-         prompt = unicode(_('Do you want to add Clip "%s" as an example of Keyword "%s:%s"?'), 'utf8') % (sourceData.text, kwg, kw)
-      else:
-         prompt = _('Do you want to add Clip "%s" as an example of Keyword "%s:%s"?') % (sourceData.text, kwg, kw)
-      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-      result = dlg.LocalShowModal()
-      dlg.Destroy()
-      if result == wx.ID_YES:
-         # Locate the appropriate ClipKeyword Record in the Database and flag it as an example
-         DBInterface.SetKeywordExampleStatus(kwg, kw, sourceData.recNum, 1)
-         # Add the Clip as Keyword Example to the Node Structure.
-         # (Keyword Root, Keyword Group, Keyword, Example Clip Name)
-         nodeData = (_('Keywords'), kwg, kw, sourceData.text)
-         # Add the Keyword Example Node to the Database Tree Tab
-         treeCtrl.add_Node("KeywordExampleNode", nodeData, sourceData.recNum, sourceData.parent)
-
-         # Now let's communicate with other Transana instances if we're in Multi-user mode
-         if not TransanaConstants.singleUserVersion:
-            # The first message parameter for a Keyword Example is the Clip Number
-            
-            if DEBUG:
-               print 'Message to send = "AKE %d >|< %s >|< %s >|< %s"' % (sourceData.recNum, kwg, kw, sourceData.text)
-               
-            if TransanaGlobal.chatWindow != None:
-               TransanaGlobal.chatWindow.SendMessage("AKE %d >|< %s >|< %s >|< %s" % (sourceData.recNum, kwg, kw, sourceData.text))
-               TransanaGlobal.chatWindow.SendMessage("UKL Clip %d" % sourceData.recNum)
-
-         # Load the Clip
-         tempClip = Clip.Clip(sourceData.recNum)
-         # If the affected clip is for the current Episode, we need to update the
-         # Keyword Visualization
-         if (isinstance(treeCtrl.parent.ControlObject.currentObj, Episode.Episode)) and \
-            (tempClip.episode_num == treeCtrl.parent.ControlObject.currentObj.number):
-             # See if the Keyword visualization needs to be updated.
-             treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
-         # If the affected clip is the current Clip, we need to update the
-         # Keyword Visualization
-         if (isinstance(treeCtrl.parent.ControlObject.currentObj, Clip.Clip)) and \
-            (sourceData.recNum == treeCtrl.parent.ControlObject.currentObj.number):
-             # See if the Keyword visualization needs to be updated.
-             treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
-         # Even if this computer doesn't need to update the keyword visualization others, might need to.
-         if not TransanaConstants.singleUserVersion:
-             # We need to update the Clip Keyword Visualization when adding a keyword to a clip
-             if DEBUG:
-                 print 'Message to send = "UKV %s %s %s"' % ('Clip', tempClip.number, tempClip.episode_num)
+                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', sourceClip.number, sourceClip.episode_num))
+            except TransanaExceptions.RecordLockedError, e:
+                TransanaExceptions.ReportRecordLockedException(_("Clip"), sourceClip.id, e)
                 
-             if TransanaGlobal.chatWindow != None:
-                 TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', tempClip.number, tempClip.episode_num))
+    # Drop a Clip on a Clip (Alter SortOrder, Copy or Move a Clip to a particular place in the SortOrder)
+    elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'ClipNode'):
+        # Load the Source Clip
+        sourceClip = Clip.Clip(id_or_num=sourceData.recNum)
+        # Load the Source Collection
+        sourceCollection = Collection.Collection(sourceData.parent)
+        # Load the Destination (or target) Clip
+        destClip = Clip.Clip(destNodeData.recNum)
+        # Load the Destination (or target) Collection
+        destCollection = Collection.Collection(destClip.collection_num)
+        # See if we are in the SAME Collection, and therefore just changing Sort Order
+        if sourceCollection.number == destCollection.number:
+            # If so, change the Sort Order as requested
+            if not ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
+                # This is OKAY.  Nothing needs to be fixed, either locally or remotely if this fails.
+                pass
+              
+            # NOTE:  We can't just use the insertPos parameter of add_Node, as we need to have the Sort Order set in the
+            #        Clip Object as well.
 
-   # Drop a Keyword on a Series
-   elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'SeriesNode'):
-      DropKeyword(treeCtrl, sourceData, 'Series', \
-              treeCtrl.GetItemText(destNode), destNodeData.recNum, 0)
-   
-   # Drop a Keyword on an Episode
-   elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'EpisodeNode'):
-      DropKeyword(treeCtrl, sourceData, 'Episode', \
-              treeCtrl.GetItemText(destNode), destNodeData.recNum, 0)
-   
-      # Drop a Keyword on a Collection
-   elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'CollectionNode'):
-      DropKeyword(treeCtrl, sourceData, 'Collection', \
-              treeCtrl.GetItemText(destNode), destNodeData.recNum, destNodeData.parent)
-
-   # Drop a Keyword on a Clip
-   elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'ClipNode'):
-      DropKeyword(treeCtrl, sourceData, 'Clip', \
-              treeCtrl.GetItemText(destNode), destNodeData.recNum, 0)
-
-   # Drop a Keyword on a Keyword Group (Copy or Move a Keyword)
-   elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'KeywordGroupNode'):
-      # Get user confirmation of the Keyword Copy request
-      if 'unicode' in wx.PlatformInfo:
-         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-         prompt = unicode(_('Do you want to %s Keyword "%s" from\nKeyword Group "%s" to\nKeyword Group "%s"?'), 'utf8') % (copyMovePrompt, sourceData.text, sourceData.parent, treeCtrl.GetItemText(destNode))
-      else:
-         prompt = _('Do you want to %s Keyword "%s" from\nKeyword Group "%s" to\nKeyword Group "%s"?') % (copyMovePrompt, sourceData.text, sourceData.parent, treeCtrl.GetItemText(destNode))
-      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-      result = dlg.LocalShowModal()
-      dlg.Destroy()
-      if result == wx.ID_YES:
-         # Determine if we're copying or moving data
-         if action == 'Copy':
-            # If confirmed, copy the Keyword to the Keyword Group
-            # Load the original Keyword
-            originalKeyword = Keyword.Keyword(sourceData.parent, sourceData.text)
-            # Create a blank Keyword Object
-            tempKeyword = Keyword.Keyword()
-            # Assign the data value for the Keyword
-            tempKeyword.keyword = sourceData.text
-            # Copy the keyword definition
-            tempKeyword.definition = originalKeyword.definition
-         elif action == 'Move':
-            # If confirmed, move the Keyword to the Clip.
-            # Load the appropriate Keyword Object
-            tempKeyword = Keyword.Keyword(sourceData.parent, sourceData.text)
-            # Lock the Keyword Record
-            tempKeyword.lock_record()
-
-            sourceData.nodeList = (_('Keywords'), sourceData.parent, sourceData.text)
-            
-            # We need to find out if the moved keyword had any keyword Example nodes.
-            # First, we need to get the original Keyword node.
-            sourceNode = treeCtrl.select_Node(sourceData.nodeList, sourceData.nodetype)
-            # Create a List to put information about Examples in.
-            exampleNodes = []
-            # Check to see if the node has children ...
-            if treeCtrl.ItemHasChildren(sourceNode):
-                # ... and if it does, get the first.
-                (childNode, cookieVal) = treeCtrl.GetFirstChild(sourceNode)
-                # As long as the node is OK ...
-                while childNode.IsOk():
-                    # ... get the node's Data ...
-                    childData = treeCtrl.GetPyData(childNode)
-                    # ... append the node's name and data to the Example Nodes list ...
-                    exampleNodes.append((treeCtrl.GetItemText(childNode), childData))
-                    # ... and get the next child, if there is one.
-                    (childNode, cookieVal) = treeCtrl.GetNextChild(sourceNode, cookieVal)
-
-         # Change the Keyword Group to the new Group Value (from dropNode)
-         tempKeyword.keywordGroup = treeCtrl.GetItemText(destNode)
-         try:
-             # Save the Keyword Record
-             tempKeyword.db_save()
-             if action == 'Move':
-                # Unlock the Keyword Record
-                tempKeyword.unlock_record()
-                # Remove the old Keyword from the Tree.  First, build the appropriate Node List
-                nodeList = (_('Keywords'), sourceData.parent, sourceData.text)
-                # Now delete the specified node
-                treeCtrl.delete_Node(nodeList, 'KeywordNode')
-                # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
-                ClearClipboard()
-
-             # Add the new Keyword to the Tree.  First, build the Node List as required by add_Node()
-             nodeList = (_('Keywords'), treeCtrl.GetItemText(destNode), sourceData.text)
-             # Now call add_Node to actually put the node in the tree.
-             treeCtrl.add_Node('KeywordNode', nodeList, 0, treeCtrl.GetItemText(destNode))
-
-             # Now let's communicate with other Transana instances if we're in Multi-user mode
-             if not TransanaConstants.singleUserVersion:
-                if DEBUG:
-                   print 'Message to send = "AK %s >|< %s"' % (treeCtrl.GetItemText(destNode), sourceData.text)
-                if TransanaGlobal.chatWindow != None:
-                   TransanaGlobal.chatWindow.SendMessage("AK %s >|< %s" % (treeCtrl.GetItemText(destNode), sourceData.text))
-
-             # If we are Moving and if there were Examples, we need to add those examples to the moved Keyword Node.
-             if (action == 'Move') and (exampleNodes != []):
-                 # Iterate through the Example nodes data collected above.
-                 for (nodeName, nodeData) in exampleNodes:
-                     # Add the Keyword Example to the Tree.  First, build the Node List as required by add_Node()
-                     nodeList = (_('Keywords'), treeCtrl.GetItemText(destNode), sourceData.text, nodeName)
-                     # Now call add_Node to actually put the node in the tree.
-                     treeCtrl.add_Node("KeywordExampleNode", nodeList, nodeData.recNum, nodeData.parent)
-
-                     # Now let's communicate with other Transana instances if we're in Multi-user mode
-                     if not TransanaConstants.singleUserVersion:
-                        # The first message parameter for a Keyword Example is the Clip Number
-                        
-                        if DEBUG:
-                           print 'Message to send = "AKE %d >|< %s >|< %s >|< %s"' % (nodeData.recNum, treeCtrl.GetItemText(destNode), sourceData.text, nodeName)
-                           
+        # If not, we are copying/moving a Clip to a place in the SortOrder
+        else:
+            # Get user confirmation of the Clip Copy/Move request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
+            else:
+                prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            if result == wx.ID_YES:
+                try:
+                    # Copy or Move the Clip to the Destination Collection
+                    # If confirmed, copy the Source Clip to the Destination Collection.  CopyClip will place the clip at
+                    # end of the list of clips.
+                    # We need to work with the COPY of the clip instead of the original from here on, so we get that
+                    # value from CopyClip.
+                    tempClip = CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action)
+                    # If the Copy/Move is cancelled, tempClip will be None
+                    if tempClip != None:
+                        # Now change the order of the clips
+                        if not ChangeClipOrder(treeCtrl, destNode, tempClip, destCollection):
+                            # This is OKAY.  Nothing needs to be fixed, either locally or remotely if this fails.
+                            pass
+                            
+                    # See if the Keyword visualization needs to be updated.
+                    treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+                    # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                    if not TransanaConstants.singleUserVersion:
+                        # We need to update the Episode Keyword Visualization
                         if TransanaGlobal.chatWindow != None:
-                           TransanaGlobal.chatWindow.SendMessage("AKE %d >|< %s >|< %s >|< %s" % (nodeData.recNum, treeCtrl.GetItemText(destNode), sourceData.text, nodeName))
+                            TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
+                except TransanaExceptions.RecordLockedError, e:
+                    TransanaExceptions.ReportRecordLockedException(_("Clip"), sourceClip.id, e)
 
-             # If it's a Move, we need to update the Keyword Visualization too!
-             if (action == 'Move'):
+    # Drop a Clip on a Keyword (Create Keyword Example)
+    elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'KeywordNode'):
+        # Get the Keyword Group 
+        kwg = treeCtrl.GetItemText(treeCtrl.GetItemParent(destNode))
+        # Get the Keyword
+        kw = treeCtrl.GetItemText(destNode)
+        # Get user confirmation of the Keyword Example Add request
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Do you want to add Clip "%s" as an example of Keyword "%s:%s"?'), 'utf8') % (sourceData.text, kwg, kw)
+        else:
+            prompt = _('Do you want to add Clip "%s" as an example of Keyword "%s:%s"?') % (sourceData.text, kwg, kw)
+        dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+        result = dlg.LocalShowModal()
+        dlg.Destroy()
+        if result == wx.ID_YES:
+            # Locate the appropriate ClipKeyword Record in the Database and flag it as an example
+            DBInterface.SetKeywordExampleStatus(kwg, kw, sourceData.recNum, 1)
+            # Add the Clip as Keyword Example to the Node Structure.
+            # (Keyword Root, Keyword Group, Keyword, Example Clip Name)
+            nodeData = (_('Keywords'), kwg, kw, sourceData.text)
+            # Add the Keyword Example Node to the Database Tree Tab
+            treeCtrl.add_Node("KeywordExampleNode", nodeData, sourceData.recNum, sourceData.parent)
+
+            # Now let's communicate with other Transana instances if we're in Multi-user mode
+            if not TransanaConstants.singleUserVersion:
+                # The first message parameter for a Keyword Example is the Clip Number
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage("AKE %d >|< %s >|< %s >|< %s" % (sourceData.recNum, kwg, kw, sourceData.text))
+                    TransanaGlobal.chatWindow.SendMessage("UKL Clip %d" % sourceData.recNum)
+
+            # Load the Clip
+            tempClip = Clip.Clip(sourceData.recNum)
+            # If the affected clip is for the current Episode, we need to update the
+            # Keyword Visualization
+            if (isinstance(treeCtrl.parent.ControlObject.currentObj, Episode.Episode)) and \
+                (tempClip.episode_num == treeCtrl.parent.ControlObject.currentObj.number):
+                # See if the Keyword visualization needs to be updated.
+                treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+            # If the affected clip is the current Clip, we need to update the
+            # Keyword Visualization
+            if (isinstance(treeCtrl.parent.ControlObject.currentObj, Clip.Clip)) and \
+               (sourceData.recNum == treeCtrl.parent.ControlObject.currentObj.number):
+                # See if the Keyword visualization needs to be updated.
+                treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+            if not TransanaConstants.singleUserVersion:
+                # We need to update the Clip Keyword Visualization when adding a keyword to a clip
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', tempClip.number, tempClip.episode_num))
+
+    # Drop a Keyword on a Series
+    elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'SeriesNode'):
+        DropKeyword(treeCtrl, sourceData, 'Series', treeCtrl.GetItemText(destNode), destNodeData.recNum, 0, confirmations=confirmations)
+   
+    # Drop a Keyword on an Episode
+    elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'EpisodeNode'):
+        DropKeyword(treeCtrl, sourceData, 'Episode', treeCtrl.GetItemText(destNode), destNodeData.recNum, 0, confirmations=confirmations)
+   
+    # Drop a Keyword on a Collection
+    elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'CollectionNode'):
+        DropKeyword(treeCtrl, sourceData, 'Collection', treeCtrl.GetItemText(destNode), destNodeData.recNum, destNodeData.parent, confirmations=confirmations)
+
+    # Drop a Keyword on a Clip
+    elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'ClipNode'):
+        DropKeyword(treeCtrl, sourceData, 'Clip', treeCtrl.GetItemText(destNode), destNodeData.recNum, 0, confirmations=confirmations)
+
+    # Drop a Keyword on a Keyword Group (Copy or Move a Keyword)
+    elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'KeywordGroupNode'):
+        # Get user confirmation of the Keyword Copy request
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Do you want to %s Keyword "%s" from\nKeyword Group "%s" to\nKeyword Group "%s"?'), 'utf8') % (copyMovePrompt, sourceData.text, sourceData.parent, treeCtrl.GetItemText(destNode))
+        else:
+            prompt = _('Do you want to %s Keyword "%s" from\nKeyword Group "%s" to\nKeyword Group "%s"?') % (copyMovePrompt, sourceData.text, sourceData.parent, treeCtrl.GetItemText(destNode))
+        dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+        result = dlg.LocalShowModal()
+        dlg.Destroy()
+        if result == wx.ID_YES:
+            # Determine if we're copying or moving data
+            if action == 'Copy':
+                # If confirmed, copy the Keyword to the Keyword Group
+                # Load the original Keyword
+                originalKeyword = Keyword.Keyword(sourceData.parent, sourceData.text)
+                # Create a blank Keyword Object
+                tempKeyword = Keyword.Keyword()
+                # Assign the data value for the Keyword
+                tempKeyword.keyword = sourceData.text
+                # Copy the keyword definition
+                tempKeyword.definition = originalKeyword.definition
+            elif action == 'Move':
+                # If confirmed, move the Keyword to the Clip.
+                # Load the appropriate Keyword Object
+                tempKeyword = Keyword.Keyword(sourceData.parent, sourceData.text)
+                # Lock the Keyword Record
+                tempKeyword.lock_record()
+
+                sourceData.nodeList = (_('Keywords'), sourceData.parent, sourceData.text)
+                
+                # We need to find out if the moved keyword had any keyword Example nodes.
+                # First, we need to get the original Keyword node.
+                sourceNode = treeCtrl.select_Node(sourceData.nodeList, sourceData.nodetype)
+                # Create a List to put information about Examples in.
+                exampleNodes = []
+                # Check to see if the node has children ...
+                if treeCtrl.ItemHasChildren(sourceNode):
+                    # ... and if it does, get the first.
+                    (childNode, cookieVal) = treeCtrl.GetFirstChild(sourceNode)
+                    # As long as the node is OK ...
+                    while childNode.IsOk():
+                        # ... get the node's Data ...
+                        childData = treeCtrl.GetPyData(childNode)
+                        # ... append the node's name and data to the Example Nodes list ...
+                        exampleNodes.append((treeCtrl.GetItemText(childNode), childData))
+                        # ... and get the next child, if there is one.
+                        (childNode, cookieVal) = treeCtrl.GetNextChild(sourceNode, cookieVal)
+
+            # Change the Keyword Group to the new Group Value (from dropNode)
+            tempKeyword.keywordGroup = treeCtrl.GetItemText(destNode)
+            try:
+                # Save the Keyword Record
+                tempKeyword.db_save()
+                if action == 'Move':
+                    # Unlock the Keyword Record
+                    tempKeyword.unlock_record()
+                    # Remove the old Keyword from the Tree.  First, build the appropriate Node List
+                    nodeList = (_('Keywords'), sourceData.parent, sourceData.text)
+                    # Now delete the specified node
+                    treeCtrl.delete_Node(nodeList, 'KeywordNode')
+                    # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                    ClearClipboard()
+
+                # Add the new Keyword to the Tree.  First, build the Node List as required by add_Node()
+                nodeList = (_('Keywords'), treeCtrl.GetItemText(destNode), sourceData.text)
+                # Now call add_Node to actually put the node in the tree.
+                treeCtrl.add_Node('KeywordNode', nodeList, 0, treeCtrl.GetItemText(destNode))
+
+                # Now let's communicate with other Transana instances if we're in Multi-user mode
+                if not TransanaConstants.singleUserVersion:
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("AK %s >|< %s" % (treeCtrl.GetItemText(destNode), sourceData.text))
+
+                # If we are Moving and if there were Examples, we need to add those examples to the moved Keyword Node.
+                if (action == 'Move') and (exampleNodes != []):
+                    # Iterate through the Example nodes data collected above.
+                    for (nodeName, nodeData) in exampleNodes:
+                        # Add the Keyword Example to the Tree.  First, build the Node List as required by add_Node()
+                        nodeList = (_('Keywords'), treeCtrl.GetItemText(destNode), sourceData.text, nodeName)
+                        # Now call add_Node to actually put the node in the tree.
+                        treeCtrl.add_Node("KeywordExampleNode", nodeList, nodeData.recNum, nodeData.parent)
+
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            # The first message parameter for a Keyword Example is the Clip Number
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage("AKE %d >|< %s >|< %s >|< %s" % (nodeData.recNum, treeCtrl.GetItemText(destNode), sourceData.text, nodeName))
+
+                # If it's a Move, we need to update the Keyword Visualization too!
+                if (action == 'Move'):
                     # See if the Keyword visualization needs to be updated.
                     treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
                     # Even if this computer doesn't need to update the keyword visualization others, might need to.
                     if not TransanaConstants.singleUserVersion:
                         # We need to update the Keyword Visualization
-                        if DEBUG:
-                            print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
-                            
                         if TransanaGlobal.chatWindow != None:
                             TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
-                 
-         except TransanaExceptions.SaveError:
-             # Display the Error Message, allow "continue" flag to remain true
-             errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-             errordlg.ShowModal()
-             errordlg.Destroy()
 
-   # Drop a Series Note on a new Series
-   elif (sourceData.nodetype == 'SeriesNoteNode' and destNodeData.nodetype == 'SeriesNode'):
-      # Load the Source Series Note
-      sourceNote = Note.Note(id_or_num=sourceData.recNum)
-      # Load the Source Series
-      sourceSeries = Series.Series(sourceNote.series_num)
-      # Load the Destination Series
-      destSeries = Series.Series(destNodeData.recNum)
-      # Can't drop a note on it's own parent!
-      if sourceSeries.number != destSeries.number:
-          # Get user confirmation of the Note Copy/Move request
-          if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-             prompt = unicode(_('Do you want to %s Note "%s" from\nSeries "%s" to\nSeries "%s"?'), 'utf8') % (copyMovePrompt, sourceNote.id, sourceSeries.id, destSeries.id)
-          else:
-             prompt = _('Do you want to %s Note "%s" from\nSeries "%s" to\nSeries "%s"?') % (copyMovePrompt, sourceNote.id, sourceSeries.id, destSeries.id)
-          # Display the prompt and get user input
-          dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-          result = dlg.LocalShowModal()
-          dlg.Destroy()
-          # If the user says YES ...
-          if result == wx.ID_YES:
-              # Copy or Move the Note to the Destination Series
-              contin = True
-              # If copying ...
-              if action == 'Copy':
-                  # Make a duplicate of the note to be copied
-                  newNote = sourceNote.duplicate()
-                  # To place the copy in the destination Series, alter its Series Number
-                  newNote.series_num = destSeries.number
-              # If moving ...
-              elif action == 'Move':
-                  # We need to trap Record Lock exceptions
-                  try:
-                      # Lock the Note Record to prevent other users from altering it simultaneously
-                      sourceNote.lock_record()
-                      # To move a Note, alter its Series Number
-                      sourceNote.series_num = destSeries.number
-                  # If the record IS locked ...
-                  except TransanaExceptions.RecordLockedError, e:
-                      # Prepare the error message
-                      if 'unicode' in wx.PlatformInfo:
-                          # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                          prompt = unicode(_('You cannot move Note "%s"') + \
-                                           _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
-                      else:
-                          prompt = _('You cannot move Note "%s"') + \
-                                   _('.\nThe record is currently locked by %s.\nPlease try again later.')
-                      # Display the error message
-                      errordlg = Dialogs.ErrorDialog(None, prompt % (sourceNote.id, e.user))
-                      errordlg.ShowModal()
-                      errordlg.Destroy()
-                      # If an error arises, we do NOT continue!
-                      contin = False
-              # If no error has occurred yet ...
-              if contin:
-                  # If copying ...
-                  if action == 'Copy':
-                      # Begin exception handling to trap save errors
-                      try:
-                          # Save the new Note to the database.
-                          newNote.db_save()
-                      # If the Save fails ...
-                      except TransanaExceptions.SaveError, e:
-                          # Prepare the Error Message
-                          msg = _('A Note named "%s" already exists in Series "%s".')
-                          if 'unicode' in wx.PlatformInfo:
-                              msg = unicode(msg, 'utf8')
-                          # Display the error message
-                          errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destSeries.id))
-                          errordlg.ShowModal()
-                          errordlg.Destroy()
-                          # If an error arises, we do NOT continue!
-                          contin = False
-                  # If moving ...
-                  elif action == 'Move':
-                      # Begin exception handling to trap save errors
-                      try:
-                          # Save the new Note to the database.
-                          sourceNote.db_save()
-                          # Remove the old Note from the Tree.
-                          # delete_Node needs to be able to climb the tree, so we need to build the Node List that
-                          # tells it what to delete.  Start with the sourceSeries.
-                          nodeList = (_('Series'), sourceSeries.id, sourceNote.id)
-                          # Now request that the defined node be deleted.  (DeleteNode sends its own MU messages!
-                          treeCtrl.delete_Node(nodeList, 'SeriesNoteNode')
-                                 
-                      # If the Save fails ...
-                      except TransanaExceptions.SaveError, e:
-                          # Prepare the Error Message
-                          msg = _('A Note named "%s" already exists in Series "%s".')
-                          if 'unicode' in wx.PlatformInfo:
-                              msg = unicode(msg, 'utf8')
-                          # Display the error message
-                          errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destSeries.id))
-                          errordlg.ShowModal()
-                          errordlg.Destroy()
-                          # If an error arises, we do NOT continue!
-                          contin = False
-                      # Unlock the Clip Record
-                      sourceNote.unlock_record()
+            except TransanaExceptions.SaveError:
+                # We have locked this record.  We better unlock it.
+                tempKeyword.unlock_record()
+                # Display the Error Message
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
 
-                      # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
-                      ClearClipboard()
-
-              # If no error has occurred yet ...
-              if contin:
-                  # We need to update the database tree and inform other copies of MU.
-                  # Start by getting the correct note object.
-                  if action == 'Copy':
-                      tempNote = newNote
-                  elif action == 'Move':
-                      tempNote = sourceNote
-                  # Build the Node List for the tree control
-                  nodeList = (_('Series'), destSeries.id, tempNote.id)
-                  # Add the Node to the Tree
-                  treeCtrl.add_Node('SeriesNoteNode', nodeList, tempNote.number, tempNote.series_num)
-
-                  # Now let's communicate with other Transana instances if we're in Multi-user mode
-                  if not TransanaConstants.singleUserVersion:
-                      # Prepare an Add Series Note message
-                      msg = "ASN Series >|< %s"
-                      # Convert the Node List to the form needed for messaging
-                      data = (nodeList[1],)
-                      for nd in nodeList[2:]:
-                           msg += " >|< %s"
-                           data += (nd, )
-
-                      if DEBUG:
-                          print 'DragAndDropObjects.CopyMoveClip(Copy): Message to send =', msg % data
-                                 
-                      # Send the message
-                      if TransanaGlobal.chatWindow != None:
-                          TransanaGlobal.chatWindow.SendMessage(msg % data)
-
-   # Drop an Episode Note on a new Episode
-   elif (sourceData.nodetype == 'EpisodeNoteNode' and destNodeData.nodetype == 'EpisodeNode'):
-      # Load the Source Episode Note
-      sourceNote = Note.Note(id_or_num=sourceData.recNum)
-      # Load the Source Episode
-      sourceEpisode = Episode.Episode(sourceNote.episode_num)
-      # Load the Destination Episode
-      destEpisode = Episode.Episode(destNodeData.recNum)
-      # Can't drop a note on it's own parent!
-      if sourceEpisode.number != destEpisode.number:
-          # Get user confirmation of the Note Copy/Move request
-          if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-             prompt = unicode(_('Do you want to %s Note "%s" from\nEpisode "%s" to\nEpisode "%s"?'), 'utf8') % (copyMovePrompt, sourceNote.id, sourceEpisode.id, destEpisode.id)
-          else:
-             prompt = _('Do you want to %s Note "%s" from\nEpisode "%s" to\nEpisode "%s"?') % (copyMovePrompt, sourceNote.id, sourceEpisode.id, destEpisode.id)
-          # Display the prompt and get user input
-          dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-          result = dlg.LocalShowModal()
-          dlg.Destroy()
-          # If the user says YES ...
-          if result == wx.ID_YES:
-              # Copy or Move the Note to the Destination Series
-              contin = True
-              # If copying ...
-              if action == 'Copy':
-                  # Make a duplicate of the note to be copied
-                  newNote = sourceNote.duplicate()
-                  # To place the copy in the destination Episode, alter its Episode Number
-                  newNote.episode_num = destEpisode.number
-              # If moving ...
-              elif action == 'Move':
-                  # We need to trap Record Lock exceptions
-                  try:
-                      # Lock the Note Record to prevent other users from altering it simultaneously
-                      sourceNote.lock_record()
-                      # To move a Note, alter its Episode Number
-                      sourceNote.episode_num = destEpisode.number
-                  # If the record IS locked ...
-                  except TransanaExceptions.RecordLockedError, e:
-                      # Prepare the error message
-                      if 'unicode' in wx.PlatformInfo:
-                          # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                          prompt = unicode(_('You cannot move Note "%s"') + \
-                                           _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
-                      else:
-                          prompt = _('You cannot move Note "%s"') + \
-                                   _('.\nThe record is currently locked by %s.\nPlease try again later.')
-                      # Display the error message
-                      errordlg = Dialogs.ErrorDialog(None, prompt % (sourceNote.id, e.user))
-                      errordlg.ShowModal()
-                      errordlg.Destroy()
-                      # If an error arises, we do NOT continue!
-                      contin = False
-              # If no error has occurred yet ...
-              if contin:
-                  # If copying ...
-                  if action == 'Copy':
-                      # Begin exception handling to trap save errors
-                      try:
-                          # Save the new Note to the database.
-                          newNote.db_save()
-                      # If the Save fails ...
-                      except TransanaExceptions.SaveError, e:
-                          # Prepare the Error Message
-                          msg = _('A Note named "%s" already exists in Episode "%s".')
-                          if 'unicode' in wx.PlatformInfo:
-                              msg = unicode(msg, 'utf8')
-                          # Display the error message
-                          errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destEpisode.id))
-                          errordlg.ShowModal()
-                          errordlg.Destroy()
-                          # If an error arises, we do NOT continue!
-                          contin = False
-                  # If moving ...
-                  elif action == 'Move':
-                      # Begin exception handling to trap save errors
-                      try:
-                          # Save the new Note to the database.
-                          sourceNote.db_save()
-                          # Remove the old Note from the Tree.
-                          # delete_Node needs to be able to climb the tree, so we need to build the Node List that
-                          # tells it what to delete.  Start with the sourceSeries.
-                          nodeList = (_('Series'), sourceEpisode.series_id, sourceEpisode.id, sourceNote.id)
-                          # Now request that the defined node be deleted.  (DeleteNode sends its own MU messages!
-                          treeCtrl.delete_Node(nodeList, 'EpisodeNoteNode')
-                                 
-                      # If the Save fails ...
-                      except TransanaExceptions.SaveError, e:
-                          # Prepare the Error Message
-                          msg = _('A Note named "%s" already exists in Episode "%s".')
-                          if 'unicode' in wx.PlatformInfo:
-                              msg = unicode(msg, 'utf8')
-                          # Display the error message
-                          errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destEpisode.id))
-                          errordlg.ShowModal()
-                          errordlg.Destroy()
-                          # If an error arises, we do NOT continue!
-                          contin = False
-                      # Unlock the Clip Record
-                      sourceNote.unlock_record()
-
-                      # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
-                      ClearClipboard()
-
-              # If no error has occurred yet ...
-              if contin:
-                  # We need to update the database tree and inform other copies of MU.
-                  # Start by getting the correct note object.
-                  if action == 'Copy':
-                      tempNote = newNote
-                  elif action == 'Move':
-                      tempNote = sourceNote
-                  # Build the Node List for the tree control
-                  nodeList = (_('Series'), destEpisode.series_id, destEpisode.id, tempNote.id)
-                  # Add the Node to the Tree
-                  treeCtrl.add_Node('EpisodeNoteNode', nodeList, tempNote.number, tempNote.episode_num)
-
-                  # Now let's communicate with other Transana instances if we're in Multi-user mode
-                  if not TransanaConstants.singleUserVersion:
-                      # Prepare an Add Episode Note message
-                      msg = "AEN Series >|< %s"
-                      # Convert the Node List to the form needed for messaging
-                      data = (nodeList[1],)
-                      for nd in nodeList[2:]:
-                           msg += " >|< %s"
-                           data += (nd, )
-
-                      if DEBUG:
-                          print 'DragAndDropObjects.CopyMoveClip(Copy): Message to send =', msg % data
-                                 
-                      # Send the message
-                      if TransanaGlobal.chatWindow != None:
-                          TransanaGlobal.chatWindow.SendMessage(msg % data)
-
-   # Drop a Transcript Note on a new Transcript
-   elif (sourceData.nodetype == 'TranscriptNoteNode' and destNodeData.nodetype == 'TranscriptNode'):
-      # Load the Source Transcript Note
-      sourceNote = Note.Note(id_or_num=sourceData.recNum)
-      # Load the Source Transcript
-      sourceTranscript = Transcript.Transcript(sourceNote.transcript_num)
-      # Load the Source Episode
-      sourceEpisode = Episode.Episode(sourceTranscript.episode_num)
-      # Load the Destination Transcript
-      destTranscript = Transcript.Transcript(destNodeData.recNum)
-      # Load the Destination Episode
-      destEpisode = Episode.Episode(destTranscript.episode_num)
-      # Can't drop a note on it's own parent!
-      if sourceTranscript.number != destTranscript.number:
-          # Get user confirmation of the Note Copy/Move request
-          if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-             prompt = unicode(_('Do you want to %s Note "%s" from\nTranscript "%s" to\nTranscript "%s"?'), 'utf8') % (copyMovePrompt, sourceNote.id, sourceTranscript.id, destTranscript.id)
-          else:
-             prompt = _('Do you want to %s Note "%s" from\nTranscript "%s" to\nTranscript "%s"?') % (copyMovePrompt, sourceNote.id, sourceTranscript.id, destTranscript.id)
-          # Display the prompt and get user input
-          dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-          result = dlg.LocalShowModal()
-          dlg.Destroy()
-          # If the user says YES ...
-          if result == wx.ID_YES:
-              # Copy or Move the Note to the Destination Series
-              contin = True
-              # If copying ...
-              if action == 'Copy':
-                  # Make a duplicate of the note to be copied
-                  newNote = sourceNote.duplicate()
-                  # To place the copy in the destination Transcript, alter its Transcript Number
-                  newNote.transcript_num = destTranscript.number
-              # If moving ...
-              elif action == 'Move':
-                  # We need to trap Record Lock exceptions
-                  try:
-                      # Lock the Note Record to prevent other users from altering it simultaneously
-                      sourceNote.lock_record()
-                      # To move a Note, alter its Transcript Number
-                      sourceNote.transcript_num = destTranscript.number
-                  # If the record IS locked ...
-                  except TransanaExceptions.RecordLockedError, e:
-                      # Prepare the error message
-                      if 'unicode' in wx.PlatformInfo:
-                          # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                          prompt = unicode(_('You cannot move Note "%s"') + \
-                                           _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
-                      else:
-                          prompt = _('You cannot move Note "%s"') + \
-                                   _('.\nThe record is currently locked by %s.\nPlease try again later.')
-                      # Display the error message
-                      errordlg = Dialogs.ErrorDialog(None, prompt % (sourceNote.id, e.user))
-                      errordlg.ShowModal()
-                      errordlg.Destroy()
-                      # If an error arises, we do NOT continue!
-                      contin = False
-              # If no error has occurred yet ...
-              if contin:
-                  # If copying ...
-                  if action == 'Copy':
-                      # Begin exception handling to trap save errors
-                      try:
-                          # Save the new Note to the database.
-                          newNote.db_save()
-                      # If the Save fails ...
-                      except TransanaExceptions.SaveError, e:
-                          # Prepare the Error Message
-                          msg = _('A Note named "%s" already exists in Transcript "%s".')
-                          if 'unicode' in wx.PlatformInfo:
-                              msg = unicode(msg, 'utf8')
-                          # Display the error message
-                          errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destTranscript.id))
-                          errordlg.ShowModal()
-                          errordlg.Destroy()
-                          # If an error arises, we do NOT continue!
-                          contin = False
-                  # If moving ...
-                  elif action == 'Move':
-                      # Begin exception handling to trap save errors
-                      try:
-                          # Save the new Note to the database.
-                          sourceNote.db_save()
-                          # Remove the old Note from the Tree.
-                          # delete_Node needs to be able to climb the tree, so we need to build the Node List that
-                          # tells it what to delete.  Start with the sourceSeries.
-                          nodeList = (_('Series'), sourceEpisode.series_id, sourceEpisode.id, sourceTranscript.id, sourceNote.id)
-                          # Now request that the defined node be deleted.  (DeleteNode sends its own MU messages!
-                          treeCtrl.delete_Node(nodeList, 'TranscriptNoteNode')
-                                 
-                      # If the Save fails ...
-                      except TransanaExceptions.SaveError, e:
-                          # Prepare the Error Message
-                          msg = _('A Note named "%s" already exists in Transcript "%s".')
-                          if 'unicode' in wx.PlatformInfo:
-                              msg = unicode(msg, 'utf8')
-                          # Display the error message
-                          errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destTranscript.id))
-                          errordlg.ShowModal()
-                          errordlg.Destroy()
-                          # If an error arises, we do NOT continue!
-                          contin = False
-                      # Unlock the Clip Record
-                      sourceNote.unlock_record()
-
-                      # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
-                      ClearClipboard()
-
-              # If no error has occurred yet ...
-              if contin:
-                  # We need to update the database tree and inform other copies of MU.
-                  # Start by getting the correct note object.
-                  if action == 'Copy':
-                      tempNote = newNote
-                  elif action == 'Move':
-                      tempNote = sourceNote
-                  # Build the Node List for the tree control
-                  nodeList = (_('Series'), destEpisode.series_id, destEpisode.id, destTranscript.id, tempNote.id)
-                  # Add the Node to the Tree
-                  treeCtrl.add_Node('TranscriptNoteNode', nodeList, tempNote.number, tempNote.transcript_num)
-
-                  # Now let's communicate with other Transana instances if we're in Multi-user mode
-                  if not TransanaConstants.singleUserVersion:
-                      # Prepare an Add Transcript Note message
-                      msg = "ATN Series >|< %s"
-                      # Convert the Node List to the form needed for messaging
-                      data = (nodeList[1],)
-                      for nd in nodeList[2:]:
-                           msg += " >|< %s"
-                           data += (nd, )
-
-                      if DEBUG:
-                          print 'DragAndDropObjects.CopyMoveClip(Copy): Message to send =', msg % data
-                                 
-                      # Send the message
-                      if TransanaGlobal.chatWindow != None:
-                          TransanaGlobal.chatWindow.SendMessage(msg % data)
-
-   # Drop a Collection Note on a new Collection
-   elif (sourceData.nodetype == 'CollectionNoteNode' and destNodeData.nodetype == 'CollectionNode'):
-      # Load the Source Collection Note
-      sourceNote = Note.Note(id_or_num=sourceData.recNum)
-      # Load the Source Collection
-      sourceCollection = Collection.Collection(sourceNote.collection_num)
-      # Load the Destination Collection
-      destCollection = Collection.Collection(destNodeData.recNum)
-      # Can't drop a note on it's own parent!
-      if sourceCollection.number != destCollection.number:
-          # Get user confirmation of the Note Copy/Move request
-          if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-             prompt = unicode(_('Do you want to %s Note "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceNote.id, sourceCollection.GetNodeString(), destCollection.GetNodeString())
-          else:
-             prompt = _('Do you want to %s Note "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceNote.id, sourceCollection.GetNodeString(), destCollection.GetNodeString())
-          # Display the prompt and get user input
-          dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-          result = dlg.LocalShowModal()
-          dlg.Destroy()
-          # If the user says YES ...
-          if result == wx.ID_YES:
-              # Copy or Move the Note to the Destination Series
-              contin = True
-              # If copying ...
-              if action == 'Copy':
-                  # Make a duplicate of the note to be copied
-                  newNote = sourceNote.duplicate()
-                  # To place the copy in the destination Collection, alter its Collection Number
-                  newNote.collection_num = destCollection.number
-              # If moving ...
-              elif action == 'Move':
-                  # We need to trap Record Lock exceptions
-                  try:
-                      # Lock the Note Record to prevent other users from altering it simultaneously
-                      sourceNote.lock_record()
-                      # To move a Note, alter its Collection Number
-                      sourceNote.collection_num = destCollection.number
-                  # If the record IS locked ...
-                  except TransanaExceptions.RecordLockedError, e:
-                      # Prepare the error message
-                      if 'unicode' in wx.PlatformInfo:
-                          # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                          prompt = unicode(_('You cannot move Note "%s"') + \
-                                           _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
-                      else:
-                          prompt = _('You cannot move Note "%s"') + \
-                                   _('.\nThe record is currently locked by %s.\nPlease try again later.')
-                      # Display the error message
-                      errordlg = Dialogs.ErrorDialog(None, prompt % (sourceNote.id, e.user))
-                      errordlg.ShowModal()
-                      errordlg.Destroy()
-                      # If an error arises, we do NOT continue!
-                      contin = False
-              # If no error has occurred yet ...
-              if contin:
-                  # If copying ...
-                  if action == 'Copy':
-                      # Begin exception handling to trap save errors
-                      try:
-                          # Save the new Note to the database.
-                          newNote.db_save()
-                      # If the Save fails ...
-                      except TransanaExceptions.SaveError, e:
-                          # Prepare the Error Message
-                          msg = _('A Note named "%s" already exists in Collection "%s".')
-                          if 'unicode' in wx.PlatformInfo:
-                              msg = unicode(msg, 'utf8')
-                          # Display the error message
-                          errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destCollection.GetNodeString()))
-                          errordlg.ShowModal()
-                          errordlg.Destroy()
-                          # If an error arises, we do NOT continue!
-                          contin = False
-                  # If moving ...
-                  elif action == 'Move':
-                      # Begin exception handling to trap save errors
-                      try:
-                          # Save the new Note to the database.
-                          sourceNote.db_save()
-                          # Remove the old Note from the Tree.
-                          # delete_Node needs to be able to climb the tree, so we need to build the Node List that
-                          # tells it what to delete.
-                          nodeList = (_('Collections'),) + sourceCollection.GetNodeData() + (sourceNote.id, )
-                          # Now request that the defined node be deleted.  (DeleteNode sends its own MU messages!
-                          treeCtrl.delete_Node(nodeList, 'CollectionNoteNode')
-                                 
-                      # If the Save fails ...
-                      except TransanaExceptions.SaveError, e:
-                          # Prepare the Error Message
-                          msg = _('A Note named "%s" already exists in Collection "%s".')
-                          if 'unicode' in wx.PlatformInfo:
-                              msg = unicode(msg, 'utf8')
-                          # Display the error message
-                          errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destCollection.GetNodeString()))
-                          errordlg.ShowModal()
-                          errordlg.Destroy()
-                          # If an error arises, we do NOT continue!
-                          contin = False
-                      # Unlock the Clip Record
-                      sourceNote.unlock_record()
-
-                      # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
-                      ClearClipboard()
-
-              # If no error has occurred yet ...
-              if contin:
-                  # We need to update the database tree and inform other copies of MU.
-                  # Start by getting the correct note object.
-                  if action == 'Copy':
-                      tempNote = newNote
-                  elif action == 'Move':
-                      tempNote = sourceNote
-                  # Build the Node List for the tree control
-                  nodeList = (_('Collections'),) + destCollection.GetNodeData() + (tempNote.id,)
-                  # Add the Node to the Tree
-                  treeCtrl.add_Node('CollectionNoteNode', nodeList, tempNote.number, tempNote.collection_num)
-
-                  # Now let's communicate with other Transana instances if we're in Multi-user mode
-                  if not TransanaConstants.singleUserVersion:
-                      # Prepare an Add Collection Note message
-                      msg = "ACN Collections >|< %s"
-                      # Convert the Node List to the form needed for messaging
-                      data = (nodeList[1],)
-                      for nd in nodeList[2:]:
-                           msg += " >|< %s"
-                           data += (nd, )
-
-                      if DEBUG:
-                          print 'DragAndDropObjects.CopyMoveClip(Copy): Message to send =', msg % data
-                                 
-                      # Send the message
-                      if TransanaGlobal.chatWindow != None:
-                          TransanaGlobal.chatWindow.SendMessage(msg % data)
-
-   # Drop a Clip Note on a new Clip
-   elif (sourceData.nodetype == 'ClipNoteNode' and destNodeData.nodetype == 'ClipNode'):
-      # Load the Source Clip Note
-      sourceNote = Note.Note(id_or_num=sourceData.recNum)
-      # Load the Source Clip
-      sourceClip = Clip.Clip(sourceNote.clip_num)
-      # Load the Destination Clip
-      destClip = Clip.Clip(destNodeData.recNum)
-      # Can't drop a note on it's own parent!
-      if sourceClip.number != destClip.number:
-          # Get user confirmation of the Note Copy/Move request
-          if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-             prompt = unicode(_('Do you want to %s Note "%s" from\nClip "%s" to\nClip "%s"?'), 'utf8') % (copyMovePrompt, sourceNote.id, sourceClip.id, destClip.id)
-          else:
-             prompt = _('Do you want to %s Note "%s" from\nClip "%s" to\nClip "%s"?') % (copyMovePrompt, sourceNote.id, sourceClip.id, destClip.id)
-          # Display the prompt and get user input
-          dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-          result = dlg.LocalShowModal()
-          dlg.Destroy()
-          # If the user says YES ...
-          if result == wx.ID_YES:
-              # Copy or Move the Note to the Destination Series
-              contin = True
-              # If copying ...
-              if action == 'Copy':
-                  # Make a duplicate of the note to be copied
-                  newNote = sourceNote.duplicate()
-                  # To place the copy in the destination Clip, alter its Clip Number
-                  newNote.clip_num = destClip.number
-              # If moving ...
-              elif action == 'Move':
-                  # We need to trap Record Lock exceptions
-                  try:
-                      # Lock the Note Record to prevent other users from altering it simultaneously
-                      sourceNote.lock_record()
-                      # To move a Note, alter its Clip Number
-                      sourceNote.clip_num = destClip.number
-                  # If the record IS locked ...
-                  except TransanaExceptions.RecordLockedError, e:
-                      # Prepare the error message
-                      if 'unicode' in wx.PlatformInfo:
-                          # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                          prompt = unicode(_('You cannot move Note "%s"') + \
-                                           _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
-                      else:
-                          prompt = _('You cannot move Note "%s"') + \
-                                   _('.\nThe record is currently locked by %s.\nPlease try again later.')
-                      # Display the error message
-                      errordlg = Dialogs.ErrorDialog(None, prompt % (sourceNote.id, e.user))
-                      errordlg.ShowModal()
-                      errordlg.Destroy()
-                      # If an error arises, we do NOT continue!
-                      contin = False
-              # If no error has occurred yet ...
-              if contin:
-                  # If copying ...
-                  if action == 'Copy':
-                      # Begin exception handling to trap save errors
-                      try:
-                          # Save the new Note to the database.
-                          newNote.db_save()
-                      # If the Save fails ...
-                      except TransanaExceptions.SaveError, e:
-                          # Prepare the Error Message
-                          msg = _('A Note named "%s" already exists in Clip "%s".')
-                          if 'unicode' in wx.PlatformInfo:
-                              msg = unicode(msg, 'utf8')
-                          # Display the error message
-                          errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destClip.id))
-                          errordlg.ShowModal()
-                          errordlg.Destroy()
-                          # If an error arises, we do NOT continue!
-                          contin = False
-                  # If moving ...
-                  elif action == 'Move':
-                      # Begin exception handling to trap save errors
-                      try:
-                          # Save the new Note to the database.
-                          sourceNote.db_save()
-                          # Remove the old Note from the Tree.
-                          # delete_Node needs to be able to climb the tree, so we need to build the Node List that
-                          # tells it what to delete.
-                          nodeList = (_('Collections'),) + sourceClip.GetNodeData() + (sourceNote.id, )
-                          # Now request that the defined node be deleted.  (DeleteNode sends its own MU messages!
-                          treeCtrl.delete_Node(nodeList, 'ClipNoteNode')
-                                 
-                      # If the Save fails ...
-                      except TransanaExceptions.SaveError, e:
-                          # Prepare the Error Message
-                          msg = _('A Note named "%s" already exists in Clip "%s".')
-                          if 'unicode' in wx.PlatformInfo:
-                              msg = unicode(msg, 'utf8')
-                          # Display the error message
-                          errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destClip.id))
-                          errordlg.ShowModal()
-                          errordlg.Destroy()
-                          # If an error arises, we do NOT continue!
-                          contin = False
-                      # Unlock the Clip Record
-                      sourceNote.unlock_record()
-
-                      # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
-                      ClearClipboard()
-
-              # If no error has occurred yet ...
-              if contin:
-                  # We need to update the database tree and inform other copies of MU.
-                  # Start by getting the correct note object.
-                  if action == 'Copy':
-                      tempNote = newNote
-                  elif action == 'Move':
-                      tempNote = sourceNote
-                  # Build the Node List for the tree control
-                  nodeList = (_('Collections'),) + destClip.GetNodeData() + (tempNote.id,)
-                  # Add the Node to the Tree
-                  treeCtrl.add_Node('ClipNoteNode', nodeList, tempNote.number, tempNote.collection_num)
-
-                  # Now let's communicate with other Transana instances if we're in Multi-user mode
-                  if not TransanaConstants.singleUserVersion:
-                      # Prepare an Add Clip Note message
-                      msg = "AClN Collections >|< %s"
-                      # Convert the Node List to the form needed for messaging
-                      data = (nodeList[1],)
-                      for nd in nodeList[2:]:
-                           msg += " >|< %s"
-                           data += (nd, )
-
-                      if DEBUG:
-                          print 'DragAndDropObjects.CopyMoveClip(Copy): Message to send =', msg % data
-                                 
-                      # Send the message
-                      if TransanaGlobal.chatWindow != None:
-                          TransanaGlobal.chatWindow.SendMessage(msg % data)
-
-   # Drop a SearchCollection on a SearchCollection (Copy or Move all SearchClips in a SearchCollection)
-   elif (sourceData.nodetype == 'SearchCollectionNode' and destNodeData.nodetype == 'SearchCollectionNode'):
-      # NOTE:  SearchClips don't exist in the database.  Therefore, to copy or move them,
-      #        all we need to do is manipulate Database Tree Nodes
-
-      # Get user confirmation of the Collection Copy request.
-      # First, set the names for use in the prompt.
-      sourceCollectionId = sourceData.text
-      destCollectionId = treeCtrl.GetItemText(destNode)
-      # Create the Dialog Box for the confirmation prompt
-      if 'unicode' in wx.PlatformInfo:
-         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-         prompt = unicode(_('Do you want to %s all Search Results Clips from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?'), 'utf8') % (copyMovePrompt, sourceCollectionId, destCollectionId)
-      else:
-         prompt = _('Do you want to %s all Search Results Clips from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?') % (copyMovePrompt, sourceCollectionId, destCollectionId)
-      # Show the confirmation prompt Dialog
-      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-      result = dlg.LocalShowModal()
-      # Clean up after the confirmation Dialog
-      dlg.Destroy()
-      # Process the results only if the user confirmed.
-      if result == wx.ID_YES:
-         # We need to keep a record of items that need to be deleted later.  Initialize a list for that.
-         # (We can't just delete records as we go as that screws up iterating through the Collection's child nodes.)
-         itemsToDelete = []
-
-         # Let's get all the children of the Source SearchCollection.  However, we don't have direct access to the Source
-         # Node in all cases.  (We can get it in Drag and Drop, but not Cut and Paste.  I tried to pass the actual
-         # node in the SourceData, but that caused catastrophic program crashes.)
-         # This ALWAYS gets the correct Source Node.
-         sourceNode = treeCtrl.select_Node(sourceData.nodeList, sourceData.nodetype)
-         # Iterating through a wxTreeCtrl requires a "cookie" value.  Initialize it here.
-         cookieItem = 0L
-         # Get the Source Collection's first Child Node
-         (childNode, cookieItem) = treeCtrl.GetFirstChild(sourceNode)
-         # Iterate through all the Source Collection's Child Nodes
-         while childNode.IsOk():
-            # Get the Child Node's Node Data
-            childData = treeCtrl.GetPyData(childNode)
-            # We should only move Clips, not nested Collections
-            if childData.nodetype == 'SearchClipNode':
-               # We need to reference the child's Name repeatedly, so let's create a variable for it.
-               clipName = treeCtrl.GetItemText(childNode)
-               # Check for Duplicate Clip Names, an error condition
-               (dupResult, newClipName) = CheckForDuplicateClipName(clipName, treeCtrl, destNode)
-               # If a Duplicate Clip Name is found and the error situation not resolved, show an Error Message
-               if dupResult:
-                  if 'unicode' in wx.PlatformInfo:
-                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                     prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Clip Name Error.'), 'utf8') % (copyMovePrompt, clipName)
-                  else:
-                     prompt = _('%s cancelled for Clip "%s".  Duplicate Clip Name Error.') % (copyMovePrompt, clipName)
-                  dlg = Dialogs.ErrorDialog(None, prompt)
-                  dlg.ShowModal()
-                  dlg.Destroy()
-               else:
-                  # The user may have given the clip a new Clip Name in CheckForDuplicateClipName.  
-                  if newClipName != sourceData.text:
-                     # If so, use this new name!
-                     clipName = newClipName
-
-                  # What we need to do first is add the appropriate new Node to the Tree.
-                  # Let's build the NodeList by starting with the Source Clip text ...
-                  nodeList = (clipName,)
-                  # ... and then climbing the Destination Node Tree .... 
-                  currentNode = destNode
-                  # ... until we get to the SearchRootNode
-                  while treeCtrl.GetPyData(currentNode).nodetype != 'SearchRootNode':
-                     # We add the Item Test to the FRONT of the Node List
-                     nodeList = (treeCtrl.GetItemText(currentNode),) + nodeList
-                     # and we move up to the node's parent
-                     currentNode = treeCtrl.GetItemParent(currentNode)
-                  # Now Add the new Node, using the SourceData's Data
-                  treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, childData.recNum, childData.parent, False)
-                  # No need to communicate with other Transana Clients here, we're just manipulating Search Results.
-
-                  # If we need to remove the node, the SourceData carries the nodeList to the Collection, but we can't just
-                  # delete that because it might have subCollections.  Therefore, add the Clip Name to the CourseCollection
-                  # Node List 
-                  if action == 'Move':
-                     itemsToDelete.append((sourceData.nodeList + (treeCtrl.GetItemText(childNode),), treeCtrl.GetPyData(childNode).nodetype),)
-
-            # If we are not currently looking at the Source Collection's LAST Child ...
-            if childNode != treeCtrl.GetLastChild(sourceNode):
-               # ... then let's move on to the next Child record.
-               (childNode, cookieItem) = treeCtrl.GetNextChild(sourceNode, cookieItem)
-            # Otherwise ...
-            else:
-               # We've seen all there is to see, so stop iterating.
-               break
-
-         # Delete any items that have been flagged for deletion.
-         for (item, itemNodeType) in itemsToDelete:
-            treeCtrl.delete_Node(item, itemNodeType)
-
-         if (action == 'Move') and (len(itemsToDelete) > 0):
-             # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
-             ClearClipboard()
-            
-         # Select the Destination Collection as the tree's Selected Item
-         treeCtrl.SelectItem(destNode)
-
-   # Drop a SearchClip on a SearchCollection (Copy or Move a SearchClip)
-   elif (sourceData.nodetype == 'SearchClipNode' and destNodeData.nodetype == 'SearchCollectionNode'):
-      # NOTE:  SearchClips don't exist in the database.  Therefore, to copy or move them,
-      #        all we need to do is manipulate Database Tree Nodes
-
-      # Get user confirmation of the Clip Copy/Move request.
-      # First, let's get the appropriate text for the confirmation prompt.
-      sourceClipId = sourceData.text
-      # The Source Collection is the second-to-last entry in the source Node List!
-      sourceCollectionId = sourceData.nodeList[-2]
-      destCollectionId = treeCtrl.GetItemText(destNode)
-      # Create the confirmation Dialog box
-      if 'unicode' in wx.PlatformInfo:
-         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-         prompt = unicode(_('Do you want to %s Search Results Clip "%s" from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?'), 'utf8') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
-      else:
-         prompt = _('Do you want to %s Search Results Clip "%s" from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
-      # Display the confirmation Dialog Box
-      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-      result = dlg.LocalShowModal()
-      # Clean up after the confirmation Dialog box
-      dlg.Destroy()
-      # If the user confirmed, process the request.
-      if result == wx.ID_YES:
-         # Check for Duplicate Clip Name error
-         (dupResult, newClipName) = CheckForDuplicateClipName(sourceData.text, treeCtrl, destNode)
-         # If a Duplicate Clip Name exists that is not resolved within CheckForDuplicateClipNames ...
-         if dupResult:
-            # ... display the error message.
+    # Drop a Series Note on a new Series
+    elif (sourceData.nodetype == 'SeriesNoteNode' and destNodeData.nodetype == 'SeriesNode'):
+        # Load the Source Series Note
+        sourceNote = Note.Note(id_or_num=sourceData.recNum)
+        # Load the Source Series
+        sourceSeries = Series.Series(sourceNote.series_num)
+        # Load the Destination Series
+        destSeries = Series.Series(destNodeData.recNum)
+        # Can't drop a note on it's own parent!
+        if sourceSeries.number != destSeries.number:
+            # Get user confirmation of the Note Copy/Move request
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Clip Name Error.'), 'utf8') % (copyMovePrompt, sourceData.text)
+                prompt = unicode(_('Do you want to %s Note "%s" from\nSeries "%s" to\nSeries "%s"?'), 'utf8') % (copyMovePrompt, sourceNote.id, sourceSeries.id, destSeries.id)
             else:
-                prompt = _('%s cancelled for Clip "%s".  Duplicate Clip Name Error.') % (copyMovePrompt, sourceData.text)
-            dlg = Dialogs.ErrorDialog(None, prompt)
-            dlg.ShowModal()
+                prompt = _('Do you want to %s Note "%s" from\nSeries "%s" to\nSeries "%s"?') % (copyMovePrompt, sourceNote.id, sourceSeries.id, destSeries.id)
+            # Display the prompt and get user input
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+            result = dlg.LocalShowModal()
             dlg.Destroy()
-         else:
-            # The user may have provided a new name for the Clip if it was a duplicate.
-            if newClipName != sourceData.text:
-               # If so, use this new name.
-               sourceData.text = newClipName
+            # If the user says YES ...
+            if result == wx.ID_YES:
+                # Copy or Move the Note to the Destination Series
+                contin = True
+                # If copying ...
+                if action == 'Copy':
+                    # Make a duplicate of the note to be copied
+                    newNote = sourceNote.duplicate()
+                    # To place the copy in the destination Series, alter its Series Number
+                    newNote.series_num = destSeries.number
+                # If moving ...
+                elif action == 'Move':
+                    # We need to trap Record Lock exceptions
+                    try:
+                        # Lock the Note Record to prevent other users from altering it simultaneously
+                        sourceNote.lock_record()
+                        # To move a Note, alter its Series Number
+                        sourceNote.series_num = destSeries.number
+                    # If the record IS locked ...
+                    except TransanaExceptions.RecordLockedError, e:
+                        # Prepare the error message
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_('You cannot move Note "%s"') + \
+                                             _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
+                        else:
+                            prompt = _('You cannot move Note "%s"') + \
+                                     _('.\nThe record is currently locked by %s.\nPlease try again later.')
+                        # Display the error message
+                        errordlg = Dialogs.ErrorDialog(None, prompt % (sourceNote.id, e.user))
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                        # If an error arises, we do NOT continue!
+                        contin = False
+                # If no error has occurred yet ...
+                if contin:
+                    # If copying ...
+                    if action == 'Copy':
+                        # Begin exception handling to trap save errors
+                        try:
+                            # Save the new Note to the database.
+                            newNote.db_save()
+                        # If the Save fails ...
+                        except TransanaExceptions.SaveError, e:
+                            # Prepare the Error Message
+                            msg = _('A Note named "%s" already exists in Series "%s".')
+                            if 'unicode' in wx.PlatformInfo:
+                                msg = unicode(msg, 'utf8')
+                            # Display the error message
+                            errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destSeries.id))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # If an error arises, we do NOT continue!
+                            contin = False
+                    # If moving ...
+                    elif action == 'Move':
+                        # Begin exception handling to trap save errors
+                        try:
+                            # Save the new Note to the database.
+                            sourceNote.db_save()
+                            # Remove the old Note from the Tree.
+                            # delete_Node needs to be able to climb the tree, so we need to build the Node List that
+                            # tells it what to delete.  Start with the sourceSeries.
+                            nodeList = (_('Series'), sourceSeries.id, sourceNote.id)
+                            # Now request that the defined node be deleted.  (DeleteNode sends its own MU messages!
+                            treeCtrl.delete_Node(nodeList, 'SeriesNoteNode')
 
-            # What we need to do first is add the appropriate new Node to the Tree.
-            # Let's build the NodeList by starting with the Source Clip text ...
-            nodeList = (sourceData.text,)
-            # ... and then climbing the Destination Node Tree .... 
-            currentNode = destNode
-            # ... until we get to the SearchRootNode
-            while treeCtrl.GetPyData(currentNode).nodetype != 'SearchRootNode':
-               # We add the Item Test to the FRONT of the Node List
-               nodeList = (treeCtrl.GetItemText(currentNode),) + nodeList
-               # and we move up to the node's parent
-               currentNode = treeCtrl.GetItemParent(currentNode)
-            # Now Add the new Node, using the SourceData's Data
-            treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, sourceData.recNum, sourceData.parent, False)
-            # No need to communicate with other Transana Clients here, we're just manipulating Search Results.
-            # If we need to remove the node, the SourceData carries the nodeList we need to delete
-            if action == 'Move':
-               treeCtrl.delete_Node(sourceData.nodeList, 'SearchClipNode')
-               # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
-               ClearClipboard()
-            # Select the Destination Collection as the tree's Selected Item
-            treeCtrl.SelectItem(destNode)
+                        # If the Save fails ...
+                        except TransanaExceptions.SaveError, e:
+                            # Prepare the Error Message
+                            msg = _('A Note named "%s" already exists in Series "%s".')
+                            if 'unicode' in wx.PlatformInfo:
+                                msg = unicode(msg, 'utf8')
+                            # Display the error message
+                            errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destSeries.id))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # If an error arises, we do NOT continue!
+                            contin = False
+                        # Unlock the Clip Record
+                        sourceNote.unlock_record()
 
-   # Drop a SearchClip on a SearchClip (Copy or Move a SearchClip into a position in the SortOrder)
-   elif (sourceData.nodetype == 'SearchClipNode' and destNodeData.nodetype == 'SearchClipNode'):
-      # NOTE:  SearchClips don't exist in the database.  Therefore, to copy or move them,
-      #        all we need to do is manipulate Database Tree Nodes
+                        # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                        ClearClipboard()
 
-      # Set variables for the user Confirmation Prompt, if needed.
-      sourceClipId = sourceData.text
-      # The Source Collection is the second-to-last entry in the source Node List!
-      sourceCollectionId = sourceData.nodeList[-2]
-      destCollectionId = treeCtrl.GetItemText(treeCtrl.GetItemParent(destNode))
+                # If no error has occurred yet ...
+                if contin:
+                    # We need to update the database tree and inform other copies of MU.
+                    # Start by getting the correct note object.
+                    if action == 'Copy':
+                        tempNote = newNote
+                    elif action == 'Move':
+                        tempNote = sourceNote
+                    # Build the Node List for the tree control
+                    nodeList = (_('Series'), destSeries.id, tempNote.id)
+                    # Add the Node to the Tree
+                    treeCtrl.add_Node('SeriesNoteNode', nodeList, tempNote.number, tempNote.series_num)
 
-      # Only prompt if we are copying/moving to a DIFFERENT collection, not the same one!
-      if (sourceCollectionId == destCollectionId) and \
-         (sourceData.parent == destNodeData.parent):
-         # This bypasses the prompt if both collection names and parents are the same
-         result = wx.ID_YES
-         # By definition, this MUST be a move, as we are altering Sort Order.
-         action = 'Move'
-         # We don't have to deal with duplicate Clip Names if changing a Clip's Sort Order.
-         # It IS a duplicate name, but we can ignore that.
-         dupResult = False
-      else:
-         # If we're dealing with different collections, prompt the user to confirm the copy/move.
-         # First, build the confirmation Dialog Box
-         if 'unicode' in wx.PlatformInfo:
-             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-             prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
-         else:
-             prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
-         # Display the Confirmation Dialog Box
-         dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-         result = dlg.LocalShowModal()
-         # Clean up the Confirmation Dialog Box
-         dlg.Destroy()
-         # If the user confirmed ...
-         if result == wx.ID_YES:
-            # ... we need to check to see if this Clip is a Duplicate, giving the user a chance to resolve the problem.
-            (dupResult, newClipName) = CheckForDuplicateClipName(sourceData.text, treeCtrl, treeCtrl.GetItemParent(destNode))
-            # If the clip is no longer a duplicate and the user has changed the clip's name to resolve that ...
-            if (not dupResult) and (newClipName != sourceData.text):
-               # ... use the new name.
-               sourceData.text = newClipName
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        # Prepare an Add Series Note message
+                        msg = "ASN Series >|< %s"
+                        # Convert the Node List to the form needed for messaging
+                        data = (nodeList[1],)
+                        for nd in nodeList[2:]:
+                            msg += " >|< %s"
+                            data += (nd, )
+                        # Send the message
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage(msg % data)
 
-      # If the user confirmed (or wasn't asked) ...
-      if result == wx.ID_YES:
-         # If we have a Duplicate Clip Name error ...
-         if dupResult:
-            # ... show the error message.
+    # Drop an Episode Note on a new Episode
+    elif (sourceData.nodetype == 'EpisodeNoteNode' and destNodeData.nodetype == 'EpisodeNode'):
+        # Load the Source Episode Note
+        sourceNote = Note.Note(id_or_num=sourceData.recNum)
+        # Load the Source Episode
+        sourceEpisode = Episode.Episode(sourceNote.episode_num)
+        # Load the Destination Episode
+        destEpisode = Episode.Episode(destNodeData.recNum)
+        # Can't drop a note on it's own parent!
+        if sourceEpisode.number != destEpisode.number:
+            # Get user confirmation of the Note Copy/Move request
             if 'unicode' in wx.PlatformInfo:
-                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                 prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Clip Name Error.'), 'utf8') % (copyMovePrompt, sourceData.text)
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Note "%s" from\nEpisode "%s" to\nEpisode "%s"?'), 'utf8') % (copyMovePrompt, sourceNote.id, sourceEpisode.id, destEpisode.id)
             else:
-                 prompt = _('%s cancelled for Clip "%s".  Duplicate Clip Name Error.') % (copyMovePrompt, sourceData.text)
-            dlg = Dialogs.ErrorDialog(None, prompt)
-            dlg.ShowModal()
+                prompt = _('Do you want to %s Note "%s" from\nEpisode "%s" to\nEpisode "%s"?') % (copyMovePrompt, sourceNote.id, sourceEpisode.id, destEpisode.id)
+            # Display the prompt and get user input
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+            result = dlg.LocalShowModal()
             dlg.Destroy()
-         # If there's no Duplicate Clip Name Error ...
-         else:
-            # What we need to do first is add the appropriate new Node to the Tree.
-            # Let's build the NodeList by starting with the Source Clip text ...
-            nodeList = (sourceData.text,)
-            # ... and then climbing the Destination Node Tree  using the clip's Parent Collection .... 
-            currentNode = treeCtrl.GetItemParent(destNode)
-            # ... until we get to the SearchRootNode
-            while treeCtrl.GetPyData(currentNode).nodetype != 'SearchRootNode':
-               # We add the Item Test to the FRONT of the Node List
-               nodeList = (treeCtrl.GetItemText(currentNode),) + nodeList
-               # and we move up to the node's parent
-               currentNode = treeCtrl.GetItemParent(currentNode)
+            # If the user says YES ...
+            if result == wx.ID_YES:
+                # Copy or Move the Note to the Destination Series
+                contin = True
+                # If copying ...
+                if action == 'Copy':
+                    # Make a duplicate of the note to be copied
+                    newNote = sourceNote.duplicate()
+                    # To place the copy in the destination Episode, alter its Episode Number
+                    newNote.episode_num = destEpisode.number
+                # If moving ...
+                elif action == 'Move':
+                    # We need to trap Record Lock exceptions
+                    try:
+                        # Lock the Note Record to prevent other users from altering it simultaneously
+                        sourceNote.lock_record()
+                        # To move a Note, alter its Episode Number
+                        sourceNote.episode_num = destEpisode.number
+                    # If the record IS locked ...
+                    except TransanaExceptions.RecordLockedError, e:
+                        # Prepare the error message
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_('You cannot move Note "%s"') + \
+                                             _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
+                        else:
+                            prompt = _('You cannot move Note "%s"') + \
+                                     _('.\nThe record is currently locked by %s.\nPlease try again later.')
+                        # Display the error message
+                        errordlg = Dialogs.ErrorDialog(None, prompt % (sourceNote.id, e.user))
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                        # If an error arises, we do NOT continue!
+                        contin = False
+                # If no error has occurred yet ...
+                if contin:
+                    # If copying ...
+                    if action == 'Copy':
+                        # Begin exception handling to trap save errors
+                        try:
+                            # Save the new Note to the database.
+                            newNote.db_save()
+                        # If the Save fails ...
+                        except TransanaExceptions.SaveError, e:
+                            # Prepare the Error Message
+                            msg = _('A Note named "%s" already exists in Episode "%s".')
+                            if 'unicode' in wx.PlatformInfo:
+                                msg = unicode(msg, 'utf8')
+                            # Display the error message
+                            errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destEpisode.id))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # If an error arises, we do NOT continue!
+                            contin = False
+                    # If moving ...
+                    elif action == 'Move':
+                        # Begin exception handling to trap save errors
+                        try:
+                            # Save the new Note to the database.
+                            sourceNote.db_save()
+                            # Remove the old Note from the Tree.
+                            # delete_Node needs to be able to climb the tree, so we need to build the Node List that
+                            # tells it what to delete.  Start with the sourceSeries.
+                            nodeList = (_('Series'), sourceEpisode.series_id, sourceEpisode.id, sourceNote.id)
+                            # Now request that the defined node be deleted.  (DeleteNode sends its own MU messages!
+                            treeCtrl.delete_Node(nodeList, 'EpisodeNoteNode')
+                                 
+                        # If the Save fails ...
+                        except TransanaExceptions.SaveError, e:
+                            # Prepare the Error Message
+                            msg = _('A Note named "%s" already exists in Episode "%s".')
+                            if 'unicode' in wx.PlatformInfo:
+                                msg = unicode(msg, 'utf8')
+                            # Display the error message
+                            errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destEpisode.id))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # If an error arises, we do NOT continue!
+                            contin = False
+                        # Unlock the Clip Record
+                        sourceNote.unlock_record()
 
-            # If we need to remove the node, the SourceData carries the nodeList we need to delete.
-            # (We need to delete first so that the moved Clip in the same Collection doesn't get removed
-            # immediately after being added.)
-            if action == 'Move':
-               treeCtrl.delete_Node(sourceData.nodeList, sourceData.nodetype)
-               # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
-               ClearClipboard()
+                        # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                        ClearClipboard()
+
+                # If no error has occurred yet ...
+                if contin:
+                    # We need to update the database tree and inform other copies of MU.
+                    # Start by getting the correct note object.
+                    if action == 'Copy':
+                        tempNote = newNote
+                    elif action == 'Move':
+                        tempNote = sourceNote
+                    # Build the Node List for the tree control
+                    nodeList = (_('Series'), destEpisode.series_id, destEpisode.id, tempNote.id)
+                    # Add the Node to the Tree
+                    treeCtrl.add_Node('EpisodeNoteNode', nodeList, tempNote.number, tempNote.episode_num)
+
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        # Prepare an Add Episode Note message
+                        msg = "AEN Series >|< %s"
+                        # Convert the Node List to the form needed for messaging
+                        data = (nodeList[1],)
+                        for nd in nodeList[2:]:
+                            msg += " >|< %s"
+                            data += (nd, )
+                        # Send the message
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+    # Drop a Transcript Note on a new Transcript
+    elif (sourceData.nodetype == 'TranscriptNoteNode' and destNodeData.nodetype == 'TranscriptNode'):
+        # Load the Source Transcript Note
+        sourceNote = Note.Note(id_or_num=sourceData.recNum)
+        # Load the Source Transcript
+        sourceTranscript = Transcript.Transcript(sourceNote.transcript_num)
+        # Load the Source Episode
+        sourceEpisode = Episode.Episode(sourceTranscript.episode_num)
+        # Load the Destination Transcript
+        destTranscript = Transcript.Transcript(destNodeData.recNum)
+        # Load the Destination Episode
+        destEpisode = Episode.Episode(destTranscript.episode_num)
+        # Can't drop a note on it's own parent!
+        if sourceTranscript.number != destTranscript.number:
+            # Get user confirmation of the Note Copy/Move request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Note "%s" from\nTranscript "%s" to\nTranscript "%s"?'), 'utf8') % (copyMovePrompt, sourceNote.id, sourceTranscript.id, destTranscript.id)
+            else:
+                prompt = _('Do you want to %s Note "%s" from\nTranscript "%s" to\nTranscript "%s"?') % (copyMovePrompt, sourceNote.id, sourceTranscript.id, destTranscript.id)
+            # Display the prompt and get user input
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            # If the user says YES ...
+            if result == wx.ID_YES:
+                # Copy or Move the Note to the Destination Series
+                contin = True
+                # If copying ...
+                if action == 'Copy':
+                    # Make a duplicate of the note to be copied
+                    newNote = sourceNote.duplicate()
+                    # To place the copy in the destination Transcript, alter its Transcript Number
+                    newNote.transcript_num = destTranscript.number
+                # If moving ...
+                elif action == 'Move':
+                    # We need to trap Record Lock exceptions
+                    try:
+                        # Lock the Note Record to prevent other users from altering it simultaneously
+                        sourceNote.lock_record()
+                        # To move a Note, alter its Transcript Number
+                        sourceNote.transcript_num = destTranscript.number
+                    # If the record IS locked ...
+                    except TransanaExceptions.RecordLockedError, e:
+                        # Prepare the error message
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_('You cannot move Note "%s"') + \
+                                             _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
+                        else:
+                            prompt = _('You cannot move Note "%s"') + \
+                                     _('.\nThe record is currently locked by %s.\nPlease try again later.')
+                        # Display the error message
+                        errordlg = Dialogs.ErrorDialog(None, prompt % (sourceNote.id, e.user))
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                        # If an error arises, we do NOT continue!
+                        contin = False
+                # If no error has occurred yet ...
+                if contin:
+                    # If copying ...
+                    if action == 'Copy':
+                        # Begin exception handling to trap save errors
+                        try:
+                            # Save the new Note to the database.
+                            newNote.db_save()
+                        # If the Save fails ...
+                        except TransanaExceptions.SaveError, e:
+                            # Prepare the Error Message
+                            msg = _('A Note named "%s" already exists in Transcript "%s".')
+                            if 'unicode' in wx.PlatformInfo:
+                                msg = unicode(msg, 'utf8')
+                            # Display the error message
+                            errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destTranscript.id))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # If an error arises, we do NOT continue!
+                            contin = False
+                    # If moving ...
+                    elif action == 'Move':
+                        # Begin exception handling to trap save errors
+                        try:
+                            # Save the new Note to the database.
+                            sourceNote.db_save()
+                            # Remove the old Note from the Tree.
+                            # delete_Node needs to be able to climb the tree, so we need to build the Node List that
+                            # tells it what to delete.  Start with the sourceSeries.
+                            nodeList = (_('Series'), sourceEpisode.series_id, sourceEpisode.id, sourceTranscript.id, sourceNote.id)
+                            # Now request that the defined node be deleted.  (DeleteNode sends its own MU messages!
+                            treeCtrl.delete_Node(nodeList, 'TranscriptNoteNode')
+
+                        # If the Save fails ...
+                        except TransanaExceptions.SaveError, e:
+                            # Prepare the Error Message
+                            msg = _('A Note named "%s" already exists in Transcript "%s".')
+                            if 'unicode' in wx.PlatformInfo:
+                                msg = unicode(msg, 'utf8')
+                            # Display the error message
+                            errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destTranscript.id))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # If an error arises, we do NOT continue!
+                            contin = False
+                        # Unlock the Clip Record
+                        sourceNote.unlock_record()
+
+                        # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                        ClearClipboard()
+
+                # If no error has occurred yet ...
+                if contin:
+                    # We need to update the database tree and inform other copies of MU.
+                    # Start by getting the correct note object.
+                    if action == 'Copy':
+                        tempNote = newNote
+                    elif action == 'Move':
+                        tempNote = sourceNote
+                    # Build the Node List for the tree control
+                    nodeList = (_('Series'), destEpisode.series_id, destEpisode.id, destTranscript.id, tempNote.id)
+                    # Add the Node to the Tree
+                    treeCtrl.add_Node('TranscriptNoteNode', nodeList, tempNote.number, tempNote.transcript_num)
+
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        # Prepare an Add Transcript Note message
+                        msg = "ATN Series >|< %s"
+                        # Convert the Node List to the form needed for messaging
+                        data = (nodeList[1],)
+                        for nd in nodeList[2:]:
+                             msg += " >|< %s"
+                             data += (nd, )
+                        # Send the message
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+    # Drop a Collection Note on a new Collection
+    elif (sourceData.nodetype == 'CollectionNoteNode' and destNodeData.nodetype == 'CollectionNode'):
+        # Load the Source Collection Note
+        sourceNote = Note.Note(id_or_num=sourceData.recNum)
+        # Load the Source Collection
+        sourceCollection = Collection.Collection(sourceNote.collection_num)
+        # Load the Destination Collection
+        destCollection = Collection.Collection(destNodeData.recNum)
+        # Can't drop a note on it's own parent!
+        if sourceCollection.number != destCollection.number:
+            # Get user confirmation of the Note Copy/Move request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Note "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceNote.id, sourceCollection.GetNodeString(), destCollection.GetNodeString())
+            else:
+                prompt = _('Do you want to %s Note "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceNote.id, sourceCollection.GetNodeString(), destCollection.GetNodeString())
+            # Display the prompt and get user input
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            # If the user says YES ...
+            if result == wx.ID_YES:
+                # Copy or Move the Note to the Destination Series
+                contin = True
+                # If copying ...
+                if action == 'Copy':
+                    # Make a duplicate of the note to be copied
+                    newNote = sourceNote.duplicate()
+                    # To place the copy in the destination Collection, alter its Collection Number
+                    newNote.collection_num = destCollection.number
+                # If moving ...
+                elif action == 'Move':
+                    # We need to trap Record Lock exceptions
+                    try:
+                        # Lock the Note Record to prevent other users from altering it simultaneously
+                        sourceNote.lock_record()
+                        # To move a Note, alter its Collection Number
+                        sourceNote.collection_num = destCollection.number
+                    # If the record IS locked ...
+                    except TransanaExceptions.RecordLockedError, e:
+                        # Prepare the error message
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_('You cannot move Note "%s"') + \
+                                             _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
+                        else:
+                            prompt = _('You cannot move Note "%s"') + \
+                                     _('.\nThe record is currently locked by %s.\nPlease try again later.')
+                        # Display the error message
+                        errordlg = Dialogs.ErrorDialog(None, prompt % (sourceNote.id, e.user))
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                        # If an error arises, we do NOT continue!
+                        contin = False
+                # If no error has occurred yet ...
+                if contin:
+                    # If copying ...
+                    if action == 'Copy':
+                        # Begin exception handling to trap save errors
+                        try:
+                            # Save the new Note to the database.
+                            newNote.db_save()
+                        # If the Save fails ...
+                        except TransanaExceptions.SaveError, e:
+                            # Prepare the Error Message
+                            msg = _('A Note named "%s" already exists in Collection "%s".')
+                            if 'unicode' in wx.PlatformInfo:
+                                msg = unicode(msg, 'utf8')
+                            # Display the error message
+                            errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destCollection.GetNodeString()))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # If an error arises, we do NOT continue!
+                            contin = False
+                    # If moving ...
+                    elif action == 'Move':
+                        # Begin exception handling to trap save errors
+                        try:
+                            # Save the new Note to the database.
+                            sourceNote.db_save()
+                            # Remove the old Note from the Tree.
+                            # delete_Node needs to be able to climb the tree, so we need to build the Node List that
+                            # tells it what to delete.
+                            nodeList = (_('Collections'),) + sourceCollection.GetNodeData() + (sourceNote.id, )
+                            # Now request that the defined node be deleted.  (DeleteNode sends its own MU messages!
+                            treeCtrl.delete_Node(nodeList, 'CollectionNoteNode')
+                                 
+                        # If the Save fails ...
+                        except TransanaExceptions.SaveError, e:
+                            # Prepare the Error Message
+                            msg = _('A Note named "%s" already exists in Collection "%s".')
+                            if 'unicode' in wx.PlatformInfo:
+                                msg = unicode(msg, 'utf8')
+                            # Display the error message
+                            errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destCollection.GetNodeString()))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # If an error arises, we do NOT continue!
+                            contin = False
+                        # Unlock the Clip Record
+                        sourceNote.unlock_record()
+
+                        # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                        ClearClipboard()
+
+                # If no error has occurred yet ...
+                if contin:
+                    # We need to update the database tree and inform other copies of MU.
+                    # Start by getting the correct note object.
+                    if action == 'Copy':
+                        tempNote = newNote
+                    elif action == 'Move':
+                        tempNote = sourceNote
+                    # Build the Node List for the tree control
+                    nodeList = (_('Collections'),) + destCollection.GetNodeData() + (tempNote.id,)
+                    # Add the Node to the Tree
+                    treeCtrl.add_Node('CollectionNoteNode', nodeList, tempNote.number, tempNote.collection_num)
+
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        # Prepare an Add Collection Note message
+                        msg = "ACN Collections >|< %s"
+                        # Convert the Node List to the form needed for messaging
+                        data = (nodeList[1],)
+                        for nd in nodeList[2:]:
+                             msg += " >|< %s"
+                             data += (nd, )
+                        # Send the message
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+    # Drop a Clip Note on a new Clip
+    elif (sourceData.nodetype == 'ClipNoteNode' and destNodeData.nodetype == 'ClipNode'):
+        # Load the Source Clip Note
+        sourceNote = Note.Note(id_or_num=sourceData.recNum)
+        # Load the Source Clip
+        sourceClip = Clip.Clip(sourceNote.clip_num)
+        # Load the Destination Clip
+        destClip = Clip.Clip(destNodeData.recNum)
+        # Can't drop a note on it's own parent!
+        if sourceClip.number != destClip.number:
+            # Get user confirmation of the Note Copy/Move request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Note "%s" from\nClip "%s" to\nClip "%s"?'), 'utf8') % (copyMovePrompt, sourceNote.id, sourceClip.id, destClip.id)
+            else:
+                prompt = _('Do you want to %s Note "%s" from\nClip "%s" to\nClip "%s"?') % (copyMovePrompt, sourceNote.id, sourceClip.id, destClip.id)
+            # Display the prompt and get user input
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            # If the user says YES ...
+            if result == wx.ID_YES:
+                # Copy or Move the Note to the Destination Series
+                contin = True
+                # If copying ...
+                if action == 'Copy':
+                    # Make a duplicate of the note to be copied
+                    newNote = sourceNote.duplicate()
+                    # To place the copy in the destination Clip, alter its Clip Number
+                    newNote.clip_num = destClip.number
+                # If moving ...
+                elif action == 'Move':
+                    # We need to trap Record Lock exceptions
+                    try:
+                        # Lock the Note Record to prevent other users from altering it simultaneously
+                        sourceNote.lock_record()
+                        # To move a Note, alter its Clip Number
+                        sourceNote.clip_num = destClip.number
+                    # If the record IS locked ...
+                    except TransanaExceptions.RecordLockedError, e:
+                        # Prepare the error message
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_('You cannot move Note "%s"') + \
+                                             _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
+                        else:
+                            prompt = _('You cannot move Note "%s"') + \
+                                     _('.\nThe record is currently locked by %s.\nPlease try again later.')
+                        # Display the error message
+                        errordlg = Dialogs.ErrorDialog(None, prompt % (sourceNote.id, e.user))
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                        # If an error arises, we do NOT continue!
+                        contin = False
+                # If no error has occurred yet ...
+                if contin:
+                    # If copying ...
+                    if action == 'Copy':
+                        # Begin exception handling to trap save errors
+                        try:
+                            # Save the new Note to the database.
+                            newNote.db_save()
+                        # If the Save fails ...
+                        except TransanaExceptions.SaveError, e:
+                            # Prepare the Error Message
+                            msg = _('A Note named "%s" already exists in Clip "%s".')
+                            if 'unicode' in wx.PlatformInfo:
+                                msg = unicode(msg, 'utf8')
+                            # Display the error message
+                            errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destClip.id))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # If an error arises, we do NOT continue!
+                            contin = False
+                    # If moving ...
+                    elif action == 'Move':
+                        # Begin exception handling to trap save errors
+                        try:
+                            # Save the new Note to the database.
+                            sourceNote.db_save()
+                            # Remove the old Note from the Tree.
+                            # delete_Node needs to be able to climb the tree, so we need to build the Node List that
+                            # tells it what to delete.
+                            nodeList = (_('Collections'),) + sourceClip.GetNodeData() + (sourceNote.id, )
+                            # Now request that the defined node be deleted.  (DeleteNode sends its own MU messages!
+                            treeCtrl.delete_Node(nodeList, 'ClipNoteNode')
+                                 
+                        # If the Save fails ...
+                        except TransanaExceptions.SaveError, e:
+                            # Prepare the Error Message
+                            msg = _('A Note named "%s" already exists in Clip "%s".')
+                            if 'unicode' in wx.PlatformInfo:
+                                msg = unicode(msg, 'utf8')
+                            # Display the error message
+                            errordlg = Dialogs.ErrorDialog(None, msg % (sourceNote.id, destClip.id))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            # If an error arises, we do NOT continue!
+                            contin = False
+                        # Unlock the Clip Record
+                        sourceNote.unlock_record()
+
+                        # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                        ClearClipboard()
+
+                # If no error has occurred yet ...
+                if contin:
+                    # We need to update the database tree and inform other copies of MU.
+                    # Start by getting the correct note object.
+                    if action == 'Copy':
+                        tempNote = newNote
+                    elif action == 'Move':
+                        tempNote = sourceNote
+                    # Build the Node List for the tree control
+                    nodeList = (_('Collections'),) + destClip.GetNodeData() + (tempNote.id,)
+                    # Add the Node to the Tree
+                    treeCtrl.add_Node('ClipNoteNode', nodeList, tempNote.number, tempNote.collection_num)
+
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        # Prepare an Add Clip Note message
+                        msg = "AClN Collections >|< %s"
+                        # Convert the Node List to the form needed for messaging
+                        data = (nodeList[1],)
+                        for nd in nodeList[2:]:
+                             msg += " >|< %s"
+                             data += (nd, )
+                        # Send the message
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+    # Drop a SearchCollection on a SearchCollection (Nest a SearchCollection in another SearchCollection)
+    elif (sourceData.nodetype == 'SearchCollectionNode' and \
+          (destNodeData.nodetype == 'SearchCollectionNode' or destNodeData.nodetype == 'SearchResultsNode')):
+        # NOTE:  SearchCollections and SearchClips don't exist in the database.  Therefore, to copy or move them,
+        #        all we need to do is manipulate Database Tree Nodes
+
+        # First, check that we're not dragging a collection into a collection that's nested inside it.
+        # Determine the parent node
+        parentNode = treeCtrl.GetItemParent(destNode)
+        # Keep climbing the node tree while we have valid nodes
+        while parentNode.IsOk():
+            # Get the parent node's data
+            parentData = treeCtrl.GetPyData(parentNode)
+            # if the parent node matches the source node, we have an error condition
+            if (parentData.recNum == sourceData.recNum) and (parentData.nodetype == sourceData.nodetype):
+                # Create a prompt for the user
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_("You cannot nest a Collection in one of its nested collections."), 'utf8')
+                else:
+                    prompt = _("You cannot nest a Collection in one of its nested collections.")
+                # Display the Error Message
+                errordlg = Dialogs.ErrorDialog(None, prompt)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                # We need to exit this method.
+                return
+            # Get the next parent node, one level up
+            parentNode = treeCtrl.GetItemParent(parentNode)
+
+        # Get user confirmation of the Collection Copy request.
+        # First, set the names for use in the prompt.
+        sourceCollectionId = sourceData.text
+        destCollectionId = treeCtrl.GetItemText(destNode)
+        # If we're dropping on the Search Results Node ...
+        if destNodeData.nodetype == 'SearchResultsNode':
+            # Create a prompt for the user
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Search Results Collection "%s" \nto the main Search Results node "%s"?'), 'utf8') % (copyMovePrompt, sourceCollectionId, destCollectionId)
+            else:
+                prompt = _('Do you want to %s Search Results Collection "%s" \nto the main Search Results node "%s"?') % (copyMovePrompt, sourceCollectionId, destCollectionId)
+        # If we're dropping on a SearchCollectionNode ...
+        else:
+            # Create a prompt for the user
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Search Results Collection "%s" \nso it is nested in Search Results Collection "%s"?'), 'utf8') % (copyMovePrompt, sourceCollectionId, destCollectionId)
+            else:
+                prompt = _('Do you want to %s Search Results Collection "%s" \nso it is nested in Search Results Collection "%s"?') % (copyMovePrompt, sourceCollectionId, destCollectionId)
+        # Get user confirmation of the Collection Copy request
+        dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+        result = dlg.LocalShowModal()
+        dlg.Destroy()
+        # Process the results only if the user confirmed.
+        if result == wx.ID_YES:
+            # Let's get the Source SearchCollection.  However, we don't have direct access to the Source
+            # Node in all cases.  (We can get it in Drag and Drop, but not Cut and Paste.  I tried to pass the actual
+            # node in the SourceData, but that caused catastrophic program crashes.)
+            # This ALWAYS gets the correct Source Node.
+            sourceNode = treeCtrl.select_Node(sourceData.nodeList, sourceData.nodetype)
+
+            # Let's make sure there isn't already a Search Collection node with the SourceNode's name in the DestNode
+            # Get the Dest Collection's first Child Node
+            (childNode, cookieItem) = treeCtrl.GetFirstChild(destNode)
+            # Iterate through all the Source Collection's Child Nodes
+            while childNode.IsOk():
+                # Get the child node's data
+                childData = treeCtrl.GetPyData(childNode)
+                # If the nodetypes and item text match, we need an error message ...
+                if (childData.nodetype == sourceData.nodetype) and \
+                   (treeCtrl.GetItemText(childNode) == treeCtrl.GetItemText(sourceNode)):
+                    # Create a prompt for the user
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('A Collection named "%s" already exists.'), 'utf8') % treeCtrl.GetItemText(childNode)
+                    else:
+                        prompt = _('A Collection named "%s" already exists.') % treeCtrl.GetItemText(childNode)
+                    # Display the Error Message
+                    errordlg = Dialogs.ErrorDialog(None, prompt)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # We need to exit this method.
+                    return
+                # If we are not currently looking at the Dest Collection's LAST Child ...
+                if childNode != treeCtrl.GetLastChild(destNode):
+                    # ... then let's move on to the next Child record.
+                    (childNode, cookieItem) = treeCtrl.GetNextChild(destNode, cookieItem)
+                # Otherwise ...
+                else:
+                    # We've seen all there is to see, so stop iterating.
+                    break
+
+            # Build the node list for the destination collection!
+            # Start with the Destination Node name and build the node list up from the back
+            destNodeList = (treeCtrl.GetItemText(destNode), )
+            # Get the Destination Node's parent, and its node data
+            parentNode = treeCtrl.GetItemParent(destNode)
+            parentData = treeCtrl.GetPyData(parentNode)
+            # As long as we get valid parent nodes, up to the point where we reach the Search Root Node ...
+            while parentNode.IsOk() and \
+                  (parentData.nodetype != "SearchRootNode"):
+                # ... prepend the parent node's name to the node list ...
+                destNodeList = (treeCtrl.GetItemText(parentNode),) + destNodeList
+                # Get the Parent Node's parent, and its node data
+                parentNode = treeCtrl.GetItemParent(parentNode)
+                parentData = treeCtrl.GetPyData(parentNode)
+            # Finally, add the Search Root to the node list
+            destNodeList = (_('Search'),) + destNodeList
+
             # Now Add the new Node, using the SourceData's Data
-            treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, sourceData.recNum, sourceData.parent, False, insertPos=destNode)
             # No need to communicate with other Transana Clients here, we're just manipulating Search Results.
+
+            # If we're MOVING ...
+            if action == 'Move':
+                # .. then MOVE the node
+                treeCtrl.copy_Node(sourceData.nodetype, sourceData.nodeList, destNodeList, True, sendMessage=False)
+                # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                ClearClipboard()
+            # If we're COPYING ...
+            else:
+                # ... then COPY the node
+                treeCtrl.copy_Node(sourceData.nodetype, sourceData.nodeList, destNodeList, False, sendMessage=False)
+                
             # Select the Destination Collection as the tree's Selected Item
+            treeCtrl.UnselectAll()
             treeCtrl.SelectItem(destNode)
-   else:
-      # This code will only get called if a source/drop combination is defined in DragDropEvaluation()
-      # as a legal drop but is not defined here with the appropriate code to define what to do!
-      # Notify the user of the problem.  This should never be seen by the general public, but is intended for developers.
-      dlg = Dialogs.ErrorDialog(treeCtrl, 'Drop of %s on %s allowed by "DragDropEvaluation()" but not implemented in "ProcessPasteDrop()".' % (sourceData.nodetype, destNodeData.nodetype))
-      dlg.ShowModal()
-      dlg.Destroy()
+
+    # Drop a SearchClip on a SearchCollection (Copy or Move a SearchClip)
+    elif (sourceData.nodetype == 'SearchClipNode' and destNodeData.nodetype == 'SearchCollectionNode'):
+        # NOTE:  SearchClips don't exist in the database.  Therefore, to copy or move them,
+        #        all we need to do is manipulate Database Tree Nodes
+
+        # Get user confirmation of the Clip Copy/Move request.
+        # First, let's get the appropriate text for the confirmation prompt.
+        sourceClipId = sourceData.text
+        # The Source Collection is the second-to-last entry in the source Node List!
+        sourceCollectionId = sourceData.nodeList[-2]
+        destCollectionId = treeCtrl.GetItemText(destNode)
+        # Create the confirmation Dialog box
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Do you want to %s Search Results Clip "%s" from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?'), 'utf8') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
+        else:
+            prompt = _('Do you want to %s Search Results Clip "%s" from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
+        # Display the confirmation Dialog Box
+        dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+        result = dlg.LocalShowModal()
+        # Clean up after the confirmation Dialog box
+        dlg.Destroy()
+        # If the user confirmed, process the request.
+        if result == wx.ID_YES:
+            # Check for Duplicate Clip Name error
+            (dupResult, newClipName) = CheckForDuplicateClipName(sourceData.text, treeCtrl, destNode)
+            # If a Duplicate Clip Name exists that is not resolved within CheckForDuplicateClipNames ...
+            if dupResult:
+                # ... display the error message.
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Clip Name Error.'), 'utf8') % (copyMovePrompt, sourceData.text)
+                else:
+                    prompt = _('%s cancelled for Clip "%s".  Duplicate Clip Name Error.') % (copyMovePrompt, sourceData.text)
+                dlg = Dialogs.ErrorDialog(None, prompt)
+                dlg.ShowModal()
+                dlg.Destroy()
+            else:
+                # The user may have provided a new name for the Clip if it was a duplicate.
+                if newClipName != sourceData.text:
+                    # If so, use this new name.
+                    sourceData.text = newClipName
+
+                # What we need to do first is add the appropriate new Node to the Tree.
+                # Let's build the NodeList by starting with the Source Clip text ...
+                nodeList = (sourceData.text,)
+                # ... and then climbing the Destination Node Tree .... 
+                currentNode = destNode
+                # ... until we get to the SearchRootNode
+                while treeCtrl.GetPyData(currentNode).nodetype != 'SearchRootNode':
+                    # We add the Item Test to the FRONT of the Node List
+                    nodeList = (treeCtrl.GetItemText(currentNode),) + nodeList
+                    # and we move up to the node's parent
+                    currentNode = treeCtrl.GetItemParent(currentNode)
+                # Now Add the new Node, using the SourceData's Data
+                treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, sourceData.recNum, sourceData.parent, False)
+                # No need to communicate with other Transana Clients here, we're just manipulating Search Results.
+                # If we need to remove the node, the SourceData carries the nodeList we need to delete
+                if action == 'Move':
+                    treeCtrl.delete_Node(sourceData.nodeList, 'SearchClipNode')
+                    # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                    ClearClipboard()
+                # Select the Destination Collection as the tree's Selected Item
+                treeCtrl.SelectItem(destNode)
+
+    # Drop a SearchClip on a SearchClip (Copy or Move a SearchClip into a position in the SortOrder)
+    elif (sourceData.nodetype == 'SearchClipNode' and destNodeData.nodetype == 'SearchClipNode'):
+        # NOTE:  SearchClips don't exist in the database.  Therefore, to copy or move them,
+        #        all we need to do is manipulate Database Tree Nodes
+
+        # Set variables for the user Confirmation Prompt, if needed.
+        sourceClipId = sourceData.text
+        # The Source Collection is the second-to-last entry in the source Node List!
+        sourceCollectionId = sourceData.nodeList[-2]
+        destCollectionId = treeCtrl.GetItemText(treeCtrl.GetItemParent(destNode))
+
+        # Only prompt if we are copying/moving to a DIFFERENT collection, not the same one!
+        if (sourceCollectionId == destCollectionId) and \
+            (sourceData.parent == destNodeData.parent):
+            # This bypasses the prompt if both collection names and parents are the same
+            result = wx.ID_YES
+            # By definition, this MUST be a move, as we are altering Sort Order.
+            action = 'Move'
+            # We don't have to deal with duplicate Clip Names if changing a Clip's Sort Order.
+            # It IS a duplicate name, but we can ignore that.
+            dupResult = False
+        else:
+            # If we're dealing with different collections, prompt the user to confirm the copy/move.
+            # First, build the confirmation Dialog Box
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
+            else:
+                prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
+            # Display the Confirmation Dialog Box
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+            result = dlg.LocalShowModal()
+            # Clean up the Confirmation Dialog Box
+            dlg.Destroy()
+            # If the user confirmed ...
+            if result == wx.ID_YES:
+                # ... we need to check to see if this Clip is a Duplicate, giving the user a chance to resolve the problem.
+                (dupResult, newClipName) = CheckForDuplicateClipName(sourceData.text, treeCtrl, treeCtrl.GetItemParent(destNode))
+                # If the clip is no longer a duplicate and the user has changed the clip's name to resolve that ...
+                if (not dupResult) and (newClipName != sourceData.text):
+                   # ... use the new name.
+                   sourceData.text = newClipName
+
+        # If the user confirmed (or wasn't asked) ...
+        if result == wx.ID_YES:
+            # If we have a Duplicate Clip Name error ...
+            if dupResult:
+                # ... show the error message.
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Clip Name Error.'), 'utf8') % (copyMovePrompt, sourceData.text)
+                else:
+                    prompt = _('%s cancelled for Clip "%s".  Duplicate Clip Name Error.') % (copyMovePrompt, sourceData.text)
+                dlg = Dialogs.ErrorDialog(None, prompt)
+                dlg.ShowModal()
+                dlg.Destroy()
+            # If there's no Duplicate Clip Name Error ...
+            else:
+                # What we need to do first is add the appropriate new Node to the Tree.
+                # Let's build the NodeList by starting with the Source Clip text ...
+                nodeList = (sourceData.text,)
+                # ... and then climbing the Destination Node Tree  using the clip's Parent Collection .... 
+                currentNode = treeCtrl.GetItemParent(destNode)
+                # ... until we get to the SearchRootNode
+                while treeCtrl.GetPyData(currentNode).nodetype != 'SearchRootNode':
+                    # We add the Item Test to the FRONT of the Node List
+                    nodeList = (treeCtrl.GetItemText(currentNode),) + nodeList
+                    # and we move up to the node's parent
+                    currentNode = treeCtrl.GetItemParent(currentNode)
+
+                # If we need to remove the node, the SourceData carries the nodeList we need to delete.
+                # (We need to delete first so that the moved Clip in the same Collection doesn't get removed
+                # immediately after being added.)
+                if action == 'Move':
+                    treeCtrl.delete_Node(sourceData.nodeList, sourceData.nodetype)
+                    # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                    ClearClipboard()
+                # Now Add the new Node, using the SourceData's Data
+                treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, sourceData.recNum, sourceData.parent, False, insertPos=destNode)
+                # No need to communicate with other Transana Clients here, we're just manipulating Search Results.
+                # Select the Destination Collection as the tree's Selected Item
+                treeCtrl.SelectItem(destNode)
+    else:
+        # This code will only get called if a source/drop combination is defined in DragDropEvaluation()
+        # as a legal drop but is not defined here with the appropriate code to define what to do!
+        # Notify the user of the problem.  This should never be seen by the general public, but is intended for developers.
+        dlg = Dialogs.ErrorDialog(treeCtrl, 'Drop of %s on %s allowed by "DragDropEvaluation()" but not implemented in "ProcessPasteDrop()".' % (sourceData.nodetype, destNodeData.nodetype))
+        dlg.ShowModal()
+        dlg.Destroy()
 
 def ClearClipboard():
     """ If we Moved, we need to clear out the Clipboard.  We'll do this by putting an empty DataTreeDragDropData object into the Clipboard. """
@@ -2699,8 +2958,6 @@ def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollectio
                      # This must be untranslated to avoid problems in mixed-language environments.
                      # Prepend these on the Messsage
                      msg = "KeywordExampleNode >|< Keywords" + msg
-                     if DEBUG:
-                         print 'Message to send = "RN %s"' % msg
                      # Send the Rename Node message
                      if TransanaGlobal.chatWindow != None:
                          TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
@@ -2736,12 +2993,41 @@ def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollectio
                 for nd in nodeList[2:]:
                    msg += " >|< %s"
                    data += (nd, )
-
-                if DEBUG:
-                   print 'DragAndDropObjects.CopyMoveClip(Copy): Message to send =', msg % data
-                    
                 if TransanaGlobal.chatWindow != None:
                    TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+             # Now let's see if the clip had clip notes to copy!
+             clipNoteList = DBInterface.list_of_notes(Clip=sourceClip.number, includeNumber=True)
+             # For each note in the note list ...
+             for clipNote in clipNoteList:
+                 # Open a temporary copy of the note
+                 tmpNote = Note.Note(clipNote[0])
+                 # Duplicate the note (which automatically gives it an object number = 0)
+                 newNote = tmpNote.duplicate()
+                 # Assign the duplicate to the NEW clip
+                 newNote.clip_num = newClip.number
+                 # Save the new note
+                 newNote.db_save()
+                 # Add the new Note Node to the Tree
+                 treeCtrl.add_Node('ClipNoteNode', nodeList + (newNote.id,), newNote.number, newClip.number)
+
+                 # If the Notes Browser is open ...
+                 if treeCtrl.parent.ControlObject.NotesBrowserWindow != None:
+                     # ... Add the new note to the Notes Browser
+                     treeCtrl.parent.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('A', newNote)
+                
+                 # Now let's communicate with other Transana instances if we're in Multi-user mode
+                 if not TransanaConstants.singleUserVersion:
+                     # Prepare an Add Clip Note message
+                     msg = "AClN Collections >|< %s"
+                     # Convert the Node List to the form needed for messaging
+                     data = (nodeList[1],)
+                     for nd in (nodeList[2:] + (newNote.id,)):
+                          msg += " >|< %s"
+                          data += (nd, )
+                     # Send the message
+                     if TransanaGlobal.chatWindow != None:
+                         TransanaGlobal.chatWindow.SendMessage(msg % data)
 
              # When copying a Clip and setting its sort order, we need to keep working with the new clip
              # rather than the old one.  Having CopyClip return the new clip makes this easy.
@@ -2768,10 +3054,6 @@ def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollectio
                 for nd in nodeList[2:]:
                    msg += " >|< %s"
                    data += (nd, )
-
-                if DEBUG:
-                   print 'DragAndDropObjects.CopyMoveClip(Move): Message to send =', msg % data
-                    
                 if TransanaGlobal.chatWindow != None:
                    TransanaGlobal.chatWindow.SendMessage(msg % data)
 
@@ -2809,10 +3091,6 @@ def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
             msg = _('Clips in Collection "%s" are not in the desired order.') + '\n\n' + \
                   _('Transana could not change the sort order because you cannot obtain a lock on Clip "%s"') + \
                   _('.\nThe record is currently locked by %s.')
-
-        print "DragAndDropObjects.ChangeClipOrder():  Collection data:"
-        print sourceCollection
-        print
 
         dlg = Dialogs.ErrorDialog(None, msg % (sourceCollection.id, tmpClip.id, e.user))
         dlg.ShowModal()
@@ -2931,10 +3209,6 @@ def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
                     for nd in nodeList[2:]:
                         msg += " >|< %s"
                         data += (nd, )
-
-                    if DEBUG:
-                        print 'DragAndDropObjects.CreateClip(): Message to send =', msg % data
-                        
                     if TransanaGlobal.chatWindow != None:
                         TransanaGlobal.chatWindow.SendMessage(msg % data)
 
@@ -2948,7 +3222,7 @@ def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
 
     return allClipsLocked
 
-def CreateQuickClip(clipData, kwg, kw, dbTree):
+def CreateQuickClip(clipData, kwg, kw, dbTree, extraKeywords=[]):
     """ Create a "Quick Clip", which is the implementation of a simplified form of Clip Creation """
     # We need to error check to make sure we have a legal Clip spec
     if (clipData.clipStart >= clipData.clipStop) or (clipData.text == ""):
@@ -3051,13 +3325,15 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
                 quickClip.lock_record()
                 # Add the keyword to the Clip record
                 quickClip.add_keyword(kwg, kw)
+                # If there are extra keywords ...
+                for (kwg2, kw2) in extraKeywords:
+                    # ... add them to the quick clip
+                    quickClip.add_keyword(kwg2, kw2)
                 # Save the Clip Record
                 quickClip.db_save()
                 # Now let's communicate with other Transana instances if we're in Multi-user mode
                 if not TransanaConstants.singleUserVersion:
                     msg = 'Clip %d' % quickClip.number
-                    if DEBUG:
-                        print 'Message to send = "UKL %s"' % msg
                     if TransanaGlobal.chatWindow != None:
                         # Send the "Update Keyword List" message
                         TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
@@ -3067,9 +3343,6 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
                 # Even if this computer doesn't need to update the keyword visualization others, might need to.
                 if not TransanaConstants.singleUserVersion:
                     # We need to update the Episode Keyword Visualization
-                    if DEBUG:
-                        print 'Message to send = "UKV %s %s %s"' % ('Clip', quickClip.number, quickClip.episode_num)
-                        
                     if TransanaGlobal.chatWindow != None:
                         TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', quickClip.number, quickClip.episode_num))
 
@@ -3210,7 +3483,11 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
             quickClip.keyword_list = sourceEpisode.keyword_list
             # Add the keyword that initiated the Quick Clip
             quickClip.add_keyword(kwg, kw)
-            
+            # If there are extra keywords ...
+            for (kwg2, kw2) in extraKeywords:
+                # ... add them to the quick clip
+                quickClip.add_keyword(kwg2, kw2)
+
             # If we're in multi-user mode ...
             if not TransanaConstants.singleUserVersion:
                 if 'unicode' in wx.PlatformInfo:
@@ -3252,9 +3529,6 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
                 # Even if this computer doesn't need to update the keyword visualization others, might need to.
                 if not TransanaConstants.singleUserVersion:
                     # We need to update the Episode Keyword Visualization
-                    if DEBUG:
-                        print 'Message to send = "UKV %s %s %s"' % ('Clip', quickClip.number, quickClip.episode_num)
-                        
                     if TransanaGlobal.chatWindow != None:
                         TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', quickClip.number, quickClip.episode_num))
             # Process the SaveError.  This should ONLY occur in Demo Mode if the Clip Limit is exceeded.

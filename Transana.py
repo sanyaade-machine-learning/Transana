@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -57,6 +57,20 @@ class Transana(wx.App):
     
     def OnInit(self):
         """ Initialize the application """
+        # If we have a Workshop Version, see if the version is still valid, report to the user and exit if not.
+        # NOTE:  This code just provides a user message and clean exit.  Transana will still be disabled if this
+        # code is removed.  (This code is user-accessible on OS X!)
+        if TransanaConstants.workshopVersion:
+            import datetime
+            t1 = TransanaConstants.startdate
+            t2 = TransanaConstants.expirationdate
+            t3 = time.localtime()
+            t4 = datetime.datetime(t3[0], t3[1], t3[2], t3[3], t3[4])
+            if (t1 > t4) or (t2 < t4):
+                dlg = Dialogs.ErrorDialog(None, "This copy of Transana is no longer valid.")
+                dlg.ShowModal()
+                dlg.Destroy
+                return False
         # In wxPython, you used to be able to initialize the ConfigData object in the TransanaGlobal module, even though the
         # wx.App() hadn't been initialized yet.  Moving from wxPython 2.8.1 to wxPython 2.8.9, this stopped being true
         # at least on the Mac.  Therefore, we moved creation of the ConfigData object to here in the code.

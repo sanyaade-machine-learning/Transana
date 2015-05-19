@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -123,7 +123,7 @@ class Clip(DataObject.DataObject):
             str = str + '\nClip Transcript: %s from %s\n' % (tr.number, tr.source_transcript)
             str = str + '%s\n' % tr
         for kws in self.keyword_list:
-            str = str + "\nKeyword:  %s" % kws
+            str = str + "\nKeyword:  %s" % kws.keywordPair
         str = str + '\n'
         return str.encode('utf8')
         

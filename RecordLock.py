@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -67,6 +67,21 @@ class RecordLock(wx.Dialog):
         boxButtons.Add(self.btnClear, 0, wx.LEFT, 6)
         # Bind the OnClear event to the Clear button's press event
         self.btnClear.Bind(wx.EVT_BUTTON, self.OnClear)
+
+        # Add a spacer
+        boxButtons.Add((1, 1), 1, wx.EXPAND)
+
+        # Add an "Automatic Updates" checkbox
+        self.AutoUpdate = wx.CheckBox(self, -1, _("Update Automatically"))
+        # Add the checkbox to the Button sizer
+        boxButtons.Add(self.AutoUpdate, 0, wx.RIGHT, 6)
+        # Bind the AutoUpdate Checkbox to an event
+        self.AutoUpdate.Bind(wx.EVT_CHECKBOX, self.OnAutoUpdate)
+
+        # Add a Timer for automatic updating
+        self.AutoUpdateTimer = wx.Timer()
+        # Bind the Timer to the Update event
+        self.AutoUpdateTimer.Bind(wx.EVT_TIMER, self.OnUpdate)
         
         # Create a Sizer for Report data
         boxReport = wx.BoxSizer(wx.HORIZONTAL)
@@ -207,6 +222,18 @@ class RecordLock(wx.Dialog):
             # ... we'd better disable the "Unlock" button.
             self.btnUnlock.Enable(False)
         
+    def OnAutoUpdate(self, event):
+        """ Handle Auto Update Checkbox """
+        # If the checkbox is checked ...
+        if self.AutoUpdate.IsChecked():
+            # Call the Update event immediately
+            self.OnUpdate(event)
+            # Start the Timer so the Update will be called every 2.5 seconds
+            self.AutoUpdateTimer.Start(2500)
+        # if the checkbox is un-checked ...
+        else:
+            # ... stop the timer
+            self.AutoUpdateTimer.Stop()
 
     def OnUnlock(self, event):
         """ Unlock handler """
@@ -273,6 +300,12 @@ class RecordLock(wx.Dialog):
 
     def OnClear(self, event):
         """ Clear button handler """
+        # If the AutoUpdate Timer is running, ...
+        if self.AutoUpdateTimer.IsRunning():
+            # ... STOP it!
+            self.AutoUpdateTimer.Stop()
+            # Also, uncheck Auto Update!
+            self.AutoUpdate.SetValue(False)
         # Clear the list of Current Users
         self.userList.Clear()
         # If there's a Chat Window defined, we'll get the current users from there.

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -2993,8 +2993,12 @@ def UpdateDBFilenames(parent, filePath, fileList):
 
 def DeleteDatabase(username, password, server, database, port):
     """ Delete an entire database """
+    # Possible Result codes:
+    #   0  Database Deletion FAILED
+    #   1  Database Deletion SUCCEEDED
+    #   2  Database Deletion CANCELLED by user
     # Assume failure
-    res = False
+    res = 0
     try:
         # Connect to the MySQL Server without specifying a Database
         if TransanaConstants.singleUserVersion:
@@ -3036,7 +3040,15 @@ def DeleteDatabase(username, password, server, database, port):
                         # Close the Database Cursor
                         dbCursor.close()
                         # If we get this far, return True rather than False
-                        res = True
+                        res = 1
+                    # If user cancels ...
+                    else:
+                        # ... signal that the user said NO.
+                        res = 2
+                # If user cancels ...
+                else:
+                    # ... signal that the user said NO.
+                    res = 2
 
                     # Okay, this is weird.  If you drop a database, immediately quit transana, then
                     # shut down the database server (in multi-user mode), then the server 

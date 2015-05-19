@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -727,6 +727,21 @@ class ReportGenerator(wx.Object):
                             # Add Additional Media File info
                             for mediaFile in episodeObj.additional_media_files:
                                 reportText.InsertStyledText(_('       %s\n') % mediaFile['filename'])
+                        # If we're supposed to show the Episode Time data ...
+                        if self.showTime and (episodeObj.tape_length > 0):
+                            # Turn bold on.
+                            reportText.SetBold(True)
+                            # Add the header to the report
+                            reportText.InsertStyledText(_('Length:'))
+                            # Turn bold off.
+                            reportText.SetBold(False)
+                            # Add the data to the report, the Clip Length in this case
+                            reportText.InsertStyledText('  %s\n' % (Misc.time_in_ms_to_str(episodeObj.tape_length)))
+                            # Add the Episode's length to the Episode Total Time accumulator (Yeah, we're using clipTotalTime)
+                            self.clipTotalTime += episodeObj.tape_length
+                        # Increment the Episode Counter (Yeah, we're using clipCount)
+                        self.clipCount += 1
+                            
                                 
                     # if we are supposed to show Keywords ...
                     if self.showKeywords:
@@ -1038,12 +1053,21 @@ class ReportGenerator(wx.Object):
             reportText.InsertStyledText('\n')
             # If we're showing Clip Time data ...
             if self.showTime:
+                # Set the appropriate prompt for Episodes or Clips
+                if self.seriesName != None:
+                    prompt = _('  Episodes:  %8d                                      Total Time:  %s\n')
+                else:
+                    prompt = _('  Clips:  %8d                                         Total Time:  %s\n')
                 # Add the Clip Count and Total Time data to the report
-                reportText.InsertStyledText(_('  Clips:  %8d                                         Total Time:  %s\n') % (self.clipCount, Misc.time_in_ms_to_str(self.clipTotalTime)))
+                reportText.InsertStyledText(prompt % (self.clipCount, Misc.time_in_ms_to_str(self.clipTotalTime)))
             # if we're not showing Clip Time data ...
             else:
+                if self.seriesName != None:
+                    prompt = _('  Episodes:  %4d\n')
+                else:
+                    prompt = _('  Clips:  %4d\n')
                 # Add the Clip Count but NOT the Total Time data to the report
-                reportText.InsertStyledText(_('  Clips:  %4d\n') % self.clipCount)
+                reportText.InsertStyledText(prompt % self.clipCount)
             
         # Make the control read only, now that it's done
         reportText.SetReadOnly(True)
@@ -1190,7 +1214,7 @@ class ReportGenerator(wx.Object):
             dlgFilter = FilterDialog.FilterDialog(self.report, -1, self.title, reportType=10,
                                                   reportScope=tempSeries.number, loadDefault=loadDefault, configName=self.configName,
                                                   episodeFilter=True, keywordFilter=True, reportContents=True, showFile=self.showFile,
-                                                  showClipKeywords=self.showKeywords)
+                                                  showTime=self.showTime, showClipKeywords=self.showKeywords)
             # Populate the Filter Dialog with the Episode and Keyword Filter lists
             dlgFilter.SetEpisodes(self.filterList)
             dlgFilter.SetKeywords(self.keywordFilterList)
@@ -1220,6 +1244,7 @@ class ReportGenerator(wx.Object):
                 self.filterList = dlgFilter.GetEpisodes()
                 self.keywordFilterList = dlgFilter.GetKeywords()
                 self.showFile = dlgFilter.GetShowFile()
+                self.showTime = dlgFilter.GetShowTime()
                 self.showKeywords = dlgFilter.GetShowClipKeywords()
                 # Remember the configuration name for later reuse
                 self.configName = dlgFilter.configName

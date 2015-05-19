@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -322,7 +322,7 @@ class DataObject(object):
             # Verify record lock is still good
             if (self.number == 0) or \
                 ((self.record_lock == DBInterface.get_username()) and
-                ((DBInterface.ServerDateTime() - self.lock_time).days <= 1)):
+                ((self.lock_time == None) or ((DBInterface.ServerDateTime() - self.lock_time).days <= 1))):
                 # If record num is 0, this is a NEW record and needs to be
                 # INSERTed.  Otherwise, it is an existing record to be UPDATEd.
                 if (self.number == 0):

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -28,3 +28,5 @@ singleUserVersion = True
 labVersion = False
 # Set this flag to "True" to create the Demonstration version.  (But don't mix this with MU!)
 demoVersion = False
+# Indicate if this is the Workshop version.  (But don't mix this with MU or Lab!)
+workshopVersion = False

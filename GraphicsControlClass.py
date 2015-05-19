@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2009  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2010  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -60,6 +60,8 @@ __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
 import wx
 # import Python's os module
 import os
+# import Python's time module
+import time
 
 class GraphicsControl(wx.ScrolledWindow):
     """ Graphics Control Class implements a Graphic Control used for doing some
@@ -118,6 +120,8 @@ class GraphicsControl(wx.ScrolledWindow):
         # Initialize startTime and endTime
         self.startTime = 0.0
         self.endTime = 0.0  # Set it to duration only if in visualizationMode, see below
+        # keep track of the last time this image was drawn
+        self.lastUpdateTime = time.time()
         self.isDragging = False
         self.reSetSelection = False
         self.lastRedTop = 0
@@ -711,6 +715,13 @@ class GraphicsControl(wx.ScrolledWindow):
         # recreate a new selection based on timecodes
         self.reInitBuffer = True
 
+    def Redraw(self):
+        """ Re-draw the visualization immediately """
+        # Signal that the visualization needs to be redrawn
+        self.reInitBuffer = True
+        # Call the OnIdle method directly to force a re-draw immediately instead of waiting for idle time.
+        self.OnIdle(None)
+
     def OnIdle(self, event):
         """ Use Idle Time to redraw the Control """
         # Check the flag to see if the control needs to be redrawn
@@ -721,6 +732,8 @@ class GraphicsControl(wx.ScrolledWindow):
             self.InitBuffer()
             # Refresh the image
             self.Refresh(False)
+            # note the draw time
+            self.lastUpdateTime = time.time()
 
     def OnPaint(self, event):
         """ Repaint Event """

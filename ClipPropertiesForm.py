@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -69,6 +69,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
         self.parent = parent
         # Remember the original Clip Object passed in
         self.obj = clip_object
+        # Add a placeholder to the clip object for the merge clip number
+        self.obj.mergeNumber = 0
         # Remember the merge list, if one is passed in
         self.mergeList = mergeList
         # Initialize the merge item as unselected
@@ -77,6 +79,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
         # Then, when OK is pressed, the Keyword Example references in the Database Tree can be removed.
         # We can't remove them immediately in case the whole Clip Properties Edit process is cancelled.
         self.keywordExamplesToDelete = []
+        # Initialize a variable to hold merged keyword examples.
+        self.mergedKeywordExamples = []
 
         ######################################################
         # Tedious GUI layout code follows
@@ -231,8 +235,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
         lay.right.SameAs(self.panel, wx.Right, 10)        # 10 from right side
         lay.height.AsIs()
         # Convert to HH:MM:SS.mm
-        clip_length_edit = self.new_edit_box(_("Clip Length"), lay, Misc.time_in_ms_to_str(self.obj.clip_stop - self.obj.clip_start))
-        clip_length_edit.Enable(False)
+        self.clip_length_edit = self.new_edit_box(_("Clip Length"), lay, Misc.time_in_ms_to_str(self.obj.clip_stop - self.obj.clip_start))
+        self.clip_length_edit.Enable(False)
 
         # Comment layout
         lay = wx.LayoutConstraints()
@@ -369,7 +373,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
         lay.width.SameAs(txt, wx.Width)                # width same as label
         lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
         
-        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list)
+        self.kw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, self.kw_list, style=wx.LB_EXTENDED)
         self.kw_lb.SetConstraints(lay)
 
         wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnAddKW)
@@ -422,7 +426,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
         lay.bottom.SameAs(self.panel, wx.Height, 50)   # 50 from bottom
 
         # Create an empty ListBox
-        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize)
+        self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, style=wx.LB_EXTENDED)
         # Populate the ListBox
         # If we are loading a defined Clips (Clip.number != 0), use the Clips's keywords
         if self.obj.number != 0:
@@ -523,25 +527,35 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
     def OnAddKW(self, evt):
         """Invoked when the user activates the Add Keyword (>>) button."""
-        kw_name = self.kw_lb.GetStringSelection()
-        if not kw_name:
-            return
-        kwg_name = self.kw_group_lb.GetStringSelection()
-        if not kwg_name:
-            # This shouldn't really happen anymore though
-            return
-        ep_kw = "%s : %s" % (kwg_name, kw_name)
-        if self.ekw_lb.FindString(ep_kw) == -1:
-            self.obj.add_keyword(kwg_name, kw_name)
-            self.ekw_lb.Append(ep_kw)
-            
+        # For each selected Keyword ...
+        for item in self.kw_lb.GetSelections():
+            # ... get the keyword group name ...
+            kwg_name = self.kw_group_lb.GetStringSelection()
+            # ... get the keyword name ...
+            kw_name = self.kw_lb.GetString(item)
+            # ... build the kwg : kw combination ...
+            ep_kw = "%s : %s" % (kwg_name, kw_name)
+            # ... and if it's NOT already in the Episode Keywords list ...
+            if self.ekw_lb.FindString(ep_kw) == -1:
+                # ... add the keyword to the Episode object ...
+                self.obj.add_keyword(kwg_name, kw_name)
+                # ... and add it to the Episode Keywords list box
+                self.ekw_lb.Append(ep_kw)
         
     def OnRemoveKW(self, evt):
         """Invoked when the user activates the Remove Keyword (<<) button."""
-        sel = self.ekw_lb.GetSelection()
-        if sel > -1:
+        # Get the selection(s) from the Episode Keywords list box
+        kwitems = self.ekw_lb.GetSelections()
+        # The items are returned as an immutable tuple.  Convert this to a list.
+        kwitems = list(kwitems)
+        # Now sort the list.  For reasons that elude me, the list is arbitrarily ordered on the Mac, which causes
+        # deletes to be done out of order so the wrong elements get deleted, which is BAD.
+        kwitems.sort()
+        # We have to go through the list items BACKWARDS so that item numbers don't change on us as we delete items!
+        for item in range(len(kwitems), 0, -1):
+            sel = kwitems[item - 1]
             # Separate out the Keyword Group and the Keyword
-            kwlist = string.split(self.ekw_lb.GetStringSelection(), ':')
+            kwlist = string.split(self.ekw_lb.GetString(sel), ':')
             kwg = string.strip(kwlist[0])
             kw = ':'.join(kwlist[1:]).strip()
             # If the selected keyword is in the current clip object ...
@@ -646,6 +660,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
             self.clip_start = mergeClip.clip_start
             # The stop value comes from the original clip
             self.clip_stop_edit.SetValue(Misc.time_in_ms_to_str(self.obj.clip_stop))
+            # Update the Clip Length
+            self.clip_length_edit.SetValue(Misc.time_in_ms_to_str(self.obj.clip_stop - mergeClip.clip_start))
             # Update the merged clip Stop Time
             self.clip_stop = self.obj.clip_stop
             # For each of the original clip's Transcripts ...
@@ -687,6 +703,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
             self.clip_start = self.obj.clip_start
             # The stop value comes from the merge clip
             self.clip_stop_edit.SetValue(Misc.time_in_ms_to_str(mergeClip.clip_stop))
+            # Update the Clip Length
+            self.clip_length_edit.SetValue(Misc.time_in_ms_to_str(mergeClip.clip_stop - self.obj.clip_start))
             # Update the merged clip Stop Time
             self.clip_stop = mergeClip.clip_stop
             # For each of the original clip's Transcripts ...
@@ -720,6 +738,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
                 self.text_edit[x].load_timecodes()
                 # ... display the time codes
                 self.text_edit[x].show_codes()
+        # Remember the Merged Clip's Clip Number
+        self.obj.mergeNumber = mergeClip.number
         # Create a list object for merging the keywords
         kwList = []
         # Add all the original keywords
@@ -776,9 +796,10 @@ class ClipPropertiesForm(Dialogs.GenForm):
                         # In this situation, the user has merged a clip with a keyword example into a clip that
                         # already has that keyword, but it's not an example.  In this case, we need to tell OTHER
                         # copies of Transana to remove the OLD keyword example.  We don't need to do anything to
-                        # the local copy of the database tree, though.
+                        # the local copy of the database tree, though.  Include the Merge Clip Number, so the right
+                        # record gets deleted.
                         if not TransanaConstants.singleUserVersion:
-                            msg = "%s >|< %s >|< %s >|< %s >|< %s" % ("KeywordExampleNode", "Keywords", kwg, kw, self.mergeList[self.mergeItemIndex][1])
+                            msg = "%s >|< %s >|< %s >|< %s >|< %s >|< %s" % ("KeywordExampleNode", "Keywords", kwg, kw, self.mergeList[self.mergeItemIndex][1], self.obj.mergeNumber)
                             if TransanaGlobal.chatWindow != None:
                                 TransanaGlobal.chatWindow.SendMessage("DN %s" % msg)
                     # If the keyword isn't a merged example ...

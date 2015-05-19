@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -254,6 +254,9 @@ class ColorListCtrl(wx.Panel):
             # ... and de-select the item.  (You can't "check/uncheck" the selected item, so changing the "check"
             # back and forth without this was too hard.)
             self.SetItemState(itemNum, 0, wx.LIST_STATE_SELECTED)
+
+    def GetColumnWidth(self, colNum):
+        return self.lc.GetColumnWidth(colNum)
 
     def SetColumnWidth(self, colNum, width):
         """ Set a column's width in the ListCtrl.  (Gives our Panel ListCtrl functionality.) """

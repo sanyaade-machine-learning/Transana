@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -56,7 +56,7 @@ class Note(DataObject.DataObject):
         str = str + "clip_num = %s\n" % self.clip_num
         str = str + "author = %s\n" % self.author
         str = str + "text = %s\n\n" % self.text
-        return str
+        return str.encode('utf8')
 
 
 # Public methods
@@ -265,6 +265,12 @@ class Note(DataObject.DataObject):
 
         return result
 
+    def duplicate(self):
+        """ Duplicate a Note """
+        # Inherit the Dataobject duplicate method, which duplicates the note but strips the note number
+        newNote = DataObject.DataObject.duplicate(self)
+        # Return the duplicate note
+        return newNote
     
 # Private methods
 

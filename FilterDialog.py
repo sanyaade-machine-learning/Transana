@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -256,7 +256,10 @@ class FilterDialog(wx.Dialog):
                 self.showFile.SetValue(self.kwargs['showFile'])
                 pnlVSizer.Add(self.showFile, 0, wx.TOP | wx.LEFT, 10)
             if self.kwargs.has_key('showTime'):
-                self.showTime = wx.CheckBox(self.reportContentsPanel, -1, _("Show Clip Time"))
+                if self.reportType == 10:
+                    self.showTime = wx.CheckBox(self.reportContentsPanel, -1, _("Show Episode Length"))
+                else:
+                    self.showTime = wx.CheckBox(self.reportContentsPanel, -1, _("Show Clip Time"))
                 self.showTime.SetValue(self.kwargs['showTime'])
                 pnlVSizer.Add(self.showTime, 0, wx.TOP | wx.LEFT, 10)
             if self.kwargs.has_key('showClipTranscripts'):
@@ -1617,30 +1620,26 @@ class FilterDialog(wx.Dialog):
                         if (self.reportType in [12]) or ((self.reportType == 4) and (reportScope != 0)):
                             self.SaveFilterData(self.reportType, reportScope, configName, 101, self.showNestedData.IsChecked())
 
-                        # If we have an Episode Report (reportType 11), or
-                        # a Collection Report (reportType 12), 
-                        # Show Clip Time (FilterDataType 103),
-                        # Show Clip Transcripts (FilterDataType 104),
-                        # Show Comments (FilterDataType 106), and
-                        # Show Clip Notes (Filter Data Type 108)
-                        if self.reportType in [11, 12]:
-                            self.SaveFilterData(self.reportType, reportScope, configName, 103, self.showTime.IsChecked())
-                            self.SaveFilterData(self.reportType, reportScope, configName, 104, self.showClipTranscripts.IsChecked())
-                            self.SaveFilterData(self.reportType, reportScope, configName, 106, self.showComments.IsChecked())
-                            self.SaveFilterData(self.reportType, reportScope, configName, 108, self.showClipNotes.IsChecked())
-
                         # If we have a Series Report (reportType 10), or
                         # an Episode Report (reportType 11), or
                         # a Collection Report (reportType 12), 
                         # insert Show Media Filename Data (FilterDataType 102),
                         # Show Clip Time (FilterDataType 103),
-                        # Show Clip Transcripts (FilterDataType 104),
                         # Show Clip Keywords (FilterDataType 105),
-                        # Show Comments (FilterDataType 106), and
-                        # Show Clip Notes (Filter Data Type 108)
                         if self.reportType in [10, 11, 12]:
                             self.SaveFilterData(self.reportType, reportScope, configName, 102, self.showFile.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 103, self.showTime.IsChecked())
                             self.SaveFilterData(self.reportType, reportScope, configName, 105, self.showClipKeywords.IsChecked())
+
+                        # If we have an Episode Report (reportType 11), or
+                        # a Collection Report (reportType 12), 
+                        # Show Clip Transcripts (FilterDataType 104),
+                        # Show Comments (FilterDataType 106), and
+                        # Show Clip Notes (Filter Data Type 108)
+                        if self.reportType in [11, 12]:
+                            self.SaveFilterData(self.reportType, reportScope, configName, 104, self.showClipTranscripts.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 106, self.showComments.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 108, self.showClipNotes.IsChecked())
 
                          # If we have a Collection Report (reportType 12), 
                         # insert Show Collection Notes (Filter Data Type 107)
@@ -1990,10 +1989,26 @@ class FilterDialog(wx.Dialog):
             # If the item should be checked, check it!
             if checked:
                 self.episodeList.CheckItem(index)
-        # Set the column width for Episode IDs
+        # Column widths have proven more complicated than I'd like due to cross-platform differences.
+        # This formula seems to work pretty well.
+        # Set the column width for Episode IDs based on the Header
+        self.episodeList.SetColumnWidth(0, wx.LIST_AUTOSIZE_USEHEADER)
+        # Set the Column width for Series Data based on the Header
+        self.episodeList.SetColumnWidth(1, wx.LIST_AUTOSIZE_USEHEADER)
+        # Remember these widths
+        w11 = self.episodeList.GetColumnWidth(0) + 10
+        w12 = self.episodeList.GetColumnWidth(1) + 10
+        # Set the column width for Episode IDs based on the Data
         self.episodeList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
-        # Set the Column width for Series Data
+        # Set the Column width for Series Data based on the Data
         self.episodeList.SetColumnWidth(1, wx.LIST_AUTOSIZE)
+        # Remember these widths
+        w21 = self.episodeList.GetColumnWidth(0) + 10
+        w22 = self.episodeList.GetColumnWidth(1) + 10
+        # Set the proper column width for Episode IDs 
+        self.episodeList.SetColumnWidth(0, max(w11, w21, 100))
+        # Set the proper Column width for Series Data
+        self.episodeList.SetColumnWidth(1, max(w21, w22, 100))
         # lay out the Episode Panel
         self.episodesPanel.Layout()
         # Lay out the Dialog
@@ -2030,12 +2045,26 @@ class FilterDialog(wx.Dialog):
             # If the item should be checked, check it!
             if checked:
                 self.transcriptList.CheckItem(index)
-        # Set the column width for Episode IDs
+        # Column widths have proven more complicated than I'd like due to cross-platform differences.
+        # This formula seems to work pretty well.
+        # Set the column width for Episode IDs based on the Header
+        self.transcriptList.SetColumnWidth(0, wx.LIST_AUTOSIZE_USEHEADER)
+        # Set the Column width for Transcript Data based on the Header
+        self.transcriptList.SetColumnWidth(1, wx.LIST_AUTOSIZE_USEHEADER)
+        # Remember these widths
+        w11 = self.transcriptList.GetColumnWidth(0) + 10
+        w12 = self.transcriptList.GetColumnWidth(1) + 10
+        # Set the column width for Episode IDs based on the Data
         self.transcriptList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
-        # Set the Column width for Transcript Data
+        # Set the Column width for Transcript Data based on the Data
         self.transcriptList.SetColumnWidth(1, wx.LIST_AUTOSIZE)
-        # Set the Column with for Number of Clips Data
-        #self.transcriptList.SetColumnWith(2, wx.LIST_AUTOSIZE)
+        # Remember these widths
+        w21 = self.transcriptList.GetColumnWidth(0) + 10
+        w22 = self.transcriptList.GetColumnWidth(1) + 10
+        # Set the proper column width for Episode IDs 
+        self.transcriptList.SetColumnWidth(0, max(w11, w21, 100))
+        # Set the proper Column width for Transcript Data
+        self.transcriptList.SetColumnWidth(1, max(w21, w22, 100))
         # lay out the transcript Panel
         self.transcriptPanel.Layout()
         # Lay out the Dialog
@@ -2066,9 +2095,18 @@ class FilterDialog(wx.Dialog):
             # If the item should be checked, check it!
             if checked:
                 self.collectionList.CheckItem(index)
-        # Set the column width for Collection Name
+        # Column widths have proven more complicated than I'd like due to cross-platform differences.
+        # This formula seems to work pretty well.
+        # Set the column width for Collection Name based on the Header
+        self.collectionList.SetColumnWidth(0, wx.LIST_AUTOSIZE_USEHEADER)
+        # Remember these widths
+        w11 = self.collectionList.GetColumnWidth(0) + 10
+        # Set the column width for Collection Name based on the Data
         self.collectionList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
-        
+        # Remember these widths
+        w21 = self.collectionList.GetColumnWidth(0) + 10
+        # Set the proper column width for Collection Name
+        self.collectionList.SetColumnWidth(0, max(w11, w21, 100))
         # lay out the Collections Panel
         self.collectionPanel.Layout()
         # Lay out the Dialog
@@ -2105,10 +2143,26 @@ class FilterDialog(wx.Dialog):
             # If the item should be checked, check it!
             if checked:
                 self.clipList.CheckItem(index)
-        # Set the column width for Clip IDs
+        # Column widths have proven more complicated than I'd like due to cross-platform differences.
+        # This formula seems to work pretty well.
+        # Set the column width for Clip IDs based on the Header
+        self.clipList.SetColumnWidth(0, wx.LIST_AUTOSIZE_USEHEADER)
+        # Set the Column width for Collection Data based on the Header
+        self.clipList.SetColumnWidth(1, wx.LIST_AUTOSIZE_USEHEADER)
+        # Remember these widths
+        w11 = self.clipList.GetColumnWidth(0) + 10
+        w12 = self.clipList.GetColumnWidth(1) + 10
+        # Set the column width for Clip IDs based on the Data
         self.clipList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
-        # Set the Column width for Collection Data
+        # Set the Column width for Collection Data based on the Data
         self.clipList.SetColumnWidth(1, wx.LIST_AUTOSIZE)
+        # Remember these widths
+        w21 = self.clipList.GetColumnWidth(0) + 10
+        w22 = self.clipList.GetColumnWidth(1) + 10
+        # Set the proper column width for Clip IDs 
+        self.clipList.SetColumnWidth(0, max(w11, w21, 100))
+        # Set the proper Column width for Collection Data
+        self.clipList.SetColumnWidth(1, max(w21, w22, 100))
         # lay out the Clips Panel
         self.clipsPanel.Layout()
         # Lay out the Dialog
@@ -2150,8 +2204,18 @@ class FilterDialog(wx.Dialog):
                 self.keywordGroupList.CheckItem(index)
             # We store the color code in the ItemData!
             self.keywordGroupList.SetItemData(index, colorSpec)
-        # Set the column width for Keyword Groups
+        # Column widths have proven more complicated than I'd like due to cross-platform differences.
+        # This formula seems to work pretty well.
+        # Set the column width for Keyword Groups based on the Header
+        self.keywordGroupList.SetColumnWidth(0, wx.LIST_AUTOSIZE_USEHEADER)
+        # Remember these widths
+        w11 = self.keywordGroupList.GetColumnWidth(0) + 10
+        # Set the column width for Keyword Groups based on the Data
         self.keywordGroupList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
+        # Remember these widths
+        w21 = self.keywordGroupList.GetColumnWidth(0) + 10
+        # Set the proper column width for Keyword Groups 
+        self.keywordGroupList.SetColumnWidth(0, max(w11, w21, 100))
         # lay out the Keyword Groups Panel
         self.keywordGroupPanel.Layout()
         # Lay out the Dialog
@@ -2195,10 +2259,29 @@ class FilterDialog(wx.Dialog):
                 self.keywordList.CheckItem(index)
             # We store the color code in the ItemData!
             self.keywordList.SetItemData(index, colorSpec)
-        # Set the column width for Keyword Groups
+        # Column widths have proven more complicated than I'd like due to cross-platform differences.
+        # This formula seems to work pretty well.
+        # Set the column width for Keyword Groups based on the Header
+        self.keywordList.SetColumnWidth(0, wx.LIST_AUTOSIZE_USEHEADER)
+        # Set the Column width for Keywords based on the Header
+        self.keywordList.SetColumnWidth(1, wx.LIST_AUTOSIZE_USEHEADER)
+        # Remember these widths
+        w11 = self.keywordList.GetColumnWidth(0) + 10
+        w12 = self.keywordList.GetColumnWidth(1) + 10
+        # Set the column width for Keyword Groups based on the Data
         self.keywordList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
-        # Set the Column width for Keywords
+        # Set the Column width for Keywords based on the Data
         self.keywordList.SetColumnWidth(1, wx.LIST_AUTOSIZE)
+        self.keywordsPanel.Layout()
+        # Remember these widths
+        w21 = self.keywordList.GetColumnWidth(0) + 10
+        w22 = self.keywordList.GetColumnWidth(1) + 10
+        # Set the proper column width for Keyword Groups 
+        self.keywordList.SetColumnWidth(0, max(w11, w21, 100))
+        # Set the proper Column width for Keywords
+        self.keywordList.SetColumnWidth(1, max(w21, w22, 100))
+        # lay out the panel
+        self.keywordsPanel.Layout()
         # lay out the Keywords Panel
         self.keywordsPanel.Layout()
         # Lay out the Dialog
@@ -2247,10 +2330,26 @@ class FilterDialog(wx.Dialog):
                 self.notesList.CheckItem(index)
             # Add the note number to the note list's Item Data
             self.notesList.SetItemData(index, noteNum)
-        # Set the column widths for Note Name and Parent 
+        # Column widths have proven more complicated than I'd like due to cross-platform differences.
+        # This formula seems to work pretty well.
+        # Set the column width for Note Name based on the Header
+        self.notesList.SetColumnWidth(0, wx.LIST_AUTOSIZE_USEHEADER)
+        # Set the Column width for Note Parent based on the Header
+        self.notesList.SetColumnWidth(1, wx.LIST_AUTOSIZE_USEHEADER)
+        # Remember these widths
+        w11 = self.notesList.GetColumnWidth(0) + 10
+        w12 = self.notesList.GetColumnWidth(1) + 10
+        # Set the column width for Note Name based on the Data
         self.notesList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
+        # Set the Column width for Note Parent based on the Data
         self.notesList.SetColumnWidth(1, wx.LIST_AUTOSIZE)
-        
+        # Remember these widths
+        w21 = self.notesList.GetColumnWidth(0) + 10
+        w22 = self.notesList.GetColumnWidth(1) + 10
+        # Set the proper column width for Note Name 
+        self.notesList.SetColumnWidth(0, max(w11, w21, 100))
+        # Set the proper Column width for Note Parent
+        self.notesList.SetColumnWidth(1, max(w21, w22, 100))
         # lay out the Notes Panel
         self.notesPanel.Layout()
         # Lay out the Dialog
@@ -2648,13 +2747,13 @@ class FilterCopyConfigDialog(wx.Dialog):
         # For each column ...
         for x in range(maxCol):
             # Set the width to the widest item ...
-            self.choices.SetColumnWidth(x, wx.LIST_AUTOSIZE)
+            self.choices.SetColumnWidth(x, wx.LIST_AUTOSIZE_USEHEADER)
             colWidth1 = self.choices.GetColumnWidth(x)
             # Note that the column header might be wider than any item!
             self.choices.SetColumnWidth(x, wx.LIST_AUTOSIZE_USEHEADER)
             colWidth2 = self.choices.GetColumnWidth(x)
             # Pick the wider of the two, but then make the column just a little bit wider!
-            colWidth = max(colWidth1, colWidth2) + 5
+            colWidth = max(colWidth1, colWidth2) + 10
             # Set the column width to what we decided was appropriate
             self.choices.SetColumnWidth(x, colWidth)
             # Add that width to our total window width value

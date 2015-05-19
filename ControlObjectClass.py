@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -469,8 +469,8 @@ class ControlObject(object):
             # We need an adjustment for the Mac.  I don't know why exactly.  It might have to do with the height of the menu bar.
             if 'wxMac' in wx.PlatformInfo:
                 height += 20
-            # If there's only ONE Media Player ...
-            if len(self.VideoWindow.mediaPlayers) == 1:
+            # If there's only ONE Media Player AND AutoArrange is turned ON ...
+            if (len(self.VideoWindow.mediaPlayers) == 1) and TransanaGlobal.configData.autoArrange:
                 # ... the width from the Transcript may very well be incorrect.  Let's grab the width from the Visualization Window
                 (width, vh) = self.VisualizationWindow.GetSizeTuple()
             # Initialize a Window Counter
@@ -1553,8 +1553,10 @@ class ControlObject(object):
 
     def VideoSizeChange(self):
         """ Signal that the Video Size has been changed via the Options > Video menu """
-        # Resize the video window.  This will trigger changes in all the other windows as appropriate.
-        self.VideoWindow.OnSizeChange()
+        # If there is a media files loaded ...
+        if self.currentObj != None:
+            # ... resize the video window.  This will trigger changes in all the other windows as appropriate.
+            self.VideoWindow.OnSizeChange()
 
     def SaveTranscript(self, prompt=0, cleardoc=0, transcriptToSave=-1):
         """Save the Transcript to the database if modified.  If prompt=1,
@@ -1738,10 +1740,12 @@ class ControlObject(object):
 
     def CreateQuickClip(self):
         """ Trigger the creation of a Quick Clip from outside of the Database Tree """
-        # First, let's see if a Keyword is selected in the Database Tree.  That's required.
-        (nodeName, nodeRecNum, nodeParent, nodeType) = self.DataWindow.DBTab.GetSelectedNodeInfo()
-        # A Keyword MUST be selected, or we don't know what keyword to base the Quick Clip on
-        if nodeType == 'KeywordNode':
+
+        # Get the list of selected Nodes in the Database Tree
+        dbTreeSelections = self.DataWindow.DBTab.GetSelectedNodeInfo()
+
+        # The selection list must not be empty , and Keywords MUST be selected, or we don't know what keyword to base the Quick Clip on
+        if (len(dbTreeSelections) > 0) and (dbTreeSelections[0][3] == 'KeywordNode'):
             # Get the Transcript Selection information from the ControlObject, since we can't communicate with the
             # TranscriptEditor directly.
             (transcriptNum, startTime, endTime, text) = self.GetTranscriptSelectionInfo()
@@ -1769,21 +1773,29 @@ class ControlObject(object):
                     endTime = self.currentObj.clip_stop
             # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
             clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, videoCheckboxData=self.GetVideoCheckboxDataForClips(startTime))
+
+            # Let's assemble the keyword list
+            kwList = []
+            # For each selected node in the DB Tree ...
+            for selection in dbTreeSelections:
+                # ... get the Node information
+                (nodeName, nodeRecNum, nodeParent, nodeType) = selection
+                # ... and add the keyword info to the Keyword List
+                kwList.append((nodeParent, nodeName))
             # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
             # because drag and drop is an alternate way to create a Quick Clip.
-            DragAndDropObjects.CreateQuickClip(clipData, nodeParent, nodeName, self.DataWindow.DBTab.tree)
+            DragAndDropObjects.CreateQuickClip(clipData, kwList[0][0], kwList[0][1], self.DataWindow.DBTab.tree, extraKeywords = kwList[1:])
+
         # If there is something OTHER than a Keyword selected in the Database Tree ...
-        else:
-            # ... and if we're showing Quick Clip Warnings ...
-            if TransanaGlobal.configData.quickClipWarning:
-                # ... create an error message
-                msg = _("You must select a Keyword in the Data Tree to create a Quick Clip this way.")
-                if 'unicode' in wx.PlatformInfo:
-                    msg = unicode(msg, 'utf8')
-                # Display the error message and then clean up.
-                dlg = Dialogs.ErrorDialog(None, msg)
-                dlg.ShowModal()
-                dlg.Destroy()
+        elif (len(dbTreeSelections) > 0):
+            # ... create an error message
+            msg = _("You must select a Keyword in the Data Tree to create a Quick Clip this way.")
+            if 'unicode' in wx.PlatformInfo:
+                msg = unicode(msg, 'utf8')
+            # Display the error message and then clean up.
+            dlg = Dialogs.ErrorDialog(None, msg)
+            dlg.ShowModal()
+            dlg.Destroy()
 
     def ChangeLanguages(self):
         """ Update all screen components to reflect change in the selected program language """
@@ -1836,6 +1848,19 @@ class ControlObject(object):
             # We need to update the ChatWindow too
             self.ChatWindow.ChangeLanguages()
 
+    def AutoTimeCodeEnableTest(self):
+        """ Test to see if the Fixed-Increment Time Code menu item should be enabled """
+        # See if the transcript has some time codes.  If it does, we cannot enable the menu item.
+        return len(self.TranscriptWindow[self.activeTranscript].dlg.editor.timecodes) == 0
+        
+    def AutoTimeCode(self):
+        """ Add fixed-interval time codes to a transcript """
+        # Ask the Transcript Editor to handle AutoTimeCoding and let us know if it worked.
+        # "result" indicates whether the menu item needs to be disabled!
+        result = self.TranscriptWindow[self.activeTranscript].dlg.editor.AutoTimeCode()
+        # Return the function result obtained
+        return result
+        
     def AdjustIndexes(self, adjustmentAmount):
         """ Adjust Transcript Time Codes by the specified amount """
         self.TranscriptWindow[self.activeTranscript].AdjustIndexes(adjustmentAmount)

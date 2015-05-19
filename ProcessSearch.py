@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -135,10 +135,16 @@ class ProcessSearch(object):
                     nodeList = (_('Search'), searchName, tempSeries.id, tempEpisode.id)
                     # Find out what Transcripts exist for each Episode
                     transcriptList = DBInterface.list_transcripts(tempSeries.id, tempEpisode.id)
-                    # Add each Transcript to the Database Tree
-                    for (transcriptNum, transcriptID, episodeNum) in transcriptList:
-                        # Add the Transcript Node to the Tree.  
-                        self.dbTree.add_Node('SearchTranscriptNode', nodeList + (transcriptID,), transcriptNum, episodeNum)
+                    # If the Episode HAS defined transcripts ...
+                    if len(transcriptList) > 0:
+                        # Add each Transcript to the Database Tree
+                        for (transcriptNum, transcriptID, episodeNum) in transcriptList:
+                            # Add the Transcript Node to the Tree.  
+                            self.dbTree.add_Node('SearchTranscriptNode', nodeList + (transcriptID,), transcriptNum, episodeNum)
+                    # If the Episode has no transcripts, it still has the keywords and SHOULD be displayed!
+                    else:
+                        # Add the Transcript-less Episode Node to the Tree.  
+                        self.dbTree.add_Node('SearchEpisodeNode', nodeList, tempEpisode.number, tempSeries.number)
 
                 # Execute the Collection/Clip query
                 dbCursor.execute(collectionQuery, params)

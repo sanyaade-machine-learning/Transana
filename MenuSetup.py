@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -50,6 +50,7 @@ MENU_TRANSCRIPT_FONT            =  wx.NewId()
 MENU_TRANSCRIPT_PRINT           =  wx.NewId()
 MENU_TRANSCRIPT_PRINTERSETUP    =  wx.NewId()
 MENU_TRANSCRIPT_CHARACTERMAP    =  wx.NewId()
+MENU_TRANSCRIPT_AUTOTIMECODE    =  wx.NewId()
 MENU_TRANSCRIPT_ADJUSTINDEXES   =  wx.NewId()
 
 # Tools Menu
@@ -163,6 +164,7 @@ class MenuSetup(wx.MenuBar):
         #     with Unicode at this point.
         # Let's just disable it completely for now.
         # self.transcriptmenu.Append(MENU_TRANSCRIPT_CHARACTERMAP, _("&Character Map"))
+        self.transcriptmenu.Append(MENU_TRANSCRIPT_AUTOTIMECODE, _("F&ixed-Increment Time Codes"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_ADJUSTINDEXES, _("&Adjust Indexes"))
         self.Append(self.transcriptmenu, _("&Transcript"))
 

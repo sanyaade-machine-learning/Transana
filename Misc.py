@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2002 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2002 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -45,8 +45,12 @@ def dt_to_datestr(dt):
         s = ""
     return s
 
-def time_in_ms_to_str(time_in_ms):
+def time_in_ms_to_str(time_in_ms, extraPrecision=False):
     """ Return a string representation of Time in Milliseconds to H:MM:SS.s format """
+    # Note if our initial value is positive
+    isPositive = (time_in_ms >= 0)
+    # Use the abolute value of our initial value
+    time_in_ms = abs(time_in_ms)
     # determine the total number of seconds in the time value
     seconds = int(time_in_ms / 1000)
     # determine the number of hours in that number of seconds
@@ -55,9 +59,21 @@ def time_in_ms_to_str(time_in_ms):
     minutes = int(seconds / 60) - (hours * 60)
     # determine the number of seconds left after the hours and minutes have been removed
     seconds = seconds - (minutes * 60) - (hours * 3600)
-    # determine the number of milliseconds left after hours, minutes, and seconds have been removed,
-    # and round to the number of TENTHS of a second
-    tenthsofasecond = round((time_in_ms - (seconds * 1000) - (minutes * 60000) - (hours * 3600000)) / 100.0)
+    # determine the number of milliseconds left after hours, minutes, and seconds have been removed.
+    # If extra precision is called for ...
+    if extraPrecision:
+        # report thousandths of a second
+        tenthsofasecond = (time_in_ms - (seconds * 1000) - (minutes * 60000) - (hours * 3600000))
+        prompt = "%d:%02d:%02d.%03d"
+    # If normal precision is called for ...
+    else:
+        # round to the number of TENTHS of a second
+        tenthsofasecond = round((time_in_ms - (seconds * 1000) - (minutes * 60000) - (hours * 3600000)) / 100.0)
+        prompt = "%d:%02d:%02d.%d"
+    # If our original number was negative ...
+    if not isPositive:
+        # ... add the unary minus sign to the result
+        prompt = '-' + prompt
     # Adjust (round up) for values that are maxed out (These are unlikely, but this is necessary)
     if tenthsofasecond == 10:
         tenthsofasecond = 0
@@ -68,8 +84,9 @@ def time_in_ms_to_str(time_in_ms):
             if minutes == 60:
                 minutes = 0
                 hours = hours + 1
-    # Now build the final string.  "%02d" converts values to 2-character, 0-padded strings.
-    str = "%d:%02d:%02d.%d" % (hours, minutes, seconds, tenthsofasecond)
+    # Now build the final string.
+    str = prompt % (hours, minutes, seconds, tenthsofasecond)
+    # Return this as the result
     return str
 
 

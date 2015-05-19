@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -225,8 +225,8 @@ class XMLImport(Dialogs.GenForm):
                        # This error means we can't continue processing the file.
                        contin = False
                        break
-               # ignore blank lines
-               elif line == '':
+               # ignore blank lines, except in the Notes Text, where they represent blank lines!
+               elif (line == '') and (dataType != 'NoteText'):
                    pass
                # Code for Creating and Saving Objects
                elif line.upper() == '<SERIES>':
@@ -548,19 +548,29 @@ class XMLImport(Dialogs.GenForm):
                            elif objectType == 'Keyword':
                                 if 'unicode' in wx.PlatformInfo:
                                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                    prompt = unicode(_('The record is for Keyword "%s:%s".'), 'utf8')
+                                    prompt = unicode(_('The record is for Keyword "%s:%s".') + '  ', 'utf8')
+                                    # Explain about Keyword Definitions
+                                    prompt += '\n' + unicode(_('The Keyword Definition will not be updated, but the Database import will continue.'), 'utf8')
                                 else:
-                                    prompt = _('The record is for Keyword "%s:%s".')
+                                    prompt = _('The record is for Keyword "%s:%s".') + '  '
+                                    # Explain about Keyword Definitions
+                                    prompt += '\n' + unicode(_('The Keyword Definition will not be updated, but the Database import will continue.'), 'utf8')
                                 msg = msg + '\n' + prompt % (currentObj.keywordGroup, currentObj.keyword)
-                       if 'unicode' in wx.PlatformInfo:
-                           # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                           prompt = unicode(_('You need to correct this record in XML file %s.'), 'utf8')
-                           prompt2 = unicode(_('The %s record ends at line %d.'), 'utf8')
-                       else:
-                           prompt = _('You need to correct this record in XML file %s.')
-                           prompt2 = _('The %s record ends at line %d.')
-                       msg = msg + '\n' +  prompt % self.XMLFile.GetValue() + '\n' + \
-                                           prompt2 % (objectType, lineCount)
+                                # So the keyword already exists.  Let's continue the import anyway!  This is a minor issue.
+                                contin = True
+                       # If we're interrupting and cancelling the import ...
+                       if not contin:
+                           # ... we need to tell the user where to intervene.
+                           if 'unicode' in wx.PlatformInfo:
+                               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                               prompt = unicode(_('You need to correct this record in XML file %s.'), 'utf8')
+                               prompt2 = unicode(_('The %s record ends at line %d.'), 'utf8')
+                           else:
+                               prompt = _('You need to correct this record in XML file %s.')
+                               prompt2 = _('The %s record ends at line %d.')
+                           # Add the intervention information to the error message
+                           msg = msg + '\n' +  prompt % self.XMLFile.GetValue() + '\n' + \
+                                               prompt2 % (objectType, lineCount)
                        # Display our carefully crafted error message to the user.
                        errordlg = Dialogs.ErrorDialog(None, msg)
                        errordlg.ShowModal()
@@ -1192,7 +1202,21 @@ class XMLImport(Dialogs.GenForm):
            # Execute the COMMIT or ROLLBACK
            dbCursor.execute(SQLText)
            dbCursor.close()
-           
+
+       # Handle IO Errors
+       except IOError, e:
+           filename = self.XMLFile.GetValue()
+           if 'unicode' in wx.PlatformInfo:
+               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+               prompt = unicode(_('File "%s" was not found.  Try using the "Browse" button to locate your file.'), 'utf8')
+           else:
+               prompt = _('File "%s" was not found.  Try using the "Browse" button to locate your file.')
+           errordlg = Dialogs.ErrorDialog(self, prompt % filename)
+           errordlg.ShowModal()
+           errordlg.Destroy()
+           SQLText = 'ROLLBACK'
+           dbCursor.execute(SQLText)
+           dbCursor.close()
        except:
            if DEBUG:
                import traceback

@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -50,13 +50,6 @@ class AboutBox(wx.Dialog):
         title.SetFont(font)
         title.SetConstraints(lay)
 
-# This looks like crap.  Forget it for now.
-        # Load the Transana icon
-#        iconImage = wx.Image('images' + os.sep + 'Transana.ico', wx.BITMAP_TYPE_ICO).ConvertToBitmap()
-        # Display the Transana Icon on the screen
-#        icon = wx.StaticBitmap(dlg, -1, iconImage, pos=(40, 25), size=(iconImage.GetWidth(), iconImage.GetHeight()))
-#        icon2= wx.StaticBitmap(dlg, -1, iconImage, pos=(width - iconImage.GetWidth() - 40, 25), size=(iconImage.GetWidth(), iconImage.GetHeight()))
-        
         lay = wx.LayoutConstraints()
         lay.top.Below(title, 10)
         lay.centreX.SameAs(dlg, wx.CentreX)
@@ -71,7 +64,7 @@ class AboutBox(wx.Dialog):
         version.SetConstraints(lay)
 
         # Create a label for the Program Copyright
-        str = _("Copyright 2002-2009\nThe Board of Regents of the University of Wisconsin System")
+        str = _("Copyright 2002-2010\nThe Board of Regents of the University of Wisconsin System")
         lay = wx.LayoutConstraints()
         lay.top.Below(version, 10)
         lay.centreX.SameAs(dlg, wx.CentreX)

@@ -1,4 +1,4 @@
-# Copyright (C) 2006 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2006 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -36,18 +36,22 @@ import Dialogs
 # import the Transana Global data
 import TransanaGlobal
 
-CONTROL_PROGRESSNOTIFICATION = wx.NewId()
-
 # Declare the main VideoPlayer class, designed to interact with the rest of Transana
 class VideoPlayer(wx.Panel):
     """ Media Player Panel control for the Video Window.  This is based on wxMediaCtrl. """
         
-    def __init__(self, parent=None, pos=(30, 30), size=wx.Size(480, 420), includeCheckBoxes=False, offset=0, playerNum=-1):
+    def __init__(self, parent=None, pos=(30, 30), size=wx.Size(480, 420), includeCheckBoxes=False, offset=0, playerNum=-1, formPar=None):
         """ Initialize the Media Player Panel object """
-        # Create a Panel to hold the Media Player
-        wx.Panel.__init__(self, parent, -1, size=(358, 285))
-        # We need to know the Media Player Panel's parent window
+        # In some instances, because of the way sizers work (I think), we have to distinguish between the FORM's parent, which may be
+        # a Panel on form, and the CONTROL's parent, which has methods for handling changes in media position etc.
+        # If the FORM Parent does NOT differ from the CONTROL Parent ...
+        if formPar == None:
+            # ... then we can use the CONTROL parent as the Form Parent
+            formPar = parent
+        # We need to know the Media Player CONTROL's parent
         self.parent = parent
+        # Create a Panel to hold the Media Player, using the FORM parent
+        wx.Panel.__init__(self, formPar, -1, size=(358, 285))
         # Remember the includeCheckBoxes setting
         self.includeCheckBoxes = includeCheckBoxes
         # Remember the (optional) offset value
@@ -86,8 +90,9 @@ class VideoPlayer(wx.Panel):
         dc = wx.BufferedDC(wx.ClientDC(self), self.graphic)
 
         # Define timer for progress notification to other windows
-        self.ProgressNotification = wx.Timer(self, CONTROL_PROGRESSNOTIFICATION)
-        wx.EVT_TIMER(self, CONTROL_PROGRESSNOTIFICATION, self.OnProgressNotification)
+        timerID = wx.NewId()
+        self.ProgressNotification = wx.Timer(self, timerID)
+        wx.EVT_TIMER(self, timerID, self.OnProgressNotification)
 
         # set default back end to QuickTime, as then either type of media can be opened.  If we
         # set it to DirectShow for Windows, we can't later load Quicktime files
@@ -125,7 +130,7 @@ class VideoPlayer(wx.Panel):
         """ Create the actual Media Player component """
         # If the Progress Notification timer is running, STOP it!!
         self.ProgressNotification.Stop()
-
+        # Freeze the interface to speed up updates
         self.Freeze()
         
         # If there is a media player already defined ...
@@ -225,23 +230,18 @@ class VideoPlayer(wx.Panel):
             box.Add(hSizer, 0, wx.EXPAND)
         # Set the main sizer
         self.SetSizer(box)
-
+        # Re-bind the right-click-up event
         self.movie.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
-
+        # Thaw the interface when updates are complete
         self.Thaw()
         
         # Adjust the media player size to fit the window, now that it's been laid out.
         self.OnSize(None)
-        # There's no way to detect when the Media Player's control buttons are pressed!
-        # Therefore, we ALWAYS need the ProgressNotification loop running.
-        self.ProgressNotification.Start(UPDATE_PROGRESS_INTERVAL)
 
     def SetFilename(self, filename, offset=0):
         """ Load a file in a media player.  If an offset is passed, the video will be positioned to that offset. """
         # If a file name is specified
         if filename != '':
-            # hide the Transana graphic
-#            self.graphic.Show(False)
             # Show the media player control
             self.movie.Show(True)
             # If we're including check boxes ...
@@ -254,7 +254,7 @@ class VideoPlayer(wx.Panel):
                 # Break out the file extension
                 (videoFilename, videoExtension) = os.path.splitext(filename)
                 # If the extension is one that requires the QuickTime players ...
-                if videoExtension.lower() in ['.mov', '.mp4', '.m4v']:
+                if videoExtension.lower() in ['.mov', '.mp4', '.m4v', '.aac']:
                     # ... indicate we need the QuickTime back end
                     backendNeeded = wx.media.MEDIABACKEND_QUICKTIME
                 # If not QuickTime ...
@@ -377,21 +377,25 @@ class VideoPlayer(wx.Panel):
     
     def SetCurrentVideoPosition(self, TimeCode):
         """ Set the current video position. """
-        # TimeCode must be an int on the Mac.
-        if not isinstance(TimeCode, int):
-            TimeCode = int(TimeCode)
-        # On the Mac, the start point can't be less than 0
-        if TimeCode < self.offset:
-            TimeCode = 0
-        else:
-            TimeCode -= self.offset
-        # On the Mac, the start point can't be after the end.  A 5 ms adjustment (1/6 of a frame) is too small to be noticable.
-        if (self.mediaLengthKnown) and (TimeCode > self.GetMediaLength() - 5):
-            self.VideoStartPoint = self.GetMediaLength() - 5
-            TimeCode = self.GetMediaLength() - 5
-        # Find the appropriate spot in the media file
-        self.movie.Seek(TimeCode)
-
+        try:
+            # TimeCode must be an int on the Mac.
+            if not isinstance(TimeCode, int):
+                TimeCode = int(TimeCode)
+            # On the Mac, the start point can't be less than 0
+            if TimeCode < self.offset:
+                TimeCode = 0
+            else:
+                TimeCode -= self.offset
+            # On the Mac, the start point can't be after the end.  A 5 ms adjustment (1/6 of a frame) is too small to be noticable.
+            if (self.mediaLengthKnown) and (TimeCode > self.GetMediaLength() - 5):
+                self.VideoStartPoint = self.GetMediaLength() - 5
+                TimeCode = self.GetMediaLength() - 5
+            # Find the appropriate spot in the media file
+            self.movie.Seek(TimeCode)
+        # Trap the PyDeadObjectError, mostly during Play All Clips on PPC Mac
+        except wx._core.PyDeadObjectError, e:
+            pass
+    
     # NOTE:  GetPlayBackSpeed and SetPlayBackSpeed seem to disagree with each other by a factor of 10!!!!
     def GetPlayBackSpeed(self):
         """ Get the current Playback Speed """
@@ -459,15 +463,29 @@ class VideoPlayer(wx.Panel):
                 self.movie.SetPlaybackRate(self.Rate)
             else:
                 self.movie.Play()
+        # Start the Progress Notification timer when play starts
+        self.ProgressNotification.Start(UPDATE_PROGRESS_INTERVAL)
 
     def Pause(self):
         """Pause the video. (pause does not reposition the video)"""
+        # pause the media playback
         self.movie.Pause()
+        # Stop the progress notification times when playback pauses
+        self.ProgressNotification.Stop()
+        # Call OnProgressNotification ONCE to signal the stop (needed for Looping)
+        wx.CallAfter(self.OnProgressNotification, None)
 
     def Stop(self):
         """Stop the video. (stop playback and return position to Video Start Point)."""
+        # Stop the media playback
         self.movie.Stop()
+        # Stop the progress notification times when playback stops
+        self.ProgressNotification.Stop()
+        # Call OnProgressNotification ONCE to signal the stop (needed for Looping)
+        wx.CallAfter(self.OnProgressNotification, None)
+        # Reset the media position to the StartPoint
         self.SetCurrentVideoPosition(self.VideoStartPoint)
+        # Signal Transana that the position has changed.
         self.PostPos()
 
     def OnCloseWindow(self, event):
@@ -481,8 +499,6 @@ class VideoPlayer(wx.Panel):
         """ This event is triggered when media loading is complete.  Only then are certain things known about the media file. """
         # We can now know the media length
         self.mediaLengthKnown = True
-        # Putting this here allows the Media Player control to show up under QuickTime!
-        # self.movie.ShowPlayerControls(wx.media.MEDIACTRLPLAYERCONTROLS_DEFAULT | wx.media.MEDIACTRLPLAYERCONTROLS_VOLUME)
         # Once the video is loaded, we can determine its size and should react to that.
         self.parent.OnSizeChange()
         self.Update()
@@ -582,9 +598,21 @@ class VideoPlayer(wx.Panel):
         try:
             # We can't update the graphic's size if it's hidden, as that causes problems visually on the Mac.
             if self.movie and self.movie.IsShown():
+
+                # Force the media player to preserve Aspect Ratio
+                (sizex, sizey) = self.movie.GetBestSize()
+                # If the video HAS a width ...
+                if sizex > 0:
+                    # ... determine the original aspect ratio of the media file
+                    aspectRatio = float(sizey) / float(sizex)
+                    # Reset the height of the media player AND the media itself based on width and original aspect ratio
+                    self.SetSize((self.GetSize()[0], self.GetSize()[0] * aspectRatio))
+                    self.movie.SetSize((self.GetSize()[0], self.GetSize()[0] * aspectRatio))
+                    
                 # ... refresh the media player
                 self.movie.Refresh()
                 self.Refresh()
+        # Trap the PyDeadObjectError, mostly during Play All Clips on PPC Mac
         except wx._core.PyDeadObjectError:
             pass
 
@@ -601,49 +629,52 @@ class VideoPlayer(wx.Panel):
             wx.CallAfter(self.SetCurrentVideoPosition, self.movie.Length() - 1)
 
     def OnProgressNotification(self, event):
-        # Detect Play State Change and notify the VideoWindow.
-        # See if the playState has changed.
-        if self.playState != self.movie.GetState():
-            # If it has, communicate that to the VideoWindow.  The Mac doesn't seem to differentiate between
-            # Stop and Pause the say Windows does, so pass "Stopped" for either Stop or Pause.
-            if self.movie.GetState() != wx.media.MEDIASTATE_PLAYING:
-                if self.parent != None:
-                    self.parent.UpdatePlayState(wx.media.MEDIASTATE_STOPPED)
-            # Pass "Play" for play.
-            else:
-                if self.parent != None:
-                    self.parent.UpdatePlayState(wx.media.MEDIASTATE_PLAYING)
-            # Update the local playState variable
-            self.playState = self.movie.GetState()
-
-        # Take this opportunity to see if there are any waiting events.  Leaving this out has the unfortunate side effect
-        # of diabling the media player's control bar.
-        # There is sometimes a problem with recursive calls to Yield; trap the exception ...
         try:
+            # Detect Play State Change and notify the VideoWindow.
+            # See if the playState has changed.
+            if (self.movie != None) and (self.playState != self.movie.GetState()):
+                # If it has, communicate that to the VideoWindow.  The Mac doesn't seem to differentiate between
+                # Stop and Pause the say Windows does, so pass "Stopped" for either Stop or Pause.
+                if self.movie.GetState() != wx.media.MEDIASTATE_PLAYING:
+                    if self.parent != None:
+                        self.parent.UpdatePlayState(wx.media.MEDIASTATE_STOPPED)
+                # Pass "Play" for play.
+                else:
+                    if self.parent != None:
+                        self.parent.UpdatePlayState(wx.media.MEDIASTATE_PLAYING)
+                # Update the local playState variable
+                self.playState = self.movie.GetState()
+
+            # Take this opportunity to see if there are any waiting events.  Leaving this out has the unfortunate side effect
+            # of diabling the media player's control bar.
+            # There is sometimes a problem with recursive calls to Yield; trap the exception ...
             wx.YieldIfNeeded()
-        # ... and ignore it!
-        except:
-            pass
 
-        # We need to trap PyDeadObjectErrors here
-        try:
             # The timer that calls this routine runs whether the video is playing or not.  We only need to think
             # about updating the rest of Transana if the video is playing.
             if self.IsPlaying():
                 self.PostPos()
-        except wx._core.PyDeadObjectError:
+        # Trap the PyDeadObjectError, mostly during Play All Clips on PPC Mac
+        except wx._core.PyDeadObjectError, e:
+            pass
+        # ... and ignore it!
+        except:
             pass
 
     def PostPos(self):
         """ Inform other elements of the current video position """
-        # If we are not shutting down Transana (to avoid a crash) ...
-        if (self.parent != None) and (self.parent.ControlObject != None) and (not self.parent.ControlObject.shuttingDown):
-            tc = self.GetTimecode()
-            if self.playerNum == -1:
-                # ... then update the parent (Video Window)'s Video Position with the current time code
-                self.parent.UpdateVideoPosition(tc)
-            else:
-                self.parent.UpdateVideoPosition(tc, self.playerNum)
+        try:
+            # If we are not shutting down Transana (to avoid a crash) ...
+            if (self.parent != None) and (self.parent.ControlObject != None) and (not self.parent.ControlObject.shuttingDown):
+                tc = self.GetTimecode()
+                if self.playerNum == -1:
+                    # ... then update the parent (Video Window)'s Video Position with the current time code
+                    self.parent.UpdateVideoPosition(tc)
+                else:
+                    self.parent.UpdateVideoPosition(tc, self.playerNum)
+        # Trap the PyDeadObjectError, mostly during Play All Clips on PPC Mac
+        except wx._core.PyDeadObjectError, e:
+            pass
 
     def OnIncludeCheck(self, event):
         """ Event handler for the includeInClip Checkbox """

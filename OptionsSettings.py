@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -545,6 +545,18 @@ class OptionsSettings(wx.Dialog):
         #   2 = Message Server tab, if MU
         if tabToShow != notebook.GetSelection():
             notebook.SetSelection(tabToShow)
+        # If the Directories Tab is showing ...
+        if notebook.GetSelection() == 0:
+            # ... the video directory should receive initial focus
+            self.videoDirectory.SetFocus()
+        # If the Transcriber Settings tab is showing ...
+        elif notebook.GetSelection() == 1:
+            # ... the Transcription Setback slider should receive focus
+            self.transcriptionSetback.SetFocus()
+        # If the Message Server tab is showing ...
+        elif notebook.GetSelection() == 2:
+            # ... the Message Server field should recieve initial focus
+            self.messageServer.SetFocus()
 
         # Define the buttons on the bottom of the form
         # Define the "OK" Button
@@ -578,6 +590,9 @@ class OptionsSettings(wx.Dialog):
         wx.EVT_BUTTON(self, btnOK.GetId(), self.OnOK)
         wx.EVT_BUTTON(self, btnCancel.GetId(), self.OnCancel)
         wx.EVT_BUTTON(self, btnHelp.GetId(), self.OnHelp)
+
+        # Bind the notebook page change event
+        notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.OnPageChange)
 
         # Lay out the Window, and tell it to Auto Layout
         self.Layout()
@@ -751,3 +766,20 @@ class OptionsSettings(wx.Dialog):
         """ Handle the Scroll Event for the Video Speed Slider. """
         # Update the Current Video Speed Label
         self.lblVideoSpeedSetting.SetLabel("%1.1f" % (float(self.videoSpeed.GetValue()) / 10))
+
+    def OnPageChange(self, event):
+        """ Notebook page change event """
+        # Call the parent page change method so the tab is drawn
+        event.Skip()
+        # If the Directories tab is showing ...
+        if event.GetSelection() == 0:
+            # ... the Video Root should recieve focus
+            wx.CallAfter(self.videoDirectory.SetFocus)
+        # If the Transcriber Settings tab is showing ...
+        elif event.GetSelection() == 1:
+            # ... the Transcription Setback slider should receive focus
+            wx.CallAfter(self.transcriptionSetback.SetFocus)
+        # If the Message Server tab is showing ...
+        elif event.GetSelection() == 2:
+            # ... the Message Server should receive focus
+            wx.CallAfter(self.messageServer.SetFocus)

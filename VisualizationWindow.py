@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -384,12 +384,12 @@ class VisualizationWindow(wx.Dialog):
                         #     that indicates if that waveform should be shown 
                         self.waveFilename[x]['Show'] = checkboxData[x][1]
                     # Create the waveform graphic
-                    waveformGraphicImage = WaveformGraphic.WaveformGraphicCreate(self.waveFilename, ':memory:', start, length, self.waveform.canvassize)
+                    waveformGraphicImage = WaveformGraphic.WaveformGraphicCreate(self.waveFilename, ':memory:', start, length, self.waveform.canvassize, style='waveform')
                     # If a waveform graphic was created ...
                     if waveformGraphicImage != None:
                         # ... clear the waveform
                         self.waveform.Clear()
-                        # ... and set the image as teh waveform background
+                        # ... and set the image as the waveform background
                         self.waveform.SetBackgroundGraphic(waveformGraphicImage)
                         # Determine NEW Frame Size
                         (width, height) = self.GetSize()
@@ -811,9 +811,12 @@ class VisualizationWindow(wx.Dialog):
         # If a data object is currently loaded ...
         if self.ControlObject.currentObj != None:
             # If no selection endpoint is defined ...
-            if self.endPoint == 0:
+            if self.endPoint <= 0:
                 # ... then set the endpoint for the earlier of the media end (episode or clip end) or 5 seconds from start
                 self.endPoint = min(self.zoomInfo[0][1], self.startPoint + 5000)
+                # Now check for self.zoomInfo[0][1] having been zero, which would be a problem!
+                if self.endPoint == 0:
+                    self.endPoint = self.startPoint + 5000
                 # Set the video selection to include this new end point
                 self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
             # Signal the Control Object to start or stop looped playback

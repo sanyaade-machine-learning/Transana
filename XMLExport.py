@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2010 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -859,11 +859,11 @@ class XMLExport(Dialogs.GenForm):
             # If note text is found ...
             if NoteText != None:
                 # ... add it to the output file ...
-                f.write('        %s\n' % NoteText.encode(EXPORT_ENCODING))
+                f.write('%s\n' % NoteText.encode(EXPORT_ENCODING))
             # ... but if NO note text is found ...
             else:
                 # ... explicitly note that!  (This was crashing the export/import process.)
-                f.write('        %s\n' % _('(No Note Text found.)').encode(EXPORT_ENCODING))
+                f.write('%s\n' % _('(No Note Text found.)').encode(EXPORT_ENCODING))
             f.write('      </NoteText>\n')
         f.write('    </Note>\n')
 
