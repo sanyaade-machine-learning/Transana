@@ -34,6 +34,8 @@ import MySQLdb
 import GraphicsControlClass
 # Load the Printout Class
 from KeywordMapPrintoutClass import MyPrintout
+# Load the Collection object
+import Collection
 # Import Transana's Database Interface
 import DBInterface
 # Import Transana's Dialogs
@@ -117,6 +119,9 @@ class KeywordMap(wx.Frame):
             # SetupEmbedded() with Setup().
         # Initialize EpisodeNum
         self.episodeNum = None
+        # Initialize CollectionNum and the collection object
+        self.collectionNum = None
+        self.collection = None
         # Initialize Media File to nothing
         self.MediaFile = ''
         # Initialize Media Length to 0
@@ -145,6 +150,8 @@ class KeywordMap(wx.Frame):
             # We default to Color Output.  When this was configurable, if a new Map was
             # created in B & W, the colors never worked right afterwards.
             self.colorOutput = True
+            # Get the colorAsKeyword value
+            self.colorAsKeywords = TransanaGlobal.configData.colorAsKeywords
         else:
             # Get the Configuration values for the Keyword Visualization Options
             self.barHeight = TransanaGlobal.configData.keywordVisualizationBarHeight
@@ -153,12 +160,14 @@ class KeywordMap(wx.Frame):
             self.vGridLines = TransanaGlobal.configData.keywordVisualizationVerticalGridLines
             self.colorOutput = True
 
-    def Setup(self, episodeNum, seriesName, episodeName):
-        """ Complete initialization for the free-standing Keyword Map, not the embedded version. """
+    def Setup(self, episodeNum=None, seriesName='', episodeName='', collNum=None):
+        """ Complete initialization for the free-standing Keyword Map or Collection Keyword Map, not the embedded version. """
         # Remember the appropriate Episode information
         self.episodeNum = episodeNum
         self.seriesName = seriesName
         self.episodeName = episodeName
+        # Remember the appropriate Collection information
+        self.collectionNum = collNum
         # indicate that we're not working from a Clip.  (The Keyword Map is never Clip-based.)
         self.clipNum = None
         # You can't have a separate menu on the Mac, so we'll use a Toolbar
@@ -194,7 +203,10 @@ class KeywordMap(wx.Frame):
             self.menuFile.Enable(M_FILE_PRINTPREVIEW, False)
             self.menuFile.Append(M_FILE_PRINT, _("&Print"), _("Send your output to the Printer")) # Add "Print" to the File Menu
             self.menuFile.Enable(M_FILE_PRINT, False)
-            self.menuFile.Append(M_FILE_EXIT, _("E&xit"), _("Exit the Keyword Map program")) # Add "Exit" to the File Menu
+            if self.collectionNum == None:
+                self.menuFile.Append(M_FILE_EXIT, _("E&xit"), _("Exit the Keyword Map program")) # Add "Exit" to the File Menu
+            else:
+                self.menuFile.Append(M_FILE_EXIT, _("E&xit"), _("Exit the Collection Keyword Map program")) # Add "Exit" to the File Menu
             menuBar.Append(self.menuFile, _('&File'))                                     # Add the File Menu to the Menu Bar
             self.menuHelp = wx.Menu()
             self.menuHelp.Append(M_HELP_HELP, _("&Help"), _("Help"))
@@ -218,8 +230,10 @@ class KeywordMap(wx.Frame):
 
         # Determine the window boundaries
         (w, h) = self.GetClientSizeTuple()
-        if (self.seriesName != '') and (self.episodeName != ''):
+        # If not embedded ...
+        if ((self.seriesName != '') and (self.episodeName != '')) or (self.collectionNum != None):
             self.Bounds = (5, 5, w - 10, h - 25)
+        # If embedded ...
         else:
             self.Bounds = (5, 40, w - 10, h - 30)
 
@@ -247,18 +261,37 @@ class KeywordMap(wx.Frame):
 
         # Center on the screen
         self.CenterOnScreen()
-        # Show the Frame
-        self.Show(True)
 
+        # If we have a Series name and Episode Name, we are doing a Keyword Map
         if (self.seriesName != '') and (self.episodeName != ''):
             # Clear the drawing
             self.filteredKeywordList = []
             self.unfilteredKeywordList = []
             # Populate the drawing
             self.ProcessEpisode()
+            # We need to draw the graph before we set the Default filter
+            self.DrawGraph()
             # Trigger the load of the Default filter, if one exists.  An event of None signals we're loading the
             # Default config, and the OnFilter method will handle drawing the graph!
             self.OnFilter(None)
+
+        # If we have a Collection Number, we're doing a Collection Keyword Map
+        elif self.collectionNum != None:
+            # Create a collection object
+            self.collection = Collection.Collection(self.collectionNum)
+            # Clear the drawing
+            self.filteredKeywordList = []
+            self.unfilteredKeywordList = []
+            # Populate the drawing
+            self.ProcessCollection()
+            # We need to draw the graph before we set the Default filter
+            self.DrawGraph()
+            # Trigger the load of the Default filter, if one exists.  An event of None signals we're loading the
+            # Default config, and the OnFilter method will handle drawing the graph!
+            self.OnFilter(None)
+
+        # Show the Frame
+        self.Show(True)
 
     def SetupEmbedded(self, episodeNum, seriesName, episodeName, startTime, endTime, filteredKeywordList=[],
                       unfilteredKeywordList = [], keywordColors = None, clipNum=None, configName='', loadDefault=False):
@@ -292,7 +325,7 @@ class KeywordMap(wx.Frame):
                 self.keywordColors = keywordColors
             # Populate the drawing
             self.ProcessEpisode()
-            # Unlike the standard Setup, the embedded Setup requires that we draw the graph before we set the Default filter
+            # We nedd to draw the graph before we set the Default filter
             self.DrawGraph()
             # If we need to load the Default Configuration ...
             if loadDefault:
@@ -314,21 +347,31 @@ class KeywordMap(wx.Frame):
         if not self.embedded:
             # For the keyword map, the form created here is the parent
             parent = self
-            title = unicode(_("Keyword Map Filter Dialog"), 'utf8')
+            # If we don't have a Collection Keyword Map ...
+            if self.collectionNum == None:
+                # Set and encode the dialog title
+                title = unicode(_("Keyword Map Filter Dialog"), 'utf8')
+                # reportType=1 indicates it is for a Keyword Map.  
+                reportType = 1
+                reportScope = self.episodeNum
+            else:
+                # Set and encode the dialog title
+                title = unicode(_("Collection Keyword Map Filter Dialog"), 'utf8')
+                # reportType=16 indicates it is for a Collection Keyword Map.  
+                reportType = 16
+                reportScope = self.collectionNum
             # Keyword Map wants the Clip Filter
             clipFilter = True
-            # Keyword map does not support Keyword Color customization.  (Colors represent Clips!)
-            keywordColors = False
+            # Keyword Map and Collection Keyword Map now support Keyword Color customization, at least sometimes
+            keywordColors = True
             # We want the Options tab
             options = True
-            # reportType=1 indicates it is for a Keyword Map.  
-            reportType = 1
             # Create a Filter Dialog, passing all the necessary parameters.
             dlgFilter = FilterDialog.FilterDialog(parent, -1, title, reportType=reportType, loadDefault=loadDefault, configName=self.configName,
-                                                  reportScope=self.episodeNum, clipFilter=clipFilter, keywordFilter=True, keywordSort=True,
+                                                  reportScope=reportScope, clipFilter=clipFilter, keywordFilter=True, keywordSort=True,
                                                   keywordColor=keywordColors, options=options, startTime=self.startTime, endTime=self.endTime,
                                                   barHeight=self.barHeight, whitespace=self.whitespaceHeight, hGridLines=self.hGridLines,
-                                                  vGridLines=self.vGridLines, colorOutput=self.colorOutput)
+                                                  vGridLines=self.vGridLines, colorOutput=self.colorOutput, colorAsKeywords=self.colorAsKeywords)
         else:
             # For the keyword visualization, the parent that was passed in on initialization is the parent
             parent = self.parent
@@ -450,13 +493,17 @@ class KeywordMap(wx.Frame):
                         # Get the colorOutput value from the dialog IF we're in the Keyword Map
                         self.colorOutput = dlgFilter.GetColorOutput()
 
+                        # Get the colorAsKeywords value from the dialog IF we're in the Keyword Map
+                        self.colorAsKeywords = dlgFilter.GetColorAsKeywords()
+
                     # Get the Bar Height and Whitespace Height for both versions of the Keyword Map
                     self.barHeight = dlgFilter.GetBarHeight()
                     self.whitespaceHeight = dlgFilter.GetWhitespace()
-                    # we need to store the Bar Height and Whitespace values in the Configuration.
+                    # we need to store the Bar Height, Whitespace, and colorAsKeywords values in the Configuration.
                     if not self.embedded:
                         TransanaGlobal.configData.keywordMapBarHeight = self.barHeight
                         TransanaGlobal.configData.keywordMapWhitespace = self.whitespaceHeight
+                        TransanaGlobal.configData.colorAsKeywords = self.colorAsKeywords
                     else:
                         TransanaGlobal.configData.keywordVisualizationBarHeight = self.barHeight
                         TransanaGlobal.configData.keywordVisualizationWhitespace = self.whitespaceHeight
@@ -554,7 +601,9 @@ class KeywordMap(wx.Frame):
                 self.Bounds = (5, 40, w - 10, h - 30)
         else:
             self.Bounds = (0, 0, w, h - 25)
-        if self.episodeName != '':
+        # If we have data defined in the graph ...
+        if (self.episodeName != '') or (self.collection != None):
+            # ... redraw the graph
             self.DrawGraph()
             
     def CalcX(self, XPos):
@@ -789,6 +838,76 @@ class KeywordMap(wx.Frame):
                 if not ((clipID, collectNum, True) in self.clipFilterList):
                     self.clipFilterList.append((clipID, collectNum, True))
 
+    def ProcessCollection(self):
+        """ Process a Collection for the Collection Keyword Map variation of the Keyword Map """
+        # Initialize the Clip Filter List
+        self.clipFilterList = []
+        # We don't have a single Media File here.  Leave it blank
+        self.MediaFile = ''
+        # Initialize the Media Length, which we will accumulate from the clips
+        self.MediaLength = 0
+
+        # We need a data struture to hold the data about what clips correspond to what keywords.
+        # But we only need to process it once.
+        if self.filteredKeywordList == []:
+            # If we deleted the last keyword in a filtered list, the Filter Dialog ended up with
+            # duplicate entries.  This should prevent it!!
+            self.unfilteredKeywordList = []
+            # Get the list of Keywords to be displayed.  This query should do it.
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword
+                           FROM Clips2 cl, ClipKeywords2 ck
+                           WHERE cl.CollectNum = %s AND
+                                 cl.ClipNum = ck.ClipNum
+                           GROUP BY ck.keywordgroup, ck.keyword
+                           ORDER BY KeywordGroup, Keyword, ClipStart"""
+
+            # Execute the query
+            self.DBCursor.execute(SQLText, self.collectionNum)
+            # For each record in the query results ...
+            for (kwg, kw) in self.DBCursor.fetchall():
+                # ... encode the KWG and KW
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                # ... and add them to the filtered and unfiltered keyword lists
+                self.filteredKeywordList.append((kwg, kw))
+                self.unfilteredKeywordList.append((kwg, kw, True))
+
+        # Create the Keyword Placement lines to be displayed.  We need them to be in ClipSortOrder order so colors will be
+        # distributed properly across bands.
+        SQLText = """SELECT ck.KeywordGroup, ck.Keyword, cl.ClipStart, cl.ClipStop, cl.ClipNum, cl.ClipID, cl.CollectNum
+                       FROM Clips2 cl, ClipKeywords2 ck
+                       WHERE cl.CollectNum = %s AND
+                             cl.ClipNum = ck.ClipNum
+                       ORDER BY SortOrder, KeywordGroup, Keyword"""
+        # We need to track what clip we're looking at.  Initialize a variable for that.
+        currClip = 0
+        # Execute the query
+        self.DBCursor.execute(SQLText, self.collectionNum)
+        # Iterate through the query results
+        for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) in self.DBCursor.fetchall():
+            # If we have not yet added THIS clip to total time ...
+            if clipNum != currClip:
+                # ... add this clip's length, plus 100 ms, to the total length of the Collection Keyword Map's time line ...
+                self.MediaLength += (clipStop - clipStart + 100)
+                # ... and update the current clip number so this clip won't be counted again if it has multiple keywords
+                currClip = clipNum
+            # Decode the KWG, KW, and Clip ID
+            kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+            kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+            clipID = DBInterface.ProcessDBDataForUTF8Encoding(clipID)
+            # If we're dealing with a Collection, self.clipNum will be None and we want all clips.
+            # If we're dealing with a Clip, we only want to deal with THIS clip!  (I DON'T THINK THIS IF CLAUSE IS NEEDED HERE!)
+            if (self.clipNum == None) or (clipNum == self.clipNum):
+                # Add the current Clip/keyword combo to the Clip List, placing it to the right of the last clip.
+                self.clipList.append((kwg, kw, self.MediaLength - (clipStop - clipStart) - 50, self.MediaLength - 50, clipNum, clipID, collectNum))
+                # If the clip ID isn't already in the Clip Filter List ...
+                if not ((clipID, collectNum, True) in self.clipFilterList):
+                    # ... add the clip to the Clip Filter List
+                    self.clipFilterList.append((clipID, collectNum, True))
+        # When we're done adding clips, we know the total width of the graphic.  Set self.endTime to the accumulated
+        # Media Length so the graphic will render correctly.
+        self.endTime = self.MediaLength
+
     def UpdateKeywordVisualization(self):
         """ Update the Keyword Visualization following something that could have changed it. """
         # If the Keyword Map hasn't been Setup yet, skip this.
@@ -874,24 +993,34 @@ class KeywordMap(wx.Frame):
         else:
             self.graphic.SetFontSize(10)
         if not self.embedded:
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('Series: %s'), 'utf8')
+            # If we're doing a Keyword Map, not a Collection Keyword Map ...
+            if self.collectionNum == None:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Series: %s'), 'utf8')
+                else:
+                    prompt = _('Series: %s')
+                self.graphic.AddText(prompt % self.seriesName, 2, 2)
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_("Episode: %s"), 'utf8')
+                else:
+                    prompt = _("Episode: %s")
+                self.graphic.AddTextCentered(prompt % self.episodeName, (self.Bounds[2] - self.Bounds[0]) / 2, 2)
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('File: %s'), 'utf8')
+                else:
+                    prompt = _('File: %s')
+                self.graphic.AddTextRight(prompt % DBInterface.ProcessDBDataForUTF8Encoding(self.MediaFile), self.Bounds[2] - self.Bounds[1], 2)
+            # If we're doing a Collection Keyword Map, not a Keyword Map ...
             else:
-                prompt = _('Series: %s')
-            self.graphic.AddText(prompt % self.seriesName, 2, 2)
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_("Episode: %s"), 'utf8')
-            else:
-                prompt = _("Episode: %s")
-            self.graphic.AddTextCentered(prompt % self.episodeName, (self.Bounds[2] - self.Bounds[0]) / 2, 2)
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('File: %s'), 'utf8')
-            else:
-                prompt = _('File: %s')
-            self.graphic.AddTextRight(prompt % DBInterface.ProcessDBDataForUTF8Encoding(self.MediaFile), self.Bounds[2] - self.Bounds[1], 2)
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Collection: %s'), 'utf8')
+                else:
+                    prompt = _('Collection: %s')
+                self.graphic.AddTextCentered(prompt % self.collection.GetNodeString(), (self.Bounds[2] - self.Bounds[0]) / 2, 2)
             if self.configName != '':
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -999,25 +1128,28 @@ class KeywordMap(wx.Frame):
         else:
             colorSet = TransanaGlobal.keywordMapGraySet
             colorLookup = TransanaGlobal.transana_grayLookup
-        if self.embedded:
-            if 'wxMac' in wx.PlatformInfo:
-                self.graphic.SetFontSize(10)
-            else:
-                self.graphic.SetFontSize(7)
-            # Iterate through the keyword list in order ...
-            for (KWG, KW) in self.filteredKeywordList:
-                # ... and assign colors to Keywords
-                if self.keywordColors.has_key((KWG, KW)) and self.colorOutput:
-                    colourindex = self.keywordColors[(KWG, KW)]
-                else:
-                    colourindex = self.keywordColors['lastColor'] + 1
-                    if colourindex > len(colorSet) - 1:
-                        colourindex = 0
-                    self.keywordColors['lastColor'] = colourindex
-                    self.keywordColors[(KWG, KW)] = colourindex
+        # Set the font size, differing by platform
+        if 'wxMac' in wx.PlatformInfo:
+            self.graphic.SetFontSize(10)
+        else:
+            self.graphic.SetFontSize(7)
 
-                if self.showEmbeddedLabels:
-                    self.graphic.AddText("%s : %s" % (KWG, KW), 2, self.CalcY(self.filteredKeywordList.index((KWG, KW))) - 7)
+        # Iterate through the keyword list in order ...
+        for (KWG, KW) in self.filteredKeywordList:
+            # ... and assign colors to Keywords
+            if self.keywordColors.has_key((KWG, KW)) and self.colorOutput:
+                colourindex = self.keywordColors[(KWG, KW)]
+            else:
+                colourindex = self.keywordColors['lastColor'] + 1
+                if colourindex > len(colorSet) - 1:
+                    colourindex = 0
+                self.keywordColors['lastColor'] = colourindex
+                self.keywordColors[(KWG, KW)] = colourindex
+
+            # If we're in the Keyword Visualization and showEmbeddedLabels is enabled ...
+            # NOTE:  This is ONLY to be used for testing the mouse-overs, not in production!
+            if self.embedded and self.showEmbeddedLabels:
+                self.graphic.AddText("%s : %s" % (KWG, KW), 2, self.CalcY(self.filteredKeywordList.index((KWG, KW))) - 7)
 
         for (KWG, KW, Start, Stop, ClipNum, ClipName, CollectNum) in self.clipList:
             if ((ClipName, CollectNum, True) in self.clipFilterList) and ((KWG, KW) in self.filteredKeywordList):
@@ -1035,12 +1167,14 @@ class KeywordMap(wx.Frame):
                     self.graphic.SetThickness(self.barHeight)
                     tempLine = []
                     tempLine.append((self.CalcX(Start), self.CalcY(self.filteredKeywordList.index((KWG, KW))), self.CalcX(Stop), self.CalcY(self.filteredKeywordList.index((KWG, KW)))))
-                    if not self.embedded:
+                    # If we're in the Keyword Map and are NOT using Colors as Keywords (i.e., colors are Clips) ....
+                    if (not self.embedded) and (not self.colorAsKeywords):
+                        # Update the color index here, at the clip transition
                         if (ClipNum != lastclip) and (lastclip != 0):
-                             if colourindex < len(colorSet) - 1:
-                                 colourindex = colourindex + 1
-                             else:
-                                 colourindex = 0
+                            if colourindex < len(colorSet) - 1:
+                                colourindex = colourindex + 1
+                            else:
+                                colourindex = 0
                     else:
                         colourindex = self.keywordColors[(KWG, KW)]
                             

@@ -703,7 +703,7 @@ class Synchronize(wx.Dialog):
         if self.windowBuilt:
             # Get the video's "Best Size"
             (x1, y1) = self.mp1.movie.GetBestSize()
-            # Determine teh proper scaling factor, based on the size of the media player cell and the video height.
+            # Determine the proper scaling factor, based on the size of the media player cell and the video height.
             if y1 > 0:
                 resizeFactor = (float(self.mainGBSSizer.GetCellSize(6, 0)[1])) / float(y1)
             # If the video doesn't yet have a size, just use 1 as the scaling factor.
@@ -712,7 +712,7 @@ class Synchronize(wx.Dialog):
             # If the video width would exceed 400 ...
             if int(x1 * resizeFactor) > 400:
                 # ... adjust the scaling factor down.
-                resizeFactor = 400.0 / int(x1 * resizeFactor)
+                resizeFactor = 400.0 / x1
             # Set the minimum and maximum size for Media Player 1
             self.mp1.SetSizeHints(int(x1 * resizeFactor), int(y1 * resizeFactor), int(x1 * resizeFactor), int(y1 * resizeFactor))
             # Set the actual size of Media Player 1
@@ -725,12 +725,19 @@ class Synchronize(wx.Dialog):
             self.mp2.SetSize((int(x1 * resizeFactor), int(y1 * resizeFactor)))
             # Refresh Media Player 2
             self.mp2.Refresh()
-            # Get the dialog's current size
-            size = self.GetSize()
-            # Set this to the minimum size for the dialog
-            self.SetSizeHints(size[0], size[1])
+            # Get the screen size
+            (t, l, w, h) = wx.ClientDisplayRect()
+            # Set the minimum and maximum sizes for the dialog
+            self.SetSizeHints(800, 600, int(0.9 * w), int(0.9 * h))
             # Trigger the sizer to re-layout the form
             self.Layout()
+            # Large dimension files in some video formats cause the synchronize window to be rendered
+            # too large to fit in the screen.  Check for this.
+            if (self.GetSizeTuple()[0] > int(0.9 * w)) or (self.GetSizeTuple()[1] > int(0.9 * h)):
+                # If too large, set the window size to the maximum (90% of the size of the screen.)
+                self.SetSize((int(0.9 * w), int(0.9 * h)))
+                # Center the window on the screen
+                self.CenterOnScreen()
             # When the dust settles, redraw the Waveforms.
             wx.CallAfter(self.ResizeWaveforms)
 
@@ -744,14 +751,14 @@ class Synchronize(wx.Dialog):
             cellSize1 = self.mainGBSSizer.GetCellSize(1, 3)
             # Get the position of the Sizer cell for Waveform 1
             cellPos1 = self.waveform1.GetPosition()
-            # Resize the Waveform to conform to the cell size
-            self.waveform1.SetDim(cellPos1[0], cellPos1[1], cellSize1[0], cellSize1[1])
+            # Resize the Waveform to conform to the cell size and video height
+            self.waveform1.SetDim(cellPos1[0], cellPos1[1], cellSize1[0], self.mp1.GetSize()[1])
             # Get the size of the Sizer cell for Waveform 2
             cellSize2 = self.mainGBSSizer.GetCellSize(6, 3)
             # Get the position of the Sizer cell for Waveform 1
             cellPos2 = self.waveform2.GetPosition()
-            # Resize the Waveform to conform to the cell size
-            self.waveform2.SetDim(cellPos2[0], cellPos2[1], cellSize2[0], cellSize2[1])
+            # Resize the Waveform to conform to the cell size and video height
+            self.waveform2.SetDim(cellPos2[0], cellPos2[1], cellSize2[0], self.mp2.GetSize()[1])
             # Finally, update the Waveforms
             self.UpdateWaveforms()
             

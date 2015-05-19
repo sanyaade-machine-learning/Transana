@@ -25,7 +25,8 @@ if DEBUG:
 
 HYBRIDOFFSET = 80
 
-import wx
+import wx                     # Import wxPython
+import wx.lib.buttons         # Import wxPython's extra buttons
 
 if __name__ == '__main__':
     # This module expects i18n.  Enable it here.
@@ -144,9 +145,30 @@ class VisualizationWindow(wx.Dialog):
         toolbarSizer.Add(self.zoom100, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL , 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_ZOOM100, self.OnZoom100)
 
+        # Put in a tiny horizontal spacer
+        toolbarSizer.Add((4, 0))
+
+        # Add a button for looping playback
+        # We need to use a Generic Bitmap Toggle Button!
+        self.loop = wx.lib.buttons.GenBitmapToggleButton(self.toolbar, -1, None)
+        # Define the image for the "un-pressed" state
+        bmp = wx.Bitmap('images/loop_up.xpm', wx.BITMAP_TYPE_XPM)
+        self.loop.SetBitmapLabel(bmp)
+        # Define the image for the "pressed" state
+        bmp = wx.Bitmap('images/loop_down.xpm', wx.BITMAP_TYPE_XPM)
+        self.loop.SetBitmapSelected(bmp)
+        # Set the button to "un-pressed"
+        self.loop.SetToggle(False)
+        # Set the button's initial size
+        self.loop.SetInitialSize((20, 20))
+        # Add the button to the toolbar
+        toolbarSizer.Add(self.loop, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL , 2)
+        # Bind the OnLoop event handler to the button
+        self.loop.Bind(wx.EVT_BUTTON, self.OnLoop)
+
         # Place line separating Zoom buttons from Position section
         separator = wx.StaticLine(self.toolbar, -1, size=wx.Size(2, 22))
-        toolbarSizer.Add(separator, 0, wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 2)
+        toolbarSizer.Add(separator, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 2)
 
         # Add "Time" label
         self.lbl_Time = wx.StaticText(self.toolbar, -1, _("Time:"))
@@ -193,6 +215,8 @@ class VisualizationWindow(wx.Dialog):
         # Add "Total" Time label
         self.lbl_Total_Time = wx.StaticText(self.toolbar, -1, "0:00:00.0")
         toolbarSizer.Add(self.lbl_Total_Time, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 4)
+
+        toolbarSizer.Add((1, 0), 1, wx.EXPAND | wx.RIGHT, 2)
 
         self.toolbar.SetSizer(toolbarSizer)
         self.toolbar.SetAutoLayout(True)
@@ -324,6 +348,8 @@ class VisualizationWindow(wx.Dialog):
                 # ... and exit this method.  We're done here.
                 return
 
+            # Initialize
+            waveformGraphicImage = None
             if TransanaGlobal.configData.visualizationStyle in ['Waveform', 'Hybrid']:
                 # Create the appropriate Waveform Graphic
                 try:
@@ -349,6 +375,7 @@ class VisualizationWindow(wx.Dialog):
                         # we have to know the right start and end points for the waveform.
                         start = self.ControlObject.VideoStartPoint
                         length = self.ControlObject.GetMediaLength()
+
                     # Get the status of the VideoWindow's checkboxes
                     checkboxData = self.ControlObject.GetVideoCheckboxDataForClips(start)
                     # For each media file (with its corresponding checkboxes) ...
@@ -356,9 +383,13 @@ class VisualizationWindow(wx.Dialog):
                         # ... add a "Show" variable to the waveform filename dictionary in the waveFilename list
                         #     that indicates if that waveform should be shown 
                         self.waveFilename[x]['Show'] = checkboxData[x][1]
+                    # Create the waveform graphic
                     waveformGraphicImage = WaveformGraphic.WaveformGraphicCreate(self.waveFilename, ':memory:', start, length, self.waveform.canvassize)
+                    # If a waveform graphic was created ...
                     if waveformGraphicImage != None:
+                        # ... clear the waveform
                         self.waveform.Clear()
+                        # ... and set the image as teh waveform background
                         self.waveform.SetBackgroundGraphic(waveformGraphicImage)
                         # Determine NEW Frame Size
                         (width, height) = self.GetSize()
@@ -394,8 +425,9 @@ class VisualizationWindow(wx.Dialog):
                 if (TransanaGlobal.configData.visualizationStyle == 'Hybrid'):
                     # Get the waveform Bitmap and convert it to an Image
                     hybridWaveform = waveformGraphicImage
-                    # Rescale the image so that it matches the size alloted for the Waveform (HYBRIDOFFSET)
-                    hybridWaveform.Rescale(hybridWaveform.GetWidth(), HYBRIDOFFSET)
+                    if hybridWaveform != None:
+                        # Rescale the image so that it matches the size alloted for the Waveform (HYBRIDOFFSET)
+                        hybridWaveform.Rescale(hybridWaveform.GetWidth(), HYBRIDOFFSET)
 
             if TransanaGlobal.configData.visualizationStyle in ['Keyword', 'Hybrid']:
                 # Clear the Visualization
@@ -521,8 +553,7 @@ class VisualizationWindow(wx.Dialog):
             # If resetVideoPosition == 0 and GetVideoStartPoint() > 0, we may have just located a Clip in the Episode.
             elif self.ControlObject.GetVideoStartPoint() > 0:
                 # Make sure the Position Cursor is drawn on the Waveform
-                self.UpdatePosition(self.ControlObject.GetVideoStartPoint())
-
+                self.UpdatePosition(self.ControlObject.GetVideoPosition())
 
     def resizeKeywordVisualization(self):
         """ The Keyword Visualization (and Hybrid) should auto-resize under some circumstances.  This method implements that. """
@@ -635,13 +666,17 @@ class VisualizationWindow(wx.Dialog):
             elif c in [wx.WXK_LEFT, wx.WXK_NUMPAD_LEFT]:
                 # ... moves the video the equivalent of 1 pixel earlier in the video
                 if currentPos > self.waveformLowerLimit - timePerPixel:
-                    self.ControlObject.SetVideoStartPoint(currentPos - timePerPixel)
+                    self.startPoint = currentPos - timePerPixel
+                    self.endPoint = 0
+                    self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
 
             # Cursor Right ...
             elif c in [wx.WXK_RIGHT, wx.WXK_NUMPAD_RIGHT]:
                 # ... moves the video the equivalent of 1 pixel later in the video
                 if currentPos < self.waveformUpperLimit + timePerPixel:
-                    self.ControlObject.SetVideoStartPoint(currentPos + timePerPixel)
+                    self.startPoint = currentPos + timePerPixel
+                    self.endPoint = 0
+                    self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
 
         except:
 
@@ -679,7 +714,6 @@ class VisualizationWindow(wx.Dialog):
 
             # Draw the TimeLine values
             self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
-            
             # Signal that the Waveform Graphic should be updated
             self.redrawWhenIdle = True
             
@@ -705,24 +739,89 @@ class VisualizationWindow(wx.Dialog):
 
     def OnZoom100(self, event):
         """ Zoom all the way out on the Waveform Diagram """
-        # Reset the zoomInfo to the original values
-        self.zoomInfo = [self.zoomInfo[0]]
+        if len(self.zoomInfo) > 1:
+            # Reset the zoomInfo to the original values
+            self.zoomInfo = [self.zoomInfo[0]]
 
-        # Signal that the video position needs to be reset after the waveform is drawn
-        self.resetVideoPosition = self.ControlObject.GetVideoPosition()
+            # Signal that the video position needs to be reset after the waveform is drawn
+            self.resetVideoPosition = self.ControlObject.GetVideoPosition()
 
-        # Change the start and end points
-        self.ControlObject.SetVideoSelection(self.zoomInfo[0][0], self.zoomInfo[0][1] + self.zoomInfo[0][0])
+            # Change the start and end points
+            self.ControlObject.SetVideoSelection(self.zoomInfo[0][0], self.zoomInfo[0][1] + self.zoomInfo[0][0])
 
-        # Clear the Start and End points of the Visualization Selection
-        self.startPoint = 0
-        self.endPoint = 0
+            # Clear the Start and End points of the Visualization Selection
+            self.startPoint = 0
+            self.endPoint = 0
 
-        # Draw the TimeLine values
-        self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
-        # Redraw the waveform
-        self.redrawWhenIdle = True
+            # Draw the TimeLine values
+            self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
+            # Redraw the waveform
+            self.redrawWhenIdle = True
 
+    def OnScroll(self, direction):
+        """ Scroll the visualization in the direction specified """
+        # If the window had been zoomed ...
+        if len(self.zoomInfo) > 1:
+            # Let's rename some data representations to make this a bit simpler
+            # The left side of the visualization is the LAST zoomInfo element's FIRST value
+            currLeft = self.zoomInfo[-1][0]
+            # The width of the visualization is the LAST zoomInfo element's SECOND value
+            currWidth = self.zoomInfo[-1][1]
+            # The right side of the visualization is the left side plus the width!!
+            currRight = currLeft + currWidth
+            # The total width of the media file is the FIRST zoomInfo element's SECOND value
+            totalWidth = self.zoomInfo[0][1]
+            # If a Scroll Left has been requested ...
+            if (direction == 'Left'):
+                # If the is 75% of the width available to the left ...
+                if currLeft > int(currWidth * 0.75):
+                    # ... scroll 75% to the left by shifting the selected start and end points and adjusting zoomInfo appropriately
+                    self.startPoint -= int(currWidth * 0.75)
+                    self.endPoint -= int(currWidth * 0.75)
+                    self.zoomInfo[-1] = (self.zoomInfo[-1][0] - int(currWidth * 0.75), self.zoomInfo[-1][1])
+                # If there is less than 75% of the width available ...
+                else:
+                    # ... scroll to the left edge by setting the start to 0, the end to width, and adjusting zoomInfo appropriately
+                    self.startPoint = 0
+                    self.endPoint = currWidth
+                    self.zoomInfo[-1] = (0, self.zoomInfo[-1][1])
+                # Signal that we need to re-draw the visualization
+                self.redrawWhenIdle = True
+                
+            # If a Scroll Right has been requested ...
+            elif (direction == 'Right'):
+                # If there's a full 75% of width available to shift right ...
+                if currRight < totalWidth - int(currWidth * 0.75):
+                    # ... scroll 75% to the right by shifting the selected start and end points and adjusting zoomInfo appropriately
+                    self.startPoint = currLeft + int(currWidth * 0.75)
+                    self.endPoint += int(currWidth * 0.75)
+                    self.zoomInfo[-1] = (self.startPoint, self.zoomInfo[-1][1])
+                # If there is less than 75% of the width available ...
+                else:
+                    # ... scroll to the right edge by setting the start to total width - current width, the end to total width,
+                    # and adjusting zoomInfo appropriately
+                    self.startPoint = totalWidth - currWidth
+                    self.endPoint = totalWidth
+                    self.zoomInfo[-1] = (self.startPoint, self.zoomInfo[-1][1])
+                # Signal that we need to re-draw the visualization
+                self.redrawWhenIdle = True
+
+    def OnLoop(self, event):
+        """ Click the "Loop" button to initiate a playback loop """
+        # If a data object is currently loaded ...
+        if self.ControlObject.currentObj != None:
+            # If no selection endpoint is defined ...
+            if self.endPoint == 0:
+                # ... then set the endpoint for the earlier of the media end (episode or clip end) or 5 seconds from start
+                self.endPoint = min(self.zoomInfo[0][1], self.startPoint + 5000)
+                # Set the video selection to include this new end point
+                self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
+            # Signal the Control Object to start or stop looped playback
+            self.ControlObject.PlayLoop(self.loop.GetValue())
+        # if no data object is currently loaded ...
+        else:
+            # then forcibly reject the button press by un-pressing the button.
+            self.loop.SetValue(False)
 
     def OnCurrent(self, event):
         """ Click the "Current" button to place a time code in the Transcript """
@@ -1000,7 +1099,6 @@ class VisualizationWindow(wx.Dialog):
         # Set the values for the waveform Lower and Upper limits
         self.waveformLowerLimit = mediaStart
         self.waveformUpperLimit = mediaStart + mediaLength
-
         # Determine the number of labels and the time interval between labels that should be displayed
         numIncrements, Interval = GetScaleIncrements(mediaLength)
         # Now we can determine the appropriate starting point for our labels!
@@ -1080,8 +1178,52 @@ class VisualizationWindow(wx.Dialog):
         # If UpperLimit and LowerLimit have not been set yet, avoid dividing by zero.  Things will be cleaned up later.
         if self.waveformUpperLimit == self.waveformLowerLimit:
             self.waveformUpperLimit = self.waveformUpperLimit + 1
+        # Determine the current/new horizontal position within the waveform
         pos = ((float(currentPosition - self.waveformLowerLimit)) / (self.waveformUpperLimit - self.waveformLowerLimit))
-        self.waveform.DrawCursor(pos)
+        # Let's catch the problem of indeterminate media file lengths.  By the time this is called, the length should be known.
+        if self.zoomInfo[0][1] == -1:
+            self.zoomInfo[0] = (0, self.ControlObject.GetMediaLength(True))
+        # Check to see if automatic waveform scrolling is necessary
+        # First, check to see if we are zoomed in, if we're at the END of the waveform, if there's room to scroll, and if a redraw
+        # hasn't already been requested.
+        if (len(self.zoomInfo) > 1) and (pos > 0.99) and (self.waveformUpperLimit < self.zoomInfo[0][1]) and not self.redrawWhenIdle:
+            # If there is a relatively large shift to take place (over 10% of the current width) ...
+            if (pos > 1.1):
+                # ... then let's just jump directly to the new position
+                self.startPoint = currentPosition - int(self.zoomInfo[-1][1] * 0.25)
+                self.endPoint = self.startPoint + self.zoomInfo[-1][1]
+                if self.endPoint > self.zoomInfo[0][1]:
+                    self.startPoint = self.zoomInfo[0][1] - self.zoomInfo[-1][1]
+                    self.endPoint = self.zoomInfo[0][1]
+                self.zoomInfo[-1] = (self.startPoint, self.zoomInfo[-1][1])
+                # Signal that the waveform needs to be redrawn
+                self.redrawWhenIdle = True
+            # If we have a more modest shift to make ...
+            else:
+                # ... and call the Scroll event
+                self.OnScroll('Right')
+        # Second, check to see if we are zoomed in, if we're at the START of the waveform, if there's room to scroll, and if a redraw
+        # hasn't already been requested.
+        elif (len(self.zoomInfo) > 1) and (pos < 0) and (self.waveformLowerLimit > self.zoomInfo[0][0]) and not self.redrawWhenIdle:
+            # If there is a relatively large shift to take place (over 10% of the current width) ...
+            if (pos < -0.1):
+                # ... then let's just jump directly to the new position
+                self.startPoint = currentPosition - int(self.zoomInfo[-1][1] * 0.75)
+                if self.startPoint < self.zoomInfo[0][0]:
+                    self.startPoint = self.zoomInfo[0][0]
+                self.endPoint = self.startPoint + self.zoomInfo[-1][1]
+                self.zoomInfo[-1] = (self.startPoint, self.zoomInfo[-1][1])
+                # Signal that the waveform needs to be redrawn
+                self.redrawWhenIdle = True
+            # If we have a more modest shift to make ...
+            else:
+                # ... and call the Scroll event
+                self.OnScroll('Left')
+        # If no scrolling is needed ...
+        else:
+            # ... just draw the new current position on the waveform
+            self.waveform.DrawCursor(pos)
+
         # Force a redraw at least every half second while the video is playing.  (Mostly for slow Macs and when running multi-transcript video)
         if (self.ControlObject.IsPlaying()) and (time.time() - self.lastRedrawTime > 0.5):
             self.waveform.reInitBuffer = True
@@ -1100,17 +1242,23 @@ class VisualizationWindow(wx.Dialog):
             self.lastRedrawTime = time.time()
             
     def OnLeftDown(self, x, y, xpct, ypct):
+        """ Mouse Left Down event for the Visualization Window -- over-rides the Waveform's left down! """
         # If we don't convert this to an int, our SQL gets screwed up in non-English localizations that use commas instead
         # of decimals.
         self.startPoint = int(round(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit))
         # Show the media position in the Current Time label
-        self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(self.startPoint))       
+        self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(self.startPoint))
 
     def OnLeftUp(self, x, y, xpct, ypct):
+        """ Mouse Left Up event for the Visualization Window -- over-rides the Waveform's left up! """
+        # If the media is currently playing ...
         if self.ControlObject.IsPlaying():
+            # ... we need to stop it!
             self.ControlObject.Stop()
         # Distinguish a left-click (positioning start only) from a left-drag (select range)
+        # If we have a DRAG ...
         if self.startPoint != int(round(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit)):
+            # ... set the end point value based on mouse position
             self.endPoint = int(round(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit))
             # If the user drags to the left rather than to the right, we need to swap the values!
             if self.endPoint < self.startPoint:
@@ -1119,13 +1267,21 @@ class VisualizationWindow(wx.Dialog):
                 self.endPoint = temp
             # Show the media selection in the Selected Time label
             self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(self.endPoint - self.startPoint))
+        # If we have a CLICK ...
         else:
-            self.endPoint = 0
+            # If we're Looping ...
+            if self.loop.GetValue():
+                # ... then set the end point to 5 seconds after start the video length, whichever is smaller
+                self.endPoint = self.startPoint + min(self.zoomInfo[0][1], 5000)
+            # If we're NOT looping ...
+            else:
+                # ... then set endpoint to 0 to indicate we don't have a selection
+                self.endPoint = 0
             # Clear the media selection in the Selected Time label
             self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(0))
         # Set the Current Video Selection to the highlighted part of the Waveform
         self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
-    
+
     def TimeCodeFromPctPos(self, xpct):
         return int(round(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit))
         

@@ -56,9 +56,15 @@ T_FILE_EXIT    =  wx.NewId()
 
 class CheckListCtrl(wx.ListCtrl, CheckListCtrlMixin):
     """ This class turns a normal ListCtrl into a CheckListCtrl. """
-    def __init__(self, parent):
-        # Create a ListCtrl in Report View that only allows single selection
-        wx.ListCtrl.__init__(self, parent, -1, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+    def __init__(self, parent, multSelect=False):
+        # If multSelect is requested ...
+        if multSelect:
+            # ... create a ListCtrl in Report View that allows multiple selection
+            wx.ListCtrl.__init__(self, parent, -1, style=wx.LC_REPORT)
+        # If multSelect is NOT requested ...
+        else:
+            # ... create a ListCtrl in Report View that only allows single selection
+            wx.ListCtrl.__init__(self, parent, -1, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         # Make it a CheckList using the CheckListCtrlMixin
         CheckListCtrlMixin.__init__(self)
         # Bind the Item Activated method
@@ -89,6 +95,7 @@ class FilterDialog(wx.Dialog):
                                            6 for Clips)
                         14 = Series Clip Data Export (reportScope is the Series Number)
                         15 = Search Save (Search Saves have NO reportScope! or FilterDataType!!)
+                        16 = Collection Keyword Map  (reportScope is the CollectionNumber)
 
             *** ADDING A REPORT TYPE?  Remember to add the delete_filter_records() call to the appropriate
                 object's db_delete() method!
@@ -122,6 +129,7 @@ class FilterDialog(wx.Dialog):
           singleLineDisplay (boolean)
           showLegend        (boolean)
           colorOutput       (boolean)
+          colorAsKeywords     (boolean)
           showClipTranscripts (boolean)
           showClipKeywords    (boolean)
           showNestedData      (boolean)
@@ -279,6 +287,9 @@ class FilterDialog(wx.Dialog):
             # Now declare the panel's vertical sizer as the panel's official sizer
             self.reportContentsPanel.SetSizer(pnlVSizer)
 
+        # Multiple selection has been implemented everywhere!  Signal that it is allowed!!!
+        multSelect = True
+        
         # If Episode Filtering is requested ...
         if self.kwargs.has_key('episodeFilter') and self.kwargs['episodeFilter']:
             # ... build a Panel for Episodes ...
@@ -289,7 +300,7 @@ class FilterDialog(wx.Dialog):
             # ... place the Episode Panel on the Notebook, creating an Episodes tab ...
             self.notebook.AddPage(self.episodesPanel, _("Episodes"))
             # ... place a Check List Ctrl on the Episodes Panel ...
-            self.episodeList = CheckListCtrl(self.episodesPanel)
+            self.episodeList = CheckListCtrl(self.episodesPanel, multSelect=multSelect)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.episodeList, 1, wx.EXPAND)
             # The episode List needs two columns, Episode ID and Series ID.
@@ -350,7 +361,7 @@ class FilterDialog(wx.Dialog):
             # ... place the Transcripts Panel on the Notebook, creating a Transcripts tab ...
             self.notebook.AddPage(self.transcriptPanel, _("Transcripts"))
             # ... place a Check List Ctrl on the Transcripts Panel ...
-            self.transcriptList = CheckListCtrl(self.transcriptPanel)
+            self.transcriptList = CheckListCtrl(self.transcriptPanel, multSelect=multSelect)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.transcriptList, 1, wx.EXPAND)
             # The Transcripts List needs four columns, Series, Episode, Transcript, and Number of Clips.
@@ -374,7 +385,7 @@ class FilterDialog(wx.Dialog):
             # ... place the Collections Panel on the Notebook, creating a Collections tab ...
             self.notebook.AddPage(self.collectionPanel, _("Collections"))
             # ... place a Check List Ctrl on the Collections Panel ...
-            self.collectionList = CheckListCtrl(self.collectionPanel)
+            self.collectionList = CheckListCtrl(self.collectionPanel, multSelect=multSelect)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.collectionList, 1, wx.EXPAND)
             # The Collections List needs one column, Collection.
@@ -394,7 +405,7 @@ class FilterDialog(wx.Dialog):
             # ... place the Clips Panel on the Notebook, creating a Clips tab ...
             self.notebook.AddPage(self.clipsPanel, _("Clips"))
             # ... place a Check List Ctrl on the Clips Panel ...
-            self.clipList = CheckListCtrl(self.clipsPanel)
+            self.clipList = CheckListCtrl(self.clipsPanel, multSelect=multSelect)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.clipList, 1, wx.EXPAND)
             # The Clip List needs two columns, Clip ID and Collection nesting.
@@ -435,11 +446,11 @@ class FilterDialog(wx.Dialog):
             # If Keyword Group Color Specification is enabled ...
             if self.keywordGroupColor:
                 # ... we need to use the ColorListCtrl for the Keyword Groups List.
-                self.keywordGroupList = ColorListCtrl.ColorListCtrl(self.keywordGroupPanel)
+                self.keywordGroupList = ColorListCtrl.ColorListCtrl(self.keywordGroupPanel, multSelect=multSelect)
             # If Keyword Group Color specification is disabled ...
             else:
                 # ... place a Check List Ctrl on the Keyword Group Panel ...
-                self.keywordGroupList = CheckListCtrl(self.keywordGroupPanel)
+                self.keywordGroupList = CheckListCtrl(self.keywordGroupPanel, multSelect=multSelect)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.keywordGroupList, 1, wx.EXPAND)
             # The Keyword Groups List needs one column, Keyword Group.
@@ -466,11 +477,11 @@ class FilterDialog(wx.Dialog):
             # If Keyword Color Specification is enabled ...
             if self.keywordColor:
                 # ... we need to use the ColorListCtrl for the Keywords List.
-                self.keywordList = ColorListCtrl.ColorListCtrl(self.keywordsPanel)
+                self.keywordList = ColorListCtrl.ColorListCtrl(self.keywordsPanel, multSelect=multSelect)
             # If Keyword Color specification is disabled ...
             else:
                 # ... place a Check List Ctrl on the Keywords Panel ...
-                self.keywordList = CheckListCtrl(self.keywordsPanel)
+                self.keywordList = CheckListCtrl(self.keywordsPanel, multSelect=multSelect)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.keywordList, 1, wx.EXPAND)
             # The keyword List needs two columns, Keyword Group and Keyword.
@@ -534,7 +545,7 @@ class FilterDialog(wx.Dialog):
             # ... place the Notes Panel on the Notebook, creating a Notes tab ...
             self.notebook.AddPage(self.notesPanel, _("Notes"))
             # ... place a Check List Ctrl on the Notes Panel ...
-            self.notesList = CheckListCtrl(self.notesPanel)
+            self.notesList = CheckListCtrl(self.notesPanel, multSelect=multSelect)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.notesList, 1, wx.EXPAND)
             # The Notes List needs two columns, Note ID and Parent.
@@ -555,9 +566,9 @@ class FilterDialog(wx.Dialog):
             self.notebook.AddPage(self.optionsPanel, _("Options"))
             
             # This gets a bit convoluted, as different reports can have different options.  But it shouldn't be too bad.
-            # Keyword Map Report and the Series Keyword Sequence Map
+            # Keyword Map Report, the Series Keyword Sequence Map, and the Collection Keyword Map
             # have Start and End times on the Options tab
-            if self.reportType in [1, 5]:
+            if self.reportType in [1, 5, 16]:
                 # Add a label for the Start Time field
                 startTimeTxt = wx.StaticText(self.optionsPanel, -1, _("Start Time"))
                 pnlVSizer.Add(startTimeTxt, 0, wx.TOP | wx.LEFT, 10)
@@ -574,9 +585,9 @@ class FilterDialog(wx.Dialog):
                 tRTxt = wx.StaticText(self.optionsPanel, -1, _("NOTE:  Setting the End Time to 0 will set it to the end of the Media File.\nTime Range data is not saved as part of the Filter Configuration data."))
                 pnlVSizer.Add(tRTxt, 0, wx.ALL, 10)
 
-            # Keyword Map Report, Keyword Visualization,and the Series Keyword Sequence Map
+            # Keyword Map Report, Keyword Visualization, the Series Keyword Sequence Map, and the Collection Keyword Map
             # have Bar height and Whitespace parameters as well as horizontal and vertical grid lines
-            if self.reportType in [1, 2, 5, 6, 7]:
+            if self.reportType in [1, 2, 5, 6, 7, 16]:
                 if self.kwargs.has_key('barHeight'):
                     # Add a label for the Bar Height field
                     barHeightTxt = wx.StaticText(self.optionsPanel, -1, _("Keyword Bar Height"))
@@ -645,13 +656,38 @@ class FilterDialog(wx.Dialog):
                 # Also, connect the Single Line Display with an event that handles enabling and disabling the Legend option
                 self.Bind(wx.EVT_CHECKBOX, self.OnSingleLineDisplay, self.singleLineDisplay)
 
-            # If we have a Keyword Map, a Series Keyword Sequence Map, a Series Keyword Bar Graph, or 
-            # a Series Keyword Percentage Graph ...
-            if self.reportType in [1, 5, 6, 7] and self.kwargs.has_key('colorOutput'):
+            # If we have a Keyword Map, a Series Keyword Sequence Map, a Series Keyword Bar Graph, 
+            # a Series Keyword Percentage Graph, or a Collection Keyword Map ...
+            if self.reportType in [1, 5, 6, 7, 16] and self.kwargs.has_key('colorOutput'):
                 # ... add a check box for Color (vs. GrayScale) output
                 self.colorOutput = wx.CheckBox(self.optionsPanel, -1, _("Color Output"))
                 self.colorOutput.SetValue(self.kwargs['colorOutput'])
                 pnlVSizer.Add(self.colorOutput, 0, wx.TOP | wx.LEFT, 10)
+
+            # If we have a Keyword Map or a Collection Keyword Map, we ask if color represents Clips or Keywords ...
+            if self.reportType in [1, 16] and self.kwargs.has_key('colorAsKeywords'):
+                # Create a Horizontal Panel
+                pnlHSizer = wx.BoxSizer(wx.HORIZONTAL)
+                # Create a text label for the radiobox
+                txtLabel = wx.StaticText(self.optionsPanel, -1, _('Color represents:'))
+                # Add a horizontal spacer for the horizontal Sizer
+                pnlHSizer.Add((10, 0))
+                # Determine which platform we're on, and select the appropriate top offset for the text, based on platform
+                if 'wxMac' in wx.PlatformInfo:
+                    topOffset = 6
+                else:
+                    topOffset = 16
+                # Add the text label to the horizontal sizer with the appropriate top offset
+                pnlHSizer.Add(txtLabel, 0, wx.TOP, topOffset)
+                # ... add a Radio Box for Color as Clips vs. Color as Keywords
+                self.colorAsKeywords = wx.RadioBox(self.optionsPanel, -1, choices=[_('Clips'), _('Keywords')],
+                                                     majorDimension=2, style=wx.RA_SPECIFY_COLS)
+                # Set the appropriate radio button selection
+                self.colorAsKeywords.SetSelection(self.kwargs['colorAsKeywords'])
+                # Place the radio button on the horizontal sizer
+                pnlHSizer.Add(self.colorAsKeywords, 0, wx.LEFT, 10)
+                # Place the horizontal sizer into the main vertical sizer
+                pnlVSizer.Add(pnlHSizer, 0)
 
             # Now declare the panel's vertical sizer as the panel's official sizer
             self.optionsPanel.SetSizer(pnlVSizer)
@@ -961,7 +997,7 @@ class FilterDialog(wx.Dialog):
                         # Now over-ride existing Keyword Color data with the data from the file
                         for kwPair in fileKeywordColorData.keys():
                             self.keywordColors[kwPair] = fileKeywordColorData[kwPair]
-                    
+
                     # If the data is for the Keywords Group Tab (filterDataType 5) ...
                     elif filterDataType == 5:
                         # Get the current Keyword Group data from the Form
@@ -1310,6 +1346,7 @@ class FilterDialog(wx.Dialog):
                                 values = (episodes, self.reportType, reportScope, configName, 1)
                                 # Execute the query with the appropriate data
                                 DBCursor.execute(query, values)
+                                
                             # If we have a Keyword Map (reportType 1), or
                             # an Episode Clip Data Export (reportType 3), or
                             # a Collection Clip Data Export (reportType 4), or
@@ -1318,15 +1355,17 @@ class FilterDialog(wx.Dialog):
                             # a Series Keyword Percentage Graph (reportType 7),
                             # an Episode Report (reportType 11),
                             # a Collection Report (reportType 12), or
-                            # a Series Clip Data Export (reportType 14),
+                            # a Series Clip Data Export (reportType 14), or
+                            # a Collection Keyword Map (reportType 16),
                             # update Clip Data (FilterDataType 2)
-                            if self.reportType in [1, 3, 4, 5, 6, 7, 11, 12, 14]:
+                            if self.reportType in [1, 3, 4, 5, 6, 7, 11, 12, 14, 16]:
                                 # Pickle the Clip Data
                                 clips = cPickle.dumps(self.GetClips())
                                 # Build the values to match the query, including the pickled Clip data
                                 values = (clips, self.reportType, reportScope, configName, 2)
                                 # Execute the query with the appropriate data
                                 DBCursor.execute(query, values)
+                                
                             # If we have a Keyword Map (reportType 1), or
                             # a Keyword Visualization (reportType 2), or
                             # an Episode Clip Data Export (reportType 3), or
@@ -1337,27 +1376,47 @@ class FilterDialog(wx.Dialog):
                             # a Series Report (reportType 10)
                             # an Episode Report (reportType 11),
                             # a Collection Report (reportType 12), or
-                            # a Series Clip Data Export (reportType 14),
+                            # a Series Clip Data Export (reportType 14), or
+                            # a Collection Keyword Map (reportType 16),
                             # update Keyword Data (FilterDataType 3)
-                            if self.reportType in [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 14]:
+                            if self.reportType in [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 14, 16]:
                                 # Pickle the Keyword Data
                                 keywords = cPickle.dumps(self.GetKeywords())
                                 # Build the values to match the query, including the pickled Keyword data
                                 values = (keywords, self.reportType, reportScope, configName, 3)
                                 # Execute the query with the appropriate data
                                 DBCursor.execute(query, values)
-                            # If we have a Keyword Visualization (reportType 2), or
+                                
+                            # If we have a Keyword Map (reportType 1), or
+                            # a Keyword Visualization (reportType 2), or
                             # a Series Keyword Sequence Map (reportType 5), or
                             # a Series Keyword Bar Graph (reportType 6), or
-                            # a Series Keyword Percentage Graph (reportType 7),
+                            # a Series Keyword Percentage Graph (reportType 7), or
+                            # a Collection Keyword Map (reportType 16),
                             # update Keyword Color Data (FilterDataType 4)
-                            if self.reportType in [2, 5, 6, 7]:
+                            if self.reportType in [1, 2, 5, 6, 7, 16]:
                                 # Pickle the Keyword Colors Data
                                 keywordColors = cPickle.dumps(self.GetKeywordColors())
-                                # Build the values to match the query, including the pickled Keyword Colors data
-                                values = (keywordColors, self.reportType, reportScope, configName, 4)
-                                # Execute the query with the appropriate data
-                                DBCursor.execute(query, values)
+                                # Keyword Colors were implemented late.  Therefore, we need to check whether we need to INSERT
+                                # or UPDATE this record
+                                if DBInterface.record_match_count('Filters2',
+                                                         ('ReportType', 'ReportScope', 'ConfigName', 'FilterDataType'),
+                                                         (self.reportType, reportScope, configName, 4)) > 0:
+                                    # Build the values to match the query, including the pickled Keyword Colors data
+                                    values = (keywordColors, self.reportType, reportScope, configName, 4)
+                                    # Execute the query with the appropriate data
+                                    DBCursor.execute(query, values)
+                                else:
+                                    # Build the Insert Query for the Data
+                                    query2 = """ INSERT INTO Filters2
+                                                    (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
+                                                  VALUES
+                                                    (%s, %s, %s, %s, %s) """
+                                    # Build the values to match the query, including the pickled Keyword Colors data
+                                    values = (self.reportType, reportScope, configName, 4, keywordColors)
+                                    # Execute the query with the appropriate data
+                                    DBCursor.execute(query2, values)
+
                             # If we have a Notes Report (reportType 13)
                             # update Notes Data (FilterDataType 8)
                             if self.reportType in [13]:
@@ -1398,9 +1457,10 @@ class FilterDialog(wx.Dialog):
                             # a Series Keyword Percentage Graph (reportType 7),
                             # an Episode Report (reportType 11),
                             # a Collection Report (reportType 12), or
-                            # a Series Clip Data Export (reportType 14),
+                            # a Series Clip Data Export (reportType 14), or
+                            # a Collection Keyword Map (reportType 16),
                             # insert Clip Data (FilterDataType 2)
-                            if self.reportType in [1, 3, 4, 5, 6, 7, 11, 12, 14]:
+                            if self.reportType in [1, 3, 4, 5, 6, 7, 11, 12, 14, 16]:
                                 # Pickle the Clip Data
                                 clips = cPickle.dumps(self.GetClips())
                                 # Build the values to match the query, including the pickled Clip data
@@ -1417,21 +1477,24 @@ class FilterDialog(wx.Dialog):
                             # a Series Report (reportType 10)
                             # an Episode Report (reportType 11),
                             # a Collection Report (reportType 12), or
-                            # a Series Clip Data Export (reportType 14),
+                            # a Series Clip Data Export (reportType 14), or
+                            # a Collection Keyword Map (reportType 16),
                             # insert Keyword Data (FilterDataType 3)
-                            if self.reportType in [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 14]:
+                            if self.reportType in [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 14, 16]:
                                 # Pickle the Keyword Data
                                 keywords = cPickle.dumps(self.GetKeywords())
                                 # Build the values to match the query, including the pickled Keyword data
                                 values = (self.reportType, reportScope, configName, 3, keywords)
                                 # Execute the query with the appropriate data
                                 DBCursor.execute(query, values)
-                            # If we have a Keyword Visualization (reportType 2), or
+                            # If we have a Keyword Map (reportType 1), or
+                            # a Keyword Visualization (reportType 2), or
                             # a Series Keyword Sequence Map (reportType 5), or
                             # a Series Keyword Bar Graph (reportType 6), or
-                            # a Series Keyword Percentage Graph (reportType 7),
+                            # a Series Keyword Percentage Graph (reportType 7), or
+                            # a Collection Keyword Map (reportType 16),
                             # insert Keyword Color Data (FilterDataType 4)
-                            if self.reportType in [2, 5, 6, 7]:
+                            if self.reportType in [1, 2, 5, 6, 7, 16]:
                                 # Pickle the Keyword Colors Data
                                 keywordColors = cPickle.dumps(self.GetKeywordColors())
                                 # Build the values to match the query, including the pickled Keyword Colors data
@@ -1470,7 +1533,7 @@ class FilterDialog(wx.Dialog):
                                 DBCursor.execute(query, values)
 
                             # We need a debugging message if the save is requested for an unknown reportType
-                            if self.reportType not in [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14]:
+                            if self.reportType not in [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14, 16]:
                                 tmpDlg = Dialogs.ErrorDialog(self, "FilterDialog.OnFileSave() doesn't yet implement Save for reportType %d." % self.reportType)
                                 tmpDlg.ShowModal()
                                 tmpDlg.Destroy()
@@ -1491,10 +1554,11 @@ class FilterDialog(wx.Dialog):
                             #  17 = Color Output
                             
                         # If we have a Keyword Map (reportType 1), or
-                        # a Series Keyword Sequence Map (reportType 5), 
+                        # a Series Keyword Sequence Map (reportType 5),  or
+                        # a Collection Keyword Map (reportType 16),
                         # insert Start Time data (FilterDataType 9)
                         # and End Time data (FilterDataType 10)
-                        if self.reportType in [1, 5]:
+                        if self.reportType in [1, 5, 16]:
                             self.SaveFilterData(self.reportType, reportScope, configName, 9, self.startTime.GetValue())
                             self.SaveFilterData(self.reportType, reportScope, configName, 10, self.endTime.GetValue())
 
@@ -1502,12 +1566,13 @@ class FilterDialog(wx.Dialog):
                         # a Keyword Visualization (reportType 2), or
                         # a Series Keyword Sequence Map (reportType 5), or
                         # a Series Keyword Bar Graph (reportType 6), or
-                        # a Series Keyword Percentage Graph (reportType 7),
+                        # a Series Keyword Percentage Graph (reportType 7), or
+                        # a Collection Keyword Map (reportType 16),
                         # insert Keyword Bar Height Data (FilterDataType 11),
                         # Space Between Bars data (FilterDataType 12),
                         # Horizontal Grid Lines data (FilterDataType 13), and
                         # Vertical Grid Lines data (FilterDataType 14)
-                        if self.reportType in [1, 2, 5, 6, 7]:
+                        if self.reportType in [1, 2, 5, 6, 7, 16]:
                             self.SaveFilterData(self.reportType, reportScope, configName, 11, self.barHeight.GetStringSelection())
                             self.SaveFilterData(self.reportType, reportScope, configName, 12, self.whitespace.GetStringSelection())
                             self.SaveFilterData(self.reportType, reportScope, configName, 13, self.hGridLines.IsChecked())
@@ -1528,9 +1593,10 @@ class FilterDialog(wx.Dialog):
                         # If we have a Keyword Map (reportType 1), or
                         # a Series Keyword Sequence Map (reportType 5), or
                         # a Series Keyword Bar Graph (reportType 6), or
-                        # a Series Keyword Percentage Graph (reportType 7),
+                        # a Series Keyword Percentage Graph (reportType 7), or
+                        # a Collection Keyword Map (reportType 16),
                         # insert Color output Data (FilterDataType 17)
-                        if self.reportType in [1, 5, 6, 7]:
+                        if self.reportType in [1, 5, 6, 7, 16]:
                             self.SaveFilterData(self.reportType, reportScope, configName, 17, self.colorOutput.IsChecked())
 
                         # Report Content Options information may not already exist, so
@@ -1678,56 +1744,84 @@ class FilterDialog(wx.Dialog):
         if selectedTab == unicode(_("Episodes"), 'utf8'):
             # ... iterate through the Episodes in the Episode List
             for x in range(self.episodeList.GetItemCount()):
-                # If the Episode List Item's checked status does not match the desired status ...
-                if self.episodeList.IsChecked(x) != (btnID == T_CHECK_ALL):
+                # If the Episode List Item's checked status does not match the desired status AND
+                # (one of fewer items is selected OR
+                # the current item is selected) ...
+                if (self.episodeList.IsChecked(x) != (btnID == T_CHECK_ALL)) and \
+                   ((self.episodeList.GetSelectedItemCount() < 2) or
+                    (self.episodeList.GetItemState(x, wx.LIST_STATE_SELECTED) == wx.LIST_STATE_SELECTED)):
                     # ... then toggle the item so it will match
                     self.episodeList.ToggleItem(x)
         # if we're looking at the Transcripts tab ...
         elif selectedTab == unicode(_("Transcripts"), 'utf8'):
             # ... iterate through the Transcript items in the Transcript List
             for x in range(self.transcriptList.GetItemCount()):
-                # If the Transcript List Item's checked status does not match the desired status ...
-                if self.transcriptList.IsChecked(x) != (btnID == T_CHECK_ALL):
+                # If the Transcript List Item's checked status does not match the desired status  AND
+                # (one of fewer items is selected OR
+                # the current item is selected) ...
+                if (self.transcriptList.IsChecked(x) != (btnID == T_CHECK_ALL)) and \
+                   ((self.transcriptList.GetSelectedItemCount() < 2) or
+                    (self.transcriptList.GetItemState(x, wx.LIST_STATE_SELECTED) == wx.LIST_STATE_SELECTED)):
                     # ... then toggle the item so it will match
                     self.transcriptList.ToggleItem(x)
         # if we're looking at the Collections tab ...
         elif selectedTab == unicode(_("Collections"), 'utf8'):
             # ... iterate through the Collection items in the Collection List
             for x in range(self.collectionList.GetItemCount()):
-                # If the Collection List Item's checked status does not match the desired status ...
-                if self.collectionList.IsChecked(x) != (btnID == T_CHECK_ALL):
+                # If the Collection List Item's checked status does not match the desired status  AND
+                # (one of fewer items is selected OR
+                # the current item is selected) ...
+                if (self.collectionList.IsChecked(x) != (btnID == T_CHECK_ALL)) and \
+                   ((self.collectionList.GetSelectedItemCount() < 2) or
+                    (self.collectionList.GetItemState(x, wx.LIST_STATE_SELECTED) == wx.LIST_STATE_SELECTED)):
                     # ... then toggle the item so it will match
                     self.collectionList.ToggleItem(x)
         # if we're looking at the Clips tab ...
         elif selectedTab == unicode(_("Clips"), 'utf8'):
             # ... iterate through the Clips in the Clip List
             for x in range(self.clipList.GetItemCount()):
-                # If the Clip List Item's checked status does not match the desired status ...
-                if self.clipList.IsChecked(x) != (btnID == T_CHECK_ALL):
+                # If the Clip List Item's checked status does not match the desired status  AND
+                # (one of fewer items is selected OR
+                # the current item is selected) ...
+                if (self.clipList.IsChecked(x) != (btnID == T_CHECK_ALL)) and \
+                   ((self.clipList.GetSelectedItemCount() < 2) or
+                    (self.clipList.GetItemState(x, wx.LIST_STATE_SELECTED) == wx.LIST_STATE_SELECTED)):
                     # ... then toggle the item so it will match
                     self.clipList.ToggleItem(x)
-        # if we're looking at the Keywords tab ...
-        elif selectedTab == unicode(_("Keywords"), 'utf8'):
-            # ... iterate through the Keywords in the Keyword List
-            for x in range(self.keywordList.GetItemCount()):
-                # If the Keyword List Item's checked status does not match the desired status ...
-                if self.keywordList.IsChecked(x) != (btnID == T_CHECK_ALL):
-                    # ... then toggle the item so it will match
-                    self.keywordList.ToggleItem(x)
         # if we're looking at the Keywords Group tab ...
         elif selectedTab == unicode(_("Keyword Groups"), 'utf8'):
             # ... iterate through the Keyword Groups in the Keyword Group List
             for x in range(self.keywordGroupList.GetItemCount()):
-                # If the Keyword Group List Item's checked status does not match the desired status ...
-                if self.keywordGroupList.IsChecked(x) != (btnID == T_CHECK_ALL):
+                # If the Keyword Group List Item's checked status does not match the desired status  AND
+                # (one of fewer items is selected OR
+                # the current item is selected) ...
+                if (self.keywordGroupList.IsChecked(x) != (btnID == T_CHECK_ALL)) and \
+                   ((self.keywordGroupList.GetSelectedItemCount() < 2) or
+                    (self.keywordGroupList.GetItemState(x, wx.LIST_STATE_SELECTED) == wx.LIST_STATE_SELECTED)):
                     # ... then toggle the item so it will match
                     self.keywordGroupList.ToggleItem(x)
+        # if we're looking at the Keywords tab ...
+        elif selectedTab == unicode(_("Keywords"), 'utf8'):
+            # ... iterate through the Keywords in the Keyword List
+            for x in range(self.keywordList.GetItemCount()):
+                # If the Keyword List Item's checked status does not match the desired status  AND
+                # (one of fewer items is selected OR
+                # the current item is selected) ...
+                if (self.keywordList.IsChecked(x) != (btnID == T_CHECK_ALL)) and \
+                   ((self.keywordList.GetSelectedItemCount() < 2) or
+                    (self.keywordList.GetItemState(x, wx.LIST_STATE_SELECTED) == wx.LIST_STATE_SELECTED)):
+                    # ... then toggle the item so it will match
+                    self.keywordList.ToggleItem(x)
         # if we're looking at the Notes tab ...
         elif selectedTab == unicode(_("Notes"), 'utf8'):
             # ... iterate through the Notes in the Notes List
             for x in range(self.notesList.GetItemCount()):
-                # If the Notes List Item's checked status does not match the desired status ...
-                if self.notesList.IsChecked(x) != (btnID == T_CHECK_ALL):
+                # If the Notes List Item's checked status does not match the desired status  AND
+                # (one of fewer items is selected OR
+                # the current item is selected) ...
+                if (self.notesList.IsChecked(x) != (btnID == T_CHECK_ALL)) and \
+                   ((self.notesList.GetSelectedItemCount() < 2) or
+                    (self.notesList.GetItemState(x, wx.LIST_STATE_SELECTED) == wx.LIST_STATE_SELECTED)):
                     # ... then toggle the item so it will match
                     self.notesList.ToggleItem(x)
                     
@@ -1741,13 +1835,16 @@ class FilterDialog(wx.Dialog):
         if self.kwargs.has_key('episodeFilter') and (btnID in [self.btnEpUp.GetId(), self.btnEpDown.GetId()]):
             # If it's one of these, we're working on the Episode List
             listAffected = self.episodeList
+            # Determine which direction we're going
             if btnID == self.btnEpUp.GetId():
                 btnPressed = 'btnUp'
             else:
                 btnPressed = 'btnDown'
         # Next, check the Keyword-related Sort Buttons.
         elif self.kwargs.has_key('keywordFilter') and (btnID in [self.btnKwUp.GetId(), self.btnKwDown.GetId()]):
+            # If it's one of these, we're working on the Keyword List
             listAffected = self.keywordList
+            # Determine which direction we're going
             if btnID == self.btnKwUp.GetId():
                 btnPressed = 'btnUp'
             else:
@@ -1758,10 +1855,16 @@ class FilterDialog(wx.Dialog):
             
         # If the Move Item Up button is pressed ...
         if btnPressed == 'btnUp':
+            # We need to know the first UN-SELECTED item.  Initialize to the top of the list.
+            topItem = 0
             # Determine which item is selected (-1 is None)
             item = listAffected.GetNextItem(-1, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
             # If an item is selected ...
-            if item > -1:
+            while item > -1:
+                # If the current selected item is at the top of the list ...
+                if item - topItem == 0:
+                    # ... move the top indicator down to keep this item fixed in place
+                    topItem += 1
                 # Extract the data from the List
                 col1 = listAffected.GetItem(item, 0).GetText()
                 col2 = listAffected.GetItem(item, 1).GetText()
@@ -1769,7 +1872,7 @@ class FilterDialog(wx.Dialog):
                 # We store the color code in the ItemData!
                 colorSpec = listAffected.GetItemData(item)
                 # Check to make sure there's room to move up
-                if item > 0:
+                if item > topItem:
                     # Delete the current item
                     listAffected.DeleteItem(item)
                     # Insert a new item one position up and add the extracted data
@@ -1783,13 +1886,33 @@ class FilterDialog(wx.Dialog):
                     listAffected.SetItemState(item - 1, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
                     # Make sure the item is visible
                     listAffected.EnsureVisible(item - 1)
+                # Determine which item is selected (-1 is None)
+                item = listAffected.GetNextItem(item, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
 
         # If the Move Item Down button is pressed ...
         elif btnPressed == 'btnDown':
-            # Determine which item is selected (-1 is None)
+            # We need to go from the bottom of the list up, which the ListCtrl doesn't seem to support right.
+            # Therefore, we'll collect a list of selected item numbers, reverse that list, and then move the items
+            # based on the list.  First, we'll initialize the list.
+            sortList = []
+            # Set the bottom-of-list indicator to the last item in the list
+            topItem = listAffected.GetItemCount() - 1
+            # Find the first selected item
             item = listAffected.GetNextItem(-1, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
+            # While there are selected items to process ...
+            while item > -1:
+                # ... add the item to the list
+                sortList.append(item)
+                # ... and look for the next selected item
+                item = listAffected.GetNextItem(item, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
+            # When moving down, we need to work in reverse order to prevent sorting problems
+            sortList.reverse()
             # If an item is selected ...
-            if item > -1:
+            for item in sortList:
+                # If the current item is at the bottom of the list ...
+                if item - topItem == 0:
+                    # ... adjust the bottom position indicator so that it cannot be moved
+                    topItem -= 1
                 # Extract the data from the  List
                 col1 = listAffected.GetItem(item, 0).GetText()
                 col2 = listAffected.GetItem(item, 1).GetText()
@@ -1797,7 +1920,7 @@ class FilterDialog(wx.Dialog):
                 # We store the color code in the ItemData!
                 colorSpec = listAffected.GetItemData(item)
                 # Check to make sure there's room to move down
-                if item < listAffected.GetItemCount() - 1:
+                if item < topItem:
                     # Delete the current item
                     listAffected.DeleteItem(item)
                     # Insert a new item one position down and add the extracted data
@@ -2181,6 +2304,10 @@ class FilterDialog(wx.Dialog):
         """ Return the value of colorOutput on the Options tab """
         return self.colorOutput.GetValue()
 
+    def GetColorAsKeywords(self):
+        """ Return the value of colorAsKeywords on the Options tab """
+        return self.colorAsKeywords.GetSelection()
+
     def OnOK(self, event):
         """ implement the Filter Dialog's OK button """
         # If we're using a Default configuration ...
@@ -2238,7 +2365,7 @@ class FilterLoadDialog(wx.Dialog):
         box2.Add((1, 1), 1, wx.LEFT, 9)
         # If this is for the appropriate report type ...
         # (Copy Configuration has been implemented for Keyword Map, Keyword Visualization, Series Keyword Sequence Map,
-        # Series Keyword Bar Graph, Series Keyword Percentage Graph, and Collection Report.)
+        # Series Keyword Bar Graph, Series Keyword Percentage Graph, Collection Report.)
         if self.reportType in [1, 2, 5, 6, 7]:
             # ... display the Copy Configuration button
             btnCopy = wx.Button(self, -1, _("Copy Configuration"))
@@ -2283,7 +2410,7 @@ class FilterLoadDialog(wx.Dialog):
         """ View and select a configuration from another selection """
         # Get a list of configuration names that can be copied
         configList = self.GetConfigNames()
-        # Create the Configuration Copy dialog box
+        # Create the Configuration Copy dialog box.
         dlg = FilterCopyConfigDialog(self, _("Select a configuration to copy:"), self.title, configList)
         # Display the dialog and get feedback from the user
         if dlg.ShowModal() == wx.ID_OK:
@@ -2481,7 +2608,8 @@ class FilterCopyConfigDialog(wx.Dialog):
         # Display a list of choices the user can select from.  Building the control takes several steps.
         # First, use an Auto Width List Control
         self.choices = AutoWidthListCtrl(self, -1, size=(350, 200), style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES)
-        # Currently, all configs are Episode Based.  This may need to be parameterized later.
+        # For Series-based configs ...
+        # ... label the first column "Series"
         self.choices.InsertColumn(0, _('Series'))
         # We figure out if Episode Name is included by looking at the length of the data records sent.
         if (len(configNames) > 0) and len(configNames[0]) == 5:

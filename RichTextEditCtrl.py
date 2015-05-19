@@ -92,8 +92,8 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         self.StyleSetSpec(stc.STC_STYLE_DEFAULT, "size:%s,face:%s,fore:#000000,back:#ffffff" % (str(TransanaGlobal.configData.defaultFontSize), TransanaGlobal.configData.defaultFontFace))
         # Set the Line Number style based on the Default Font Face
         self.StyleSetSpec(stc.STC_STYLE_LINENUMBER, "size:10,face:%s" % TransanaGlobal.configData.defaultFontFace)
-        # Indicated that we want Word Wrap
-        self.SetWrapMode(stc.STC_WRAP_WORD)
+        # Set Word Wrap as configured
+        self.SetWrapMode(TransanaGlobal.configData.wordWrap)  # (stc.STC_WRAP_WORD)
 
         # Setting the LayoutCache to the whole document seems to reduce the typing lag problem on the PPC Mac
         self.SetLayoutCache(stc.STC_CACHE_DOCUMENT)
@@ -103,8 +103,8 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         # Turn off Anti-Aliasing
         self.SetUseAntiAliasing(False)
 
-        # Let's set the default Tab Width to 4 to maintain compatibility with Transana 1.24
-        self.SetTabWidth(4)
+        # Set the Tab Width to the configured size
+        self.SetTabWidth(int(TransanaGlobal.configData.tabSize))
         # Indicate that we would like Line Numbers in the STC Margin
         self.SetMarginType(0, stc.STC_MARGIN_NUMBER)
         # We need a slighly wider Line Number section on the Mac.  This code determines an optimum width by platform
@@ -509,7 +509,17 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
 
                 else:
 
+                    # I've seen some sporadic problems converting RTF.  Specifically, chunks of the transcript get loaded
+                    # in the wrong order, or in the wrong place in the new document.
+                    #
+                    # This problem can be detected by comparing GetCurrentPos() to GetLength(), since new text should
+                    # ALWAYS be added to the end of the document.  If this problem is detected ...
+                    if self.GetCurrentPos() != self.GetLength():
+                        # ... correct it by resetting the CurrentPos to the last character in the document!
+                        self.SetCurrentPos(self.GetLength())
+                    
                     startpos = self.GetCurrentPos()
+
                     self.AddText(obj.text)
 
                     # If we receive Unicode objects, we need to decode them so we can figure out their correct length, which

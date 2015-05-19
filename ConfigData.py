@@ -24,6 +24,8 @@ if DEBUG:
 
 # Import wxPython
 import wx
+# Import the Styled Text Control for a constant
+from wx import stc
 # import Python os module
 import os
 # Import Transana's Constants
@@ -74,6 +76,8 @@ class ConfigData(object):
         str = str + 'language = %s\n\n' % self.language
         str = str + 'databaseList = %s\n\n' % self.databaseList
         str += 'pathsByDB = %s\n' % self.pathsByDB
+        str += 'tabSize = %s\n' % self.tabSize
+        str += 'wordWrap = %s\n' % self.wordWrap
         str = str + 'defaultFontFace = %s\n' % self.defaultFontFace
         str = str + 'defaultFontSize = %s\n' % self.defaultFontSize
         str = str + 'keywordMapBarHeight = %s\n' % self.keywordMapBarHeight
@@ -91,6 +95,7 @@ class ConfigData(object):
         str = str + 'singleLineDisplay = %s\n' % self.singleLineDisplay
         str = str + 'showLegend = %s\n' % self.showLegend
         str = str + 'colorOutput = %s\n' % self.colorOutput
+        str += 'colorAsKeywords = %s\n' % self.colorAsKeywords
         str = str + 'colorConfigFilename = %s\n' % self.colorConfigFilename
         str = str + 'quickClipsWarning = %s\n' % self.quickClipWarning
         if 'wxMSW' in wx.PlatformInfo:
@@ -135,6 +140,8 @@ class ConfigData(object):
             defaultHost = 'localhost'
         else:
             defaultHost = ''
+        # Default tab size is 4
+        self.tabSize = '4'
         # Default Font Face is Courier New, a fixed-width font
         self.defaultFontFace = "Courier New"
         # Default Font Size is 10, reasoning that smaller is better
@@ -178,6 +185,10 @@ class ConfigData(object):
             self.messageServerPort = config.ReadInt('/2.0/MessagePort', 17595)
             # Load Language Setting
             self.language = config.Read('/2.0/Language', '')
+            # Load the Tab Size Setting
+            self.tabSize = config.Read('/2.0/TabSize', '4')
+            # Load the Word Wrap setting
+            self.wordWrap = config.ReadInt('/2.0/WordWrap', stc.STC_WRAP_WORD)
             # Load Default Font Face Setting
             self.defaultFontFace = config.Read('/2.0/FontFace', self.defaultFontFace)
             # Load Default Font Size Setting
@@ -255,6 +266,8 @@ class ConfigData(object):
                 self.quickClipMode = True
             # Auto Word Tracking is enabled by default
             self.wordTracking = True
+            # Word Wrap
+            self.wordWrap = stc.STC_WRAP_WORD
             # Language setting
             self.language = ''
             # Load Keyword Map Bar Height Setting
@@ -297,6 +310,9 @@ class ConfigData(object):
         self.showLegend = True
         # Initialize Color Output Setting
         self.colorOutput = True
+        # Initialize the colorAsKeywords setting for the Keyword Map
+        self.colorAsKeywords = config.ReadInt('/2.0/ColorAsKeywords', 0)
+        # Initialize Color Configuration Filename 
         self.colorConfigFilename = config.Read('/2.0/ColorConfigFilename', '')
         # Load the Quick Clips Warning setting
         self.quickClipWarning = config.ReadInt('/2.0/QuickClipWarning', True)
@@ -443,6 +459,10 @@ class ConfigData(object):
         # Now we can save it to the config file/registry
         config.Write('/2.0/pathsByDB', tmpPathsByDB)
 
+        # Save Tab Size setting
+        config.Write('/2.0/TabSize', self.tabSize)
+        # Save the Word Wrap setting
+        config.WriteInt('/2.0/WordWrap', self.wordWrap)
         # Save Default Font Face Setting
         config.Write('/2.0/FontFace', self.defaultFontFace)
         # Save Default Font Size Setting
@@ -473,6 +493,8 @@ class ConfigData(object):
         config.WriteInt('/2.0/SeriesMapVerticalGridLines', self.seriesMapVerticalGridLines)
         # Save the Series Map Sequence Map Single Line Setting
         config.WriteInt('/2.0/SeriesMapSequenceMapSingleLine', self.singleLineDisplay)
+        # Save the Keyword Map's colorAsKeywords setting
+        config.WriteInt('/2.0/ColorAsKeywords', self.colorAsKeywords)
         # Save Color Configuration Filename
         config.Write('/2.0/ColorConfigFilename', self.colorConfigFilename)
         # Save the Quick Clips Warning setting

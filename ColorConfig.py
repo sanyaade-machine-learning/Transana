@@ -56,8 +56,8 @@ class ColorConfig(wx.Dialog):
         # Create the sizer for Row 1
         boxRow1 = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Create a List Control for the Color List
-        self.colorList = wx.ListCtrl(self, -1, size=(200, 350), style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        # Create a List Control for the Color List, allowing multi-select
+        self.colorList = wx.ListCtrl(self, -1, size=(200, 350), style=wx.LC_REPORT)
         # Define the Item Selected event for the List Control
         self.colorList.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnItemSelected)
         # Add the List Control to the Sizer
@@ -336,56 +336,75 @@ class ColorConfig(wx.Dialog):
         """ Up or Down Button Press """
         # Remember which button triggered this event, Up or Down
         btnID = event.GetId()
+        # Let's make a list of the selected items
+        sortList = []
+        # Find the index of the first selected item
+        item = self.colorList.GetNextItem(-1, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
+        # While there is another selected item to process ...
+        while item > -1:
+            # ... add the item index to the item list
+            sortList.append(item)
+            # See if there's another selected item
+            item = self.colorList.GetNextItem(item, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
         # If we're moving UP ...
         if btnID == self.btnUp.GetId():
-            # ... we want to work on the item ABOVE the current selection
-            itemToChange = self.currentItem - 1
+            # ... note that the end item is 0, the top of the list
+            topItem = 0
+            # ... and note that item adjustment direction is positive
+            itemAdjust = 1
         # If we're moving DOWN ...
         elif btnID == self.btnDown.GetId():
-            # ... we want to work on the item BELOW the current selection
-            itemToChange = self.currentItem + 1
-        else:
-            print "Unknown button in OnUpDown()"
-            return
+            # ... reverse the order of the list, as we need to work from the bottom up to make this work
+            sortList.reverse()
+            # ... note that the end item is ABOVE white, at the the of the list, which is immovable.
+            topItem = self.colorList.GetItemCount() - 2
+            # ... and note that item adjustment direction is negative
+            itemAdjust = -1
+        # For each item in the item list ...
+        for currentItem in sortList:
+            # If the current item is at the top/bottom of the list, and thus immovable, ...
+            if currentItem - topItem == 0:
+                # ... we need to move the list top/bottom indicator by one to compensate.
+                topItem += itemAdjust
+            # If (we're going UP and below the top item OR
+            #     we're going DOWN and above the bottom movable item) AND
+            #     we're NOT the last item in the list (immovable White) and going up ...
+            if (((currentItem > topItem) and (btnID == self.btnUp.GetId())) or \
+               ((currentItem < topItem) and (btnID == self.btnDown.GetId()))) and \
+               not ((currentItem == self.colorList.GetItemCount() - 1) and (btnID == self.btnUp.GetId())):
+                # If we're moving UP ...
+                if btnID == self.btnUp.GetId():
+                    # ... we want to work on the item ABOVE the current selection
+                    itemToChange = currentItem - 1
+                # If we're moving DOWN ...
+                elif btnID == self.btnDown.GetId():
+                    # ... we want to work on the item BELOW the current selection
+                    itemToChange = currentItem + 1
 
-        # To move items, we must meet the following conditions:
-        #   Something in the list must be selected
-        #   We can't move the first item UP
-        #   We can't move the LAST item (White) UP!
-        #   We can't move the last TWO items down.  (White must be LAST in the list.)
-        if (self.colorList.GetSelectedItemCount() != 1) or \
-           ((self.currentItem == 0) and (btnID == self.btnUp.GetId())) or \
-           ((self.currentItem == self.colorList.GetItemCount() - 1) and (btnID == self.btnUp.GetId())) or \
-           ((self.currentItem >= self.colorList.GetItemCount() - 2) and (btnID == self.btnDown.GetId())):
-            # If we don't meet these conditions, exit this method.
-            return
+                # Remember the values for the current selection
+                currentItemName = self.colorList.GetItem(currentItem, 0).GetText()
+                currentItemHex = self.colorList.GetItem(currentItem, 1).GetText()
+                currentItemRed = self.colorList.GetItem(currentItem, 2).GetText()
+                currentItemGreen = self.colorList.GetItem(currentItem, 3).GetText()
+                currentItemBlue = self.colorList.GetItem(currentItem, 4).GetText()
+                # Delete the current selection.  (I tried swapping values in existing items, but couldn't
+                # figure out how with the images in the first column.)
+                self.colorList.DeleteItem(currentItem)
 
-        # Remember the values for the current selection
-        currentItemName = self.colorList.GetItem(self.currentItem, 0).GetText()
-        currentItemHex = self.colorList.GetItem(self.currentItem, 1).GetText()
-        currentItemRed = self.colorList.GetItem(self.currentItem, 2).GetText()
-        currentItemGreen = self.colorList.GetItem(self.currentItem, 3).GetText()
-        currentItemBlue = self.colorList.GetItem(self.currentItem, 4).GetText()
-        # Delete the current selection.  (I tried swapping values in existing items, but couldn't
-        # figure out how with the images in the first column.)
-        self.colorList.DeleteItem(self.currentItem)
+                # Create a new item in the desired new position and populate it with values stored above
+                index = self.colorList.InsertImageStringItem(itemToChange, currentItemName, self.imageIndex[currentItem])
+                self.colorList.SetStringItem(index, 1, currentItemHex)
+                self.colorList.SetStringItem(index, 2, currentItemRed)
+                self.colorList.SetStringItem(index, 3, currentItemGreen)
+                self.colorList.SetStringItem(index, 4, currentItemBlue)
 
-        # Create a new item in the desired new position and populate it with values stored above
-        index = self.colorList.InsertImageStringItem(itemToChange, currentItemName, self.imageIndex[self.currentItem])
-        self.colorList.SetStringItem(index, 1, currentItemHex)
-        self.colorList.SetStringItem(index, 2, currentItemRed)
-        self.colorList.SetStringItem(index, 3, currentItemGreen)
-        self.colorList.SetStringItem(index, 4, currentItemBlue)
+                # Need to swap imageIndex values!
+                imgIndex = self.imageIndex[currentItem]
+                self.imageIndex[currentItem] = self.imageIndex[itemToChange]
+                self.imageIndex[itemToChange] = imgIndex
 
-        # Need to swap imageIndex values!
-        imgIndex = self.imageIndex[self.currentItem]
-        self.imageIndex[self.currentItem] = self.imageIndex[itemToChange]
-        self.imageIndex[itemToChange] = imgIndex
-
-        # Now to select the moved position
-        self.colorList.SetItemState(itemToChange, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
-        # The current item is now the new selection, where we moved to.
-        self.currentItem = itemToChange
+                # Now to select the moved position
+                self.colorList.SetItemState(itemToChange, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
 
     def OnColorSelect(self, event):
         """ Color Select Button Press """
@@ -747,6 +766,12 @@ class ColorConfig(wx.Dialog):
 
     def OnAdd(self, event):
         """ Add Button Press -- Add a Color """
+        # If multiple items are selected in the list ...
+        if self.colorList.GetSelectedItemCount > 1:
+            # ... iterate through the whole list ...
+            for item in range(self.colorList.GetItemCount() - 1):
+                # ... delect the item
+                self.colorList.SetItemState(item, 0, wx.LIST_STATE_SELECTED)
         # Validate the Color Definition, including making sure we don't have duplicate color names.
         (success, colorRed, colorGreen, colorBlue) = self.ValidateColorDef(True)
         # If not valid, we're done here.
@@ -770,6 +795,14 @@ class ColorConfig(wx.Dialog):
 
     def OnEdit(self, event):
         """ Edit Button Press -- Edit a Color """
+        # If multiple items are selected in the list ...
+        if self.colorList.GetSelectedItemCount > 1:
+            # ... iterate through the whole list ...
+            for item in range(self.colorList.GetItemCount() - 1):
+                # ... and for all items except the currentItem ...
+                if item != self.currentItem:
+                    # ... delect the item
+                    self.colorList.SetItemState(item, 0, wx.LIST_STATE_SELECTED)
         # Validate the Color Definition, including making sure we don't have duplicate color names.
         (success, colorRed, colorGreen, colorBlue) = self.ValidateColorDef()
         # If not valid, we're done here.
@@ -803,14 +836,31 @@ class ColorConfig(wx.Dialog):
 
     def OnDelete(self, event):
         """ Delete Button Press -- Delete a Color """
-        # NOTE:  We cannot delete the last entry in the list.  Transana requires White at the end of the color list.
-        if self.currentItem < self.colorList.GetItemCount() - 1:
-            # Delete the current selection.
-            self.colorList.DeleteItem(self.currentItem)
-            # Remove the image index as well!
-            self.imageIndex = self.imageIndex[:self.currentItem] + self.imageIndex[self.currentItem + 1:]
-            # Now to select the item in that same position
-            self.colorList.SetItemState(self.currentItem, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
+        # Let's make a list of the selected items
+        delList = []
+        # Find the first selected item
+        item = self.colorList.GetNextItem(-1, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
+        # While there are selected items ...
+        while item > -1:
+            # Add the current item to the list
+            delList.append(item)
+            # Determine which item is selected (-1 is None)
+            item = self.colorList.GetNextItem(item, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
+        # Now reverse the order of the list.  We need to delete from the bottom up, as deletions change item numbers.
+        delList.reverse()
+        # Iterate through the deletion list
+        for currentItem in delList:
+            # NOTE:  We cannot delete the last entry in the list.  Transana requires White at the end of the color list.
+            if currentItem < self.colorList.GetItemCount() - 1:
+                # Delete the current selection.
+                self.colorList.DeleteItem(currentItem)
+                # Remove the image index as well!
+                self.imageIndex = self.imageIndex[:currentItem] + self.imageIndex[currentItem + 1:]
+        # We need to have something selected in the list.  See if we need to change the currentItem index.
+        if self.currentItem >= self.colorList.GetItemCount():
+            self.currentItem = self.colorList.GetItemCount() - 1
+        # Make a selection in the list.
+        self.colorList.SetItemState(self.currentItem, wx.LIST_STATE_SELECTED, wx.LIST_STATE_SELECTED)
 
     def OnOK(self, event):
         """ OK Button Press """

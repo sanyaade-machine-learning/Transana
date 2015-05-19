@@ -1442,7 +1442,8 @@ class _NodeData:
                                     # Root, SeriesRootNode, SeriesNode, EpisodeNode, TranscriptNode,
                                     # CollectionsRootNode, CollectionNode, ClipNode,
                                     # KeywordsRootNode, KeywordGroupNode, KeywordNode, KeywordExampleNode
-                                    # NotesGroupNode, NoteNode,
+                                    # NotesGroupNode, SeriesNoteNode, EpisodeNoteNode, TranscriptNoteNode,
+                                    # CollectionNoteNode, ClipNoteNode,
                                     # SearchRootNode, SearchResultsNode, SearchSeriesNode, SearchEpisodeNode,
                                     # SearchTranscriptNode, SearchCollectionNode, SearchClipNode
         self.recNum = recNum        # recNum indicates the Database Record Number of the node
@@ -1586,10 +1587,18 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # SearchCollections, and SearchClips have
         # "Cut" options as their first menu items and "Copy" as their second menu items.)
         if event.GetId() in [self.cmd_id_start["episode"],
-                             self.cmd_id_start["collection"],           self.cmd_id_start["clip"],           self.cmd_id_start["kw"],
-                             self.cmd_id_start["searchcollection"],     self.cmd_id_start["searchclip"],
-                             self.cmd_id_start["collection"] + 1,       self.cmd_id_start["clip"] + 1,        self.cmd_id_start["kw"] + 1,
-                             self.cmd_id_start["searchcollection"] + 1, self.cmd_id_start["searchclip"] + 1]:
+                             self.cmd_id_start["collection"],
+                             self.cmd_id_start["clip"],
+                             self.cmd_id_start["note"],
+                             self.cmd_id_start["kw"],
+                             self.cmd_id_start["searchcollection"],
+                             self.cmd_id_start["searchclip"],
+                             self.cmd_id_start["collection"] + 1,
+                             self.cmd_id_start["clip"] + 1,
+                             self.cmd_id_start["note"] + 1,
+                             self.cmd_id_start["kw"] + 1,
+                             self.cmd_id_start["searchcollection"] + 1,
+                             self.cmd_id_start["searchclip"] + 1]:
             # If "Cut" or "Copy", get the selected item from cutCopyInfo
             sel_item = self.cutCopyInfo['sourceItem']
             
@@ -1656,10 +1665,18 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
             # If the event was triggered by a "Cut" or "Copy" request ...
             if event.GetId() in [self.cmd_id_start["episode"],
-                                 self.cmd_id_start["collection"],           self.cmd_id_start["clip"],           self.cmd_id_start["kw"],
-                                 self.cmd_id_start["searchcollection"],     self.cmd_id_start["searchclip"],
-                                 self.cmd_id_start["collection"] + 1,       self.cmd_id_start["clip"] + 1,        self.cmd_id_start["kw"] + 1,
-                                 self.cmd_id_start["searchcollection"] + 1, self.cmd_id_start["searchclip"] + 1]:
+                                 self.cmd_id_start["collection"],
+                                 self.cmd_id_start["clip"],
+                                 self.cmd_id_start["note"],
+                                 self.cmd_id_start["kw"],
+                                 self.cmd_id_start["searchcollection"],
+                                 self.cmd_id_start["searchclip"],
+                                 self.cmd_id_start["collection"] + 1,
+                                 self.cmd_id_start["clip"] + 1,
+                                 self.cmd_id_start["note"] + 1,
+                                 self.cmd_id_start["kw"] + 1,
+                                 self.cmd_id_start["searchcollection"] + 1,
+                                 self.cmd_id_start["searchclip"] + 1]:
                 # ... open the clipboard ...
                 # wx.TheClipboard.Open()
                 # ... put the data in the clipboard ...
@@ -1760,14 +1777,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Find the correct Series, Episode, or Transcript node using the map dictionary
             if seriesNum > 0:
                 item = mapDict['Series'][seriesNum]
+                noteNodeType = 'SeriesNoteNode'
             elif episodeNum > 0:
                 item = mapDict['Episode'][episodeNum]
+                noteNodeType = 'EpisodeNoteNode'
             elif transcriptNum > 0:
                 item = mapDict['Transcript'][transcriptNum]
+                noteNodeType = 'TranscriptNoteNode'
             # Create the tree node
             noteitem = self.AppendItem(item, noteID)
             # Add the node's image and node data
-            nodedata = _NodeData(nodetype='NoteNode', recNum=noteNum)  # Identify this as a Note node
+            nodedata = _NodeData(nodetype=noteNodeType, recNum=noteNum)  # Identify this as a Note node
             self.SetPyData(noteitem, nodedata)                  # Associate this data with the node
             self.set_image(noteitem, "Note16")
 
@@ -1874,18 +1894,20 @@ class _DBTreeCtrl(wx.TreeCtrl):
             if collectNum > 0:
                 if mapDict['Collection'].has_key(collectNum):
                     item = mapDict['Collection'][collectNum]
+                    noteNodeType = 'CollectionNoteNode'
                 else:
                     print "ABANDONED COLLECTION NOTE RECORD!", noteNum, noteID.encode('utf8'), collectNum
             elif clipNum > 0:
                 if mapDict['Clip'].has_key(clipNum):
                     item = mapDict['Clip'][clipNum]
+                    noteNodeType = 'ClipNoteNode'
                 else:
                     print "ABANDONED CLIP NOTE RECORD!", noteNum, noteID.encode('utf8'), clipNum
             if item != None:
                 # Create the tree node
                 noteitem = self.AppendItem(item, noteID)
                 # Add the node's image and node data
-                nodedata = _NodeData(nodetype='NoteNode', recNum=noteNum)  # Identify this as a Note node
+                nodedata = _NodeData(nodetype=noteNodeType, recNum=noteNum)  # Identify this as a Note node
                 self.SetPyData(noteitem, nodedata)                  # Associate this data with the node
                 self.set_image(noteitem, "Note16")
 
@@ -1967,11 +1989,23 @@ class _DBTreeCtrl(wx.TreeCtrl):
     def add_note_nodes(self, note_ids, item, **parent_num):
         """ Add the notes specified in note_ids to item """
         if len(note_ids) > 0:
+            if parent_num.has_key('Series'):
+                noteNodeType = 'SeriesNoteNode'
+            elif parent_num.has_key('Episode'):
+                noteNodeType = 'EpisodeNoteNode'
+            elif parent_num.has_key('Transcript'):
+                noteNodeType = 'TranscriptNoteNode'
+            elif parent_num.has_key('Collection'):
+                noteNodeType = 'CollectionNoteNode'
+            elif parent_num.has_key('Clip'):
+                noteNodeType = 'ClipNoteNode'
+            else:
+                noteNodeType = 'NoteNode'
             for n in note_ids:
                 noteitem = self.AppendItem(item, n)
                 self.set_image(noteitem, "Note16")
                 note = Note.Note(n, **parent_num)
-                nodedata = _NodeData(nodetype='NoteNode', recNum=note.number)  # Identify this as a Note node
+                nodedata = _NodeData(nodetype=noteNodeType, recNum=note.number)  # Identify this as a Note node
                 self.SetPyData(noteitem, nodedata)                          # Associate this data with the node
                 del note
 
@@ -1997,7 +2031,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # First, let's see if we're dealing with a NOTE, as the next node is different if we are.
         if ((nodeListPos == len(nodeData) - 1) and (nodeType in ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode',
                                                                  'CollectionNoteNode', 'ClipNoteNode'])):
-            expectedNodeType = 'NoteNode'
+            expectedNodeType = nodeType
         # For ClipNotes only, we need to move from Collection to Clip at the second-to-last node
         elif ((nodeListPos == len(nodeData) - 2) and (nodeType == 'ClipNoteNode')):
             expectedNodeType = 'ClipNode'
@@ -2189,14 +2223,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     newNode = self.AppendItem(currentNode, node)
                     # Add the tree node's graphic.  This section only applied to Clips.
                     self.set_image(newNode, "Clip16")
-                    # Get the Node Type data
-                    newNodeType = expectedNodeType
                     # Get the current (clip) record number
                     currentRecNum = nodeRecNum
                     # Get the parent information
                     currentParent = nodeParent
                     # Use this data to create the node data
-                    nodedata = _NodeData(nodetype=newNodeType, recNum=currentRecNum, parent=currentParent)
+                    nodedata = _NodeData(nodetype=expectedNodeType, recNum=currentRecNum, parent=currentParent)
                     # Assign the node data to the new node.
                     self.SetPyData(newNode, nodedata)
                     # Signal that we're done!
@@ -2404,12 +2436,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                       dlg.ShowModal()
                       dlg.Destroy()
                     # Create the Node Data and attach it to the Node
-                    # If the expectedNodeType is ANY Note Node, we need to set it to NoteNode
-                    if expectedNodeType  in ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
-                        newNodeType = 'NoteNode'
-                    else:
-                        newNodeType = expectedNodeType
-                    nodedata = _NodeData(nodetype=newNodeType, recNum=currentRecNum, parent=currentParent)
+                    nodedata = _NodeData(nodetype=expectedNodeType, recNum=currentRecNum, parent=currentParent)
                     self.SetPyData(newNode, nodedata)
                     if expandNode:
                         self.Expand(currentNode)
@@ -2704,7 +2731,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Transcript Menu
         # Default Double-click is Open.  (See OnItemActivated())
         self.create_menu("transcript",
-                         (_("Open"), _("Open Additional Transcript"), _("Add Transcript Note"), _("Delete Transcript"), _("Transcript Properties")),
+                         (_("Paste"), _("Open"), _("Open Additional Transcript"), _("Add Transcript Note"),
+                           _("Delete Transcript"), _("Transcript Properties")),
                          self.OnTranscriptCommand)
 
         # Collection Root Menu
@@ -2719,7 +2747,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         (_("Cut"), _("Copy"), _("Paste"),
                          _("Add Clip"), _("Add Multi-transcript Clip"), _("Add Nested Collection"),
                          _("Add Collection Note"), _("Delete Collection"),
-                         _("Collection Report"), _("Clip Data Export"), _("Play All Clips"),
+                         _("Collection Report"), _("Collection Keyword Map"), _("Clip Data Export"), _("Play All Clips"),
                          _("Collection Properties")),
                         self.OnCollectionCommand)
 
@@ -2762,7 +2790,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Note Menu
         # Default Double-click is Open.  (See OnItemActivated())
         self.create_menu("note",
-                        (_("Open"), _("Delete Note"), _("Note Properties")),
+                        (_("Cut"), _("Copy"), _("Open"), _("Delete Note"), _("Note Properties")),
                         self.OnNoteCommand)
         
         # The Search Root Node menu
@@ -3280,10 +3308,27 @@ class _DBTreeCtrl(wx.TreeCtrl):
         selData = self.GetPyData(sel)
         transcript_name = self.GetItemText(sel)
         
-        if n == 0:      # Open
+        if n == 0:      # Paste
+            # Open the Clipboard
+            # wx.TheClipboard.Open()
+            # specify the data formats to accept
+            df = wx.CustomDataFormat('DataTreeDragData')
+            # Specify the data object to accept data for this format
+            cdo = wx.CustomDataObject(df)
+            # Try to get the appropriate data from the Clipboard      
+            success = wx.TheClipboard.GetData(cdo)
+            # If we got appropriate data ...
+            if success:
+                # ... unPickle the data so it's in a usable format
+                data = cPickle.loads(cdo.GetData())
+                DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
+                # Clear the Clipboard.  We can't paste again, since the data has been moved!
+                DragAndDropObjects.ClearClipboard()
+
+        elif n == 1:      # Open
             self.OnItemActivated(evt)                            # Use the code for double-clicking the Transcript
 
-        elif n == 1:    # Open additional Transcript
+        elif n == 2:    # Open additional Transcript
             # Get the Episode Name, which is the tree selection's parent's text
             episode_name = self.GetItemText(self.GetItemParent(sel))
             # Get the Series Name, which is the tree selection's grand-parent's text
@@ -3291,10 +3336,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Open the transcript as an additional Transcript
             self.parent.ControlObject.OpenAdditionalTranscript(selData.recNum, series_name, episode_name)
             
-        elif n == 2:    # Add Note
+        elif n == 3:    # Add Note
             self.parent.add_note(transcriptNum=selData.recNum)
 
-        elif n == 3:    # Delete
+        elif n == 4:    # Delete
             # Load the Selected Transcript
             transcript = Transcript.Transcript(selData.recNum)
             # Get user confirmation of the Transcript Delete request
@@ -3354,7 +3399,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
 
-        elif n == 4:    # Properties
+        elif n == 5:    # Properties
             series_name = self.GetItemText(self.GetItemParent(self.GetItemParent(sel)))
             episode_name = self.GetItemText(self.GetItemParent(sel))
             episode = Episode.Episode()
@@ -3567,10 +3612,16 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                             showTranscripts=True, showKeywords=True, showComments=False,
                                             showCollectionNotes=False, showClipNotes=False, showNested=True)
 
-        elif n == 9:    # Clip Data Export
+        elif n == 9:    # Collection Keyword Map Report
+            # Call the Collection Keyword Map 
+            self.CollectionKeywordMapReport(selData.recNum)
+
+        elif n == 10:    # Clip Data Export
+            # Call Clip Data Export with the Collection Number
             self.ClipDataExport(collectionNum = selData.recNum)
 
-        elif n == 10:    # Play All Clips
+        elif n == 11:    # Play All Clips
+            # Get the appropriate collection
             coll = Collection.Collection(coll_name, parent_num)
             # Play All Clips takes the current Collection and the ControlObject as parameters.
             # (The ControlObject is owned not by the _DBTreeCtrl but by its parent)
@@ -3582,7 +3633,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Let's clear all the Windows, since we don't want to stay in the last Clip played.
             self.parent.ControlObject.ClearAllWindows()
 
-        elif n == 11:    # Properties
+        elif n == 12:    # Properties
             # FIXME: Gracefully handle when we can't load the Collection.
             coll = Collection.Collection(coll_name, parent_num)
             self.parent.edit_collection(coll)
@@ -4187,10 +4238,20 @@ class _DBTreeCtrl(wx.TreeCtrl):
         note_name = self.GetItemText(sel)
         selData = self.GetPyData(sel)
         
-        if n == 0:      # Open
+        if n == 0:      # Cut
+            self.cutCopyInfo['action'] = 'Move'    # Functionally, "Cut" is the same as Drag/Drop Move
+            self.cutCopyInfo['sourceItem'] = sel
+            self.OnCutCopyBeginDrag(evt)
+
+        elif n == 1:    # Copy
+            self.cutCopyInfo['action'] = 'Copy'
+            self.cutCopyInfo['sourceItem'] = sel
+            self.OnCutCopyBeginDrag(evt)
+
+        elif n == 2:      # Open
             self.OnItemActivated(evt)                            # Use the code for double-clicking the Note
 
-        elif n == 1:    # Delete
+        elif n == 3:    # Delete
             # Load the Selected Note
             note = Note.Note(selData.recNum)
             # Get user confirmation of the Note Delete request
@@ -4250,7 +4311,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
 
-        elif n == 2:    # Properties
+        elif n == 4:    # Properties
             note = Note.Note(selData.recNum)
             self.parent.edit_note(note)
 
@@ -4534,7 +4595,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 if endTime <= 0:
                     endTime = self.parent.ControlObject.currentObj.clip_stop
             # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
-            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, self.parent.ControlObject.GetVideoCheckboxDataForClips(startTime))
+            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, videoCheckboxData=self.parent.ControlObject.GetVideoCheckboxDataForClips(startTime))
             # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
             # because drag and drop is an alternate way to create a Quick Clip.
             DragAndDropObjects.CreateQuickClip(clipData, kw_group, kw_name, self)
@@ -4549,7 +4610,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Initialize Transcript Number to 0, which signals multi-transcript Quick Clip
             transcriptNum = 0
             # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
-            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, tempClip.clip_start, tempClip.clip_stop, tempClip, self.parent.ControlObject.GetVideoCheckboxDataForClips(tempClip.clip_start))
+            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, tempClip.clip_start, tempClip.clip_stop, tempClip, videoCheckboxData=self.parent.ControlObject.GetVideoCheckboxDataForClips(tempClip.clip_start))
             # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
             # because drag and drop is an alternate way to create a Quick Clip.
             DragAndDropObjects.CreateQuickClip(clipData, kw_group, kw_name, self)
@@ -5283,7 +5344,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             elif sel_item_data.nodetype == 'KeywordExampleNode':
                 menu = self.menu["kw_example"]
 
-            elif sel_item_data.nodetype == 'NoteNode':
+            elif sel_item_data.nodetype in ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
                 menu = self.menu["note"]
 
             elif sel_item_data.nodetype == 'SearchRootNode':
@@ -5436,7 +5497,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     sel_item_data = self.GetPyData(sel_item)                 # Get the Collection's data so we can test its nodetype
                     self.parent.ControlObject.LoadClipByNumber(sel_item_data.recNum)  # Load everything via the ControlObject
 
-                elif sel_item_data.nodetype == 'NoteNode':
+                elif sel_item_data.nodetype in ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
                     # We store the record number in the data for the node item
                     num = self.GetPyData(sel_item).recNum
                     n = Note.Note(num)
@@ -5470,6 +5531,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # or a type that is explicitly handled in OnEndLabelEdit() ...
         if not (sel_item_data.nodetype in ['SeriesNode', 'EpisodeNode', 'TranscriptNode',
                                            'CollectionNode', 'ClipNode', 'NoteNode',
+                                           'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode',
                                            'KeywordNode',
                                            'SearchResultsNode', 
                                            'SearchCollectionNode', 'SearchClipNode']):
@@ -5520,7 +5582,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     tempObject = Clip.Clip(sel_item_data.recNum)
 
                 # If we are renaming a Note Record...
-                elif sel_item_data.nodetype == 'NoteNode':
+                elif sel_item_data.nodetype in ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
                     # Load the Note
                     tempObject = Note.Note(sel_item_data.recNum)
 
@@ -5617,7 +5679,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             # Prepend these on the Messsage
                             nodetype = sel_item_data.nodetype
                             # If we have a Note Node, we need to know which kind of Note.
-                            if nodetype == 'NoteNode':
+                            if nodetype in ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
                                 nodetype = '%sNoteNode' % tempObject.notetype
                             msg = nodetype + " >|< " + rootNodeType + msg
                             if DEBUG:
@@ -5732,6 +5794,13 @@ class _DBTreeCtrl(wx.TreeCtrl):
         frame = KeywordMapClass.KeywordMap(self, -1, _("Transana Keyword Map Report"), embedded=False)
         # Now set it up, passing in the Series and Episode to be displayed
         frame.Setup(episodeNum = episodeNum, seriesName = seriesName, episodeName = episodeName)
+
+    def CollectionKeywordMapReport(self, collNum):
+        """ Produce a Collection Keyword Map Report for the specified Collection """
+        # Create a Keyword Map Report (not embedded)
+        frame = KeywordMapClass.KeywordMap(self, -1, _("Transana Collection Keyword Map Report"), embedded=False)
+        # Now set it up, passing in the Series and Episode to be displayed
+        frame.Setup(collNum = collNum)
 
     def KeywordMapLoadClip(self, clipNum):
         """ This method is called FROM the Keyword Map and causes a specified Clip to be loaded. """

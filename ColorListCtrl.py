@@ -27,7 +27,7 @@ import TransanaGlobal
 class ColorListCtrl(wx.Panel):
     """ This class is like a CheckListCtrl, but displays a COLOR box for the check box. """
     # While the ColorListCtrl is actually a panel, it needs to look and act like a ListCtrl to the parent.
-    def __init__(self, parent):
+    def __init__(self, parent, multSelect=False):
         # Initialize a data structure to keep track of whether items are selected or deselected
         self.itemChecks = []
         # Create a panel to hold all the controls for the ColorListCtrl.  
@@ -39,8 +39,14 @@ class ColorListCtrl(wx.Panel):
         # Create instructions and add to the sizer
         instructions = wx.StaticText(self, -1, _('Click the color box to select/unselect a keyword.  A color is "selected," white is "unselected."'))
         vSizer.Add(instructions, 0, wx.ALL, 2)
-        # Create a ListCtrl to hold the items
-        self.lc = wx.ListCtrl(self, -1, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        # If multSelect is requested ...
+        if multSelect:
+            # ... create a ListCtrl to hold the items that allows multiple selections
+            self.lc = wx.ListCtrl(self, -1, style=wx.LC_REPORT)
+        # If multSelect is NOT requested ...
+        else:
+            # ... create a ListCtrl to hold the items that allows single selection only
+            self.lc = wx.ListCtrl(self, -1, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         vSizer.Add(self.lc, 1, wx.EXPAND)
         # Bind the ListItemSelected method to the ListCtrl
         self.lc.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnListItemSelected)
@@ -175,6 +181,14 @@ class ColorListCtrl(wx.Panel):
     def GetItemData(self, itemNum):
         """ Get Item Data for the ListCtrl.  (Gives our Panel ListCtrl functionality.) """
         return self.lc.GetItemData(itemNum)
+
+    def GetItemState(self, itemNum, itemStateMask):
+        """ Get Item State for the ListCtrl.  (Gives our Panel ListCtrl functionality.) """
+        return self.lc.GetItemState(itemNum, itemStateMask)
+
+    def GetSelectedItemCount(self):
+        """ Get Selected Item Count for the ListCtrl.  (Gives our Panel ListCtrl functionality.) """
+        return self.lc.GetSelectedItemCount()
 
     def GetNextItem(self, selItem, geometry, state):
         """ Get Next Item in the ListCtrl that matches the parameters.  (Gives our Panel ListCtrl functionality.) """

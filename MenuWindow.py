@@ -906,6 +906,9 @@ class MenuWindow(wx.Frame):
 
     def OnOptionsSettings(self, event):
         """ Handler for Options > Settings """
+        # Remember the old Tab Size and Word Wrap values
+        oldTabSize = TransanaGlobal.configData.tabSize
+        oldWordWrap = TransanaGlobal.configData.wordWrap
         # If MU, change Message Servers if necessary.  To do so, let's note what
         # the settings are before the Program Options screen is shown.
         if not TransanaConstants.singleUserVersion:
@@ -917,6 +920,15 @@ class MenuWindow(wx.Frame):
         if self.ControlObject.VideoWindow.GetPlayBackSpeed() != TransanaGlobal.configData.videoSpeed/10.0:
             # Change video speed here
             self.ControlObject.VideoWindow.SetPlayBackSpeed(TransanaGlobal.configData.videoSpeed)
+        # Update the Tab Size and Word Wrap.  First, see if they've changed.
+        if (TransanaGlobal.configData.tabSize != oldTabSize) or (TransanaGlobal.configData.wordWrap != oldWordWrap):
+            # For each Transcript Window ...
+            for trWin in self.ControlObject.TranscriptWindow:
+                # ... set the new tab size
+                trWin.dlg.editor.SetTabWidth(int(TransanaGlobal.configData.tabSize))
+                # ... and set the new Word Wrap
+                trWin.dlg.editor.SetWrapMode(TransanaGlobal.configData.wordWrap)
+            
         # If MU, if Message Server or Message Server Port is changed, we need to
         # reset the Message Server.
         if not TransanaConstants.singleUserVersion:

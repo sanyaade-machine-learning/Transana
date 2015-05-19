@@ -152,8 +152,14 @@ class XMLImport(Dialogs.GenForm):
            for line in f:
                # ... increment the line counter
                lineCount += 1
-               # We can't just use strip() here.  Strings ending with the a with a grave (Alt-133) get corrupted!
-               line = Misc.unistrip(line)
+               # If we DON'T have RTF Text or Note Text ...
+               if not (dataType in  ['RTFText', 'NoteText']):
+                   # ... we can't just use strip() here.  Strings ending with the a with a grave (Alt-133) get corrupted!
+                   line = Misc.unistrip(line)
+               # If we have RTF Text or Note Text, we don't want to strip leading white space ...
+               else:
+                   # ... so we do unicode stripping only of the RIGHT side here.
+                   line = Misc.unistrip(line, left=False)
 
                if DEBUG:
                    print "Line %d: '%s' %s %s" % (lineCount, line, objectType, dataType)
@@ -659,8 +665,9 @@ class XMLImport(Dialogs.GenForm):
                    dataType = 'RTFText'
 
                # Because RTF Text can be many lines long, we need to explicitly close this datatype when
-               # the closing XML tag is found
-               elif line.upper() == '</RTFTEXT>':
+               # the closing XML tag is found.  Since left stripping is skipped during RTFText reads, we need
+               # to add the lstrip() call here.
+               elif line.upper().lstrip() == '</RTFTEXT>':
                    dataType = None
 
                elif line.upper() == '<PARENTCOLLECTNUM>':
@@ -699,8 +706,9 @@ class XMLImport(Dialogs.GenForm):
                    dataType = 'NoteText'
 
                # Because Note Text can be many lines long, we need to explicitly close this datatype when
-               # the closing XML tag is found
-               elif line.upper() == '</NOTETEXT>':
+               # the closing XML tag is found.  Since left stripping is skipped during NoteText reads, we need
+               # to add the lstrip() call here.
+               elif line.upper().lstrip() == '</NOTETEXT>':
                    dataType = None
 
                elif line.upper() == '<REPORTTYPE>':
@@ -1101,7 +1109,7 @@ class XMLImport(Dialogs.GenForm):
                     elif self.FilterReportType in ['1', '2', '3', '8', '11']:
                         self.FilterScope = recNumbers['Episode'][int(line)]
                     # Collection Clip Data Export (ReportType 4) only needs translation if ReportScope != 0
-                    elif (self.FilterReportType in ['12']) or ((self.FilterReportType == '4') and (int(line) != 0)):
+                    elif (self.FilterReportType in ['12', '16']) or ((self.FilterReportType == '4') and (int(line) != 0)):
                         self.FilterScope = recNumbers['Collection'][int(line)]
                     elif self.FilterReportType in ['13']:
                         # FilterScopes for ReportType 13 (Notes Report) are constants, not object numbers!

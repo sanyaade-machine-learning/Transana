@@ -100,6 +100,8 @@ class ControlObject(object):
         self.WindowPositions = []       # Initial Screen Positions for all Windows, used for Presentation Mode
         self.TranscriptNum = []         # Transcript record # LIST loaded
         self.currentObj = None          # Currently loaded Object (Episode or Clip)
+        self.playInLoop = False         # Should we loop playback?
+        self.LoopPresMode = None        # What presentation mode are we ignoring while Looping?
         self.shuttingDown = False       # We need to signal when we want to shut down to prevent problems
                                         # with the Visualization Window's IDLE event trying to call the
                                         # VideoWindow after it's been destroyed.
@@ -874,6 +876,40 @@ class ControlObject(object):
         else: # If not playing, paused or stopped, then video not loaded yet
             pass
 
+    def PlayLoop(self, startPlay):
+        """ Start or stop Looped Playback """
+        # Remember if we're supposed to play in a loop
+        self.playInLoop = startPlay
+        # If we're supposed to play in a loop ...
+        if self.playInLoop:
+            # Looping doesn't work with Presentation Modes.  You can't stop it without the Visualization Window!
+            # Therefore, we need to remember which Presentation Mode we started in.
+            if self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
+                self.LoopPresMode = 'All'
+            elif self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_VIDEO):
+                self.LoopPresMode = 'Video'
+            elif self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_TRANS):
+                self.LoopPresMode = 'Transcript'
+            elif self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_AUDIO):
+                self.LoopPresMode = 'Audio'
+            # Now force All Windows Presentation Mode
+            self.MenuWindow.menuBar.optionsmenu.Check(MenuSetup.MENU_OPTIONS_PRESENT_ALL, True)
+            # ... start playing.
+            self.Play()
+        # If we're supposed to STOP playing in a loop ...
+        else:
+            # ... then stop playing!
+            self.Stop()
+            # Restore the old Presentation Mode
+            if self.LoopPresMode == 'Video':
+                self.MenuWindow.menuBar.optionsmenu.Check(MenuSetup.MENU_OPTIONS_PRESENT_VIDEO, True)
+            elif self.LoopPresMode == 'Transcript':
+                self.MenuWindow.menuBar.optionsmenu.Check(MenuSetup.MENU_OPTIONS_PRESENT_TRANS, True)
+            elif self.LoopPresMode == 'Audio':
+                self.MenuWindow.menuBar.optionsmenu.Check(MenuSetup.MENU_OPTIONS_PRESENT_AUDIO, True)
+            # and clear out the mode that was remembered
+            self.LoopPresMode = None
+
     def IsPlaying(self):
         """ Indicates whether the video is playing or not. """
         return self.VideoWindow.IsPlaying()
@@ -957,9 +993,12 @@ class ControlObject(object):
     def UpdatePlayState(self, playState):
         """ When the Video Player's Play State Changes, we may need to adjust the Screen Layout
             depending on the Presentation Mode settings. """
-        
+        # If media playback is stopping and we're supposed to be playing in a loop ...
+        if (playState == TransanaConstants.MEDIA_PLAYSTATE_STOP) and self.playInLoop:
+            # ... then re-start media playback
+            self.Play()
         # If the video is STOPPED, return all windows to normal Transana layout
-        if (playState == TransanaConstants.MEDIA_PLAYSTATE_STOP) and (self.PlayAllClipsWindow == None):
+        elif (playState == TransanaConstants.MEDIA_PLAYSTATE_STOP) and (self.PlayAllClipsWindow == None):
             # When Play is intiated (below), the positions of windows gets saved if they are altered by Presentation Mode.
             # If this has happened, we need to put the screen back to how it was before when Play is stopped.
             if len(self.WindowPositions) != 0:
@@ -1729,7 +1768,7 @@ class ControlObject(object):
                 if endTime <= 0:
                     endTime = self.currentObj.clip_stop
             # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
-            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, self.GetVideoCheckboxDataForClips(startTime))
+            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, videoCheckboxData=self.GetVideoCheckboxDataForClips(startTime))
             # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
             # because drag and drop is an alternate way to create a Quick Clip.
             DragAndDropObjects.CreateQuickClip(clipData, nodeParent, nodeName, self.DataWindow.DBTab.tree)

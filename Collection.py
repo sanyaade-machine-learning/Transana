@@ -64,6 +64,7 @@ class Collection(DataObject.DataObject):
         str = str + "comment = %s\n" % self.comment.encode('utf8')
         str = str + "owner = %s\n" % self.owner.encode('utf8')
         str = str + "Default KWG = %s\n\n" % self.keyword_group.encode('utf8')
+        str += "GetNodeData(): %s\n\n" % (self.GetNodeData(), )
         return str
 
     def db_load_by_name(self, name, parent_num=0):
@@ -216,6 +217,8 @@ class Collection(DataObject.DataObject):
             DBInterface.delete_filter_records(4, self.number)
             #   Delete Collection Report records
             DBInterface.delete_filter_records(12, self.number)
+            # Delete Collection Map records
+            DBInterface.delete_filter_records(16, self.number)
 
             # Detect, Load, and Delete all Collection Notes
             notes = self.get_note_nums()

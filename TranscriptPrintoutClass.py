@@ -186,6 +186,19 @@ def ProcessRTF(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines, xPos,
     for line in data:
         # each line is made up of a font spec and the associated text.
         (fontSpec, text) = line
+        # We have to handle TABS manually.  Here's a good place to do it.
+        # First, determine the size of the tab settting and create a string that many characters (spaces) wide.
+        tabStr = '                    '[:int(TransanaGlobal.configData.tabSize)]
+        # While there are tab characters in the text being processed ...
+        while text.find('\t') > -1:
+            # Determine the position of the tab character
+            tabPos = text.find('\t')
+            # Within the text, replace the tab character with the appropriate number of spaces.  The number of spaces to
+            # be inserted is the tab position modded by the tab size.
+            text = text[:tabPos] + \
+                   tabStr[: int(TransanaGlobal.configData.tabSize) - (tabPos % int(TransanaGlobal.configData.tabSize))] + \
+                   text[tabPos + 1:]
+        
         # Find a Line Break character, if there is one.
         breakPos = text.find('\n')
 

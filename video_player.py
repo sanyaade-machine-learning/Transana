@@ -254,7 +254,7 @@ class VideoPlayer(wx.Panel):
                 # Break out the file extension
                 (videoFilename, videoExtension) = os.path.splitext(filename)
                 # If the extension is one that requires the QuickTime players ...
-                if videoExtension.lower() in ['.mov', '.mp4']:
+                if videoExtension.lower() in ['.mov', '.mp4', '.m4v']:
                     # ... indicate we need the QuickTime back end
                     backendNeeded = wx.media.MEDIABACKEND_QUICKTIME
                 # If not QuickTime ...

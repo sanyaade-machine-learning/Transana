@@ -21,6 +21,8 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
 
 # import wxPython
 import wx
+# import the Styled Text Ctrl, to get some constants
+from wx import stc
 # import the Python os module
 import os
 # import the Python sys module
@@ -47,15 +49,15 @@ class OptionsSettings(wx.Dialog):
         # if we're showing the LAB version's initial configuration, we need a bit more room.
         if 'wxMSW' in wx.PlatformInfo:
             if self.lab:
-                dlgHeight = 370
+                dlgHeight = 390
             else:
-                dlgHeight = 360
+                dlgHeight = 380
         else:
             if self.lab:
                 dlgWidth = 580
-                dlgHeight = 350
+                dlgHeight = 370
             else:
-                dlgHeight = 300
+                dlgHeight = 320
         # Define the Dialog Box
         wx.Dialog.__init__(self, parent, -1, _("Transana Settings"), wx.DefaultPosition, wx.Size(dlgWidth, dlgHeight), style=wx.CAPTION | wx.SYSTEM_MENU | wx.THICK_FRAME)
 
@@ -214,7 +216,7 @@ class OptionsSettings(wx.Dialog):
             # Add the Video Setback Label to the Transcriber Settings Tab
             lblTranscriptionSetback = wx.StaticText(panelTranscriber, -1, _("Transcription Setback:  (Auto-rewind interval for Ctrl-S)"), style=wx.ST_NO_AUTORESIZE)
             lay = wx.LayoutConstraints()
-            lay.top.SameAs(panelTranscriber, wx.Top, 20)
+            lay.top.SameAs(panelTranscriber, wx.Top, 10)
             lay.left.SameAs(panelTranscriber, wx.Left, 10)
             lay.width.AsIs()
             lay.height.AsIs()
@@ -296,14 +298,16 @@ class OptionsSettings(wx.Dialog):
                 # Add the Media Player Option Label to the Transcriber Settings Tab
                 lblMediaPlayer = wx.StaticText(panelTranscriber, -1, _("Media Player Selection"), style=wx.ST_NO_AUTORESIZE)
                 lay = wx.LayoutConstraints()
-                lay.top.Below(lblTranscriptionSetbackMin, 15)
+                lay.top.Below(lblTranscriptionSetbackMin, 10)
                 lay.left.SameAs(panelTranscriber, wx.Left, 10)
                 lay.width.AsIs()
                 lay.height.AsIs()
                 lblMediaPlayer.SetConstraints(lay)
 
                 # Add the Media Player Option to the Transcriber Settings Tab
-                self.chMediaPlayer = wx.Choice(panelTranscriber, -1, choices = [_('Enable WMV and WMA formats, disable speed control'), _('Disable WMV and WMA formats, enable speed control')])
+                self.chMediaPlayer = wx.Choice(panelTranscriber, -1,
+                                               choices = [_('Enable WMV and WMA formats, disable speed control for some formats'),
+                                                          _('Disable WMV and WMA formats, enable speed control for more formats')])
                 self.chMediaPlayer.SetSelection(TransanaGlobal.configData.mediaPlayer)
                 lay = wx.LayoutConstraints()
                 lay.top.Below(lblMediaPlayer, 3)
@@ -320,7 +324,7 @@ class OptionsSettings(wx.Dialog):
             # Add the Video Speed Slider Label to the Transcriber Settings Tab
             lblVideoSpeed = wx.StaticText(panelTranscriber, -1, _("Video Playback Speed"), style=wx.ST_NO_AUTORESIZE)
             lay = wx.LayoutConstraints()
-            lay.top.Below(nextLabelPositioner, 15)
+            lay.top.Below(nextLabelPositioner, 10)
             lay.left.SameAs(panelTranscriber, wx.Left, 10)
             lay.width.AsIs()
             lay.height.AsIs()
@@ -375,10 +379,31 @@ class OptionsSettings(wx.Dialog):
             lay.height.AsIs()
             lblVideoSpeedMax.SetConstraints(lay)
 
+            # Add Tab Size
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblVideoSpeedMin, 10)
+            lay.left.SameAs(panelTranscriber, wx.Left, 10)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblTabSize = wx.StaticText(panelTranscriber, -1, _("Tab Size"))
+            lblTabSize.SetConstraints(lay)
+
+            # Tab Size Box
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblTabSize, 3)
+            lay.left.SameAs(lblTabSize, wx.Left, 0)
+            lay.right.PercentOf(panelTranscriber, wx.Width, 25)
+            lay.height.AsIs()
+            self.tabSize = wx.ComboBox(panelTranscriber, -1, choices=['4', '6', '8', '10', '12', '14', '16', '18', '20'], style = wx.CB_DROPDOWN )
+            self.tabSize.SetConstraints(lay)
+
+            # Set the value to the default value provided by the Configuration Data
+            self.tabSize.SetValue(TransanaGlobal.configData.tabSize)
+
             # Add Default Transcript Font
             lay = wx.LayoutConstraints()
-            lay.top.Below(lblVideoSpeedMin, 15)
-            lay.left.SameAs(panelTranscriber, wx.Left, 10)
+            lay.top.Below(lblVideoSpeedMin, 10)
+            lay.left.PercentOf(panelTranscriber, wx.Width, 30)
             lay.width.AsIs()
             lay.height.AsIs()
             lblDefaultFont = wx.StaticText(panelTranscriber, -1, _("Default Font"))
@@ -409,8 +434,8 @@ class OptionsSettings(wx.Dialog):
             # Default Font Combo Box
             lay = wx.LayoutConstraints()
             lay.top.Below(lblDefaultFont, 3)
-            lay.left.SameAs(panelTranscriber, wx.Left, 10)
-            lay.right.PercentOf(panelTranscriber, wx.Width, 45)
+            lay.left.SameAs(lblDefaultFont, wx.Left, 0)
+            lay.right.PercentOf(panelTranscriber, wx.Width, 70)
             lay.height.AsIs()
             self.defaultFont = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN | wx.CB_SORT)
             self.defaultFont.SetConstraints(lay)
@@ -420,8 +445,8 @@ class OptionsSettings(wx.Dialog):
 
             # Add Default Transcript Font Size
             lay = wx.LayoutConstraints()
-            lay.top.Below(lblVideoSpeedMin, 15)
-            lay.left.PercentOf(panelTranscriber, wx.Width, 55)
+            lay.top.Below(lblVideoSpeedMin, 10)
+            lay.left.PercentOf(panelTranscriber, wx.Width, 75)
             lay.width.AsIs()
             lay.height.AsIs()
             lblDefaultFontSize = wx.StaticText(panelTranscriber, -1, _("Default Font Size"))
@@ -441,6 +466,18 @@ class OptionsSettings(wx.Dialog):
 
             # Set the value to the default value provided by the Configuration Data
             self.defaultFontSize.SetValue(str(TransanaGlobal.configData.defaultFontSize))
+
+            # Word Wrap checkbox
+            lay = wx.LayoutConstraints()
+            lay.top.Below(self.tabSize, 10)
+            lay.left.SameAs(panelTranscriber, wx.Left, 10)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            self.cbWordWrap = wx.CheckBox(panelTranscriber, -1, _("Word Wrap") + "  ", style=wx.ALIGN_RIGHT)
+            self.cbWordWrap.SetConstraints(lay)
+            # Set the value to the configured value for Word Wrap
+            self.cbWordWrap.SetValue((TransanaGlobal.configData.wordWrap == stc.STC_WRAP_WORD))
+            
 
             # Tell the Transcriber Panel to lay out now and do AutoLayout
             panelTranscriber.SetAutoLayout(True)
@@ -622,6 +659,14 @@ class OptionsSettings(wx.Dialog):
                 TransanaGlobal.configData.mediaPlayer = self.chMediaPlayer.GetSelection()
             # Update the Global Video Speed
             TransanaGlobal.configData.videoSpeed = self.videoSpeed.GetValue()
+            # Update the tab size
+            TransanaGlobal.configData.tabSize = self.tabSize.GetValue()
+            # Update the Word Wrap setting
+            if self.cbWordWrap.GetValue():
+                wordWrapValue = stc.STC_WRAP_WORD
+            else:
+                wordWrapValue = stc.STC_WRAP_NONE
+            TransanaGlobal.configData.wordWrap = wordWrapValue
             # Update the Global Default Font
             TransanaGlobal.configData.defaultFontFace = self.defaultFont.GetValue()
             # Update the Global Default Font Size
@@ -701,19 +746,6 @@ class OptionsSettings(wx.Dialog):
                 self.databaseDirectory.SetValue(dlg.GetPath())
         # Destroy the Dialog
         dlg.Destroy
-
-
-# REMOVED!  When Speed Control is OFF for WMP, it still works for QuickTime!
-#    def OnMediaPlayerSelect(self, event):
-#        """ Handle the OnChoice Event for the Media Player Choice box """
-        # Disable the slider if it should be disabled
-#        if self.chMediaPlayer.GetCurrentSelection() == 0:
-#            self.videoSpeed.SetValue(10)
-#            self.videoSpeed.Enable(False)
-#            self.lblVideoSpeedSetting.SetLabel("%1.1f" % (1.0))
-#        else:
-#            self.videoSpeed.Enable(True)
-#            self.lblVideoSpeedSetting.SetLabel("%1.1f" % (float(self.videoSpeed.GetValue()) / 10))
 
     def OnScroll(self, event):
         """ Handle the Scroll Event for the Video Speed Slider. """

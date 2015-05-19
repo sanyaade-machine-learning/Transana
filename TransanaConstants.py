@@ -38,7 +38,7 @@ labVersion = TransanaConfigConstants.labVersion
 demoVersion = TransanaConfigConstants.demoVersion
 
 # Program Version Number
-versionNumber = '2.40'
+versionNumber = '2.41'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
@@ -102,21 +102,21 @@ MEDIA_PLAYSTATE_PAUSE              =  wx.media.MEDIASTATE_PAUSED
 MEDIA_PLAYSTATE_PLAY               =  wx.media.MEDIASTATE_PLAYING
 
 # Define the Media File type strings to be used throughout Transana
-fileTypesString = _("""All files (*.*)|*.*|All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.wmv, *.mp3, *.wav, *.wma)|*.mpg;*.avi;*.mov;*.mp4;*.wmv;*.mp3;*.wav;*.wma|All video files (*.mpg, *.avi, *.mov, *.mp4, *.wmv)|*.mpg;*.mpeg;*.avi;*.mov;*.mp4;*.wmv|All audio files (*.mp3, *.wav, *.wma, *.au, *.snd)|*.mp3;*.wav;*.wma;*.au;*.snd|MPEG files (*.mpg)|*.mpg;*.mpeg|AVI files (*.avi)|*.avi|QuickTime files (*.mov, *.mp4)|*.mov;*.mp4|Windows Media Video (*.wmv)|*wmv|MP3 files (*.mp3)|*.mp3|WAV files (*.wav)|*.wav|Windows Media Audio (*.wma)|*.wma""")
+fileTypesString = _("""All files (*.*)|*.*|All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv, *.mp3, *.wav, *.wma)|*.mpg;*.avi;*.mov;*.mp4;*.m4v;*.wmv;*.mp3;*.wav;*.wma|All video files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv)|*.mpg;*.mpeg;*.avi;*.mov;*.mp4;*.m4v;*.wmv|All audio files (*.mp3, *.wav, *.wma, *.au, *.snd)|*.mp3;*.wav;*.wma;*.au;*.snd|MPEG files (*.mpg)|*.mpg;*.mpeg|AVI files (*.avi)|*.avi|QuickTime files (*.mov, *.mp4, *.m4v)|*.mov;*.mp4;*.m4v|Windows Media Video (*.wmv)|*wmv|MP3 files (*.mp3)|*.mp3|WAV files (*.wav)|*.wav|Windows Media Audio (*.wma)|*.wma""")
 fileTypesList = [_("All files (*.*)"),
-                 _("All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.wmv, *.mp3, *.wav, *.wma)"),
-                 _("All video files (*.mpg, *.avi, *.mov, *.mp4, *.wmv)"),
+                 _("All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv, *.mp3, *.wav, *.wma)"),
+                 _("All video files (*.mpg, *.avi, *.mov, *.mp4, *.m4v, *.wmv)"),
                  _("All audio files (*.mp3, *.wav, *.wma, *.au, *.snd)"),
                  _("MPEG files (*.mpg, *.mpeg)"),
                  _("AVI files (*.avi)"),
-                 _("QuickTime files (*.mov, *.mp4)"),
+                 _("QuickTime files (*.mov, *.mp4, *.m4v)"),
                  _("Windows Media Video files (*.wmv)"),
                  _("MP3 files (*.mp3)"),
                  _("WAV files (*.wav)"),
                  _("Windows Media Audio files (*.wma)"),
                  _("Rich Text Format files (*.rtf)"),
                  _("BMP, PNG, and WAV files (*.bmp, *.png, *.wav)")]
-mediaFileTypes = ['mpg', 'mpeg', 'avi', 'mov', 'mp4', 'wmv', 'mp3', 'wav', 'wma']
+mediaFileTypes = ['mpg', 'mpeg', 'avi', 'mov', 'mp4', 'm4v', 'wmv', 'mp3', 'wav', 'wma']
 
 # We need to know what characters are legal in a file name!
 legalFilenameCharacters = string.ascii_letters + string.digits + ":. -_$&@!%(){}[]~'#^+=/" 

@@ -33,9 +33,9 @@ import wx
 import wx.lib.masked
 
 # Define the Format Options for different File Types
-imageOptions = ['', 'avi', 'mov', 'mp4', 'mpeg', 'mpeg2', 'wmv']
+imageOptions = ['', 'avi', 'mov', 'mp4', 'm4v', 'mpeg', 'mpeg2', 'wmv']
 soundOptions = ['', 'mp3', 'wav', 'wma']
-allOptions   = ['', 'avi', 'mov', 'mp3', 'mp4', 'mpeg', 'mpeg2', 'wav', 'wma', 'wmv']
+allOptions   = ['', 'avi', 'mov', 'mp3', 'mp4', 'm4v', 'mpeg', 'mpeg2', 'wav', 'wma', 'wmv']
 
 
 class CoreDataPropertiesForm(Dialogs.GenForm):

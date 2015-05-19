@@ -225,31 +225,6 @@ class TranscriptEditor(RichTextEditCtrl):
                             # To fix that, let's strip the final style character from both strings.  DKW
 			    bufferContents = bufferContents.replace(k[:-1], v[:-1])
 
-                    # Now let's look for mal-formed time codes.
-                    
-                    # Initialize a list to keep track of where corrections are needed
-#                    todo = []
-                    # Iterate through the text buffer, 2 char (content, formatting) at a time ...
-#                    for x in range(0, len(bufferContents), 2):
-                        # ... get the character we're looking at ...
-#                        char = bufferContents[x]
-                        # If it's the Time Code character ...
-#                        if char == '\xa4':
-                            # ... and if the character PRECEEDING IT ISN'T the UTF8 character that, with \xa4, makes up the properly
-                            # formatted time code character ...
-#                            if (x > 2) and (bufferContents[x - 2] != '\xc2'):
-                                # ... then note the position in the text buffer where a correction needs to be made!
-#                                todo.append(x)
-                    # While there are corrections to be made ... (We go from the end of the list, as corrections move later positions!)
-#                    while len(todo) > 0:
-                        # Get the correction position
-#                        x = todo[-1]
-                        # Remove the correction position from the list of corrections
-#                        todo = todo[:-1]
-                        # Correct the text buffer.  We duplicate the formatting character intentionally during this process,
-                        # which is why the slices overlap by 1 character.
-#                        bufferContents = bufferContents[:x] + '\xc2' + bufferContents[x - 1:]
-
 		    # With platform specific issues taken care of, we can now simply
                     # reload the pickled data into the buffer, and everything is just
                     # peachy
@@ -345,7 +320,7 @@ class TranscriptEditor(RichTextEditCtrl):
                 self.LoadDocument(transcript)
                 self.TranscriptObj = None
             else:
-                # Assume a Transcript object was passed 
+                # Assume a Transcript object was passed
                 self.LoadRTFData(transcript.text)
                 self.TranscriptObj = transcript
                 self.TranscriptObj.has_changed = 0
@@ -1130,22 +1105,32 @@ class TranscriptEditor(RichTextEditCtrl):
         if True:
             # Get the position of the start of the current selection
             pos = self.GetSelectionStart()
+            # remember the initial selected position, just in case.
+            initialPos = pos
+            # Initialize the variable where we'll collect Time Code data
+            numStr = ''
             # While the current character is not a time code (and we're not at the document start) ...
-            while (pos > 0) and (self.GetCharAt(pos) != 194) and (self.GetCharAt(pos + 1) != 164):
+            while (pos > 0) and ((self.GetCharAt(pos) != 194) or (self.GetCharAt(pos + 1) != 164)):
                 # ... move towards the front of the document.  (i.e. find the preceding time code)
                 pos -= 1
             # If we get to the start of the document without finding a time code ...
-            if pos == 0:
+            if pos == 0 and ((initialPos == 0) or (self.GetCharAt(pos) != 194) or (self.GetCharAt(pos + 1) != 164)):
                 # ... then our time position is 0, the start of the media file.
                 numStr = "0"
             # If we have found a time code ...
             else:
                 # Initialize a blank string for collecting the time code value
                 numStr = ""
+                # Initialize the flag that tracks if we're adding numbers yet
+                startAddingNumbers = False
                 # Process text until we get to a ">" character (which closes time code data) or the document end.
                 while (self.GetCharAt(pos) != 62) and (pos < self.GetTextLength() - 1):
-                    # If the character is a DIGIT ...
-                    if chr(self.GetCharAt(pos)) in string.digits:
+                    # Once we find a time code character ...
+                    if (self.GetCharAt(pos) == 194) and (self.GetCharAt(pos + 1) == 164):
+                        # ... we can start adding digits to the time code data
+                        startAddingNumbers = True
+                    # If we're adding data to the time code data AND the character is a DIGIT ...
+                    if startAddingNumbers and (chr(self.GetCharAt(pos)) in string.digits):
                         # ... add it to the time code value string
                         numStr += chr(self.GetCharAt(pos))
                     # increment the string position being examined
@@ -1160,23 +1145,31 @@ class TranscriptEditor(RichTextEditCtrl):
 
             # Get the position of the end of the current selection
             pos = self.GetSelectionEnd()
+            # Initialize the string for gathering the time code data
+            numStr = ''
             # While the current character is not a time code (and we're not at the document end) ...
-            while (pos < self.GetTextLength() - 1) and (self.GetCharAt(pos) != 194) and (self.GetCharAt(pos + 1) != 164):
+            while (pos < self.GetTextLength() - 1) and ((self.GetCharAt(pos) != 194) or (self.GetCharAt(pos + 1) != 164)):
                 # ... move towards the front of the document.  (i.e. find the following time code)
                 pos += 1
 
             # If we get to the end of the document without finding a time code ...
-            if pos == self.GetTextLength() - 1:
+            if pos == self.GetTextLength():
                 # ... then our time position is -1, the end of the media file.
                 numStr = "-1"
             # If we have found a time code ...
             else:
                 # Initialize a blank string for collecting the time code value
                 numStr = ""
+                # We shouldn't start collecting time code data until we find a time code!!  Initialize the flag for that.
+                startAddingNumbers = False
                 # Process text until we get to a ">" character (which closes time code data) or the document end.
                 while (self.GetCharAt(pos) != 62) and (pos < self.GetTextLength() - 1):
-                    # If the character is a DIGIT ...
-                    if chr(self.GetCharAt(pos)) in string.digits:
+                    # If we find a Time Code ...
+                    if (self.GetCharAt(pos) == 194) and (self.GetCharAt(pos + 1) == 164):
+                        # ... then we can start adding digits to the time code's time value.
+                        startAddingNumbers = True
+                    # If we should be collecting time code data AND the character is a DIGIT ...
+                    if startAddingNumbers and (chr(self.GetCharAt(pos)) in string.digits):
                         # ... add it to the time code value string
                         numStr += chr(self.GetCharAt(pos))
                     # increment the string position being examined
@@ -2038,7 +2031,7 @@ class TranscriptEditor(RichTextEditCtrl):
 
         # Create a ClipDragDropData object with all the data we need to create a Clip
         data = DragAndDropObjects.ClipDragDropData(self.TranscriptObj.number, self.TranscriptObj.episode_num, \
-                start_time, end_time, rtfText, videoCheckboxData)
+                start_time, end_time, rtfText, self.GetSelectedText(), videoCheckboxData)
         # let's convert that object into a portable string using cPickle. (cPickle is faster than Pickle.)
         pdata = cPickle.dumps(data, 1)
         # Create a CustomDataObject with the format of the ClipDragDropData Object
@@ -2132,7 +2125,6 @@ class TranscriptEditor(RichTextEditCtrl):
         if type(self.parent).__name__ == '_TranscriptDialog':
             # Get the Start and End times from the time codes on either side of the cursor
             (segmentStartTime, segmentEndTime) = self.get_selected_time_range()
-
             # If we have a Clip loaded, the StartTime should be the beginning of the Clip, not 0!
             if type(self.parent.ControlObject.currentObj).__name__ == 'Clip' and (segmentStartTime == 0):
                 segmentStartTime = self.parent.ControlObject.currentObj.clip_start
@@ -2585,7 +2577,7 @@ class TranscriptEditorDropTarget(wx.PyDropTarget):
                         text = ''
                     else:
                         text = self.editor.GetRTFBuffer(select_only=1)
-                    clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, self.editor.parent.ControlObject.GetVideoCheckboxDataForClips(startTime))
+                    clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, self.editor.GetSelectedText(), self.editor.parent.ControlObject.GetVideoCheckboxDataForClips(startTime))
                     # I'm sure this is horrible form, but I don't know how else to do this from here!
                     dbTree = self.editor.parent.ControlObject.DataWindow.DBTab.tree
                     # Create the Quick Clip
@@ -2709,9 +2701,11 @@ class TranscriptDropSource(wx.DropSource):
                       self.parent.ControlObject.DataWindow.DBTab.tree.EnsureVisible(last)
 
             # Regular Clips are dropped on Collections or Clips.  Quick Clips are dropped on Keywords.
+            # Text dropped on a Keyword Group can create a Keyword.
             if (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'CollectionNode') or \
                (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'ClipNode') or \
-               (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'KeywordNode'):
+               (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'KeywordNode') or\
+               (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'KeywordGroupNode'):
                 # Make sure the cursor reflects an acceptable drop.  (This resets it if it was previously changed
                 # to indicate a bad drop.)
                 self.parent.ControlObject.SetDatabaseTreeTabCursor(wx.CURSOR_ARROW)

@@ -216,10 +216,12 @@ def convertMacFilename(filename):
 # you can no longer decode t with UTF-8.  The string is broken and irretrievable.
 #
 # This method is a replacement for string.strip() that avoids this problem with UTF-8 strings.
-def unistrip(strng):
+def unistrip(strng, left=True):
     """ A unicode-safe replacement for string.strip() """
-    # We can safely use lstrip() to remove whitespace from the left side of the string.
-    strng = strng.lstrip()
+    # If left-stripping is enabled ...
+    if left:
+        # ... we can safely use lstrip() to remove whitespace from the left side of the string.
+        strng = strng.lstrip()
     # Now we can check the right side of the string character by character.  If the string still has
     # characters and the last character is whitespace ...
     while (len(strng) > 0) and (strng[-1] in string.whitespace):

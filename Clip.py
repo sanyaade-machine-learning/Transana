@@ -741,7 +741,16 @@ class Clip(DataObject.DataObject):
         self.offset = r['ClipOffset']
         self.audio = r['Audio']
         self.sort_order = r['SortOrder']
-
+        # I've seen once instance of incomplete updating of the database on 2.40 upgrade database modification.  The following
+        # fixes problems caused there.
+        # If the offset is NULL in the database, it would come up as None here....
+        if self.offset == None:
+            # If so, convert it to 0 to prevent problems loading clips.  (It should have been converted.)
+            self.offset = 0
+        # If self.audio is None, it's NULL in the database.
+        if self.audio == None:
+            # It should have been converted to 1.
+            self.audio = 1
         # Initialize a list of Transcript objects
         self.transcripts = []
         # Load the Clip Transcripts.  Get the list of clip transcripts from the database and interate ...
