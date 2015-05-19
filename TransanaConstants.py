@@ -35,14 +35,14 @@ import string
 singleUserVersion = True
 
 # Program Version Number
-versionNumber = '2.11'
+versionNumber = '2.12'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
 # Add testing version information if appropriate.  (Set to "''" if not!)
 # NOTE:  This will differ by Platform for a little while.
 if '__WXMAC__' in wx.PlatformInfo:
-    versionNumber = versionNumber +  '-Mac Alpha 1.15'
+    versionNumber = versionNumber +  '-Mac Alpha 1.16'
 else:
     versionNumber = versionNumber + '-Win'
 

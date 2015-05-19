@@ -1865,7 +1865,10 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
             # Establish the base Clip Name.  Limit the size of the Episode Name so we don't overflow
             # the Clip ID field length in any language.
             # Start with the i18n version of "Quick Clip"
-            baseName = _('Quick Clip') + ' '
+            if 'unicode' in wx.PlatformInfo:
+                baseName = unicode(_('Quick Clip'), 'utf8') + ' '
+            else:
+                baseName = _('Quick Clip') + ' '
             # If multi-user ...
             if not TransanaConstants.singleUserVersion:
                 # ... then pre-pend the username

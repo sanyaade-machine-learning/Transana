@@ -852,6 +852,11 @@ class TranscriptEditor(RichTextEditCtrl):
         self.SearchAnchor()
         pos = self.SearchNext(0, findstr)
         if pos > -1:
+            # Transana has been finding ">" symbols in the text that follow the cursor selection but preceed the next time code.
+            # Let's set the SearchAnchor to the start of the time code so it'll find the end correctly.
+            self.GotoPos(pos)
+            self.SearchAnchor()
+            # Now let's look for the next ">" character, which MUST be the end of the time code data.
             endi = self.SearchNext(0, '>')
             self.SetSelection(pos + offset, endi)
             timestr = self.GetSelectedText()
@@ -862,7 +867,6 @@ class TranscriptEditor(RichTextEditCtrl):
         # If no later time code is found return -1 
         else:
             end_timecode = -1
-
         # Now we need to reset the selection to where it used to be.
         self.SetSelection(selstart, selend)
 

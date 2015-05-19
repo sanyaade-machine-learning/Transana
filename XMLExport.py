@@ -453,10 +453,22 @@ class XMLExport(Dialogs.GenForm):
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT TranscriptNum, TranscriptID, EpisodeNum, ClipNum, Transcriber, Comment, RTFText FROM Transcripts2'
+
+                if DEBUG:
+                    print "Selecting Transcripts"
+                    
                 dbCursor.execute(SQLText)
+
+                if DEBUG:
+                    print "%d Transcripts selected." % dbCursor.rowcount
+                    
                 if dbCursor.rowcount > 0:
                     f.write('  <TranscriptFile>\n')
                 for (TranscriptNum, TranscriptID, EpisodeNum, ClipNum, Transcriber, Comment, RTFText) in dbCursor.fetchall():
+
+                    if DEBUG:
+                        print "TranscriptNum =", TranscriptNum
+                        
                     f.write('    <Transcript>\n')
                     f.write('      <Num>\n')
                     f.write('        %s\n' % TranscriptNum)

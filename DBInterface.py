@@ -35,6 +35,8 @@ if DEBUG:
 from exceptions import *
 # We also need the MySQL exceptions!
 import _mysql_exceptions
+# import Python's array module
+import array
 # import Python's os module
 import os
 # import Python's sys module
@@ -471,6 +473,50 @@ def get_db():
 
                     _dbref = None
 
+            # Okay, this is a little weird.
+            # By default, MySQL limits the size of a record to 1 MB.  This has started causing some problems with large transcripts.
+            # So we need to change the value of the "max_allowed_packet" to fix this.  However, we apparently need to break our
+            # database connection and re-establish it for the parameter change to go into effect.  That's what the following block
+            # of code does.
+
+            # Initialize a value, as I suppose it's possible it won't be found.
+            max_allowed_packet = 0
+            # Let's find out the current setting of max_allowed_packets
+            # Query the DB for the current value
+            query = "SHOW VARIABLES LIKE 'max_allowed_packe%'"
+            dbCursor = _dbref.cursor()
+            # Execute the Query
+            dbCursor.execute(query)
+            # Look at the Results Set
+            for pair in dbCursor.fetchall():
+                # Find the max_allowed_packet variable
+                if pair[0] == 'max_allowed_packet':
+                    # Its value comes in different forms depending on what version of MySQL and MySQL for Python we're using.
+                    if type(pair[1]) == array.array:
+                        max_allowed_packet = pair[1].tostring()
+                    else:
+                        max_allowed_packet = pair[1]
+                    
+            # We need to increase the size of the maximum allowed "packet" from 1MB (default) to 8MB.  
+            if int(max_allowed_packet) < 8388608:
+                dbCursor.execute('SET GLOBAL max_allowed_packet=8388608')
+                # If we had to change this, we need to shut down our connection and re-establish it for the change to "take".
+                close_db()
+                # Re-establish a connection to the Database Server.
+                if TransanaConstants.singleUserVersion:
+                    if 'unicode' in wx.PlatformInfo:
+                        # The single-user version requires no parameters
+                        _dbref = MySQLdb.connect(use_unicode=True)
+                    else:
+                        # The single-user version requires no parameters
+                        _dbref = MySQLdb.connect()
+                else:
+                    if 'unicode' in wx.PlatformInfo:
+                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, use_unicode=True)
+                    else:
+                        # The multi-user version requires all information to connect to the database server
+                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password)
+
             # We need to know the MySQL version we're dealing with to know if UTF-8 is supported.
             if _dbref != None:
                 # Get a Database Cursor
@@ -498,7 +544,7 @@ def get_db():
                         dbCursor.execute('SET character_set_server = utf8')
                         dbCursor.execute('SET character_set_database = utf8')
                         dbCursor.execute('SET character_set_results = utf8')
-
+                        
                         dbCursor.execute('USE %s' % databaseName.encode('utf8'))
                         # Set the global character encoding to UTF-8
                         TransanaGlobal.encoding = 'utf8'
@@ -855,7 +901,10 @@ def locate_quick_clips_collection():
     # Create a query to get the Collection Number for the QuickClips Collection
     query = "SELECT CollectNum from Collections2 where CollectID = %s"
     # Determine the appropriate name for the QuickClips Collection
-    collectionName = _("Quick Clips")
+    if 'unicode' in wx.PlatformInfo:
+        collectionName = unicode(_("Quick Clips"), 'utf8')
+    else:
+        collectionName = _("Quick Clips")
     if not TransanaConstants.singleUserVersion:
         collectionName += " - %s" % get_username()
     # Execute the query
@@ -870,7 +919,10 @@ def locate_quick_clips_collection():
         tempCollection = Collection.Collection()
         tempCollection.id = collectionName
         tempCollection.parent = 0
-        tempCollection.comment = _('This collection was created automatically to accept Quick Clips.')
+        if 'unicode' in wx.PlatformInfo:
+            tempCollection.comment = unicode(_('This collection was created automatically to accept Quick Clips.'), 'utf8')
+        else:
+            tempCollection.comment = _('This collection was created automatically to accept Quick Clips.')
         if not TransanaConstants.singleUserVersion:
             tempCollection.owner = get_username()
         tempCollection.db_save()

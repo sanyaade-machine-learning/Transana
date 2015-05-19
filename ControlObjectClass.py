@@ -54,6 +54,8 @@ import DBInterface
 import Dialogs
 # import Transana File Management System
 import FileManagement
+# import Transana's Exceptions
+import TransanaExceptions
 
 # import Python's os module
 import os
@@ -909,8 +911,14 @@ class ControlObject(object):
                 dlg.Destroy()
             
             if result == wx.ID_YES:
-                self.TranscriptWindow.SaveTranscript()
-                return 1
+                try:
+                    self.TranscriptWindow.SaveTranscript()
+                    return 1
+                except TransanaExceptions.SaveError, e:
+                    dlg = Dialogs.ErrorDialog(None, e.reason)
+                    dlg.ShowModal()
+                    dlg.Destroy()
+                    return 1
             else:
                 if cleardoc:
                     self.TranscriptWindow.ClearDoc()

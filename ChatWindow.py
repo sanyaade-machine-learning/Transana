@@ -377,11 +377,11 @@ class ChatWindow(wx.Frame):
             db = TransanaGlobal.configData.database.encode('utf8')
             
             if DEBUG:
-                print 'C %s %s %s 200 ||| ' % (userName, host, db)
+                print 'C %s %s %s 212 ||| ' % (userName, host, db)
             
-            self.socketObj.send('C %s %s %s 200 ||| ' % (userName, host, db))
+            self.socketObj.send('C %s %s %s 212 ||| ' % (userName, host, db))
         else:
-            self.socketObj.send('C %s %s %s 200 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
+            self.socketObj.send('C %s %s %s 212 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
 
         # Create a Timer to check for Message Server validation.
         # Initialize to unvalidated state

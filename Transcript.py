@@ -167,7 +167,7 @@ class Transcript(DataObject):
 
         if DEBUG:
             print "Transcript.db_save():  %s\n%s" % (self.text, type(self.text))
-        
+
         # If we're in Unicode mode, ...
         if 'unicode' in wx.PlatformInfo:
             # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
@@ -189,6 +189,10 @@ class Transcript(DataObject):
             id = self.id
             transcriber = self.transcriber
             comment = self.comment
+
+
+        if (len(self.text) > 8388000):
+            raise SaveError, _("This transcript is too large for the database.  Please shorten it, split it into two parts\nor if you are importing an RTF document, remove some unnecessary RTF encoding.")
 
         fields = ("TranscriptID", "EpisodeNum", "ClipNum", "Transcriber", \
                         "RTFText", "Comment", "LastSaveTime")

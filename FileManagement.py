@@ -952,7 +952,7 @@ class FileManagement(wx.Dialog):
             # Strip whitespace and null character (c string terminator) from buf
             buf = string.strip(buf)[:-1]
             # The SRBFileTransfer class handles file transfers and provides Progress Feedback
-            dlg = SRBFileTransfer.SRBFileTransfer(None, _("SRB File Transfer"), file, int(buf), targetDir, self.srbConnectionID, sourceDir, SRBFileTransfer.srb_DOWNLOAD)
+            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), file, int(buf), targetDir, self.srbConnectionID, sourceDir, SRBFileTransfer.srb_DOWNLOAD)
             success = dlg.TransferSuccessful()
             dlg.Destroy()
 
