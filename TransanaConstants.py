@@ -37,7 +37,7 @@ labVersion = False
 demoVersion = False
 
 # Program Version Number
-versionNumber = '2.30'
+versionNumber = '2.31 Development 1'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'

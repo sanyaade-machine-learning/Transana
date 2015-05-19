@@ -626,9 +626,9 @@ class OptionsSettings(wx.Dialog):
             TransanaGlobal.configData.defaultFontSize = int(self.defaultFontSize.GetValue())
 
         # Make sure the current video root and visualization path settings are saved in the configuration under the (username, server, database) key.
-        TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database)] = \
-            {'videoPath' : TransanaGlobal.configData.videoPath,
-             'visualizationPath' : TransanaGlobal.configData.visualizationPath}
+        TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName.encode('utf8'), TransanaGlobal.configData.host.encode('utf8'), TransanaGlobal.configData.database.encode('utf8'))] = \
+            {'videoPath' : TransanaGlobal.configData.videoPath.encode('utf8'),
+             'visualizationPath' : TransanaGlobal.configData.visualizationPath.encode('utf8')}
 
         if not TransanaConstants.singleUserVersion:
             # TODO:  If Message Server is changed, disconnect and connect to new Message Server!

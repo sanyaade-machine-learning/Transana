@@ -112,6 +112,17 @@ def InitializeSingleUserDatabase():
     # Swedish
     elif (TransanaGlobal.configData.language == 'sv'):
         lang = '--language=./share/swedish'
+
+    # MySQLdb.server_init parameters MUST be strings, but paths with encoded characters aren't.
+    if isinstance(datadir, unicode):
+        # On Windows ...
+        if 'wxMSW' in wx.PlatformInfo:
+            # ... we seem to be able to fix this by using "CP1250" encoding
+            datadir = datadir.encode('cp1250')
+        # On non-Windows platforms, maybe we can use UTF8.
+        else:
+            datadir = datadir.encode('utf8')
+
     MySQLdb.server_init(args=['Transana', datadir, '--basedir=.', lang])
     
 def EndSingleUserDatabase():
@@ -563,16 +574,20 @@ def establish_db_exists():
                 dbCursor2.execute(query)
 
         # See if this (username, server, database) combination has defined paths.
-        if TransanaGlobal.configData.pathsByDB.has_key((TransanaGlobal.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database)):
+        if TransanaGlobal.configData.pathsByDB.has_key((TransanaGlobal.userName.encode('utf8'), TransanaGlobal.configData.host.encode('utf8'), TransanaGlobal.configData.database.encode('utf8'))):
             # If so, load the video root and visualization paths.
-            TransanaGlobal.configData.videoPath = TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database)]['videoPath']
-            TransanaGlobal.configData.visualizationPath = TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database)]['visualizationPath']
+            TransanaGlobal.configData.videoPath = TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName.encode('utf8'), TransanaGlobal.configData.host.encode('utf8'), TransanaGlobal.configData.database.encode('utf8'))]['videoPath']
+            if isinstance(TransanaGlobal.configData.videoPath, str):
+                TransanaGlobal.configData.videoPath = TransanaGlobal.configData.videoPath.decode('utf8')
+            TransanaGlobal.configData.visualizationPath = TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName.encode('utf8'), TransanaGlobal.configData.host.encode('utf8'), TransanaGlobal.configData.database.encode('utf8'))]['visualizationPath']
+            if isinstance(TransanaGlobal.configData.visualizationPath, str):
+                TransanaGlobal.configData.visualizationPath = TransanaGlobal.configData.visualizationPath.decode('utf8')
         # If not ...
         else:
             # ... use the current video root and visualization paths to initialize the configuration values.
-            TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database)] = \
-                    {'videoPath' : TransanaGlobal.configData.videoPath,
-                     'visualizationPath' : TransanaGlobal.configData.visualizationPath}
+            TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName.encode('utf8'), TransanaGlobal.configData.host.encode('utf8'), TransanaGlobal.configData.database.encode('utf8'))] = \
+                    {'videoPath' : TransanaGlobal.configData.videoPath.encode('utf8'),
+                     'visualizationPath' : TransanaGlobal.configData.visualizationPath.encode('utf8')}
 
         # If we've gotten this far, return "true" to indicate success.
         return True
