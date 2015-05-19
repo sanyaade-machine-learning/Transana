@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -18,33 +18,42 @@
 
 __author__ = 'Nathaniel Case <nacase@wisc.edu>, David Woods <dwoods@wcer.wisc.edu>'
 
+DEBUG = False
+if DEBUG:
+    print "DataWindow DEBUG is ON!"
+
 import wx
 from DatabaseTreeTab import *
 from EpisodeClipsTab import *
 from KeywordsTab import *
 import TransanaGlobal
 
-class DataWindow(wx.Dialog):
+class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
     """This class implements the window containing all data display tabs."""
 
     def __init__(self, parent, id=-1):
         """Initialize a DataWindow object."""
         # Start with a Dialog Box (wxPython)
         wx.Dialog.__init__(self, parent, id, _("Data"), self.__pos(),
+#        wx.MDIChildFrame.__init__(self, parent, id, _("Data"), self.__pos(),
                             self.__size(),
                             style=wx.CAPTION | wx.RESIZE_BORDER)
-        # Set "Window Variant" to small only for Mac to make fonts match better
+
+        # Set "Window Variant" to small only for Mac to use small icons
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
-        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        vSizer = wx.BoxSizer(wx.VERTICAL)
 
         # add a Notebook Control to the Dialog Box
         # The wxCLIP_CHILDREN style allegedly reduces flicker.
         self.nb = wx.Notebook(self, -1, style=wx.CLIP_CHILDREN)
-        # In order to 
+        # Set the Notebook's background to White.  Otherwise, we get a visual anomoly on OS X with wxPython 2.9.4.0.
+        self.nb.SetBackgroundColour(wx.Colour(255, 255, 255))
+        
+        # Let the notebook remember it's parent
         self.nb.parent = self
-        mainSizer.Add(self.nb, 1, wx.EXPAND)
+        vSizer.Add(self.nb, 1, wx.EXPAND)
 
         # Create tabs for the Notebook Control.  These tabs are complex enough that they are
         # instantiated as separate objects.
@@ -56,10 +65,8 @@ class DataWindow(wx.Dialog):
         self.SelectedEpisodeClipsTab = None
         self.KeywordsTab = None
         
-
         # Add the tabs to the Notebook Control
         self.nb.AddPage(self.DBTab, _("Database"), True)
-        
 
         # OSX requires this for some reason or else it won't have a default
         # page selected.
@@ -68,7 +75,7 @@ class DataWindow(wx.Dialog):
         # Handle Key Press Events
         self.nb.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
 
-        self.SetSizer(mainSizer)
+        self.SetSizer(vSizer)
         self.SetAutoLayout(True)
         self.Layout()
 
@@ -76,6 +83,9 @@ class DataWindow(wx.Dialog):
 
         # Capture Size Changes
         wx.EVT_SIZE(self, self.OnSize)
+
+        if DEBUG:
+            print "DataWindow.__init__():  Initial size:", self.GetSize()
 
         # Capture the selection of different Notebook Pages
         wx.EVT_NOTEBOOK_PAGE_CHANGED(self, self.nb.GetId(), self.OnNotebookPageSelect)
@@ -87,7 +97,7 @@ class DataWindow(wx.Dialog):
             # If a ControlObject is defined, propagate it to the EpisodeClipsTab so that Clips can be loaded via double-clicking
             if self.ControlObject != None:
                 self.EpisodeClipsTab.Register(self.ControlObject)
-            self.nb.AddPage(self.EpisodeClipsTab, _("Episode Clips"), False)
+            self.nb.AddPage(self.EpisodeClipsTab, _("Episode Items"), False)
             # Allow the Database Tab to redraw, as adding the Episode Clips tab can interfere with the appearance of the Data Window
             self.DBTab.Refresh()
 
@@ -97,7 +107,7 @@ class DataWindow(wx.Dialog):
             # If a ControlObject is defined, propagate it to the EpisodeClipsTab so that Clips can be loaded via double-clicking
             if self.ControlObject != None:
                 self.SelectedEpisodeClipsTab.Register(self.ControlObject)
-            self.nb.AddPage(self.SelectedEpisodeClipsTab, _("Selected Clips"), False)
+            self.nb.AddPage(self.SelectedEpisodeClipsTab, _("Selected Items"), False)
             # Allow the Database Tab to redraw, as adding the Episode Clips tab can interfere with the appearance of the Data Window
             self.DBTab.Refresh()
 
@@ -166,7 +176,12 @@ class DataWindow(wx.Dialog):
             # Get the size of the Data Window
             (left, top) = self.GetPositionTuple()
             # Ask the Control Object to resize all other windows
-            self.ControlObject.UpdateWindowPositions('Data', left - 4, YLower = top - 4)
+
+            if DEBUG:
+                print
+                print "Call 2", 'Data', left - 1, -1, top
+            
+            self.ControlObject.UpdateWindowPositions('Data', left - 1, YLower = top)
         # Call to Layout() is required so that the Notebook Control resizes properly
         self.Layout()
 
@@ -174,11 +189,11 @@ class DataWindow(wx.Dialog):
         """ Detect which tab in the Notebook is selected and prepare that tab for display. """
         if 'unicode' in wx.PlatformInfo:
             # If Episode Clips Tab is selected ...
-            if self.nb.GetPageText(event.GetSelection()) == unicode(_("Episode Clips"), 'utf8'):
+            if self.nb.GetPageText(event.GetSelection()) == unicode(_("Episode Items"), 'utf8'):
                 # ... get the latest Data for the Episode Clips
                 self.EpisodeClipsTab.Refresh()
             # If the Selected Clips Tab is selected ...
-            elif self.nb.GetPageText(event.GetSelection()) == unicode(_("Selected Clips"), 'utf8'):
+            elif self.nb.GetPageText(event.GetSelection()) == unicode(_("Selected Items"), 'utf8'):
                 # ... get the latest Data based on the current Video Position
                 self.SelectedEpisodeClipsTab.Refresh(self.ControlObject.GetVideoPosition())
             # If the Keyword Tab is selected ...
@@ -187,11 +202,11 @@ class DataWindow(wx.Dialog):
                 self.KeywordsTab.Refresh()
         else:
             # If Episode Clips Tab is selected ...
-            if self.nb.GetPageText(event.GetSelection()) == _("Episode Clips"):
+            if self.nb.GetPageText(event.GetSelection()) == _("Episode Items"):
                 # ... get the latest Data for the Episode Clips
                 self.EpisodeClipsTab.Refresh()
             # If the Selected Clips Tab is selected ...
-            elif self.nb.GetPageText(event.GetSelection()) == _("Selected Clips"):
+            elif self.nb.GetPageText(event.GetSelection()) == _("Selected Items"):
                 # ... get the latest Data based on the current Video Position
                 self.SelectedEpisodeClipsTab.Refresh(self.ControlObject.GetVideoPosition())
             # If the Keyword Tab is selected ...
@@ -232,14 +247,34 @@ class DataWindow(wx.Dialog):
 
         # print "DataWindow.ChangeLanguages()  (%s)" % _("Data")
 
+    def GetNewRect(self):
+        """ Get (X, Y, W, H) for initial positioning """
+        pos = self.__pos()
+        size = self.__size()
+        return (pos[0], pos[1], size[0], size[1])
+
     def __size(self):
         """Determine default size of Data Frame."""
-        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
-        if 'wxGTK' in wx.PlatformInfo:
-            width = min((rect[2] - 10), (1280 - rect[0])) * .28  # min(rect[2], 1440) * .28
+        # Determine which monitor to use and get its size and position
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            primaryScreen = TransanaGlobal.configData.primaryScreen
         else:
-            width = rect[2] * .28
-        height = (rect[3] - TransanaGlobal.menuHeight) * .64
+            primaryScreen = 0
+        rect = wx.Display(primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
+        if not 'wx.GTK' in wx.PlatformInfo:
+            container = rect[2:4]
+        else:
+            screenDims = wx.Display(primaryScreen).GetClientArea()
+            # screenDims2 = wx.Display(primaryScreen).GetGeometry()
+            left = screenDims[0]
+            top = screenDims[1]
+            width = screenDims[2] - screenDims[0]  # min(screenDims[2], 1280 - self.left)
+            height = screenDims[3]
+            container = (width, height)
+        
+        width = container[0] * .282  # rect[2] * .28
+        height = (container[1] - TransanaGlobal.menuHeight) * .66  # (rect[3] - TransanaGlobal.menuHeight) * .64
+
         # Compensate in Linux.  I'm not sure why this is necessary, but it seems to be.
 #        if 'wxGTK' in wx.PlatformInfo:
 #            height -= 50
@@ -247,16 +282,26 @@ class DataWindow(wx.Dialog):
 
     def __pos(self):
         """Determine default position of Data Frame."""
-        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        # Determine which monitor to use and get its size and position
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            primaryScreen = TransanaGlobal.configData.primaryScreen
+        else:
+            primaryScreen = 0
+        rect = wx.Display(primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
+        if not 'wxGTK' in wx.PlatformInfo:
+            container = rect[2:4]
+        else:
+            # Linux rect includes both screens, so we need to use an alternate method!
+            container = TransanaGlobal.menuWindow.GetSize()
         (width, height) = self.__size()
         # rect[0] compensates if the Start menu is on the Left
         if 'wxGTK' in wx.PlatformInfo:
             x = rect[0] + min((rect[2] - 10), (1280 - rect[0])) - width   # min(rect[2], 1440) - width - 3
         else:
-            x = rect[0] + rect[2] - width - 3
+            x = rect[0] + container[0] - width - 2  # rect[0] + rect[2] - width - 3
         # rect[1] compensates if the Start menu is on the Top
         if 'wxGTK' in wx.PlatformInfo:
             y = rect[1] + rect[3] - height + 24
         else:
-            y = rect[1] + rect[3] - height - 3
+            y = rect[1] + container[1] - height # rect[1] + rect[3] - height - 3
         return wx.Point(x, y)

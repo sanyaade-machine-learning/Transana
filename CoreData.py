@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -58,7 +58,7 @@ class CoreData(DataObject.DataObject):
         str = 'Core Data Record:\n'
         str = str + 'Number = %s\n' % self.number
         str = str + 'id = %s\n' % self.id
-        str = str + 'comment (full-path file name) = %s\n' % self.comment
+#        str = str + 'comment (full-path file name) = %s\n' % self.comment
         str = str + 'title = %s\n' % self.title
         str = str + 'creator = %s\n' % self.creator
         str = str + 'subject = %s\n' % self.subject

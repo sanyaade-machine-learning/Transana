@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -60,6 +60,8 @@ import FileManagement
 import PlayAllClips
 # import the Episode Transcript Change Propagation tool
 import PropagateEpisodeChanges
+# import the Snapshot Window
+import SnapshotWindow
 # import Transana's Exceptions
 import TransanaExceptions
 # Import Transana's Transcript User Interface for creating supplemental Transcript Windows
@@ -87,13 +89,20 @@ class ControlObject(object):
         self.VideoWindow = None
         # There may be multiple Transcript Windows.  We'll use a List to keep track of them.
         self.TranscriptWindow = []
+        self.shuttingDown = False       # We need to signal when we want to shut down to prevent problems
+                                        # with the Visualization Window's IDLE event trying to call the
+                                        # VideoWindow after it's been destroyed.
         # We need to know what transcript is "Active" (most recently selected) at any given point.  -1 signals none.
         self.activeTranscript = -1
         self.VisualizationWindow = None
         self.DataWindow = None
+        # Keep track of all Snapshot Windows that are opened
+        self.SnapshotWindows = []
         self.PlayAllClipsWindow = None
         self.NotesBrowserWindow = None
         self.ChatWindow = None
+        # Keep track of all Report, Map, and Graph Windows that are opened
+        self.ReportWindows = {}
 
         # Initialize variables
         self.VideoFilename = ''         # Video File Name
@@ -102,14 +111,13 @@ class ControlObject(object):
         self.WindowPositions = []       # Initial Screen Positions for all Windows, used for Presentation Mode
         self.TranscriptNum = []         # Transcript record # LIST loaded
         self.currentObj = None          # Currently loaded Object (Episode or Clip)
+        self.reportNumber = 0           # Report Number, for tracking reports in the Window Menu
         # Have the Export Directory default to the Video Root, but then remember its changed value for the session
         self.defaultExportDir = TransanaGlobal.configData.videoPath
         self.playInLoop = False         # Should we loop playback?
         self.LoopPresMode = None        # What presentation mode are we ignoring while Looping?
-        self.shuttingDown = False       # We need to signal when we want to shut down to prevent problems
-                                        # with the Visualization Window's IDLE event trying to call the
-                                        # VideoWindow after it's been destroyed.
-        
+        self.shutdownPlayAllClips = False  # Flag to signal the need to reformat the screen following Play All Clips
+
     def Register(self, Menu='', Video='', Transcript='', Data='', Visualization='', PlayAllClips='', NotesBrowser='', Chat=''):
         """ The ControlObject can extert control only over those objects it knows about.  This method
             provides a way to let the ControlObject know about other objects.  This infrastructure allows
@@ -151,6 +159,39 @@ class ControlObject(object):
         self.MenuWindow.Close()
         # VideoWindow needs to be closed explicitly.
         self.VideoWindow.close()
+
+    def CloseAllImages(self):
+        """ Close all Snapshot Windows """
+        # For each Shapshot Window (from the end of the list to the start) ...
+        while len(self.SnapshotWindows) > 0:
+            # ... close it, thus releasing any records that might be locked there.
+            self.SnapshotWindows[len(self.SnapshotWindows) - 1].Close()
+
+    def CloseAllReports(self):
+        """ Close all Report Windows """
+        # For each Report Window (from the end of the list to the start) ...
+        while len(self.ReportWindows) > 0:
+            # ... close it, thus releasing any records that might be locked there.
+            self.ReportWindows[self.ReportWindows.keys()[len(self.ReportWindows) - 1]].Close()
+
+    def IconizeAll(self, iconize):
+        """ Have all windows minimize and restore together """
+        self.MenuWindow.Iconize(iconize)
+        self.VisualizationWindow.Iconize(iconize)
+        self.VideoWindow.Iconize(iconize)
+        # The TranscriptWindow sometimes MUST be called here, while other times it isn't needed.
+        for win in self.TranscriptWindow:
+            win.dlg.Iconize(iconize)
+        self.DataWindow.Iconize(iconize)
+        for win in self.SnapshotWindows:
+            win.Iconize(iconize)
+        if self.NotesBrowserWindow != None:
+            self.NotesBrowserWindow.Iconize(iconize)
+        # The File Management Window also does not need to be processed here.
+        # For each Report Window ...
+        for win in self.ReportWindows.keys():
+            # ... minimize/restore the Report
+            self.ReportWindows[win].Iconize(iconize)
 
     def LoadTranscript(self, series, episode, transcript):
         """ When a Transcript is identified to trigger systemic loading of all related information,
@@ -239,6 +280,7 @@ class ControlObject(object):
 
              # Set focus to the new Transcript's Editor (so that CommonKeys work on the Mac)
             self.TranscriptWindow[self.activeTranscript].dlg.editor.SetFocus()
+
         # If the video won't load ...
         else:
             # Clear the interface!
@@ -246,12 +288,17 @@ class ControlObject(object):
             # We only want to load the File Manager in the Single User version.  It's not the appropriate action
             # for the multi-user version!
             if TransanaConstants.singleUserVersion:
-                # Create a File Management Window
-                fileManager = FileManagement.FileManagement(self.MenuWindow, -1, _("Transana File Management"))
-                # Set up, display, and process the File Management Window
-                fileManager.Setup(showModal=True)
-                # Destroy the File Manager window
-                fileManager.Destroy()
+                # Open the File Management Window just as if the Menu Item was selected, which
+                # doesn't cause menu problems on OS X
+                self.MenuWindow.OnFileManagement(None)
+
+## REPLACED - on Mac, when you exit the File Manager, you don't get the menus back!!  Yikes!
+##                # Create a File Management Window
+##                fileManager = FileManagement.FileManagement(self.MenuWindow, -1, _("Transana File Management"))
+##                # Set up, display, and process the File Management Window
+##                fileManager.Setup(showModal=True)
+##                # Destroy the File Manager window
+##                fileManager.Destroy()
 
     def LoadClipByNumber(self, clipNum):
         """ When a Clip is identified to trigger systematic loading of all related information,
@@ -304,10 +351,12 @@ class ControlObject(object):
             self.TranscriptWindow[self.activeTranscript].dlg.SetTitle(str)
             # Open the first Clip Transcript in Transcript Window (activeTranscript is ALWAYS 0 here!)
             self.TranscriptWindow[self.activeTranscript].LoadTranscript(clipObj.transcripts[0])
-            # Open the remaining clip transcripts in additional transcript windows.
-            for tr in clipObj.transcripts[1:]:
-                self.OpenAdditionalTranscript(tr.number, isEpisodeTranscript=False)
-                self.TranscriptWindow[len(self.TranscriptWindow) - 1].dlg.SetTitle(str)
+            # If we allow multiple transcripts ...
+            if TransanaConstants.proVersion:
+                # Open the remaining clip transcripts in additional transcript windows.
+                for tr in clipObj.transcripts[1:]:
+                    self.OpenAdditionalTranscript(tr.number, isEpisodeTranscript=False)
+                    self.TranscriptWindow[len(self.TranscriptWindow) - 1].dlg.SetTitle(str)
 
             # Remove any tabs in the Data Window beyond the Database Tab.  (This was moved down to late in the
             # process due to problems on the Mac documented in the DataWindow object.)
@@ -353,6 +402,170 @@ class ControlObject(object):
 
             return False
 
+    def LoadSnapshot(self, snapshot):
+        """ Load the SnapshotWindow for the Snapshot object passed in """
+        # Assume no Snapshot Window exists for this snapshot
+        windowOpen = False
+        # If we have a known Snapshot Number ...
+        if snapshot.number != 0:
+            # ... iterate through all Snapshot Windows ...
+            for snapshotWindow in self.SnapshotWindows:
+                # ... see if there is already a Snapshot Window open for the specified Snapshot
+                if snapshotWindow.obj.number == snapshot.number:
+                    # If so, show the windows ...
+                    snapshotWindow.Show()
+                    # ... raise it to the top of the stack ...
+                    snapshotWindow.Raise()
+                    # ... and if it's Iconized (minimized) ...
+                    if snapshotWindow.IsIconized():
+                        # ... then un-minimize it.  (This is different from maximizing it, of course!)
+                        snapshotWindow.Iconize(False)
+                    # Note that an open windows was found
+                    windowOpen = True
+                    # We can stop looking once we've found an open windows
+                    break
+        # If we did NOT find an open window ...
+        if not windowOpen:
+            # Start Exception Handling
+            try:
+                # ... create a new Snapshot Window ...
+                snapshotDlg = SnapshotWindow.SnapshotWindow(self.MenuWindow, -1, snapshot.id, snapshot)
+                # ... and add this to the list of open Snapshot Windows
+                self.SnapshotWindows.append(snapshotDlg)
+                # Iterate through the existing Snapshot Windows
+                for win in self.SnapshotWindows:
+                    # For all windows except the newest one ...
+                    if win != snapshotDlg:
+                        # ... add the looping window's ID to the Window Menu
+                        snapshotDlg.AddWindowMenuItem(win.obj.id, win.obj.number)
+                    # Add the new window's ID to the looping window's Window menu
+                    win.AddWindowMenuItem(snapshot.id, snapshot.number)
+                # Add this to the Menu Window's Window's menu
+                self.MenuWindow.AddWindowMenuItem(snapshot.id, snapshot.number)
+                    
+            # If an ImageLoadError occurs ...
+            except TransanaExceptions.ImageLoadError, exception:
+                # ... report the error to the user
+                dlg = Dialogs.ErrorDialog(self.MenuWindow, exception.explanation)
+                dlg.ShowModal()
+                dlg.Destroy()
+
+    def SelectSnapshotWindow(self, itemName, itemNumber, selectInDataWindow=False):
+        """ Select the indicated Snapshot Window """
+        # Assume the window will NOT be found
+        winFound = False
+        # Iterate through the Snapshot Windows
+        for win in self.SnapshotWindows:
+            # If we have the correct window ...
+            if (itemName == win.obj.id) and (itemNumber == win.obj.number):
+                # ... if we're supposed to select the Snapshot in the Data Window ...
+                if selectInDataWindow:
+                    # ... bet the Snapshot's Node Data ...
+                    nodeList = (_('Collections'),) + win.obj.GetNodeData()
+                    # ... and point the DBTree to the loaded Snapshot
+                    self.DataWindow.DBTab.tree.select_Node(nodeList, 'SnapshotNode')
+                # ... bring it to the top of the window stack ...
+                win.Raise()
+                # ... make sure it's not minimized ...
+                win.Iconize(False)
+                # ... give it focus ...
+                win.SetFocus()
+                # Note that the window has been found
+                winFound = True
+                # ... and stop looking
+                break
+
+        # Return an indicator of whether the window was found
+        return winFound
+
+    def RemoveSnapshotWindow(self, itemName, itemNumber):
+        """ Remove a Snapshot Window and all references from Transana's Interface """
+        # Iterate through the Snapshot Windows.
+        for snapshotWindow in self.SnapshotWindows:
+            # When we find the Snapshot Window reference for this Snapshot ...
+            if itemNumber == snapshotWindow.obj.number:
+                # ... remove it from the List of Snapshot Windows
+                self.SnapshotWindows.remove(snapshotWindow)
+        # Iterate through the Snapshot Windows again.  (remove() above changed the number of items, so skips one!)
+        for snapshotWindow in self.SnapshotWindows:
+            # Remove this item from the Snapshot Windows' Window menu
+            snapshotWindow.DeleteWindowMenuItem(itemName, itemNumber)
+        # Remove this from the Menu Window's Window's menu
+        self.MenuWindow.DeleteWindowMenuItem(itemName, itemNumber)
+
+    def GetOpenSnapshotWindows(self, editableOnly=False):
+        """ Return a list of all Snapshot Windows that are open """
+        # Initialize values to be returned
+        values = []
+        # Iterate through the Snapshot Windows
+        for win in self.SnapshotWindows:
+            # If we want all windows, or if the current window is editable ...
+            if (not editableOnly) or win.editTool.IsToggled():
+                # ... then add the window to the return values
+                values.append(win)
+        # Return the Return values
+        return values
+
+    def ShowNotesBrowser(self):
+        """ Bring the Notes Browser to the front """
+        # Raise the Notes Browser Window to the top
+        self.NotesBrowserWindow.Raise()
+        # If the Notes Browser is minimized ...
+        if self.NotesBrowserWindow.IsIconized():
+            # ... restore it to full size
+            self.NotesBrowserWindow.Iconize(False)
+        # Push the Visualization Window behind it
+        self.VisualizationWindow.Lower()
+        # Push the Video Window behind it
+        self.VideoWindow.Lower()
+        # For each Transcript Window ...
+        for win in self.TranscriptWindow:
+            # ... push the transcript behind the Notes Browser
+            win.dlg.Lower()
+        # Push the Data Window behind it
+        self.DataWindow.Lower()
+        # For each Snapshot Window ...
+        for win in self.SnapshotWindows:
+            # ... push the Snapshot behind the Notes Browser
+            win.Lower()
+        # For each Report Window ...
+        for win in self.ReportWindows.keys():
+            # ... push the Report behind the Notes Browser
+            self.ReportWindows[win].Lower()
+
+    def AddReportWindow(self, reportWindow):
+        """ Add a Report Window to Transana's Interface """
+        # Increment the unique Report Number
+        self.reportNumber += 1
+        # Remember the report in the ReportWindows dictionary
+        self.ReportWindows[self.reportNumber] = reportWindow
+        # Add the unique Report Number to the report
+        reportWindow.reportNumber = self.reportNumber
+        # Add the Report to the Window Menu
+        self.MenuWindow.AddWindowMenuItem(reportWindow.title, self.reportNumber)
+
+    def SelectReportWindow(self, reportName, reportNumber):
+        """ Select the indicated Report Window """
+        # If the desired report number is in the ReportWindows keys ...
+        if reportNumber in self.ReportWindows.keys():
+            # ... select the correct window
+            win = self.ReportWindows[reportNumber]
+            # ... bring it to the top of the window stack ...
+            win.Raise()
+            # ... make sure it's not minimized ...
+            win.Iconize(False)
+            # ... give it focus ...
+            win.SetFocus()
+
+    def RemoveReportWindow(self, reportName, reportNumber):
+        """ Remove a Report Window from Transana's Interface """
+        # If the report window still exists ... (sometimes a close event will get double-called and the report will already be gone!)
+        if self.ReportWindows.has_key(reportNumber):
+            # Delete the Report Window from the ReportWindows dictionary
+            del(self.ReportWindows[reportNumber])
+            # Remove this from the Menu Window's Window's menu
+            self.MenuWindow.DeleteWindowMenuItem(reportName, reportNumber)
+
     def OpenAdditionalTranscript(self, transcriptNum, seriesID='', episodeID='', isEpisodeTranscript=True):
         """ Open an additional Transcript without replacing the current one """
         # Create a new Transcript Window
@@ -389,8 +602,7 @@ class ControlObject(object):
         # Load the transcript text into the new transcript window
         newTranscriptWindow.LoadTranscript(transcriptObj)
         # Add the new transcript's number to the list that tracks the numbers of the open transcripts.
-        self.TranscriptNum[self.activeTranscript] = transcriptObj.number
-
+        self.TranscriptNum[len(self.TranscriptNum) - 1] = transcriptObj.number
         # Now we need to arrange the various Transcript windows.
         # if Auto Arrange is enabled ...
         if TransanaGlobal.configData.autoArrange:
@@ -421,8 +633,8 @@ class ControlObject(object):
         
     def CloseAdditionalTranscript(self, transcriptNum):
         """ Close a secondary transcript """
-        # If we're closeing a transcript other than the active transscript ...
-        if self.activeTranscript != transcriptNum:
+        # If we're closeing a transcript other than the active transcript ...
+        if self.activeTranscript != transcriptNum and not self.shuttingDown:
             # ... remember which transcript WAS active ...
             prevActiveTranscript = self.activeTranscript
             # ... and make the one we're supposed to close active.
@@ -498,25 +710,28 @@ class ControlObject(object):
             (left, top) = self.TranscriptWindow[0].dlg.GetPositionTuple()
             (width, height) = self.TranscriptWindow[0].dlg.GetSizeTuple()
             # Get the size of the full screen
-            (x, y, w, h) = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+            (x, y, w, h) = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()  # self.MenuWindow.GetClientRect()
             # We don't want the height of the first Transcript window, but the size of the space for all Transcript windows.
             # We assume that it extends from the top of the first Transcript window to the bottom of the whole screen.
-            height = h - top
-            # We need an adjustment for the Mac.  I don't know why exactly.  It might have to do with the height of the menu bar.
-            if 'wxMac' in wx.PlatformInfo:
-                height += 20
+            height = y + h - top
             # If there's only ONE Media Player AND AutoArrange is turned ON ...
             if (len(self.VideoWindow.mediaPlayers) == 1) and TransanaGlobal.configData.autoArrange:
                 # ... the width from the Transcript may very well be incorrect.  Let's grab the width from the Visualization Window
                 (width, vh) = self.VisualizationWindow.GetSizeTuple()
             # Initialize a Window Counter
             cnt = 0
+            # Remember if we're resizing All
+            tmpResizingAll = TransanaGlobal.resizingAll
+            # For the moment, we want to signal we are resizing all regardless
+            TransanaGlobal.resizingAll = True
             # Iterate through all the Transcript Windows
             for win in self.TranscriptWindow:
                 # Increment the counter
                 cnt += 1
                 # Set the position of each window so they evenly fill up the Transcript space
                 win.dlg.SetDimensions(left, top + int((cnt-1) * (height / len(self.TranscriptWindow))), width, int(height / len(self.TranscriptWindow)))
+            # Restore the original value of resizingAll
+            TransanaGlobal.resizingAll = tmpResizingAll
 
     def ClearAllWindows(self, resetMultipleTranscripts = True):
         """ Clears all windows and resets all objects """
@@ -534,6 +749,15 @@ class ControlObject(object):
         str = _('Transcript')
         self.TranscriptWindow[self.activeTranscript].dlg.SetTitle(str)
 
+        # Force the screen updates.
+        # If this is left out, we get an exception when deleting an OPEN multi-transcript clip on OS X.
+        # there can be an issue with recursive calls to wxYield, so trap the exception ...
+        try:
+            wx.Yield()
+        # ... and ignore it!
+        except:
+            pass
+
         # Clear the Menu Window (Reset menus to initial state)
         self.MenuWindow.ClearMenus()
         # Clear Visualization Window
@@ -545,7 +769,7 @@ class ControlObject(object):
         # Identify the loaded media file
         str = _('Video')
         self.VideoWindow.SetTitle(str)
-        
+
         # If we are resetting multiple transcripts ...
         if resetMultipleTranscripts:
             # While there are additional Transcript windows open ...
@@ -556,14 +780,22 @@ class ControlObject(object):
                 # Clear Transcript Window
                 self.TranscriptWindow[len(self.TranscriptWindow) - 1].ClearDoc()
                 self.TranscriptWindow[len(self.TranscriptWindow) - 1].dlg.Close()
+
             # When all the Transcritp Windows are closed, rearrrange the screen
             self.AutoArrangeTranscriptWindows()
-                    
+
         # Clear the Data Window
         self.DataWindow.ClearData()
+
+##        # Close all Snapshot Windows
+##        self.CloseAllImages()
+##        # Close all Reports
+##        # BREAKS RIGHT-CLICK for Keyword Map and Series Keyword Sequence Map !!
+##        self.CloseAllReports()
+        
         # Clear the currently loaded object, as there is none
         self.currentObj = None
-        
+
         # Force the screen updates
         # there can be an issue with recursive calls to wxYield, so trap the exception ...
         try:
@@ -578,6 +810,10 @@ class ControlObject(object):
         self.activeTranscript = 0
         # Clear all existing Data
         self.ClearAllWindows()
+        # Close all Snapshot Windows
+        self.CloseAllImages()
+        # Close all Reports
+        self.CloseAllReports()
         # If we're in multi-user ...
         if not TransanaConstants.singleUserVersion:
             # ... stop the Connection Timer so it won't fire while the Database is closed
@@ -648,6 +884,8 @@ class ControlObject(object):
         if self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
             # Display the Keywords Tab
             self.DataWindow.nb.SetSelection(tabValue)
+            # Refresh the display for OS X
+            self.DataWindow.Refresh()
 
     def ProcessCommonKeyCommands(self, event):
         """ Process keyboard commands common to several of Transana's main windows """
@@ -659,11 +897,11 @@ class ControlObject(object):
         hasMods = event.AltDown() or event.ControlDown() or event.CmdDown() or event.ShiftDown()
         # Note whether there is something loaded in the main interface
         loaded = (self.currentObj != None)
-
+        
         # F1 = Focus on Menu Window
         if (c == wx.WXK_F1) and not hasMods:
             # Set the focus on the Menu Window
-            self.MenuWindow.SetFocus()
+            self.MenuWindow.tmpCtrl.SetFocus()
 
         # F2 = Focus on Visualization Window
         elif (c == wx.WXK_F2) and not hasMods:
@@ -925,7 +1163,7 @@ class ControlObject(object):
             # independent programs.
         
             # Make the Help call differently from Python and the stand-alone executable.
-            if fn.lower() == 'transana.py':
+            if fn.lower() in ['transana.py', 'unit_test_form_check.py', 'unit_test_search.py']:
                 # for within Python, we call python, then the Help code and the context
                 os.spawnv(os.P_NOWAIT, 'python.bat', [programName, helpContext])
             else:
@@ -1022,7 +1260,56 @@ class ControlObject(object):
     def UpdateKeywordVisualization(self):
         """ If the Keyword Visualization is displayed, update it based on something that could change the keywords
             in the display area. """
+        # Update the Keyword Visualization
         self.VisualizationWindow.UpdateKeywordVisualization()
+
+    def UpdateSnapshotWindows(self, mode, event, kw_group, kw_name=None):
+        """ mode = 'Update' -- Update all open Snapshot Windows based on a change in a keyword
+                   'Detect' -- Return True if the keyword in question is in an open Snapshot in EDIT mode  """
+        # We need to update open Snapshots that contain this keyword.
+        # Start with a list of all the open Snapshot Windows.
+        if mode == 'Update':
+            openSnapshotWindows = self.GetOpenSnapshotWindows()
+        elif mode == 'Detect':
+            openSnapshotWindows = self.GetOpenSnapshotWindows(editableOnly=True)
+        else:
+            TransanaExceptions.ProgrammingError('Unknown mode "%s" in ControlObjectClass.UpdateSnapshotWindows()' % mode)
+        # Initialize a variable that signals whether the keyword to be deleted has been found
+        keywordFound = False
+        # Interate through the Snapshot Windows
+        for win in openSnapshotWindows:
+            # Iterate through the Whole Snapshot Keywords
+            for kw in win.obj.keyword_list:
+                # If we find the Keyword to be deleted ...
+                if (kw.keywordGroup == kw_group) and \
+                   ((kw_name == None) or (kw.keyword == kw_name)):
+                    # ... signal that we found a keyword ...
+                    keywordFound = True
+                    # ... and stop iterating
+                    break
+            # Iterate through the Detail Coding for the Snapshot
+            for key in win.obj.codingObjects:
+                # If we find the Keyword to be deleted ...
+                if (win.obj.codingObjects[key]['keywordGroup'] == kw_group) and \
+                   ((kw_name == None) or (win.obj.codingObjects[key]['keyword'] == kw_name)):
+                    # ... signal that we found a keyword ...
+                    keywordFound = True
+                    # ... and stop iterating
+                    break
+            # If we've found the keyword in any Snapshot not in Edit mode ...
+            if (mode == 'Update') and (not win.editTool.IsToggled()) and keywordFound:
+                # ... update the Snapshot Window
+                win.FileClear(event)
+                win.FileRestore(event)
+                win.OnEnterWindow(event)
+            # If we're detecting keywords and we've found one ...
+            elif (mode == 'Detect') and (win.editTool.IsToggled()) and keywordFound:
+                # ... we don't need to keep looking
+                return keywordFound
+        # Once we're done with all the Windows, if we're DETECTing ...
+        if mode == 'Detect':
+            # ... return the results of the detection
+            return keywordFound
 
     def Play(self, setback=False):
         """ This method starts video playback from the current video position. """
@@ -1199,7 +1486,7 @@ class ControlObject(object):
         if UpdateSelectionText:
             # Update the Selection Text in the current Transcript Window.  But it needs just a tick before the cursor position is set correctly.
             wx.CallLater(50, self.UpdateSelectionTextLater, self.activeTranscript)
-        
+
     def UpdatePlayState(self, playState):
         """ When the Video Player's Play State Changes, we may need to adjust the Screen Layout
             depending on the Presentation Mode settings. """
@@ -1208,43 +1495,57 @@ class ControlObject(object):
             # ... then re-start media playback
             self.Play()
         # If the video is STOPPED, return all windows to normal Transana layout
-        elif (playState == TransanaConstants.MEDIA_PLAYSTATE_STOP) and (self.PlayAllClipsWindow == None):
-            # When Play is intiated (below), the positions of windows gets saved if they are altered by Presentation Mode.
-            # If this has happened, we need to put the screen back to how it was before when Play is stopped.
-            if len(self.WindowPositions) != 0:
-                # Reset the AutoArrange (which was temporarily disabled for Presentation Mode) variable based on the Menu Setting
-                TransanaGlobal.configData.autoArrange = self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_AUTOARRANGE)
-                # Reposition the Video Window to its original Position (self.WindowsPositions[2])
-                self.VideoWindow.SetDims(self.WindowPositions[2][0], self.WindowPositions[2][1], self.WindowPositions[2][2], self.WindowPositions[2][3])
-                # Unpack the Transcript Window Positions
-                for winNum in range(len(self.WindowPositions[3])):
-                    # if we're NOT using the Rich Text Ctrl (ie. we are using the Styled Text Ctrl) ...
-                    if not TransanaConstants.USESRTC:
-                        # The Mac has a different base zoom factor than Windows
-                        if 'wxMac' in wx.PlatformInfo:
-                            zoomFactor = 3
-                        else:
-                            zoomFactor = 0
-                        # Zoom the Transcript window back to normal size
-                        self.TranscriptWindow[winNum].dlg.editor.SetZoom(zoomFactor)
-                    # Reposition each Transcript Window to its original Position (self.WindowsPositions[3])
-                    self.TranscriptWindow[winNum].SetDims(self.WindowPositions[3][winNum][0], self.WindowPositions[3][winNum][1], self.WindowPositions[3][winNum][2], self.WindowPositions[3][winNum][3])
-                # Show the Menu Bar
-                self.MenuWindow.Show(True)
-                # Show the Visualization Window
-                self.VisualizationWindow.Show(True)
-                # Show the Video Window
-                self.VideoWindow.Show(True)
-                # Show all Transcript Windows
-                for trWindow in self.TranscriptWindow:
-                    trWindow.Show(True)
-                # Show the Data Window
-                self.DataWindow.Show(True)
-                # Clear the saved Window Positions, so that if they are moved, the new settings will be saved when the time comes
-                self.WindowPositions = []
-            # Reset the Transcript Cursors
-            self.RestoreAllTranscriptCursors()
-                
+        elif (playState == TransanaConstants.MEDIA_PLAYSTATE_STOP):
+            # If we don't have a PlayAllClips Window or the PlayAllClips Shutdown has been triggered ...
+            if (self.PlayAllClipsWindow == None) or self.shutdownPlayAllClips:
+                # When Play is intiated (below), the positions of windows gets saved if they are altered by Presentation Mode.
+                # If this has happened, we need to put the screen back to how it was before when Play is stopped.
+                if len(self.WindowPositions) != 0:
+                    # Reset the AutoArrange (which was temporarily disabled for Presentation Mode) variable based on the Menu Setting
+                    TransanaGlobal.configData.autoArrange = self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_AUTOARRANGE)
+                    # Reposition the Video Window to its original Position (self.WindowsPositions[2])
+                    self.VideoWindow.SetDims(self.WindowPositions[2][0], self.WindowPositions[2][1], self.WindowPositions[2][2], self.WindowPositions[2][3])
+                    # Unpack the Transcript Window Positions
+                    for winNum in range(len(self.WindowPositions[3])):
+                        # if we're NOT using the Rich Text Ctrl (ie. we are using the Styled Text Ctrl) ...
+                        if not TransanaConstants.USESRTC:
+                            # The Mac has a different base zoom factor than Windows
+                            if 'wxMac' in wx.PlatformInfo:
+                                zoomFactor = 3
+                            else:
+                                zoomFactor = 0
+                            # Zoom the Transcript window back to normal size
+                            self.TranscriptWindow[winNum].dlg.editor.SetZoom(zoomFactor)
+                        # Reposition each Transcript Window to its original Position (self.WindowsPositions[3])
+                        self.TranscriptWindow[winNum].SetDims(self.WindowPositions[3][winNum][0], self.WindowPositions[3][winNum][1], self.WindowPositions[3][winNum][2], self.WindowPositions[3][winNum][3])
+                    # Show the Menu Bar
+                    self.MenuWindow.Show(True)
+                    # Show the Visualization Window
+                    self.VisualizationWindow.Show(True)
+                    # Show the Video Window
+                    self.VideoWindow.Show(True)
+                    # Show all Transcript Windows
+                    for trWindow in self.TranscriptWindow:
+                        trWindow.Show(True)
+                    # Show the Data Window
+                    self.DataWindow.Show(True)
+                    # Clear the saved Window Positions, so that if they are moved, the new settings will be saved when the time comes
+                    self.WindowPositions = []
+                # Reset the Transcript Cursors
+                self.RestoreAllTranscriptCursors()
+                # Reset the Shutdown flag
+                self.shutdownPlayAllClips = False
+            # if we have a PlayAllClipsWindow but its shutdown has not been triggered ...
+            else:
+                # ... see if we're playing the LAST clip now.
+                if (('wxMSW' in wx.PlatformInfo) and \
+                    (self.PlayAllClipsWindow.clipNowPlaying == len(self.PlayAllClipsWindow.clipList))) or \
+                   (('wxMac' in wx.PlatformInfo) and \
+                    (self.PlayAllClipsWindow.clipNowPlaying == len(self.PlayAllClipsWindow.clipList) - 1) and \
+                    (self.PlayAllClipsWindow.btnPlayPause.GetLabel() == _("Pause"))):
+                    # If so, set the Play All Clips Shutdown flag to True!
+                    self.shutdownPlayAllClips = True
+
         # If the video is PLAYED, adjust windows to the desired screen layout,
         # as indicated by the Presentation Mode selection
         elif playState == TransanaConstants.MEDIA_PLAYSTATE_PLAY:
@@ -1272,15 +1573,20 @@ class ControlObject(object):
                                             self.VideoWindow.GetDimensions(),
                                             transcriptWindowPositions,
                                             self.DataWindow.GetDimensions()]
-                # Hide the Menu Window
-                self.MenuWindow.Show(False)
+                # If we're on Windows ...
+                if 'wxMSW' in wx.PlatformInfo:
+                    # ... hide the Menu Window
+                    self.MenuWindow.Show(False)
                 # Hide the Visualization Window
                 self.VisualizationWindow.Show(False)
                 # Hide the Data Window
                 self.DataWindow.Show(False)
-                # Determine the size of the screen
-                (left, top, width, height) = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
-
+                # Determine which monitor to use and get its size and position
+                if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+                    primaryScreen = TransanaGlobal.configData.primaryScreen
+                else:
+                    primaryScreen = 0
+                (left, top, width, height) = wx.Display(primaryScreen).GetClientArea()
                 # See if Presentation Mode is set to "Video Only"
                 if self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_VIDEO):
                     # Hide the Transcript Windows
@@ -1294,19 +1600,16 @@ class ControlObject(object):
                         self.PlayAllClipsWindow.xPos = left + 1
                         self.PlayAllClipsWindow.yPos = height - 58
                         # We need a bit more adjustment on the Mac
-                        if 'wxMac' in wx.PlatformInfo:
+                        if ('wxMac' in wx.PlatformInfo) and (TransanaGlobal.configData.primaryScreen == 0):
                             self.PlayAllClipsWindow.yPos += 24
                         self.PlayAllClipsWindow.SetRect(wx.Rect(self.PlayAllClipsWindow.xPos, self.PlayAllClipsWindow.yPos, width - 2, 56))
                         # Make the PlayAllClipsWindow the focus
                         self.PlayAllClipsWindow.SetFocus()
+
                     # If there's NO play all clips window within Video Only presentation mode ...
                     else:
                         # Set the Video Window to take up almost the whole Client Display area
                         self.VideoWindow.SetDims(left + 1, top + 1, width - 2, height - 2)
-                        # ... let's create a controller for the video by creating a PlayAllClips window with the current object only
-#                        PlayAllClips.PlayAllClips(controlObject=self, singleObject=self.currentObj)
-                        # ... When we're done play all the clips, we need to call UpdatePlayState recursively to reset the display!
-#                        self.UpdatePlayState(TransanaConstants.MEDIA_PLAYSTATE_STOP)
 
                 # See if Presentation Mode is set to "Video and Transcript"
                 elif self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_TRANS):
@@ -1324,6 +1627,9 @@ class ControlObject(object):
                         self.PlayAllClipsWindow.yPos = int(dividePt * height) + 1
                         if 'wxMac' in wx.PlatformInfo:
                             self.PlayAllClipsWindow.yPos -= 20
+                        # We need a bit more adjustment on Windows for Video and Transcript mode
+                        elif ('wxMSW' in wx.PlatformInfo):
+                            self.PlayAllClipsWindow.yPos -= 28
                         self.PlayAllClipsWindow.SetRect(wx.Rect(self.PlayAllClipsWindow.xPos, self.PlayAllClipsWindow.yPos, width - 2, 56))
                         # Make the PlayAllClipsWindow the focus
                         self.PlayAllClipsWindow.SetFocus()
@@ -1364,7 +1670,6 @@ class ControlObject(object):
                             self.TranscriptWindow[trWinNum].dlg.editor.SetZoom(zoomFactor)
                         # Set the Transcript Window to take up the entire Client Display Area
                         self.TranscriptWindow[trWinNum].SetDims(left + 1, trWinNum * winHeight + top, width - 2, winHeight)
-                        
 
                     # If there is a PlayAllClipsWindow, reset it's size and layout
                     if self.PlayAllClipsWindow != None:
@@ -1372,9 +1677,13 @@ class ControlObject(object):
                         self.PlayAllClipsWindow.xPos = left + 1
                         self.PlayAllClipsWindow.yPos = top
                         if 'wxMac' in wx.PlatformInfo:
-                            winHeight = self.TranscriptWindow[0].dlg.GetSizeTuple()[1] - self.TranscriptWindow[0].dlg.GetClientSizeTuple()[1] + 20
+                            winHeight = self.TranscriptWindow[0].dlg.GetSizeTuple()[1] - self.TranscriptWindow[0].dlg.GetClientSizeTuple()[1] - 10
                         else:
-                            winHeight = self.TranscriptWindow[0].dlg.GetSizeTuple()[1] - self.TranscriptWindow[0].dlg.GetClientSizeTuple()[1] + 30
+                            ## Removed because we were getting too large a window, especially in Arabic.
+                            ## winHeight = self.TranscriptWindow[0].dlg.GetSizeTuple()[1] - self.TranscriptWindow[0].dlg.GetClientSizeTuple()[1] + 30
+
+                            winHeight = 56
+                            
                         self.PlayAllClipsWindow.SetRect(wx.Rect(self.PlayAllClipsWindow.xPos, self.PlayAllClipsWindow.yPos, width - 2, winHeight))
                         # Make the PlayAllClipsWindow the focus
                         self.PlayAllClipsWindow.SetFocus()
@@ -1567,8 +1876,9 @@ class ControlObject(object):
                 if 'unicode' in wx.PlatformInfo:
                     lbl = unicode(lbl, 'utf8')
                 lbl = lbl % (Misc.time_in_ms_to_str(start), Misc.time_in_ms_to_str(end))
-            # Now display the label on the Transcript Window.
-            self.TranscriptWindow[winNum].UpdateSelectionText(lbl)
+            # Now display the label on the Transcript Window.  But only if it's changed (for optimization during HD playback)
+            if self.TranscriptWindow[winNum].dlg.toolbar.selectionText.GetLabel() != lbl:
+                self.TranscriptWindow[winNum].UpdateSelectionText(lbl)
 
     def GetMediaLength(self, entire = False):
         """ This method returns the length of the entire video/media segment """
@@ -1633,6 +1943,8 @@ class ControlObject(object):
     def UpdateVideoWindowPosition(self, left, top, width, height):
         """ This method receives screen position and size information from the Video Window and adjusts all other windows accordingly """
         if TransanaGlobal.configData.autoArrange:
+            # Determine the values for potential screen position adjustment
+            (adjustX, adjustY, adjustW, adjustH) = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()
             # This method behaves differently when there are multiple Video Players open
             if (self.currentObj != None) and (len(self.currentObj.additional_media_files) > 0):
                 # Get the current dimensionf of the Video Window
@@ -1648,17 +1960,69 @@ class ControlObject(object):
                     # Get the current dimensionf of the Video Window
                     (wleft, wtop, wwidth, wheight) = self.VideoWindow.GetDimensions()
                     # Update other windows based on this information
-                    self.UpdateWindowPositions('Video', wleft, YLower=wtop + wheight)
+
+                    if DEBUG:
+                        print
+                        print "Call 1", 'Video', wleft, -1, wtop + wheight
+                    
+                    self.UpdateWindowPositions('Video', wleft - 1, YLower=wtop + wheight)
 
                 else:
                     # NOTE:  We only need to trigger Visualization and Data windows' SetDims method to resize everything!
 
+                    if DEBUG:
+                        print
+                        print "ControlObjectClass.UpdateVideoWindowPosition():"
+
                     # Visualization Window adjusts WIDTH only to match shift in video window
                     (wleft, wtop, wwidth, wheight) = self.VisualizationWindow.GetDimensions()
-                    self.VisualizationWindow.SetDims(wleft, wtop, left - wleft - 4, wheight)
+
+                    if adjustX < wleft - 1:
+                        wleft += adjustX
+
+                    if DEBUG:
+                        print "  visual (in UpdateVideoPosition):\t", wleft, wtop, wwidth, '=>', left - wleft - 1, wheight
+
+                    self.VisualizationWindow.SetDims(wleft, wtop, left - wleft - 1, wheight)
                     # Data Window matches Video Window's width and shifts top and height to accommodate shift in video window
                     (wleft, wtop, wwidth, wheight) = self.DataWindow.GetDimensions()
-                    self.DataWindow.SetDims(left, top + height + 4, width, wheight - (top + height + 4 - wtop))
+
+                    if DEBUG:
+                        print "  data (in UpdateVideoPosition):\t", wleft, '=>', left, wtop, '=>', top + height + 1, wwidth, '=>', width, wheight, '=>', wheight - (top + height + 1 - wtop)
+
+                    # See if Secondary Monitor adjustment is needed
+                    if wheight - (top + height + 1 - wtop) < 0:
+                        # If there are more than one monitors on this system and the system is configured to use one of them ...
+                        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+                            # ... use the configured monitor as the primary screen
+                            primaryScreen = TransanaGlobal.configData.primaryScreen
+                        # If not ...
+                        else:
+                            # ... use the default primary monitor
+                            primaryScreen = 0
+
+                        # Determine the values for potential screen position adjustment
+                        (adjustX, adjustY, adjustW, adjustH) = wx.Display(primaryScreen).GetClientArea()
+
+                        # Fix for Linux
+                        if 'wxGTK' in wx.PlatformInfo:
+                            adjustW = wx.Display(primaryScreen).GetClientArea()[2] # GetGeometry()[2]
+
+                        if DEBUG:
+                            print "  Adjusts (in UpdateVideoPosition):", (adjustX, adjustY, adjustW, adjustH)
+
+                        # Although the HEIGHT isn't what we need to change, it's the value we can alter without affecting
+                        # anything else adversely!
+                        wheight += adjustY
+
+                        if DEBUG:
+                            print "  data height  (in UpdateVideoPosition) -----> ", wheight - (top + height + 1 - wtop)
+
+                    # Alter the Data Window size and position as needed
+                    self.DataWindow.SetDims(left, top + height + 1, width, wheight - (top + height + 1 - wtop))
+
+                    if DEBUG:
+                        print
 
             # Play All Clips Window matches the Data Window's WIDTH
             if self.PlayAllClipsWindow != None:
@@ -1677,12 +2041,43 @@ class ControlObject(object):
         # NOTE:  This routine was originally written when only one media file could be displayed.  That's why it's
         #        a little more awkward in the multiple-video case.  The data passed in assumes a single video, and
         #        we have to adjust for that.
-        
+
+        if DEBUG:
+            print
+            print "ControlObjectClass.UpdateWindowPositions(1):", sender, X, YUpper, YLower, TransanaGlobal.resizingAll
+
+        # If Transana is in the process of shutting down ...
+        if self.shuttingDown:
+            # ... we can skip this method
+            return
+
+#        focusControl = wx.Window.FindFocus()
+
+#        print "ControlObjectClass.UpdateWindowPosition():  Getting focus from", focusControl
+
+        # If there are more than one monitors on this system and the system is configured to use one of them ...
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            # ... use the configured monitor as the primary screen
+            primaryScreen = TransanaGlobal.configData.primaryScreen
+        # If not ...
+        else:
+            # ... use the default primary monitor
+            primaryScreen = 0
+        # Determine the values for potential screen position adjustment
+        (adjustX, adjustY, adjustW, adjustH) = wx.Display(primaryScreen).GetClientArea()
+
+        # Fix for Linux
+        if 'wxGTK' in wx.PlatformInfo:
+            adjustW = wx.Display(primaryScreen).GetClientArea()[2]   # GetGeometry()[2]
+
+        if DEBUG:
+            print "Adjusts:", (adjustX, adjustY, adjustW, adjustH)
+
         # We need to adjust the Window Positions to accomodate multiple transcripts!
         # Basically, if we are not in the "first" transcript, we need to substitute the first transcript's
         # "Top position" value for the one sent by the active window.
         if (sender == 'Transcript'):
-            YUpper = self.TranscriptWindow[0].dlg.GetPositionTuple()[1] - 4
+            YUpper = self.TranscriptWindow[0].dlg.GetRect()[1] - 1
         # If Auto-Arrange is enabled, resizing one window may alter the positioning of others.
         if TransanaGlobal.configData.autoArrange:
             # If YUpper is NOT passed in ...
@@ -1706,19 +2101,19 @@ class ControlObject(object):
                 # If the Visualization window has been changed ...
                 if sender == 'Visualization':
                     # Visual changes Video X, width, height
-                    videoDims = (X + 4, videoDims[1], videoDims[2] + (videoDims[0] - X - 4), YUpper - videoDims[1])
+                    videoDims = (X + 1, videoDims[1], videoDims[2] + (videoDims[0] - X - 1), YUpper - videoDims[1])
                     # Visual changes Transcript Y, height
-                    transcriptDims = (transcriptDims[0], YUpper + 4, transcriptDims[2], transcriptDims[3] + (transcriptDims[1] - YUpper - 4))
+                    transcriptDims = (transcriptDims[0], YUpper + 1, transcriptDims[2], transcriptDims[3] + (transcriptDims[1] - YUpper - 1))
                     # Visual changes Data Y, height
-                    dataDims = (dataDims[0], YUpper + 4, dataDims[2], dataDims[3] + (dataDims[1] - YUpper - 4))
+                    dataDims = (dataDims[0], YUpper + 1, dataDims[2], dataDims[3] + (dataDims[1] - YUpper - 1))
                 # If the Video window has been changed ...
                 elif sender == 'Video':
                     # Video changes Visual width and height
-                    visualDims = (visualDims[0], visualDims[1], X - visualDims[0] - 4, YUpper - visualDims[1])
+                    visualDims = (visualDims[0], visualDims[1], X - visualDims[0] - 1, YUpper - visualDims[1])
                     # Video changes Transcript Y and height
-                    transcriptDims = (transcriptDims[0], YUpper + 4, transcriptDims[2], transcriptDims[3] + (transcriptDims[1] - YUpper - 4))
+                    transcriptDims = (transcriptDims[0], YUpper + 1, transcriptDims[2], transcriptDims[3] + (transcriptDims[1] - YUpper))
                     # Video changes Data Y, height
-                    dataDims = (dataDims[0], YUpper + 4, dataDims[2], dataDims[3] + (dataDims[1] - YUpper - 4))
+                    dataDims = (dataDims[0], YUpper + 1, dataDims[2], dataDims[3] + (dataDims[1] - YUpper))
                 # If the Transcript window has been changed ...
                 elif sender == 'Transcript':
                     # Transcript changes Visual height
@@ -1726,15 +2121,16 @@ class ControlObject(object):
                     # Transcript changes Video height
                     videoDims = (videoDims[0], videoDims[1], videoDims[2], YUpper - videoDims[1])
                     # Transcript changes Data X, Y, width, height
-                    dataDims = (X + 4, YUpper + 4, dataDims[2] + (dataDims[0] - X - 4), dataDims[3] + (dataDims[1] - YUpper - 4))
+                    dataDims = (X + 1, YUpper + 1, dataDims[2] + (dataDims[0] - X - 1), dataDims[3] + (dataDims[1] - YUpper - 1))
                 # If the Data window has been changed ...
                 elif sender == 'Data':
                     # Data changes Visual height
                     visualDims = (visualDims[0], visualDims[1], visualDims[2], YLower - visualDims[1])
                     # Data changes Transcript Y, width, height
-                    transcriptDims = (transcriptDims[0], YLower + 4, X - transcriptDims[0], transcriptDims[3] + (transcriptDims[1] - YLower - 4))
+                    transcriptDims = (transcriptDims[0], YLower + 1, X - transcriptDims[0], transcriptDims[3] + (transcriptDims[1] - YLower - 1))
                     # Data changes Video height
                     videoDims = (videoDims[0], videoDims[1], videoDims[2], YLower - videoDims[1])
+
                 # We need to signal that we are resizing everything to reduce redundant OnSize calls
                 TransanaGlobal.resizingAll = True
                 # Vertical Adjustments
@@ -1744,9 +2140,11 @@ class ControlObject(object):
                 # Adjust Transcript Window
                 if sender != 'Transcript':
                     self.TranscriptWindow[0].SetDims(transcriptDims[0], transcriptDims[1], transcriptDims[2], transcriptDims[3])
+
                 # If there are multiple transcripts, we need to adjust them all
                 if len(self.TranscriptWindow) > 1:
                     self.AutoArrangeTranscriptWindows()
+                        
                 # Adjust Video Window
                 if sender != 'Video':
                     self.VideoWindow.SetDims(videoDims[0], videoDims[1], videoDims[2], videoDims[3])
@@ -1757,25 +2155,118 @@ class ControlObject(object):
                 TransanaGlobal.resizingAll = False
             # If we have only a single video window ...
             else:
+
+                if DEBUG:
+                    print "ControlObjectClass.UpdateWindowPositions(2):", sender, X, YUpper, YLower
+                
                 # Adjust Visualization Window
                 if sender != 'Visualization':
                     (wleft, wtop, wwidth, wheight) = self.VisualizationWindow.GetDimensions()
+
+                    if DEBUG:
+                        print "  visual:\t", wleft, wtop + adjustY, wwidth, '=>', X - wleft, wheight, '=>', YUpper - wtop
+
+                    if adjustX < wleft - 1:
+                        wleft += adjustX
+                    
+                        if DEBUG:
+                            print "  visual left -----> ", wleft
+
                     self.VisualizationWindow.SetDims(wleft, wtop, X - wleft, YUpper - wtop)
-                # Adjust Transcript Window
-                if sender != 'Transcript':
-                    (wleft, wtop, wwidth, wheight) = self.TranscriptWindow[0].GetDimensions()
-                    self.TranscriptWindow[0].SetDims(wleft, YUpper + 4, X - wleft, wheight + (wtop - YUpper - 4))
-                # If there are multiple transcripts, we need to adjust them all
-                if len(self.TranscriptWindow) > 1:
-                    self.AutoArrangeTranscriptWindows()
+
                 # Adjust Video Window
                 if sender != 'Video':
                     (wleft, wtop, wwidth, wheight) = self.VideoWindow.GetDimensions()
-                    self.VideoWindow.SetDims(X + 4, wtop, wwidth + (wleft - X - 4), YLower - wtop)
+
+                    if DEBUG:
+                        print "ControlObjectClass.UpdateWindowPositions(3):", sender, X, YUpper, YLower, TransanaGlobal.resizingAll
+                        print "    video original:\t", wleft, wtop, wwidth, wheight
+                        print "  video:\t", wleft, '=>', X + 1, wtop, wwidth, '=>', wwidth + wleft - X - 1, wheight, '=>', YLower - wtop - 1
+
+                    # See if Secondary Monitor adjustment is needed ...
+                    if wwidth + wleft - X - 1 < 0:
+                        # ... we can adjust the left position
+                        wleft += adjustX
+
+                        if DEBUG:
+                            print "  video width -----> ", wwidth + wleft - X - 1
+                    
+                    self.VideoWindow.SetDims(X + 1, wtop, wwidth + wleft - X - 1, YLower - wtop - 1)
+
+                    self.VideoWindow.Refresh()
+
+                # Adjust Transcript Window
+                if sender != 'Transcript':
+                    (wleft, wtop, wwidth, wheight) = self.TranscriptWindow[0].GetDimensions()
+
+                    if DEBUG:
+                        print "  trans:\t", wleft, wtop, '=>', YUpper + 1, wwidth, '=>', X - wleft, wheight, '=>', wheight + wtop - YUpper - 1
+
+                    # See if Secondary Monitor adjustment is needed ...
+                    if (wheight + wtop - YUpper - 1 < 0) or ((wheight + wtop - YUpper - 1 > adjustH) and (adjustY < 0)):
+                        # ... we can adjust the top position
+                        wtop += adjustY
+
+                        if DEBUG:
+                            print "  transcript height -----> ", wheight + wtop - YUpper - 1, (wheight + wtop - YUpper - 1 < 0), ((wheight + wtop - YUpper - 1 > adjustH))
+
+                    if YUpper + 1 < adjustY:
+                        tmpAdjustedY = YUpper + adjustY + 1 
+
+                        if DEBUG:
+                            print "  transcript top, height -----> ", tmpAdjustedY, wheight + wtop - tmpAdjustedY
+                    else:
+                        tmpAdjustedY = YUpper + 1
+                    
+                    self.TranscriptWindow[0].SetDims(wleft, tmpAdjustedY, X - wleft, wheight + wtop - tmpAdjustedY)
+
                 # Adjust Data Window
                 if sender != 'Data':
                     (wleft, wtop, wwidth, wheight) = self.DataWindow.GetDimensions()
-                    self.DataWindow.SetDims(X + 4, YLower + 4, wwidth + (wleft - X - 4), wheight + (wtop - YLower - 4))
+
+                    if DEBUG:
+                        print "  data:\t\t", wleft, '=>', X + 1, wtop, '=>', YLower + 1, wwidth, '=>', wwidth + wleft - X  - 1, wheight, '=>', wheight + wtop - YLower - 1
+                    
+                    # See if Secondary Monitor adjustment is needed ...
+                    if (wheight + wtop - YUpper - 1 < 0) or ((wheight + wtop - YUpper - 1 > adjustH) and (adjustY < 0)):
+                        # ... we can adjust the top position
+                        wtop += adjustY
+
+                        if DEBUG:
+                            print "  data height -----> ", wheight + wtop - YUpper - 1, (wheight + wtop - YUpper - 1 < 0), ((wheight + wtop - YUpper - 1 > adjustH))
+                    
+                    if YLower + 1 < adjustY:
+                        tmpAdjustedY = YLower + adjustY + 1 
+
+                        if DEBUG:
+                            print "  data top, height -----> ", tmpAdjustedY, wheight + wtop - tmpAdjustedY
+                    else:
+                        tmpAdjustedY = YLower + 1
+
+                    self.DataWindow.SetDims(X + 1, YLower + 1, wwidth + wleft - X - 1, wheight + wtop - tmpAdjustedY)
+
+                if DEBUG:
+                    st = "Final Window Sizes:\n"
+                    st += "  Monitor %s:\t%s\n\n" % (TransanaGlobal.configData.primaryScreen, (adjustX, adjustY, adjustW, adjustH),)
+                    st += "  menu:\t\t%s\n" % self.MenuWindow.GetRect()
+                    st += "  visual:\t%s\n" % (self.VisualizationWindow.GetDimensions(),)
+                    st += "  video:\t%s\n" % (self.VideoWindow.GetDimensions(), )
+                    st += "  trans:\t%s\n" % (self.TranscriptWindow[0].GetDimensions(), )
+                    st += "  data:\t\t%s\n" % (self.DataWindow.GetDimensions(), )
+
+#                    dlg = wx.MessageDialog(None, st)
+#                    dlg.ShowModal()
+#                    dlg.Destroy()
+
+                    print
+                    print st
+                    print
+
+#        focusControl.SetFocus()
+
+#        print "ControlObjectClass.UpdateWindowPosition():  Setting focus to", focusControl
+#        print
+                    
 
     def VideoSizeChange(self):
         """ Signal that the Video Size has been changed via the Options > Video menu """
@@ -1850,7 +2341,8 @@ class ControlObject(object):
                     prompt = _('A file named "%s" already exists.  Do you want to replace it?')
                 dlg2 = Dialogs.QuestionDialog(None, prompt % fname,
                                         _('Transana Confirmation'))
-                dlg2.CentreOnScreen()
+#                dlg2.CentreOnScreen()
+                TransanaGlobal.CenterOnPrimary(dlg2)
                 if dlg2.LocalShowModal() == wx.ID_YES:
                     self.TranscriptWindow[self.activeTranscript].SaveTranscriptAs(fname)
                 dlg2.Destroy()
@@ -1922,9 +2414,16 @@ class ControlObject(object):
         clipList = DBInterface.list_of_clips_by_episode(episodeNum)
         # If there are Clips that have been created from this episode AND Keywords have been added to the Episode ...
         if (len(clipList) > 0) and (len(keywordsToAdd) > 0):
-            prompt = unicode(_("Do you want to add the new keywords to all clips created from Episode %s?"), 'utf8')
+            # If there's only one Keyword to Add, prompt for it individually.
+            # (This happens when multiple keywords are dragged to a Transcript with Quick Clips mode OFF!)
+            if len(keywordsToAdd) == 1:
+                prompt = unicode(_("Do you want to add keyword %s : %s to all clips created from Episode %s?"), 'utf8')
+                data = (keywordsToAdd[0].keywordGroup, keywordsToAdd[0].keyword, tmpEpisode.id)
+            else:
+                prompt = unicode(_("Do you want to add the new keywords to all clips created from Episode %s?"), 'utf8')
+                data = (tmpEpisode.id,)
             # ... build a dialog to prompt the user about adding them to Clips
-            tmpDlg = Dialogs.QuestionDialog(self.MenuWindow, prompt % tmpEpisode.id,
+            tmpDlg = Dialogs.QuestionDialog(self.MenuWindow, prompt % data,
                                             _("Episode Keyword Propagation"), noDefault = True)
             # Prompt the user.  If the user says YES ...
             if tmpDlg.LocalShowModal() == wx.ID_YES:
@@ -2149,6 +2648,9 @@ class ControlObject(object):
         """ Update all screen components to reflect change in the selected program language """
         self.ClearAllWindows()
 
+        self.CloseAllImages()
+        self.CloseAllReports()
+
 ##        # Let's look at the issue of database encoding.  We only need to do something if the encoding is NOT UTF-8
 ##        # or if we're on Windows single-user version.
 ##        if (TransanaGlobal.encoding != 'utf8') or \
@@ -2214,6 +2716,11 @@ class ControlObject(object):
         """ Adjust Transcript Time Codes by the specified amount """
         self.TranscriptWindow[self.activeTranscript].AdjustIndexes(adjustmentAmount)
 
+    def TextTimeCodeConversion(self):
+        """ Convert Text (H:MM:SS.hh) Time Codes to Transana's Format """
+        # Call the Transcription UI's Text Time Code Conversion method
+        self.TranscriptWindow[self.activeTranscript].TextTimeCodeConversion()
+
     def __repr__(self):
         """ Return a string representation of information about the ControlObject """
         tempstr = "Control Object contents:\nVideoFilename = %s\nVideoStartPoint = %s\nVideoEndPoint = %s\n"  % (self.VideoFilename, self.VideoStartPoint, self.VideoEndPoint)
@@ -2227,45 +2734,56 @@ class ControlObject(object):
 
     def _set_activeTranscript(self, transcriptNum):
         """ "Setter" for the activeTranscript property """
-        # Initiate exception handling.  (Shutting down Transana generates exceptions here!)
-        try:
-            # Iterate through the defined Transcript Windows
-            for x in range(len(self.TranscriptWindow)):
-                # Get the current window title
-                title = self.TranscriptWindow[x].dlg.GetTitle()
-                # If the current window is NOT the new active trancript, yet is labeled as
-                # the active transcript (i.e. is LOSING focus) ...
-                if (x != transcriptNum) and (title[:2] == '**') and (title[-2:] == '**'):
-                    # ... remove the asterisks from the title.  (CallAfter resolves timing problems)
-                    # But skip this if we are shutting down, as trying to set the title of a deleted
-                    # window causes an exception!
-                    if not self.shuttingDown:
-                        wx.CallAfter(self.TranscriptWindow[x].dlg.SetTitle, title[3:-3])
-                        
-                # If the current window IS the new active transcript, but is not yet labeled
-                # as the active transcript (i.e. is GAINING focus) ...
-                if (x == transcriptNum) and (title[:2] != '**') and (title[-2:] != '**') and \
-                   (len(self.TranscriptWindow) > 1):
-                    # ... create a prompt that puts asterisks on either side of the window title ...
-                    prompt = '** %s **'
-                    if 'unicode' in wx.PlatformInfo:
-                        prompt = unicode(prompt, 'utf8')
-                    # ... and set the window title to this new prompt
-                    self.TranscriptWindow[x].dlg.SetTitle(prompt % title)
+        # If we're not shutting down the system ... (avoids an exception when shutting down!)
+        if not self.shuttingDown:
+            # Initiate exception handling.  (Shutting down Transana generates exceptions here!)
+            try:
+                # Iterate through the defined Transcript Windows
+                for x in range(len(self.TranscriptWindow)):
+                    # Get the current window title
+                    title = self.TranscriptWindow[x].dlg.GetTitle()
+                    # If the current window is NOT the new active trancript, yet is labeled as
+                    # the active transcript (i.e. is LOSING focus) ...
+                    if (x != transcriptNum) and (title[:2] == '**') and (title[-2:] == '**'):
+                        # ... remove the asterisks from the title.  (CallAfter resolves timing problems)
+                        # But skip this if we are shutting down, as trying to set the title of a deleted
+                        # window causes an exception!
+                        if not self.shuttingDown:
+                            wx.CallAfter(self.TranscriptWindow[x].dlg.SetTitle, title[3:-3])
+                            
+                    # If the current window IS the new active transcript, but is not yet labeled
+                    # as the active transcript (i.e. is GAINING focus) ...
+                    if (x == transcriptNum) and (title[:2] != '**') and (title[-2:] != '**') and \
+                       (len(self.TranscriptWindow) > 1):
+                        # ... create a prompt that puts asterisks on either side of the window title ...
+                        prompt = '** %s **'
+                        if 'unicode' in wx.PlatformInfo:
+                            prompt = unicode(prompt, 'utf8')
+                        # ... and set the window title to this new prompt
+                        self.TranscriptWindow[x].dlg.SetTitle(prompt % title)
 
+##                    # Set the Menus to match the active transcript's Edit state
+##                    if (x == transcriptNum):
+##                        if not self.shuttingDown:
+##                            # Enable or disable the transcript menu item options
+##                            self.MenuWindow.SetTranscriptEditOptions(not self.TranscriptWindow[x].dlg.editor.get_read_only())
+
+                # Set the underlying data value to the new window number
+                self._activeTranscript = transcriptNum
                 # Set the Menus to match the active transcript's Edit state
-                if (x == transcriptNum):
+                if not self.shuttingDown and (self.MenuWindow != None):
                     # Enable or disable the transcript menu item options
-                    self.MenuWindow.SetTranscriptEditOptions(not self.TranscriptWindow[x].dlg.editor.get_read_only())
-        except:
+                    self.MenuWindow.SetTranscriptEditOptions(not self.TranscriptWindow[transcriptNum].dlg.editor.get_read_only())
+            except:
 
-            if DEBUG:
-                print "Exception in ControlObjectClass._set_activeTranscript()"
-            
-            # We can ignore it.  This only happens when shutting down Transana.
-            pass
-        # Set the underlying data value to the new window number
-        self._activeTranscript = transcriptNum
+                if DEBUG:
+                    print "Exception in ControlObjectClass._set_activeTranscript()"
+
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+                
+                # If this occurs, set activeTranscript to 0
+                self._activeTranscript = 0
 
     # define the activeTranscript property for the ControlObject.
     # Doing this as a property allows automatic labeling of the active transcript window.

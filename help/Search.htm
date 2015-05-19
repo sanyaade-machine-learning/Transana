@@ -7,9 +7,9 @@
 
 <H1>Search</H1><HR>
 
-To search for a single keyword, you can right-click a keyword in the <A HREF="datawindow.htm">data window</A>'s database tree and select <B>Quick Search</B> from the popup menu.  A node named after the keyword group : keyword pair will appear under the Search node containing a tree structure with all episode and clip records that have the selected keyword.<P>
+To search for a single keyword, you can right-click a keyword in the <A HREF="datawindow.htm">data window</A>'s database tree and select <B>Quick Search</B> from the popup menu.  A node named after the keyword group : keyword pair will appear under the Search node containing a tree structure with all episode, clip, and snapshot records that have the selected keyword.<P>
 
-If you want to do a more complex search, right-click on the Search root node on the database tab of the <A HREF="datawindow.htm">data window</A> and select <B>Search</B> to search your <A HREF="organization.htm">Episodes</A> and <A HREF="organization.htm">Clips</A> for the presence of assigned keywords.  The Search dialog will appear.<P>
+If you want to do a more complex search, right-click on the Search root node on the database tab of the <A HREF="datawindow.htm">data window</A> and select <B>Search</B> to search your <A HREF="organization.htm">Episodes</A>, <A HREF="organization.htm">Clips</A>, and <A HREF="organization.htm">Snapshots</A> for the presence of assigned keywords.  The Search dialog will appear.<P>
 
 <IMG SRC="images/keywordsearch.gif"  ALT="keywordsearch"   BORDER=0><P>
 
@@ -19,9 +19,9 @@ When you have constructed a valid search query, you can save it for later reuse 
 
 This dialog box allows you to specify complex searches, including using boolean logical operator (AND, OR, and NOT,) but you must do so carefully to be sure to get the results you want.  <P>
 
-For example, the searches &quot;<CODE><B>(A or B) and C</CODE></B>&quot; and &quot;<CODE><B>A or (B and C)</CODE></B>&quot; produce different results.  The first search will find all Episodes and Clips that have Keyword C and also have either Keyword A or Keyword B, producing hits on combinations AC, BC, and ABC.  The second search will find all Episodes and Clips that have Keyword A, as well as those that have both B and C, producing hits on A, AB, AC, BC, and ABC.  These are obviously very different results, with the second search including more results.<P>
+For example, the searches &quot;<CODE><B>(A or B) and C</CODE></B>&quot; and &quot;<CODE><B>A or (B and C)</CODE></B>&quot; produce different results.  The first search will find all Episodes, Clips, and Snapshots that have Keyword C and also have either Keyword A or Keyword B, producing hits on combinations AC, BC, and ABC.  The second search will find all Episodes, Clips, and Snapshots that have Keyword A, as well as those that have both B and C, producing hits on A, AB, AC, BC, and ABC.  These are obviously very different results, with the second search including more results.<P>
 
-This is particularly an issue with the more ambiguous search &quot;<CODE><B>A or B and C</CODE></B>.&quot;  Many people initially expect this to be equivalent to the first query above.  However (because AND is higher than OR in the Boolean &quot;order of operations&quot;), this search is actually equivalent to the second search described above, and will find all Episodes and Clips that have Keyword A, as well as those that have both B and C.<P>
+This is particularly an issue with the more ambiguous search &quot;<CODE><B>A or B and C</CODE></B>.&quot;  Many people initially expect this to be equivalent to the first query above.  However (because AND is higher than OR in the Boolean &quot;order of operations&quot;), this search is actually equivalent to the second search described above, and will find all Episodes and Clips that have Keyword A, as well as those that have both B and C.  To avoid problems, liberal use of parentheses is recommended.<P>
 
 <A HREF="FilterDialog.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;

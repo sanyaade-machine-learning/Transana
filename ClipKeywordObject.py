@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -17,15 +17,15 @@
 """This module implements the ClipKeyword class.
 
    The ClipKeyword class is designed to retain all important information for a KeywordGroup:Keyword
-   pair as used within Episode and Clip objects.  The primary differences between this and the
+   pair as used within Episode, Clip, and Snapshot objects.  The primary differences between this and the
    Keyword class is that this object retains information about whether this KeywordGroup:Keyword
    pair instance serves as a Keyword Example, and the ClipKeyword does not concern itself with
    the Keyword Definition.
 
    Usage:
-     ClipKeyword(keywordGroup, keyword, episodeNum = 0, clipNum = 0, example = 0)
-       keywordGroup and keyword are mandatory.  episodeNum and clipNum will only be useful
-       outside of the context of an Episode or Clip, although this context is exactly where
+     ClipKeyword(keywordGroup, keyword, episodeNum = 0, clipNum = 0, snapshotNum = 0, example = 0)
+       keywordGroup and keyword are mandatory.  episodeNum, clipNum, and snapshotNum will only be useful
+       outside of the context of an Episode, Clip, or Snapshot, although this context is exactly where
        I anticipate this object will be mostly used.  example defaults to 0, as few
        ClipKeywords are examples.
 
@@ -33,8 +33,9 @@
      keywordGroup   Keyword Group
      keyword        Keyword
      keywordPair    read-only KeywordGroup:Keyword string
-     episodeNum     Episode Number (0 for Clip)
-     clipNum        Clip Number (0 for Episode)
+     episodeNum     Episode Number (0 for Clip and Snapshot)
+     clipNum        Clip Number (0 for Episode and Snapshot)
+     snapshotNum    Snapshot Number (0 for Episode and Clip)
      example        0 if not a Keyword Example instance, 1 if it is
 
    Methods:
@@ -53,27 +54,29 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
 
 class ClipKeyword(object):
-    """ The ClipKeyword Object holds all data for a Keyword.  This can be held in lists in the Episode and Clip objects. """
+    """ The ClipKeyword Object holds all data for a Keyword.  This can be held in lists in the Episode, Clip, and Snapshot objects. """
 
-    def __init__(self, keywordGroup, keyword, episodeNum = 0, clipNum = 0, example=0):
-        """ Initialize the ClipKeyword Object.  keywordGroup and keyword are required.  Either an episodeNum
-            or a clipNum must be specified. """
+    def __init__(self, keywordGroup, keyword, episodeNum = 0, clipNum = 0, snapshotNum = 0, example=0):
+        """ Initialize the ClipKeyword Object.  keywordGroup and keyword are required.  One of episodeNum,
+            clipNum, or snapshotNum must be specified. """
         # Store all data values passed in on initialization
         self.keywordGroup = keywordGroup
         self.keyword = keyword
         self.episodeNum = episodeNum
         self.clipNum = clipNum
+        self.snapshotNum = snapshotNum
         self.example = example
 
     def __repr__(self):
         """ Provides a String Representation of the ClipKeyword Object. """
         str = 'Clip Keyword:\n'
-        str = str + '  episodeNum = %s\n' % self.episodeNum
-        str = str + '  clipNum = %s\n' % self.clipNum
-        str = str + '  keywordGroup = %s\n' % self.keywordGroup
-        str = str + '  keyword = %s\n' % self.keyword
-        str = str + '  keywordPair = %s\n' % self.keywordPair
-        str = str + '  example = %s (%s)\n\n' % (self.example, type(self.example))
+        str += '  episodeNum = %s\n' % self.episodeNum
+        str += '  clipNum = %s\n' % self.clipNum
+        str += '  snapshotNum = %s\n' % self.snapshotNum
+        str += '  keywordGroup = %s\n' % self.keywordGroup
+        str += '  keyword = %s\n' % self.keyword
+        str += '  keywordPair = %s\n' % self.keywordPair
+        str += '  example = %s (%s)\n\n' % (self.example, type(self.example))
         return str.encode('utf8')
 
     def db_save(self):
@@ -82,19 +85,28 @@ class ClipKeyword(object):
         #        Therefore, it does no checking for duplicate records.  If you want to
         #        use it for other purposes, you probably have to make it smarter!
 
+        # If we're using Unicode ...
         if 'unicode' in wx.PlatformInfo:
+            # ... encode the text fields for this object
             keywordGroup = self.keywordGroup.encode(TransanaGlobal.encoding)
             keyword = self.keyword.encode(TransanaGlobal.encoding)
+        # If we're not using Unicode ...
         else:
+            # ... no encoding is needed
             keywordGroup = self.keywordGroup
             keyword = self.keyword
+        # Get a Database Cursor
         dbCursor = DBInterface.get_db().cursor()
+        # Create the Insert Query
         SQLText = """ INSERT INTO ClipKeywords2
-                        (EpisodeNum, ClipNum, KeywordGroup, Keyword, Example)
+                        (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example)
                       VALUES
-                        (%s, %s, %s, %s, %s) """
-        values = (self.episodeNum, self.clipNum, keywordGroup, keyword, self.example)
+                        (%s, %s, %s, %s, %s, %s) """
+        # Prepare the Data Values for the query
+        values = (self.episodeNum, self.clipNum, self.snapshotNum, keywordGroup, keyword, self.example)
+        # Execute the Query
         dbCursor.execute(SQLText, values)
+        # Close the Database Cursor
         dbCursor.close()
     
     # Define Property getters and setters
@@ -134,6 +146,14 @@ class ClipKeyword(object):
     def _delClipNum(self):
         self._clipNum = 0
 
+    # Snapshot Number Property
+    def _getSnapshotNum(self):
+        return self._snapshotNum
+    def _setSnapshotNum(self, snapshotNum):
+        self._snapshotNum = snapshotNum
+    def _delSnapshotNum(self):
+        self._snapshotNum = 0
+
     # Example Property
     def _getExample(self):
         return self._example
@@ -155,4 +175,5 @@ class ClipKeyword(object):
     keywordPair = property(_getKeywordPair, doc="Read-only KWG:KW Pair")
     episodeNum = property(_getEpisodeNum, _setEpisodeNum, _delEpisodeNum, "Episode Number.")
     clipNum = property(_getClipNum, _setClipNum, _delClipNum, "Clip Number.")
+    snapshotNum = property(_getSnapshotNum, _setSnapshotNum, _delSnapshotNum, "Snapshot Number.")
     example = property(_getExample, _setExample, _delExample, "Keyword Example.")

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -38,6 +38,8 @@ MENU_FILE_SAVE                  =  wx.NewId()
 MENU_FILE_SAVEAS                =  wx.NewId()
 MENU_FILE_PRINTTRANSCRIPT       =  wx.NewId()
 MENU_FILE_PRINTERSETUP          =  wx.NewId()
+MENU_FILE_CLOSE_SNAPSHOTS       =  wx.NewId()
+MENU_FILE_CLOSE_REPORTS         =  wx.NewId()
 MENU_FILE_EXIT                  =  wx.ID_EXIT   # Constant used to improve Mac standardization
 
 # Trasncript Menu
@@ -61,6 +63,7 @@ MENU_TRANSCRIPT_PRINTERSETUP    =  wx.NewId()
 MENU_TRANSCRIPT_CHARACTERMAP    =  wx.NewId()
 MENU_TRANSCRIPT_AUTOTIMECODE    =  wx.NewId()
 MENU_TRANSCRIPT_ADJUSTINDEXES   =  wx.NewId()
+MENU_TRANSCRIPT_TEXT_TIMECODE   =  wx.NewId()
 
 # Tools Menu
 MENU_TOOLS_NOTESBROWSER         =  wx.NewId()
@@ -121,12 +124,25 @@ MENU_OPTIONS_VIDEOSIZE_66       =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_100      =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_150      =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_200      =  wx.NewId()
+# Options for Multiple Monitors
+MENU_OPTIONS_MONITOR_BASE       =  wx.NewId()
 # Options Presentation Mode menu
 MENU_OPTIONS_PRESENT            =  wx.NewId()
 MENU_OPTIONS_PRESENT_ALL        =  wx.NewId()
 MENU_OPTIONS_PRESENT_VIDEO      =  wx.NewId()
 MENU_OPTIONS_PRESENT_TRANS      =  wx.NewId()
 MENU_OPTIONS_PRESENT_AUDIO      =  wx.NewId()
+
+# Window Menu
+MENU_WINDOW_ALL_MAIN            =  wx.NewId()
+MENU_WINDOW_ALL_SNAPSHOT        =  wx.NewId()
+MENU_WINDOW_CLOSE_REPORTS       =  wx.NewId()
+MENU_WINDOW_DATA                =  wx.NewId()
+MENU_WINDOW_VIDEO               =  wx.NewId()
+MENU_WINDOW_TRANSCRIPT          =  wx.NewId()
+MENU_WINDOW_VISUALIZATION       =  wx.NewId()
+MENU_WINDOW_NOTESBROWSER        =  wx.NewId()
+MENU_WINDOW_CHAT                =  wx.NewId()
 
 # Help Menu
 MENU_HELP_MANUAL                =  wx.ID_HELP   # Constant used to improve Mac standardization
@@ -156,6 +172,8 @@ class MenuSetup(wx.MenuBar):
         self.filemenu.Append(MENU_FILE_PRINTTRANSCRIPT, _("&Print Transcript"))
         self.filemenu.Append(MENU_FILE_PRINTERSETUP, _("P&rinter Setup"))
         self.filemenu.AppendSeparator()
+        self.filemenu.Append(MENU_FILE_CLOSE_SNAPSHOTS, _("Close All Snapshots"))
+        self.filemenu.Append(MENU_FILE_CLOSE_REPORTS, _("Close All Reports"))
         self.filemenu.Append(MENU_FILE_EXIT, _("E&xit"))
         self.Append(self.filemenu, _("&File"))
 
@@ -184,6 +202,7 @@ class MenuSetup(wx.MenuBar):
         # Let's just disable it completely for now.
         # self.transcriptmenu.Append(MENU_TRANSCRIPT_CHARACTERMAP, _("&Character Map"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_AUTOTIMECODE, _("F&ixed-Increment Time Codes"))
+        self.transcriptmenu.Append(MENU_TRANSCRIPT_TEXT_TIMECODE, _("Text Time Code Conversion"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_ADJUSTINDEXES, _("&Adjust Indexes"))
         self.Append(self.transcriptmenu, _("&Transcript"))
 
@@ -296,7 +315,6 @@ class MenuSetup(wx.MenuBar):
         self.optionsvideomenu.Append(MENU_OPTIONS_VIDEOSIZE_150, "15&0%", kind=wx.ITEM_RADIO)
         self.optionsvideomenu.Append(MENU_OPTIONS_VIDEOSIZE_200, "&200%", kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_VIDEOSIZE, _("&Video Size"), self.optionsvideomenu)
-        
         self.optionspresentmenu = wx.Menu()
         self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_ALL, _("&All Windows"), kind=wx.ITEM_RADIO)
         self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_VIDEO, _("&Video Only"), kind=wx.ITEM_RADIO)
@@ -338,6 +356,22 @@ class MenuSetup(wx.MenuBar):
         # Disable the automatic "Window" menu on the Mac.  It's not accessible for i18n, etc.
         if 'wxMac' in wx.PlatformInfo:
             wx.MenuBar.SetAutoWindowMenu(False)
+
+        # Build the Window Menu
+        self.windowMenu = wx.Menu()
+        self.windowMenu.Append(MENU_WINDOW_ALL_MAIN, _("Bring Main Windows to Front"))
+        self.windowMenu.Append(MENU_WINDOW_ALL_SNAPSHOT, _("Close All Snapshots"))
+        self.windowMenu.Append(MENU_WINDOW_CLOSE_REPORTS, _("Close All Reports"))
+        self.windowMenu.AppendSeparator()
+        self.windowMenu.Append(MENU_WINDOW_DATA, _("Data"))
+        self.windowMenu.Append(MENU_WINDOW_VIDEO, _("Video"))
+        self.windowMenu.Append(MENU_WINDOW_TRANSCRIPT, _("Transcript"))
+        self.windowMenu.Append(MENU_WINDOW_VISUALIZATION, _("Visualization"))
+        self.windowMenu.Append(MENU_WINDOW_NOTESBROWSER, _("Notes Browser"))
+        if not TransanaConstants.singleUserVersion:
+            self.windowMenu.Append(MENU_WINDOW_CHAT, _("Chat"))
+        self.windowMenu.AppendSeparator()
+        self.Append(self.windowMenu, _("Window"))
 
         # Build the Help Menu
         self.helpmenu = wx.Menu()

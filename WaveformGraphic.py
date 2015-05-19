@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -95,8 +95,8 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
                     # Hmmmm.  I don't understand this.  If the offset is negative, we need to ignore it, as it shifts the
                     # waveform, but if it's positive, we need to compensate for it.
 
-                    if wavFile['offset'] < 0:
-                        print "***********     ALERT     WaveformGraphic.OnIdle() change     ALERT     ****************"
+#                    if wavFile['offset'] < 0:
+#                        print "***********     ALERT     WaveformGraphic.OnIdle() change     ALERT     ****************"
                         
 #                    indent = max(0, wavFile['offset']) - startPoint
                     indent = wavFile['offset'] - startPoint

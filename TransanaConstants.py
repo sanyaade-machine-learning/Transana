@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -21,6 +21,15 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
 # import wxPython
 import wx
 
+# If we're using wx 2.8 instead of wx 2.9 ...
+if (wx.VERSION[0] == 2) and (wx.VERSION[1] < 9):
+    # ... import the Rich Text Ctrl
+    import wx.richtext as richtext
+    # Add these variables to the wx module.  (These were moved from richtext to wx in 2.9)
+    wx.TEXT_ATTR_LINE_SPACING_HALF = richtext.TEXT_ATTR_LINE_SPACING_HALF
+    wx.TEXT_ATTR_LINE_SPACING_NORMAL = richtext.TEXT_ATTR_LINE_SPACING_NORMAL
+    wx.TEXT_ATTR_LINE_SPACING_TWICE = richtext.TEXT_ATTR_LINE_SPACING_TWICE
+
 # import the Python string module
 import string
 
@@ -32,6 +41,7 @@ import TransanaConfigConstants
 # NOTE:  When you change this value, you MUST change the MySQL for Python installation you are using
 #        to match.
 singleUserVersion = TransanaConfigConstants.singleUserVersion
+proVersion = TransanaConfigConstants.proVersion
 # Indicate if this is the Lab version
 labVersion = TransanaConfigConstants.labVersion
 # Set this flag to "True" to create the Demonstration version.  (But don't mix this with MU!)
@@ -42,9 +52,9 @@ if workshopVersion:
     expirationdate = TransanaConfigConstants.xpdt
 
 # Program Version Number
-versionNumber = '2.53'
+versionNumber = '2.60'
 # Build Number
-buildNumber = '253'
+buildNumber = '260'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
@@ -64,21 +74,26 @@ if labVersion:
     
 # Define limits for the Demonstration Version
 if demoVersion:
-    versionNumber += ' Demonstration'
     maxEpisodes = 5
     maxEpisodeTranscripts = 5
     maxClips = 30
+    maxSnapshots = 5
     maxKeywords = 15
 
 # If this is the Workshop Version ...
-if workshopVersion:
+#if workshopVersion:
     # ... note that on the Version Number
-    versionNumber += ' Workshop'
+#    versionNumber += ' Workshop'
 
 # Allow Drag and Drop on the Mac?  (There's a bug, but it could be fixed!)
 macDragDrop = True
-# Define the maximum number of Trasncript Windows that can be opened
-maxTranscriptWindows = 5
+
+if proVersion:
+    # Define the maximum number of Transcript Windows that can be opened
+    maxTranscriptWindows = 5
+else:
+    # Define the maximum number of Transcript Windows that can be opened
+    maxTranscriptWindows = 1
 
 # Define the Timecode Character
 if 'unicode' in wx.PlatformInfo:

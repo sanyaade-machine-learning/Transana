@@ -1,0 +1,103 @@
+<HTML>
+<HEAD>
+<TITLE>Add a Snapshot</TITLE>
+</HEAD>
+
+<BODY>
+
+<H2><I>Add a Snapshot</I><HR></H2>
+
+If you are using the Standard version of Transana, you can skip this page.  Snapshots are only supported in the Professional, Computer Lab, and Multi-User versions of Transana.<P>
+
+Snapshots are still images that you bring into Transana to analyze.  These images may stand alone, or may be linked to a media file.  They may be drawn from still image files or can be captured from video within Transana.<P>
+
+Transana offers a number of ways of bringing still images into the data analysis process.  We will discuss those techniques here in terms of supplementing the analysis of a media file, but some of these techniques are useful even in the absence of a media file.<p>
+
+for example, between 4:34.8 and 5:04.3 in the Demo video, we see a researcher and a student discussing the lines of symmetry they see in a particular core square they are looking at on the computer screen.  It would be really nice to be able to see that core square more clearly, especially when they obscure it with their hands.<P>
+
+One option is to add a still image to the transcript.  If you had a still image representation of this quilt square available, say a digital photograph or scan, you could make sure the transcript was in edit mode, position your transcript cursor, go to the <B>Transcript</B> menu, and select <B>Insert Image</B>.  In this example, you don't have such a file, so you can grab the best image you can from the video.<P>
+
+<FONT COLOR="Red">Activity:</FONT> Follow these instructions to import an image from a video file into a transcript.<P>
+
+1.  Make sure the transcript is in Edit mode.<P>
+
+2.  Position the transcript cursor at the place in the transcript where you would like the image to appear, either just before or just after the researcher's first line at 4:34.8.  Create a blank line to hold the image.<P>
+
+3.  Position the video at approximately 4:55.7.  This is a moment where the camera shows just the computer screen with the core square.<P>
+
+4.  Press the <IMG SRC="images/SnapshotButton.gif"> &nbsp; "Capture Snapshot in Transcript or File" button <B>on the Video window</b>.  Transana's Media File Conversion dialog will be displayed.<P>
+
+<IMG SRC="images/ImageCapture1.gif"><P>
+
+5.  Press the "Convert" button.  It may take a moment for Transana to process the screen capture request.  (The further into the file, the longer this process may take.)<P>
+
+<IMG SRC="images/ImageInTranscript.gif"><P>
+
+You can now see the core square in question within the transcript, so you can tell whether the student is correct in asserting both horizontal and diagonal lines of symmetry.  This is a step forward.<P>
+
+A second option is to create a codable Snapshot in Transana.  <P>
+
+<FONT COLOR="Red">Activity:</FONT> Follow these instructions to create a Snapshot in Transana.<P>
+
+1.  Position the video at approximately 4:55.7.  This is a moment where the camera shows just the computer screen with the core square you want.<P>
+
+2.  Right-click the "Symmetry" Collection.  Choose "Add Snapshot" from the popup menu.<P>
+
+<IMG SRC="images/SnapshotWindow2.gif"><P>
+
+3.  If you wanted to load a graphic file from the hard drive, you could press the "Browse" button and select the file.  However, in this case, you want to capture a screen shot from the video.  To do this, press the <IMG SRC="images/SnapshotButton.gif"> &nbsp; "Capture Snapshot for Coding" button <B>on the Add Snapshot dialog box</B>.  This will call up Transana's Media File Conversion tool.<P>
+
+<IMG SRC="images/ImageCapture2.gif"><p>
+
+4.  When you capture a screen shot to be placed in a Transcript, you do not have to worry about the file name given to that screen shot.  That's because images are actually imported into the transcript and immediately lose their connection with the source image file.  Snapshots, on the other hand, maintain a connection to the source file, much the same way that Transana's Episodes and Clips maintain a connection to the media file(s) they are connected to.  As a result, you need to change the Destination Media File name on the Media File Conversion form.  This greatly reduces the chances of accidentally over-writing your Snapshot image with a different screen shot from the same media file.  Change the file name from "Demo_Snapshot_%06d.jpg" to "Quilt Square 1.jpg".  (Transana will automatically append the necessary "_%06d" text to the end of the file name.)  Press "Convert".<P>
+
+<IMG SRC="images/SnapshotWindow3.gif"><P>
+
+5.  Edit the Snapshot ID to read "Quilt Square 1".  Notice that this Snapshot is automatically connected to the current video position in the Episode from which it was captured.  However, you need to adjust the Episode Position to "4:34.8" and the duration to "29.5".  Finally, add "Tutorial : Geometry by Design" and "Tutorial : Symmetry" as Whole Snapshot Keywords.  Whole Snapshot Keywords are codes which should be applied to the entire Snapshot image.  Press "OK".<P>
+
+<IMG SRC="images/SnapshotWindow4.gif"><P>
+
+6.  Transana now displays your screen shot in the Snapshot Window, ready for detailed coding.  Press the <IMG SRC="images/EditButton.gif"> &nbsp; button to place the Snapshot into Edit mode so that your upcoming changes will be retained.<P>
+
+7.  The first thing to do is focus on just the quilt square.  Use a combination of zooming, positioning the image in the frame, and resizing the Snapshot Window to get the image to look exactly the way you want to emphasize the portion of the image you want to focus on.<P>
+
+8.  Let's code this Snapshot for the lines of symmetry that exist in this quilt square.  However, we don't yet have appropriate Keywords for these codes.  Click on the Data Window and add the Keyword "Line of Symmetry" to the "Tutorial" Keyword Group.  Enter an appropriate definition for this keyword, select "Green Blue" as the Default Code Color, select "Line" for the Default Snapshot Coding Tool, set the Default Snapshot Line Width to "3", and set the default Snapshot Line Style to "Solid".  Press OK.<P>
+
+<IMG SRC="images/SnapshotKeyword1.gif"><P>
+
+9.  In your video, the student suggests that he thinks there is also a diagonal line of symmetry in this quilt square.  In this instance, the student is incorrect.  It would be nice to be able to emphasize this in coding your Snapshot.  Therefore, create a Keyword in the "Tutorial" Keyword Group called "NOT a Line of Symmetry".  Set the Color to "Red", the Coding Tool to "Line", the Line Width to "3", and the Line Style to "Dash".  Press OK.<P>
+
+10.  When you clicked on the Data Window, your Snapshot Window was moved to the background behind Transana's main interface.  To get back to your Snapshot, go to the Window menu and select "Quilt Square 1" from the list of Transana Windows.<P>
+
+11.  In the Snapshot Window's Toolbar, select the "Tutorial" Keyword Group and the "Line of Symmetry" Keyword.  Notice that the default values for color, code tool, line width, and line style that you defined as part of the Keyword are displayed, although you have the option of changing them for this Snapshot.  Select the Coding Tool from the Toolbar and draw the horizontal and vertical lines of symmetry visible on this quilt square.  If you can't draw the coding line, check to make sure you're in Edit Mode.  If you don't get the line positioned exactly like you want it on your first try, you can always right-click the coding line and select Delete from the popup menu.<P>
+
+<IMG SRC="images/SnapshotWindow5.gif"><P>
+
+12.  Now select the "NOT a Line of Symmetry" Keyword.  Draw two diagonal lines on the quilt square to emphasize that the diagonals of this quilt square are in fact not lines of symmetry.<P>
+
+13.  Leave Edit Mode (or close the Snapshot) to save the sizing, positioning, and coding you've done on the Snapshot.  <P>
+
+14.  When you are in Exploration Mode (i.e. when you are NOT in Edit Mode), you can explore your coded Snapshot, including hiding and showing different codes, resizing the image or frame, and so on, without affecting the saved settings of the Snapshot.  Changes are only saved when you are in Edit Mode.<P>
+
+15.  Close the Snapshot Window.<P>
+
+A final option you have is to drop your coded Snapshot into the transcript in place of the uncoded screen shot we started with above.<P>
+
+<FONT COLOR="Red">Activity:</FONT> Follow these instructions to replace the Transcript Image inserted above in section 1 with the Snapshot created above in section 2.<P>
+
+1.  With the Transcript in Edit mode, delete the current image from the transcript, if there is one.<P>
+
+2.  If the "Quilt Square 1" Snapshot is open, select it through Transana's Window menu.  If it is not open, double-click the "Quilt Square 1" Snapshot in the Symmetry Collection.<P>
+
+3.  It's helpful to include the Snapshot's Coding Key with the Snapshot in the transcript, as this makes the meaning of the coding shapes clear.  Therefore, press the <IMG SRC="images/KeywordIcon.gif"> &nbsp; "Show Coding Key" button in the Snapshot Window so the Coding Key is displayed.  When the Coding Key is displayed, it will be included when a Snapshot is exported or placed in a transcript.<P>  
+
+4.  Press the <IMG SRC="images/SnapshotButton.gif"> &nbsp; "Insert Coded Image Into Transcript" button <B>in the Snapshot Window's toolbar</b>.  Now close the Snapshot Window and you will see your coded Snapshot in the transcript.  Editing the Snapshot after this point will not affect the copy of the image in the transcript.<P>
+
+<IMG SRC="images/SnapshotInTranscript.gif"><P>
+
+<A HREF="quickclips.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="workwithcollections.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

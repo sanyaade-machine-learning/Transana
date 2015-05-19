@@ -1,4 +1,4 @@
-# Copyright (C) 2008 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2008 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -38,6 +38,8 @@ import GraphicsControlClass
 import Misc
 # Import Transana's Globals
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 # Import the Video Player module
 import video_player
 # Import Transana's module for creating Waveform Graphics
@@ -54,7 +56,7 @@ class Synchronize(wx.Dialog):
         self.windowBuilt = False
 
         # This form requires a minimum resolution of 1024 x 768.  It just doesn't fit at 800 x 600.
-        if wx.Display(0).GetClientArea()[3] < 650:  # wx.ClientDisplayRect()
+        if wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[3] < 650:  # wx.ClientDisplayRect()
             msg = _('This form requires a screen resolution of 1024 x 768 or higher.')
             dlg = Dialogs.ErrorDialog(parent, msg)
             dlg.ShowModal()
@@ -67,10 +69,16 @@ class Synchronize(wx.Dialog):
                            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         # Freeze the dialog.  This prevents screen updates, speeding up the creation process.
         self.Freeze()
+        displayRect = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()
         # Set the initial size as the minimum size.
-        minX = min(self.GetSize()[0], int(0.9 * wx.Display(0).GetClientArea()[2]))  # wx.ClientDisplayRect()
-        minY = min(self.GetSize()[1], int(0.9 * wx.Display(0).GetClientArea()[3]))  # wx.ClientDisplayRect()
-        self.SetSizeHints(minX, minY, int(0.9 * wx.Display(0).GetClientArea()[2]), int(0.9 * wx.Display(0).GetClientArea()[3]))  # wx.ClientDisplayRect()
+        minX = min(self.GetSize()[0], int(0.9 * displayRect[2]))  # wx.ClientDisplayRect()
+        minY = min(self.GetSize()[1], int(0.9 * displayRect[3]))  # wx.ClientDisplayRect()
+        self.SetSizeHints(minX, minY, int(0.9 * displayRect[2]), int(0.9 * displayRect[3]))  # wx.ClientDisplayRect()
+
+        # With wxPython 2.9.4.0, panels get assigned a minimum size below which they try not to shrink
+        # when the frame shrinks.  This was making the video files become different sizes when smaller
+        # than their original size (or perhaps below 320 x 240).  This fixes that.
+        self.SetMinSize((10, 10))
 
         # Set the background to White
         self.SetBackgroundColour(wx.WHITE)
@@ -121,9 +129,9 @@ class Synchronize(wx.Dialog):
         if self.mp1.FileName == "":
             return
         # Add the media player to the vertical sizer
-        vSizer.Add(self.mp1, 8, wx.EXPAND, 0)
+        vSizer.Add(self.mp1, 8, wx.ALIGN_CENTER | wx.EXPAND, 0)
         # Add the vertical sizer to the horizontal sizer
-        hSizer.Add(vSizer, 12, wx.EXPAND | wx.ALL, 5)
+        hSizer.Add(vSizer, 12, wx.ALIGN_CENTER | wx.EXPAND | wx.ALL, 5)
         # Add a spacer to the horizontal sizer
         hSizer.Add((10, 1), 0)
         # Add a vertical sizer for the second media player
@@ -140,13 +148,13 @@ class Synchronize(wx.Dialog):
         if self.mp2.FileName == "":
             return
         # Add the second media player to the vertical sizer
-        vSizer.Add(self.mp2, 8, wx.EXPAND, 0)
+        vSizer.Add(self.mp2, 8, wx.ALIGN_CENTER | wx.EXPAND, 0)
         # Add the second vertical sizer to the horizontal sizer
-        hSizer.Add(vSizer, 12, wx.EXPAND | wx.ALL, 5)
+        hSizer.Add(vSizer, 12, wx.ALIGN_CENTER | wx.EXPAND | wx.ALL, 5)
         # Add a spacer to the horizontal sizer
         hSizer.Add((10, 1), 0)
         # Add the horizontal sizer, containing both media players, to the main sizer
-        mainBoxSizer.Add(hSizer, 1, wx.EXPAND | wx.BOTTOM | wx.RIGHT, 5)
+        mainBoxSizer.Add(hSizer, 1, wx.ALIGN_CENTER | wx.EXPAND | wx.BOTTOM | wx.RIGHT, 5)
         # Now that we have both media players created, get the sizes of the respective media files
         (size1x, size1y) = self.mp1.movie.GetBestSize()
         (size2x, size2y) = self.mp2.movie.GetBestSize()
@@ -210,10 +218,9 @@ class Synchronize(wx.Dialog):
         # Add the vertical sizer to the whole row horizontal sizer
         hSizer.Add(vSizer, 0)
 
-        # Get the initial image for the Play / Pause button
-        img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
         # Add a Play button for the top media player
-        self.btnPlay1 = wx.BitmapButton(self.pnl, -1, img, size=(48, 48))   # wx.Button(self.pnl, -1, _("Play Left"), size=(100, 20))
+        self.btnPlay1 = wx.BitmapButton(self.pnl, -1, TransanaGlobal.GetImage(TransanaImages.Play), size=(48, 48))
+        self.btnPlay1.SetLayoutDirection(wx.Layout_LeftToRight)
         # Bind the button to the OnPlay event handler
         self.btnPlay1.Bind(wx.EVT_BUTTON, self.OnPlay)
         # Add the play button to the sizer
@@ -294,10 +301,9 @@ class Synchronize(wx.Dialog):
         # Add the vertical sizer to the whole row horizontal sizer
         hSizer.Add(vSizer, 0)
         
-        # Get the initial image for the Play / Pause button
-        img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
         # Add a Play button for the bottom media player
-        self.btnPlay3 = wx.BitmapButton(self.pnl, -1, img, size=(48, 48))   # wx.Button(self.pnl, -1, _("Play Right"), size=(100, 20))
+        self.btnPlay3 = wx.BitmapButton(self.pnl, -1, TransanaGlobal.GetImage(TransanaImages.Play), size=(48, 48))
+        self.btnPlay3.SetLayoutDirection(wx.Layout_LeftToRight)
         # Bind the button to the OnPlay event handler
         self.btnPlay3.Bind(wx.EVT_BUTTON, self.OnPlay)
         # Add the play button to the sizer
@@ -428,7 +434,7 @@ class Synchronize(wx.Dialog):
         # If the waveform fails ...
         if self.waveFile2 == False:
             # ... display an error message ...
-            print "Waveform FAIL for", filename2
+            print "Waveform FAIL for", filename2.encode('utf8')
             # .. and exit the Synchronize routine.
             return
         # Add the waveform to the sizer
@@ -643,8 +649,7 @@ class Synchronize(wx.Dialog):
             else:
                 # ... then tell it to play.
                 self.mp1.Play()
-                img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
-                self.btnPlay1.SetBitmapLabel(img)
+                self.btnPlay1.SetBitmapLabel(TransanaGlobal.GetImage(TransanaImages.Play))
         # If the MIDDLE or BOTTOM Play button was pressed ...
         if play2:
             # ... and if the bottom player is playing ...
@@ -659,20 +664,16 @@ class Synchronize(wx.Dialog):
         # Now, we need to update the form buttons.
         if isPlaying1:  # Player 1 was playing before the button press...
             if play1:   # The top button read "Pause"
-                img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
-                self.btnPlay1.SetBitmapLabel(img)
+                self.btnPlay1.SetBitmapLabel(TransanaGlobal.GetImage(TransanaImages.Play))
         else:           # Player 1 was NOT playing before the button press ...
             if play1:   # The top button read "Play"
-                img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Pause.xpm"), wx.BITMAP_TYPE_XPM)
-                self.btnPlay1.SetBitmapLabel(img)
+                self.btnPlay1.SetBitmapLabel(TransanaImages.Pause.GetBitmap())
         if isPlaying2:  # Player 2 was playing before the button press ...
             if play2:   # The bottom button read "Pause"
-                img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
-                self.btnPlay3.SetBitmapLabel(img)
+                self.btnPlay3.SetBitmapLabel(TransanaGlobal.GetImage(TransanaImages.Play))
         else:           # Player 2 was NOT playing before the button press ...
             if play2:   # The bottom button read "Play"
-                img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Pause.xpm"), wx.BITMAP_TYPE_XPM)
-                self.btnPlay3.SetBitmapLabel(img)
+                self.btnPlay3.SetBitmapLabel(TransanaImages.Pause.GetBitmap())
 
         # If both players are NOW paused ...
         if (isPlaying1 and play1 and not isPlaying2) or \

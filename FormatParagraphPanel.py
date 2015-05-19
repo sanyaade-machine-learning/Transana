@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -117,20 +117,26 @@ class FormatParagraphPanel(wx.Panel):
         box.Add(lblSpacing, 0, wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.LEFT | wx.TOP, 15)
         box.Add((0, 5))  # Spacer
         # Create the list of line spacing options
-        spacingList = [_('Single'), _("One and a half"), _("Double"), _("Two and a half"), _("Triple")]
+        spacingList = [_('Single'), _('11 point'), _('12 point'), _("One and a half"), _("Double"), _("Two and a half"), _("Triple")]
         # Now create the Line Spacing list box        
         self.lbSpacing = wx.Choice(self, -1, choices=spacingList)
         # if line spacing <= 10 ...
-        if (self.formatData.paragraphLineSpacing <= rt.TEXT_ATTR_LINE_SPACING_NORMAL):
-            # If line spacing is 0, let's reset it to 10!
-            if self.formatData.paragraphLineSpacing == 0:
-                self.formatData.paragraphLineSpacing = rt.TEXT_ATTR_LINE_SPACING_NORMAL
+        # If line spacing is 0, let's reset it to 11!
+        if self.formatData.paragraphLineSpacing == 0:
+            self.formatData.paragraphLineSpacing = 11
+        if (self.formatData.paragraphLineSpacing <= wx.TEXT_ATTR_LINE_SPACING_NORMAL):
             self.lbSpacing.SetStringSelection(_("Single"))
+        # if line spacing <= 11 ...
+        elif (self.formatData.paragraphLineSpacing <= 11):
+            self.lbSpacing.SetStringSelection(_("11 point"))
+        # if line spacing <= 12 ...
+        elif (self.formatData.paragraphLineSpacing <= 12):
+            self.lbSpacing.SetStringSelection(_("12 point"))
         # if line spacing <= 15 ...
-        elif (self.formatData.paragraphLineSpacing <= rt.TEXT_ATTR_LINE_SPACING_HALF):
+        elif (self.formatData.paragraphLineSpacing <= wx.TEXT_ATTR_LINE_SPACING_HALF):
             self.lbSpacing.SetStringSelection(_("One and a half"))
         # if line spacing <= 20 ...
-        elif (self.formatData.paragraphLineSpacing <= rt.TEXT_ATTR_LINE_SPACING_TWICE):
+        elif (self.formatData.paragraphLineSpacing <= wx.TEXT_ATTR_LINE_SPACING_TWICE):
             self.lbSpacing.SetStringSelection(_("Double"))
         # if line spacing <= 25 ...
         elif (self.formatData.paragraphLineSpacing <= 25):
@@ -142,7 +148,7 @@ class FormatParagraphPanel(wx.Panel):
         else:
             # ... so reset line spacing to single spaced.
             self.lbSpacing.SetStringSelection(_("Single"))
-            self.formatData.paragraphLineSpacing = rt.TEXT_ATTR_LINE_SPACING_NORMAL
+            self.formatData.paragraphLineSpacing = 12  # wx.TEXT_ATTR_LINE_SPACING_NORMAL
         # Bind the event for setting line spacing.
         self.lbSpacing.Bind(wx.EVT_CHOICE, self.OnLineSpacingSelect)
 
@@ -256,11 +262,15 @@ class FormatParagraphPanel(wx.Panel):
         """ Handle the Select event for Line Spacing """
         # Convert the control's label into the appropriate wx.RTC Line Spacing constant or integer value
         if self.lbSpacing.GetStringSelection() == unicode(_("Single"), 'utf8'):
-            self.formatData.paragraphLineSpacing = rt.TEXT_ATTR_LINE_SPACING_NORMAL
+            self.formatData.paragraphLineSpacing = wx.TEXT_ATTR_LINE_SPACING_NORMAL
+        elif self.lbSpacing.GetStringSelection() == unicode(_("11 point"), 'utf8'):
+            self.formatData.paragraphLineSpacing = 11
+        elif self.lbSpacing.GetStringSelection() == unicode(_("12 point"), 'utf8'):
+            self.formatData.paragraphLineSpacing = 12
         elif self.lbSpacing.GetStringSelection() == unicode(_("One and a half"), 'utf8'):
-            self.formatData.paragraphLineSpacing = rt.TEXT_ATTR_LINE_SPACING_HALF
+            self.formatData.paragraphLineSpacing = wx.TEXT_ATTR_LINE_SPACING_HALF
         elif self.lbSpacing.GetStringSelection() == unicode(_("Double"), 'utf8'):
-            self.formatData.paragraphLineSpacing = rt.TEXT_ATTR_LINE_SPACING_TWICE
+            self.formatData.paragraphLineSpacing = wx.TEXT_ATTR_LINE_SPACING_TWICE
         elif self.lbSpacing.GetStringSelection() == unicode(_("Two and a half"), 'utf8'):
             self.formatData.paragraphLineSpacing = 25
         elif self.lbSpacing.GetStringSelection() == unicode(_("Triple"), 'utf8'):

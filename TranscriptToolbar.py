@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -32,7 +32,10 @@ import KeywordListEditForm
 import TransanaConstants
 import TransanaExceptions
 import TransanaGlobal
-import os
+# Import Transana's Images
+import TransanaImages
+# import Python's os and sys modules
+import os, sys
 
 class TranscriptToolbar(wx.ToolBar):
     """This class consists of a toolbar for use with a TranscriptEditor
@@ -51,12 +54,14 @@ class TranscriptToolbar(wx.ToolBar):
         wx.ToolBar.__init__(self, parent, id, wx.DefaultPosition, size, wx.TB_HORIZONTAL | wx.BORDER_SIMPLE | wx.TB_FLAT | wx.TB_TEXT)
         # remember the parent
         self.parent = parent
+        # Set the Toolbar Bitmap size
+        self.SetToolBitmapSize((16, 16))
         # Keep a list of the tools placed on the toolbar so they're more easily manipulated
         self.tools = []
 
         # Create an Undo button
         self.CMD_UNDO_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_UNDO_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Undo16.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_UNDO_ID, TransanaImages.Undo16.GetBitmap(),
                         shortHelpString=_('Undo action')))
         wx.EVT_MENU(self, self.CMD_UNDO_ID, self.OnUndo)
 
@@ -64,17 +69,17 @@ class TranscriptToolbar(wx.ToolBar):
   
         # Bold, Italic, Underline buttons
         self.CMD_BOLD_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_BOLD_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Bold.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_BOLD_ID, TransanaGlobal.GetImage(TransanaImages.Bold),
                         isToggle=1, shortHelpString=_('Bold text')))
         wx.EVT_MENU(self, self.CMD_BOLD_ID, self.OnBold)
 
         self.CMD_ITALIC_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_ITALIC_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Italic.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_ITALIC_ID, TransanaGlobal.GetImage(TransanaImages.Italic),
                         isToggle=1, shortHelpString=_("Italic text")))
         wx.EVT_MENU(self, self.CMD_ITALIC_ID, self.OnItalic)
        
         self.CMD_UNDERLINE_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_UNDERLINE_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Underline.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_UNDERLINE_ID, TransanaGlobal.GetImage(TransanaImages.Underline),
                         isToggle=1, shortHelpString=_("Underline text")))
         wx.EVT_MENU(self, self.CMD_UNDERLINE_ID, self.OnUnderline)
 
@@ -94,12 +99,12 @@ class TranscriptToolbar(wx.ToolBar):
         wx.EVT_MENU(self, self.CMD_FALLING_INT_ID, self.OnInsertChar) 
        
         self.CMD_AUDIBLE_BREATH_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_AUDIBLE_BREATH_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "AudibleBreath.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_AUDIBLE_BREATH_ID, TransanaGlobal.GetImage(TransanaImages.AudibleBreath),
                         shortHelpString=_("Audible Breath")))
         wx.EVT_MENU(self, self.CMD_AUDIBLE_BREATH_ID, self.OnInsertChar)
     
         self.CMD_WHISPERED_SPEECH_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_WHISPERED_SPEECH_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "WhisperedSpeech.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_WHISPERED_SPEECH_ID, TransanaGlobal.GetImage(TransanaImages.WhisperedSpeech),
                         shortHelpString=_("Whispered Speech")))
         wx.EVT_MENU(self, self.CMD_WHISPERED_SPEECH_ID, self.OnInsertChar)
       
@@ -107,20 +112,22 @@ class TranscriptToolbar(wx.ToolBar):
 
         # Add show / hide timecodes button
         self.CMD_SHOWHIDE_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_SHOWHIDE_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "TimeCode16.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_SHOWHIDE_ID, TransanaGlobal.GetImage(TransanaImages.TimeCode16),
                         isToggle=1, shortHelpString=_("Show/Hide Time Code Indexes")))
         wx.EVT_MENU(self, self.CMD_SHOWHIDE_ID, self.OnShowHideCodes)
 
         # Add show / hide timecodes button
         self.CMD_SHOWHIDETIME_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_SHOWHIDETIME_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "TimeCodeData16.xpm"), wx.BITMAP_TYPE_XPM),
-                        isToggle=1, shortHelpString=_("Show/Hide Time Code Values")))
+        self.tools.append(self.AddTool(self.CMD_SHOWHIDETIME_ID, TransanaGlobal.GetImage(TransanaImages.TimeCodeData16),
+                                       TransanaGlobal.GetImage(TransanaImages.TimeCodeData16),
+                                       isToggle=1, shortHelpString=_("Show/Hide Time Code Values")))
         wx.EVT_MENU(self, self.CMD_SHOWHIDETIME_ID, self.OnShowHideValues)
 
         # Add read only / edit mode button
         self.CMD_READONLY_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_READONLY_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "ReadOnly16.xpm"), wx.BITMAP_TYPE_XPM),
-                        isToggle=1, shortHelpString=_("Edit/Read-only select")))
+        self.tools.append(self.AddTool(self.CMD_READONLY_ID, TransanaGlobal.GetImage(TransanaImages.ReadOnly16),
+                                       TransanaGlobal.GetImage(TransanaImages.ReadOnly16),
+                                       isToggle=1, shortHelpString=_("Edit/Read-only select")))
         wx.EVT_MENU(self, self.CMD_READONLY_ID, self.OnReadOnlySelect)
 
         # Add Formatring button
@@ -135,19 +142,19 @@ class TranscriptToolbar(wx.ToolBar):
 
         # Add QuickClip button
         self.CMD_QUICKCLIP_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_QUICKCLIP_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "QuickClip16.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_QUICKCLIP_ID, TransanaGlobal.GetImage(TransanaImages.QuickClip16),
                         shortHelpString=_("Create Quick Clip")))
         wx.EVT_MENU(self, self.CMD_QUICKCLIP_ID, self.OnQuickClip)
 
         # Add Edit keywords button
         self.CMD_KEYWORD_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_KEYWORD_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KeywordRoot16.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_KEYWORD_ID, TransanaGlobal.GetImage(TransanaImages.KeywordRoot16),
                         shortHelpString=_("Edit Keywords")))
         wx.EVT_MENU(self, self.CMD_KEYWORD_ID, self.OnEditKeywords)
 
         # Add Save Button
         self.CMD_SAVE_ID = wx.NewId()
-        self.tools.append(self.AddTool(self.CMD_SAVE_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Save16.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_SAVE_ID, TransanaGlobal.GetImage(TransanaImages.Save16),
                         shortHelpString=_("Save Transcript")))
         wx.EVT_MENU(self, self.CMD_SAVE_ID, self.OnSave)
 
@@ -157,7 +164,7 @@ class TranscriptToolbar(wx.ToolBar):
         # First, define the ID for this button
         self.CMD_PROPAGATE_ID = wx.NewId()
         # Now create the button and add it to the Tools list
-        self.tools.append(self.AddTool(self.CMD_PROPAGATE_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Propagate.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_PROPAGATE_ID, TransanaGlobal.GetImage(TransanaImages.Propagate),
                         shortHelpString=_("Propagate Changes")))
         # Link the button to the appropriate event handler
         wx.EVT_MENU(self, self.CMD_PROPAGATE_ID, self.OnPropagate)
@@ -168,7 +175,7 @@ class TranscriptToolbar(wx.ToolBar):
         # First, define the ID for this button
         self.CMD_MULTISELECT_ID = wx.NewId()
         # Now create the button and add it to the Tools list
-        self.tools.append(self.AddTool(self.CMD_MULTISELECT_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "MultiSelect.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_MULTISELECT_ID, TransanaGlobal.GetImage(TransanaImages.MultiSelect),
                         shortHelpString=_("Match Selection in Other Transcripts")))
         # Link the button to the appropriate event handler
         wx.EVT_MENU(self, self.CMD_MULTISELECT_ID, self.OnMultiSelect)
@@ -177,7 +184,7 @@ class TranscriptToolbar(wx.ToolBar):
         # First, define the ID for this button
         self.CMD_PLAY_ID = wx.NewId()
         # Now create the button and add it to the Tools list
-        self.tools.append(self.AddTool(self.CMD_PLAY_ID, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM),
+        self.tools.append(self.AddTool(self.CMD_PLAY_ID, TransanaImages.Play.GetBitmap(),
                         shortHelpString=_("Play Multiple Transcript Selection")))
         # Link the button to the appropriate event handler
         wx.EVT_MENU(self, self.CMD_PLAY_ID, self.OnMultiPlay)
@@ -191,6 +198,47 @@ class TranscriptToolbar(wx.ToolBar):
                   self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID, self.CMD_FORMAT_ID, \
                   self.CMD_PROPAGATE_ID, self.CMD_MULTISELECT_ID, self.CMD_PLAY_ID):
             self.EnableTool(x, False)
+
+##        # On Windows, we need to display a "Transcript Health" indicator related to GDI resources.
+##        # I tried to handle this through changing the "Save" button graphic in the Toolbar, but that
+##        # caused the Search box to be disabled when the graphic was updated.  Weird.
+##        if 'wxMSW' in wx.PlatformInfo:
+##            # Create Bitmap objects for the four images used to populate the health indicator
+##            self.GDIBmpAll = TransanaGlobal.GetImage(TransanaImages.StopLightAll)
+##            self.GDIBmpRed = TransanaGlobal.GetImage(TransanaImages.StopLightRed)
+##            self.GDIBmpYellow = TransanaGlobal.GetImage(TransanaImages.StopLightYellow)
+##            self.GDIBmpGreen = TransanaGlobal.GetImage(TransanaImages.StopLightGreen)
+##            # Create a Static Bitmap to display the Transcript Health indicator.  Start it with the neutral graphic
+##            self.GDIBmp = wx.StaticBitmap(self, -1, self.GDIBmpAll)
+##            self.AddControl(self.GDIBmp)
+##            # Set the proper Tool Tip
+##            self.GDIBmp.SetToolTip(wx.ToolTip(_("Transcript Healthy")))
+
+        # Add Quick Search tools
+        # Start with the Search Backwards button
+        self.CMD_SEARCH_BACK_ID = wx.NewId()
+        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
+        self.tools.append(self.AddTool(self.CMD_SEARCH_BACK_ID, bmp,
+                        shortHelpString=_("Search backwards")))
+        wx.EVT_MENU(self, self.CMD_SEARCH_BACK_ID, self.parent.OnSearch)
+
+        # Add the Search Text box
+        self.searchText = wx.TextCtrl(self, -1, size=(100, 20), style=wx.TE_PROCESS_ENTER)
+        self.AddControl(self.searchText)
+        self.Bind(wx.EVT_TEXT_ENTER, self.parent.OnSearch, self.searchText)
+
+        # Add the Search Forwards button
+        self.CMD_SEARCH_NEXT_ID = wx.NewId()
+        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
+        self.tools.append(self.AddTool(self.CMD_SEARCH_NEXT_ID, bmp,
+                        shortHelpString=_("Search forwards")))
+        wx.EVT_MENU(self, self.CMD_SEARCH_NEXT_ID, self.parent.OnSearch)
+
+        self.AddSeparator()
+
+        # Add the Selection Label, which indicates the time position of the current selection
+        self.selectionText = wx.StaticText(self, -1, "", size=wx.Size(200, 20))
+        self.AddControl(self.selectionText)
 
     def GetNextId(self):
         """Get a new event ID to use for the toolbar objects."""
@@ -369,7 +417,7 @@ class TranscriptToolbar(wx.ToolBar):
                     # RTF import.  The following code tries to fix that problem when the USER first opens
                     # a new transcript.  (That's why it's here instead of elsewhere.)
                     if self.parent.editor.GetLastPosition() == 0:
-                        self.parent.editor.SetTxtStyle(parAlign = wx.TEXT_ALIGNMENT_LEFT, parLineSpacing = richtext.TEXT_ATTR_LINE_SPACING_NORMAL)
+                        self.parent.editor.SetTxtStyle(parAlign = wx.TEXT_ALIGNMENT_LEFT, parLineSpacing = wx.TEXT_ATTR_LINE_SPACING_NORMAL)
                     # Call CheckFormatting() to set the Default and Basic Styles correctly
                     self.parent.editor.CheckFormatting()
 
@@ -422,7 +470,7 @@ class TranscriptToolbar(wx.ToolBar):
         """ Format Text """
         # Call the ControlObject's Format Dialog method
         self.parent.ControlObject.TranscriptCallFormatDialog()
-
+        
     def UpdateEditingButtons(self):
         """ Update the Toolbar Buttons depending on the Edit State """
         # Enable/Disable editing buttons
@@ -434,10 +482,10 @@ class TranscriptToolbar(wx.ToolBar):
             self.EnableTool(x, can_edit)
         # Enable/Disable Transcript menu Items
         self.parent.ControlObject.SetTranscriptEditOptions(can_edit)
-        # If on Windows and we are LEAVING Edit Mode ...
-        if ('wxMSW' in wx.PlatformInfo) and not can_edit:
-            # ... change the Transcript Health Indicator to Neutral
-            self.parent.GDIBmp.SetBitmap(self.parent.GDIBmpAll)
+##        # If on Windows and we are LEAVING Edit Mode ...
+##        if ('wxMSW' in wx.PlatformInfo) and not can_edit:
+##            # ... change the Transcript Health Indicator to Neutral
+##            self.GDIBmp.SetBitmap(self.GDIBmpAll)
 
     def UpdateMultiTranscriptButtons(self, enable):
         """ Update the Toolbar Buttons depending on the enable parameter """
@@ -515,57 +563,97 @@ class TranscriptToolbar(wx.ToolBar):
                     
                 # Create/define the Keyword List Edit Form
                 dlg = KeywordListEditForm.KeywordListEditForm(self.parent, -1, dlgTitle, obj, kwlist)
-                # Show the Keyword List Edit Form and process it if the user selects OK
-                if dlg.ShowModal() == wx.ID_OK:
-                    # Clear the local keywords list and repopulate it from the Keyword List Edit Form
-                    kwlist = []
-                    for kw in dlg.keywords:
-                        kwlist.append(kw)
+                # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
+                contin = True
+                # While the "continue" flag is True ...
+                while contin:
+                    # if the user pressed "OK" ...
+                    try:
+                        # Show the Keyword List Edit Form and process it if the user selects OK
+                        if dlg.ShowModal() == wx.ID_OK:
+                            # Clear the local keywords list and repopulate it from the Keyword List Edit Form
+                            kwlist = []
+                            for kw in dlg.keywords:
+                                kwlist.append(kw)
 
-                    # Copy the local keywords list into the appropriate object
-                    obj.keyword_list = kwlist
+                            # Copy the local keywords list into the appropriate object
+                            obj.keyword_list = kwlist
 
-                    # If we are dealing with an Episode ...
-                    if isinstance(obj, Episode.Episode):
-                        # Check to see if there are keywords to be propagated
-                        self.parent.ControlObject.PropagateEpisodeKeywords(obj.number, obj.keyword_list)
+                            # If we are dealing with an Episode ...
+                            if isinstance(obj, Episode.Episode):
+                                # Check to see if there are keywords to be propagated
+                                self.parent.ControlObject.PropagateEpisodeKeywords(obj.number, obj.keyword_list)
 
-                    # Save the Data object
-                    obj.db_save()
+                            # Save the Data object
+                            obj.db_save()
 
-                    # Now let's communicate with other Transana instances if we're in Multi-user mode
-                    if not TransanaConstants.singleUserVersion:
-                        if isinstance(obj, Episode.Episode):
-                            msg = 'Episode %d' % obj.number
-                            msgObjType = 'Episode'
-                            msgObjClipEpNum = 0
-                        elif isinstance(obj, Clip.Clip):
-                            msg = 'Clip %d' % obj.number
-                            msgObjType = 'Clip'
-                            msgObjClipEpNum = obj.episode_num
+                            # Now let's communicate with other Transana instances if we're in Multi-user mode
+                            if not TransanaConstants.singleUserVersion:
+                                if isinstance(obj, Episode.Episode):
+                                    msg = 'Episode %d' % obj.number
+                                    msgObjType = 'Episode'
+                                    msgObjClipEpNum = 0
+                                elif isinstance(obj, Clip.Clip):
+                                    msg = 'Clip %d' % obj.number
+                                    msgObjType = 'Clip'
+                                    msgObjClipEpNum = obj.episode_num
+                                else:
+                                    msg = ''
+                                    msgObjType = 'None'
+                                    msgObjClipEpNum = 0
+                                if msg != '':
+                                    if TransanaGlobal.chatWindow != None:
+                                        # Send the "Update Keyword List" message
+                                        TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+
+                            # If any Keyword Examples were removed, remove them from the Database Tree
+                            for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
+                                self.parent.ControlObject.RemoveDataWindowKeywordExamples(keywordGroup, keyword, clipNum)
+
+                            # Update the Data Window Keywords Tab (this must be done AFTER the Save)
+                            self.parent.ControlObject.UpdateDataWindowKeywordsTab()
+
+                            # Update the Keyword Visualizations
+                            self.parent.ControlObject.UpdateKeywordVisualization()
+
+                            # Notify other computers to update the Keyword Visualization as well.
+                            if not TransanaConstants.singleUserVersion:
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % (msgObjType, obj.number, msgObjClipEpNum))
+
+                            # If we do all this, we don't need to continue any more.
+                            contin = False
+
+                        # If the user pressed Cancel ...
                         else:
-                            msg = ''
-                            msgObjType = 'None'
-                            msgObjClipEpNum = 0
-                        if msg != '':
-                            if TransanaGlobal.chatWindow != None:
-                                # Send the "Update Keyword List" message
-                                TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                            # ... then we don't need to continue any more.
+                            contin = False
 
-                    # If any Keyword Examples were removed, remove them from the Database Tree
-                    for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
-                        self.parent.ControlObject.RemoveDataWindowKeywordExamples(keywordGroup, keyword, clipNum)
+                    # Handle "SaveError" exception
+                    except TransanaExceptions.SaveError:
+                        # Display the Error Message, allow "continue" flag to remain true
+                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                        # Refresh the Keyword List, if it's a changed Keyword error
+                        dlg.refresh_keywords()
+                        # Highlight the first non-existent keyword in the Keywords control
+                        dlg.highlight_bad_keyword()
 
-                    # Update the Data Window Keywords Tab (this must be done AFTER the Save)
-                    self.parent.ControlObject.UpdateDataWindowKeywordsTab()
-
-                    # Update the Keyword Visualizations
-                    self.parent.ControlObject.UpdateKeywordVisualization()
-
-                    # Notify other computers to update the Keyword Visualization as well.
-                    if not TransanaConstants.singleUserVersion:
-                        if TransanaGlobal.chatWindow != None:
-                            TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % (msgObjType, obj.number, msgObjClipEpNum))
+                    # Handle other exceptions
+                    except:
+                        if DEBUG:
+                            import traceback
+                            traceback.print_exc(file=sys.stdout)
+                        # Display the Exception Message, allow "continue" flag to remain true
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_("Exception %s: %s"), 'utf8')
+                        else:
+                            prompt = _("Exception %s: %s")
+                        errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
 
                 # Unlock the Data Object
                 obj.unlock_record()
@@ -657,3 +745,5 @@ class TranscriptToolbar(wx.ToolBar):
         self.SetToolShortHelp(self.CMD_PROPAGATE_ID, _("Propagate Changes"))
         self.SetToolShortHelp(self.CMD_MULTISELECT_ID, _("Match Selection in Other Transcripts"))
         self.SetToolShortHelp(self.CMD_PLAY_ID, _("Play Multiple Transcript Selection"))
+        self.SetToolShortHelp(self.CMD_SEARCH_BACK_ID, _("Search backwards"))
+        self.SetToolShortHelp(self.CMD_SEARCH_NEXT_ID, _("Search forwards"))

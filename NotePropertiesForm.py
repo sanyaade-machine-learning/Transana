@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -18,6 +18,7 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case <nacase@wisc.edu>'
 
+import TransanaConstants
 import DBInterface
 import Dialogs
 import KWManager
@@ -28,6 +29,7 @@ import Episode
 import Transcript
 import Collection
 import Clip
+import Snapshot
 import Note
 
 import wx
@@ -47,6 +49,7 @@ class NotePropertiesForm(Dialogs.GenForm):
         transcriptID = ''
         collectionID = ''
         clipID = ''
+        snapshotID = ''
         if (self.obj.series_num != 0) and (self.obj.series_num != None):
             tempSeries = Series.Series(self.obj.series_num)
             seriesID = tempSeries.id
@@ -65,13 +68,18 @@ class NotePropertiesForm(Dialogs.GenForm):
             seriesID = tempSeries.id
         elif (self.obj.collection_num != 0) and (self.obj.collection_num != None):
             tempCollection = Collection.Collection(self.obj.collection_num)
-            collectionID = tempCollection.id
+            collectionID = tempCollection.GetNodeString()
         elif (self.obj.clip_num != 0) and (self.obj.clip_num != None):
             # We can skip loading the Clip Transcript to save load time
             tempClip = Clip.Clip(self.obj.clip_num, skipText=True)
             clipID = tempClip.id
             tempCollection = Collection.Collection(tempClip.collection_num)
-            collectionID = tempCollection.id
+            collectionID = tempCollection.GetNodeString()
+        elif (self.obj.snapshot_num != 0) and (self.obj.snapshot_num != None):
+            tempSnapshot = Snapshot.Snapshot(self.obj.snapshot_num)
+            snapshotID = tempSnapshot.id
+            tempCollection = Collection.Collection(tempSnapshot.collection_num)
+            collectionID = tempCollection.GetNodeString()
             
         # Create the form's main VERTICAL sizer
         mainSizer = wx.BoxSizer(wx.VERTICAL)
@@ -141,35 +149,50 @@ class NotePropertiesForm(Dialogs.GenForm):
         r3Sizer.Add(v5, 2, wx.EXPAND)
         collectionID_edit.Enable(False)
 
-        # Add a horizontal spacer to the row sizer        
-        r3Sizer.Add((10, 0))
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r3Sizer, 0, wx.EXPAND)
+
+        # Create a HORIZONTAL sizer for the next row
+        r4Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # Create a VERTICAL sizer for the next element
         v6 = wx.BoxSizer(wx.VERTICAL)
         # Clip ID
         clipID_edit = self.new_edit_box(_("Clip ID"), v6, clipID)
         # Add the element to the row sizer
-        r3Sizer.Add(v6, 1, wx.EXPAND)
+        r4Sizer.Add(v6, 1, wx.EXPAND)
         clipID_edit.Enable(False)
 
+        if TransanaConstants.proVersion:
+            # Add a horizontal spacer to the row sizer        
+            r4Sizer.Add((10, 0))
+
+            # Create a VERTICAL sizer for the next element
+            v7 = wx.BoxSizer(wx.VERTICAL)
+            # Snapshot ID
+            snapshotID_edit = self.new_edit_box(_("Snapshot ID"), v7, snapshotID)
+            # Add the element to the row sizer
+            r4Sizer.Add(v7, 1, wx.EXPAND)
+            snapshotID_edit.Enable(False)
+
         # Add the row sizer to the main vertical sizer
-        mainSizer.Add(r3Sizer, 0, wx.EXPAND)
+        mainSizer.Add(r4Sizer, 0, wx.EXPAND)
 
         # Add a vertical spacer to the main sizer        
         mainSizer.Add((0, 10))
 
         # Create a HORIZONTAL sizer for the next row
-        r4Sizer = wx.BoxSizer(wx.HORIZONTAL)
+        r5Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # Create a VERTICAL sizer for the next element
-        v7 = wx.BoxSizer(wx.VERTICAL)
+        v8 = wx.BoxSizer(wx.VERTICAL)
         # Comment layout
-        noteTaker_edit = self.new_edit_box(_("Note Taker"), v7, self.obj.author, maxLen=100)
+        noteTaker_edit = self.new_edit_box(_("Note Taker"), v8, self.obj.author, maxLen=100)
         # Add the element to the row sizer
-        r4Sizer.Add(v7, 2, wx.EXPAND)
+        r5Sizer.Add(v8, 2, wx.EXPAND)
 
         # Add the row sizer to the main vertical sizer
-        mainSizer.Add(r4Sizer, 0, wx.EXPAND)
+        mainSizer.Add(r5Sizer, 0, wx.EXPAND)
 
         # Add a vertical spacer to the main sizer        
         mainSizer.Add((0, 10))
@@ -226,7 +249,7 @@ class NotePropertiesForm(Dialogs.GenForm):
 class AddNoteDialog(NotePropertiesForm):
     """Dialog used when adding a new Note."""
 
-    def __init__(self, parent, id, seriesNum=0, episodeNum=0, transcriptNum=0, collectionNum=0, clipNum=0):
+    def __init__(self, parent, id, seriesNum=0, episodeNum=0, transcriptNum=0, collectionNum=0, clipNum=0, snapshotNum=0):
         obj = Note.Note()
         obj.author = DBInterface.get_username()
         obj.series_num = seriesNum
@@ -234,6 +257,7 @@ class AddNoteDialog(NotePropertiesForm):
         obj.transcript_num = transcriptNum
         obj.collection_num = collectionNum
         obj.clip_num = clipNum
+        obj.snapshot_num = snapshotNum
         NotePropertiesForm.__init__(self, parent, id, _("Add Note"), obj)
 
 class EditNoteDialog(NotePropertiesForm):

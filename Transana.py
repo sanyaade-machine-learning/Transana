@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -30,6 +30,8 @@ from TransanaExceptions import *    # import all exception classes
 import Dialogs                      # import Transana Error Dialog
 import TransanaConstants            # import the Transana Constants
 import TransanaGlobal               # import Transana's Global Variables
+# Import Transana's Images
+import TransanaImages
 from ControlObjectClass import ControlObject   # import the Transana Control Object
 if "__WXMAC__" in wx.PlatformInfo:
     import MacOS
@@ -78,7 +80,7 @@ class Transana(wx.App):
         # However, there are MANY references to ConfigData being in the TransanaGlobal module, so that's where we'll keep it.
         TransanaGlobal.configData = ConfigData.ConfigData()
         # If we are running from a BUILD instead of source code ...
-        if hasattr(sys, "frozen") or ('wxMac' in wx.PlatformInfo):
+        if hasattr(sys, "frozen"): #  or ('wxMac' in wx.PlatformInfo):
             # See if the Default Profile Path exists.  If not ...
             if not os.path.exists(TransanaGlobal.configData.GetDefaultProfilePath()):
                 # ... then create it (recursively).
@@ -128,6 +130,20 @@ class Transana(wx.App):
 
         sys.excepthook = transana_excepthook        # Define the system exception handler
 
+        # First, determine the program name that should be displayed, single or multi-user
+        if TransanaConstants.singleUserVersion:
+            if TransanaConstants.proVersion:
+                programTitle = _("Transana - Professional")
+            else:
+                programTitle = _("Transana - Standard")
+        else:
+            programTitle = _("Transana - Multiuser")
+        # Ammend the program title for the Demo version if appropriate
+        if TransanaConstants.demoVersion:
+            programTitle += _(" - Demonstration")
+        # Create the Menu Window
+        TransanaGlobal.menuWindow = MenuWindow.MenuWindow(None, -1, programTitle)
+
         # Create the global transana graphics colors, once the ConfigData object exists.
         TransanaGlobal.transana_graphicsColorList = TransanaGlobal.getColorDefs(TransanaGlobal.configData.colorConfigFilename)
         # Set essential global color manipulation data structures once the ConfigData object exists.
@@ -138,19 +154,34 @@ class Transana(wx.App):
         # and the current directory/subdirectories.
         sys.path.append("rtf")
         
-        wx.InitAllImageHandlers()                       # Required on Mac to enable display of Splash Screen
-
-        bitmap = wx.Bitmap("images/splash.gif", wx.BITMAP_TYPE_GIF)  # Load the Splash Screen graphic
+        # Load the Splash Screen graphic
+        bitmap = TransanaImages.splash.GetBitmap()
 
         # We need to draw the Version Number onto the Splash Screen Graphic.
         # First, create a Memory DC
         memoryDC = wx.MemoryDC()
         # Select the bitmap into the Memory DC
         memoryDC.SelectObject(bitmap)
+        # Build the Version label
+        if TransanaConstants.singleUserVersion:
+            if TransanaConstants.labVersion:
+                versionLbl = _("Computer Lab Version")
+            elif TransanaConstants.demoVersion:
+                versionLbl = _("Demonstration Version")
+            elif TransanaConstants.workshopVersion:
+                versionLbl = _("Workshop Version")
+            else:
+                if TransanaConstants.proVersion:
+                    versionLbl = _("Professional Version")
+                else:
+                    versionLbl = _("Standard Version")
+        else:
+            versionLbl = _("Multi-user Version")
+        versionLbl += " %s"
         # Determine the size of the version text
-        (verWidth, verHeight) = memoryDC.GetTextExtent(_("Version %s") % TransanaConstants.versionNumber)
+        (verWidth, verHeight) = memoryDC.GetTextExtent(versionLbl % TransanaConstants.versionNumber)
         # Add the Version Number text to the Memory DC (and therefore the bitmap)
-        memoryDC.DrawText(_("Version %s") % TransanaConstants.versionNumber, 370 - verWidth, 156)
+        memoryDC.DrawText(versionLbl % TransanaConstants.versionNumber, 370 - verWidth, 156)
         # Clear the bitmap from the Memory DC, thus freeing it to be displayed!
         memoryDC.SelectObject(wx.EmptyBitmap(10, 10))
         # If the Splash Screen Graphic exists, display the Splash Screen for 4 seconds.
@@ -161,6 +192,11 @@ class Transana(wx.App):
                 splashStyle = wx.SIMPLE_BORDER
             else:
                 splashStyle = wx.SIMPLE_BORDER | wx.STAY_ON_TOP
+            # If we have a Right-To-Left language ...
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                # ... we need to reverse the image direcion
+                bitmap = bitmap.ConvertToImage().Mirror().ConvertToBitmap()
+            # Create the SplashScreen object
             splash = wx.SplashScreen(bitmap,
                         wx.SPLASH_CENTRE_ON_SCREEN | wx.SPLASH_TIMEOUT,
                         4000, None, -1, wx.DefaultPosition, wx.DefaultSize, splashStyle)
@@ -169,6 +205,12 @@ class Transana(wx.App):
                     _("Unable to load Transana's splash screen image.  Installation error?")
 
         wx.Yield()
+
+        if DEBUG:
+            print "Number of Monitors:", wx.Display.GetCount()
+            for x in range(wx.Display.GetCount()):
+                print "  ", x, wx.Display(x).IsPrimary(), wx.Display(x).GetGeometry(), wx.Display(x).GetClientArea()
+            print
 
         import DataWindow                      # import Data Window Object
         import VideoWindow                     # import Video Window Object
@@ -185,18 +227,6 @@ class Transana(wx.App):
             import ChatWindow
         
         # Initialize all main application Window Objects
-
-        # First, determine the program name that should be displayed, single or multi-user
-        if TransanaConstants.singleUserVersion:
-            programTitle = "Transana"
-        else:
-            programTitle = "Transana-MU"
-        # Ammend the program title for the Demo version if appropriate
-        if TransanaConstants.demoVersion:
-            programTitle += " - Demonstration Version"
-
-        # Create the Menu Window
-        TransanaGlobal.menuWindow = MenuWindow.MenuWindow(None, -1, programTitle)
 
         # If we're running the Lab version OR we're on the Mac ...
         if TransanaConstants.labVersion or ('wxMac' in wx.PlatformInfo):
@@ -344,25 +374,47 @@ class Transana(wx.App):
                 # NOTE:  The Menu Window must be created first to server as a parent for the Username and Password Dialog
                 #        called up by DBInterface.
                 if DBInterface.establish_db_exists():
+
+                    if DEBUG:
+                        print "Creating Data Window",
         
                     # Create the Data Window
                     # Data Window creation causes Username and Password Dialog to be displayed,
                     # so it should be created before the Video Window
-                    self.dataWindow = DataWindow.DataWindow(TransanaGlobal.menuWindow)   
+                    self.dataWindow = DataWindow.DataWindow(TransanaGlobal.menuWindow)
+
+                    if DEBUG:
+                        print self.dataWindow.GetSize()
+                        print "Creating Video Window",
+        
                     # Create the Video Window
                     self.videoWindow = VideoWindow.VideoWindow(TransanaGlobal.menuWindow)
                     # Create the Transcript Window.  If on the Mac, include the Close button.
+
+                    if DEBUG:
+                        print self.videoWindow.GetSize()
+                        print "Creating Transcript Window",
+        
                     self.transcriptWindow = TranscriptionUI.TranscriptionUI(TransanaGlobal.menuWindow, includeClose = ('wxMac' in wx.PlatformInfo))
+
+                    if DEBUG:
+                        print self.transcriptWindow.dlg.GetSize()
+                        print "Creating Visualization Window",
+        
                     # Create the Visualization Window
                     self.visualizationWindow = VisualizationWindow.VisualizationWindow(TransanaGlobal.menuWindow)
 
+                    if DEBUG:
+                        print self.visualizationWindow.GetSize()
+                        print "Creating Control Object"
+        
                     # Create the Control Object and register all objects to be controlled with it
                     self.controlObject = ControlObject()
                     self.controlObject.Register(Menu = TransanaGlobal.menuWindow,
                                                 Video = self.videoWindow,
-                                                Transcript=self.transcriptWindow,
-                                                Data=self.dataWindow,
-                                                Visualization=self.visualizationWindow)
+                                                Transcript = self.transcriptWindow,
+                                                Data = self.dataWindow,
+                                                Visualization = self.visualizationWindow)
                     # Set the active transcript
                     self.controlObject.activeTranscript = 0
 
@@ -376,26 +428,99 @@ class Transana(wx.App):
                     # Set the Application Top Window to the Menu Window (wxPython)
                     self.SetTopWindow(TransanaGlobal.menuWindow)
 
+                    TransanaGlobal.resizingAll = True
+
+                    if DEBUG:
+                        print
+                        print "Before Showing Windows:"
+                        print "  menu:\t\t", TransanaGlobal.menuWindow.GetRect()
+                        print "  visual:\t", self.visualizationWindow.GetRect()
+                        print "  video:\t", self.videoWindow.GetRect()
+                        print "  trans:\t", self.transcriptWindow.dlg.GetRect()
+                        print "  data:\t\t", self.dataWindow.GetRect()
+                        print
+
+                        print 'Heights:', self.transcriptWindow.dlg.GetRect()[1] + self.transcriptWindow.dlg.GetRect()[3], self.dataWindow.GetRect()[1] + self.dataWindow.GetRect()[3]
+                        print
+                        if self.transcriptWindow.dlg.GetRect()[1] + self.transcriptWindow.dlg.GetRect()[3] > self.dataWindow.GetRect()[1] + self.dataWindow.GetRect()[3]:
+                            self.dataWindow.SetRect((self.dataWindow.GetRect()[0],
+                                                     self.dataWindow.GetRect()[1],
+                                                     self.dataWindow.GetRect()[2],
+                                                     self.dataWindow.GetRect()[3] + \
+                                                       (self.transcriptWindow.dlg.GetRect()[1] + self.transcriptWindow.dlg.GetRect()[3] - (self.dataWindow.GetRect()[1] + self.dataWindow.GetRect()[3]))))
+                            print "DataWindow Height Adjusted!"
+                            print "  data:\t\t", self.dataWindow.GetRect()
+                            print
+        
                     # Show all Windows.
-                    self.videoWindow.Show()
-                    self.transcriptWindow.Show()
-                    self.dataWindow.Show()
+                    TransanaGlobal.menuWindow.Show(True)
+
+                    if DEBUG:
+                        print "Showing Windows:"
+                        print "  menu:", TransanaGlobal.menuWindow.GetRect()
+
                     self.visualizationWindow.Show()
-                    TransanaGlobal.menuWindow.Show(True)     # Show this last so it will have focus when the screen is displayed
+
+                    if DEBUG:
+                        print "  visualization:", self.visualizationWindow.GetRect()
+        
+                    self.videoWindow.Show()
+
+                    if DEBUG:
+                        print "  video:", self.videoWindow.GetRect(), self.transcriptWindow.dlg.GetRect()
+        
+                    self.transcriptWindow.Show()
+
+                    if DEBUG:
+                        print "  transcript:", self.transcriptWindow.dlg.GetRect(), self.dataWindow.GetRect()
+        
+                    self.dataWindow.Show()
+
+                    if DEBUG:
+                        print "  data:", self.dataWindow.GetRect(), self.visualizationWindow.GetRect()
+        
+                    # Get the size and position of the Visualization Window
+                    (x, y, w, h) = self.visualizationWindow.GetRect()
+
+                    if DEBUG:
+                        print
+                        print "Call 3", 'Visualization', w + x
+
+                    # Adjust the positions of all other windows to match the Visualization Window's initial position
+                    self.controlObject.UpdateWindowPositions('Visualization', w + x)
+
+                    TransanaGlobal.resizingAll = False
 
                     loggedOn = True
                 # If logon fails, inform user and offer to try again twice.
                 elif logonCount <= 3:
-                    dlg = Dialogs.QuestionDialog(TransanaGlobal.menuWindow, _('Transana was unable to connect to the database.\nWould you like to try again?'),
-                                             _('Transana Database Connection'))
+                    # Check to see if we have an SSL failure caused by insufficient data
+                    if (not TransanaConstants.singleUserVersion) and TransanaGlobal.configData.ssl and \
+                       (TransanaGlobal.configData.sslClientCert == '' or TransanaGlobal.configData.sslClientKey == ''):
+                        # If so, inform the user
+                        prompt = _("The information on the SSL tab is required to establish an SSL connection to the database.\nWould you like to try again?")
+                    # Otherwise ...
+                    else:
+                        # ... give a generic message about logon failure.
+                        prompt = _('Transana was unable to connect to the database.\nWould you like to try again?')
+                    dlg = Dialogs.QuestionDialog(TransanaGlobal.menuWindow, prompt, _('Transana Database Connection'))
                     # If the user does not want to try again, set the counter to 4, which will cause the program to exit
                     if dlg.LocalShowModal() == wx.ID_NO:
                         logonCount = 4
                     # Clean up the Dialog Box
                     dlg.Destroy()
 
+            # If we successfully logged in ...
+            if loggedOn:
+                # ... save the configuration data that got us in
+                TransanaGlobal.configData.SaveConfiguration()
+
             # if we're running the multi-user version of Transana and successfully connected to a database ...
             if not TransanaConstants.singleUserVersion and loggedOn:
+
+                if DEBUG:
+                    print "Need to connect to MessageServer"
+
                 # ... connect to the Message Server Here
                 TransanaGlobal.socketConnection = ChatWindow.ConnectToMessageServer()
                 # If the connections fails ...
@@ -416,40 +541,44 @@ class Transana(wx.App):
                     # NOTE:  If changing this value, it also needs to be changed in the ControlObjectClass.GetNewDatabase() method.
                     TransanaGlobal.connectionTimer.Start(600000)
 
-            # If we're on OS X ...
-            if 'wxMac' in wx.PlatformInfo:
-                # ... create a list of the FFmpeg files that should be in /usr/local/lib
-                ffmpegFileList = ['libmp4ff.a', 'libfaad.la', 'libfaad.a', 'libfaad.2.0.0.dylib', 'libmp3lame.la', 'libmp3lame.a',
-                                  'libmp3lame.0.0.0.dylib']
-                # Create a list of the Links that should be in /usr/local/lib, including what they should link to
-                ffmpegLinkList = [('libfaad.2.0.0.dylib', 'libfaad.2.dylib'),
-                                  ('libfaad.2.0.0.dylib', 'libfaad.dylib'),
-                                  ('libmp3lame.0.0.0.dylib', 'libmp3lame.0.dylib'),
-                                  ('libmp3lame.0.0.0.dylib', 'libmp3lame.dylib')]
-                # Assume the files exist
-                filesExist = True
-                # For each file that should be in /usr/local/lib ...
-                for filename in ffmpegFileList:
-                    # ... if that file does not exist ...
-                    if not os.path.exists('/usr/local/lib/%s' % filename):
-                        # ... not that NOT ALL FILES exist ...
-                        filesExist = False
-                        # ... and stop looking
-                        break
-                # See if the FFMpeg libraries are installed correctly.  If not ...
-                if not filesExist:
-                    # ... get the program directory, removing the final directory which points to Transana.py
-                    sourceDir = os.path.split(TransanaGlobal.programDir)[0]
-                    # For each file in the FFmpeg file list ...
-                    for filename in ffmpegFileList:
-                        # ... if the file is not already in /usr/local/lib ...
-                        if not os.path.exists('/usr/local/lib/%s' % filename):
-                            # ... copy the file to /usr/local/lib
-                            os.system("cp %s/Frameworks/%s /usr/local/lib/%s" % (sourceDir, filename, filename))
-                    # For each file LINK in the FFmpeg List List ...
-                    for (filename, linkname) in ffmpegLinkList:
-                        # ... create the appropriate symbolic link
-                        os.system("ln -fs /usr/local/lib/%s /usr/local/lib/%s" % (filename, linkname))
+
+                if DEBUG:
+                    print "MessageServer connected!"
+
+##            # If we're on OS X ...
+##            if 'wxMac' in wx.PlatformInfo:
+##                # ... create a list of the FFmpeg files that should be in /usr/local/lib
+##                ffmpegFileList = ['libmp4ff.a', 'libfaad.la', 'libfaad.a', 'libfaad.2.0.0.dylib', 'libmp3lame.la', 'libmp3lame.a',
+##                                  'libmp3lame.0.0.0.dylib']
+##                # Create a list of the Links that should be in /usr/local/lib, including what they should link to
+##                ffmpegLinkList = [('libfaad.2.0.0.dylib', 'libfaad.2.dylib'),
+##                                  ('libfaad.2.0.0.dylib', 'libfaad.dylib'),
+##                                  ('libmp3lame.0.0.0.dylib', 'libmp3lame.0.dylib'),
+##                                  ('libmp3lame.0.0.0.dylib', 'libmp3lame.dylib')]
+##                # Assume the files exist
+##                filesExist = True
+##                # For each file that should be in /usr/local/lib ...
+##                for filename in ffmpegFileList:
+##                    # ... if that file does not exist ...
+##                    if not os.path.exists('/usr/local/lib/%s' % filename):
+##                        # ... not that NOT ALL FILES exist ...
+##                        filesExist = False
+##                        # ... and stop looking
+##                        break
+##                # See if the FFMpeg libraries are installed correctly.  If not ...
+##                if not filesExist:
+##                    # ... get the program directory, removing the final directory which points to Transana.py
+##                    sourceDir = os.path.split(TransanaGlobal.programDir)[0]
+##                    # For each file in the FFmpeg file list ...
+##                    for filename in ffmpegFileList:
+##                        # ... if the file is not already in /usr/local/lib ...
+##                        if not os.path.exists('/usr/local/lib/%s' % filename):
+##                            # ... copy the file to /usr/local/lib
+##                            os.system("cp %s/Frameworks/%s /usr/local/lib/%s" % (sourceDir, filename, filename))
+##                    # For each file LINK in the FFmpeg List List ...
+##                    for (filename, linkname) in ffmpegLinkList:
+##                        # ... create the appropriate symbolic link
+##                        os.system("ln -fs /usr/local/lib/%s /usr/local/lib/%s" % (filename, linkname))
 
             # if this is the first time this user profile has used Transana ...
             if firstStartup:
@@ -462,6 +591,16 @@ class Transana(wx.App):
                 if tmpDlg.LocalShowModal() == wx.ID_YES:
                     # ... start the Tutorial
                     self.controlObject.Help('Welcome to the Transana Tutorial')
+
+            if DEBUG:
+                print
+                print "Final Windows:"
+                print "  menu:\t\t", TransanaGlobal.menuWindow.GetRect()
+                print "  visual:\t", self.visualizationWindow.GetRect()
+                print "  video:\t", self.videoWindow.GetRect()
+                print "  trans:\t", self.transcriptWindow.dlg.GetRect()
+                print "  data:\t\t", self.dataWindow.GetRect()
+                print
 
         else:
             loggedOn = False
@@ -522,6 +661,6 @@ def transana_excepthook(extype, value, trace):
 if __name__ == "__main__":
 
     # Main Application definition and execution call (wxPython)
-    app = Transana(redirect=False)
+    app = Transana(0)  # redirect=False
     # Run the application main loop
     app.MainLoop()    

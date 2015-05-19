@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -53,6 +53,18 @@ class WaveformProgress(wx.Dialog):
 
     def __init__(self, parent, label='', clipStart=0, clipDuration=0):
         """ Initialize the Progress Dialog """
+
+        # There's a bug.  I think it's an interaction between OS X 10.7.5 and earlier (but not 10.8.4), wxPython (version
+        # unknown, but I've seen it in 2.8.12.1, 2.9.4.0, and a pre-release build of 2.9.5.0), and the build process.
+        # Basically, if you open a wxFileDialog object, something bad happens with wxLocale such that subsequent calls
+        # to wxProcess don't encode unicode file names correctly, so FFMpeg fails.  Only OS X 10.7.5, only when Transana
+        # has been built (not running through the interpreter), only following the opening of a wxFileDialog, and only
+        # with filenames with accented characters or characters from non-English languages.
+
+        # The resolution to this bug is to reset the Locale here, based on Transana's current wxLocale setting in the
+        # menuWindow object.
+        self.locale = wx.Locale(TransanaGlobal.menuWindow.locale.Language)
+
         # Remember the start time and duration, if they are passed in.
         self.clipStart = clipStart
         self.clipDuration = clipDuration
@@ -395,7 +407,7 @@ if __name__ == '__main__':
     app = wx.PySimpleApp()
     # Indicate what file to process
     srcfilename = u'E:\\Vidëo\\Demo\\BBC News.mp4'
-    # Create the Progress Dialog
+   # Create the Progress Dialog
     frame = WaveformProgress(None, "Converting\n  %s " % (srcfilename))
     # If the source file exists ...
     if os.path.exists(srcfilename):

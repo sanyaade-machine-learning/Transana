@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -54,6 +54,8 @@ import Transcript
 import Collection
 # import Transana's Clip object
 import Clip
+# import Transana's Snapshot object
+import Snapshot
 # import Transana's Note object
 import Note
 
@@ -238,7 +240,7 @@ class ListenerThread(threading.Thread):
 
 class ChatWindow(wx.Frame):
     """ This window displays the Chat form. """
-    def __init__(self,parent,id,title, socketObj):
+    def __init__(self, parent, id, title, socketObj):
         # Remember the parent window
         self.parent = parent
         # Remember the window title
@@ -347,7 +349,9 @@ class ChatWindow(wx.Frame):
         # Set the minimum size for the form.
         self.SetSizeHints(minW = 600, minH = 440)
         # Center the form on the screen
-        self.CentreOnScreen()
+#        self.CentreOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
+        
         # Set the initial focus to the Text Entry control
         self.txtEntry.SetFocus()
         # We need to know if loss of socket connection is expected or should be reported
@@ -389,6 +393,15 @@ class ChatWindow(wx.Frame):
             if DEBUG:
                 print 'C %s %s %s 250 ||| ' % (userName, host, db)
 
+
+            if ('wxGTK' in wx.PlatformInfo) and (host.lower() == 'localhost'):
+                host = 'walnut-v.ad.education.wisc.edu'
+
+                print
+                print '***************************************************************************'
+                print '*                      GTK Message Server Faked!                          *'
+                print '***************************************************************************'
+            
             # If we are running the Transana Client on the same computer as the MySQL server, we MUST refer to it as localhost.
             # In this circumstance, this copy of the Transana Client will not be recognized by the Transana Message Server
             # as being connected to the same database as other computers connecting to it.  To get around this, we need to
@@ -405,10 +418,10 @@ class ChatWindow(wx.Frame):
                     host = dlg.GetValue()
                 # Destroy the Text Entry Dialog.
                 dlg.Destroy()
-            
-            self.socketObj.send('C %s %s %s 250 ||| ' % (userName, host, db))
+
+            self.socketObj.send('C %s %s %s 260 ||| ' % (userName, host, db))
         else:
-            self.socketObj.send('C %s %s %s 250 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
+            self.socketObj.send('C %s %s %s 260 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
 
         # Create a Timer to check for Message Server validation.
         # Initialize to unvalidated state
@@ -541,7 +554,7 @@ class ChatWindow(wx.Frame):
                     st = st[:st.find(' ')]
                 # Only add a user name if it's not redundant.  (The message server should prevent this
                 # from occurring.)
-                if st != self.userName:
+                if (st != self.userName) and not (st in self.userList.GetItems()):
                     self.userList.Append(st)
                     
             # Rename Message ?
@@ -572,7 +585,7 @@ class ChatWindow(wx.Frame):
                     # Update the Data Window via the Control Object
                     self.ControlObject.UpdateDataWindow()
 
-            # Server Validation ?
+            # Server Validation
             elif messageHeader == 'V':
                 # Indicate that the server has been validated.  The Validation Timer processes this later.
                 self.serverValidation = True
@@ -581,8 +594,11 @@ class ChatWindow(wx.Frame):
             elif messageHeader == 'D':
                 # Remove the Message Prefix.
                 st = event.data[2:]
-                # The remainder of the message is the username to be removed.  Delete it from the User List.
-                self.userList.Delete(self.userList.FindString(st))
+                try:
+                    # The remainder of the message is the username to be removed.  Delete it from the User List.
+                    self.userList.Delete(self.userList.FindString(st))
+                except:
+                    pass
                 
             else:
                 # The remaining messages should not be processed if this user was the message sender
@@ -595,34 +611,38 @@ class ChatWindow(wx.Frame):
                         # Add Series Message
                         if messageHeader == 'AS':
                             tempSeries = Series.Series(message)
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('SeriesNode', (_('Series'), message), tempSeries.number, None, False, avoidRecursiveYields = True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('SeriesNode', (_('Series'), message), tempSeries.number, None, expandNode=False, avoidRecursiveYields = True)
                             
                         # Add Episode Message
                         elif messageHeader == 'AE':
+                            # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             tempEpisode = Episode.Episode(series=nodelist[0], episode=nodelist[1])
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('EpisodeNode', (_('Series'),) + nodelist, tempEpisode.number, tempEpisode.series_num, False, avoidRecursiveYields = True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('EpisodeNode', (_('Series'),) + nodelist, tempEpisode.number, tempEpisode.series_num, expandNode=False, avoidRecursiveYields = True)
 
                         # Add Transcript Message
                         elif messageHeader == 'AT':
+                            # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             tempEpisode = Episode.Episode(series=nodelist[0], episode=nodelist[1])
                             # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
                             tempTranscript = Transcript.Transcript(nodelist[-1], ep=tempEpisode.number, skipText=True)
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('TranscriptNode', (_('Series'),) + nodelist, tempTranscript.number, tempEpisode.number, False, avoidRecursiveYields = True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('TranscriptNode', (_('Series'),) + nodelist, tempTranscript.number, tempEpisode.number, expandNode=False, avoidRecursiveYields = True)
 
                         # Add Collection Message
                         elif messageHeader == 'AC':
+                            # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             parentNum = 0
                             for coll in nodelist:
                                 tempCollection = Collection.Collection(coll, parentNum)
                                 parentNum = tempCollection.number
                             # avoidRecursiveYields added to try to prevent a problem on the Mac when converting Searches
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('CollectionNode', (_('Collections'),) + nodelist, tempCollection.number, tempCollection.parent, False, avoidRecursiveYields=True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('CollectionNode', (_('Collections'),) + nodelist, tempCollection.number, tempCollection.parent, expandNode=False, avoidRecursiveYields=True)
 
                         # Add Clip Message
                         elif messageHeader == 'ACl':
+                            # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             parentNum = 0
                             for coll in nodelist[:-1]:
@@ -631,8 +651,7 @@ class ChatWindow(wx.Frame):
                             # Get a temporary copy of the Clip.  We don't need the clip's transcript, which speeds this up.
                             tempClip = Clip.Clip(nodelist[-1], tempCollection.id, tempCollection.parent, skipText=True)
                             # avoidRecursiveYields added to try to prevent a problem on the Mac when converting Searches
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('ClipNode', (_('Collections'),) + nodelist, tempClip.number, tempCollection.number, False, avoidRecursiveYields=True)
-
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('ClipNode', (_('Collections'),) + nodelist, tempClip.number, tempCollection.number, sortOrder=tempClip.sort_order, expandNode=False, avoidRecursiveYields=True)
                             # If we are moving a Clip, the clip's Notes need to travel with the Clip.  The first step is to
                             # get a list of those Notes.
                             noteList = DBInterface.list_of_notes(Clip=tempClip.number)
@@ -645,6 +664,7 @@ class ChatWindow(wx.Frame):
 
                         # Add Clip in Sort Order Message
                         elif messageHeader == 'AClSO':
+                            # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             parentNum = 0
                             for coll in nodelist[:-2]:
@@ -656,7 +676,7 @@ class ChatWindow(wx.Frame):
                             tempClip = Clip.Clip(nodelist[-1], tempCollection.id, tempCollection.parent, skipText=True)
                             # Add new node, leaving the insertNode out of the nodeList.
                             # avoidRecursiveYields added to try to prevent a problem on the Mac when converting Searches
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('ClipNode', (_('Collections'),) + nodelist[:-2] + (nodelist[-1],), tempClip.number, tempCollection.number, False, insertNode, avoidRecursiveYields=True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('ClipNode', (_('Collections'),) + nodelist[:-2] + (nodelist[-1],), tempClip.number, tempCollection.number, sortOrder=tempClip.sort_order, expandNode=False, insertPos=insertNode, avoidRecursiveYields=True)
                             # If we are moving a Clip, the clip's Notes need to travel with the Clip.  The first step is to
                             # get a list of those Notes.
                             noteList = DBInterface.list_of_notes(Clip=tempClip.number)
@@ -667,8 +687,43 @@ class ChatWindow(wx.Frame):
                                 self.ControlObject.DataWindow.DBTab.tree.add_note_nodes(noteList, insertNode, Clip=tempClip.number)
                                 self.ControlObject.DataWindow.DBTab.tree.Refresh()
 
+                        # Order Collection Message
+                        elif messageHeader == 'OC':
+                            # Convert the message to a Node List
+                            nodelist = ConvertMessageToNodeList(message)
+                            # Get the Collection's Tree Node
+                            node = self.ControlObject.DataWindow.DBTab.tree.select_Node((_('Collections'),) + nodelist[1:], 'CollectionNode')
+                            # Update the Sort Information for that tree node
+                            self.ControlObject.DataWindow.DBTab.tree.UpdateCollectionSortOrder(node, sendMessage=False)
+
+                        # Add Snapshot Message
+                        elif messageHeader == 'ASnap':
+                            # Convert the Message to a Node List
+                            nodelist = ConvertMessageToNodeList(message)
+                            # Initialize the Parent Number variable
+                            parentNum = 0
+                            # Get the appropriate Collection by interating through the node list ...
+                            for coll in nodelist[:-1]:
+                                # ... get the Collection for each node ...
+                                tempCollection = Collection.Collection(coll, parentNum)
+                                # ... and the parent number
+                                parentNum = tempCollection.number
+                            # Get a temporary copy of the Snapshot.
+                            tempSnapshot = Snapshot.Snapshot(nodelist[-1], parentNum)
+                            # avoidRecursiveYields added to try to prevent a problem on the Mac when converting Searches
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('SnapshotNode', (_('Collections'),) + nodelist, tempSnapshot.number, tempCollection.number, sortOrder=tempSnapshot.sort_order, expandNode=False, avoidRecursiveYields=True)
+                            # If we are moving a Snapshot, the snapshot's Notes need to travel with the Snapshot.  The first step is to
+                            # get a list of those Notes.
+                            noteList = DBInterface.list_of_notes(Snapshot=tempSnapshot.number)
+                            # If there are Snapshot Notes, we need to make sure they travel with the Snapshot
+                            if noteList != []:
+                                insertNode = self.ControlObject.DataWindow.DBTab.tree.select_Node((_('Collections'),) + nodelist, 'SnapshotNode', ensureVisible=False)
+                                # We accomplish this using the TreeCtrl's "add_note_nodes" method
+                                self.ControlObject.DataWindow.DBTab.tree.add_note_nodes(noteList, insertNode, Snapshot=tempSnapshot.number)
+                                self.ControlObject.DataWindow.DBTab.tree.Refresh()
+
                         # Add Note Message
-                        elif messageHeader in ['ASN', 'AEN', 'ATN', 'ACN', 'AClN']:
+                        elif messageHeader in ['ASN', 'AEN', 'ATN', 'ACN', 'AClN', 'ASnN']:
                             # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             # Initialize variables
@@ -721,8 +776,9 @@ class ChatWindow(wx.Frame):
                                 elif (objectType == None) and (node == 'Collections'):
                                     # ... then the first level of object we're looking at is a Collection.
                                     objectType = 'Collections'
-                                # if we're looking at a Collection and either we don't have a Clip Note or we're not at the end of the list yet...
-                                elif (objectType == 'Collections') and ((messageHeader != 'AClN') or (nodeCount < len(nodelist) - 1)):
+                                # if we're looking at a Collection and either we don't have a Clip / Snapshot Note
+                                # or we're not at the end of the list yet...
+                                elif (objectType == 'Collections') and (not (messageHeader in ['AClN', 'ASnN']) or (nodeCount < len(nodelist) - 1)):
                                     # ... then we're still looking at a Collection
                                     objectType = 'Collections'
                                     # ... and if we stop here, we've got a Collection Note
@@ -741,6 +797,16 @@ class ChatWindow(wx.Frame):
                                     tempObj = Clip.Clip(node, tempObj.id, tempObj.parent, skipText=True)
                                     # ... and note its number as the parent number of the Note
                                     parentNum = tempObj.number
+                                # if we're looking at a Collection and we have a Snapshot Note and we're at the end of the list ...
+                                elif (objectType == 'Collections') and (messageHeader == 'ASnN') and (nodeCount == len(nodelist) - 1):
+                                    # ... then we're looking at a Snapshot
+                                    objectType = 'Snapshot'
+                                    # ... and we're dealing with a Snapshot Note
+                                    nodeType = 'SnapshotNoteNode'
+                                    # Get a temporary copy of the Snapshot.
+                                    tempObj = Snapshot.Snapshot(node, tempObj.number)
+                                    # ... and note its number as the parent number of the Note
+                                    parentNum = tempObj.number
                             # Initialize the Temporary Note object
                             tempNote = None
                             # Load the Note, which we do a bit differently based on what kind of parent object we have.
@@ -754,8 +820,10 @@ class ChatWindow(wx.Frame):
                                 tempNote = Note.Note(nodelist[-1], Collection=tempObj.number)
                             elif nodeType == 'ClipNoteNode':
                                 tempNote = Note.Note(nodelist[-1], Clip=tempObj.number)
+                            elif nodeType == 'SnapshotNoteNode':
+                                tempNote = Note.Note(nodelist[-1], Snapshot=tempObj.number)
                             # Add the Note to the Database Tree
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node(nodeType, nodelist, tempNote.number, tempObj.number, False, avoidRecursiveYields = True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node(nodeType, nodelist, tempNote.number, tempObj.number, expandNode=False, avoidRecursiveYields = True)
                             # If the Notes Browser is open ...
                             if self.ControlObject.NotesBrowserWindow != None:
                                 # ... add the Note to the Notes Browser
@@ -763,25 +831,27 @@ class ChatWindow(wx.Frame):
 
                         # Add Keyword Group Message
                         elif messageHeader == 'AKG':
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('KeywordGroupNode', (_('Keywords'),) + (message, ), 0, 0, False, avoidRecursiveYields = True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('KeywordGroupNode', (_('Keywords'),) + (message, ), 0, 0, expandNode=False, avoidRecursiveYields = True)
                             # Once we've added the Keyword Group, we need to update the Keyword Groups Data Structure
                             self.ControlObject.DataWindow.DBTab.tree.updateKWGroupsData()
 
                         # Add Keyword Message
                         elif messageHeader == 'AK':
+                            # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('KeywordNode', (_('Keywords'),) + nodelist, 0, nodelist[0], False, avoidRecursiveYields = True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('KeywordNode', (_('Keywords'),) + nodelist, 0, nodelist[0], expandNode=False, avoidRecursiveYields = True)
 
                         # Add Keyword Example Message
                         elif messageHeader == 'AKE':
-                            # The first message parameter for a Keyword Example is the Clip Number
+                            # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             # Get a temporary copy of the Clip.  We don't need the clip's transcript, which speeds this up.
                             tempClip = Clip.Clip(int(nodelist[0]), skipText=True)
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('KeywordExampleNode', (_('Keywords'),) + nodelist[1:], tempClip.number, tempClip.collection_num, False, avoidRecursiveYields = True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('KeywordExampleNode', (_('Keywords'),) + nodelist[1:], tempClip.number, tempClip.collection_num, expandNode=False, avoidRecursiveYields = True)
 
                         # Rename a Node
                         elif messageHeader == 'RN':
+                            # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             # The first element in the nodelist is the nodeType, which we need for the rename_Node call.
                             # The second element in the nodelist is the UNTRANSLATED root node label.  This avoids problems
@@ -836,9 +906,23 @@ class ChatWindow(wx.Frame):
                                                 # ... and refresh the keyword list
                                                 self.ControlObject.currentObj.refresh_keywords()
                                                 break
+                                            
+                                # We need to update open Snapshots that contain this keyword.
+                                # Start with a list of all the open Snapshot Windows.
+                                openSnapshotWindows = self.ControlObject.GetOpenSnapshotWindows()
+                                # Interate through the Snapshot Windows
+                                for win in openSnapshotWindows:
+                                    # For ANY non-editable Snapshot ...
+                                    if (not win.editTool.IsToggled()):
+                                        # ... update the Snapshot Window
+                                        win.FileClear(event)
+                                        win.FileRestore(event)
+
+                                        win.OnEnterWindow(event)
 
                             # If we're renaming a Note ...
-                            elif nodelist[0] in ['SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
+                            elif nodelist[0] in ['SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode',
+                                                 'CollectionNoteNode', 'ClipNoteNode', 'SnapshotNoteNode']:
                                 # ... if the Notes Browser is open, we need to update the note there as well.
                                 if self.ControlObject.NotesBrowserWindow != None:
                                     # The first element in the nodelist is the NOTE Node Type.
@@ -905,6 +989,14 @@ class ChatWindow(wx.Frame):
                                             tempObj = Clip.Clip(node, tempObj.id, tempObj.parent, skipText=True)
                                             # ... and note its number as the parent number of the Note
                                             parentNum = tempObj.number
+                                        # if we're looking at a Collection and we have a Snapshot Note and we're at the end of the list ...
+                                        elif (objectType == 'Collections') and (nodeType == 'SnapshotNoteNode') and (nodeCount == len(nodelist) - 2):
+                                            # ... then we're looking at a Snapshot
+                                            objectType = 'Snapshot'
+                                            # Get a temporary copy of the Snapshot.
+                                            tempObj = Snapshot.Snapshot(node, tempObj.number)
+                                            # ... and note its number as the parent number of the Note
+                                            parentNum = tempObj.number
                                     # Initialize the Temporary Note object
                                     tempNote = None
                                     # Load the Note, which we do a bit differently based on what kind of parent object we have.
@@ -918,12 +1010,14 @@ class ChatWindow(wx.Frame):
                                         tempNote = Note.Note(nodelist[-1], Collection=tempObj.number)
                                     elif nodeType == 'ClipNoteNode':
                                         tempNote = Note.Note(nodelist[-1], Clip=tempObj.number)
+                                    elif nodeType == 'SnapshotNoteNode':
+                                        tempNote = Note.Note(nodelist[-1], Snapshot=tempObj.number)
                                     # Rename the Note in the Database Tree
                                     self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('R', tempNote, oldName=nodelist[-2])
 
                         # Move Collection Node
                         elif messageHeader == 'MCN':
-                            # Get the Node List to the MOVED collection, extracting it from the Chat Message
+                            # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             # The first element in the node list needs translation.  Check it's type.
                             if type(_(nodelist[0])).__name__ == 'str':
@@ -989,6 +1083,19 @@ class ChatWindow(wx.Frame):
                                                 self.ControlObject.currentObj.refresh_keywords()
                                                 break
 
+                                # We need to update open Snapshots that contain this keyword.
+                                # Start with a list of all the open Snapshot Windows.
+                                openSnapshotWindows = self.ControlObject.GetOpenSnapshotWindows()
+                                # Interate through the Snapshot Windows
+                                for win in openSnapshotWindows:
+                                    # For ANY non-editable Snapshot ...
+                                    if (not win.editTool.IsToggled()):
+                                        # ... update the Snapshot Window
+                                        win.FileClear(event)
+                                        win.FileRestore(event)
+
+                                        win.OnEnterWindow(event)
+
                             # If we're deleting  a Keyword ...
                             elif nodelist[0] == 'KeywordNode':
                                 # ... see if we have an Episode or Clip object currently loaded ...
@@ -1004,8 +1111,23 @@ class ChatWindow(wx.Frame):
                                                 # ... and refresh the keyword list
                                                 self.ControlObject.currentObj.refresh_keywords()
                                                 break
+
+                                # We need to update open Snapshots that contain this keyword.
+                                # Start with a list of all the open Snapshot Windows.
+                                openSnapshotWindows = self.ControlObject.GetOpenSnapshotWindows()
+                                # Interate through the Snapshot Windows
+                                for win in openSnapshotWindows:
+                                    # For ANY non-editable Snapshot ...
+                                    if (not win.editTool.IsToggled()):
+                                        # ... update the Snapshot Window
+                                        win.FileClear(event)
+                                        win.FileRestore(event)
+
+                                        win.OnEnterWindow(event)
+
                             # If we're deleting a Note Node ...
-                            elif nodelist[0] in ['SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
+                            elif nodelist[0] in ['SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode',
+                                                 'ClipNoteNode', 'SnapshotNoteNode']:
                                 # ... and the Notes Browser is open, we need to delete the Note from there too.
                                 if self.ControlObject.NotesBrowserWindow != None:
                                     # Determine the Note Browser's root node based on the type of Note we're deleting
@@ -1019,14 +1141,16 @@ class ChatWindow(wx.Frame):
                                         nodeType = 'Collection'
                                     elif nodelist[0] == 'ClipNoteNode':
                                         nodeType = 'Clip'
+                                    elif nodelist[0] == 'SnapshotNoteNode':
+                                        nodeType = 'Snapshot'
                                     else:
                                         nodeType = None
                                     # Signal the Notes Browser to delete the Note.  Shorten the node list by 1 element
                                     # so it does not conflict with DatabaseTreeTab.py calls.
                                     if nodeType != None:
                                         self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('D', (nodeType, nodelist[1:]))
-                            # Otherwise, if a Series, Episode, Transcript, Collection, or Clip node is deleted ...
-                            elif nodelist[0] in ['SeriesNode', 'EpisodeNode', 'TranscriptNode', 'CollectionNode', 'ClipNode']:
+                            # Otherwise, if a Series, Episode, Transcript, Collection, Clip, or Snapshot node is deleted ...
+                            elif nodelist[0] in ['SeriesNode', 'EpisodeNode', 'TranscriptNode', 'CollectionNode', 'ClipNode', 'SnapshotNode']:
                                 # ... and if the Notes Browser is open, ...
                                 if self.ControlObject.NotesBrowserWindow != None:
                                     # ... we need to CHECK to see if any notes were deleted.

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -54,6 +54,7 @@ class Note(DataObject.DataObject):
         str = str + "transcript_num = %s\n" % self.transcript_num
         str = str + "collection_num = %s\n" % self.collection_num
         str = str + "clip_num = %s\n" % self.clip_num
+        str = str + "snapshot_num = %s\n" % self.snapshot_num
         str = str + "author = %s\n" % self.author
         str = str + "text = %s\n\n" % self.text
         return str.encode('utf8')
@@ -100,6 +101,8 @@ class Note(DataObject.DataObject):
             q = "ClipNum"
         elif kwargs.has_key("Transcript"):
             q = "TranscriptNum"
+        elif kwargs.has_key("Snapshot"):
+            q = "SnapshotNum"
 
         num = kwargs.values()[0]
         
@@ -131,7 +134,8 @@ class Note(DataObject.DataObject):
            ((self.episode_num == 0) or (self.episode_num == None)) and \
            ((self.collection_num == 0) or (self.collection_num == None)) and \
            ((self.clip_num == 0) or (self.clip_num == None)) and \
-           ((self.transcript_num == 0) or (self.transcript_num == None)):
+           ((self.transcript_num == 0) or (self.transcript_num == None)) and \
+           ((self.snapshot_num == 0) or (self.snapshot_num == None)):
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                 prompt = unicode(_("Note %s is not assigned to any object."), 'utf8')
@@ -154,14 +158,15 @@ class Note(DataObject.DataObject):
             text = self.text
 
         values = (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, \
-                  author, text)
+                  self.snapshot_num, author, text)
 
         # Determine if we are creating a new record or saving an existing one
         if (self._db_start_save() == 0):  # Creating new record
             # Check to see that no identical record exists
             if DBInterface.record_match_count('Notes2', \
-                                              ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum"), \
-                                              (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num) ) > 0:
+                                              ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum", "SnapshotNum"), \
+                                              (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, \
+                                               self.snapshot_num) ) > 0:
                 targetObject = _('object')
                 if (self.series_num != 0) and (self.series_num != None):
                     targetObject = _('Series')
@@ -173,6 +178,8 @@ class Note(DataObject.DataObject):
                     targetObject = _('Collection')
                 elif (self.clip_num != 0) and (self.clip_num != None):
                     targetObject = _('Clip')
+                elif (self.snapshot_num != 0) and (self.snapshot_num != None):
+                    targetObject = _('Snapshot')
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_('A Note named "%s" already exists for this %s.'), 'utf8')
@@ -183,16 +190,16 @@ class Note(DataObject.DataObject):
 
             # insert a new record
             query = """ INSERT INTO Notes2
-                            (NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, TranscriptNum,
+                            (NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, TranscriptNum, SnapshotNum,
                              NoteTaker, NoteText)
                           VALUES
-                            (%s, %s, %s, %s, %s, %s, %s, %s) """
+                            (%s, %s, %s, %s, %s, %s, %s, %s, %s) """
             
         else:  # Saving an existing record
             # Check to see that no identical record with a different number exists (!NoteNum specifies "Not same note number")
             if DBInterface.record_match_count('Notes2', \
-                                              ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum", "!NoteNum"), \
-                                              (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, self.number) ) > 0:
+                                              ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum", "SnapshotNum", "!NoteNum"), \
+                                              (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, self.snapshot_num, self.number) ) > 0:
                 targetObject = _('object')
                 if (self.series_num != 0) and (self.series_num != None):
                     targetObject = _('Series')
@@ -204,6 +211,8 @@ class Note(DataObject.DataObject):
                     targetObject = _('Collection')
                 elif (self.clip_num != 0) and (self.clip_num != None):
                     targetObject = _('Clip')
+                elif (self.snapshot_num != 0) and (self.snapshot_num != None):
+                    targetObject = _('Snapshot')
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_('A Note named "%s" already exists for this %s.'), 'utf8')
@@ -220,6 +229,7 @@ class Note(DataObject.DataObject):
                               CollectNum = %s,
                               ClipNum = %s,
                               TranscriptNum = %s,
+                              SnapshotNum = %s,
                               NoteTaker = %s,
                               NoteText = %s
                           WHERE NoteNum = %s """ 
@@ -238,9 +248,11 @@ class Note(DataObject.DataObject):
                                 EpisodeNum = %s AND
                                 CollectNum = %s AND
                                 ClipNum = %s AND
-                                TranscriptNum = %s """
+                                TranscriptNum = %s AND
+                                SnapshotNum = %s """
             tempDBCursor = DBInterface.get_db().cursor()
-            tempDBCursor.execute(query, (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num))
+            tempDBCursor.execute(query, (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, \
+                                         self.snapshot_num))
             if tempDBCursor.rowcount == 1:
                 self.number = tempDBCursor.fetchone()[0]
             else:
@@ -277,12 +289,13 @@ class Note(DataObject.DataObject):
     def _load_row(self, r):
         self.number = r['NoteNum']
         self.id = r['NoteID']
-        self.comment = 'This is a note object'
+        self.comment = ''
         self.series_num = r['SeriesNum']
         self.episode_num = r['EpisodeNum']
         self.collection_num = r['CollectNum']
         self.clip_num = r['ClipNum']
         self.transcript_num = r['TranscriptNum']
+        self.snapshot_num = r['SnapshotNum']
         self.author = r['NoteTaker']
 
         # self.text = r['NoteText']
@@ -342,6 +355,13 @@ class Note(DataObject.DataObject):
     def _del_transcript(self):
         self._transcript = 0
 
+    def _set_snapshot(self, num):
+        self._snapshot = num
+    def _get_snapshot(self):
+        return self._snapshot
+    def _del_snapshot(self):
+        self._snapshot = 0
+
     def _get_notetype(self):
         notetype = None
         if self.transcript_num > 0:
@@ -354,6 +374,8 @@ class Note(DataObject.DataObject):
             notetype = 'Clip'
         elif self.collection_num > 0:
             notetype = 'Collection'
+        elif self.snapshot_num > 0:
+            notetype = 'Snapshot'
         return notetype
 
     def _set_author(self, name):
@@ -385,6 +407,8 @@ class Note(DataObject.DataObject):
                         """Clip number attached to (if applicable)""")
     transcript_num = property(_get_transcript, _set_transcript, _del_transcript,
                         """Number of the transcript from which this Note was taken.""")
+    snapshot_num = property(_get_snapshot, _set_snapshot, _del_snapshot,
+                        """Number of the snapshot from which this Note was taken.""")
     notetype = property(_get_notetype, doc=""" Type of Note (read-only) """)
     author = property(_get_author, _set_author, _del_author,
                         """Person responsible for creating the Note.""")

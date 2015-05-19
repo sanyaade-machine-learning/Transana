@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -591,9 +591,9 @@ class FormatDialog(wx.Dialog):
         newTabs = []
         for tab in tmpTabs:
             if self.panelTabs.rbUnitsInches.GetValue():
-                newTabs.append(float(tab) * 254.0)
+                newTabs.append(int(round(float(tab) * 254.0)))
             else:
-                newTabs.append(float(tab) * 100.0)
+                newTabs.append(int(round(float(tab) * 100.0)))
         # If we sent tabs in OR we got tabs out ...
         if (self.formatData.tabs != None) or (len(newTabs) > 0):
             # ... update the tab stops

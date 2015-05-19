@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -80,7 +80,7 @@ import MediaConvert
 
 # Language-specific labels for the different languages.  
 ENGLISH_LABEL = 'English'
-ARABIC_LABEL = 'Arabic'
+ARABIC_LABEL = unichr(1575) + unichr(1604) + unichr(1593) + unichr(1585) + unichr(1576) + unichr(1610) + unichr(1577)  # 'Arabic'
 DANISH_LABEL = 'Dansk'
 GERMAN_LABEL = 'Deutsch'
 GREEK_LABEL = 'English prompts, Greek data'
@@ -114,7 +114,7 @@ EASTEUROPE_LABEL = _("English prompts, Eastern European data (ISO-8859-2 encodin
 JAPANESE_LABEL = 'English prompts, Japanese data'
 KOREAN_LABEL = 'English prompts, Korean data'
 
-class MenuWindow(wx.Frame):
+class MenuWindow(wx.Frame):  # wx.MDIParentFrame
     """This class contains the frame object for the Transana Menu Bar window."""
 
     def __init__(self, parent, id, title):
@@ -123,70 +123,14 @@ class MenuWindow(wx.Frame):
         self.ControlObject = None
         # Initialize the height to be used for the Menu Window.
         self.height = TransanaGlobal.menuHeight
-
         if DEBUG:
-            print "START"
-            print "MenuWindow.__init__():", wx.ClientDisplayRect(), wx.Display(0).GetClientArea()
+            print "MenuWindow.__init__():", wx.ClientDisplayRect(), wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()
             print
             print "Number of Monitors:", wx.Display.GetCount()
             for x in range(wx.Display.GetCount()):
                 print "  ", x, wx.Display(x).IsPrimary(), wx.Display(x).GetGeometry(), wx.Display(x).GetClientArea()
+            print
             
-        # We need to handle the window differently on Windows vs. Mac.
-        # First, Windows ...
-        if '__WXMSW__' in wx.Platform:
-            screenDims = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
-            self.left = screenDims[0]
-            self.top = screenDims[1]
-            self.width = screenDims[2]
-            self.height = screenDims[3]
-            winstyle = wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION      # | wx.MAXIMIZE
-            
-        # on Mac OS-X ...
-        elif '__WXMAC__' in wx.Platform:
-            # Ugly hack.  Make the window basically invisible on the mac.
-            # Unfortunately this is the cleanest way to achieve the desired
-            # result at the moment with wxPython.
-            self.left = 1
-            self.top = 1
-            self.width = 1
-            self.height = 1
-            winstyle = wx.FRAME_TOOL_WINDOW
-
-        # Linux and who knows what else
-        else:
-            screenDims = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
-            screenDims2 = wx.Display(0).GetGeometry()
-            self.left = screenDims[0]
-            self.top = screenDims[1]
-            self.width = screenDims2[2] - screenDims[0] - 4  # min(screenDims[2], 1280 - self.left)
-            self.height = min(screenDims[3], screenDims2[3]) - max(screenDims[1], screenDims2[1]) - 6
-            winstyle = wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION      # | wx.MAXIMIZE
-
-            if DEBUG:
-                print "Linux:", screenDims, screenDims2, self.left, self.top, self.width, self.height
-                print
-
-        # Now create the Frame for the Menu Bar
-        wx.Frame.__init__(self, parent, -1, title, style=winstyle,
-                    size=(self.width, self.height), pos=(self.left, self.top))
-
-        if "__WXMAC__" in wx.PlatformInfo:
-            self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
-
-        # Initialize Window Layout variables (saved position and size)
-        self.menuWindowLayout = None
-        self.visualizationWindowLayout = None
-        self.videoWindowLayout = None
-        self.transcriptWindowLayout = None
-        self.dataWindowLayout = None
-
-        # Initialize File Management Window
-        self.fileManagementWindow = None
-
-        # Define the Key Down Event Handler
-        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
-
         # If no language has been specified, request an initial language
         if TransanaGlobal.configData.language == '':
             initialLanguage = self.GetLanguage(self)
@@ -365,67 +309,67 @@ class MenuWindow(wx.Frame):
             # NOTE:  Eastern European Encoding, Greek, Japanese, Korean will use English prompts
             if (TransanaGlobal.configData.language in ['', 'en', 'easteurope', 'el', 'ja', 'ko']) :
                 lang = wx.LANGUAGE_ENGLISH
-                self.presLan_en.install()
+                self.presLan_en.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Arabic
             elif (TransanaGlobal.configData.language == 'ar'):
                 outofdateLanguage = 'Arabic'
                 lang = wx.LANGUAGE_ARABIC
-                self.presLan_ar.install()
+                self.presLan_ar.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Danish
             elif (TransanaGlobal.configData.language == 'da'):
                 outofdateLanguage = 'Danish'
                 lang = wx.LANGUAGE_DANISH
-                self.presLan_da.install()
+                self.presLan_da.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # German
             elif (TransanaGlobal.configData.language == 'de'):
                 outofdateLanguage = 'German'
                 lang = wx.LANGUAGE_GERMAN
-                self.presLan_de.install()
+                self.presLan_de.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Greek
 #            elif (TransanaGlobal.configData.language == 'el'):
 #                outofdateLanguage = 'Greek'
 #                lang = wx.LANGUAGE_GREEK
-#                self.presLan_el.install()
+#                self.presLan_el.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Spanish
             elif (TransanaGlobal.configData.language == 'es'):
                 outofdateLanguage = 'Spanish'
                 lang = wx.LANGUAGE_SPANISH
-                self.presLan_es.install()
+                self.presLan_es.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Finnish
             elif (TransanaGlobal.configData.language == 'fi'):
                 outofdateLanguage = 'Finnish'
                 lang = wx.LANGUAGE_FINNISH
-                self.presLan_fi.install()
+                self.presLan_fi.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # French
             elif (TransanaGlobal.configData.language == 'fr'):
                 outofdateLanguage = 'French'
                 lang = wx.LANGUAGE_FRENCH
-                self.presLan_fr.install()
+                self.presLan_fr.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Hebrew
             elif (TransanaGlobal.configData.language == 'he'):
                 outofdateLanguage = 'Hebrew'
                 lang = wx.LANGUAGE_HEBREW
-                self.presLan_he.install()
+                self.presLan_he.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Italian
             elif (TransanaGlobal.configData.language == 'it'):
                 outofdateLanguage = 'Italian'
                 lang = wx.LANGUAGE_ITALIAN
-                self.presLan_it.install()
+                self.presLan_it.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Dutch
             elif (TransanaGlobal.configData.language == 'nl'):
                 outofdateLanguage = 'Dutch'
                 lang = wx.LANGUAGE_DUTCH
-                self.presLan_nl.install()
+                self.presLan_nl.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Norwegian Bokmal
             elif (TransanaGlobal.configData.language == 'nb'):
@@ -436,7 +380,7 @@ class MenuWindow(wx.Frame):
                     lang = wx.LANGUAGE_ENGLISH
                 else:
                     lang = wx.LANGUAGE_NORWEGIAN_BOKMAL
-                self.presLan_nb.install()
+                self.presLan_nb.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
                 
             # Norwegian Ny-norsk
             elif (TransanaGlobal.configData.language == 'nn'):
@@ -447,43 +391,43 @@ class MenuWindow(wx.Frame):
                     lang = wx.LANGUAGE_ENGLISH
                 else:
                     lang = wx.LANGUAGE_NORWEGIAN_NYNORSK
-                self.presLan_nn.install()
+                self.presLan_nn.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Polish
             elif (TransanaGlobal.configData.language == 'pl'):
                 outofdateLanguage = 'Polish'
                 lang = wx.LANGUAGE_POLISH    # Polish spec causes an error message on my computer
-                self.presLan_pl.install()
+                self.presLan_pl.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Portuguese
             elif (TransanaGlobal.configData.language == 'pt'):
                 outofdateLanguage = 'Portuguese'
                 lang = wx.LANGUAGE_PORTUGUESE    # Polish spec causes an error message on my computer
-                self.presLan_pt.install()
+                self.presLan_pt.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Russian
             elif (TransanaGlobal.configData.language == 'ru'):
                 outofdateLanguage = 'Russian'
                 lang = wx.LANGUAGE_RUSSIAN   # Russian spec causes an error message on my computer
-                self.presLan_ru.install()
+                self.presLan_ru.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Swedish
             elif (TransanaGlobal.configData.language == 'sv'):
                 outofdateLanguage = 'Swedish'
                 lang = wx.LANGUAGE_SWEDISH
-                self.presLan_sv.install()
+                self.presLan_sv.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Chinese
             elif (TransanaGlobal.configData.language == 'zh'):
                 outofdateLanguage = 'Chinese - Simplified'
                 lang = wx.LANGUAGE_CHINESE
-                self.presLan_zh.install()
+                self.presLan_zh.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
         except:
             TransanaGlobal.configData.language = 'en'
             TransanaGlobal.configData.SaveConfiguration()
             lang = wx.LANGUAGE_ENGLISH
-            self.presLan_en.install()
+            self.presLan_en.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
             # Change the Language Error Message
             languageErrorPrompt = "Transana's %s translation is no longer up-to-date or available.\nAll prompts will be displayed in English.\n\nIf you are willing to update this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
 
@@ -497,22 +441,99 @@ class MenuWindow(wx.Frame):
             
         # This provides localization for wxPython
         self.locale = wx.Locale(lang) # , wx.LOCALE_LOAD_DEFAULT | wx.LOCALE_CONV_ENCODING)
-        
-        # NOTE:  I've commented out the next line as Transana's i18n will be implemented using Python's
-        #        "gettext" rather than wxPython's "wx.Locale".
+
+        # Add the Transana catalog to the Locale
         self.locale.AddCatalog("Transana")
 
+        if 'wxGTK' in wx.PlatformInfo:
+            TransanaGlobal.configData.LayoutDirection = wx.Layout_LeftToRight
+        else:
+            # Save the Text Direction to the Configuration Data
+            TransanaGlobal.configData.LayoutDirection = self.locale.GetLanguageInfo(lang).LayoutDirection
+
+        if DEBUG:
+            print "MenuWindow.__init__():  Language:  ", TransanaGlobal.configData.language, lang
+            if not 'wxGTK' in wx.PlatformInfo:
+                print "Layout Direction:", self.locale.GetLanguageInfo(lang).LayoutDirection, "LtR:", wx.Layout_LeftToRight, "RtL:", wx.Layout_RightToLeft
+            print
+        
         # Check to see if we have a translation, and if it is up-to-date.
         
         # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  "&Media Conversion" works for 2.50.
+        #        For 2.60, let's go with "Snapshot"
         # If you update this, also update the phrase
         # below in the OnOptionsLanguage method.)
         
-        if (outofdateLanguage != '') and ("&Media Conversion" == _("&Media Conversion")):
+        if (outofdateLanguage != '') and ("Snapshot" == _("Snapshot")):
             # If not, display an information message.
             dlg = wx.MessageDialog(None, languageErrorPrompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
             dlg.ShowModal()
             dlg.Destroy()
+
+        # Determine which monitor to use
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            primaryScreen = TransanaGlobal.configData.primaryScreen
+        else:
+            primaryScreen = 0
+
+        # We need to handle the window differently on Windows vs. Mac.
+        # First, Windows ...
+        if '__WXMSW__' in wx.Platform:
+            screenDims = wx.Display(primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
+            self.left = screenDims[0] # + 2
+            self.top = screenDims[1] # + 2
+            self.width = screenDims[2] # - 4
+            # ... adjust the Menu Window to full height (grey background)
+            self.height = TransanaGlobal.menuHeight   # screenDims[3] - 4
+            winstyle = wx.DEFAULT_FRAME_STYLE | wx.FRAME_NO_WINDOW_MENU
+            # wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION      # | wx.MAXIMIZE
+            
+        # on Mac OS-X ...
+        elif '__WXMAC__' in wx.Platform:
+            screenDims = wx.Display(primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
+            self.left = screenDims[0] + 2
+            self.top = 1 # screenDims[1] + 2
+            self.width = 1 # screenDims[2] - 4
+            # ... adjust the Menu Window to full height (grey background)
+            self.height = screenDims[3] - 4
+            winstyle = wx.DEFAULT_FRAME_STYLE | wx.FRAME_NO_WINDOW_MENU
+
+        # Linux and who knows what else
+        else:
+            screenDims = wx.Display(primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
+            # screenDims2 = wx.Display(primaryScreen).GetGeometry()
+            self.left = screenDims[0]
+            self.top = screenDims[1]
+            self.width = 1  # screenDims2[2] - screenDims[0]  # min(screenDims[2], 1280 - self.left)
+            self.height = 1  # min(screenDims[3], screenDims2[3])
+            winstyle = wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION      # | wx.MAXIMIZE
+
+            if DEBUG:
+                print "Linux:", screenDims, self.left, self.top, self.width, self.height
+                print
+
+        # Now create the Frame for the Menu Bar
+        wx.Frame.__init__(self, parent, -1, title, style=winstyle,
+#        wx.MDIParentFrame.__init__(self, parent, -1, title, style=winstyle,
+                    size=(self.width, self.height), pos=(self.left, self.top))
+
+        # Set "Window Variant" to small only for Mac to use small icons
+        if "__WXMAC__" in wx.PlatformInfo:
+            self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+
+        # Initialize Window Layout variables (saved position and size)
+        self.lastSize = self.GetClientSize()
+        self.menuWindowLayout = None
+        self.visualizationWindowLayout = None
+        self.videoWindowLayout = None
+        self.transcriptWindowLayout = None
+        self.dataWindowLayout = None
+
+        # Initialize File Management Window
+        self.fileManagementWindow = None
+
+        # Define the Key Down Event Handler
+        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
 
         transanaIcon = wx.Icon("images/Transana.ico", wx.BITMAP_TYPE_ICO)
         self.SetIcon(transanaIcon)
@@ -534,6 +555,10 @@ class MenuWindow(wx.Frame):
         wx.EVT_MENU(self, MenuSetup.MENU_FILE_PRINTTRANSCRIPT, self.OnPrintTranscript)
         # Define handler for File > Printer Setup
         wx.EVT_MENU(self, MenuSetup.MENU_FILE_PRINTERSETUP, self.OnPrinterSetup)
+        # Define handler for File > Close All Snapshots
+        wx.EVT_MENU(self, MenuSetup.MENU_FILE_CLOSE_SNAPSHOTS, self.OnCloseAllSnapshots)
+        # Define handler for File > Close All Reports
+        wx.EVT_MENU(self, MenuSetup.MENU_FILE_CLOSE_REPORTS, self.OnCloseAllReports)
         # Define handler for File > Exit
         wx.EVT_MENU(self, MenuSetup.MENU_FILE_EXIT, self.OnFileExit)
 
@@ -564,6 +589,8 @@ class MenuWindow(wx.Frame):
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, self.OnAutoTimeCode)
         # Define handler for Transcript > Adjust Indexes
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, self.OnAdjustIndexes)
+        # Define handler for Transcript > Text Time Code Conversion
+        wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_TEXT_TIMECODE, self.OnTextTimeCodeConversion)
 
         # Define handler for Tools > Notes Browser
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_NOTESBROWSER, self.OnNotesBrowser)
@@ -602,6 +629,17 @@ class MenuWindow(wx.Frame):
         # Define handler for Options > Video Size changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_VIDEOSIZE_50, MenuSetup.MENU_OPTIONS_VIDEOSIZE_200, self.OnOptionsVideoSize)
 
+        # Define handler for Window Menu
+        wx.EVT_MENU(self, MenuSetup.MENU_WINDOW_ALL_MAIN, self.OnWindow)
+        wx.EVT_MENU(self, MenuSetup.MENU_WINDOW_ALL_SNAPSHOT, self.OnCloseAllSnapshots)
+        wx.EVT_MENU(self, MenuSetup.MENU_WINDOW_CLOSE_REPORTS, self.OnCloseAllReports)
+        wx.EVT_MENU(self, MenuSetup.MENU_WINDOW_DATA, self.OnWindow)
+        wx.EVT_MENU(self, MenuSetup.MENU_WINDOW_VIDEO, self.OnWindow)
+        wx.EVT_MENU(self, MenuSetup.MENU_WINDOW_TRANSCRIPT, self.OnWindow)
+        wx.EVT_MENU(self, MenuSetup.MENU_WINDOW_VISUALIZATION, self.OnWindow)
+        wx.EVT_MENU(self, MenuSetup.MENU_WINDOW_NOTESBROWSER, self.OnNotesBrowser)
+        wx.EVT_MENU(self, MenuSetup.MENU_WINDOW_CHAT, self.OnChat)
+
         # Define handler for Help > Manual
         wx.EVT_MENU(self, MenuSetup.MENU_HELP_MANUAL, self.OnHelpManual)
         # Define handler for Help > Tutorial
@@ -616,12 +654,25 @@ class MenuWindow(wx.Frame):
         # Define handler for Help > About
         wx.EVT_MENU(self, MenuSetup.MENU_HELP_ABOUT, self.OnHelpAbout)
 
-        # We need to block moving the Menu Bar.  This should allow that.
-        wx.EVT_MOVE(self, self.OnMove)
-
         # Define a Close Event, so that if the user click the "X" on the Menu Frame, everything
         # will close properly, including the Video Window.
         wx.EVT_CLOSE(self, self.OnCloseWindow)
+
+        # This doesn't work for Right-To-Left languages!
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_LeftToRight:
+            MenuSetup.MENU_OPTIONS_MONITOR            =  []
+            for x in range(wx.Display.GetCount()):
+                MenuSetup.MENU_OPTIONS_MONITOR.append(wx.NewId())
+
+            if len(MenuSetup.MENU_OPTIONS_MONITOR) > 1:
+                cnt = 1
+                self.MenuBar.optionsmonitormenu = wx.Menu()
+                for x in MenuSetup.MENU_OPTIONS_MONITOR:
+                    self.MenuBar.optionsmonitormenu.Append(x, '%d' % cnt, kind=wx.ITEM_RADIO)
+                    cnt += 1
+                    wx.EVT_MENU(self, x, self.OnMonitor)
+                self.MenuBar.optionsmenu.AppendMenu(MenuSetup.MENU_OPTIONS_MONITOR_BASE, _("Display Monitor"), self.MenuBar.optionsmonitormenu)
+                self.MenuBar.optionsmonitormenu.Check(MenuSetup.MENU_OPTIONS_MONITOR[TransanaGlobal.configData.primaryScreen], True)
 
         # Initialize Menus by setting them to their initial starting point
         self.ClearMenus()
@@ -630,8 +681,59 @@ class MenuWindow(wx.Frame):
         if 'wxMSW' in wx.PlatformInfo:
             # The difference between the actual window size and the Client Size is (surprise!) the height of the
             # Header Bar and the Menu.  This is exactly what we need to know.
-            TransanaGlobal.menuHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
+            # TransanaGlobal.menuHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
+            # That worked in wxPython 2.8.x, but not in wxPython 2.9.x!!
+
+            # Determine which monitor to use and get its size and position
+            if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+                primaryScreen = TransanaGlobal.configData.primaryScreen
+            else:
+                primaryScreen = 0
+            rect = wx.Display(primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
+
+            # Get the SCREEN coordinates of the CLIENT WINDOW's (0, 0) position
+            origin = self.ClientToScreen(wx.Point(0, 0))
             
+            # This doesn't work for Right-To-Left languages!
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                primaryScreen = 0
+                origin = (8, 50)
+                
+            # The Menu Height needs to be the width of the window's frame (origin[0]) to accomodate the BOTTOM
+            # of the window plus the height of the top of the frame and the height of the menu, but we
+            # need to compensate for possibly not being on the primary monitor
+            # minus 1 because we don't want to show the first pixel below the menu!
+            TransanaGlobal.menuHeight = origin[0] - rect[0] + origin[1] - rect[1] - 1
+
+
+            if DEBUG:
+                print "MenuWindow.__init__()  1  Menu Height set to:", rect, origin, TransanaGlobal.menuHeight
+                print
+
+            # Resize the MenuWindow based on this change!
+            self.SetSize((self.GetSize()[0], TransanaGlobal.menuHeight))
+
+        # Set the Minimum Size for the MDI Parent Window
+        self.SetSizeHints((self.GetSize()[0] * .60),self.GetSize()[1], self.GetSize()[0], self.GetSize()[1])
+            
+        # Define the OnSize event.  We should resize ALL Transana main windows on resizing the Menu Window!
+#        wx.EVT_SIZE(self, self.OnSize)
+        
+        # We need to block moving the Menu Bar.  This should allow that.
+        wx.EVT_MOVE(self, self.OnMove)
+
+        # Define an event for minimizing or restoring Transana
+        self.Bind(wx.EVT_ICONIZE, self.OnIconize)
+
+        if DEBUG:
+            print "MenuWindow.__init__():  Initial size:", self.GetSize()
+
+        # With wxPython 2.9.x, the MenuWindow can no longer accept focus through pressing the F1 key.  Adding a
+        # useless control, which CAN recieve focus, is the only way I've found to get around this.
+        if 'wxMSW' in wx.PlatformInfo:
+            self.tmpCtrl = wx.TextCtrl(self, -1)
+            self.tmpCtrl.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
+
     def OnKeyDown(self, event):
         """ Handle Key Down Events """
         # See if the ControlObject wants to handle the key that was pressed.
@@ -639,20 +741,71 @@ class MenuWindow(wx.Frame):
             # If so, we're done here.
             return
         # If we didn't already handle the key ...
-        else:
+        elif (event.AltDown()):
             # ... pass it along to the parent control.  (Leaving this out breaks Menu shortcuts!)
             event.Skip()
+
+    def OnSize(self, event):
+        """ Handle Size Events for the MDI parent """
+        # Call the inherited event so the ClientSize will be correct
+        event.Skip()
+        # Compare current size to last known size to determine how much the size has changes and in what direction
+        changeX = self.GetClientSize()[0] - self.lastSize[0]
+        changeY = self.GetClientSize()[1] - self.lastSize[1]
+
+        # If there's a HORIZONTAL change ...
+        if (changeX != 0) and TransanaGlobal.configData.autoArrange:
+            # Get the Visualization Size
+            visRect = self.ControlObject.VisualizationWindow.GetRect()
+            # Get the Video Size
+            vidRect = self.ControlObject.VideoWindow.GetRect()
+            # Change the Visualization WIDTH by the horizontal change
+            self.ControlObject.VisualizationWindow.SetRect((visRect[0], visRect[1], visRect[2] + changeX, visRect[3]))
+            # Change the Video POSITION by the horizontal change
+            self.ControlObject.VideoWindow.SetRect((vidRect[0] + changeX, vidRect[1], vidRect[2], vidRect[3]))
+
+        # If there's a VERTICAL change ...
+        if (changeY != 0) and TransanaGlobal.configData.autoArrange:
+            # Get the Data Size
+            dataRect = self.ControlObject.DataWindow.GetRect()
+            # Get the Transcript Size (pick the transcript window based on the REMAINDER so each transcript gets change in turn!)
+            trRect = self.ControlObject.TranscriptWindow[self.lastSize[1] % len(self.ControlObject.TranscriptWindow)].dlg.GetRect()
+            # Change the HEIGHT of the Data Window
+            self.ControlObject.DataWindow.SetRect((dataRect[0], dataRect[1], dataRect[2], dataRect[3] + changeY))
+            # Change the HEIGHT of the Transcript Window
+            self.ControlObject.TranscriptWindow[self.lastSize[1] % len(self.ControlObject.TranscriptWindow)].dlg.SetRect((trRect[0], trRect[1], trRect[2], trRect[3] + changeY))
+
+        # Update the Last Known Size value
+        self.lastSize = self.GetClientSize()
 
     def OnMove(self, event):
         # We need to block moving the Menu Bar.  This should allow that, except on Linux, where it causes problems in Gnome
         # (and perhaps elsewhere.)
         if not ('wxGTK' in wx.PlatformInfo):
             self.Move(wx.Point(self.left, self.top))
+
+    def OnIconize(self, event):
+        """ When the Menu Window is minimized or restored, all other windows should be too! """
+        # Pass the instruction on to the Control Object
+        self.ControlObject.IconizeAll(event.Iconized())
+
+    def OnCloseAllSnapshots(self, event):
+        """ Handler for the Close All Snapshots menu item """
+        # Tell the Control Object to close all Snapshot Images
+        self.ControlObject.CloseAllImages()
     
     def OnCloseWindow(self, event):
         """ This code forces the Video Window to close when the "X" is used to close the Menu Bar """
         # Prompt for save if transcript was modified
         self.ControlObject.SaveTranscript(1)
+
+        # For each Shapshot Window (from the end of the list to the start) ...
+        while len(self.ControlObject.SnapshotWindows) > 0:
+            # ... close it, thus releasing any records that might be locked there.
+            self.ControlObject.SnapshotWindows[len(self.ControlObject.SnapshotWindows) - 1].Close()
+
+        # Tell the Control Object to close all the Reports
+        self.ControlObject.CloseAllReports()
 
         # Check to see if there are Search Results Nodes
         if self.ControlObject.DataWindowHasSearchNodes():
@@ -675,7 +828,8 @@ class MenuWindow(wx.Frame):
                 # If so, close it, which saves anything being edited.
                 self.ControlObject.NotesBrowserWindow.Close()
             # unlock the Transcript Records, if any are locked
-            for x in range(len(self.ControlObject.TranscriptWindow)):
+            # (Count backwards from the highest number!)
+            for x in range(len(self.ControlObject.TranscriptWindow) - 1, -1, -1):
                 # Turn off the Line Number Timer
                 self.ControlObject.TranscriptWindow[x].dlg.LineNumTimer.Stop()
                 # If the transcript has been modified ...
@@ -687,6 +841,8 @@ class MenuWindow(wx.Frame):
                    (self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj.isLocked):
                     # ... unlock it
                     self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj.unlock_record()
+                # Close the Transcript Window
+                self.ControlObject.TranscriptWindow[x].dlg.Close()
             # Close the connection to the Database, if one is open
             if DBInterface.is_db_open():
                 DBInterface.close_db()
@@ -699,8 +855,13 @@ class MenuWindow(wx.Frame):
             # We need to force the Video Window to close along with all of the other windows.
             # (The other windows all close automatically.)
             if self.ControlObject != None:
+                if self.ControlObject.DataWindow != None:
+                    # Close the Data Window
+                    self.ControlObject.DataWindow.Close()
                 if self.ControlObject.VideoWindow != None:
-                    self.ControlObject.VideoWindow.close()
+                    self.ControlObject.VideoWindow.Close()
+                if self.ControlObject.VisualizationWindow != None:
+                    self.ControlObject.VisualizationWindow.Close()
             # Terminate MySQL if using the embedded version.
             # (This is slow, so should be done as late as possible, preferably after windows are closed.)
             if TransanaConstants.singleUserVersion:
@@ -773,6 +934,14 @@ class MenuWindow(wx.Frame):
         else:
             self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, False)
         self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, enable)
+        # If there are NO existing Time Codes ...
+        if enable and self.ControlObject.AutoTimeCodeEnableTest():
+            # ... enable Text Time Code Conversion
+            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_TEXT_TIMECODE, enable)
+        # If there are existing time codes ...
+        else:
+            # ... then we can't do Text Time Code conversion
+            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_TEXT_TIMECODE, False)
 
     def OnFileNew(self, event):
         """ Implements File New menu command """
@@ -782,6 +951,10 @@ class MenuWindow(wx.Frame):
             self.ControlObject.activeTranscript = 0
             # ... it should know how to clear all the Windows!
             self.ControlObject.ClearAllWindows()
+            # Close all Snapshot Windows
+            self.ControlObject.CloseAllImages()
+            # ... and close all the reports, which ClearAllWindows doesn't do
+            self.ControlObject.CloseAllReports()
 
     def OnFileNewDatabase(self, event):
         """ Implements File > New Database menu command """
@@ -921,8 +1094,8 @@ class MenuWindow(wx.Frame):
                 else:
                     
                     # Create the Frame for the Print Preview
-                    theWidth = max(wx.Display(0).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
-                    theHeight = max(wx.Display(0).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
+                    theWidth = max(wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
+                    theHeight = max(wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
                     printFrame = wx.PreviewFrame(printPreview, self, _("Print Preview"), size=(theWidth, theHeight))
                     printFrame.Centre()
                     # Initialize the Frame for the Print Preview
@@ -953,7 +1126,6 @@ class MenuWindow(wx.Frame):
         TransanaGlobal.printData = self.printData
         # Destroy the Page Dialog
         pageDialog.Destroy()
-
 
     def OnSaveTranscript(self, event):
         """Handler for File > Save Transcript menu command"""
@@ -989,6 +1161,10 @@ class MenuWindow(wx.Frame):
             isinstance(tmpObj, MenuWindow)):
             # ... let Transana handle the Cut
             self.ControlObject.TranscriptCut(event)
+        # It works differently for right-to-left text, which apparently doesn't look like our RichTextCtrl here!
+        elif ((TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft) and \
+             isinstance(tmpObj, wx.TextCtrl)):
+              self.ControlObject.TranscriptCut(event)
         # Otherwise ...
         else:
             # ... call event.Skip() so the Cut gets processed somewhere
@@ -1004,6 +1180,10 @@ class MenuWindow(wx.Frame):
             isinstance(tmpObj, MenuWindow)):
             # ... let Transana handle the Copy
             self.ControlObject.TranscriptCopy(event)
+        # It works differently for right-to-left text, which apparently doesn't look like our RichTextCtrl here!
+        elif ((TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft) and \
+             isinstance(tmpObj, wx.TextCtrl)):
+              self.ControlObject.TranscriptCopy(event)
         # Otherwise ...
         else:
             # ... call event.Skip() so the Copy gets processed somewhere
@@ -1019,6 +1199,10 @@ class MenuWindow(wx.Frame):
             isinstance(tmpObj, MenuWindow)):
             # ... let Transana handle the Paste
             self.ControlObject.TranscriptPaste(event)
+        # It works differently for right-to-left text, which apparently doesn't look like our RichTextCtrl here!
+        elif ((TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft) and \
+             isinstance(tmpObj, wx.TextCtrl)):
+              self.ControlObject.TranscriptPaste(event)
         # Otherwise ...
         else:
             # ... call event.Skip() so the Paste gets processed somewhere
@@ -1042,10 +1226,15 @@ class MenuWindow(wx.Frame):
 
     def OnAutoTimeCode(self, event):
         """ Handler for Transcript > Fixed-Increment Time Codes """
+        if not self.ControlObject.AutoTimeCodeEnableTest():
+            msg = _('You cannot add fixed-increment time codes to a transcript that already has time codes.')
+            dlg = Dialogs.ErrorDialog(self, msg)
+            dlg.ShowModal()
+            dlg.Destroy()
         # Ask the Control Object to process AutoTimeCoding and let us know if it worked.
-        if self.ControlObject.AutoTimeCode():
-            # If it worked, disable the menu item!
-            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, False)
+        if not self.ControlObject.AutoTimeCodeEnableTest() or self.ControlObject.AutoTimeCode():
+            # If it worked, update the Transcript menu's Enabled status
+            self.SetTranscriptEditOptions(True)
 
     def OnAdjustIndexes(self, event):
         """ Handler for Transcript > Adjust Indexes menu command """
@@ -1070,6 +1259,13 @@ class MenuWindow(wx.Frame):
             
         dlg.Destroy()
 
+    def OnTextTimeCodeConversion(self, event):
+        """  Convert Text (H:MM:SS.hh) Time Codes to Transana's Format """
+        # Inform the Control Object that Text Time Code Conversion has been requested
+        self.ControlObject.TextTimeCodeConversion()
+        # Update the Transcript menu's Enabled status
+        self.SetTranscriptEditOptions(True)
+
     def OnNotesBrowser(self, event):
         """ Notes Browser """
         # If the Notes Browser is NOT already open ...
@@ -1082,12 +1278,15 @@ class MenuWindow(wx.Frame):
             notesBrowser.Show()
         # If the Notes Browswer IS already open ...
         else:
-            # ... bring it to the front.
-            self.ControlObject.NotesBrowserWindow.Raise()
-            # If the window has been minimized ...
-            if self.ControlObject.NotesBrowserWindow.IsIconized():
-                # ... then restore it to its proper size!
-                self.ControlObject.NotesBrowserWindow.Iconize(False)
+            # ... show it through the ControlObject
+            self.ControlObject.ShowNotesBrowser()
+            
+##            # ... bring it to the front.
+##            self.ControlObject.NotesBrowserWindow.Raise()
+##            # If the window has been minimized ...
+##            if self.ControlObject.NotesBrowserWindow.IsIconized():
+##                # ... then restore it to its proper size!
+##                self.ControlObject.NotesBrowserWindow.Iconize(False)
 
     def OnMediaConversion(self, event):
         """ Handler for Tools > Media Conversion """
@@ -1114,7 +1313,7 @@ class MenuWindow(wx.Frame):
             dlg.Destroy()
 
         # Create an Import Database dialog
-        temp = XMLImport.XMLImport(self, -1, _('Transana XML Import'))
+        temp = XMLImport.XMLImport(self.ControlObject.TranscriptWindow[0].dlg, -1, _('Transana XML Import'))
         # Get the User Input
         result = temp.get_input()
         # If the user gave a valid response ...
@@ -1138,7 +1337,7 @@ class MenuWindow(wx.Frame):
     def OnExportDatabase(self, event):
         """ Export Database """
         # Create an Export Database dialog
-        temp = XMLExport.XMLExport(self, -1, _('Transana XML Export'))
+        temp = XMLExport.XMLExport(self.ControlObject.TranscriptWindow[0].dlg, -1, _('Transana XML Export'))
         # Set up the confirmation loop signal variable
         repeat = True
         # While we are in the confirmation loop ...
@@ -1268,6 +1467,10 @@ class MenuWindow(wx.Frame):
             if self.ControlObject.NotesBrowserWindow != None:
                 # ... close it, thus releasing any records that might be locked there.
                 self.ControlObject.NotesBrowserWindow.Close()
+            # For each Shapshot Window (from the end of the list to the start) ...
+            while len(self.ControlObject.SnapshotWindows) > 0:
+                # ... close it, thus releasing any records that might be locked there.
+                self.ControlObject.SnapshotWindows[len(self.ControlObject.SnapshotWindows) - 1].Close()
         # Create a Record Lock Utility window
         recordLockWindow = RecordLock.RecordLock(self, -1, _("Transana Record Lock Utility"))
         recordLockWindow.ShowModal()
@@ -1275,6 +1478,8 @@ class MenuWindow(wx.Frame):
 
     def OnOptionsSettings(self, event):
         """ Handler for Options > Settings """
+        # Assume that nothing will happen to trigger shutting down Transana
+        self.shutDown = False
         # Remember the old Tab Size and Word Wrap values
         oldTabSize = TransanaGlobal.configData.tabSize
         oldWordWrap = TransanaGlobal.configData.wordWrap
@@ -1309,6 +1514,14 @@ class MenuWindow(wx.Frame):
                 else:
                     # Now update the Data Window, in case there were changes while we were away.
                     self.ControlObject.DataWindow.DBTab.tree.refresh_tree()
+        # If we need to shut down Transana ...
+        if self.shutDown:
+            # ... let the user know 
+            infoDlg = Dialogs.InfoDialog(self, _("Database directory change will take effect after you restart Transana."))
+            infoDlg.ShowModal()
+            infoDlg.Destroy()
+            # ... and shut down Transana
+            self.OnCloseWindow(event)
 
     def OnOptionsLanguage(self, event):
         """ Handler for Options > Language menu selections """
@@ -1330,143 +1543,177 @@ class MenuWindow(wx.Frame):
 
             # English
             if event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EN:
+                lang = wx.LANGUAGE_ENGLISH
                 TransanaGlobal.configData.language = 'en'
-                self.presLan_en.install()
+                self.presLan_en.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
                 
             # Arabic
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_AR:
                 outofdateLanguage = 'Arabic'
+                lang = wx.LANGUAGE_ARABIC
                 TransanaGlobal.configData.language = 'ar'
-                self.presLan_ar.install()
+                self.presLan_ar.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
                 
             # Danish
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DA:
                 outofdateLanguage = 'Danish'
+                lang = wx.LANGUAGE_DANISH
                 TransanaGlobal.configData.language = 'da'
-                self.presLan_da.install()
+                self.presLan_da.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
                 
             # German
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DE:
                 outofdateLanguage = 'German'
+                lang = wx.LANGUAGE_GERMAN
                 TransanaGlobal.configData.language = 'de'
-                self.presLan_de.install()
+                self.presLan_de.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Greek
     #        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
     #            outofdateLanguage = 'Greek'
+    #            lang = wx.LANGUAGE_GREEK
     #            TransanaGlobal.configData.language = 'el'
-    #            self.presLan_el.install()
+    #            self.presLan_el.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Spanish
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ES:
                 outofdateLanguage = 'Spanish'
+                lang = wx.LANGUAGE_SPANISH
                 TransanaGlobal.configData.language = 'es'
-                self.presLan_es.install()
+                self.presLan_es.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Finnish
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_FI:
                 outofdateLanguage = 'Finnish'
+                lang = wx.LANGUAGE_FINNISH
                 TransanaGlobal.configData.language = 'fi'
-                self.presLan_fi.install()
+                self.presLan_fi.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # French
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_FR:
                 outofdateLanguage = 'French'
+                lang = wx.LANGUAGE_FRENCH
                 TransanaGlobal.configData.language = 'fr'
-                self.presLan_fr.install()
+                self.presLan_fr.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Hebrew
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_HE:
                 outofdateLanguage = 'Hebrew'
+                lang = wx.LANGUAGE_HEBREW
                 TransanaGlobal.configData.language = 'he'
-                self.presLan_he.install()
+                self.presLan_he.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Italian
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_IT:
                 outofdateLanguage = 'Italian'
+                lang = wx.LANGUAGE_ITALIAN
                 TransanaGlobal.configData.language = 'it'
-                self.presLan_it.install()
+                self.presLan_it.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Dutch
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NL:
                 outofdateLanguage = 'Dutch'
+                lang = wx.LANGUAGE_DUTCH
                 TransanaGlobal.configData.language = 'nl'
-                self.presLan_nl.install()
+                self.presLan_nl.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Norwegian Bokmal
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NB:
                 outofdateLanguage = 'Norwegian Bokmal'
+                # There seems to be a bug in GetText on the Mac when the wxLANGUAGE is set to Bokmal.
+                # Setting this to English seems to make little practical difference.
+                if 'wxMac' in wx.PlatformInfo:
+                    lang = wx.LANGUAGE_ENGLISH
+                else:
+                    lang = wx.LANGUAGE_NORWEGIAN_BOKMAL
+
                 TransanaGlobal.configData.language = 'nb'
-                self.presLan_nb.install()
+                self.presLan_nb.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Norwegian Ny-norsk
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NN:
                 outofdateLanguage = 'Norwegian Nynorsk'
+                # There seems to be a bug in GetText on the Mac when the wxLANGUAGE is set to Nynorsk.
+                # Setting this to English seems to make little practical difference.
+                if 'wxMac' in wx.PlatformInfo:
+                    lang = wx.LANGUAGE_ENGLISH
+                else:
+                    lang = wx.LANGUAGE_NORWEGIAN_NYNORSK
                 TransanaGlobal.configData.language = 'nn'
-                self.presLan_nn.install()
+                self.presLan_nn.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Polish
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_PL:
                 outofdateLanguage = 'Polish'
+                lang = wx.LANGUAGE_PORTUGUESE    # Polish spec causes an error message on my computer
                 TransanaGlobal.configData.language = 'pl'
-                self.presLan_pl.install()
-
+                self.presLan_pl.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
             # Portuguese
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_PT:
                 outofdateLanguage = 'Portuguese'
+                lang = wx.LANGUAGE_PORTUGUESE
                 TransanaGlobal.configData.language = 'pt'
-                self.presLan_pt.install()
+                self.presLan_pt.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Russian
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_RU:
                 outofdateLanguage = 'Russian'
+                lang = wx.LANGUAGE_RUSSIAN   # Russian spec causes an error message on my computer
                 TransanaGlobal.configData.language = 'ru'
-                self.presLan_ru.install()
+                self.presLan_ru.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Swedish
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_SV:
                 outofdateLanguage = 'Swedish'
+                lang = wx.LANGUAGE_SWEDISH
                 TransanaGlobal.configData.language = 'sv'
-                self.presLan_sv.install()
+                self.presLan_sv.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Chinese (English prompts)
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ZH:
                 outofdateLanguage = 'Chinese - Simplified'
+                lang = wx.LANGUAGE_CHINESE
                 TransanaGlobal.configData.language = 'zh'
-                self.presLan_zh.install()
+                self.presLan_zh.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Eastern Europe Encoding (English prompts)
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EASTEUROPE:
                 TransanaGlobal.configData.language = 'easteurope'
-                self.presLan_en.install()
+                lang = wx.LANGUAGE_ENGLISH
+                self.presLan_en.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Greek (English prompts)
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
                 TransanaGlobal.configData.language = 'el'
-                self.presLan_en.install()
+                lang = wx.LANGUAGE_ENGLISH
+                self.presLan_en.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Japanese (English prompts)
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_JA:
                 TransanaGlobal.configData.language = 'ja'
-                self.presLan_en.install()
+                lang = wx.LANGUAGE_ENGLISH
+                self.presLan_en.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Korean (English prompts)
             elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_KO:
                 TransanaGlobal.configData.language = 'ko'
-                self.presLan_en.install()
+                lang = wx.LANGUAGE_ENGLISH
+                self.presLan_en.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             else:
                 wx.MessageDialog(None, "Unknown Language", "Unknown Language").ShowModal()
 
+                lang = wx.LANGUAGE_ENGLISH
                 TransanaGlobal.configData.language = 'en'
-                self.presLan_en.install()
+                self.presLan_en.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             # Check to see if we have a translation, and if it is up-to-date.
             
             # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  "&Media Conversion" works for version 2.50.
+            #        For 2.60, let's go with "Snapshot".
             # If you update this, also update the phrase above in the __init__ method.)
             
-            if (outofdateLanguage != '') and ("&Media Conversion" == _("&Media Conversion")):
+            if (outofdateLanguage != '') and ("Snapshot" == _("Snapshot")):
                 # If not, display an information message.
                 prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
                 dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
@@ -1477,7 +1724,21 @@ class MenuWindow(wx.Frame):
             infodlg.ShowModal()
             infodlg.Destroy()
             
-            self.ControlObject.ChangeLanguages()
+            # Check the Text Direction to the new language
+            if TransanaGlobal.configData.LayoutDirection != self.locale.GetLanguageInfo(lang).LayoutDirection:
+
+                # If we're changing layout direction, we need to quit and restart Transana.
+                prompt = _("You must restart Transana for this language change to take effect.")
+                dlg = Dialogs.InfoDialog(None, prompt)
+                dlg.ShowModal()
+                dlg.Destroy()
+
+                # ... and shut down Transana
+                self.OnCloseWindow(event)
+            # If we did NOT change layout directions ...
+            else:
+                # ... substitute all of the prompts with the new language prompts
+                self.ControlObject.ChangeLanguages()
         # if the language change is blocked because of search results ...
         else:
             # ... we need to restore the proper language selection in the menus
@@ -1498,7 +1759,7 @@ class MenuWindow(wx.Frame):
         TransanaGlobal.configData.autoArrange = event.IsChecked()
 
         # If we turn Auto-Arrange ON ...
-        if event.IsChecked():
+        if event.IsChecked() and (not 'wxGTK' in wx.PlatformInfo):
             # ... let's restore the windows to the positions saved earlier.
             # Menu Window
             if self.menuWindowLayout != None:
@@ -1565,6 +1826,212 @@ class MenuWindow(wx.Frame):
         # Trigger the change in size of the Video Component via the Control Object
         self.ControlObject.VideoSizeChange()
 
+    def OnMonitor(self, event):
+        """ Handler for Options > Display Monitor menu """
+        # If we've changed monitor selections ...
+        if (TransanaGlobal.configData.primaryScreen != MenuSetup.MENU_OPTIONS_MONITOR.index(event.GetId())):
+            # Remember the dimensions of the original screen
+            oldScreen = TransanaGlobal.configData.primaryScreen
+            oldRect = wx.Display(oldScreen).GetClientArea()
+            # Update the screen selection in the Configuration Data
+            TransanaGlobal.configData.primaryScreen = MenuSetup.MENU_OPTIONS_MONITOR.index(event.GetId())
+            # Save the Configuration Change so that Help can use the correct monitor
+            TransanaGlobal.configData.SaveConfiguration()
+            # If Auto Arrange is selected ...
+            if TransanaGlobal.configData.autoArrange:
+                # Clear the screen
+                self.OnFileNew(event)
+                
+                # Signal that we're resizing everything, so resizes don't propagate
+                TransanaGlobal.resizingAll = True
+
+                # Get the position/size of the new screen
+                rect = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()
+
+                if DEBUG:
+                    print "MenuWindow.OnMonitor():", rect, oldRect
+                    print "  menu:", self.GetRect()
+
+                if not 'wxMac' in wx.PlatformInfo:
+                    TransanaGlobal.menuHeight = self.GetRect()[3]
+                else:
+                    TransanaGlobal.menuHeight = 0  # rect[1]
+
+                if DEBUG:
+                    print "  menuHeight:", TransanaGlobal.menuHeight
+                    
+                # If we're on Windows ...
+                if 'wxMSW' in wx.PlatformInfo:
+                    # Get the position/size of the original Menu Window
+                    menuRect = self.GetRect()
+                    # Set the new X, Y, and W (H does not change!) for the Menu Window
+                    self.left = rect[0]
+                    self.top = rect[1]
+                    self.width = rect[2]
+                    # Reposition the Menu Window
+                    self.SetPosition((self.left, self.top))
+                    # ... resize the Menu Window (in case the monitors are different resolutions)
+                    self.SetSize((self.width, self.height))
+
+                if DEBUG:
+                    print "  ==> menu:", self.left, self.top, self.width, self.height, self.GetRect()
+
+                # Determine what the Visualization Rectangle should be on the new monitor
+                visualRect = self.ControlObject.VisualizationWindow.GetNewRect()
+                # Reposition the Visualization Window
+                self.ControlObject.VisualizationWindow.SetDims(visualRect[0], visualRect[1], visualRect[2], visualRect[3])
+                
+                # Determine what the Video Rectangle should be on the new monitor
+                videoRect = self.ControlObject.VideoWindow.GetNewRect()
+                # Reposition the Video Window
+                self.ControlObject.VideoWindow.SetDims(videoRect[0], videoRect[1], videoRect[2], videoRect[3])
+
+                # Determine what the Transcription Rectangle should be on the new monitor
+                transRect = self.ControlObject.TranscriptWindow[0].GetNewRect()
+                # Reposition the Transcript Window
+                self.ControlObject.TranscriptWindow[0].SetDims(transRect[0], transRect[1], transRect[2], transRect[3])
+
+                # Determine what the Data Rectangle should be on the new monitor
+                dataRect = self.ControlObject.DataWindow.GetNewRect()
+                # Reposition the Data Window
+                self.ControlObject.DataWindow.SetDims(dataRect[0], dataRect[1], dataRect[2], dataRect[3])
+
+                # Signal that we are no longer resizing everything so changes will propagate
+                TransanaGlobal.resizingAll = False
+                
+                # Get the size and position of the Visualization Window
+                (x, y, w, h) = self.ControlObject.VisualizationWindow.GetRect()
+                # Adjust the positions of all other windows to match the Visualization Window's initial position
+                self.ControlObject.UpdateWindowPositions('Visualization', w + x)
+
+    def OnWindow(self, event):
+        """ Handler for Window Menu """
+        # Create a list of windows to act upon
+        windowList = []
+        # If the All Main Windows option is selected ...
+        if event.GetId() == MenuSetup.MENU_WINDOW_ALL_MAIN:
+            # ... add the MenuWindow (for Windows, when built, as the menu ends up behind other things!)
+            windowList.append(self.ControlObject.MenuWindow)
+            # ... add the Data Window to the list
+            windowList.append(self.ControlObject.DataWindow)
+            # ... add the Video Window to the list
+            windowList.append(self.ControlObject.VideoWindow)
+            # ... interate through the current Transcript Windows ...
+            for window in self.ControlObject.TranscriptWindow:
+                # ... and add them to the list
+                windowList.append(window.dlg)
+            # ... add the Visualization Window to the list
+            windowList.append(self.ControlObject.VisualizationWindow)
+        # If Data Window is selected ...
+        elif event.GetId() == MenuSetup.MENU_WINDOW_DATA:
+            # ... add the Data Window to the list
+            windowList.append(self.ControlObject.DataWindow)
+        # If Video Window is selected ...
+        elif event.GetId() == MenuSetup.MENU_WINDOW_VIDEO:
+            # ... add the Video Window to the list
+            windowList.append(self.ControlObject.VideoWindow)
+        # If the Transcript Window is selected ...
+        elif event.GetId() == MenuSetup.MENU_WINDOW_TRANSCRIPT:
+            # ... interate through the current Transcript Windows ...
+            for window in self.ControlObject.TranscriptWindow:
+                # ... and add them to the list
+                windowList.append(window.dlg)
+        # If the Visualization Window is selected ...
+        elif event.GetId() == MenuSetup.MENU_WINDOW_VISUALIZATION:
+            # ... add the Visualization Window to the list
+            windowList.append(self.ControlObject.VisualizationWindow)
+        elif (self.menuBar.windowMenu.GetLabel(event.GetId()).encode('utf8') == _("Play All Clips")) and \
+             (int(self.menuBar.windowMenu.GetHelpString(event.GetId())) == 0):
+            windowList.append(self.ControlObject.PlayAllClipsWindow)
+        # If another item is selected ...
+        else:
+            # ... let's see if it's a Snapshot Window
+            # Get the name and number of the menu item selected
+            itemName = self.menuBar.windowMenu.GetLabel(event.GetId())
+            itemNumber = int(self.menuBar.windowMenu.GetHelpString(event.GetId()))
+            # Have the Control Object select the appropriate Snapshot Window
+            if not self.ControlObject.SelectSnapshotWindow(itemName, itemNumber):
+                # If no Snapshot Window was found, look for a Report Window!
+                self.ControlObject.SelectReportWindow(itemName, itemNumber)
+            # NOTE:  No need ot add to the Window List here!
+        # If we are being called for ALL or one of the MAIN windows ...
+        if event.GetId() in [MenuSetup.MENU_WINDOW_ALL_MAIN, MenuSetup.MENU_WINDOW_DATA,
+                             MenuSetup.MENU_WINDOW_VIDEO, MenuSetup.MENU_WINDOW_TRANSCRIPT,
+                             MenuSetup.MENU_WINDOW_VISUALIZATION]:
+            # If there's a Notes Browser Window ...
+            if self.ControlObject.NotesBrowserWindow != None:
+                # ... then we need to Lower it
+                self.ControlObject.NotesBrowserWindow.Lower()
+        # For each Window on the list ...
+        for window in windowList:
+            # ... raise this window to the top of the Window Stack
+            window.Raise()
+            # ... maximize if minimized
+            window.Iconize(False)
+            # ... set the focus to the window
+            window.SetFocus()
+
+    def AddWindowMenuItem(self, itemName, itemNumber):
+        """ Add an item to the Menu Window's Window menu """
+        # Get an Item ID
+        id = wx.NewId()
+        # Add the Menu Item
+        newItem = self.menuBar.windowMenu.Append(id, itemName)
+        # Add the Menu Number to the Menu Item's Help, which isn't shown so can hold this data
+        newItem.SetHelp("%s" % itemNumber)
+        # Bind the ID to the Menu Handler
+        wx.EVT_MENU(self, id, self.OnWindow)
+
+    def DeleteWindowMenuItem(self, itemName, itemNumber):
+        """ Remove an item from the Menu Window's Window menu """
+
+        # The Window Menu doesn't always clear items correctly when Chinese prompts are used.
+        # The symptom is a unicode warning in the itemName comparison below.
+        # This attempts to remedy that.  However, the problem is sporadic, so I'm not sure if this is sufficient.
+        if isinstance(itemName, str):
+            itemName = unicode(itemName, 'utf8')
+
+##            print "itemName converted ********"
+            
+        # Iterate through all of the Window Menu Items
+        for item in self.menuBar.windowMenu.GetMenuItems():
+
+##            print "MenuWindow.DeleteWindowMenuItem():", type(itemName), type(self.menuBar.windowMenu.GetLabel(item.GetId()))
+##            print itemName.encode('utf8'),
+##            print self.menuBar.windowMenu.GetLabel(item.GetId()).encode('utf8'),
+##            print itemNumber,
+##            try:
+##                print int(self.menuBar.windowMenu.GetHelpString(item.GetId()))
+##            except:
+##                print 'N/A'
+##            print
+            
+            # Find the item with the correct name and number
+            if (itemName == self.menuBar.windowMenu.GetLabel(item.GetId())) and (itemNumber == int(self.menuBar.windowMenu.GetHelpString(item.GetId()))):
+
+##                print itemName.encode('utf8'), self.menuBar.windowMenu.GetLabel(item.GetId()).encode('utf8'), itemNumber,
+##                try:
+##                    print int(self.menuBar.windowMenu.GetHelpString(item.GetId())),
+##                except:
+##                    print 'N/A',
+
+##                print "Item removed **************"
+                
+                # Delete the menu item
+                self.menuBar.windowMenu.Delete(item.GetId())
+                # We don't need to look any more
+                break
+
+##        print '-------------------------------------------------------------------'
+
+    def OnCloseAllSnapshots(self, event):
+        """ Handler for Windows > Close All Snapshots """
+        self.ControlObject.CloseAllImages()
+
+    def OnCloseAllReports(self, event):
+        """ Handler for Windows > Close All Reports """
+        self.ControlObject.CloseAllReports()
+
     def OnHelpManual(self, evt):
         """ Handler for Help > Manual menu command """
         self.ControlObject.Help('Transana Main Screen')
@@ -1602,6 +2069,8 @@ class MenuWindow(wx.Frame):
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_SAVEAS, _("Save Transcript &As"))
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_PRINTTRANSCRIPT, _("&Print Transcript"))
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_PRINTERSETUP, _("Printer &Setup"))
+        self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_CLOSE_SNAPSHOTS, _("Close All Snapshots"))
+        self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_CLOSE_REPORTS, _("Close All Reports"))
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_EXIT, _("E&xit"))
         
         self.menuBar.SetLabelTop(1, _("&Transcript"))
@@ -1618,6 +2087,7 @@ class MenuWindow(wx.Frame):
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_PRINTERSETUP, _("Printer &Setup"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, _("F&ixed-Increment Time Codes"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, _("&Adjust Indexes"))
+        self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_TEXT_TIMECODE, _("Text Time Code Conversion"))
 
         self.menuBar.SetLabelTop(2, _("Too&ls"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_NOTESBROWSER, _("&Notes Browser"))
@@ -1691,9 +2161,23 @@ class MenuWindow(wx.Frame):
         self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_TRANS, _("Video and &Transcript Only"))
         self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_AUDIO, _("A&udio and Transcript Only"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT, _("&Presentation Mode"))
+        if wx.Display.GetCount() > 1:
+            self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_MONITOR_BASE, _("Display Monitor"))
+
+        self.menuBar.SetLabelTop(4, _("Window"))
+        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_ALL_MAIN, _("Bring Main Windows to Front"))
+        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_ALL_SNAPSHOT, _("Close All Snapshots"))
+        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_CLOSE_REPORTS, _("Close All Reports"))
+        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_DATA, _("Data"))
+        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_VIDEO, _("Video"))
+        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_TRANSCRIPT, _("Transcript"))
+        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_VISUALIZATION, _("Visualization"))
+        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_NOTESBROWSER, _("Notes Browser"))
+        if not TransanaConstants.singleUserVersion:
+            self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_CHAT, _("Chat"))
 
         if not 'wxMac' in wx.PlatformInfo:
-            self.menuBar.SetLabelTop(4, _("&Help"))
+            self.menuBar.SetLabelTop(5, _("&Help"))
         else:
             wx.App_SetMacHelpMenuTitleName(_("&Help"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_MANUAL, _("&Manual"))
@@ -1787,17 +2271,22 @@ class MenuWindow(wx.Frame):
             # Korean support must be removed due to a bug in wxSTC on Windows.
             # languages.append(KOREAN_LABEL)
 
+        # Check to see if only one language has been installed
         if len(languages) == 1:
+            # Return that language
             return languages[0]
+        # If more than one language is defined ...
         else:
-        
-            dlg = wx.SingleChoiceDialog(parent, "Select a Language:", "Language",
+            # ... ask the user (in English) what language we should use.
+            # Create a Dialog listing all available languages
+            dlg = wx.SingleChoiceDialog(None, "Select a Language:", "Language",
                                         languages,
                                         style= wx.OK | wx.CENTRE)
+            # Display the dialog and get a user response
             dlg.ShowModal()
-
+            # Note the user's selection
             result = dlg.GetStringSelection()
-
+            # Destroy the dialog that was displayed
             dlg.Destroy()
-        
+            # Return the user's selection
             return result

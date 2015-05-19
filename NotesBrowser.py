@@ -1,4 +1,4 @@
-# Copyright (C) 2007-2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2007-2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -47,6 +47,8 @@ import NotePropertiesForm
 import ReportGeneratorForNotes
 # import Transana's Series object
 import Series
+# import Transana's Snapshot object
+import Snapshot
 # import Transana's Constants
 import TransanaConstants
 # import Transana's Exceptions
@@ -78,11 +80,12 @@ class MySplitter(wx.SplitterWindow):
         self.parent.OnClose(event)
 
 
-class NotesBrowser(wx.Dialog):
+class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
     """ The Transana Notes Browser. """
     def __init__(self,parent,id,title):
         # Create a Dialog to house the Notes Browser
         wx.Dialog.__init__(self,parent,-1, title, size = (800,600), style=wx.DEFAULT_FRAME_STYLE | wx.NO_FULL_REPAINT_ON_RESIZE)
+#        wx.MDIChildFrame.__init__(self,parent,-1, title, size = (800,600), style=wx.DEFAULT_FRAME_STYLE | wx.NO_FULL_REPAINT_ON_RESIZE)
         # Get the Transana Icon
         transanaIcon = wx.Icon("images/Transana.ico", wx.BITMAP_TYPE_ICO)
         # Specify the Transana Icon as the Dialog's Icon
@@ -219,7 +222,7 @@ class NotesBrowser(wx.Dialog):
         if self.ControlObject != None:
             self.ControlObject.Register(NotesBrowser=self)
 
-    def AddNote(self, tree, rootNode, noteNum, noteID, seriesNum, episodeNum, transcriptNum, collectionNum, clipNum, noteTaker):
+    def AddNote(self, tree, rootNode, noteNum, noteID, seriesNum, episodeNum, transcriptNum, collectionNum, clipNum, snapshotNum, noteTaker):
         # If we have a Series Note ...
         if seriesNum > 0:
             # Load the Series to get the needed data
@@ -265,6 +268,15 @@ class NotesBrowser(wx.Dialog):
             pathData = tempCollection.GetNodeString() + ' > ' + tempClip.id
             # Create the Node Data
             nodeData = DatabaseTreeTab._NodeData('NoteNode', noteNum, clipNum)
+        # If we have a Snapshot Note ...
+        elif snapshotNum > 0:
+            # Load the Snapshot and Collection to get the needed data.
+            tempSnapshot = Snapshot.Snapshot(snapshotNum)
+            tempCollection = Collection.Collection(tempSnapshot.collection_num)
+            # The path to the Note is the Collection's Node String and the Clip Name
+            pathData = tempCollection.GetNodeString() + ' > ' + tempSnapshot.id
+            # Create the Node Data
+            nodeData = DatabaseTreeTab._NodeData('NoteNode', noteNum, snapshotNum)
         # Otherwise, we have an undefined note.  (This should never get called)
         else:
             # There is no Root Node
@@ -319,6 +331,10 @@ class NotesBrowser(wx.Dialog):
         # Add a Clip Node at the first level
         clipNode = tree.AppendItem(root, _("Clip"))
         tree.SetPyData(clipNode, DatabaseTreeTab._NodeData('ClipNode'))
+        if TransanaConstants.proVersion:
+            # Add a Snapshot Node at the first level
+            snapshotNode = tree.AppendItem(root, _("Snapshot"))
+            tree.SetPyData(snapshotNode, DatabaseTreeTab._NodeData('SnapshotNode'))
 
         # Get a list of all Notes from the Database
         notes = DBInterface.list_of_all_notes(searchText=searchText)
@@ -334,9 +350,12 @@ class NotesBrowser(wx.Dialog):
                 rootNode = collectionNode
             elif note['ClipNum'] > 0:
                 rootNode = clipNode
+            elif TransanaConstants.proVersion and (note['SnapshotNum'] > 0):
+                rootNode = snapshotNode
             else:
                 rootNode = None
-            self.AddNote(tree, rootNode, note['NoteNum'], note['NoteID'], note['SeriesNum'], note['EpisodeNum'], note['TranscriptNum'], note['CollectionNum'], note['ClipNum'], note['NoteTaker'])
+            if rootNode != None:
+                self.AddNote(tree, rootNode, note['NoteNum'], note['NoteID'], note['SeriesNum'], note['EpisodeNum'], note['TranscriptNum'], note['CollectionNum'], note['ClipNum'], note['SnapshotNum'], note['NoteTaker'])
 
         # Expand the root node so we see the first level nodes
         tree.Expand(root)
@@ -362,7 +381,8 @@ class NotesBrowser(wx.Dialog):
                ((nodeType == 'EpisodeNoteNode') and (childNodeData.nodetype == 'EpisodeNode')) or \
                ((nodeType == 'TranscriptNoteNode') and (childNodeData.nodetype == 'TranscriptNode')) or \
                ((nodeType == 'CollectionNoteNode') and (childNodeData.nodetype == 'CollectionNode')) or \
-               ((nodeType == 'ClipNoteNode') and (childNodeData.nodetype == 'ClipNode')):
+               ((nodeType == 'ClipNoteNode') and (childNodeData.nodetype == 'ClipNode')) or \
+               ((nodeType == 'SnapshotNoteNode') and (childNodeData.nodetype == 'SnapshotNode')):
                 # ... if so, start looking at the children of this node ...
                 (noteNode, cookie2) = self.treeNotebookNotesTabTreeCtrl.GetFirstChild(childNode)
                 # While we have valid grandchild nodes and have not yet found what we're looking for ...
@@ -407,9 +427,10 @@ class NotesBrowser(wx.Dialog):
                        ((nodeType == 'EpisodeNoteNode') and (childNodeData.nodetype == 'EpisodeNode')) or \
                        ((nodeType == 'TranscriptNoteNode') and (childNodeData.nodetype == 'TranscriptNode')) or \
                        ((nodeType == 'CollectionNoteNode') and (childNodeData.nodetype == 'CollectionNode')) or \
-                       ((nodeType == 'ClipNoteNode') and (childNodeData.nodetype == 'ClipNode')):
+                       ((nodeType == 'ClipNoteNode') and (childNodeData.nodetype == 'ClipNode')) or \
+                       ((nodeType == 'SnapshotNoteNode') and (childNodeData.nodetype == 'SnapshotNode')):
                         # ... if so, add the Note to the child node ...
-                        self.AddNote(self.treeNotebookNotesTabTreeCtrl, childNode, note.number, note.id, note.series_num, note.episode_num, note.transcript_num, note.collection_num, note.clip_num, note.author)
+                        self.AddNote(self.treeNotebookNotesTabTreeCtrl, childNode, note.number, note.id, note.series_num, note.episode_num, note.transcript_num, note.collection_num, note.clip_num, note.snapshot_num, note.author)
                         # ... and indicate we can stop looking
                         contin = False
                     # if we have NOT found what we're looking for ...
@@ -436,7 +457,8 @@ class NotesBrowser(wx.Dialog):
                        ((nodeType == 'EpisodeNoteNode') and (childNodeData.nodetype == 'EpisodeNode')) or \
                        ((nodeType == 'TranscriptNoteNode') and (childNodeData.nodetype == 'TranscriptNode')) or \
                        ((nodeType == 'CollectionNoteNode') and (childNodeData.nodetype == 'CollectionNode')) or \
-                       ((nodeType == 'ClipNoteNode') and (childNodeData.nodetype == 'ClipNode')):
+                       ((nodeType == 'ClipNoteNode') and (childNodeData.nodetype == 'ClipNode')) or \
+                       ((nodeType == 'SnapshotNoteNode') and (childNodeData.nodetype == 'SnapshotNode')):
                         # ... if so, start looking at the children of this node ...
                         (noteNode, cookie2) = self.treeNotebookNotesTabTreeCtrl.GetFirstChild(childNode)
                         # While we have valid grandchild nodes and have not yet found what we're looking for ...
@@ -601,6 +623,15 @@ class NotesBrowser(wx.Dialog):
             nodeData = ("Collections",) + tempCollection.GetNodeData() + (tempClip.id, noteIDToUse,)
             # ... and signal that it's a Clip Note.
             nodeType = 'ClipNoteNode'
+        # if we have a Snapshot note ...
+        elif note.snapshot_num != 0:
+            # ... load the Collection and Snapshot data ....  
+            tempSnapshot = Snapshot.Snapshot(note.snapshot_num)
+            tempCollection = Collection.Collection(tempSnapshot.collection_num)
+            # ... set up the Tree Node data ...
+            nodeData = ("Collections",) + tempCollection.GetNodeData() + (tempSnapshot.id, noteIDToUse,)
+            # ... and signal that it's a Snapshot Note.
+            nodeType = 'SnapshotNoteNode'
         return (nodeData, nodeType)
 
     def OpenNote(self, noteNum):
@@ -892,6 +923,8 @@ class NotesBrowser(wx.Dialog):
                 self.searchText = None
             # Populate the Tree Control with all the Nodes and Notes it needs!
             self.searchRoot = self.PopulateTreeCtrl(self.treeNotebookSearchTabTreeCtrl, self.searchText)
+        # Don't forget to call the parent method.  Forgetting this causes problems when EVT_KILL_FOCUS calls this method
+        event.Skip()
 
     def OnTreeCtrlRightDown(self, event):
         """ Implement the right-click menus for the Tree Control """
@@ -920,123 +953,142 @@ class NotesBrowser(wx.Dialog):
             pt = self.activeTree.ScreenToClientXY(windowx, windowy)
             # use HitTest to determine the tree item as the screen point indicated.
             sel_item, flags = self.activeTree.HitTest(pt)
-            # Select the appropriate item in the TreeCtrl
-            self.activeTree.SelectItem(sel_item)
-            # Get the item data for the current selection
-            sel_item_data = self.activeTree.GetPyData(sel_item)
-            # Determine what type of node we've selected so we can create the correct menu.
-            # First, eliminate nodes that don't have a node type, as they don't ge a menu.
-            if sel_item_data != None:
-                # Initialize the menu to None
-                menu = None
-                # If we have the Root Node ...
-                if sel_item_data.nodetype == 'RootNode':
-                    # ... create the menu object
-                    menu = wx.Menu()
-                    # Create a new Id for a menu item
-                    id = wx.NewId()
-                    # Add a menu item for the Notes Report
-                    menu.Append(id, _("Notes Report"))
-                    # Link the appropriate method to the menu item
-                    wx.EVT_MENU(self, id, self.OnMenuReport)
-                # If we have the Series Root Node ...
-                elif sel_item_data.nodetype == 'SeriesNode':
-                    # ... create the menu object
-                    menu = wx.Menu()
-                    # Create a new Id for a menu item
-                    id = wx.NewId()
-                    # Add a menu item for the Series Notes Report
-                    menu.Append(id, _("Series Notes Report"))
-                    # Link the appropriate method to the menu item
-                    wx.EVT_MENU(self, id, self.OnMenuReport)
-                # If we have the Episode Root Node ...
-                elif sel_item_data.nodetype == 'EpisodeNode':
-                    # ... create the menu object
-                    menu = wx.Menu()
-                    # Create a new Id for a menu item
-                    id = wx.NewId()
-                    # Add a menu item for the Episode Notes Report
-                    menu.Append(id, _("Episode Notes Report"))
-                    # Link the appropriate method to the menu item
-                    wx.EVT_MENU(self, id, self.OnMenuReport)
-                # If we have the Transcript Root Node ...
-                elif sel_item_data.nodetype == 'TranscriptNode':
-                    # ... create the menu object
-                    menu = wx.Menu()
-                    # Create a new Id for a menu item
-                    id = wx.NewId()
-                    # Add a menu item for the Transcript Notes Report
-                    menu.Append(id, _("Transcript Notes Report"))
-                    # Link the appropriate method to the menu item
-                    wx.EVT_MENU(self, id, self.OnMenuReport)
-                # If we have the Collection Root Node ...
-                elif sel_item_data.nodetype == 'CollectionNode':
-                    # ... create the menu object
-                    menu = wx.Menu()
-                    # Create a new Id for a menu item
-                    id = wx.NewId()
-                    # Add a menu item for the Collection Notes Report
-                    menu.Append(id, _("Collection Notes Report"))
-                    # Link the appropriate method to the menu item
-                    wx.EVT_MENU(self, id, self.OnMenuReport)
-                # If we have the Clip Root Node ...
-                elif sel_item_data.nodetype == 'ClipNode':
-                    # ... create the menu object
-                    menu = wx.Menu()
-                    # Create a new Id for a menu item
-                    id = wx.NewId()
-                    # Add a menu item for the Clip Notes Report
-                    menu.Append(id, _("Clip Notes Report"))
-                    # Link the appropriate method to the menu item
-                    wx.EVT_MENU(self, id, self.OnMenuReport)
-                # If we have a Note Node ...
-                elif sel_item_data.nodetype == 'NoteNode':
-                    # ... create the menu object
-                    menu = wx.Menu()
-                    # See if we're pointing to a Clip Note by looking at the parent's label.  If so ...
-                    if (self.activeTree.GetItemText(self.activeTree.GetItemParent(sel_item)) == unicode(_('Clip'), 'utf8')):
+            # Let's see if we got a valid tree item
+            if sel_item.IsOk():
+                # Select the appropriate item in the TreeCtrl
+                self.activeTree.SelectItem(sel_item)
+                # Get the item data for the current selection
+                sel_item_data = self.activeTree.GetPyData(sel_item)
+                # Determine what type of node we've selected so we can create the correct menu.
+                # First, eliminate nodes that don't have a node type, as they don't ge a menu.
+                if sel_item_data != None:
+                    # Initialize the menu to None
+                    menu = None
+                    # If we have the Root Node ...
+                    if sel_item_data.nodetype == 'RootNode':
+                        # ... create the menu object
+                        menu = wx.Menu()
                         # Create a new Id for a menu item
                         id = wx.NewId()
-                        # Add a menu item for loading a Clip Note's Clip
-                        menu.Append(id, _("Load the Associated Clip"))
+                        # Add a menu item for the Notes Report
+                        menu.Append(id, _("Notes Report"))
                         # Link the appropriate method to the menu item
-                        wx.EVT_MENU(self, id, self.OnMenuLoadClip)
-                    # Create a new Id for a menu item
-                    id = wx.NewId()
-                    # Add a menu item for Locating the Notes in the DB Tree
-                    menu.Append(id, _("Locate Note"))
-                    # Link the appropriate method to the menu item
-                    wx.EVT_MENU(self, id, self.OnMenuLocate)
-                    
-                    # RENAME disabled due to problems.  If you start editing a label, but click elsewhere
-                    # before completing the edit, bad things happen.
-                    
-                    # Create a new Id for a menu item
-                    # id = wx.NewId()
-                    # Add a menu item for renaming the Note
-                    # menu.Append(id, _("Rename"))
-                    # Link the appropriate method to the menu item
-                    # wx.EVT_MENU(self, id, self.OnMenuRename)
-                    # If there is no activeNote (i.e. the note is locked by someone else) ...
-                    # if (self.activeNote == None):
-                        # ... then Note Properties should not be available as a menu option
-                        # menu.Enable(id, False)
+                        wx.EVT_MENU(self, id, self.OnMenuReport)
+                    # If we have the Series Root Node ...
+                    elif sel_item_data.nodetype == 'SeriesNode':
+                        # ... create the menu object
+                        menu = wx.Menu()
+                        # Create a new Id for a menu item
+                        id = wx.NewId()
+                        # Add a menu item for the Series Notes Report
+                        menu.Append(id, _("Series Notes Report"))
+                        # Link the appropriate method to the menu item
+                        wx.EVT_MENU(self, id, self.OnMenuReport)
+                    # If we have the Episode Root Node ...
+                    elif sel_item_data.nodetype == 'EpisodeNode':
+                        # ... create the menu object
+                        menu = wx.Menu()
+                        # Create a new Id for a menu item
+                        id = wx.NewId()
+                        # Add a menu item for the Episode Notes Report
+                        menu.Append(id, _("Episode Notes Report"))
+                        # Link the appropriate method to the menu item
+                        wx.EVT_MENU(self, id, self.OnMenuReport)
+                    # If we have the Transcript Root Node ...
+                    elif sel_item_data.nodetype == 'TranscriptNode':
+                        # ... create the menu object
+                        menu = wx.Menu()
+                        # Create a new Id for a menu item
+                        id = wx.NewId()
+                        # Add a menu item for the Transcript Notes Report
+                        menu.Append(id, _("Transcript Notes Report"))
+                        # Link the appropriate method to the menu item
+                        wx.EVT_MENU(self, id, self.OnMenuReport)
+                    # If we have the Collection Root Node ...
+                    elif sel_item_data.nodetype == 'CollectionNode':
+                        # ... create the menu object
+                        menu = wx.Menu()
+                        # Create a new Id for a menu item
+                        id = wx.NewId()
+                        # Add a menu item for the Collection Notes Report
+                        menu.Append(id, _("Collection Notes Report"))
+                        # Link the appropriate method to the menu item
+                        wx.EVT_MENU(self, id, self.OnMenuReport)
+                    # If we have the Clip Root Node ...
+                    elif sel_item_data.nodetype == 'ClipNode':
+                        # ... create the menu object
+                        menu = wx.Menu()
+                        # Create a new Id for a menu item
+                        id = wx.NewId()
+                        # Add a menu item for the Clip Notes Report
+                        menu.Append(id, _("Clip Notes Report"))
+                        # Link the appropriate method to the menu item
+                        wx.EVT_MENU(self, id, self.OnMenuReport)
+                    # If we have the Snapshot Root Node ...
+                    elif sel_item_data.nodetype == 'SnapshotNode':
+                        # ... create the menu object
+                        menu = wx.Menu()
+                        # Create a new Id for a menu item
+                        id = wx.NewId()
+                        # Add a menu item for the Snapshot Notes Report
+                        menu.Append(id, _("Snapshot Notes Report"))
+                        # Link the appropriate method to the menu item
+                        wx.EVT_MENU(self, id, self.OnMenuReport)
+                    # If we have a Note Node ...
+                    elif sel_item_data.nodetype == 'NoteNode':
+                        # ... create the menu object
+                        menu = wx.Menu()
+                        # See if we're pointing to a Clip Note by looking at the parent's label.  If so ...
+                        if (self.activeTree.GetItemText(self.activeTree.GetItemParent(sel_item)) == unicode(_('Clip'), 'utf8')):
+                            # Create a new Id for a menu item
+                            id = wx.NewId()
+                            # Add a menu item for loading a Clip Note's Clip
+                            menu.Append(id, _("Load the Associated Clip"))
+                            # Link the appropriate method to the menu item
+                            wx.EVT_MENU(self, id, self.OnMenuLoadClipOrSnapshot)
+                        # See if we're pointing to a Snapshot Note by looking at the parent's label.  If so ...
+                        elif (self.activeTree.GetItemText(self.activeTree.GetItemParent(sel_item)) == unicode(_('Snapshot'), 'utf8')):
+                            # Create a new Id for a menu item
+                            id = wx.NewId()
+                            # Add a menu item for loading a Snapshot Note's Snapshot
+                            menu.Append(id, _("Load the Associated Snapshot"))
+                            # Link the appropriate method to the menu item
+                            wx.EVT_MENU(self, id, self.OnMenuLoadClipOrSnapshot)
+                        # Create a new Id for a menu item
+                        id = wx.NewId()
+                        # Add a menu item for Locating the Notes in the DB Tree
+                        menu.Append(id, _("Locate Note"))
+                        # Link the appropriate method to the menu item
+                        wx.EVT_MENU(self, id, self.OnMenuLocate)
+                        
+                        # RENAME disabled due to problems.  If you start editing a label, but click elsewhere
+                        # before completing the edit, bad things happen.
+                        
+                        # Create a new Id for a menu item
+                        # id = wx.NewId()
+                        # Add a menu item for renaming the Note
+                        # menu.Append(id, _("Rename"))
+                        # Link the appropriate method to the menu item
+                        # wx.EVT_MENU(self, id, self.OnMenuRename)
+                        # If there is no activeNote (i.e. the note is locked by someone else) ...
+                        # if (self.activeNote == None):
+                            # ... then Note Properties should not be available as a menu option
+                            # menu.Enable(id, False)
 
-                    # Create a new Id for a menu item
-                    id = wx.NewId()
-                    # Add a menu item for Note Properties
-                    menu.Append(id, _("Note Properties"))
-                    # Link the appropriate method to the menu item
-                    wx.EVT_MENU(self, id, self.OnMenuProperties)
-                    # If there is no activeNote (i.e. the note is locked by someone else) ...
-                    if (self.activeNote == None):
-                        # ... then Note Properties should not be available as a menu option
-                        menu.Enable(id, False)
-                # If a Menu Object was created ...
-                if menu != None:
-                    # ... show the menu!  (We have to adjust the position of the popup for the position of the tree control.)
-                    self.PopupMenu(menu, (event.GetPosition()[0], event.GetPosition()[1] + self.activeTree.GetPositionTuple()[1] + 15))
-
+                        # Create a new Id for a menu item
+                        id = wx.NewId()
+                        # Add a menu item for Note Properties
+                        menu.Append(id, _("Note Properties"))
+                        # Link the appropriate method to the menu item
+                        wx.EVT_MENU(self, id, self.OnMenuProperties)
+                        # If there is no activeNote (i.e. the note is locked by someone else) ...
+                        if (self.activeNote == None):
+                            # ... then Note Properties should not be available as a menu option
+                            menu.Enable(id, False)
+                    # If a Menu Object was created ...
+                    if menu != None:
+                        # ... show the menu!  (We have to adjust the position of the popup for the position of the tree control.)
+                        self.PopupMenu(menu, (event.GetPosition()[0], event.GetPosition()[1] + self.activeTree.GetPositionTuple()[1] + 15))
 
     def OnMenuReport(self, event):
         """ Implement the Notes Report function from the right-click menus """
@@ -1049,18 +1101,25 @@ class NotesBrowser(wx.Dialog):
             # ... set the search text to None
             searchText = None
         # Call the Notes Report, passing the node type and the search text
-        ReportGeneratorForNotes.ReportGenerator(title=unicode(_("Transana Notes Report"), 'utf8'),
+        ReportGeneratorForNotes.ReportGenerator(controlObject=self.ControlObject,
+                                                title=unicode(_("Transana Notes Report"), 'utf8'),
                                                 reportType=self.activeTree.GetPyData(self.activeTree.GetSelection()).nodetype,
                                                 searchText=searchText)
         
-    def OnMenuLoadClip(self, event):
-        """ Implement the Load Clip function from the right-click menu """
+    def OnMenuLoadClipOrSnapshot(self, event):
+        """ Implement the Load Clip  or Load Snapshot function from the right-click menu """
         # See if the current note is defined (which it isn't if locked by someone else!)
         if self.activeNote != None:
             # Get the Note's Node Data ...
             (nodeData, nodeType) = self.GetNodeData(self.activeNote)
-            # ... and remember the clip's number
-            clipNum = self.activeNote.clip_num
+            # If we have a Clip Note ...
+            if nodeType == 'ClipNoteNode':
+                # ... remember the clip's number
+                objNum = self.activeNote.clip_num
+            # If we have a Snapshot Note ...
+            elif nodeType == 'SnapshotNoteNode':
+                # ... remember the snapshot's number
+                objNum = self.activeNote.snapshot_num
         # If the note is locked, we can still load the Clip.  But we don't have the activeNote to get data from.
         else:
             # Get the selected item
@@ -1071,18 +1130,42 @@ class NotesBrowser(wx.Dialog):
             tempNote = Note.Note(sel_item_data.recNum)
             # Get the Note's Node Data ...
             (nodeData, nodeType) = self.GetNodeData(tempNote)
-            # ... and remember the clip's number
-            clipNum = tempNote.clip_num
-        # We want the Clip, not the Clip Note!  We need to drop the note from the list and change the node type!
+            # If we have a Clip Note ...
+            if nodeType == 'ClipNoteNode':
+                # ... remember the clip's number
+                objNum = tempNote.clip_num
+            # If we have a Snapshot Note ...
+            elif nodeType == 'SnapshotNoteNode':
+                # ... remember the snapshot's number
+                objNum = tempNote.snapshot_num
+        # We want the object, not the object's Note!  We need to drop the note from the list and change the node type!
         nodeData = nodeData[:-1]
-        # Set the node type to Clip, not Clip Note
-        nodeType = 'ClipNode'
-        # Tell the Database Tree to display that note.  (We need to translate the Root node.)
+        # If we have a Clip Note ...
+        if nodeType == 'ClipNoteNode':
+            # ... set the node type to Clip, not Clip Note
+            nodeType = 'ClipNode'
+        # If we have a Snapshot Note ...
+        elif nodeType == 'SnapshotNoteNode':
+            # ... set the node type to Snapshot, not Snapshot Note
+            nodeType = 'SnapshotNode'
+        # Tell the Database Tree to display that node.  (We need to translate the Root node.)
         self.ControlObject.DataWindow.DBTab.tree.select_Node((unicode(_(nodeData[0]), 'utf8'),) + nodeData[1:], nodeType)
-        # Load the Clip in Transana's main interface
-        self.ControlObject.LoadClipByNumber(clipNum)
-        # Close the Notes Browser so user and view the clip
-        self.Close()
+        # If we have a Clip Note ...
+        if nodeType == 'ClipNode':
+            # ... load the Clip in Transana's main interface
+            self.ControlObject.LoadClipByNumber(objNum)
+        # If we have a Snapshot Note ...
+        elif nodeType == 'SnapshotNode':
+            # Create a Snapshot Object ...
+            tmpSnapshot = Snapshot.Snapshot(objNum)
+            # ... and open the Snapshot Window for it
+            self.ControlObject.LoadSnapshot(tmpSnapshot)
+
+##        # Close the Notes Browser so user and view the clip
+##        self.Close()
+
+        # Move the Notes Browser to the back of the Window Stack
+        self.Lower()
         
     def OnMenuLocate(self, event):
         """ Implement the Locate Note function from the right-click menu """

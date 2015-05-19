@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -51,7 +51,7 @@ class Keyword(object):
         self.originalKeywordGroup = keywordGroup
         self.originalKeyword = keyword
         if isinstance(keywordGroup, types.StringTypes) and \
-        isinstance(keyword, types.StringTypes):
+           isinstance(keyword, types.StringTypes):
             self.db_load_by_name(keywordGroup, keyword)
 
 # Public methods
@@ -61,6 +61,10 @@ class Keyword(object):
         str = str + "Keyword Group = %s  (Original = %s)\n" % (self.keywordGroup, self.originalKeywordGroup)
         str = str + "Keyword = %s  (Original = %s)\n" % (self.keyword, self.originalKeyword)
         str = str + "Definition = %s\n" % self.definition
+        str += "lineColorName = %s (%s)\n" % (self.lineColorName, self.lineColorDef)
+        str += "drawMode = %s\n" % self.drawMode
+        str += "lineWidth = %s\n" % self.lineWidth
+        str += "lineStyle = %s\n" % self.lineStyle
         return str
 
     def clear(self):
@@ -73,8 +77,8 @@ class Keyword(object):
                 except AttributeError, e:
                     pass # probably a non-deletable attribute
 
-    def checkEpisodesAndClipsForLocks(self):
-        """ Checks Episodes and Clips to see if a Keyword record is free of related locks """
+    def checkEpisodesClipsSnapshotsForLocks(self):
+        """ Checks Episodes, Clips, and Snapshots to see if a Keyword record is free of related locks """
         # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
         if 'unicode' in wx.PlatformInfo:
             originalKeywordGroup = self.originalKeywordGroup.encode(TransanaGlobal.encoding)
@@ -119,6 +123,44 @@ class Keyword(object):
             RecordCount = len(result)
             c.close()
 
+        # If no Episodes or Clips that contain the record are locked, check the lock status of Snapshots that contain the Keyword for Whole Snapshot coding
+        if RecordCount == 0:
+            # query the lock status for Snapshots that contain the Keyword 
+            query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Snapshots2 c
+                         WHERE a.KeywordGroup = %s AND
+                               a.Keyword = %s AND
+                               a.KeywordGroup = b.KeywordGroup AND
+                               a.Keyword = b.Keyword AND
+                               b.SnapshotNum <> 0 AND
+                               b.SnapshotNum = c.SnapshotNum AND
+                               (c.RecordLock <> '' AND
+                                c.RecordLock IS NOT NULL)"""
+            values = (originalKeywordGroup, originalKeyword)
+            c = DBInterface.get_db().cursor()
+            c.execute(query, values)
+            result = c.fetchall()
+            RecordCount = len(result)
+            c.close()
+
+        # If no Episodes, Clips that contain the record are locked, check the lock status of Snapshots that contain the Keyword for Snapshot Coding
+        if RecordCount == 0:
+            # query the lock status for Snapshots that contain the Keyword 
+            query = """SELECT c.RecordLock FROM Keywords2 a, SnapshotKeywords2 b, Snapshots2 c
+                         WHERE a.KeywordGroup = %s AND
+                               a.Keyword = %s AND
+                               a.KeywordGroup = b.KeywordGroup AND
+                               a.Keyword = b.Keyword AND
+                               b.SnapshotNum <> 0 AND
+                               b.SnapshotNum = c.SnapshotNum AND
+                               (c.RecordLock <> '' AND
+                                c.RecordLock IS NOT NULL)"""
+            values = (originalKeywordGroup, originalKeyword)
+            c = DBInterface.get_db().cursor()
+            c.execute(query, values)
+            result = c.fetchall()
+            RecordCount = len(result)
+            c.close()
+
         if RecordCount != 0:
             LockName = result[0][0]
             return (RecordCount, LockName)
@@ -127,7 +169,7 @@ class Keyword(object):
         
     def removeDuplicatesForMerge(self):
         """  When merging keywords, we need to remove instances of the OLD keyword that already exist in
-             Episodes or Clips that also contain the NEW keyword.  (Doing it this way reduces overhead.) """
+             Episodes, Clips, or Snapshots that also contain the NEW keyword.  (Doing it this way reduces overhead.) """
         # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
         if 'unicode' in wx.PlatformInfo:
             # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
@@ -143,14 +185,15 @@ class Keyword(object):
             keywordGroup = self.keywordGroup
             keyword = self.keyword
 
-        # Look for Episodes and Clips that have BOTH the original and the merge keywords
+        # Look for Episodes, Clips, and Whole-Snapshots that have BOTH the original and the merge keywords
         query = """SELECT * FROM ClipKeywords2 a, ClipKeywords2 b
                      WHERE a.KeywordGroup = %s AND
                            a.Keyword = %s AND
                            b.KeywordGroup = %s AND
                            b.Keyword = %s AND
                            a.EpisodeNum = b.EpisodeNum AND
-                           a.ClipNum = b.ClipNum """
+                           a.ClipNum = b.ClipNum AND
+                           a.SnapshotNum = b.SnapshotNum"""
         values = (originalKeywordGroup, originalKeyword, keywordGroup, keyword)
         c = DBInterface.get_db().cursor()
         c.execute(query, values)
@@ -161,12 +204,46 @@ class Keyword(object):
         query = """ DELETE FROM ClipKeywords2
                       WHERE EpisodeNum = %s AND
                             ClipNum = %s AND
+                            SnapshotNum = %s AND
                             KeywordGroup = %s AND
                             Keyword = %s"""
         # Go through the list of duplicates ...
         for line in result:
             # ... and delete the original keyword listing, leaving the other (merge) record untouched.
-            values = (line[0], line[1], line[2], line[3])
+            values = (line[0], line[1], line[2], line[3], line[4])
+            c.execute(query, values)
+
+        # For Snapshot Coding, we don't want to LOSE any of the drawn shapes, so we rename the OLD
+        # Keyword Records to match the new Keyword Records
+        query = """UPDATE SnapshotKeywords2
+                     SET KeywordGroup = %s,
+                         Keyword = %s
+                     WHERE KeywordGroup = %s AND
+                           Keyword = %s"""
+        values = (keywordGroup, keyword, originalKeywordGroup, originalKeyword)
+        c.execute(query, values)
+            
+        # Look for Snapshots that have STYLES for BOTH the original and the merge keywords
+        query = """SELECT * FROM SnapshotKeywordStyles2 a, SnapshotKeywordStyles2 b
+                     WHERE a.KeywordGroup = %s AND
+                           a.Keyword = %s AND
+                           b.KeywordGroup = %s AND
+                           b.Keyword = %s AND
+                           a.SnapshotNum = b.SnapshotNum"""
+        values = (originalKeywordGroup, originalKeyword, keywordGroup, keyword)
+        c.execute(query, values)
+        # Remember the list of what would become duplicate entries
+        result = c.fetchall()
+
+        # Prepare a query for deleting the duplicate
+        query = """ DELETE FROM SnapshotKeywordStyles2
+                      WHERE SnapshotNum = %s AND
+                            KeywordGroup = %s AND
+                            Keyword = %s"""
+        # Go through the list of duplicates ...
+        for line in result:
+            # ... and delete the original keyword listing, leaving the other (merge) record untouched.
+            values = (line[0], line[1], line[2])
             c.execute(query, values)
             
         c.close()
@@ -188,7 +265,7 @@ class Keyword(object):
 
         lq = self._get_db_fields(('RecordLock', 'LockTime'), c)
         if (lq[1] == None) or (lq[0] == "") or ((DBInterface.ServerDateTime() - lq[1]).days > 1):
-            (EpisodeClipLockCount, LockName) = self.checkEpisodesAndClipsForLocks()
+            (EpisodeClipLockCount, LockName) = self.checkEpisodesClipsSnapshotsForLocks()
             if EpisodeClipLockCount == 0:
                 # Lock the record
                 self._set_db_fields(    ('RecordLock', 'LockTime'),
@@ -245,7 +322,6 @@ class Keyword(object):
     def db_save(self):
         """Save the record to the database using Insert or Update as
         appropriate."""
-
         # Define and implement Demo Version limits
         if TransanaConstants.demoVersion and (self._db_start_save() == 0):
             # Get a DB Cursor
@@ -286,6 +362,7 @@ class Keyword(object):
             else:
                 originalKeyword = None
             definition = self.definition.encode(TransanaGlobal.encoding)
+            lineColorName = self.lineColorName.encode(TransanaGlobal.encoding)
         else:
             # If we don't need to encode the string values, we still need to copy them to our local variables.
             keywordGroup = self.keywordGroup
@@ -299,8 +376,9 @@ class Keyword(object):
             else:
                 originalKeyword = None
             definition = self.definition
+            lineColorName = self.lineColorName
 
-        values = (keywordGroup, keyword, definition)
+        values = (keywordGroup, keyword, definition, lineColorName, self.lineColorDef, self.drawMode, self.lineWidth, self.lineStyle)
 
         if (self._db_start_save() == 0):
             # duplicate Keywords are not allowed
@@ -309,7 +387,10 @@ class Keyword(object):
                             (keywordGroup, keyword) ) > 0:
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_('A Keyword named "%s : %s" already exists.'), 'utf8') % (self.keywordGroup, self.keyword)
+                    prompt = _('A Keyword named "%s : %s" already exists.')
+                    if type(prompt) == str:
+                        prompt = unicode(prompt, 'utf8')
+                    prompt = prompt % (self.keywordGroup, self.keyword)
                 else:
                     prompt = _('A Keyword named "%s : %s" already exists.') % (self.keywordGroup, self.keyword)
                 raise SaveError, prompt
@@ -317,9 +398,9 @@ class Keyword(object):
             # insert the new Keyword
             query = """
             INSERT INTO Keywords2
-                (KeywordGroup, Keyword, Definition)
+                (KeywordGroup, Keyword, Definition, LineColorName, LineColorDef, DrawMode, LineWidth, LineStyle)
                 VALUES
-                (%s,%s,%s)
+                (%s, %s, %s, %s, %s, %s, %s, %s)
             """
             c = DBInterface.get_db().cursor()
             c.execute(query, values)
@@ -373,19 +454,17 @@ class Keyword(object):
             # because the locked Episode or Clip would retain the obsolete keyword and would lose the
             # new keyword record, so it would not appear in all Search results that it should.  I expect
             # this to be extraordinarily rare.
-            (EpisodeClipLockCount, LockName) = self.checkEpisodesAndClipsForLocks()
+            (EpisodeClipLockCount, LockName) = self.checkEpisodesClipsSnapshotsForLocks()
             if EpisodeClipLockCount != 0 and \
                ((originalKeywordGroup != keywordGroup) or \
                 (originalKeyword != keyword)):
-                tempstr = _("""You cannot proceed because another user has recently started editing an Episode or a Clip that uses\n
-Keyword "%s:%s".  If you change the Keyword now, that would corrupt the record that is \n
-currently locked by %s.  Please try again later.""")
+                tempstr = _("""You cannot proceed because another user has recently started editing an Episode, Clip, or Snapshot 
+that uses Keyword "%s:%s".  If you change the Keyword now, that would 
+corrupt the record that is currently locked by %s.  Please try again later.""")
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     tempstr = unicode(tempstr, 'utf8')
-                dlg = Dialogs.ErrorDialog(TransanaGlobal.menuWindow, tempstr  % (self.originalKeywordGroup, self.originalKeyword, LockName))
-                dlg.ShowModal()
-                dlg.Destroy()
+                raise SaveError(tempstr  % (self.originalKeywordGroup, self.originalKeyword, LockName))
             
             else:
                 c = DBInterface.get_db().cursor()
@@ -403,7 +482,12 @@ currently locked by %s.  Please try again later.""")
                     UPDATE Keywords2
                         SET KeywordGroup = %s,
                             Keyword = %s,
-                            Definition = %s
+                            Definition = %s,
+                            LineColorName = %s,
+                            LineColorDef = %s,
+                            DrawMode = %s,
+                            LineWidth = %s,
+                            LineStyle = %s
                         WHERE KeywordGroup = %s AND
                               Keyword = %s
                     """
@@ -415,6 +499,32 @@ currently locked by %s.  Please try again later.""")
                     (originalKeyword != keyword)):
                     query = """
                     UPDATE ClipKeywords2
+                        SET KeywordGroup = %s,
+                            Keyword = %s
+                        WHERE KeywordGroup = %s AND
+                              Keyword = %s
+                    """
+                    values = (keywordGroup, keyword, originalKeywordGroup, originalKeyword)
+                    c.execute(query, values)
+
+                # If the Keyword Group or Keyword has changed, we need to update all Snapshot Keyword records too.
+                if ((originalKeywordGroup != keywordGroup) or \
+                    (originalKeyword != keyword)):
+                    query = """
+                    UPDATE SnapshotKeywords2
+                        SET KeywordGroup = %s,
+                            Keyword = %s
+                        WHERE KeywordGroup = %s AND
+                              Keyword = %s
+                    """
+                    values = (keywordGroup, keyword, originalKeywordGroup, originalKeyword)
+                    c.execute(query, values)
+
+                # If the Keyword Group or Keyword has changed, we need to update all Snapshot Keyword Style records too.
+                if ((originalKeywordGroup != keywordGroup) or \
+                    (originalKeyword != keyword)):
+                    query = """
+                    UPDATE SnapshotKeywordStyles2
                         SET KeywordGroup = %s,
                             Keyword = %s
                         WHERE KeywordGroup = %s AND
@@ -450,7 +560,6 @@ currently locked by %s.  Please try again later.""")
         dlg = wx.MessageDialog(TransanaGlobal.menuWindow, tempstr, "Keyword Object", wx.OK | wx.ICON_EXCLAMATION)
         dlg.ShowModal()
         dlg.Destroy()
-
 
 
 # Private methods
@@ -618,10 +727,10 @@ currently locked by %s.  Please try again later.""")
         if (use_transactions):
             # Commit the transaction
             if (result):
-                c.execute("COMMIT\n")
+                c.execute("COMMIT")
             else:
                 # Rollback transaction because some part failed
-                c.execute("ROLLBACK\n")
+                c.execute("ROLLBACK")
             if (self.originalKeywordGroup == None) or \
                (self.originalKeyword == None):           # no record loaded?
                     self.unlock_record()
@@ -634,12 +743,18 @@ currently locked by %s.  Please try again later.""")
         self.definition = r['Definition']
         if self.definition == None:
             self.definition = ''
+        self.lineColorName = r['LineColorName']
+        self.lineColorDef = r['LineColorDef']
+        self.drawMode = r['DrawMode']
+        self.lineWidth = r['LineWidth']
+        self.lineStyle = r['LineStyle']
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
         # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
         if 'unicode' in wx.PlatformInfo:
             self.keywordGroup = DBInterface.ProcessDBDataForUTF8Encoding(self.keywordGroup)
             self.keyword = DBInterface.ProcessDBDataForUTF8Encoding(self.keyword)
             self.definition = DBInterface.ProcessDBDataForUTF8Encoding(self.definition)
+            self.lineColorName = DBInterface.ProcessDBDataForUTF8Encoding(self.lineColorName)
 
     def _get_keywordGroup(self):
         return self._keywordGroup
@@ -683,7 +798,7 @@ currently locked by %s.  Please try again later.""")
                 msg = unicode(_('Keyword Group is limited to %d characters.  Your Keyword Group has been changed to\n"%s"'), 'utf8')
             else:
                 msg = _('Keyword Group is limited to %d characters.  Your Keyword Group has been changed to\n"%s"')
-            dlg = ErrorDialog(None, msg % (maxLen, keywordGroup))
+            dlg = Dialogs.ErrorDialog(None, msg % (maxLen, keywordGroup))
             dlg.ShowModal()
             dlg.Destroy()
         # Remove white space from the Keyword Group.
@@ -719,6 +834,44 @@ currently locked by %s.  Please try again later.""")
     def _del_definition(self):
         self._definition = ""
 
+    def _get_lineColorName(self):
+        return self._lineColorName
+    def _set_lineColorName(self, lineColorName):
+        self._lineColorName = lineColorName
+    def _del_lineColorName(self):
+        self._lineColorName = ""
+
+    def _get_lineColorDef(self):
+        return self._lineColorDef
+    def _set_lineColorDef(self, lineColorDef):
+        self._lineColorDef = lineColorDef
+    def _del_lineColorDef(self):
+        self._lineColorDef = ""
+
+    def _get_drawMode(self):
+        return self._drawMode
+    def _set_drawMode(self, drawMode):
+        self._drawMode = drawMode
+    def _del_drawMode(self):
+        self._drawMode = ""
+
+    def _get_lineWidth(self):
+        return self._lineWidth
+    def _set_lineWidth(self, lineWidth):
+        if lineWidth != '':
+            self._lineWidth = int(lineWidth)
+        else:
+            self._lineWidth = 0
+    def _del_lineWidth(self):
+        self._lineWidth = 0
+
+    def _get_lineStyle(self):
+        return self._lineStyle
+    def _set_lineStyle(self, lineStyle):
+        self._lineStyle = lineStyle
+    def _del_lineStyle(self):
+        self._lineStyle = ""
+
     def _get_rl(self):
         return self._get_db_fields(('RecordLock',))[0]
 
@@ -732,6 +885,16 @@ currently locked by %s.  Please try again later.""")
                         """The keyword.""")
     definition = property(_get_definition, _set_definition, _del_definition,
                           """ The keyword Definition""")
+    lineColorName = property(_get_lineColorName, _set_lineColorName, _del_lineColorName,
+                        """The Line Color Name.""")
+    lineColorDef = property(_get_lineColorDef, _set_lineColorDef, _del_lineColorDef,
+                        """The Line Color Def.""")
+    drawMode = property(_get_drawMode, _set_drawMode, _del_drawMode,
+                        """The coding Draw Mode.""")
+    lineWidth = property(_get_lineWidth, _set_lineWidth, _del_lineWidth,
+                        """The coding Line Width.""")
+    lineStyle = property(_get_lineStyle, _set_lineStyle, _del_lineStyle,
+                        """The coding Line Style.""")
     record_lock = property(_get_rl, None, None,
                         """Username of person who has locked the record
                         (Read only).""")

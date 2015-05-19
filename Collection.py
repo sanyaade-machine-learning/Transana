@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -34,6 +34,8 @@ import DataObject
 import DBInterface
 # import Transana's Note Object
 import Note
+# import Transana's Snapshot object
+import Snapshot
 # import Transana's Exceptions
 from TransanaExceptions import *
 # import Transana's Globals
@@ -235,6 +237,15 @@ class Collection(DataObject.DataObject):
                 result = result and clip.db_delete(0)
                 del clip
             del clips
+
+            # Delete Snapshots, which in turn will delete Snapshot Coding and Keywords
+            snapshots = DBInterface.list_of_snapshots_by_collectionnum(self.number)
+            for (snapshotNo, snapshotID, collNo) in snapshots:
+                # Since we intend to delete the snapshot, we can suppress the error message about missing Episodes
+                snapshot = Snapshot.Snapshot(snapshotNo, suppressEpisodeError = True)
+                result = result and snapshot.db_delete(0)
+                del snapshot
+            del snapshots
 
             # Delete all Nested Collections
             for (collNo, collID, parentCollNo) in DBInterface.list_of_collections(self.number):

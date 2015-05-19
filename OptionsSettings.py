@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -49,9 +49,9 @@ class OptionsSettings(wx.Dialog):
         # if we're showing the LAB version's initial configuration, we need a bit more room.
         if 'wxMSW' in wx.PlatformInfo:
             if self.lab:
-                dlgHeight = 415
+                dlgHeight = 445
             else:
-                dlgHeight = 405
+                dlgHeight = 445
         else:
             if self.lab:
                 dlgWidth = 580
@@ -388,8 +388,14 @@ class OptionsSettings(wx.Dialog):
                 font = wx.Font(TransanaGlobal.configData.defaultFontSize, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
                 choicelist.append(font.GetFaceName())
                    
+            # As of wxPython 2.9.5.0, Mac doesn't support wx.CB_SORT and gives an ugly message about it!
+            if 'wxMac' in wx.PlatformInfo:
+                style = wx.CB_DROPDOWN
+                choicelist.sort()
+            else:
+                style = wx.CB_DROPDOWN | wx.CB_SORT
             # Default Font Combo Box
-            self.defaultFont = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN | wx.CB_SORT)
+            self.defaultFont = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = style)
             # Add the element to the element Sizer
             v2.Add(self.defaultFont, 0, wx.EXPAND | wx.RIGHT, 10)
 
@@ -449,8 +455,14 @@ class OptionsSettings(wx.Dialog):
                 font = wx.Font(TransanaGlobal.configData.defaultFontSize, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
                 choicelist.append(font.GetFaceName())
                    
+            # As of wxPython 2.9.5.0, Mac doesn't support wx.CB_SORT and gives an ugly message about it!
+            if 'wxMac' in wx.PlatformInfo:
+                style = wx.CB_DROPDOWN
+                choicelist.sort()
+            else:
+                style = wx.CB_DROPDOWN | wx.CB_SORT
             # Special Font Combo Box
-            self.specialFont = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN | wx.CB_SORT)
+            self.specialFont = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = style)
             # Add the element to the element Sizer
             v4.Add(self.specialFont, 0, wx.EXPAND | wx.RIGHT, 10)
 
@@ -505,6 +517,17 @@ class OptionsSettings(wx.Dialog):
             # Set the value to the configured value for Word Wrap
             self.cbAutoSave.SetValue((TransanaGlobal.configData.autoSave))
 
+            # Add a spacer
+            checkboxSizer.Add((20, 1))
+
+            # Max Transcript Image Width checkbox
+            self.cbMaxTranscriptImageWidth = wx.CheckBox(panelTranscriber, -1, _("Limit Image Width in Transcripts") + "  ", style=wx.ALIGN_RIGHT)
+            # Add the element to the Row Sizer
+            checkboxSizer.Add(self.cbMaxTranscriptImageWidth, 0)
+            # Set the value to the configured value for Word Wrap
+            self.cbMaxTranscriptImageWidth.SetValue((TransanaGlobal.configData.maxTranscriptImageWidth))
+            
+
             # Add the row sizer to the panel sizer
             panelTranSizer.Add(checkboxSizer, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
 
@@ -515,40 +538,14 @@ class OptionsSettings(wx.Dialog):
 
         # The Message Server Tab should only appear for the Multi-user version of the program.
         if not TransanaConstants.singleUserVersion:
+            
             # Add the Message Server Tab to the Notebook
-            panelMessageServer = wx.Panel(notebook, -1, size=notebook.GetSizeTuple(), name='OptionsSettings.MessageServerPanel')
-            
-            # Define the main VERTICAL sizer for the Notebook Page
-            panelMsgSizer = wx.BoxSizer(wx.VERTICAL)
-            
-            # Add the Message Server Label to the Message Server Tab
-            lblMessageServer = wx.StaticText(panelMessageServer, -1, _("Transana-MU Message Server Host Name"), style=wx.ST_NO_AUTORESIZE)
-            # Add the label to the Panel Sizer
-            panelMsgSizer.Add(lblMessageServer, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
-            # Add a spacer
-            panelMsgSizer.Add((0, 3))
-            
-            # Add the Message Server TextCtrl to the Message Server Tab
-            self.messageServer = wx.TextCtrl(panelMessageServer, -1, TransanaGlobal.configData.messageServer)
-            # Add the element to the Panel Sizer
-            panelMsgSizer.Add(self.messageServer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+            self.panelMessageServer = MessageServerPanel(notebook, name='OptionsSettings.MessageServerPanel')
 
-            # Add the Message Server Port Label to the Message Server Tab
-            lblMessageServerPort = wx.StaticText(panelMessageServer, -1, _("Port"), style=wx.ST_NO_AUTORESIZE)
-            # Add the label to the Panel Sizer
-            panelMsgSizer.Add(lblMessageServerPort, 0, wx.LEFT | wx.RIGHT, 10)
-            # Add a spacer
-            panelMsgSizer.Add((0, 3))
-            
-            # Add the Message Server Port TextCtrl to the Message Server Tab
-            self.messageServerPort = wx.TextCtrl(panelMessageServer, -1, str(TransanaGlobal.configData.messageServerPort))
-            # Add the element to the Panel Sizer
-            panelMsgSizer.Add(self.messageServerPort, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
-            # Tell the Message Server Panel to lay out now and do AutoLayout
-            panelMessageServer.SetSizer(panelMsgSizer)
-            panelMessageServer.SetAutoLayout(True)
-            panelMessageServer.Layout()
+
+
+
       
         # Add the three Panels as Tabs in the Notebook
         notebook.AddPage(panelDirectories, _("Directories"), True)
@@ -559,7 +556,7 @@ class OptionsSettings(wx.Dialog):
         # If we're in the Multi-user version ...
         if not TransanaConstants.singleUserVersion:
             # ... then add the Message Server tab.
-            notebook.AddPage(panelMessageServer, _("MU Message Server"), False)
+            notebook.AddPage(self.panelMessageServer, _("MU Message Server"), False)
 
         # the tabToShow parameter is the NUMBER of the tab which should be shown initially.
         #   0 = Directories tab
@@ -578,7 +575,7 @@ class OptionsSettings(wx.Dialog):
         # If the Message Server tab is showing ...
         elif notebook.GetSelection() == 2:
             # ... the Message Server field should recieve initial focus
-            self.messageServer.SetFocus()
+            self.panelMessageServer.messageServer.SetFocus()
 
         # Create a Row Sizer for the buttons
         btnSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -651,7 +648,7 @@ class OptionsSettings(wx.Dialog):
            (self.databaseDirectory.GetValue()[-1] != os.sep):
             TransanaGlobal.configData.databaseDir = self.databaseDirectory.GetValue() + os.sep
         else:
-            TransanaGlobal.configData.databaseDir = self.databaseDirectory.GetValue()        
+            TransanaGlobal.configData.databaseDir = self.databaseDirectory.GetValue()
         # If we're not in the LAB version and the Video Root Path has changed ...
         if (not self.lab) and (tempVideoPath != TransanaGlobal.configData.videoPath):
             # First, find out if there are Episodes or Clips that need to be changed in the Database
@@ -714,6 +711,8 @@ class OptionsSettings(wx.Dialog):
                 TransanaGlobal.configData.wordWrap = wordWrapValue
             # Update the Auto Save value
             TransanaGlobal.configData.autoSave = self.cbAutoSave.GetValue()
+            # Update the Max Transcript Image Width value
+            TransanaGlobal.configData.maxTranscriptImageWidth = self.cbMaxTranscriptImageWidth.GetValue()
             # Update the Global Default Font
             TransanaGlobal.configData.defaultFontFace = self.defaultFont.GetValue()
             # Update the Global Default Font Size
@@ -731,19 +730,19 @@ class OptionsSettings(wx.Dialog):
         if not TransanaConstants.singleUserVersion:
             # TODO:  If Message Server is changed, disconnect and connect to new Message Server!
             # Update the Global Message Server Variable
-            TransanaGlobal.configData.messageServer = self.messageServer.GetValue()
+            TransanaGlobal.configData.messageServer = self.panelMessageServer.messageServer.GetValue()
             # Update the Global Message Server Port
-            TransanaGlobal.configData.messageServerPort = int(self.messageServerPort.GetValue())
+            TransanaGlobal.configData.messageServerPort = int(self.panelMessageServer.messageServerPort.GetValue())
         
         # Make sure the oldDatabaseDir ends with the proper seperator character.
         # (But the LAB version won't HAVE an oldDatabaseDir.)
         if (self.oldDatabaseDir <> '') and (self.oldDatabaseDir[-1] != os.sep):
             self.oldDatabaseDir = self.oldDatabaseDir + os.sep
-        # If database directory was changed inform user.  (But the LAB version won't HAVE an oldDatabaseDir.)
+        # If database directory was changed, ...  (But the LAB version won't HAVE an oldDatabaseDir.)
         if (self.oldDatabaseDir <> '') and (self.oldDatabaseDir != TransanaGlobal.configData.databaseDir):
-            infoDlg = Dialogs.InfoDialog(self, _("Database directory change will take effect after you restart Transana."))
-            infoDlg.ShowModal()
-            infoDlg.Destroy()
+            # ... signal need to shut down Transana
+            self.parent.shutDown = True
+
         # Let's save the configuration data so it doesn't disappear if Transana crashes, not, of course, that Transana ever crashes.
         TransanaGlobal.configData.SaveConfiguration()
         self.Close()
@@ -818,4 +817,42 @@ class OptionsSettings(wx.Dialog):
         # If the Message Server tab is showing ...
         elif event.GetSelection() == 2:
             # ... the Message Server should receive focus
-            wx.CallAfter(self.messageServer.SetFocus)
+            wx.CallAfter(self.panelMessageServer.messageServer.SetFocus)
+
+
+class MessageServerPanel(wx.Panel):
+    def __init__(self, parent, name):
+            # Add the Message Server Tab to the Notebook
+            wx.Panel.__init__(self, parent, -1, size=parent.GetSizeTuple(), name=name)
+            
+            # Define the main VERTICAL sizer for the Notebook Page
+            panelMsgSizer = wx.BoxSizer(wx.VERTICAL)
+            
+            # Add the Message Server Label to the Message Server Tab
+            lblMessageServer = wx.StaticText(self, -1, _("Transana-MU Message Server Host Name"), style=wx.ST_NO_AUTORESIZE)
+            # Add the label to the Panel Sizer
+            panelMsgSizer.Add(lblMessageServer, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+            # Add a spacer
+            panelMsgSizer.Add((0, 3))
+            
+            # Add the Message Server TextCtrl to the Message Server Tab
+            self.messageServer = wx.TextCtrl(self, -1, TransanaGlobal.configData.messageServer)
+            # Add the element to the Panel Sizer
+            panelMsgSizer.Add(self.messageServer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            # Add the Message Server Port Label to the Message Server Tab
+            lblMessageServerPort = wx.StaticText(self, -1, _("Port"), style=wx.ST_NO_AUTORESIZE)
+            # Add the label to the Panel Sizer
+            panelMsgSizer.Add(lblMessageServerPort, 0, wx.LEFT | wx.RIGHT, 10)
+            # Add a spacer
+            panelMsgSizer.Add((0, 3))
+            
+            # Add the Message Server Port TextCtrl to the Message Server Tab
+            self.messageServerPort = wx.TextCtrl(self, -1, str(TransanaGlobal.configData.messageServerPort))
+            # Add the element to the Panel Sizer
+            panelMsgSizer.Add(self.messageServerPort, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            # Tell the Message Server Panel to lay out now and do AutoLayout
+            self.SetSizer(panelMsgSizer)
+            self.SetAutoLayout(True)
+            self.Layout()

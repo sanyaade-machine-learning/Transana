@@ -7,11 +7,11 @@
 
 <H1>The File Management Tool<HR ></H1>
 
-<P>The File Management tool is designed primarily for moving and organizing video and audio files.  It allows users to manipulate files on a local network, as well as transferring files between a local network and the Storage Resource Broker, a repository useful for sharing media files with distant collaborators.
+<P>The File Management tool is designed primarily for moving and organizing video, audio, and image files.  It allows users to manipulate files on a local network, as well as transferring files between a local network and Secure File Transfer Protocol (sFTP) server, a repository useful for securely sharing media files with distant collaborators.
 
 <P><IMG SRC="images/FileManagement.gif"  ALT="fileman"   BORDER=0>
 
-<P>The File Management screen is divided into two sides with a set of controls between them.  Files can be copied or moved in either direction.
+<P>The File Management screen is divided into two sides with a set of controls between them.  Directory trees are displayed on top, and files within the selected directory are listed below.  Files can be copied or moved in either direction.
 
 <P><B>Copy</B> will copy selected files from the current directory on one side of the screen to the current directory on the other side of the screen in the direction of the arrow button pressed.  Please note that the File Management Tool will NOT over-write existing files, and will skip the copy if the file already exists in the target directory.  If you want to replace a file, you must delete it before copying the new file.
 
@@ -23,15 +23,19 @@
 
 <P><B>New Folder</B> will create a new directory on the indicated side.
 
-<P><B>Update DB</B> will update the location of media files in Episode and Clip definitions in the Transana database.  The File Management Tool will look up all references to the selected media files on the indicated side and will update the path reference, taking the Video Root setting into account, for those database records.  This function is extremely useful if you change the location of a media file in relation to your defined Video Root setting.  Only file locations on the local network can be used for updating a database.  It is not possible to use a file stored only on the Storage Resource Broker with Transana due to bandwidth issues.
+<P><B>Update DB</B> will update the location of media files in Episode and Clip definitions in the Transana database.  The File Management Tool will look up all references to the selected media files on the indicated side and will update the path reference, taking the Video Root setting into account, for those database records.  This function is extremely useful if you change the location of a media file in relation to your defined Video Root setting.  Only file locations on the local network can be used for updating a database.  It is not possible to use a file stored only on an sFTP server with Transana due to internet bandwidth considerations.
 
-<P><B>Connect</B> is used to connect to the Storage Resource Broker, or SRB, and to disconnect from it.  The SRB provides secure, encrypted file transfer over the internet.  If your project needs access to a Storage Resource Broker for transferring files, please use the Contact form on the Transana Web Site to request a user name and password for your project.  As a general rule, do not change the default values on the SRB Connection form unless you know what you are doing.
+<P><B>Connect</B> is used to connect to an sFTP server and to disconnect from it.  sFTP provides secure, encrypted file transfer over the internet.  </P>
 
 <P><B>Refresh</B> will update all directory and file information displayed by the File Management tool to reflect changes that may have been made by other processes interacting with these resources.
 
 <P><B>Close</B> will close the File Management tool.
 
-<P>You may notice that the File Management Utility does not provide a way to rename media files. To preserve data integrity related to millisecond accuracy of start and stop positions, we have not provided a way to change the media file associated with Clips, other than changing the PATH (but not the File Name) provided by the Update DB button. We strongly recommend that you do NOT change file names of media files once you have begun working with them in Transana. If you do, you will have to recreate your Clips.
+<P>You may notice that the File Management Utility does not provide a way to rename media files. To preserve data integrity related to millisecond accuracy of start and stop positions, we have not provided a way to change the media file associated with Clips, other than changing the PATH (but not the File Name) provided by the Update DB button. We strongly recommend that you do NOT change file names of media files once you have begun working with them in Transana. If you do, you will have to recreate your Clips.</P>
+
+<P><A HREF="convert.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="programoptionsmu.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A></P>
 
 </BODY>
 </HTML>

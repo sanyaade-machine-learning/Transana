@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2011 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2011 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -59,11 +59,34 @@ ENABLE_MPG = False  # DO NOT CHANGE THIS VALUE
 # We've disabled it to be certain we are within the law.
 ENABLE_MOV = False
 
+if ENABLE_MPG or ENABLE_MOV:
+    print "MediaConvert:  MPG or MOV format enabled!!"
+
+# This simple derived class let's the user drop files onto an edit box
+class EditBoxFileDropTarget(wx.FileDropTarget):
+    def __init__(self, editbox):
+        wx.FileDropTarget.__init__(self)
+        self.editbox = editbox
+    def OnDropFiles(self, x, y, files):
+        """Called when a file is dragged onto the edit box."""
+        self.editbox.SetValue(files[0])
+
 class MediaConvert(wx.Dialog):
     """ Transana's Media Conversion Tool Dialog Box. """
     
     def __init__(self, parent, fileName='', clipStart=0, clipDuration=0, clipName='', snapshot=False):
         """ Initialize the MediaConvert Dialog Box. """
+
+        # There's a bug.  I think it's an interaction between OS X 10.7.5 and earlier (but not 10.8.4), wxPython (version
+        # unknown, but I've seen it in 2.8.12.1, 2.9.4.0, and a pre-release build of 2.9.5.0), and the build process.
+        # Basically, if you open a wxFileDialog object, something bad happens with wxLocale such that subsequent calls
+        # to wxProcess don't encode unicode file names correctly, so FFMpeg fails.  Only OS X 10.7.5, only when Transana
+        # has been built (not running through the interpreter), only following the opening of a wxFileDialog, and only
+        # with filenames with accented characters or characters from non-English languages.
+
+        # The resolution to this bug is to reset the Locale here, based on Transana's current wxLocale setting in the
+        # menuWindow object.
+        self.locale = wx.Locale(TransanaGlobal.menuWindow.locale.Language)
 
         # Remember the File Name passed in
         self.fileName = fileName
@@ -83,6 +106,8 @@ class MediaConvert(wx.Dialog):
         self.snapshot = snapshot
         # We need to know if we have successfully taken a snapshot
         self.snapshotSuccess = False
+        # Initialize the process variable
+        self.process = None
 
         # Initialize all media file variables
         self.Reset()
@@ -115,6 +140,11 @@ class MediaConvert(wx.Dialog):
         if (self.clipDuration > 0) or (TransanaConstants.demoVersion and not snapshot):
             # ... then we need to disable the Source Media File text box
             self.txtSrcFileName.Enable(False)
+        # If we're NOT exporting a Clip ...
+        else:
+            # Make the Source File a File Drop Target
+            self.txtSrcFileName.SetDropTarget(EditBoxFileDropTarget(self.txtSrcFileName))
+
         # Handle ALL changes to the source filename
         self.txtSrcFileName.Bind(wx.EVT_TEXT, self.OnSrcFileNameChange)
         box1.Add(self.txtSrcFileName, 1, wx.EXPAND)
@@ -137,6 +167,8 @@ class MediaConvert(wx.Dialog):
 
         # Add the Format Choice Box with no options initially
         self.format = wx.Choice(self, -1, choices=[])
+        # Fix problems with Right-To-Left languages
+        self.format.SetLayoutDirection(wx.Layout_LeftToRight)
         # Disable the Format box initially
         self.format.Enable(False)
         self.format.Bind(wx.EVT_CHOICE, self.OnFormat)
@@ -151,6 +183,8 @@ class MediaConvert(wx.Dialog):
 
         # Create the Destination File text box
         self.txtDestFileName = wx.TextCtrl(self, -1)
+        # Set the layout Direction to LtR so file names don't get mangled
+        self.txtDestFileName.SetLayoutDirection(wx.Layout_LeftToRight)
         # Disable the Destination File box initially
         self.txtDestFileName.Enable(False)
         box2.Add(self.txtDestFileName, 1, wx.EXPAND)
@@ -177,8 +211,15 @@ class MediaConvert(wx.Dialog):
         lblVideoSize = wx.StaticText(self, -1, _("Size:"))
         box3.Add(lblVideoSize, 0, wx.RIGHT, 10)
 
+#        This does not work!!!!
+#        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+#            style = wx.ALIGN_RIGHT
+#        else:
+#            style = 0
         # Add the Video Size choice box, initially empty
-        self.videoSize = wx.Choice(self, -1, choices=[])
+        self.videoSize = wx.Choice(self, -1, choices=[])   # , style=style
+        # Fix problems with Right-To-Left languages
+        self.videoSize.SetLayoutDirection(wx.Layout_LeftToRight)
         # Disable Video Size initially
         self.videoSize.Enable(False)
         box3.Add(self.videoSize, 1, wx.RIGHT, 10)
@@ -310,7 +351,6 @@ class MediaConvert(wx.Dialog):
 
         # Create a Close button
         btnClose = wx.Button(self, wx.ID_CANCEL, _("Close"))
-#        btnClose.Bind(wx.EVT_BUTTON, self.OnClose)
         boxButtons.Add(btnClose, 0, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT, 10)
 
         self.Bind(wx.EVT_CLOSE, self.OnClose)
@@ -349,6 +389,8 @@ class MediaConvert(wx.Dialog):
 
     def Reset(self):
         """ Initialize or Reset all variables associated with the Media File to be converted """
+        # initialize the process variable
+        self.process = None
         # Media File Duration
         self.duration = 0
         # Overall Bit Rate
@@ -390,6 +432,7 @@ class MediaConvert(wx.Dialog):
         
         # If we're messing with wxProcess, we need to define a function to clean up if we shut down!
         def __del__(self):
+
             # If a process has been defined ...
             if self.process is not None:
                 # ... detach it
@@ -482,10 +525,24 @@ class MediaConvert(wx.Dialog):
         # Just use the File Name, no encoding needed
         tempMediaFilename = inputFile
 
+        if DEBUG:
+            self.memo.AppendText("MediaConvert.ProcessMediaFile():\n")
+            self.memo.AppendText("%s\n  (%d) exists: %s\n" % (tempMediaFilename, len(tempMediaFilename), os.path.exists(tempMediaFilename)))
+
+            statinfo = os.stat(tempMediaFilename)
+            self.memo.AppendText("  size: %s\n\n" % statinfo.st_size)
+
+            self.memo.AppendText("  type: %s, defaultPyEncoding: %s, filesystemencoding: %s, Transana's Encoding: %s\n\n" % (type(tempMediaFilename), wx.GetDefaultPyEncoding(), sys.getfilesystemencoding(), TransanaGlobal.encoding))
+
+            for tmpX in range(len(tempMediaFilename)):
+                self.memo.AppendText("  - %d  %s  %d\n" % ( tmpX, tempMediaFilename[tmpX], ord(tempMediaFilename[tmpX]) ))
+            self.memo.AppendText("\n")
+
         # We need to build the Conversion command line.  Start with the executable path and name,
         # and add that we are using it embedded and want the second level of feedback (file information),
         # and specify the Input File name placeholder.
-        process = '"' + TransanaGlobal.programDir + os.sep + 'ffmpeg_Transana" "-embedded" "2" "-i" "%s"'
+        process = '"' + TransanaGlobal.programDir + os.sep + 'ffmpeg_Transana" "-embedded" "2"'
+        process += ' "-i" "%s"'
         # Create a wxProcess object
         self.process = wx.Process(self)
         # Call the wxProcess Object's Redirect method.  This allows us to capture the process's output!
@@ -494,14 +551,14 @@ class MediaConvert(wx.Dialog):
         process = process.encode('utf8')
 
         if DEBUG:
-            print "MediaConvert.ProcessMediaFile():"
-            print type(inputFile), type(tempMediaFilename)
-            print process
-            print sys.getfilesystemencoding(), os.path.exists(tempMediaFilename), os.path.exists(inputFile)
-            print
+            self.memo.AppendText("\n\nMedia Filename:\n")
+            self.memo.AppendText("%s\n\n" % tempMediaFilename)
+            self.memo.AppendText("\n\nProcess call:\n")
+            self.memo.AppendText("%s\n\n" % process % tempMediaFilename)
 
         # Call the Audio Extraction program using wxExecute, capturing the output via wxProcess.  This call MUST be asynchronous. 
-        self.pid = wx.Execute(process % tempMediaFilename, wx.EXEC_ASYNC, self.process)
+        self.pid = wx.Execute(process % tempMediaFilename.encode(sys.getfilesystemencoding()), wx.EXEC_ASYNC, self.process)
+
         # On Windows, we need to reset the encoding to UTF-8
         if 'wxMSW' in wx.PlatformInfo:
             wx.SetDefaultPyEncoding('utf_8')
@@ -510,10 +567,19 @@ class MediaConvert(wx.Dialog):
         """ End of wxProcess Event Handler """
         # If a process is defined ...
         if self.process is not None:
+
+            if DEBUG:
+                self.memo.AppendText("\n\nProcess pid %s calling OnEndProcess()\n\n" % self.pid)
+                
             # Get the Process' Input Stream
             stream = self.process.GetInputStream()
             # If that stream can be read ...
             if stream.CanRead():
+
+                if DEBUG:
+                    self.memo.AppendText("stream.CanRead() call successful\n")
+                    tmpParamCount = 0
+                    
                 # ... read it!
                 text = stream.read()
                 # Divide the text up into separate lines
@@ -523,6 +589,19 @@ class MediaConvert(wx.Dialog):
                 for line in text:
                     # Divide the line up into its separate parameters
                     param = line.split(' ')
+
+                    if DEBUG:
+                        tmpParamCount += 1
+                        self.memo.AppendText("%8d '%s' " % (tmpParamCount, param[0]))
+                        if len(param) > 1:
+                            self.memo.AppendText("%s " % param[1])
+                        if tmpParamCount < 16:
+                            for par in param[2:]:
+                                self.memo.AppendText("%s " % par)
+                        self.memo.AppendText("(%s)" % len(line))
+                        self.memo.AppendText("\n")
+                        
+                        
                     # If the line isn't blank and starts with an "x", indicating embedded feedback information ...
                     if (len(line) > 0) and (line[0] == 'x'):
                         # If the first parameter is just plain "x", we have a General Parameter
@@ -671,26 +750,48 @@ class MediaConvert(wx.Dialog):
                     # Add sizes as long as they are SMALLER than source video size.  (Calculate Heights for
                     # "standard" Width options)
                     if self.vidSizeW >= 320:
-                        st = '320 x ' + str(int(self.vidSizeH * 320.0 / self.vidSizeW))
+                        st = _('%d x %d') % (320, int(self.vidSizeH * 320.0 / self.vidSizeW))
                         self.videoSize.Append(st)
                     if self.vidSizeW >= 400:
-                        st = '400 x ' + str(int(self.vidSizeH * 400.0 / self.vidSizeW))
+                        st = _('%d x %d') % (400, int(self.vidSizeH * 400.0 / self.vidSizeW))
                         self.videoSize.Append(st)
                     if self.vidSizeW >= 480:
-                        st = '480 x ' + str(int(self.vidSizeH * 480.0 / self.vidSizeW))
+                        st = _('%d x %d') % (480, int(self.vidSizeH * 480.0 / self.vidSizeW))
                         self.videoSize.Append(st)
                     if self.vidSizeW >= 560:
-                        st = '560 x ' + str(int(self.vidSizeH * 560.0 / self.vidSizeW))
+                        st = _('%d x %d') % (560, int(self.vidSizeH * 560.0 / self.vidSizeW))
                         self.videoSize.Append(st)
                     if self.vidSizeW >= 640:
-                        st = '640 x ' + str(int(self.vidSizeH * 640.0 / self.vidSizeW))
+                        st = _('%d x %d') % (640, int(self.vidSizeH * 640.0 / self.vidSizeW))
                         self.videoSize.Append(st)
                     if self.vidSizeW >= 720:
-                        st = '720 x ' + str(int(self.vidSizeH * 720.0 / self.vidSizeW))
+                        st = _('%d x %d') % (720, int(self.vidSizeH * 720.0 / self.vidSizeW))
                         self.videoSize.Append(st)
+                    if self.vidSizeW >= 800:
+                        st = _('%d x %d') % (800, int(self.vidSizeH * 800.0 / self.vidSizeW))
+                        self.videoSize.Append(st)
+                    if self.vidSizeW >= 1024:
+                        st = _('%d x %d') % (1024, int(self.vidSizeH * 1024.0 / self.vidSizeW))
+                        self.videoSize.Append(st)
+                    if self.vidSizeW >= 1280:
+                        st = _('%d x %d') % (1280, int(self.vidSizeH * 1280.0 / self.vidSizeW))
+                        self.videoSize.Append(st)
+                    if self.vidSizeW >= 1366:
+                        st = _('%d x %d') % (1366, int(self.vidSizeH * 1366.0 / self.vidSizeW))
+                        self.videoSize.Append(st)
+                    if self.vidSizeW >= 1440:
+                        st = _('%d x %d') % (1440, int(self.vidSizeH * 1440.0 / self.vidSizeW))
+                        self.videoSize.Append(st)
+                    if self.vidSizeW >= 1680:
+                        st = _('%d x %d') % (1680, int(self.vidSizeH * 1680.0 / self.vidSizeW))
+                        self.videoSize.Append(st)
+                    if self.vidSizeW >= 1920:
+                        st = _('%d x %d') % (1920, int(self.vidSizeH * 1920.0 / self.vidSizeW))
+                        self.videoSize.Append(st)
+
                     # If the actual video size hasn't already been inserted, add it, UNLESS
-                    # it is larger than 720 pixels wide, which is our maximum
-                    if (not self.vidSizeW in [720, 640, 560, 480, 400, 320]) and (self.vidSizeW < 720):
+                    # it is larger than 1920 pixels wide, which is our maximum
+                    if (not self.vidSizeW in [1920, 1680, 1440, 1366, 1280, 1024, 800, 720, 640, 560, 480, 400, 320]) and (self.vidSizeW <= 1920):
                         st = str(self.vidSizeW) + ' x ' + str(self.vidSizeH)
                         self.videoSize.Append(st)
                     # If more than one Video Size option exists ...
@@ -846,6 +947,37 @@ class MediaConvert(wx.Dialog):
                 
     def OnConvert(self, event):
         """ Convert Button Press Event """
+        # If we're converting to a still image ...
+        if self.ext in ['.jpg']:
+            # Check the file name, ensuring it has required the "%06d" parameter
+            # First, let's break the file name up into path, filename, and ext
+            (filename, ext) = os.path.splitext(self.txtDestFileName.GetValue())
+            (path, filename) = os.path.split(filename)
+            # if "%06d" isn't part of the filename ...
+            if not ("%06d" in filename):
+                # ... add it to the end of the file name ...
+                filename += "_%06d"
+                # ... and rebuild the file name from its components
+                self.txtDestFileName.SetValue(os.path.join(path, filename) + ext)
+
+        # If a numeric insertion is called for ...
+        if '%06d' in self.txtDestFileName.GetValue():
+            # Figure out the output file name
+            tmpFileName = self.txtDestFileName.GetValue() % 1
+        else:
+            tmpFileName = self.txtDestFileName.GetValue()
+        # See if the output file already exists
+        if os.path.exists(tmpFileName):
+            # If so, inform the user
+            errmsg = unicode(_('File "%s" already exists.  Do you want to replace this file?'), 'utf8')
+            errDlg = Dialogs.QuestionDialog(self, errmsg % tmpFileName, noDefault=True)
+            result = errDlg.LocalShowModal()
+            errDlg.Destroy()
+            # If the user does not want to replace the file, ...
+            if result == wx.ID_NO:
+                # ... then exit this method immediately!
+                return
+
         # Error Checking -- Initialize Error Message to blank
         errmsg = ""
         # See if the Source File exists (is available)
@@ -909,13 +1041,19 @@ class MediaConvert(wx.Dialog):
                 # Add the Video Bit Rate specification
                 FFmpegCommand += ' "-vb" "%dk"' % int(self.videoBitrate.GetStringSelection())
 
-                # HD video with high frame rates (eg. 59.96 fps) don't play smoothly.
-                # Frame Rate reduction causes problems if set to "29.97" or "30", but is okay at "29"
-                if self.vidFrameRate > 30:
-                    # Let's max the Frame Rate out at 29 fps.
-                    FFmpegCommand += ' "-r" "29"'
-                    # Let's inform the user we changed their frame rate!
-                    self.memo.AppendText("\n" + _("Frame Rate reduced from %0.2f fps to 29 fps.") % self.vidFrameRate)
+                # if the Frame Rate is not UNKNOWN ...
+                if self.vidFrameRate > 0.0:
+                    # HD video with high frame rates (eg. 59.96 fps) don't play smoothly.
+                    # Frame Rate reduction causes problems if set to "29.97" or "30", but is okay at "29"
+                    if self.vidFrameRate > 30:
+                        # Let's max the Frame Rate out at 29 fps.
+                        FFmpegCommand += ' "-r" "29"'
+                        # Let's inform the user we changed their frame rate!
+                        self.memo.AppendText("\n" + _("Frame Rate reduced from %0.2f fps to 29 fps.") % self.vidFrameRate)
+                    # Otherwise ...
+                    else:
+                        # ... use the existing frame rate
+                        FFmpegCommand += ' "-r" "%0.2f"' % self.vidFrameRate
 
             # If we have an Audio Stream to process ...
             if self.audStream and not self.ext in ['.jpg']:
@@ -1029,17 +1167,6 @@ class MediaConvert(wx.Dialog):
                 elif self.stillFrameRate.GetStringSelection() == _("1 second"):
                     FFmpegCommand += ' "-r" "1"'
 
-                # Check the file name, ensuring it has required the "%06d" parameter
-                # First, let's break the file name up into path, filename, and ext
-                (filename, ext) = os.path.splitext(self.txtDestFileName.GetValue())
-                (path, filename) = os.path.split(filename)
-                # if "%06d" isn't part of the filename ...
-                if not ("%06d" in filename):
-                    # ... add it to the end of the file name ...
-                    filename += "_%06d"
-                    # ... and rebuild the file name from its components
-                    self.txtDestFileName.SetValue(os.path.join(path, filename) + ext)
-
             # For CLIPS, add "-ss StartTime" and "-t Duration (seconds)"!!
             if (not self.ext in ['.jpg']) and (self.clipDuration > 0):
                 FFmpegCommand += ' "-ss" "%0.5f" "-t" "%0.5f"' % (float(self.clipStart) / 1000.0, float(self.clipDuration) / 1000.0)
@@ -1053,9 +1180,9 @@ class MediaConvert(wx.Dialog):
             progressDlg = WaveformProgress.WaveformProgress(self, prompt, self.clipStart, self.clipDuration)
 
             if DEBUG:
-                print "MediaConvert.OnConvert():  FFmpeg Command:"
-                print FFmpegCommand % (self.txtSrcFileName.GetValue(), self.txtDestFileName.GetValue())
-                print
+                self.memo.AppendText("MediaConvert.OnConvert():  FFmpeg Command:")
+                self.memo.AppendText(FFmpegCommand % (self.txtSrcFileName.GetValue(), self.txtDestFileName.GetValue()))
+                self.memo.AppendText('\n\n')
             
             # Pass the Conversion Command we have created to the Progress Dialog
             progressDlg.SetProcessCommand(FFmpegCommand)
@@ -1198,6 +1325,10 @@ class MediaConvert(wx.Dialog):
         """ Browse Button event handler (for both source and destination file names) """
         # If triggered by the Source File ...
         if event.GetId() == self.srcBrowse.GetId():
+
+            if DEBUG:
+                cwdbefore = os.getcwd()
+                
             # Get Transana's File Filter definitions
             fileTypesString = _("All files (*.*)|*.*")
             # Create a File Open dialog.
@@ -1207,13 +1338,23 @@ class MediaConvert(wx.Dialog):
                             fileTypesString, 
                             wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
             # Select "All Media Files" as the initial Filter
-            fs.SetFilterIndex(1)
+            fs.SetFilterIndex(0)
             # Show the dialog and get user response.  If OK ...
             if fs.ShowModal() == wx.ID_OK:
                 # ... get the selected file name
                 self.fileName = fs.GetPath()
-                # Place the selected file and path in the Source File Name text control
-                self.txtSrcFileName.SetValue(fs.GetPath())
+##            self.fileName = '/Users/davidwoods/Movies/Workshop Video/Leader/Demo/Demo.mpg'
+            else:
+                self.fileName = ''
+            
+
+            # Destroy the File Dialog
+            fs.Destroy()
+
+            self.txtSrcFileName.SetValue(self.fileName)
+
+            if DEBUG:
+                self.memo.AppendText('cwd BEFORE: %s  AFTER: %s\n' % (cwdbefore, os.getcwd()))
 
         # If triggered by the Destination File ...
         else:
@@ -1243,8 +1384,8 @@ class MediaConvert(wx.Dialog):
                 # ... place the selected file and path in the Destination File Name text control
                 self.txtDestFileName.SetValue(fs.GetPath())
 
-        # Destroy the File Dialog
-        fs.Destroy()
+            # Destroy the File Dialog
+            fs.Destroy()
 
     def OnSrcFileNameChange(self, event):
         """ Process any change in the Source File Name text control """
@@ -1328,31 +1469,47 @@ class MediaConvert(wx.Dialog):
             fn += _('_%06d')
         # Otherwise ...
         else:
-            # ... add the TRANSLATED word "Analysis" on to indicate that this is the low-res Analysis version of the media file
-            fn += unicode(_('-Analysis'), 'utf8')
+            # If we have a Left-To-Right language ...
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_LeftToRight:
+                # ... add the TRANSLATED word "Analysis" on to indicate that this is the low-res Analysis version of the media file
+                fn += unicode(_('-Analysis'), 'utf8')
+            # With Right-To-Left languages, we can't use the Translated version of the word "Analysis"!!
+            else:
+                fn = fn + unicode('-Analysis', 'utf8')
         # Based on the Format Selection (start of the text), determine the appropriate file extension.
         # Remember it as a proxy for destination file type for later processing
-        if self.format.GetStringSelection()[:6] == 'MPEG-1':
+        if 'MPEG-1' in self.format.GetStringSelection():
             self.ext = '.mpg'
-        elif self.format.GetStringSelection()[:3] == 'MOV':
+        elif 'MOV' in self.format.GetStringSelection():
             self.ext = '.mov'
-        elif self.format.GetStringSelection()[:6] == 'MPEG-4':
+        elif 'MPEG-4' in self.format.GetStringSelection():
             self.ext = '.mp4'
-        elif self.format.GetStringSelection()[:3] == 'MP3':
+        elif 'MP3' in self.format.GetStringSelection():
             self.ext = '.mp3'
-        elif self.format.GetStringSelection()[:3] == 'WAV':
+        elif 'WAV' in self.format.GetStringSelection():
             self.ext = '.wav'
-        elif self.format.GetStringSelection()[:4] == 'JPEG':
+        elif 'JPEG' in self.format.GetStringSelection():
             self.ext = '.jpg'
         
         # Build a new file name, starting with the last path used
         newFilename = self.lastPath
-        # If that path does NOT end with a file separator ...
-        if newFilename[-1] != os.sep:
-            # ... add one
-            newFilename += os.sep
-        # Add the File Name, the "Analysis" tag which flags files that have been converted for Analysis, and the proper extension
-        newFilename += fn + self.ext
+        # If we have a Left-To-Right language ...
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_LeftToRight:
+            # If that path does NOT end with a file separator ...
+            if newFilename[-1] != os.sep:
+                # ... add one
+                newFilename += os.sep
+            # Add the File Name, the "Analysis" tag which flags files that have been converted for Analysis, and the proper extension
+            newFilename += fn + self.ext
+        # With Right-To-Left languages, we have to build file names BACKWARDS!
+        else:
+            # If that path does NOT end with a file separator ...
+            if newFilename[-1] != os.sep:
+                # ... add one
+                newFilename = newFilename + os.sep
+            # Add the File Name, the "Analysis" tag which flags files that have been converted for Analysis, and the proper extension
+            newFilename = newFilename + fn + self.ext
+
         # Update the Destination File Name text control with the new file name
         self.txtDestFileName.SetValue(newFilename)
         # Enable the Destination File Name and Browse controls

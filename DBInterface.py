@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -61,6 +61,8 @@ import KeywordObject
 import Note
 # import Transana's Series Object
 import Series
+# import Transana's Snapshot Object
+import Snapshot
 # import Transana's Constants
 import TransanaConstants
 # import Transana's Global Variables
@@ -320,6 +322,41 @@ def CreateClipsTableQuery(num):
     # Return the query to the calling routine
     return query
 
+def CreateSnapshotsTableQuery(num):
+    """ Create query for the Snapshots Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the SNAPSHOTS object
+    
+    # Snapshots Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS Snapshots%d
+                (SnapshotNum        INTEGER auto_increment, 
+                 SnapshotID         VARCHAR(100), 
+                 CollectNum         INTEGER, 
+                 ImageFile          VARCHAR(255), 
+                 ImageScale         DOUBLE,
+                 ImageCoordsX       DOUBLE,
+                 ImageCoordsY       DOUBLE,
+                 ImageSizeW         INTEGER,
+                 ImageSizeH         INTEGER,
+                 EpisodeNum         INTEGER,
+                 TranscriptNum      INTEGER,
+                 SnapshotTimeCode   INTEGER,
+                 SnapshotDuration   INTEGER,
+                 SnapshotComment    VARCHAR(255), 
+                 SortOrder          INTEGER, 
+                 LastSaveTime       DATETIME, 
+                 RecordLock         VARCHAR(25), 
+                 LockTime           DATETIME, 
+                 PRIMARY KEY (SnapshotNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
 def CreateNotesTableQuery(num):
     """ Create query for the Notes Table """
 
@@ -334,7 +371,8 @@ def CreateNotesTableQuery(num):
                      SeriesNum      INTEGER, 
                      EpisodeNum     INTEGER, 
                      CollectNum     INTEGER, 
-                     ClipNum        INTEGER, 
+                     ClipNum        INTEGER,
+                     SnapshotNum    INTEGER,
                      TranscriptNum  INTEGER, 
                      NoteTaker      VARCHAR(100), 
                      NoteText       LONGBLOB, 
@@ -361,6 +399,11 @@ def CreateKeywordsTableQuery(num):
                 (KeywordGroup  VARCHAR(50) NOT NULL, 
                  Keyword       VARCHAR(85) NOT NULL, 
                  Definition    LONGBLOB, 
+                 LineColorName VARCHAR(50),
+                 LineColorDef  VARCHAR(10),
+                 DrawMode      VARCHAR(20),
+                 LineWidth     INTEGER,
+                 LineStyle     VARCHAR(20),
                  RecordLock    VARCHAR(25), 
                  LockTime      DATETIME, 
                  PRIMARY KEY (KeywordGroup, Keyword))
@@ -385,11 +428,62 @@ def CreateClipKeywordsTableQuery(num):
     query = """
               CREATE TABLE IF NOT EXISTS ClipKeywords%d
                 (EpisodeNum    INTEGER, 
-                 ClipNum       INTEGER, 
+                 ClipNum       INTEGER,
+                 SnapshotNum   INTEGER,
                  KeywordGroup  VARCHAR(50), 
                  Keyword       VARCHAR(85), 
                  Example       CHAR(1), 
-                 UNIQUE KEY (EpisodeNum, ClipNum, KeywordGroup, Keyword))
+                 UNIQUE KEY UniqueKey (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateSnapshotKeywordsTableQuery(num):
+    """ Create query for the Snapshot Keywords Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the SNAPSHOT object
+
+    # Snapshot Keywords Table: Test for existence and create if needed
+    # Because there will be multiple uses of the same keyword on the same snapshot, no Unique Key is defined.
+    query = """
+              CREATE TABLE IF NOT EXISTS SnapshotKeywords%d
+                (SnapshotNum   INTEGER,
+                 KeywordGroup  VARCHAR(50), 
+                 Keyword       VARCHAR(85), 
+                 x1            INTEGER,
+                 y1            INTEGER,
+                 x2            INTEGER,
+                 y2            INTEGER,
+                 visible       CHAR(1))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ % num
+    # Add the appropriate Table Type to the CREATE Query
+    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    # Return the query to the calling routine
+    return query
+
+def CreateSnapshotKeywordStylesTableQuery(num):
+    """ Create query for the Snapshot Keyword Styles Table """
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the SNAPSHOT object
+
+    # Snapshot Keyword Styles Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS SnapshotKeywordStyles%d
+                (SnapshotNum   INTEGER,
+                 KeywordGroup  VARCHAR(50), 
+                 Keyword       VARCHAR(85), 
+                 DrawMode      VARCHAR(20),
+                 LineColorName VARCHAR(50),
+                 LineColorDef  VARCHAR(10),
+                 LineWidth     INTEGER,
+                 LineStyle     VARCHAR(20),
+                 UNIQUE KEY (SnapshotNum, KeywordGroup, Keyword))
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
             """ % num
@@ -539,6 +633,21 @@ def establish_db_exists(dbToOpen=None):
                 p1 = pair[1]
             if p1 == 'YES':
                 hasInnoDB = True
+    # Then let's check the MySQL version.  MySQL dropped have_bdb a long time ago, and have_innodb with 5.6.x
+    # Define a "SHOW VARIABLES" Query
+    query = "SHOW VARIABLES LIKE 'version'"
+    # Execute the Query
+    dbCursor.execute(query)
+    # Look at the Results Set
+    version = dbCursor.fetchone()[1]
+    # Break the MySQL version into major, minor, and sub-minor sections based on decimal points in the version number
+    version = version.split('.')
+
+    # If we have MySQL version 5.6 or higher ...
+    if (int(version[0]) >= 5) and (int(version[1]) >= 6):
+        # ... then InnoDB IS built in, even though there's no longer a variable for it!
+        hasInnoDB = True
+
     # If neither BDB nor InnoDB are supported, display an error message.
     if not (hasBDB or hasInnoDB):
         dlg = Dialogs.ErrorDialog(None, _("This MySQL Server is not configured to use BDB or InnoDB Tables.  Transana requires a MySQL-max Server."))
@@ -546,6 +655,15 @@ def establish_db_exists(dbToOpen=None):
         dlg.Destroy
     # If either DBD or InnoDB is supported ...
     else:
+
+        query = "SHOW TABLES"
+        # Execute the Query
+        dbCursor.execute(query)
+        if dbCursor.rowcount == 0:
+            DBVersion = 0
+        else:
+            # Set the Database Version Number to reflect the version that didn't yet have this feature
+            DBVersion = 242
 
         TransanaGlobal.hasInnoDB = hasInnoDB
         # Create the Configuration Information table if it doesn't exist
@@ -568,22 +686,54 @@ def establish_db_exists(dbToOpen=None):
         dbCursor.execute(query)
         # if no value is returned ...
         if dbCursor.rowcount == 0:
-            # ... then we've just created this table.  Let's populate it!
-            # Now let's get the Database Version value from the Configuration Information table
-            query = """INSERT INTO ConfigInfo
-                         (KeyVal, Value)
-                        VALUES
-                         ('DBVersion', '250')"""
-            # Execute the Query
-            dbCursor.execute(query)
-            # Set the Database Version Number to reflect the version that didn't yet have this feature
-            DBVersion = 242
+            # If there WERE other tables ...
+            if DBVersion == 242:
+                # ... then we've just created this table.  Let's populate it!
+                # Now let's get the Database Version value from the Configuration Information table
+                query = """INSERT INTO ConfigInfo
+                             (KeyVal, Value)
+                            VALUES
+                             ('DBVersion', '242')"""
+                # Execute the Query
+                dbCursor.execute(query)
+            # If there were NO other tables ...
+            else:
+                # ... then we've just created the whole database.  Let's signal it's a 2.60 database!
+                query = """INSERT INTO ConfigInfo
+                             (KeyVal, Value)
+                            VALUES
+                             ('DBVersion', '260')"""
+                # Execute the Query
+                dbCursor.execute(query)
         else:
             # Get the Transana Database Version from the Database
             DBVersion = int(dbCursor.fetchone()[0])
 
+        # Detect OLDER Database Versions
+        if (DBVersion > 0) and (DBVersion < 260):
+            # Create and report the problem
+            prompt = _("This Transana Database has NOT been upgraded.\nDo you want to upgrade it?")
+            dlg = Dialogs.QuestionDialog(None, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+
+            if result == wx.ID_YES:
+                # Indicate we're upgrading the DB
+                DBVersion = 260
+                # update the Database Version in ConfigInfo
+                query = """UPDATE ConfigInfo SET Value = '260' WHERE KeyVal = 'DBVersion'"""
+                dbCursor.execute(query)
+
+            else:
+                # Close the Database Cursor
+                dbCursor.close()
+                # Close the Database Connection
+                close_db()
+                # Report failure to establish the database connection
+                return False
+
         # Detect NEWER Database Versions
-        if DBVersion > 250:
+        if DBVersion > 260:
             # Create and report the problem
             prompt = _("This Transana Database has been upgraded.\nYou need to upgrade your copy of Transana to work with it.")
             dlg = Dialogs.ErrorDialog(None, prompt)
@@ -748,6 +898,11 @@ def establish_db_exists(dbToOpen=None):
                 query = "UPDATE Clips2 SET Audio = 1"
                 dbCursor2.execute(query)
 
+        #  Snapshots2 Table: Test for existence and create if needed
+        query = CreateSnapshotsTableQuery(2)
+        # Execute the Query
+        dbCursor.execute(query)
+
         # Notes2 Table: Test for existence and create if needed
         query = CreateNotesTableQuery(2)
         # Execute the Query
@@ -778,6 +933,21 @@ def establish_db_exists(dbToOpen=None):
                 dbCursor2 = db.cursor()
                 dbCursor2.execute(query)
 
+            # Transana 2.60 -- Adding Snapshot Table requires modifications to the Notes table
+            #                  so it can hold Snapshot Notes!
+            # if a "SnapshotNum" field is present, the table has already been altered.
+            if not u"snapshotnum" in d1.lower():
+                # If not, we need to alter the table to add the ClipOffset field
+                query = """ ALTER TABLE Notes2
+                              ADD COLUMN
+                                SnapshotNum  INTEGER
+                              AFTER ClipNum """
+                dbCursor2 = db.cursor()
+                dbCursor2.execute(query)
+                # Define a query that will set SnapshotNum to the default value of 0
+                query = "UPDATE Notes2 SET SnapshotNum = 0"
+                dbCursor2.execute(query)
+
         # Keywords2 Table: Test for existence and create if needed
         query = CreateKeywordsTableQuery(2)
         # Execute the Query
@@ -803,8 +973,76 @@ def establish_db_exists(dbToOpen=None):
                 dbCursor2 = db.cursor()
                 dbCursor2.execute(query)
 
+            # Transana 2.60 -- Add Coding Default information to the Keywords table
+            # if a "DrawMode" field is present, the table has already been altered.
+            if not u"drawmode" in d1.lower():
+                # If not, we need to alter the table to add the ClipOffset field
+                query = """ ALTER TABLE Keywords2
+                              ADD COLUMN
+                                 LineColorName VARCHAR(50)
+                                 AFTER Definition,
+                              ADD COLUMN
+                                 LineColorDef  VARCHAR(10)
+                                 AFTER LineColorName,
+                              ADD COLUMN
+                                 DrawMode      VARCHAR(20)
+                                 AFTER LineColorDef,
+                              ADD COLUMN
+                                 LineWidth     INTEGER
+                                 AFTER DrawMode,
+                              ADD COLUMN
+                                 LineStyle     VARCHAR(20)
+                                 AFTER LineWidth """
+                dbCursor2 = db.cursor()
+                dbCursor2.execute(query)
+                # Define a query that will set SnapshotNum to the default value of 0
+                query = "UPDATE Keywords2 SET LineColorName = '', LineColorDef = '', DrawMode = '', LineWidth = 0, LineStyle = ''"
+                dbCursor2.execute(query)
+
         # ClipKeywords2 Table: Test for existence and create if needed
         query = CreateClipKeywordsTableQuery(2)
+        # Execute the Query
+        dbCursor.execute(query)
+
+        # Transana 2.60 -- Adding Snapshot Table requires modifications to the Clip Keywords table
+        #                  so it can hold Snapshot Keyword records!
+        query = "SHOW CREATE TABLE ClipKeywords2"
+        # Execute the Query
+        dbCursor.execute(query)
+        # now let's look at the data returned from the database
+        for data in dbCursor.fetchall():
+            # Check for "array" data and convert if needed
+            if type(data[1]).__name__ == 'array':
+                d1 = data[1].tostring()
+            else:
+                d1 = data[1]
+            # if a "SnapshotNum" field is present, the table has already been altered.
+            if not u"snapshotnum" in d1.lower():
+                # If not, we need to alter the table to add the ClipOffset field
+                query = """ ALTER TABLE ClipKeywords2
+                              ADD COLUMN
+                                SnapshotNum  INTEGER
+                              AFTER ClipNum """
+                dbCursor2 = db.cursor()
+                dbCursor2.execute(query)
+                # Define a query that will set SnapshotNum to the default value of 0
+                query = "UPDATE ClipKeywords2 SET SnapshotNum = 0"
+                dbCursor2.execute(query)
+                # Define a set of queries that will remove the old Unique key and replace it
+                query = """ALTER TABLE ClipKeywords2
+                              DROP KEY EpisodeNum """
+                dbCursor2.execute(query)
+                query = """ALTER TABLE ClipKeywords2
+                             ADD UNIQUE KEY EpisodeNum (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword) """
+                dbCursor2.execute(query)
+
+        # SnapshotKeywords2 Table: Test for existence and create if needed
+        query = CreateSnapshotKeywordsTableQuery(2)
+        # Execute the Query
+        dbCursor.execute(query)
+
+        # SnapshotKeywordStyles2 Table: Test for existence and create if needed
+        query = CreateSnapshotKeywordStylesTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
 
@@ -1067,16 +1305,24 @@ def get_db(dbToOpen=None):
             UsernameForm = UsernameandPassword(TransanaGlobal.menuWindow)
             # Get the Data Entered in the Dialog
             (userName, password, dbServer, databaseName, port) = UsernameForm.GetValues()
+            # If we have the multi-user version ...
+            if not TransanaConstants.singleUserVersion:
+                # Get the additional multi-user information
+                (ssl, messageServer, messageServerPort, sslClientCert, sslClientKey) = UsernameForm.GetMultiUserValues()
+            else:
+                ssl = False
+
             # Destroy the form now that we're done with it.
             UsernameForm.Destroy()
-        # If we are passed a database name ...
+        # If we are passed a database name (2.42 to 2.50 conversion) ...
         else:
             # ... then we can skip the Username and Password Dialog
-            userName = TransanaGlobal.userName
-            password = ''
-            dbServer = ''
-            databaseName = dbToOpen
-            port = ''
+            userName = dbToOpen.username          # TransanaGlobal.userName
+            password = dbToOpen.password          # ''
+            dbServer = dbToOpen.dbServer          # ''
+            databaseName = dbToOpen.databaseName  # dbToOpen
+            port = dbToOpen.port                  # ''
+
         # Check for the validity of the data.
         # The single-user version of Transana needs only the Database Name.  The multi-user version of
         # Transana requires all four values.
@@ -1104,20 +1350,51 @@ def get_db(dbToOpen=None):
                         # The single-user version requires no parameters
                         _dbref = MySQLdb.connect()
                 else:
-                    if 'unicode' in wx.PlatformInfo:
-                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port), use_unicode=True)
-                    else:
-                        # The multi-user version requires all information to connect to the database server
-                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port))
-                    # Put the Host name in the Configuration Data
+                    # Put the Host name and the rest of the login information into the Configuration Data
                     # so that the same connection can be the default for the next logon
                     TransanaGlobal.configData.host = dbServer
                     TransanaGlobal.configData.dbport = port
 
-            except MySQLdb.OperationalError:
+                    # Add the Message Server configuration information
+                    TransanaGlobal.configData.messageServer = messageServer
+                    try:
+                        TransanaGlobal.configData.messageServerPort = int(messageServerPort)
+                    except ValueError:
+                        print "DBInterface.get_db():  Non-integer Message Server from UserName screen!"
+                        print sys.exc_info()[0]
+                        print sys.exc_info()[1]
+
+                    # Add the SSL configuration information
+                    TransanaGlobal.configData.ssl = ssl
+                    TransanaGlobal.configData.sslClientCert = sslClientCert
+                    TransanaGlobal.configData.sslClientKey = sslClientKey
+
+                    # If we're using Unicode (and we ALWAYS are now!)
+                    if 'unicode' in wx.PlatformInfo:
+                        # If we want an SSL Connection ...
+                        if ssl:
+                            # ... create the correct data structure for MySQLdb's SSL parameter
+                            sslData = {'cert': sslClientCert, 'key': sslClientKey}
+                            # Use MySQLdb to establish the SSL and Unicode connection to the database server
+                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port), use_unicode=True, ssl=sslData)
+                        # If we're NOT requesting an SSL Connection ...
+                        else:
+                            # ... use MySQLdb to establish the Unicode connection to the database server without SSL
+                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port), use_unicode=True)
+                    else:
+                        # The multi-user version requires all information to connect to the database server
+                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port))
+
+            # If MySQLdb throws an exception ...
+            except MySQLdb.OperationalError, ex:
                 if DEBUG:
                     print "DBInterface.get_db():  ", sys.exc_info()[1]
 
+                    errormsg = unicode(_('Database Connection Error:\n%s'), 'utf8') % sys.exc_info()[1]
+                    errordlg = Dialogs.ErrorDialog(None, errormsg)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # ... signal that the connection failed.  MySQLdb messages aren't very helpful!
                 _dbref = None
 
             # If the Database Connection fails, an exception is raised.
@@ -1133,7 +1410,34 @@ def get_db(dbToOpen=None):
 
                 _dbref = None
 
-            # Okay, this is a little weird.
+
+            # If we were able to make a connection to the database and want an SSL connection ...
+            if (_dbref != None) and ssl:
+                # Let's find out the current setting of ssl variables, to see if the server supports SSL
+                query = "SHOW VARIABLES LIKE 'have_ssl%'"
+                dbCursor = _dbref.cursor()
+                # Execute the Query
+                dbCursor.execute(query)
+                # Define the SSL_Found variable, assuming it's NOT present to begin with
+                SSL_Found = False
+                # Iterate through the Results Set
+                for pair in dbCursor.fetchall():
+                    # If we find that SSL is supported ...
+                    if pair == (u'have_ssl', u'YES'):
+                        # ... change teh SSL_Found variable to indicate SSL Support
+                        SSL_Found = True
+                # If SSL was requested but is not supported by the server ...
+                if not SSL_Found:
+                    # ... signal to the config file that this is NOT an SSL connection ...
+                    TransanaGlobal.configData.ssl = False
+                    # ... let's tell the user.  First, create the prompt.
+                    prompt = _("You requested an SSL connection to MySQL, but your MySQL Server is not configured to support SSL.") + '\n\n' + \
+                             _("Please note that your connection to the database server is not secured by SSL.")
+                    # now display the prompt.
+                    dlg = Dialogs.ErrorDialog(None, prompt)
+                    dlg.ShowModal()
+                    dlg.Destroy()
+
             # By default, MySQL limits the size of a record to 1 MB.  This has started causing some problems with large transcripts.
             # So we need to change the value of the "max_allowed_packet" to fix this.  However, we apparently need to break our
             # database connection and re-establish it for the parameter change to go into effect.  That's what the following block
@@ -1714,7 +2018,7 @@ def list_of_clips():
     # Create an empty list
     l = []
     # Define the Query
-    query = """ SELECT ClipNum, ClipID, CollectNum FROM Clips2
+    query = """ SELECT ClipNum, ClipID, CollectNum, SortOrder FROM Clips2
                   ORDER BY SortOrder, ClipID """
     # Get a Database Cursor
     DBCursor = get_db().cursor()
@@ -1729,7 +2033,7 @@ def list_of_clips():
             # ... we need to decode the ClipID
             id = ProcessDBDataForUTF8Encoding(id)
         # Add the results to the list
-        l.append((row['ClipNum'], id, row['CollectNum']))
+        l.append((row['ClipNum'], id, row['CollectNum'], row['SortOrder']))
     # Close the Database Cursor
     DBCursor.close()
     # Return the list as the funtion results
@@ -1766,24 +2070,27 @@ def list_of_clips_by_collection(CollectionID, ParentNum):
     DBCursor.close()
     return l
 
-def list_of_clips_by_collectionnum(collectionNum):
+def list_of_clips_by_collectionnum(collectionNum, includeSortOrder=False):
     clipList = []
-    query = """ SELECT ClipNum, ClipID, CollectNum
+    query = """ SELECT ClipNum, ClipID, CollectNum, SortOrder
                 FROM Clips2
                 WHERE CollectNum = %s
                 ORDER BY SortOrder, ClipID """
     cursor = get_db().cursor()
     cursor.execute(query, collectionNum)
-    for (clipNum, clipID, collectNum) in cursor.fetchall():
+    for (clipNum, clipID, collectNum, sortOrder) in cursor.fetchall():
         id = clipID
         if 'unicode' in wx.PlatformInfo:
             id = ProcessDBDataForUTF8Encoding(id)
-        clipList.append((clipNum, id, collectNum))
+        if includeSortOrder:
+            clipList.append((clipNum, id, collectNum, sortOrder))
+        else:
+            clipList.append((clipNum, id, collectNum))
     cursor.close()
     return clipList
 
 def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
-    """Get a list of all Clips that have been created from a given Collection
+    """Get a list of all Clips that have been created from a given Episode
     Number.  Optionally restrict list to contain only a given timecode."""
     l = []
     if TimeCode == None:
@@ -1817,7 +2124,10 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
             ClipID = ProcessDBDataForUTF8Encoding(ClipID)
             CollectID = ProcessDBDataForUTF8Encoding(CollectID)
         # Add a dictionary object to the results list that spells out the clip data
-        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'], 'Comment' : row['ClipComment']})
+        l.append({'Type' : 'Clip', 'ClipNum' : ClipNum, 'ClipID' : ClipID,
+                  'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'],
+                  'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'],
+                  'Comment' : row['ClipComment']})
 
     DBCursor.close()
     return l
@@ -1887,6 +2197,144 @@ def list_of_clip_copies(clipID, sourceTranscriptNum, clipStart, clipStop):
     cursor.close()
     # Return the data list to the calling routine
     return clipList
+
+def list_of_snapshots():
+    """ Get a list of all Snapshots, regardless of collection. """
+    # Create an empty list
+    l = []
+    # Define the Query
+    query = """ SELECT SnapshotNum, SnapshotID, CollectNum, SortOrder FROM Snapshots2
+                  ORDER BY SortOrder, SnapshotID """
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Execute the Query
+    DBCursor.execute(query)
+    # Iterate through the Results
+    for row in fetchall_named(DBCursor):
+        # Get the Snapshot ID
+        id = row['SnapshotID']
+        # If we're using Unicode ...
+        if 'unicode' in wx.PlatformInfo:
+            # ... we need to decode the ClipID
+            id = ProcessDBDataForUTF8Encoding(id)
+        # Add the results to the list
+        l.append((row['SnapshotNum'], id, row['CollectNum'], row['SortOrder']))
+    # Close the Database Cursor
+    DBCursor.close()
+    # Return the list as the funtion results
+    return l
+
+def list_of_snapshots_by_episode(EpisodeNum, TimeCode=None):
+    """Get a list of all Snapshots that have been attached to a given Episode
+    Number.  Optionally restrict list to contain only a given timecode."""
+    l = []
+    if TimeCode == None:
+        query = """
+                  SELECT a.SnapshotNum, a.SnapshotID, a.CollectNum, a.SnapshotTimeCode, a.SnapshotDuration,
+                         b.CollectID, b.ParentCollectNum, a.SnapshotComment
+                    FROM Snapshots2 a, Collections2 b
+                    WHERE a.CollectNum = b.CollectNum AND
+                          a.EpisodeNum = %s
+                    ORDER BY a.SnapshotTimeCode, b.CollectID, a.SnapshotID
+                """
+        args = (EpisodeNum)
+    else:
+        query = """
+                  SELECT a.SnapshotNum, a.SnapshotID, a.CollectNum, a.SnapshotTimeCode, a.SnapshotDuration,
+                         b.CollectID, b.ParentCollectNum, a.SnapshotComment
+                    FROM Snapshots2 a, Collections2 b
+                    WHERE a.CollectNum = b.CollectNum AND
+                          a.EpisodeNum = %s AND 
+                          SnapshotTimeCode <= %s AND 
+                          SnapshotTimeCode + SnapshotDuration > %s
+                    ORDER BY a.SnapshotTimeCode, b.CollectID, a.SnapshotID
+                """
+        args = (EpisodeNum, TimeCode, TimeCode)
+    DBCursor = get_db().cursor()
+    DBCursor.execute(query, args)
+    for row in fetchall_named(DBCursor):
+        SnapshotNum = row['SnapshotNum']
+        SnapshotID = row['SnapshotID']
+        CollectID = row['CollectID']
+        # Convert the ID values to the proper UTF-8 representation if needed
+        if 'unicode' in wx.PlatformInfo:
+            SnapshotID = ProcessDBDataForUTF8Encoding(SnapshotID)
+            CollectID = ProcessDBDataForUTF8Encoding(CollectID)
+        # Add a dictionary object to the results list that spells out the Snapshot data.
+        # Alter the TimeCode / Duration to be Start / Stop values to match Clip data from list_of_clips_by_episode()
+        l.append({'Type' : 'Snapshot', 'SnapshotNum' : SnapshotNum, 'SnapshotID' : SnapshotID,
+                  'SnapshotStart' : row['SnapshotTimeCode'], 'SnapshotStop' : row['SnapshotTimeCode'] + row['SnapshotDuration'],
+                  'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'],
+                  'Comment' : row['SnapshotComment']})
+
+    DBCursor.close()
+    return l
+
+def list_of_snapshots_by_transcriptnum(transcriptNum):
+    snapshotList = []
+    query = """ SELECT SnapshotNum, SnapshotID, CollectNum
+                FROM Snapshots2
+                WHERE TranscriptNum = %s """
+    cursor = get_db().cursor()
+    cursor.execute(query, collectionNum)
+    for (snapshotNum, snapshotID, collectNum) in cursor.fetchall():
+        id = snapshotID
+        if 'unicode' in wx.PlatformInfo:
+            id = ProcessDBDataForUTF8Encoding(id)
+        snapshotList.append((snapshotNum, id, collectNum))
+    cursor.close()
+    return snapshotList
+
+def list_of_snapshots_by_collectionnum(collectionNum, includeSortOrder=False):
+    snapshotList = []
+    query = """ SELECT SnapshotNum, SnapshotID, CollectNum, SortOrder
+                FROM Snapshots2
+                WHERE CollectNum = %s
+                ORDER BY SortOrder, SnapshotID """
+    cursor = get_db().cursor()
+    cursor.execute(query, collectionNum)
+    for (snapshotNum, snapshotID, collectNum, sortOrder) in cursor.fetchall():
+        id = snapshotID
+        if 'unicode' in wx.PlatformInfo:
+            id = ProcessDBDataForUTF8Encoding(id)
+        if includeSortOrder:
+            snapshotList.append((snapshotNum, id, collectNum, sortOrder))
+        else:
+            snapshotList.append((snapshotNum, id, collectNum))
+    cursor.close()
+    return snapshotList
+
+def GetSortOrderData(collectionNum):
+    """ Get the Sort Order information for a Collection's Clips and Snapshots.
+        This function returns a dictionary of sort orders which can be looked
+        up using a (nodetype, objectNumber) key.
+          nodetype is either 'ClipNode' or 'SnapshotNode'. """
+    # Create an empty dictionary
+    d = {}
+    # Get a database Cursor
+    cursor = get_db().cursor()
+    # Get the Clip data
+    query = """ SELECT ClipNum, SortOrder
+                FROM Clips2
+                WHERE CollectNum = %s """
+    # Execute the query
+    cursor.execute(query, collectionNum)
+    # For each item returned from the database ...
+    for (clipNum, sortOrder) in cursor.fetchall():
+        # ... add it to the dictionary
+        d[('ClipNode', clipNum)] = sortOrder
+    # Get the Snapshot data
+    query = """ SELECT SnapshotNum, SortOrder
+                FROM Snapshots2
+                WHERE CollectNum = %s """
+    # Execute the query
+    cursor.execute(query, collectionNum)
+    # For each item returned from the database ...
+    for (snapshotNum, sortOrder) in cursor.fetchall():
+        d[('SnapshotNode', snapshotNum)] = sortOrder
+    cursor.close()
+    # Return the dictionary
+    return d
 
 def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart, clipStop, vidFiles):
     """ Check to see if there is already a Quick Clip for this video segment. """
@@ -2125,7 +2573,7 @@ def FindAdjacentClips(episodeNum, startTime, endTime, trInfo, trFiles):
     return results
 
 def getMaxSortOrder(collNum):
-    """Get the largest Sort Order value for all the Clips in a Collection."""
+    """Get the largest Sort Order value for all the Clips and Snapshots in a Collection."""
     DBCursor = get_db().cursor()
     query = "SELECT MAX(SortOrder) FROM Clips2 WHERE CollectNum = %s" 
     DBCursor.execute(query, collNum)
@@ -2136,6 +2584,10 @@ def getMaxSortOrder(collNum):
             maxSortOrder = 0
     else:
         maxSortOrder = 0
+    query = "SELECT MAX(SortOrder) FROM Snapshots2 WHERE CollectNum = %s" 
+    DBCursor.execute(query, collNum)
+    if DBCursor.rowcount >= 1:
+        maxSortOrder = max(maxSortOrder, DBCursor.fetchone()[0])
     DBCursor.close()
     return maxSortOrder
 
@@ -2170,6 +2622,9 @@ def list_of_notes(** kwargs):
     elif kwargs.has_key("Clip"):
         query += " WHERE   ClipNum = %s"
         values = (kwargs['Clip'],)
+    elif kwargs.has_key("Snapshot"):
+        query += " WHERE   SnapshotNum = %s"
+        values = (kwargs['Snapshot'],)
     else:
         return []   # Should we raise an exception?
     query = query + " ORDER BY NoteID"
@@ -2207,7 +2662,7 @@ def list_of_node_notes(** kwargs):
     # Create an empty list
     notelist = []
     # Start building the Query
-    query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum
+    query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, SnapshotNum
                  FROM Notes2 """
     # If we're looking for Series Node Notes ...
     if kwargs.has_key("SeriesNode"):
@@ -2219,7 +2674,8 @@ def list_of_node_notes(** kwargs):
     elif kwargs.has_key("CollectionNode"):
         # ... we need to build a query for Collection or Clip Notes
         query += """WHERE   CollectNum <> 0 OR
-                            ClipNum <> 0"""
+                            ClipNum <> 0 OR
+                            SnapshotNum <> 0 """
     # If neither SeriesNode nor CollectionNode is defined, we've got a programming error.
     else:
         return []   # Should we raise an exception?
@@ -2254,7 +2710,7 @@ def list_of_all_notes(reportType=None, searchText=None):
     # We want to display all the Notes in each section in alphabetical order.
 
     # Query for ALL Notes in order of NoteID.
-    query = """ SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, NoteTaker
+    query = """ SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, SnapshotNum, NoteTaker
                 FROM Notes2 N"""
     # If we want the Series report, limit the query to Series notes
     if reportType == 'SeriesNode':
@@ -2271,6 +2727,9 @@ def list_of_all_notes(reportType=None, searchText=None):
     # If we want the Clip report, limit the query to Clip notes
     elif reportType == 'ClipNode':
         query += " WHERE ClipNum <> 0"
+    # If we want the Snapshot report, limit the query to Snapshot notes
+    elif reportType == 'SnapshotNode':
+        query += " WHERE SnapshotNum <> 0"
     # If searchText is passed in, we want to limit the results to notes containing that text.
     # We need to add that to our Query
     if searchText != None:
@@ -2294,7 +2753,7 @@ def list_of_all_notes(reportType=None, searchText=None):
     for row in results:
         # Pull out the elements that need to be encoded
         ID = row[1]
-        noteTaker = row[7]
+        noteTaker = row[8]
         # Encode the elements, if needed
         if 'unicode' in wx.PlatformInfo:
             ID = ProcessDBDataForUTF8Encoding(ID)
@@ -2307,6 +2766,7 @@ def list_of_all_notes(reportType=None, searchText=None):
                          'TranscriptNum' : row[4],
                          'CollectionNum' : row[5],
                          'ClipNum' : row[6],
+                         'SnapshotNum' : row[7],
                          'NoteTaker' : noteTaker})
     # Close the Database Cursor
     DBCursor.close()
@@ -2374,14 +2834,14 @@ def list_of_all_keywords():
    
 def list_of_keywords(** kwargs):
     """Get a list of all keywordgroup/keyword pairs for the specified
-    qualifiers (Episode, Clip numbers).  Result is a list of tuples,
+    qualifiers (Episode, Clip, Snapshot numbers).  Result is a list of tuples,
     where the first element in the tuple is the keyword group, 
     the second element is the keyword itself, and the third element
     indicates whether the keyword is an example or not.
 
     examples: list_of_keywords(Episode=5)
               list_of_keywords(Clip=1)
-              list_of_keywords(Episode=5, Clip=1)
+              list_of_keywords(Snapshot=3)
     """
     
     count = len(kwargs)
@@ -2403,14 +2863,54 @@ def list_of_keywords(** kwargs):
     r = DBCursor.fetchall()
     kwlist = []
     # Current ClipKeywords table row format used:
-    # EpNum, ClipNum, KWGroup, Keyword, Example
+    # EpNum, ClipNum, SnapshotNum, KWGroup, Keyword, Example
     for tup in r:
         if 'unicode' in wx.PlatformInfo:
-            kwlist.append((ProcessDBDataForUTF8Encoding(tup[2]), \
-                           ProcessDBDataForUTF8Encoding(tup[3]), \
-                           ProcessDBDataForUTF8Encoding(tup[4])))
+            kwlist.append((ProcessDBDataForUTF8Encoding(tup[3]), \
+                           ProcessDBDataForUTF8Encoding(tup[4]), \
+                           ProcessDBDataForUTF8Encoding(tup[5])))
         else:
-            kwlist.append((tup[2], tup[3], tup[4]))
+            kwlist.append((tup[3], tup[4], tup[5]))
+    DBCursor.close()
+    return kwlist
+
+def list_of_snapshot_detail_keywords(** kwargs):
+    """Get a list of all Snapshot Detail keywordgroup/keyword pairs for the specified
+    qualifier (Snapshot numbers).  Result is a list of tuples,
+    where the first element in the tuple is the keyword group, 
+    and the second element is the keyword itself.
+
+    examples: list_of_keywords(Snapshot=3)
+    """
+    
+    count = len(kwargs)
+    i = 1
+    query = "SELECT * FROM SnapshotKeywords2\n"
+    for obj in kwargs:
+        query = query + "   WHERE %sNum = %%s" % (obj)
+        if i != count:      # not last item
+            query = query + " AND \n"
+        else:
+            query = query + "\n"
+        i += 1
+    query = query + "      AND visible = 1\n"
+    query = query + "    GROUP BY KeywordGroup, Keyword\n"
+    query = query + "    ORDER BY KeywordGroup, Keyword\n"
+    DBCursor = get_db().cursor()
+    if len(kwargs) > 0:
+        DBCursor.execute(query, kwargs.values())
+    else:
+        DBCursor.execute(query)
+    r = DBCursor.fetchall()
+    kwlist = []
+    # Current SnapshotKeywords table row format used:
+    # SnapshotNum, KWGroup, Keyword, etc
+    for tup in r:
+        if 'unicode' in wx.PlatformInfo:
+            kwlist.append((ProcessDBDataForUTF8Encoding(tup[1]), \
+                           ProcessDBDataForUTF8Encoding(tup[2])))
+        else:
+            kwlist.append((tup[1], tup[2]))
     DBCursor.close()
     return kwlist
 
@@ -2425,12 +2925,12 @@ def list_of_keyword_examples():
     # Current ClipKeywords table row format used:
     # EpNum, ClipNum, KWGroup, Keyword, Example
     for dbRowData in results:
-        kwg = dbRowData[2]
-        kw = dbRowData[3]
+        kwg = dbRowData[3]
+        kw = dbRowData[4]
         if 'unicode' in wx.PlatformInfo:
             kwg = ProcessDBDataForUTF8Encoding(kwg)
             kw = ProcessDBDataForUTF8Encoding(kw)
-        keywordExampleList.append((dbRowData[0], dbRowData[1], kwg, kw, dbRowData[4]))
+        keywordExampleList.append((dbRowData[0], dbRowData[1], dbRowData[2], kwg, kw, dbRowData[5]))
     dbCursor.close()
     return keywordExampleList
 
@@ -2454,7 +2954,7 @@ def SetKeywordExampleStatus(kwg, kw, clipNum, exampleValue):
     # had not previously been assigned to this Clip, so there was no record to update.
     # In this case, we have to ADD the record!
     if dbCursor.rowcount == 0:
-        insert_clip_keyword(0, clipNum, kwg, kw, 1)
+        insert_clip_keyword(0, clipNum, 0, kwg, kw, 1)
     dbCursor.close()
 
 
@@ -2823,43 +3323,66 @@ def list_all_keyword_examples_for_a_clip(clipnum):
     # Return the list of Keyword Examples as the function result
     return kwExamples
 
-def delete_all_keywords_for_a_group(epnum, clipnum):
-    """Given an Episode or a Clip number, delete the keywordgroup/word
-    pairs."""
-    if (epnum == 0) and (clipnum == 0):
-        raise Exception, _("All keywords would have been deleted!")
-    
+def delete_all_keywords_for_a_group(epnum, clipnum, snapshotnum):
+    """ Given an Episode, Clip, or Snapshot number, delete the appropriate keywordgroup/word pairs. """
+    # If we have an Episode Number ...
     if epnum != 0:
+        # .. delete the Episode Keywords
         specifier = "EpisodeNum"
         num = epnum
-    else:
-        # clipnum must be non-zero
+    # If we have a Clip Number ...
+    elif clipnum != 0:
+        # ... delete the Clip Keywords
         specifier = "ClipNum"
         num = clipnum
-        
+    # If we have a Snapshot Number ...
+    elif snapshotnum != 0:
+        # ... delete the Snapshot Keywords
+        specifier = "SnapshotNum"
+        num = snapshotnum
+    # If we don't have any of those ...
+    else:
+        # ... raise an exception
+        raise Exception, _("All keywords would have been deleted!")
 
-    query = """
-    DELETE FROM ClipKeywords2
-        WHERE %s = %%s
-    """ % (specifier)
+    # Create the Delete query 
+    query = "DELETE FROM ClipKeywords2 WHERE %s = %%s " % (specifier)
+    # Get a database cursor
     DBCursor = get_db().cursor()
+    # Execute the query
     DBCursor.execute(query, num)
+    # Close the database cursor
     DBCursor.close()
 
-def insert_clip_keyword(ep_num, clip_num, kw_group, kw, exampleValue=0):
+def insert_clip_keyword(ep_num, clip_num, snapshot_num, kw_group, kw, exampleValue=0):
     """Insert a new record in the Clip Keywords table."""
     if 'unicode' in wx.PlatformInfo:
         kw_group = kw_group.encode(TransanaGlobal.encoding)
         kw = kw.encode(TransanaGlobal.encoding)
-    query = """
-    INSERT INTO ClipKeywords2
-        (EpisodeNum, ClipNum, KeywordGroup, Keyword, Example)
-        VALUES
-        (%s,%s,%s,%s, %s)
-    """
     DBCursor = get_db().cursor()
-    DBCursor.execute(query, (ep_num, clip_num, kw_group, kw, exampleValue))
-    DBCursor.close()
+    # Check the continued existance of the keyword.  It's possible in the multi-user version for
+    # one user to edit a keyword while another user is applying it to an Episode, Clip, or Snapshot.
+    # If this occurs, we need to avoid the save and notify the user!
+    query = "SELECT KeywordGroup, Keyword FROM Keywords2 WHERE KeywordGroup = %s AND Keyword = %s"
+    DBCursor.execute(query, (kw_group, kw))
+    # If the keyword exists, which is almost always will ...    
+    if DBCursor.rowcount == 1:
+        # create a query to insert the Clip Keyword Record
+        query = """
+        INSERT INTO ClipKeywords2
+            (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example)
+            VALUES
+            (%s,%s,%s,%s,%s, %s)
+        """
+        DBCursor.execute(query, (ep_num, clip_num, snapshot_num, kw_group, kw, exampleValue))
+        DBCursor.close()
+        # Signal success
+        return True
+    # If the keyword doesn't exist ...
+    else:
+        DBCursor.close()
+        # ... signal failure
+        return False
 
 def add_keyword(group, kw_name):
     """Add a keyword to the database."""
@@ -2947,6 +3470,50 @@ def delete_keyword_group(name):
             prompt = _('%s  Clip "%s" is locked by %s\n')
         t = prompt % (t, tempclid, temprl)
 
+    # Whole Snapshot Keywords next
+    query = """SELECT a.KeywordGroup, a.Keyword, s.SnapshotID, s.RecordLock
+        FROM ClipKeywords2 a, Snapshots2 s
+        WHERE   a.KeywordGroup = %s AND
+                a.SnapshotNum <> %s AND
+                a.SnapshotNum = s.SnapshotNum AND
+                s.RecordLock <> %s
+    """
+    DBCursor.execute(query, (kwg, 0, ""))
+    for row in fetchall_named(DBCursor):
+        tempsnid = row['SnapshotID']
+        temprl = row['RecordLock']
+        if 'unicode' in wx.PlatformInfo:
+            tempsnid = ProcessDBDataForUTF8Encoding(tempsnid)
+            temprl = ProcessDBDataForUTF8Encoding(temprl)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('%s  Snapshot "%s" is locked by %s\n'), 'utf8')
+        else:
+            prompt = _('%s  Snapshot "%s" is locked by %s\n')
+        t = prompt % (t, tempsnid, temprl)
+
+    # Snapshot Coding next
+    query = """SELECT a.KeywordGroup, a.Keyword, s.SnapshotID, s.RecordLock
+        FROM SnapshotKeywords2 a, Snapshots2 s
+        WHERE   a.KeywordGroup = %s AND
+                a.SnapshotNum <> %s AND
+                a.SnapshotNum = s.SnapshotNum AND
+                s.RecordLock <> %s
+    """
+    DBCursor.execute(query, (kwg, 0, ""))
+    for row in fetchall_named(DBCursor):
+        tempsnid = row['SnapshotID']
+        temprl = row['RecordLock']
+        if 'unicode' in wx.PlatformInfo:
+            tempsnid = ProcessDBDataForUTF8Encoding(tempsnid)
+            temprl = ProcessDBDataForUTF8Encoding(temprl)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('%s  Snapshot "%s" is locked by %s\n'), 'utf8')
+        else:
+            prompt = _('%s  Snapshot "%s" is locked by %s\n')
+        t = prompt % (t, tempsnid, temprl)
+
     if t == "":
         # Delphi Transana had a confirmation dialog here, but we won't do
         # that here (do it before calling this function).
@@ -2956,8 +3523,18 @@ def delete_keyword_group(name):
             WHERE   KeywordGroup = %s"""
         DBCursor.execute(query, kwg)
         # Now delete all instances of this keywordgroup/keyword combo in the
-        # Clipkeywords file
+        # ClipKeywords file
         query = """DELETE FROM ClipKeywords2
+            WHERE   KeywordGroup = %s"""
+        DBCursor.execute(query, (kwg))
+        # Now delete all instances of this keywordgroup/keyword combo in the
+        # SnapshotKeywords file
+        query = """DELETE FROM SnapshotKeywords2
+            WHERE   KeywordGroup = %s"""
+        DBCursor.execute(query, (kwg))
+        # Now delete all instances of this keywordgroup/keyword combo in the
+        # SnapshotKeywordStyles file
+        query = """DELETE FROM SnapshotKeywordStyles2
             WHERE   KeywordGroup = %s"""
         DBCursor.execute(query, (kwg))
 
@@ -3045,6 +3622,48 @@ def delete_keyword(group, kw_name):
             temprl = ProcessDBDataForUTF8Encoding(temprl)
         t = msg % (t, tempclid, temprl)
 
+    # Whole Snapshot Keywords next
+    query = """SELECT a.KeywordGroup, a.Keyword, s.SnapshotID, s.RecordLock
+        FROM ClipKeywords2 a, Snapshots2 s
+        WHERE   a.KeywordGroup = %s AND
+                a.Keyword = %s AND
+                a.SnapshotNum <> %s AND
+                a.SnapshotNum = s.SnapshotNum AND
+                s.RecordLock <> %s
+    """
+    DBCursor.execute(query, (kwg, kw, 0, ""))
+
+    for row in fetchall_named(DBCursor):
+        msg = _('%s  Snapshot "%s" is locked by %s\n')
+        tempsnid = row['SnapshotID']
+        temprl = row['RecordLock']
+        if 'unicode' in wx.PlatformInfo:
+            msg = unicode(msg, 'utf8')
+            tempsnid = ProcessDBDataForUTF8Encoding(tempsnid)
+            temprl = ProcessDBDataForUTF8Encoding(temprl)
+        t = msg % (t, tempsnid, temprl)
+
+    # Snapshot Coding next
+    query = """SELECT a.KeywordGroup, a.Keyword, s.SnapshotID, s.RecordLock
+        FROM SnapshotKeywords2 a, Snapshots2 s
+        WHERE   a.KeywordGroup = %s AND
+                a.Keyword = %s AND
+                a.SnapshotNum <> %s AND
+                a.SnapshotNum = s.SnapshotNum AND
+                s.RecordLock <> %s
+    """
+    DBCursor.execute(query, (kwg, kw, 0, ""))
+
+    for row in fetchall_named(DBCursor):
+        msg = _('%s  Snapshot "%s" is locked by %s\n')
+        tempsnid = row['SnapshotID']
+        temprl = row['RecordLock']
+        if 'unicode' in wx.PlatformInfo:
+            msg = unicode(msg, 'utf8')
+            tempsnid = ProcessDBDataForUTF8Encoding(tempsnid)
+            temprl = ProcessDBDataForUTF8Encoding(temprl)
+        t = msg % (t, tempsnid, temprl)
+
     if t == "":
         # Delphi Transana had a confirmation dialog here, but we won't do
         # that here (do it before calling this function).
@@ -3062,6 +3681,20 @@ def delete_keyword(group, kw_name):
                     KeyWord = %s
         """
         DBCursor.execute(query, (kwg, kw))
+        # Now delete all instances of this keywordgroup/keyword combo in the
+        # SnapshotKeywords file
+        query = """DELETE FROM SnapshotKeywords2
+            WHERE   KeywordGroup = %s AND
+                    KeyWord = %s
+        """
+        DBCursor.execute(query, (kwg, kw))
+        # Now delete all instances of this keywordgroup/keyword combo in the
+        # SnapshotKeywordStyles file
+        query = """DELETE FROM SnapshotKeywordStyles2
+            WHERE   KeywordGroup = %s AND
+                    KeyWord = %s
+        """
+        DBCursor.execute(query, (kwg, kw))
 
         # Finish the transaction
         DBCursor.execute("COMMIT")
@@ -3075,8 +3708,33 @@ def delete_keyword(group, kw_name):
         raise TransanaExceptions.GeneralError, msg
     DBCursor.close()
 
+def ClearSourceEpisodeRecords(episodeNum):
+    """ When an Episode is deleted, it must be removed from any Snapshots that claim it. """
+
+    # NOTE:  This routine is not perfect.  If a Snapshot record is locked by another user, the record WILL be changed
+    #        here but that change will be wiped out when the user with the record lock saves (thus restoring the
+    #        EpisodeNum value).  However, Transana still knows how to handle it when this value exists but
+    #        cannot be found, so I'm not too worried about this rare case.  Blocking the delete seems too extreme here.
+    
+    # Get a Database cursor
+    DBCursor = get_db().cursor()
+
+    # Define a query to delete the appropriate records
+    query = """ UPDATE Snapshots2
+                  SET EpisodeNum = 0,
+                      TranscriptNum = 0,
+                      SnapshotTimeCode = 0,
+                      SnapshotDuration = 0
+                  WHERE EpisodeNum = %s """
+    # Execute the query
+    DBCursor.execute(query, episodeNum)
+
+    # Close the Database Cursor
+    DBCursor.close()
+
 def ClearSourceTranscriptRecords(transcriptNum):
-    """ When an Episode Transcript is deleted, it must be removed as a SourceTranscript from Clip Transcript records. """
+    """ When an Episode Transcript is deleted, it must be removed as a SourceTranscript from Clip Transcript records.
+        It also must be removed from any Snapshots that claim it. """
 
     # NOTE:  This routine is not perfect.  If a Clip Transcript record is locked by another user, the record WILL be changed
     #        here but that change will be wiped out when the user with the record lock saves (thus restoring the
@@ -3085,10 +3743,17 @@ def ClearSourceTranscriptRecords(transcriptNum):
     
     # Get a Database cursor
     DBCursor = get_db().cursor()
+
     # Define a query to delete the appropriate records
     query = "UPDATE Transcripts2 SET SourceTranscriptNum = 0 where SourceTranscriptNum = %s"
     # Execute the query
     DBCursor.execute(query, transcriptNum)
+
+    # Define a query to delete the appropriate records
+    query = "UPDATE Snapshots2 SET TranscriptNum = 0 where TranscriptNum = %s"
+    # Execute the query
+    DBCursor.execute(query, transcriptNum)
+
     # Close the Database Cursor
     DBCursor.close()
 
@@ -3243,7 +3908,7 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
     # Begin a Database Transaction
     DBCursor.execute("BEGIN")
 
-    # Define Queries for Episode and Clip Records.  Because some records might be locked by other users,
+    # Define Queries for Episode, Clip, and Snapshot Records.  Because some records might be locked by other users,
     # we can't simply use this:
     #
     #   query = "UPDATE Episodes2 SET MediaFile = %s WHERE MediaFile LIKE %s"
@@ -3252,10 +3917,12 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
     episodeQuery = "SELECT EpisodeNum FROM Episodes2 WHERE MediaFile LIKE %s"
     clipQuery = "SELECT ClipNum FROM Clips2 WHERE MediaFile LIKE %s"
     additionalQuery = "SELECT AddVidNum, EpisodeNum, ClipNum FROM AdditionalVids2 WHERE MediaFile LIKE %s"
+    snapshotQuery = "SELECT SnapshotNum FROM Snapshots2 WHERE ImageFile LIKE %s"
 
     # Let's count the number of records changed
     episodeCounter = 0
     clipCounter = 0
+    snapshotCounter = 0
 
     # Go through the fileList and run the query repeatedly
     for fileName in fileList:
@@ -3429,15 +4096,49 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
                     # Don't bother to contine processing DB Records
                     break
 
+        # Execute the Snapshot Query
+        DBCursor.execute(snapshotQuery, ('%' + queryFileName))
+
+        # Iterate through the records returned from the Database
+        for (snapshotNum, ) in DBCursor.fetchall():
+            # Load the Snapshot.
+            tempSnapshot = Snapshot.Snapshot(snapshotNum)
+            # Be ready to catch exceptions
+            try:
+                # Lock the Record
+                tempSnapshot.lock_record()
+                # Make sure the file names match, that we don't have a subset name.
+                # ('mens group.mov' was substituted for 'womens group.mov', for instance.)
+                if (fileName == newName) or (os.path.split(tempSnapshot.image_filename)[1].upper() == fileName.upper()):
+                    # Update the Media Filename
+                    tempSnapshot.image_filename = filePath + fileName
+                # Save the Record
+                tempSnapshot.db_save()
+                # Unlock the Record
+                tempSnapshot.unlock_record()
+                # Increment the Counter
+                snapshotCounter += 1
+            # If an exception is raised, catch it
+            except:
+                if DEBUG:
+                    (exctype, excvalue) = sys.exc_info()[:2]
+                    print "DBInterface.UpdateDBFilenames() Exception: \n%s\n%s" % (exctype, excvalue)
+                # Indicate that we have failed.
+                success = False
+                # Don't bother to contine processing DB Records
+                break
+
     # If there have been no problems, Commit the Transaction to the Database
     if success:
         DBCursor.execute("COMMIT")
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
             prompt = unicode(_("%s Episode Records have been updated.\n%s Clip Records have been updated."), 'utf8')
+            prompt += '\n' + unicode(_("%s Snapshot Records have been updated."), 'utf8')
         else:
             prompt = _("%s Episode Records have been updated.\n%s Clip Records have been updated.")
-        infodlg = Dialogs.InfoDialog(None, prompt % (episodeCounter, clipCounter))
+            prompt += '\n' + _("%s Snapshot Records have been updated.")
+        infodlg = Dialogs.InfoDialog(None, prompt % (episodeCounter, clipCounter, snapshotCounter))
         infodlg.ShowModal()
         infodlg.Destroy()
     # Otherwise, Roll the Transaction Back.
@@ -3875,6 +4576,80 @@ def ReportRecordLocks(parent):
     # Add a blank line to clearly delineate the report sections
     resMessage += '\n'
 
+    # Define the Snapshot Query
+    lockQuery = """SELECT SnapshotID, CollectID, c.ParentCollectNum, s.RecordLock
+                   FROM Snapshots2 s, Collections2 c
+                   WHERE s.RecordLock <> '' AND
+                         s.CollectNum = c.CollectNum""" 
+    # run the query
+    if 'unicode' in wx.PlatformInfo:
+        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+        resMessage += unicode(_('Snapshot records:\n'), 'utf8')
+    else:
+        resMessage += _('Snapshot records:\n')
+    # Execute the Snapshot Query
+    DBCursor.execute(lockQuery)
+    # Iterate through the records returned from the Database
+    for recs in fetchall_named(DBCursor):
+        # Get the DB Values
+        tempSnapshotID = recs['SnapshotID']
+        tempCollectID = recs['CollectID']
+        tempRecordLock = recs['RecordLock']
+        # If we're in Unicode mode, format the strings appropriately
+        if 'unicode' in wx.PlatformInfo:
+            tempSnapshotID = ProcessDBDataForUTF8Encoding(tempSnapshotID)
+            tempCollectID = ProcessDBDataForUTF8Encoding(tempCollectID)
+            tempRecordLock = ProcessDBDataForUTF8Encoding(tempRecordLock)
+        # Add the data to the Report Results string
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Snapshot "%s" in Collection "%s" '), 'utf8')
+        else:
+            prompt = _('Snapshot "%s" in Collection "%s" ')
+        resMessage += prompt % (tempSnapshotID, tempCollectID)
+        # Note the collection Parent, so we can list Collection Nesting
+        collPar = recs['ParentCollectNum']
+        # While we're looking at a nested Collection ...
+        while collPar > 0L:
+            # ... build a query to get the parent collection ...
+            subQ = """ SELECT CollectID, ParentCollectNum
+                       FROM Collections2
+                       WHERE CollectNum = %d """
+            # ... get a second database cursor ...
+            DBCursor2 = dbConn.cursor()
+            # ... execute the parent collection query ...
+            DBCursor2.execute(subQ % collPar)
+            # ... get the parent collection data ...
+            rec2 = DBCursor2.fetchone()
+            # ... note the collection's parent ...
+            collPar = rec2[1]
+            # Get the DB Value
+            tempCollectID = rec2[0]
+            # If we're in Unicode mode, format the strings appropriately
+            if 'unicode' in wx.PlatformInfo:
+                tempCollectID = ProcessDBDataForUTF8Encoding(tempCollectID)
+            # ... add the parent collection to the report Results String ...
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('nested in "%s" '), 'utf8')
+            else:
+                prompt = _('nested in "%s" ')
+            resMessage += prompt % tempCollectID
+            # ... close the second database cursor ...
+            DBCursor2.close()
+        # ... and complete the Report Results string.
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('is locked by %s\n'), 'utf8')
+        else:
+            prompt = _('is locked by %s\n')
+        resMessage += prompt % tempRecordLock
+        # If the user holding the lock isn't already in the list, add him/her.
+        if not (tempRecordLock in userList):
+            userList.append(tempRecordLock)
+    # Add a blank line to clearly delineate the report sections
+    resMessage += '\n'
+
     # Define the NOTES Query
     lockQuery = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, RecordLock
                    FROM Notes2
@@ -4024,7 +4799,7 @@ def UnlockRecords(parent, userName):
     # Change the Cursor to the Wait Cursor
     parent.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
     # Create a list of tables to iterate through unlocking records.
-    tableList = ['Series2', 'Episodes2', 'Transcripts2', 'Collections2', 'Clips2', 'Notes2', 'Keywords2', 'CoreData2']
+    tableList = ['Series2', 'Episodes2', 'Transcripts2', 'Collections2', 'Clips2', 'Snapshots2', 'Notes2', 'Keywords2', 'CoreData2']
     # Get a Database Connection
     dbConn = get_db()
     # Get a Database Cursor

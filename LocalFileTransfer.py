@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2012  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2014  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -194,15 +194,16 @@ class LocalFileTransfer(wx.Dialog):
             self.Bind(wx.EVT_TIMER, self.UpdateDisplay)
             EVT_THREAD_COMPLETE(self, self.OnFileCopyComplete)
             
-            # 
+            # Create a timer used to update the Progress Dialog
             self.timer = wx.Timer(self)
+            # Start the timer, firing it every half second
             self.timer.Start(500)
 
             self.size1 = os.stat(copyFrom)[6]
             self.threadedFileCopy = ThreadedFileCopy(self, copyFrom, copyTo)
+
             # Show the form
             self.ShowModal()
-
 
     def TransferSuccessful(self):
         # This class needs to return whether the transfer succeeded so that the delete portion of
@@ -224,7 +225,6 @@ class LocalFileTransfer(wx.Dialog):
 
     def UpdateDisplay(self, event):
         """ Update the Transfer Dialog Box labels and progress bar """
-
         if os.path.exists(self.destFileStr):
             bytesTransferred = os.stat(self.destFileStr)[6]
         else:
@@ -281,10 +281,11 @@ class LocalFileTransfer(wx.Dialog):
         try:
             # Allow the screen to update and accept User Input (Cancel Button press, for example).
             # (wxYield allows Windows to process Windows Messages)
-            wx.Yield()
+            wx.YieldIfNeeded()
         except:
-            pass
-        
+            print sys.exc_info()[0]
+            print sys.exc_info()[1]
+
     def OnCancel(self, event):
         """ Respond to the user pressing the "Cancel" button to interrupt the file transfer """
         # Cancel is accomplished by setting this local variable.  The File Transfer logic detects this and responds appropriately
@@ -296,4 +297,5 @@ class LocalFileTransfer(wx.Dialog):
         """ Process this when the Threaded File Copy Complete event is triggered """
         self.timer.Stop()
         self.threadedFileCopy = None
-        self.Show(False)
+        # self.Show(False) doesn't work, as the Mac fails to move forward.  EndModal seems to work.
+        self.EndModal(True)

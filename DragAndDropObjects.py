@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -64,6 +64,7 @@ import Episode                      # Import the Transana Episode Object
 import Transcript                   # Import the Transana Transcript Object
 import Collection                   # Import the Transana Collection Object
 import Clip                         # Import the Transana Clip Object
+import Snapshot                     # Import the Transana Snapshot Object
 import Note                         # Import the Transana Note Object
 import ClipPropertiesForm           # Import the Transana Clip Properties Form for adding Clips on Transcript Text Drop
 import KeywordObject as Keyword     # Import the Transana Keyword Object
@@ -81,6 +82,13 @@ def DragDropEvaluation(source, destination):
         tree node.  This function is encapsulated because it needs to be called from several different locations
         during the Drag-and-Drop process, including the DropSource's GiveFeedback() Method and the DropTarget's
         OnData() Method, as well as the DBTree's OnRightClick() to enable or disable the "Paste" option. """
+
+    if DEBUG:
+        print "DragDropEvaluation():"
+        print source
+        print destination
+        print
+    
     # If the SOURCE data is not a list but IS a CLIP ...
     if (not isinstance(source, list)) and (source.nodetype == 'ClipNode'):
         # Start exception handling
@@ -107,11 +115,16 @@ def DragDropEvaluation(source, destination):
         (source.nodetype == 'CollectionNode'       and destination.nodetype == 'CollectionsRootNode'  and source.parent != 0) or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'CollectionNode'       and source.parent != destination.recNum) or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'ClipNode') or \
+        (source.nodetype == 'ClipNode'             and destination.nodetype == 'SnapshotNode') or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'KeywordNode') or \
+        (source.nodetype == 'SnapshotNode'         and destination.nodetype == 'CollectionNode'       and source.parent != destination.recNum) or \
+        (source.nodetype == 'SnapshotNode'         and destination.nodetype == 'ClipNode') or \
+        (source.nodetype == 'SnapshotNode'         and destination.nodetype == 'SnapshotNode') or \
         (source.nodetype == 'KeywordNode'          and destination.nodetype == 'SeriesNode') or \
         (source.nodetype == 'KeywordNode'          and destination.nodetype == 'EpisodeNode') or \
         (source.nodetype == 'KeywordNode'          and destination.nodetype == 'CollectionNode') or \
         (source.nodetype == 'KeywordNode'          and destination.nodetype == 'ClipNode') or \
+        (source.nodetype == 'KeywordNode'          and destination.nodetype == 'SnapshotNode') or \
         (source.nodetype == 'KeywordNode'          and destination.nodetype == 'KeywordGroupNode') or \
         (source.nodetype == 'SeriesNoteNode'       and destination.nodetype == 'SeriesNode') or \
         (source.nodetype == 'EpisodeNoteNode'      and destination.nodetype == 'EpisodeNode') or \
@@ -121,7 +134,11 @@ def DragDropEvaluation(source, destination):
         (source.nodetype == 'SearchCollectionNode' and destination.nodetype == 'SearchResultsNode') or \
         (source.nodetype == 'SearchCollectionNode' and destination.nodetype == 'SearchCollectionNode' and source.parent != destination.recNum) or \
         (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode' and source.parent != destination.recNum) or \
-        (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchClipNode')) and \
+        (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchClipNode') or \
+        (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchSnapshotNode') or \
+        (source.nodetype == 'SearchSnapshotNode'   and destination.nodetype == 'SearchCollectionNode' and source.parent != destination.recNum) or \
+        (source.nodetype == 'SearchSnapshotNode'   and destination.nodetype == 'SearchClipNode') or \
+        (source.nodetype == 'SearchSnapshotNode'   and destination.nodetype == 'SearchSnapshotNode')) and \
        ((source.recNum != destination.recNum) or (source.nodetype != destination.nodetype)):
         return True
     # If we have a Clip Creation Object (dragged transcript text, type == ClipDragDropData), then we can drop it
@@ -140,10 +157,15 @@ def DragDropEvaluation(source, destination):
          ((source[0].nodetype == 'EpisodeNode'          and destination.nodetype == 'SeriesNode') or \
           (source[0].nodetype == 'ClipNode'             and destination.nodetype == 'CollectionNode') or \
           (source[0].nodetype == 'ClipNode'             and destination.nodetype == 'ClipNode') or \
+          (source[0].nodetype == 'ClipNode'             and destination.nodetype == 'SnapshotNode') or \
+          (source[0].nodetype == 'SnapshotNode'         and destination.nodetype == 'CollectionNode') or \
+          (source[0].nodetype == 'SnapshotNode'         and destination.nodetype == 'ClipNode') or \
+          (source[0].nodetype == 'SnapshotNode'         and destination.nodetype == 'SnapshotNode') or \
           (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'SeriesNode') or \
           (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'EpisodeNode') or \
           (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'CollectionNode') or \
           (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'ClipNode') or \
+          (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'SnapshotNode') or \
           (source[0].nodetype == 'KeywordNode'          and destination.nodetype == 'KeywordGroupNode') or \
           (source[0].nodetype == 'SeriesNoteNode'       and destination.nodetype == 'SeriesNode') or \
           (source[0].nodetype == 'EpisodeNoteNode'      and destination.nodetype == 'EpisodeNode') or \
@@ -151,8 +173,11 @@ def DragDropEvaluation(source, destination):
           (source[0].nodetype == 'CollectionNoteNode'   and destination.nodetype == 'CollectionNode') or \
           (source[0].nodetype == 'ClipNoteNode'         and destination.nodetype == 'ClipNode') or \
           (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode') or \
-          (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode') or \
-          (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchClipNode')):
+          (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchClipNode') or \
+          (source[0].nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchSnapshotNode') or \
+          (source[0].nodetype == 'SearchSnapshotNode'   and destination.nodetype == 'SearchCollectionNode') or \
+          (source[0].nodetype == 'SearchSnapshotNode'   and destination.nodetype == 'SearchClipNode') or \
+          (source[0].nodetype == 'SearchSnapshotNode'   and destination.nodetype == 'SearchSnapshotNode')):
         # Assume success
         result = True
         # Iterate through the source list
@@ -180,7 +205,7 @@ class DataTreeDragDropData(object):
     def __init__(self, text='', nodetype='Unknown', nodeList=None, recNum=0, parent=0):
         self.text = text           # The source node's text/label
         self.nodetype = nodetype   # The source node's nodetype
-        self.nodeList = nodeList   # The Source Node's nodeList (for SearchCollectionNode and SearchClipNode Cut and Paste)
+        self.nodeList = nodeList   # The Source Node's nodeList (for SearchCollectionNode, SearchClipNode, and SearchSnapshotNode Cut and Paste)
         self.recNum = recNum       # the source node's record number
         self.parent = parent       # The source node's parent's record number (or Keyword Group name, if the node is a Keyword)
 
@@ -470,11 +495,11 @@ class DataTreeDropTarget(wx.PyDropTarget):
                             if 'unicode' in wx.PlatformInfo:
                                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                                 prompt = unicode(_('Do you want to add multiple Keywords to all %s in %s "%s"?'), 'utf8')
-                                data1 = unicode(_('Clips'), 'utf8')
+                                data1 = unicode(_('Clips and Snapshots'), 'utf8')
                                 data2 = unicode(_('Collection'), 'utf8')
                             else:
                                 prompt = _('Do you want to add multiple Keywords to all %s in %s "%s"?')
-                                data1 = _('Clips')
+                                data1 = _('Clips and Snapshots')
                                 data2 = _('Collection')
                             data = (data1, data2, self.tree.GetItemText(self.dropNode))
                         elif self.dropData.nodetype == 'ClipNode':
@@ -487,6 +512,19 @@ class DataTreeDropTarget(wx.PyDropTarget):
                                 prompt = _('Do you want to add multiple Keywords to %s "%s"?')
                                 data1 = _('Clip')
                             data = (data1, self.tree.GetItemText(self.dropNode))
+                        elif self.dropData.nodetype == 'SnapshotNode':
+                            # Get user confirmation of the Keyword Add request
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_('Do you want to add multiple Keywords to %s "%s"?'), 'utf8')
+                                data1 = unicode(_('Snapshot'), 'utf8')
+                            else:
+                                prompt = _('Do you want to add multiple Keywords to %s "%s"?')
+                                data1 = _('Snapshot')
+                            data = (data1, self.tree.GetItemText(self.dropNode))
+                        else:
+                            prompt = unicode('DataTreeDropTarget.OnData():  Unknown dropData.nodetype.\nPlease press "No".', 'utf8')
+                            data = ()
                         # Display the prompt for user feedback
                         dlg = Dialogs.QuestionDialog(None, prompt % data)
                         result = dlg.LocalShowModal()
@@ -578,11 +616,12 @@ class DataTreeDropTarget(wx.PyDropTarget):
                 else:
                     clipData = cPickle.loads(self.clipData.GetData())
 
-                # Dropping Transcript Text onto a Collection or Clip creates a Regular Clip.
+                # Dropping Transcript Text onto a Collection, Clip, or Snapshot creates a Regular Clip.
                 # See if the Drop Target is the correct Node Type.  The type comparison was added to get this working on the Mac.
                 if (type(clipData) == type(ClipDragDropData())) and \
                    ((self.dropData.nodetype == 'CollectionNode') or \
-                    (self.dropData.nodetype == 'ClipNode')):
+                    (self.dropData.nodetype == 'ClipNode') or \
+                    (self.dropData.nodetype == 'SnapshotNode')):
 
                     # If a previous drag of a Clip Creation Data Object has been cleared, the clipData.transcriptNum
                     # will be "0", which indicated that the current Drag is NOT a Clip Creation Data Object, 
@@ -824,16 +863,19 @@ def CreateClip(clipData, dropData, tree, dropNode):
         tempClip.collection_num = dropData.recNum
         # ... and the Clip's Collection Name from the Drop Node.
         tempClip.collection_id = tree.GetItemText(dropNode)
+        # If dropping on a Collection, set Sort Order to the end of the list
+        tempClip.sort_order = DBInterface.getMaxSortOrder(dropData.recNum) + 1        
         # Remember the Collection Node which should be the parent for the new Clip Node to be created later.
         collectionNode = dropNode
-    # If the Clip Creation Object is dropped on a Clip ...
-    elif dropData.nodetype == 'ClipNode':
+    # If the Clip Creation Object is dropped on a Clip or Snapshot ...
+    elif dropData.nodetype in ['ClipNode', 'SnapshotNode']:
         # ... get the Clip's Collection Number from the Drop Node's Parent ...
         tempClip.collection_num = dropData.parent
         # ... and the Clip's Collection Name from the Drop Node's Parent.
         tempClip.collection_id = tree.GetItemText(tree.GetItemParent(dropNode))
         # Remember the Collection Node which should be the parent for the new Clip Node to be created later.
         collectionNode = tree.GetItemParent(dropNode)
+
     # Load the Episode that is connected to the Clip's Originating Transcript
     tempEpisode = Episode.Episode(tempClip.episode_num)
     # Start the clip off with the Episode's offset, though this could change if the first video wasn't used!
@@ -848,6 +890,7 @@ def CreateClip(clipData, dropData, tree, dropNode):
     if (clipData.videoCheckboxData != []) and (not clipData.videoCheckboxData[0][1]):
         # ... then indicate that the first audio track should not be included.
         tempClip.audio = 0
+
     # For each set of media player checkboxes after the first (which has already been processed) ...
     for x in range(1, len(clipData.videoCheckboxData)):
         # ... get the checkbox data
@@ -923,7 +966,7 @@ def CreateClip(clipData, dropData, tree, dropNode):
             # Use "try", as exceptions could occur
             try:
                 # See if the Clip Name already exists in the Destination Collection
-                (dupResult, newClipName) = CheckForDuplicateClipName(tempClip.id, tree, dropNode)
+                (dupResult, newClipName) = CheckForDuplicateObjName(tempClip.id, 'ClipNode', tree, dropNode)
 
                 # If a Duplicate Clip Name is found and the error situation not resolved, show an Error Message
                 if dupResult:
@@ -945,21 +988,41 @@ def CreateClip(clipData, dropData, tree, dropNode):
                     tmpDlg = Dialogs.PopupDialog(None, _("Saving Clip"), _("Saving the Clip"))
                     # If the Name was changed, reflect that in the Clip Object
                     tempClip.id = newClipName
-                    # See if we're dropping on a Collection Node ...
-                    if dropData.nodetype == 'CollectionNode':
-                        tempClip.sort_order = tree.GetChildrenCount(dropNode, False) + 1
+                    tempCollection = Collection.Collection(tempClip.collection_num)
+
                     # Try to save the data from the form
                     tempClip.db_save()
-                    tempCollection = Collection.Collection(tempClip.collection_num)
                     nodeData = (_('Collections'),) + tempCollection.GetNodeData() + (tempClip.id,)
 
                     # See if we're dropping on a Clip Node ...
                     if dropData.nodetype == 'ClipNode':
                         # Add the new Collection to the data tree
-                        tree.add_Node('ClipNode', nodeData, tempClip.number, tempClip.collection_num, True, dropNode)
+                        newNode = tree.add_Node('ClipNode', nodeData, tempClip.number, tempClip.collection_num, sortOrder=tempClip.sort_order, expandNode=True, insertPos=dropNode)
                     else:
                         # Add the new Clip to the data tree
-                        tree.add_Node('ClipNode', nodeData, tempClip.number, tempClip.collection_num, avoidRecursiveYields=True)
+                        tree.add_Node('ClipNode', nodeData, tempClip.number, tempClip.collection_num, sortOrder=tempClip.sort_order, avoidRecursiveYields=True)
+
+                    # See if we're dropping on a Clip Node ...
+                    if dropData.nodetype in ['ClipNode', 'SnapshotNode']:
+                        # ... and if so, change the Sort Order of the clips
+                        if not ChangeClipOrder(tree, dropNode, tempClip, tempCollection):
+                            pass
+
+#                            tempClip.lock_record()
+                            # If ChangeClipOrder fails, make sure the clip is at the end of the Clip List
+#                            tempClip.sort_order = DBInterface.getMaxSortOrder(dropData.parent) + 1
+                            # Try to save the data from the form
+#                            tempClip.db_save()
+#                            tempClip.unlock_record()
+                            # Reset the order of objects in the node, no need to send MU messages
+#                            tree.UpdateCollectionSortOrder(tree.GetItemParent(dropNode), sendMessage=False)
+
+                        # When we dropped Transcript text on a Clip, the screen wouldn't update until we touched the Mouse!
+                        # This fixes that.
+                        try:
+                            wx.YieldIfNeeded()
+                        except:
+                            pass
 
                     # Now let's communicate with other Transana instances if we're in Multi-user mode
                     if not TransanaConstants.singleUserVersion:
@@ -971,31 +1034,6 @@ def CreateClip(clipData, dropData, tree, dropNode):
                             data += (nd, )
                         if TransanaGlobal.chatWindow != None:
                             TransanaGlobal.chatWindow.SendMessage(msg % data)
-
-                    # See if we're dropping on a Clip Node ...
-                    if dropData.nodetype == 'ClipNode':
-                        # ... and if so, change the Sort Order of the clips
-                        if not ChangeClipOrder(tree, dropNode, tempClip, tempCollection):
-                            # If the SortOrder change FAILS (due to a locked Clip record) ...
-                            # ... lock the Temporary Clip
-                            tempClip.lock_record()
-                            # Change the Sort Order of the new clip to the highest value (end of list)
-                            tempClip.sort_order = DBInterface.getMaxSortOrder(tempCollection.number) + 1
-                            # ... save the clip
-                            tempClip.db_save()
-                            # ... unlock the clip
-                            tempClip.unlock_record()
-                            # Delete the node that was inserted above in the WRONG PLACE!
-                            tree.delete_Node(nodeData, 'ClipNode', sendMessage=False)
-                            # Add the new Clip to the data tree AT THE END OF THE LIST
-                            tree.add_Node('ClipNode', nodeData, tempClip.number, tempClip.collection_num, avoidRecursiveYields=True)
-
-                        # When we dropped Transcript text on a Clip, the screen wouldn't update until we touched the Mouse!
-                        # This fixes that.
-                        try:
-                            wx.YieldIfNeeded()
-                        except:
-                            pass
 
                     # See if the Keyword visualization needs to be updated.
                     tree.parent.ControlObject.UpdateKeywordVisualization()
@@ -1020,6 +1058,11 @@ def CreateClip(clipData, dropData, tree, dropNode):
                 errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
                 errordlg.ShowModal()
                 errordlg.Destroy()
+                # Refresh the Keyword List, if it's a changed Keyword error
+                dlg.refresh_keywords()
+                # Highlight the first non-existent keyword in the Keywords control
+                dlg.highlight_bad_keyword()
+
             # Handle other exceptions
             except:
                 # Remove the Popup Dialog
@@ -1030,7 +1073,7 @@ def CreateClip(clipData, dropData, tree, dropNode):
                 errordlg.Destroy()
 
                 import traceback
-                print traceback.print_exc()
+                traceback.print_exc(file=sys.stdout)
                 
         # If the user pressed Cancel ...
         else:
@@ -1149,9 +1192,9 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             # Get user confirmation of the Keyword Add request
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('Do you want to add Keyword "%s:%s" to all the Clips in\nCollection "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
+                prompt = unicode(_('Do you want to add Keyword "%s:%s" to all the Clips and Snapshots in\nCollection "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
             else:
-                prompt = _('Do you want to add Keyword "%s:%s" to all the Clips in\nCollection "%s"?') % (sourceData.parent, sourceData.text, targetName)
+                prompt = _('Do you want to add Keyword "%s:%s" to all the Clips and Snapshots in\nCollection "%s"?') % (sourceData.parent, sourceData.text, targetName)
             dlg = Dialogs.QuestionDialog(parent, prompt)
             result = dlg.LocalShowModal()
             dlg.Destroy()
@@ -1166,6 +1209,7 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
         try:
             # Lock the Collection Record, just to be on the safe side (Is this necessary??  I don't think so, but maybe that can confirm that all Clips are available.)
             tempCollection.lock_record()
+
             # Now load a list of all the Clips in the Collection and iterate through them
             for tempClipNum, tempClipID, tempCollectNum in DBInterface.list_of_clips_by_collection(tempCollection.id, tempCollection.parent):
                 # Load the Clip.
@@ -1200,6 +1244,32 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
                 # Handle "RecordLockedError" exception
                 except TransanaExceptions.RecordLockedError, e:
                     TransanaExceptions.ReportRecordLockedException(_("Clip"), tempClip.id, e)
+
+            if TransanaConstants.proVersion:
+                # Now load a list of all the Snapshots in the Collection and iterate through them
+                for tempSnapshotNum, tempSnapshotID, tempCollectNum in DBInterface.list_of_snapshots_by_collectionnum(tempCollection.number):
+                    # Load the Snapshot
+                    tempSnapshot = Snapshot.Snapshot(tempSnapshotNum)
+                    try:
+                        # Lock the Snapshot
+                        tempSnapshot.lock_record()
+                        # Add the Keyword to the Snapshot
+                        tempSnapshot.add_keyword(sourceData.parent, sourceData.text)
+                        # Save the Snapshot
+                        tempSnapshot.db_save()
+
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            msg = 'Snapshot %d' % tempSnapshot.number
+                            if TransanaGlobal.chatWindow != None:
+                                # Send the "Update Keyword List" message
+                                TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                        # Unlock the Snapshot
+                        tempSnapshot.unlock_record()
+                    # Handle "RecordLockedError" exception
+                    except TransanaExceptions.RecordLockedError, e:
+                        TransanaExceptions.ReportRecordLockedException(_("Snapshot"), tempSnapshot.id, e)
+
             # Unlock the Collection Record
             tempCollection.unlock_record()
             # If we need to update the Keyword Visualization, do so
@@ -1214,7 +1284,7 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
         # Handle "RecordLockedError" exception
         except TransanaExceptions.RecordLockedError, e:
             TransanaExceptions.ReportRecordLockedException(_("Collection"), tempCollection.id, e)
-    
+
     elif targetType == 'Clip':
         # Prompt for confirmation if that is desired
         if confirmations:
@@ -1285,6 +1355,65 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             # Unlock the Clip Record
             tempClip.unlock_record()
 
+    elif targetType == 'Snapshot':
+        # Prompt for confirmation if that is desired
+        if confirmations:
+            # Get user confirmation of the Keyword Add request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to add Keyword "%s:%s" to\nSnapshot "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
+            else:
+                prompt = _('Do you want to add Keyword "%s:%s" to\nSnapshot "%s"?') % (sourceData.parent, sourceData.text, targetName)
+            dlg = Dialogs.QuestionDialog(parent, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            if result == wx.ID_NO:
+                return
+        try:
+            # If confirmed, copy the Keyword to the Snapshot
+            # First, load the Snapshot.
+            tempSnapshot = Snapshot.Snapshot(targetRecNum)
+            # Lock the Snapshot Record
+            tempSnapshot.lock_record()
+            # Add the Keyword to the Snapshot Record
+            tempSnapshot.add_keyword(sourceData.parent, sourceData.text)
+            # Save the Snapshot Record
+            tempSnapshot.db_save()
+
+            # See if the Keyword visualization needs to be updated.
+            parent.parent.ControlObject.UpdateKeywordVisualization()
+            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+            if not TransanaConstants.singleUserVersion:
+                # We need to update the Episode Keyword Visualization
+                if (TransanaGlobal.chatWindow != None) and (tempSnapshot.episode_num != 0):
+                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', tempSnapshot.episode_num, 0))
+            # Now let's communicate with other Transana instances if we're in Multi-user mode
+            if not TransanaConstants.singleUserVersion:
+                msg = 'Snapshot %d' % tempSnapshot.number
+                if TransanaGlobal.chatWindow != None:
+                    # Send the "Update Keyword List" message
+                    TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+            # Unlock the Snapshot Record
+            tempSnapshot.unlock_record()
+        except TransanaExceptions.RecordLockedError, e:
+            TransanaExceptions.ReportRecordLockedException(_("Snapshot"), tempSnapshot.id, e)
+        # Handle "SaveError" exception
+        except TransanaExceptions.SaveError:
+            # Display the Error Message
+            errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+            errordlg.ShowModal()
+            errordlg.Destroy()
+            # Unlock the Snapshot Record
+            tempSnapshot.unlock_record()
+        # Handle other exceptions
+        except:
+            # Display the Exception Message
+            errordlg = Dialogs.ErrorDialog(None, "%s" % (sys.exc_info()[:2]))
+            errordlg.ShowModal()
+            errordlg.Destroy()
+            # Unlock the Snapshot Record
+            tempSnapshot.unlock_record()
+
 def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True):
     """ This method processes a "Paste" or "Drop" request for the Transana Database Tree.
         Parameters are:
@@ -1296,6 +1425,9 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
 
     # Since we get the actual destination node as a parameter, let's first extract the Node Data for the Destination
     destNodeData = treeCtrl.GetPyData(destNode)
+
+#    print "DragAndDropObjects.ProcessPasteDrop(): dropping %s on %s" % (sourceData.nodetype, destNodeData.nodetype)
+    
     # Determine whether a Copy or Move is being requested, and set the appropriate Prompt Text
     if 'unicode' in wx.PlatformInfo:
         if action == 'Copy':
@@ -1548,12 +1680,50 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                         # Now it's time to copy the CLIPS. 
                         # Get the Tree Node for the collection we just added to the tree
                         newDestNode = treeCtrl.select_Node(nodeList, 'CollectionNode')
+
+                        # We need to copy clips and snapshots in their MIXED order, rather than copying all Clips
+                        # and then copying all Snapshots, as that would leave them in the wrong order in the destination,
+                        # with all Clips followed by all Snapshots.
+
+                        # Create a dictionary of objects which uses the sort_order as the key!!
+                        copyOrder = {}
+
                         # Iterate through the list of Clips
                         for clip in clipList:
-                           # Load the next Clip from the list
-                           tempClip = Clip.Clip(id_or_num=clip[0])
-                           # Copy or Move the Clip to the Destination Collection
-                           CopyMoveClip(treeCtrl, newDestNode, tempClip, sourceCollection, newCollection, action)
+                            # Load the next Clip from the list
+                            tempClip = Clip.Clip(id_or_num=clip[0])
+                            # Add the Clip to the sortOrder dictionary
+                            copyOrder[tempClip.sort_order] = tempClip
+
+                        # If Snapshots are supported ...
+                        if TransanaConstants.proVersion:
+                            # Now it's time to copy the SNAPSHOTS. 
+                            # We need a list of all the snapshots in the Source Collection
+                            snapshotList = DBInterface.list_of_snapshots_by_collectionnum(sourceCollection.number)
+                            # Iterate through the list of Snapshots
+                            for snapshot in snapshotList:
+                                # Load the next Snapshot from the list
+                                tempSnapshot = Snapshot.Snapshot(num_or_id=snapshot[0])
+                                # Add the Snapshot to the sortOrder dictionary
+                                copyOrder[tempSnapshot.sort_order] = tempSnapshot
+
+                        # Get the dictionary keys
+                        keys = copyOrder.keys()
+                        # Sort the dictionary keys
+                        keys.sort()
+                        # Now iterate through the sorted keys ...
+                        for key in keys:
+                            # ... and get the next object that should go into the new destination
+                            obj = copyOrder[key]
+                            # If we have a Clip ...
+                            if isinstance(obj, Clip.Clip):
+                                # ... copy or Move the Clip to the Destination Collection
+                                CopyMoveClip(treeCtrl, newDestNode, obj, sourceCollection, newCollection, action)
+                            # If we have a Snapshot ...
+                            elif isinstance(obj, Snapshot.Snapshot):
+                                # ... copy or Move the Snapshot to the Destination Collection
+                                CopyMoveSnapshot(treeCtrl, newDestNode, obj, sourceCollection, newCollection, action)
+
                         # See if the Keyword visualization needs to be updated.
                         treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
                         # Even if this computer doesn't need to update the keyword visualization others, might need to.
@@ -1562,7 +1732,7 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                             if TransanaGlobal.chatWindow != None:
                                 TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
 
-                        # now let's copy the collection notes
+                        # Now let's copy the collection notes
                         notesList = DBInterface.list_of_notes(Collection=sourceCollection.number, includeNumber=True)
                         for note in notesList:
                             srcNote = Note.Note(note[0])
@@ -1708,26 +1878,29 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                 TransanaExceptions.ReportRecordLockedException(_("Clip"), sourceClip.id, e)
                 
     # Drop a Clip on a Clip (Alter SortOrder, Copy or Move a Clip to a particular place in the SortOrder)
-    elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'ClipNode'):
+    elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype in ['ClipNode', 'SnapshotNode']):
         # Load the Source Clip
         sourceClip = Clip.Clip(id_or_num=sourceData.recNum)
         # Load the Source Collection
         sourceCollection = Collection.Collection(sourceData.parent)
-        # Load the Destination (or target) Clip
-        destClip = Clip.Clip(destNodeData.recNum)
+        if destNodeData.nodetype == 'ClipNode':
+            # Load the Destination (or target) Clip
+            destObj = Clip.Clip(destNodeData.recNum)
+        elif destNodeData.nodetype == 'SnapshotNode':
+            # Load the Destination (or target) Snapshot
+            destObj = Snapshot.Snapshot(destNodeData.recNum)
         # Load the Destination (or target) Collection
-        destCollection = Collection.Collection(destClip.collection_num)
+        destCollection = Collection.Collection(destObj.collection_num)
         # See if we are in the SAME Collection, and therefore just changing Sort Order
         if sourceCollection.number == destCollection.number:
             # If so, change the Sort Order as requested
             if not ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
                 # This is OKAY.  Nothing needs to be fixed, either locally or remotely if this fails.
                 pass
-              
-            # NOTE:  We can't just use the insertPos parameter of add_Node, as we need to have the Sort Order set in the
-            #        Clip Object as well.
+            treeCtrl.UpdateCollectionSortOrder(treeCtrl.GetItemParent(destNode))
+            wx.CallAfter(treeCtrl.Refresh)
 
-        # If not, we are copying/moving a Clip to a place in the SortOrder
+        # If not, we are copying/moving a Clip to a place in the SortOrder in a Different Colletion
         else:
             # Get user confirmation of the Clip Copy/Move request
             if 'unicode' in wx.PlatformInfo:
@@ -1753,6 +1926,9 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                             # This is OKAY.  Nothing needs to be fixed, either locally or remotely if this fails.
                             pass
                             
+                    treeCtrl.UpdateCollectionSortOrder(treeCtrl.GetItemParent(destNode))
+                    wx.CallAfter(treeCtrl.Refresh)
+
                     # See if the Keyword visualization needs to be updated.
                     treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
                     # Even if this computer doesn't need to update the keyword visualization others, might need to.
@@ -1814,6 +1990,93 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                 if TransanaGlobal.chatWindow != None:
                     TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', tempClip.number, tempClip.episode_num))
 
+    # Drop a Snapshot on a Collection (Copy or Move a Snapshot)
+    elif (sourceData.nodetype == 'SnapshotNode' and destNodeData.nodetype == 'CollectionNode'):
+        # Load the Source Snapshot
+        sourceSnapshot = Snapshot.Snapshot(sourceData.recNum)
+        # Load the Source Collection
+        sourceCollection = Collection.Collection(sourceData.parent)
+        # Load the Destination Collection
+        destCollection = Collection.Collection(destNodeData.recNum, destNodeData.parent)
+
+        # Get user confirmation of the Clip Copy/Move request
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
+        else:
+            prompt = _('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
+        dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+        result = dlg.LocalShowModal()
+        dlg.Destroy()
+        if result == wx.ID_YES:
+            try:
+                # Copy or Move the Snapshot to the Destination Collection
+                CopyMoveSnapshot(treeCtrl, destNode, sourceSnapshot, sourceCollection, destCollection, action)
+                # See if the Keyword visualization needs to be updated.
+                treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+                # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                if (sourceSnapshot.episode_num > 0) and not TransanaConstants.singleUserVersion:
+                    # We need to update the Episode Keyword Visualization
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', sourceSnapshot.episode_num, 0)) # ('Clip', sourceClip.number, sourceClip.episode_num))
+            except TransanaExceptions.RecordLockedError, e:
+                TransanaExceptions.ReportRecordLockedException(_("Snapshot"), sourceSnapshot.id, e)
+                
+    # Drop a Snapshot on a Clip or Snapshot (Alter SortOrder, Copy or Move a Snapshot to a particular place in the SortOrder)
+    elif (sourceData.nodetype == 'SnapshotNode' and destNodeData.nodetype in ['ClipNode', 'SnapshotNode']):
+        # Load the Source Snapshot
+        sourceSnapshot = Snapshot.Snapshot(sourceData.recNum)
+        # Load the Source Collection
+        sourceCollection = Collection.Collection(sourceData.parent)
+        if destNodeData.nodetype == 'ClipNode':
+            # Load the Destination (or target) Clip
+            destObj = Clip.Clip(destNodeData.recNum)
+        elif destNodeData.nodetype == 'SnapshotNode':
+            # Load the Destination (or target) Snapshot
+            destObj = Snapshot.Snapshot(destNodeData.recNum)
+        # Load the Destination (or target) Collection
+        destCollection = Collection.Collection(destObj.collection_num)
+        # See if we are in the SAME Collection, and therefore just changing Sort Order
+        if sourceCollection.number == destCollection.number:
+            # If so, change the Sort Order as requested
+            if not ChangeClipOrder(treeCtrl, destNode, sourceSnapshot, sourceCollection):
+                # This is OKAY.  Nothing needs to be fixed, either locally or remotely if this fails.
+                pass
+            treeCtrl.UpdateCollectionSortOrder(treeCtrl.GetItemParent(destNode))
+            wx.CallAfter(treeCtrl.Refresh)
+
+        # If not, we are copying/moving a Snapshot to a place in the SortOrder in a different Collection ...
+        else:
+            # Get user confirmation of the Snapshot Copy/Move request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
+            else:
+                prompt = _('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            if result == wx.ID_YES:
+                try:
+                    # Copy or Move the Snapshot to the Destination Collection
+                    # If confirmed, copy the Source Snapshot to the Destination Collection.  CopyMoveSnapshot will place the Snapshot at
+                    # end of the list of objects.
+                    # We need to work with the COPY of the snapshot instead of the original from here on, so we get that
+                    # value from CopyMoveSnapshot.
+                    tempObject = CopyMoveSnapshot(treeCtrl, destNode, sourceSnapshot, sourceCollection, destCollection, action)
+                    # If the Copy/Move is cancelled, tempObject will be None
+                    if tempObject != None:
+                        # Now change the order of the objects
+                        if not ChangeClipOrder(treeCtrl, destNode, tempObject, destCollection):
+                            # This is OKAY.  Nothing needs to be fixed, either locally or remotely if this fails.
+                            pass
+
+                    treeCtrl.UpdateCollectionSortOrder(treeCtrl.GetItemParent(destNode))
+                    wx.CallAfter(treeCtrl.Refresh)
+                            
+                except TransanaExceptions.RecordLockedError, e:
+                    TransanaExceptions.ReportRecordLockedException(_("Snapshot"), sourceSnapshot.id, e)
+
     # Drop a Keyword on a Series
     elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'SeriesNode'):
         DropKeyword(treeCtrl, sourceData, 'Series', treeCtrl.GetItemText(destNode), destNodeData.recNum, 0, confirmations=confirmations)
@@ -1829,6 +2092,10 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
     # Drop a Keyword on a Clip
     elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'ClipNode'):
         DropKeyword(treeCtrl, sourceData, 'Clip', treeCtrl.GetItemText(destNode), destNodeData.recNum, 0, confirmations=confirmations)
+
+    # Drop a Keyword on a Snapshot
+    elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'SnapshotNode'):
+        DropKeyword(treeCtrl, sourceData, 'Snapshot', treeCtrl.GetItemText(destNode), destNodeData.recNum, 0, confirmations=confirmations)
 
     # Drop a Keyword on a Keyword Group (Copy or Move a Keyword)
     elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'KeywordGroupNode'):
@@ -2752,8 +3019,8 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
         # If the user confirmed, process the request.
         if result == wx.ID_YES:
             # Check for Duplicate Clip Name error
-            (dupResult, newClipName) = CheckForDuplicateClipName(sourceData.text, treeCtrl, destNode)
-            # If a Duplicate Clip Name exists that is not resolved within CheckForDuplicateClipNames ...
+            (dupResult, newClipName) = CheckForDuplicateObjName(sourceData.text, 'SearchClipNode', treeCtrl, destNode)
+            # If a Duplicate Clip Name exists that is not resolved within CheckForDuplicateObjNames ...
             if dupResult:
                 # ... display the error message.
                 if 'unicode' in wx.PlatformInfo:
@@ -2784,7 +3051,7 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                 # Get the node data for the DESTINATION node, so we can update the Clip's Parent record
                 destData = treeCtrl.GetPyData(destNode)
                 # Now Add the new Node, using the SourceData's Data
-                treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, sourceData.recNum, destData.recNum, False)
+                treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, sourceData.recNum, destData.recNum, expandNode=False)
                 # No need to communicate with other Transana Clients here, we're just manipulating Search Results.
                 # If we need to remove the node, the SourceData carries the nodeList we need to delete
                 if action == 'Move':
@@ -2794,17 +3061,15 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                 # Select the Destination Collection as the tree's Selected Item
                 treeCtrl.SelectItem(destNode)
 
-    # Drop a SearchClip on a SearchClip (Copy or Move a SearchClip into a position in the SortOrder)
-    elif (sourceData.nodetype == 'SearchClipNode' and destNodeData.nodetype == 'SearchClipNode'):
+    # Drop a SearchClip on a SearchClip or SearchSnapshot (Copy or Move a SearchClip into a position in the SortOrder)
+    elif (sourceData.nodetype == 'SearchClipNode' and destNodeData.nodetype in ['SearchClipNode', 'SearchSnapshotNode']):
         # NOTE:  SearchClips don't exist in the database.  Therefore, to copy or move them,
         #        all we need to do is manipulate Database Tree Nodes
-
         # Set variables for the user Confirmation Prompt, if needed.
         sourceClipId = sourceData.text
         # The Source Collection is the second-to-last entry in the source Node List!
         sourceCollectionId = sourceData.nodeList[-2]
         destCollectionId = treeCtrl.GetItemText(treeCtrl.GetItemParent(destNode))
-
         # Only prompt if we are copying/moving to a DIFFERENT collection, not the same one!
         if (sourceCollectionId == destCollectionId) and \
             (sourceData.parent == destNodeData.parent):
@@ -2831,7 +3096,7 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
             # If the user confirmed ...
             if result == wx.ID_YES:
                 # ... we need to check to see if this Clip is a Duplicate, giving the user a chance to resolve the problem.
-                (dupResult, newClipName) = CheckForDuplicateClipName(sourceData.text, treeCtrl, treeCtrl.GetItemParent(destNode))
+                (dupResult, newClipName) = CheckForDuplicateObjName(sourceData.text, 'SearchClipNode', treeCtrl, treeCtrl.GetItemParent(destNode))
                 # If the clip is no longer a duplicate and the user has changed the clip's name to resolve that ...
                 if (not dupResult) and (newClipName != sourceData.text):
                    # ... use the new name.
@@ -2871,11 +3136,162 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                     treeCtrl.delete_Node(sourceData.nodeList, sourceData.nodetype)
                     # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
                     ClearClipboard()
-                # Now Add the new Node, using the SourceData's Data
-                treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, sourceData.recNum, sourceData.parent, False, insertPos=destNode)
+                # Now Add the new Node, using the SourceData's Data but the destNode's Parent
+                treeCtrl.add_Node('SearchClipNode', (_('Search'),) + nodeList, sourceData.recNum, destNodeData.parent, expandNode=False, insertPos=destNode)
                 # No need to communicate with other Transana Clients here, we're just manipulating Search Results.
                 # Select the Destination Collection as the tree's Selected Item
                 treeCtrl.SelectItem(destNode)
+
+    # Drop a SearchSnapshot on a SearchCollection (Copy or Move a SearchSnapshot)
+    elif (sourceData.nodetype == 'SearchSnapshotNode' and destNodeData.nodetype == 'SearchCollectionNode'):
+        # NOTE:  SearchSnapshot don't exist in the database.  Therefore, to copy or move them,
+        #        all we need to do is manipulate Database Tree Nodes
+
+        # Get user confirmation of the Snapshot Copy/Move request.
+        # First, let's get the appropriate text for the confirmation prompt.
+        sourceSnapshotId = sourceData.text
+        # The Source Collection is the second-to-last entry in the source Node List!
+        sourceCollectionId = sourceData.nodeList[-2]
+        destCollectionId = treeCtrl.GetItemText(destNode)
+        # Create the confirmation Dialog box
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Do you want to %s Search Results Snapshot "%s" from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?'), 'utf8') % (copyMovePrompt, sourceSnapshotId, sourceCollectionId, destCollectionId)
+        else:
+            prompt = _('Do you want to %s Search Results Snapshot "%s" from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?') % (copyMovePrompt, sourceSnapshotId, sourceCollectionId, destCollectionId)
+        # Display the confirmation Dialog Box
+        dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+        result = dlg.LocalShowModal()
+        # Clean up after the confirmation Dialog box
+        dlg.Destroy()
+        # If the user confirmed, process the request.
+        if result == wx.ID_YES:
+            # Check for Duplicate Snapshot Name error
+            (dupResult, newSnapshotName) = CheckForDuplicateObjName(sourceData.text, 'SearchSnapshotNode', treeCtrl, destNode)
+            # If a Duplicate Snapshot Name exists that is not resolved within CheckForDuplicateObjNames ...
+            if dupResult:
+                # ... display the error message.
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('%s cancelled for Snapshot "%s".  Duplicate Snapshot Name Error.'), 'utf8') % (copyMovePrompt, sourceData.text)
+                else:
+                    prompt = _('%s cancelled for Snapshot "%s".  Duplicate Snapshot Name Error.') % (copyMovePrompt, sourceData.text)
+                dlg = Dialogs.ErrorDialog(None, prompt)
+                dlg.ShowModal()
+                dlg.Destroy()
+            else:
+                # The user may have provided a new name for the Clip if it was a duplicate.
+                if newSnapshotName != sourceData.text:
+                    # If so, use this new name.
+                    sourceData.text = newSnapshotName
+
+                # What we need to do first is add the appropriate new Node to the Tree.
+                # Let's build the NodeList by starting with the Source Clip text ...
+                nodeList = (sourceData.text,)
+                # ... and then climbing the Destination Node Tree .... 
+                currentNode = destNode
+                # ... until we get to the SearchRootNode
+                while treeCtrl.GetPyData(currentNode).nodetype != 'SearchRootNode':
+                    # We add the Item Test to the FRONT of the Node List
+                    nodeList = (treeCtrl.GetItemText(currentNode),) + nodeList
+                    # and we move up to the node's parent
+                    currentNode = treeCtrl.GetItemParent(currentNode)
+                # Get the node data for the DESTINATION node, so we can update the Clip's Parent record
+                destData = treeCtrl.GetPyData(destNode)
+                # Now Add the new Node, using the SourceData's Data
+                treeCtrl.add_Node('SearchSnapshotNode', (_('Search'),) + nodeList, sourceData.recNum, destData.recNum, expandNode=False)
+                # No need to communicate with other Transana Clients here, we're just manipulating Search Results.
+                # If we need to remove the node, the SourceData carries the nodeList we need to delete
+                if action == 'Move':
+                    treeCtrl.delete_Node(sourceData.nodeList, 'SearchSnapshotNode')
+                    # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                    ClearClipboard()
+                # Select the Destination Collection as the tree's Selected Item
+                treeCtrl.SelectItem(destNode)
+
+    # Drop a SearchSnapshot on a SearchClip or SearchSnapshot (Copy or Move a SearchSnapshot into a position in the SortOrder)
+    elif (sourceData.nodetype == 'SearchSnapshotNode' and destNodeData.nodetype in ['SearchClipNode', 'SearchSnapshotNode']):
+        # NOTE:  SearchSnapshots don't exist in the database.  Therefore, to copy or move them,
+        #        all we need to do is manipulate Database Tree Nodes
+
+        # Set variables for the user Confirmation Prompt, if needed.
+        sourceSnapshotId = sourceData.text
+        # The Source Collection is the second-to-last entry in the source Node List!
+        sourceCollectionId = sourceData.nodeList[-2]
+        destCollectionId = treeCtrl.GetItemText(treeCtrl.GetItemParent(destNode))
+
+        # Only prompt if we are copying/moving to a DIFFERENT collection, not the same one!
+        if (sourceCollectionId == destCollectionId) and \
+            (sourceData.parent == destNodeData.parent):
+            # This bypasses the prompt if both collection names and parents are the same
+            result = wx.ID_YES
+            # By definition, this MUST be a move, as we are altering Sort Order.
+            action = 'Move'
+            # We don't have to deal with duplicate Clip Names if changing a Clip's Sort Order.
+            # It IS a duplicate name, but we can ignore that.
+            dupResult = False
+        else:
+            # If we're dealing with different collections, prompt the user to confirm the copy/move.
+            # First, build the confirmation Dialog Box
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceSnapshotId, sourceCollectionId, destCollectionId)
+            else:
+                prompt = _('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceSnapshotId, sourceCollectionId, destCollectionId)
+            # Display the Confirmation Dialog Box
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+            result = dlg.LocalShowModal()
+            # Clean up the Confirmation Dialog Box
+            dlg.Destroy()
+            # If the user confirmed ...
+            if result == wx.ID_YES:
+                # ... we need to check to see if this Snapshot is a Duplicate, giving the user a chance to resolve the problem.
+                (dupResult, newSnapshotName) = CheckForDuplicateObjName(sourceData.text, 'SearchSnapshotNode', treeCtrl, treeCtrl.GetItemParent(destNode))
+                # If the clip is no longer a duplicate and the user has changed the clip's name to resolve that ...
+                if (not dupResult) and (newSnapshotName != sourceData.text):
+                   # ... use the new name.
+                   sourceData.text = newSnapshotName
+
+        # If the user confirmed (or wasn't asked) ...
+        if result == wx.ID_YES:
+            # If we have a Duplicate Snapshot Name error ...
+            if dupResult:
+                # ... show the error message.
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('%s cancelled for Snapshot "%s".  Duplicate Snapshot Name Error.'), 'utf8') % (copyMovePrompt, sourceData.text)
+                else:
+                    prompt = _('%s cancelled for Snapshot "%s".  Duplicate Snapshot Name Error.') % (copyMovePrompt, sourceData.text)
+                dlg = Dialogs.ErrorDialog(None, prompt)
+                dlg.ShowModal()
+                dlg.Destroy()
+            # If there's no Duplicate Snapshot Name Error ...
+            else:
+                # What we need to do first is add the appropriate new Node to the Tree.
+                # Let's build the NodeList by starting with the Source Clip text ...
+                nodeList = (sourceData.text,)
+                # ... and then climbing the Destination Node Tree  using the clip's Parent Collection .... 
+                currentNode = treeCtrl.GetItemParent(destNode)
+                # ... until we get to the SearchRootNode
+                while treeCtrl.GetPyData(currentNode).nodetype != 'SearchRootNode':
+                    # We add the Item Test to the FRONT of the Node List
+                    nodeList = (treeCtrl.GetItemText(currentNode),) + nodeList
+                    # and we move up to the node's parent
+                    currentNode = treeCtrl.GetItemParent(currentNode)
+
+                # If we need to remove the node, the SourceData carries the nodeList we need to delete.
+                # (We need to delete first so that the moved Clip in the same Collection doesn't get removed
+                # immediately after being added.)
+                if action == 'Move':
+                    treeCtrl.delete_Node(sourceData.nodeList, sourceData.nodetype)
+                    # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+                    ClearClipboard()
+                # Now Add the new Node, using the SourceData's Data, but the destination node's parent
+                treeCtrl.add_Node('SearchSnapshotNode', (_('Search'),) + nodeList, sourceData.recNum, destNodeData.parent, expandNode=False, insertPos=destNode)
+                # No need to communicate with other Transana Clients here, we're just manipulating Search Results.
+                # Select the Destination Collection as the tree's Selected Item
+                treeCtrl.SelectItem(destNode)
+
     else:
         # This code will only get called if a source/drop combination is defined in DragDropEvaluation()
         # as a legal drop but is not defined here with the appropriate code to define what to do!
@@ -2895,7 +3311,7 @@ def ClearClipboard():
     cdo = wx.CustomDataObject(wx.CustomDataFormat('DataTreeDragData'))
     # Put the pickled data object in the wxCustomDataObject
     cdo.SetData(pddd)
-    # Is the clipboard open?  Assume so.
+    # Is the clipboard open?  Assume not.
     clipboardOpenedHere = False
     # If the Clipboard is NOT open ...
     if not wx.TheClipboard.IsOpened():
@@ -2910,12 +3326,12 @@ def ClearClipboard():
         # ... close the Clipboard
         wx.TheClipboard.Close()
 
-def CheckForDuplicateClipName(sourceClipName, treeCtrl, destCollectionNode):
-   """ Check the destCollectionNode to see if sourceClipName already exists.  If so, prompt for a name change.
+def CheckForDuplicateObjName(sourceObjName, sourceObjType, treeCtrl, destCollectionNode):
+   """ Check the destCollectionNode to see if sourceObjName already exists.  If so, prompt for a name change.
        Return True if duplicate is found, False if no duplicate is found or if Clip is renamed appropriately.  """
-   # Before we do anything, let's make sure we have a Collection Node, not a Clip Node here
-   if treeCtrl.GetPyData(destCollectionNode).nodetype == 'ClipNode':
-       # If it's a clip, let's use its parent Collection
+   # Before we do anything, let's make sure we have a Collection Node, not a Clip Node or Shapshot Node here
+   if treeCtrl.GetPyData(destCollectionNode).nodetype in ['ClipNode', 'SnapshotNode']:
+       # If it's a clip or snapshot, let's use its parent Collection
        destCollectionNode = treeCtrl.GetItemParent(destCollectionNode)
    # Assume that no duplicate exists unless proven otherwise
    result = False
@@ -2931,19 +3347,19 @@ def CheckForDuplicateClipName(sourceClipName, treeCtrl, destCollectionNode):
          tempData = treeCtrl.GetPyData(tempTreeItem)
          
          # See if the current child is a Clip AND it has the same name as the source Clip
-         if ((tempData.nodetype == 'ClipNode') or (tempData.nodetype == 'SearchClipNode')) and (treeCtrl.GetItemText(tempTreeItem).upper() == sourceClipName.upper()):
+         if (tempData.nodetype == sourceObjType)  and (treeCtrl.GetItemText(tempTreeItem).upper() == sourceObjName.upper()):
             # If so, prompt the user to change the Clip's Name.  First, build a Dialog to ask that question.
-            dlg = wx.TextEntryDialog(TransanaGlobal.menuWindow, _('Duplicate Clip Name.  Please enter a new name for the Clip.'), _('Transana Error'), sourceClipName, style=wx.OK | wx.CANCEL | wx.CENTRE)
+            dlg = wx.TextEntryDialog(TransanaGlobal.menuWindow, _('Duplicate Clip Name.  Please enter a new name for the Clip.'), _('Transana Error'), sourceObjName, style=wx.OK | wx.CANCEL | wx.CENTRE)
             # Position the Dialog Box in the center of the screen
             dlg.CentreOnScreen()
             # Show the Dialog Box
             dlgResult = dlg.ShowModal()
             # If the user selected OK AND changed the Clip Name ...
-            if (dlgResult == wx.ID_OK) and (dlg.GetValue() != sourceClipName):
+            if (dlgResult == wx.ID_OK) and (dlg.GetValue() != sourceObjName):
                # Let's look at the new name ...
-               sourceClipName = dlg.GetValue()
+               sourceObjName = dlg.GetValue()
                # ... and see if it is a Duplicate Clip Name by recursively calling this method
-               (result, sourceClipName) = CheckForDuplicateClipName(sourceClipName, treeCtrl, destCollectionNode)
+               (result, sourceObjName) = CheckForDuplicateObjName(sourceObjName, sourceObjType, treeCtrl, destCollectionNode)
                # Clean up after prompting for the new Clip name
                dlg.Destroy()
                # We can stop looking for duplicate names.  We've already found it.
@@ -2965,7 +3381,7 @@ def CheckForDuplicateClipName(sourceClipName, treeCtrl, destCollectionNode):
             break
 
    # Return the result and the Clip Name, as it could have been changed.
-   return (result, sourceClipName)
+   return (result, sourceObjName)
 
 def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action):
     """ This function copies or moves sourceClip to destCollection, depending on the value of 'action' """
@@ -3009,7 +3425,7 @@ def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollectio
        elif action == 'Move':
           clipName = sourceClip.id
        # See if the Clip Name already exists in the Destination Collection
-       (dupResult, newClipName) = CheckForDuplicateClipName(clipName, treeCtrl, destNode)
+       (dupResult, newClipName) = CheckForDuplicateObjName(clipName, 'ClipNode', treeCtrl, destNode)
        
        # If a Duplicate Clip Name is found and the error situation not resolved, show an Error Message
        if dupResult:
@@ -3019,15 +3435,15 @@ def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollectio
           # Report the failure to the user, although it's already known to have failed because they pressed "cancel".
           if 'unicode' in wx.PlatformInfo:
               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-              prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Clip Name Error.'), 'utf8') % (action, sourceClip.id)
+              prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Clip Name Error.'), 'utf8') % (copyMovePrompt, sourceClip.id)
           else:
-              prompt = _('%s cancelled for Clip "%s".  Duplicate Clip Name Error.') % (action, sourceClip.id)
+              prompt = _('%s cancelled for Clip "%s".  Duplicate Clip Name Error.') % (copyMovePrompt, sourceClip.id)
           dlg = Dialogs.ErrorDialog(treeCtrl, prompt)
           dlg.ShowModal()
           dlg.Destroy()
           return None
        else:
-          # The user may have given the clip a new Clip Name in CheckForDuplicateClipName.  
+          # The user may have given the clip a new Clip Name in CheckForDuplicateObjName.  
           if newClipName != clipName:
              # If so, use this new name!
              if action == 'Copy':
@@ -3109,7 +3525,7 @@ def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollectio
           if action == 'Copy':
              nodeList = (_('Collections'), ) + nodeList + (newClip.id, )
              # Add the Node to the Tree
-             treeCtrl.add_Node('ClipNode', nodeList, newClip.number, newClip.collection_num)
+             treeCtrl.add_Node('ClipNode', nodeList, newClip.number, newClip.collection_num, sortOrder=newClip.sort_order)
 
              # Now let's communicate with other Transana instances if we're in Multi-user mode
              if not TransanaConstants.singleUserVersion:
@@ -3161,7 +3577,7 @@ def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollectio
           elif action == 'Move':
              nodeList = (_('Collections'), ) + nodeList + (sourceClip.id, )
              # Add the Node to the Tree
-             treeCtrl.add_Node('ClipNode', nodeList, sourceClip.number, sourceClip.collection_num)
+             treeCtrl.add_Node('ClipNode', nodeList, sourceClip.number, sourceClip.collection_num, sortOrder=sourceClip.sort_order)
              # If we are moving a Clip, the clip's Notes need to travel with the Clip.  The first step is to
              # get a list of those Notes.
              noteList = DBInterface.list_of_notes(Clip=sourceClip.number)
@@ -3187,11 +3603,235 @@ def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollectio
              # rather than the old one.  Having CopyClip return the new clip makes this easy.
              return sourceClip
 
-def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
-    """ This function changes the order of the clips in a Collection """
+def CopyMoveSnapshot(treeCtrl, destNode, sourceSnapshot, sourceCollection, destCollection, action):
+    """ This function copies or moves sourceSnapshot to destCollection, depending on the value of 'action' """
+    contin = True
+    if action == 'Copy':
+       # Make a duplicate of the Snapshot to be copied
+       newSnapshot = sourceSnapshot.duplicate()
+       # To place the copy in the destination collection, alter its Collection Number, Collection ID, and Sort Order value
+       newSnapshot.collection_num = destCollection.number
+       newSnapshot.collection_id = destCollection.id
+    elif action == 'Move':
+        try:
+           # Lock the Snapshot Record to prevent other users from altering it simultaneously
+           sourceSnapshot.lock_record()
+           # To move a Snapshot, alter its Collection Number, Collection ID, and Sort Order value
+           sourceSnapshot.collection_num = destCollection.number
+           sourceSnapshot.collection_id = destCollection.id
+        except TransanaExceptions.RecordLockedError, e:
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('You cannot move Snapshot "%s"') + \
+                                 _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
+            else:
+                prompt = _('You cannot move Snapshot "%s"') + \
+                         _('.\nThe record is currently locked by %s.\nPlease try again later.')
+            errordlg = Dialogs.ErrorDialog(None, prompt % (sourceSnapshot.id, e.user))
+            errordlg.ShowModal()
+            errordlg.Destroy()
+            contin = False
+    if contin:
+       # NOTE:  CopyMoveSnapshot places the copy at the end of the Collection's Object List.  If that's not
+       #        what we want, we can call ChangeClipOrder later.
+
+       # Get the highest SortOrder value and add one to it 
+       objCount = DBInterface.getMaxSortOrder(destCollection.number) + 1
+
+       # Check for Duplicate Snapshot Names, an error condition
+       # First, get the name of the appropriate Snapshot Object
+       if action == 'Copy':
+          snapshotName = newSnapshot.id
+       elif action == 'Move':
+          snapshotName = sourceSnapshot.id
+       # See if the Snapshot Name already exists in the Destination Collection
+       (dupResult, newSnapshotName) = CheckForDuplicateObjName(snapshotName, 'SnapshotNode', treeCtrl, destNode)
+
+       # If a Duplicate Snapshot Name is found and the error situation not resolved, show an Error Message
+       if dupResult:
+          # Unlock the source snapshot (before presenting the dialog to keep if from being locked by a slow user response.)
+          if action == 'Move':
+              sourceSnapshot.unlock_record()
+          # Report the failure to the user, although it's already known to have failed because they pressed "cancel".
+          if 'unicode' in wx.PlatformInfo:
+              # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+              prompt = unicode(_('%s cancelled for Snapshot "%s".  Duplicate Snapshot Name Error.'), 'utf8') % (copyMovePrompt, sourceSnapshot.id)
+          else:
+              prompt = _('%s cancelled for Snapshot "%s".  Duplicate Snapshot Name Error.') % (copyMovePrompt, sourceSnapshot.id)
+          dlg = Dialogs.ErrorDialog(treeCtrl, prompt)
+          dlg.ShowModal()
+          dlg.Destroy()
+          return None
+       else:
+          # The user may have given the snapshot a new Snapshot Name in CheckForDuplicateObjName.  
+          if newSnapshotName != snapshotName:
+             # If so, use this new name!
+             if action == 'Copy':
+                newSnapshot.id = newSnapshotName
+             elif action == 'Move':
+                 sourceSnapshot.id = newSnapshotName 
+
+          if action == 'Copy':
+             # Now that we know the number of objects in the collection, assign that as sortOrder
+             newSnapshot.sort_order = objCount
+             # Save the new Snapshot to the database.
+             newSnapshot.db_save()
+          elif action == 'Move':
+             # Now that we know the number of objects in the collection, assign that as sortOrder
+             sourceSnapshot.sort_order = objCount
+             # Save the new Snapshot to the database.
+             sourceSnapshot.db_save()
+             # Unlock the Snapshot Record
+             sourceSnapshot.unlock_record()
+
+             # Remove the old Snapshot from the Tree.
+             # delete_Node needs to be able to climb the tree, so we need to build the Node List that
+             # tells it what to delete.  Start with the sourceCollection.
+             nodeList = (sourceCollection.id,)
+             # Load the Current Collection so we can find out about its parent, and work backwards from here.
+             tempCollection = Collection.Collection(sourceCollection.number)
+             # While the Current Collection has a defined parent...
+             while tempCollection.parent > 0:
+                # Make the Parent the Current Collection
+                tempCollection = Collection.Collection(tempCollection.parent)
+                # Add the Parent (now the Current Collection) to the FRONT of the Node List
+                nodeList = (tempCollection.id,) + nodeList
+             # Now add the Collections Root to the front of the Node List and the Snapshot's original name to the end of the Node List
+             nodeList = (_('Collections'), ) + nodeList + (snapshotName, )
+             # Now request that the defined node be deleted
+             treeCtrl.delete_Node(nodeList, 'SnapshotNode')
+             
+##             # Check for Keyword Examples that need to also be renamed!
+##             for (kwg, kw, clipNumber, clipID) in DBInterface.list_all_keyword_examples_for_a_clip(sourceClip.number):
+##                 nodeList = (_('Keywords'), kwg, kw, clipName)
+##                 exampleNode = treeCtrl.select_Node(nodeList, 'KeywordExampleNode')
+##                 treeCtrl.SetItemText(exampleNode, newClipName)
+##                 # If we're in the Multi-User mode, we need to send a message about the change
+##                 if not TransanaConstants.singleUserVersion:
+##                     # Begin constructing the message with the old and new names for the node
+##                     msg = " >|< %s >|< %s" % (clipName, newClipName)
+##                     # Get the full Node Branch by climbing it to two levels above the root
+##                     while (treeCtrl.GetItemParent(treeCtrl.GetItemParent(exampleNode)) != treeCtrl.GetRootItem()):
+##                         # Update the selected node indicator
+##                         exampleNode = treeCtrl.GetItemParent(exampleNode)
+##                         # Prepend the new Node's name on the Message with the appropriate seperator
+##                         msg = ' >|< ' + treeCtrl.GetItemText(exampleNode) + msg
+##                     # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+##                     # This must be untranslated to avoid problems in mixed-language environments.
+##                     # Prepend these on the Messsage
+##                     msg = "KeywordExampleNode >|< Keywords" + msg
+##                     # Send the Rename Node message
+##                     if TransanaGlobal.chatWindow != None:
+##                         TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+                
+             # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+             ClearClipboard()
+
+          # Add the new Snapshot to the Database Tree Tab
+          # To add a Snapshot, we need to build the node list for the tree's add_Node method to climb.
+          # We need to add all of the Collection Parents to our Node List, so we'll start by loading
+          # the current DESTINATION Collection
+          tempCollection = Collection.Collection(destCollection.number)
+          # Add the current Collection Name, and work backwards from here.
+          nodeList = (tempCollection.id,)
+          # Repeat this process as long as the Collection we're looking at has a defined Parent...
+          while tempCollection.parent > 0:
+             # Load the Parent Collection
+             tempCollection = Collection.Collection(tempCollection.parent)
+             # Add this Collection's name to the FRONT of the Node List
+             nodeList = (tempCollection.id,) + nodeList
+          # Now add the Collections Root node to the front of the Node List and the
+          # Snapshot Name to the back of the Node List
+          if action == 'Copy':
+             nodeList = (_('Collections'), ) + nodeList + (newSnapshot.id, )
+             # Add the Node to the Tree
+             treeCtrl.add_Node('SnapshotNode', nodeList, newSnapshot.number, newSnapshot.collection_num, sortOrder=newSnapshot.sort_order)
+
+             # Now let's communicate with other Transana instances if we're in Multi-user mode
+             if not TransanaConstants.singleUserVersion:
+                msg = "ASnap %s"
+                data = (nodeList[1],)
+
+                for nd in nodeList[2:]:
+                   msg += " >|< %s"
+                   data += (nd, )
+                if TransanaGlobal.chatWindow != None:
+                   TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+             # Now let's see if the snapshot had snapshot notes to copy!
+             snapshotNoteList = DBInterface.list_of_notes(Snapshot=sourceSnapshot.number, includeNumber=True)
+             # For each note in the note list ...
+             for snapshotNote in snapshotNoteList:
+                 # Open a temporary copy of the note
+                 tmpNote = Note.Note(snapshotNote[0])
+                 # Duplicate the note (which automatically gives it an object number = 0)
+                 newNote = tmpNote.duplicate()
+                 # Assign the duplicate to the NEW snapshot
+                 newNote.snapshot_num = newSnapshot.number
+                 # Save the new note
+                 newNote.db_save()
+                 # Add the new Note Node to the Tree
+                 treeCtrl.add_Node('SnapshotNoteNode', nodeList + (newNote.id,), newNote.number, newSnapshot.number)
+
+                 # If the Notes Browser is open ...
+                 if treeCtrl.parent.ControlObject.NotesBrowserWindow != None:
+                     # ... Add the new note to the Notes Browser
+                     treeCtrl.parent.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('A', newNote)
+
+                 # Now let's communicate with other Transana instances if we're in Multi-user mode
+                 if not TransanaConstants.singleUserVersion:
+                     # Prepare an Add Snapshot Note message
+                     msg = "ASnN Collections >|< %s"
+                     # Convert the Node List to the form needed for messaging
+                     data = (nodeList[1],)
+                     for nd in (nodeList[2:] + (newNote.id,)):
+                          msg += " >|< %s"
+                          data += (nd, )
+                     # Send the message
+                     if TransanaGlobal.chatWindow != None:
+                         TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+             # When copying a Snapshot and setting its sort order, we need to keep working with the new snapshot
+             # rather than the old one.  Having CopyMoveSnapshot return the new snapshot makes this easy.
+             return newSnapshot
+          elif action == 'Move':
+             nodeList = (_('Collections'), ) + nodeList + (sourceSnapshot.id, )
+             # Add the Node to the Tree
+             treeCtrl.add_Node('SnapshotNode', nodeList, sourceSnapshot.number, sourceSnapshot.collection_num, sortOrder=sourceSnapshot.sort_order)
+             # If we are moving a Snapshot, the Snapshot's Notes need to travel with the Snapshot.  The first step is to
+             # get a list of those Notes.
+             noteList = DBInterface.list_of_notes(Snapshot=sourceSnapshot.number)
+             # If there are Snapshot Notes, we need to make sure they travel with the Snapshot
+             if noteList != []:
+                 newNode = treeCtrl.select_Node(nodeList, 'SnapshotNode')
+                 # We accomplish this using the TreeCtrl's "add_note_nodes" method
+                 treeCtrl.add_note_nodes(noteList, newNode, Snapshot=sourceSnapshot.number)
+                 treeCtrl.Refresh()
+
+             # Now let's communicate with other Transana instances if we're in Multi-user mode
+             if not TransanaConstants.singleUserVersion:
+                msg = "ASnap %s"
+                data = (nodeList[1],)
+
+                for nd in nodeList[2:]:
+                   msg += " >|< %s"
+                   data += (nd, )
+                if TransanaGlobal.chatWindow != None:
+                   TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+             # When copying a Snapshot and setting its sort order, we need to keep working with the new snapshot
+             # rather than the old one.  Having CopyMoveShapshot return the new snapshot makes this easy.
+             return sourceSnapshot
+
+def ChangeClipOrder(treeCtrl, destNode, sourceObject, sourceCollection):
+    """ This function changes the order of the Items in a Collection """
+    # Get the Destination Node Data
+    destData = treeCtrl.GetPyData(destNode)
+    # Get the Sort Order value for where we want the new item
+    targetSortOrder = destData.sortOrder
     # If we can't lock all the clips in the collection, sort orders get all screwed up.
     # ... Set up a variable that signals failure
-    allClipsLocked = True
+    allObjectsLocked = True
     # Create a Dictionary to hold all the Clip data, so we only need to have one copy of the clip
     Clips = {}
     # Get all the clips for the Source Collection Number
@@ -3204,141 +3844,245 @@ def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
             tmpClip = Clip.Clip(tmpClipNum)
             # Lock the Clip Record
             tmpClip.lock_record()
+            # If we have the Source Object, clear the sort_order value
+            if isinstance(sourceObject, Clip.Clip) and (sourceObject.number == tmpClipNum):
+                tmpClip.sort_order = 0
             # Add this clip to the Clips dictionary
             Clips[tmpClipNum] = tmpClip
     # If we couldn't get a lock on one or more of the clips ...
     except TransanaExceptions.RecordLockedError, e:
         # Set the "Failure" flag
-        allClipsLocked = False
+        allObjectsLocked = False
         # Create an error message for the user
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            msg = unicode(_('Clips in Collection "%s" are not in the desired order.') + '\n\n' + \
+            msg = unicode(_('Items in Collection "%s" are not in the desired order.') + '\n\n' + \
                           _('Transana could not change the sort order because you cannot obtain a lock on Clip "%s"') + \
                           _('.\nThe record is currently locked by %s.'), 'utf8')
         else:
-            msg = _('Clips in Collection "%s" are not in the desired order.') + '\n\n' + \
+            msg = _('Items in Collection "%s" are not in the desired order.') + '\n\n' + \
                   _('Transana could not change the sort order because you cannot obtain a lock on Clip "%s"') + \
                   _('.\nThe record is currently locked by %s.')
         # Display the error message
         dlg = Dialogs.ErrorDialog(None, msg % (sourceCollection.id, tmpClip.id, e.user))
         dlg.ShowModal()
         dlg.Destroy()
+
+        # If ChangeClipOrder fails, make sure the clip is at the end of the Clip List
+#        tmpClip.sort_order = DBInterface.getMaxSortOrder(destData.parent) + 1
+        # Try to save the data from the form
+#        tmpClip.db_save()
+        # Reset the order of objects in the node, no need to send MU messages
+#        treeCtrl.UpdateCollectionSortOrder(treeCtrl.GetItemParent(destNode), sendMessage=False)
+
+        # If the Change of Sort Orders failed, put the new object at the END
+        targetSortOrder = DBInterface.getMaxSortOrder(destData.parent) + 1
+        
+
+
+    # Create a Dictionary to hold all the Snapshot data, so we only need to have one copy of the Snapshot
+    Snapshots = {}
+    # Get all the snapshots for the Source Collection Number
+    snapshotLockList = DBInterface.list_of_snapshots_by_collectionnum(sourceCollection.number)
+    # Start Exception Handling
+    try:
+        # For each Snapshot in the Collection ...
+        for (tmpSnapshotNum, tmpSnapshotID, tmpCollectNum) in snapshotLockList:
+            # Load the Snapshot.
+            tmpSnapshot = Snapshot.Snapshot(tmpSnapshotNum)
+            # Lock the Snapshot Record
+            tmpSnapshot.lock_record()
+            # If we have the Source Object, clear the sort_order value
+            if isinstance(sourceObject, Snapshot.Snapshot) and (sourceObject.number == tmpSnapshotNum):
+                tmpSnapshot.sort_order = 0
+            # Add this snapshot to the Snapshots dictionary
+            Snapshots[tmpSnapshotNum] = tmpSnapshot
+    # If we couldn't get a lock on one or more of the clips ...
+    except TransanaExceptions.RecordLockedError, e:
+        # Set the "Failure" flag
+        allObjectsLocked = False
+        # Create an error message for the user
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            msg = unicode(_('Items in Collection "%s" are not in the desired order.') + '\n\n' + \
+                          _('Transana could not change the sort order because you cannot obtain a lock on Snapshot "%s"') + \
+                          _('.\nThe record is currently locked by %s.'), 'utf8')
+        else:
+            msg = _('Items in Collection "%s" are not in the desired order.') + '\n\n' + \
+                  _('Transana could not change the sort order because you cannot obtain a lock on Snapshot "%s"') + \
+                  _('.\nThe record is currently locked by %s.')
+        # Display the error message
+        dlg = Dialogs.ErrorDialog(None, msg % (sourceCollection.id, tmpSnapshot.id, e.user))
+        dlg.ShowModal()
+        dlg.Destroy()
+
+        print "ChangeClipOrder() failed: (Snapshot):", tmpSnapshot.sort_order, DBInterface.getMaxSortOrder(destData.parent)
+
+#        lockRecord = False
+#        if not tmpSnapshot.isLocked:
+#            tmpSnapshot.lock_record()
+#            lockRecord = True
+#        # If ChangeClipOrder fails, make sure the clip is at the end of the Clip List
+#        tmpSnapshot.sort_order = DBInterface.getMaxSortOrder(destData.parent) + 1
+#        # Try to save the data from the form
+#        tmpSnapshot.db_save()
+#        if lockRecord:
+#            tmpSnapshot.unlock_record()
+#        # Reset the order of objects in the node, no need to send MU messages
+#        treeCtrl.UpdateCollectionSortOrder(treeCtrl.GetItemParent(destNode), sendMessage=False)
+
+        # If the Change of Sort Orders failed, put the new object at the END
+        targetSortOrder = DBInterface.getMaxSortOrder(destData.parent) + 1
+
+
     # If locking ALL clips DID NOT fail ...
-    if allClipsLocked:
-        # If we are changing Clip Sort Order, the clip's Notes need to travel with the Clip.  The first step is to
-        # get a list of those Notes.
-        noteList = DBInterface.list_of_notes(Clip=sourceClip.number)
+    if allObjectsLocked:
 
-        # Remove the old Clip from the Tree   
-        # delete_Node needs to be able to climb the tree, so we need to build the Node List that   
-        # tells it what to delete.  Start with the sourceCollection.   
-        nodeList = (sourceCollection.id,)   
-        # Load the Current Collection so we can find out about its parent, and work backwards from here.   
-        tempCollection = Collection.Collection(sourceCollection.number)   
-        # While the Current Collection has a defined parent...   
-        while tempCollection.parent > 0:   
-           # Make the Parent the Current Collection   
-           tempCollection = Collection.Collection(tempCollection.parent)   
-           # Add the Parent (now the Current Collection) to the FRONT of the Node List   
-           nodeList = (tempCollection.id,) + nodeList   
-        # Now add the Collections Root to the front of the Node List and the Clip to the end of the Node List   
-        nodeList = (_('Collections'), ) + nodeList + (sourceClip.id, )   
-        # Now request that the defined node be deleted   
-        treeCtrl.delete_Node(nodeList, 'ClipNode')
+        # Iterate through the Clips and Snapshots.  Increase SortOrder for everything above the desired position.
+        # Sort the Collection.  Then update the PyData for each entry!!
+        # This should be significantly faster!
 
-        # Insert the new node in the proper position.  This is done by manipulating the tree directly, as "add_Node"
-        # doesn't know about Sort Order
+        if DEBUG:
+            print
+            print "DragAndDropObjects.ChangeClipOrder():", sourceObject.number, sourceObject.sort_order
+
+        # Iterate through the Clips dictionary
+        for tmpClipNum in Clips.keys():
+
+            if DEBUG:
+                print "Clips", tmpClipNum, Clips[tmpClipNum].sort_order, '-->',
+            
+            # If the clip has a sort_order of 0, it hasn't been assigned
+            if Clips[tmpClipNum].sort_order == 0:
+                # ... which means it's the one just inserted
+                Clips[tmpClipNum].sort_order = targetSortOrder
+                # Save the Clip
+                Clips[tmpClipNum].db_save()
+            # if the Clip's Sort Order value is greater than the Target Sort Order ...
+            elif Clips[tmpClipNum].sort_order >= targetSortOrder:
+                # Change the Sort Order value for each Clip
+                Clips[tmpClipNum].sort_order += 1
+                # Save the Clip
+                Clips[tmpClipNum].db_save()
+
+            if DEBUG:
+                print Clips[tmpClipNum].sort_order
+            
+        # Iterate through the Snapshots dictionary
+        for tmpSnapshotNum in Snapshots.keys():
+
+            if DEBUG:
+                print "Snapshots", tmpSnapshotNum, Snapshots[tmpSnapshotNum].sort_order, '-->',
+            
+            # If the Snapshot has a sort_order of 0, it hasn't been assigned
+            if Snapshots[tmpSnapshotNum].sort_order == 0:
+                # ... which means it's the one just inserted
+                Snapshots[tmpSnapshotNum].sort_order = targetSortOrder
+                # Save the Clip
+                Snapshots[tmpSnapshotNum].db_save()
+            # if the Snapshot's Sort Order value is greater than the Target Sort Order ...
+            elif Snapshots[tmpSnapshotNum].sort_order >= targetSortOrder:
+                # Change the Sort Order value for each Snapshot
+                Snapshots[tmpSnapshotNum].sort_order += 1
+                # Save the Snapshot
+                Snapshots[tmpSnapshotNum].db_save()
+
+            if DEBUG:
+                print Snapshots[tmpSnapshotNum].sort_order
+            
+        # Assign the Sort Order for the object passed in
+        sourceObject.sort_order = targetSortOrder
+
+        if DEBUG:
+            print "sourceObject:", sourceObject.number, sourceObject.sort_order
+            print
+
+        # Save the Source Object
+        sourceObject.db_save()
+
+        # Now Iterate through all the Collection's children, updating the SortOrder in the PyData
+        
         # First, let's identify the Parent Node we're working with
         parentNode = treeCtrl.GetItemParent(destNode)
-
-        # We need to figure out the position amongst the parentNode's children where we should drop the new node.
-        # Initialize a variable to track this.
-        nodeCounter = 0
-
-        # What we need to do here is to iterate through all the Clips in a Collection, reassigning SortOrders
-        # as we go, and insert the new record (both into the tree and into the SortOrder) as we go.  Since we
-        # know the tree structure has the correct order and can tell us where to insert the new value, we will
-        # use the Tree Structure for our iteration rather than going out to the DBInterface.
-          
         # wxTreeCtrl requires the "cookie" value to list children.  Initialize it.
         cookie = 0
         # Get the first child of the dropNode 
         (tempNode, cookie) = treeCtrl.GetFirstChild(parentNode)
 
-        # The node is getting inserted twice on the Mac.  Let's make sure that doesn't happen by tracking it explicitly.
-        nodeInserted = False
-
+        if DEBUG:
+            print "updating NODES:"
+        
         # Iterate through all the dropNode's children
         while tempNode.IsOk():
             # Get the current child's Node Data
             tempNodeData = treeCtrl.GetPyData(tempNode)
-            # If we are looking at a Clip, and this is the Clip where the dropped item should be inserted ...
-            if (not nodeInserted) and (tempNodeData.nodetype == 'ClipNode') and (treeCtrl.GetItemText(tempNode) == treeCtrl.GetItemText(destNode)):
+            if tempNodeData.nodetype == 'ClipNode':
+                # update the node's Sort Order
+                tempNodeData.sortOrder = Clips[tempNodeData.recNum].sort_order
+            elif tempNodeData.nodetype == 'SnapshotNode':
+                # update the node's Sort Order
+                tempNodeData.sortOrder = Snapshots[tempNodeData.recNum].sort_order
+            # Save the Node Data to the TreeCtrl Node
+            treeCtrl.SetPyData(tempNode, tempNodeData)
 
-                # Create a new node in the tree BEFORE the active node (as signalled by the nodeCounter counter), naming it after   
-                # the Source Clip
-                newNode = treeCtrl.InsertItemBefore(parentNode, nodeCounter, sourceClip.id)   
-                # Identify this as a Clip node by assigning the appropriate NodeData   
-                nodedata = DatabaseTreeTab._NodeData(nodetype='ClipNode', recNum=sourceClip.number, parent=sourceClip.collection_num)   
-                # Associate the NodeData with the node   
-                treeCtrl.SetPyData(newNode, nodedata)   
-                # We know the new node is a Clip, so assign the proper image   
-                treeCtrl.set_image(newNode, "Clip16")   
-             
-                # The node has now been inserted, and should not be inserted again.
-                nodeInserted = True
-             
-                # If there are Clip Notes, we need to make sure they travel with the Clip
-                if noteList != []:
-                    # We accomplish this using the TreeCtrl's "add_note_nodes" method
-                    treeCtrl.add_note_nodes(noteList, newNode, Clip=sourceClip.number)
-
-                # Since we just inserted a new Node, we need to increment our NodeCounter
-                nodeCounter += 1
-                # Set the Clip's Sort Order based on the NodeCounter
-                Clips[sourceClip.number].sort_order = nodeCounter
-                # Save the Clip Record
-                Clips[sourceClip.number].db_save()
-
-            # Increment the Node Counter
-            nodeCounter += 1
-
-            # If the current node is a Clip, let's reset its sort order
-            if (tempNodeData.nodetype == 'ClipNode'):
-                # Reset the Sort Order based on the NodeCounter
-                Clips[tempNodeData.recNum].sort_order = nodeCounter
-                # Save the Clip
-                Clips[tempNodeData.recNum].db_save()
+            if DEBUG:
+                print treeCtrl.GetItemText(tempNode), tempNodeData.sortOrder
 
             # If we are looking at the last Child in the Parent's Node, exit the while loop
             if tempNode == treeCtrl.GetLastChild(parentNode):
-                # We need to message the re-introduction of the node.
-                # Now let's communicate with other Transana instances if we're in Multi-user mode
-                if not TransanaConstants.singleUserVersion:
-                    msg = "AClSO %s"
-                    # We have a nodeList from deleting the node above.  We'll use that as the basis for the current nodeList,
-                    # but we need to insert the DropNode into it at the second-to-last position
-                    nodeList = nodeList[:-1] + (treeCtrl.GetItemText(destNode),) + (nodeList[-1],)
-                    data = (nodeList[1],)
-
-                    for nd in nodeList[2:]:
-                        msg += " >|< %s"
-                        data += (nd, )
-                    if TransanaGlobal.chatWindow != None:
-                        TransanaGlobal.chatWindow.SendMessage(msg % data)
-
                 break
             # If not, load the next Child record
             else:
                 (tempNode, cookie) = treeCtrl.GetNextChild(parentNode, cookie)
 
+        if DEBUG:
+            print
+            print "Sorting children"
+            print
+            print
+        
+        # Sort the Database Tree's Collection Node
+        treeCtrl.SortChildren(treeCtrl.GetItemParent(destNode))
+
+    # If Sort Order failed ...
+    else:
+        # Assign the Sort Order for the object passed in
+        sourceObject.sort_order = targetSortOrder
+        # Save the Source Object
+        sourceObject.db_save()
+        # ... reset the order of objects in the node, no need to send MU messages
+        treeCtrl.UpdateCollectionSortOrder(treeCtrl.GetItemParent(destNode), sendMessage=False)
+
+        if isinstance(sourceObject, Snapshot.Snapshot):
+            nodeList = sourceObject.GetNodeData(False)
+
+            print "DragAndDropObjects.ChangeClipOrder():", nodeList
+            
+            # Now let's communicate with other Transana instances if we're in Multi-user mode
+            if not TransanaConstants.singleUserVersion:
+                msg = "OC %s"
+                data = (_('Collections'), )
+
+                for nd in nodeList[0:]:
+                    msg += " >|< %s"
+                    data += (nd, )
+
+                print '"msg %s"' % (data,)
+                print
+                
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage(msg % data)
+
     # Iterate through the Clips dictionary
     for tmpClipNum in Clips.keys():
-        # Unlock each of the locked clips
+        # Unlock each of the locked Clips
         Clips[tmpClipNum].unlock_record()
+    # Iterate through the Snapshots dictionary
+    for tmpSnapshotNum in Snapshots.keys():
+        # Unlock each of the locked Snapshots
+        Snapshots[tmpSnapshotNum].unlock_record()
     # Return the flag that indicates success or failure
-    return allClipsLocked
+    return allObjectsLocked
 
 def CreateQuickClip(clipData, kwg, kw, dbTree, extraKeywords=[]):
     """ Create a "Quick Clip", which is the implementation of a simplified form of Clip Creation """
@@ -3601,6 +4345,7 @@ def CreateQuickClip(clipData, kwg, kw, dbTree, extraKeywords=[]):
             quickClip.clip_start = clipData.clipStart
             quickClip.clip_stop = clipData.clipStop
             quickClip.sort_order = DBInterface.getMaxSortOrder(collectNum) + 1
+
             # If we're creating a multi-transcript Quick Clip, the clipData.text field will actually be a Clip object!
             if isinstance(clipData.text, Clip.Clip):
                 # If this is the case, just point the quick clip to the transcripts that are passed in.
@@ -3659,7 +4404,7 @@ def CreateQuickClip(clipData, kwg, kw, dbTree, extraKeywords=[]):
                 # Build the node data needed to add the clip.
                 nodeData = (_('Collections'), collectName, quickClip.id)
                 # Add the new Collection to the data tree
-                dbTree.add_Node('ClipNode', nodeData, quickClip.number, quickClip.collection_num, expandNode=False)
+                dbTree.add_Node('ClipNode', nodeData, quickClip.number, quickClip.collection_num, sortOrder=quickClip.sort_order, expandNode=False)
                 # Inform the Message Server of the added Clip
                 if not TransanaConstants.singleUserVersion:
                     msg = "ACl %s >|< %s"

@@ -19,9 +19,17 @@
 <H2>Change/Create Database</H2><P>
 Transana supports the creation and use of multiple, separate databases.  To change from one database to another, select &quot;Change Database&quot; from the File Menu.  If you want to create a new database, simply type in the name of a database that does not exist, and Transana will prompt you about creating it.<P>
 
+<H2>Export Clip Video</H2><P>
+When you create a Clip in Transana, what you create is a virtual clip rather than an actual video file.  However, it is occasionally useful to be able to export the media for a clips as a separate video or audio file.  To do this, right-click the clip and choose "Export Clip Video".
+
+Please note that the Standard version of Transana does not support exporting Clip Video.  To use this feature, you must be using the Professionsal, Computer Lab, or Multi-User version of Transana.<P> 
+
 <H2>Fixed-Increment Time Codes</H2><P>
 This function allows you to have Transana insert time codes at regularly spaced time intervals in a blank transcript.  Create a new transcript and put that transcript in Edit mode.  Then go to the Transcript menu and select Fixed-Increment Time Codes.  You will be prompted for the desired time increment.  Enter the number of seconds you want between time codes.<P>
 You will notice that you will need to adjust your transcription style after using this function.  You will need to use left-clicking to position in a time-coded segment of the transcript followed by right-clicking (Ctrl-clicking on the Mac with a single-button mouse) the transcript so that just the section of your media file that falls between consecutive time codes is played.  Otherwise, it's difficult to keep the time codes positioned correctly relative to the transcript text.<P>
+
+<H2>Load Snapshot Context</H2>
+<P>When a Snapshot is associated with a specific position in an Episode and Transcript, you can load that position in the media file by right-clicking the Snapshot in the <A HREF="datawindow.htm">Database Tree</A> and selecting &quot;Load Snapshot Context&quot; in the popup menu.</P>
 
 <H2>Locate Clip in Episode</H2><P>
 There are times when it is desirable to be able to move from a Clip back to the Episode it was created from.  For example, you may want to look at what occurs immediately before or after a clip, or you may want to create a similar clip with different start or end points.  To move from a Clip back to the original Episode, right-click the Clip on the Database tab in the <A HREF="datawindow.htm">Data window</A> and select &quot;Locate Clip in Episode.&quot;  Please note that if the time codes associated with a clip are deleted in the originating Transcript, this function may not work properly.<P>
@@ -34,6 +42,15 @@ Presentation Mode, selected in the Options Menu, offers four choices that affect
 
 <H2>Print a Transcript</H2><P>
 The option allowing you to print the currently-loaded transcript is located in the Transcript Menu as well as the more traditional location of the File menu.<P>
+
+<H2>Quick Clip Mode</H2>
+<P>If Quick Clip Mode is checked in the Options menu, dragging a Keyword and dropping it on a Transcript triggers the creation of a Quick Clip.  If Quick Clip Mode is not checked, dragging a Keyword and dropping it on a Transcript applies that keyword to the currently-loaded Episode or Clip.</P>
+
+<H2>Show Quick Clip Warning</H2>
+<P>When Quick Clip creation is triggered for a segment of a transcript that has already been used for a Quick Clip, Transana will display a warning message about the duplication if this option is selected.  Some researchers intentionally multi-code their quick clips and do not want such a warning slowing Quick Clip creation down, while other researchers seek to code each clip only once and find this warning very helpful.</P>
+
+<H2>Text Time Code Conversion</H2>
+<P>If you import a transcript into Transana that was created in another transcription program, it might have time code information in HH:MM:SS.hh format.  If you have not inserted any Transana time codes into the transcript, you can use Text Time Code Conversion, in the Transcript menu, to convert the text format time codes into Transana time codes.  Please note that Transana time codes MUST be in linear order from the beginning to the end of the transcript, and Transana does not support duplicate time codes.  Any text time codes that do not conform to this will be left un-converted.</P>
 
 <H2>Video Size</H2><P>
 In the Options menu, the Video Size sub-menu allows you to change the size of the Video window and have all other windows compensate automatically.<P>

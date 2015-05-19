@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -19,6 +19,10 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
+DEBUG = False
+if DEBUG:
+    print "VideoWindow DEBUG is ON."
+
 # Import wxPython
 import wx
 # import wxPython's media component
@@ -37,6 +41,8 @@ import TransanaConstants
 from TransanaExceptions import *
 # Import Transana's Globals
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 # Import the Transana Video Player panel
 import video_player
 # import Python's os module
@@ -44,18 +50,20 @@ import os
 # import Python's sys module
 import sys
 
-class VideoWindow(wx.Dialog):
+class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
     """This class implements the main Transana media window. """
 
     def __init__(self, parent):
         """Initialize the Media Window object"""
         # Initialize a Dialog Box
         wx.Dialog.__init__(self, parent, -1, _("Video"), pos=self.__pos(), size=self.__size(),
+#        wx.MDIChildFrame.__init__(self, parent, -1, _("Video"), pos=self.__pos(), size=self.__size(),
                            style = wx.RESIZE_BORDER | wx.CAPTION )
         # We need to adjust the screen position on the Mac.  I don't know why.
-        if "__WXMAC__" in wx.PlatformInfo:
-            pos = self.GetPosition()
-            self.SetPosition((pos[0], pos[1]-25))
+#        if "__WXMAC__" in wx.PlatformInfo:
+#            pos = self.GetPosition()
+#            self.SetPosition((pos[0], pos[1]-25))
+#        self.SetBackgroundColour(wx.WHITE)
         # Bind the Size event
         self.Bind(wx.EVT_SIZE, self.OnSize)
         # Bind the Right Click event
@@ -78,6 +86,9 @@ class VideoWindow(wx.Dialog):
         self.referencePlayer = 0
         # Create the Media Players
         self.CreateMediaPlayers()
+
+        if DEBUG:
+            print "VideoWindow.__init__():  Initial size:", self.GetSize()
 
     def Register(self, ControlObject=None):
         """ Register a ControlObject """
@@ -241,34 +252,35 @@ class VideoWindow(wx.Dialog):
             self.hasPlayed.append(False)
             # initialize a counter for offset values
             offsetCount = 1
-            # For each additional media file ...
-            for vid in self.ControlObject.currentObj.additional_media_files:
-                # .. create an additional media player frame ...
-                mediaPlayer = video_player.VideoPlayer(self, includeCheckBoxes=True, offset=offset[offsetCount], playerNum=offsetCount+1)
-                # ... add it to the sizer ...
-                hBox1.Add(mediaPlayer, 1, wx.ALL | wx.EXPAND, 0)
-                # ... add it to the Media Players List ...
-                self.mediaPlayers.append(mediaPlayer)
-                # Indicate that the player has not yet started
-                self.hasPlayed.append(False)
-                # .. and load the appropriate media file.
-                mediaPlayer.SetFilename(vid['filename'])
-                # Turn off the Audio Check, if needed
-                if not vid['audio']:
-                    mediaPlayer.SetAudioCheck(False)
-                # increment the counter for offset values
-                offsetCount += 1
+            if TransanaConstants.proVersion:
+                # For each additional media file ...
+                for vid in self.ControlObject.currentObj.additional_media_files:
+                    # .. create an additional media player frame ...
+                    mediaPlayer = video_player.VideoPlayer(self, includeCheckBoxes=True, offset=offset[offsetCount], playerNum=offsetCount+1)
+                    # ... add it to the sizer ...
+                    hBox1.Add(mediaPlayer, 1, wx.ALL | wx.EXPAND, 0)
+                    # ... add it to the Media Players List ...
+                    self.mediaPlayers.append(mediaPlayer)
+                    # Indicate that the player has not yet started
+                    self.hasPlayed.append(False)
+                    # .. and load the appropriate media file.
+                    mediaPlayer.SetFilename(vid['filename'])
+                    # Turn off the Audio Check, if needed
+                    if not vid['audio']:
+                        mediaPlayer.SetAudioCheck(False)
+                    # increment the counter for offset values
+                    offsetCount += 1
 
         # Add the media players in the first horizontal sizer to the main vertical sizer
         vBox.Add(hBox1, 1, wx.EXPAND)
         # Create a second horizontal sizer
         hBox2 = wx.BoxSizer(wx.HORIZONTAL)
-        # Get the initial image for the Play / Pause button
-        img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
         # Create the Play / Pause button
-        self.btnPlayPause = wx.BitmapButton(self, -1, img, size=(48, 24))
+        self.btnPlayPause = wx.BitmapButton(self, -1, TransanaGlobal.GetImage(TransanaImages.Play), size=(48, 24))
         # Set the Help String
         self.btnPlayPause.SetToolTipString(_("Play"))
+        # Add LayoutDirection to prevent problems with Right-To-Left languages
+        self.btnPlayPause.SetLayoutDirection(wx.Layout_LeftToRight)
         # Bind the Play / Pause button to its event handler
         self.btnPlayPause.Bind(wx.EVT_BUTTON, self.OnPlayPause)
         # Allow the PlayPause Button to handle Key Down events too
@@ -291,12 +303,12 @@ class VideoWindow(wx.Dialog):
 
         # If there's exactly one media player, we want a Snapshot button
         if len(self.mediaPlayers) == 1:
-            # Get the initial image for the Play / Pause button
-            img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Snapshot.xpm"), wx.BITMAP_TYPE_XPM)
             # Create the Snapshot button
-            self.btnSnapshot = wx.BitmapButton(self, -1, img, size=(48, 24))
+            self.btnSnapshot = wx.BitmapButton(self, -1, TransanaGlobal.GetImage(TransanaImages.Snapshot), size=(48, 24))
             # Set the Help String
-            self.btnSnapshot.SetToolTipString(_("Snapshot"))
+            self.btnSnapshot.SetToolTipString(_("Capture Snapshot in Transcript or File"))
+            # Add LayoutDirection to prevent problems with Right-To-Left languages
+            self.btnSnapshot.SetLayoutDirection(wx.Layout_LeftToRight)
             # Bind the Snapshot button to its event handler
             self.btnSnapshot.Bind(wx.EVT_BUTTON, self.OnSnapshot)
             # Allow the Snapshot Button to handle Key Down events too
@@ -334,7 +346,7 @@ class VideoWindow(wx.Dialog):
             self.ControlObject.PlayPause()
 
     def OnSnapshot(self, event):
-
+        """ Take a Snapshot of the current video frame and insert into Transcript if possible. """
         # If a media file is loaded ...
         if self.ControlObject.currentObj != None:
             if self.ControlObject.ActiveTranscriptReadOnly():
@@ -408,8 +420,7 @@ class VideoWindow(wx.Dialog):
                 # catches up, the media file will start playing automatically.)
                 self.hasPlayed[mp.playerNum - 1] = False
         # Change the button image
-        img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Pause.xpm"), wx.BITMAP_TYPE_XPM)
-        self.btnPlayPause.SetBitmapLabel(img)
+        self.btnPlayPause.SetBitmapLabel(TransanaGlobal.GetImage(TransanaImages.Pause))
         # Set the Help String
         self.btnPlayPause.SetToolTipString(_("Pause"))
                 
@@ -420,8 +431,7 @@ class VideoWindow(wx.Dialog):
             # ... tell it to Pause!
             mp.Pause()
         # Change the button image
-        img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
-        self.btnPlayPause.SetBitmapLabel(img)
+        self.btnPlayPause.SetBitmapLabel(TransanaGlobal.GetImage(TransanaImages.Play))
         # Set the Help String
         self.btnPlayPause.SetToolTipString(_("Play"))
 
@@ -432,8 +442,7 @@ class VideoWindow(wx.Dialog):
             # ... tell it to Stop!
             mp.Stop()
         # Change the button image
-        img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
-        self.btnPlayPause.SetBitmapLabel(img)
+        self.btnPlayPause.SetBitmapLabel(TransanaGlobal.GetImage(TransanaImages.Play))
         # Set the Help String
         self.btnPlayPause.SetToolTipString(_("Play"))
 
@@ -481,7 +490,7 @@ class VideoWindow(wx.Dialog):
             return
         # Determine the appropriate slider position.
         # If the video length is NOT known ...
-        if (start == 0) and (end <= 0):
+        if ((start == 0) and (end <= 0)) or (end - start == 0):
             # ... position the slider at the start
             newPos = 0
         # if the video length is known ...
@@ -514,7 +523,10 @@ class VideoWindow(wx.Dialog):
 
     def GetVideoEndPoint(self):
         """ Gets the Video End Point """
-        return self.mediaPlayers[self.referencePlayer].GetVideoEndPoint()
+        if self.referencePlayer == 0 or TransanaConstants.proVersion:
+            return self.mediaPlayers[self.referencePlayer].GetVideoEndPoint()
+        else:
+            return self.mediaPlayers[0].GetVideoEndPoint()
 
     def GetCurrentVideoPosition(self):
         """ Gets the Current Video Position """
@@ -531,7 +543,14 @@ class VideoWindow(wx.Dialog):
         # If ANY media player's current position is before the largest offset, we are at the beginning and looking for a minimum value.
         if minVal < self.maxOffset:
             lookForMin = True
-            tcVal = self.mediaPlayers[self.referencePlayer].GetMediaLength()
+            # If we allow multiple media players ...
+            if TransanaConstants.proVersion:
+                # ... get the time code value from the correct media player
+                tcVal = self.mediaPlayers[self.referencePlayer].GetMediaLength()
+            # If we only allow one media player ...
+            else:
+                # ... get the time code value from the only media player!
+                tcVal = self.mediaPlayers[0].GetMediaLength()
         # If NO media player's current position is before the largest offset, we are NOT looking for a minimum, so the max value will work.
         else:
             lookForMin = False
@@ -579,13 +598,13 @@ class VideoWindow(wx.Dialog):
             # ... and the media is PLAYING ...
             if playState == wx.media.MEDIASTATE_PLAYING:
                 # ... the Play/Pause button image should be "Pause"
-                img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Pause.xpm"), wx.BITMAP_TYPE_XPM)
+                img = TransanaGlobal.GetImage(TransanaImages.Pause)
                 # ... with the matching Help text
                 helpStr = _("Pause")
             # If the media is NOT playing ...
             else:
                 # ... the Play/Pause button image should be "Play"
-                img = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Play.xpm"), wx.BITMAP_TYPE_XPM)
+                img = TransanaGlobal.GetImage(TransanaImages.Play)
                 # ... with the matching Help text
                 helpStr = _("Play")
             # Display the appropriate image on the Play/Pause button
@@ -802,6 +821,7 @@ class VideoWindow(wx.Dialog):
             pos = self.GetPosition()
             # We can now inform other windows of the size and position of the Video window
             self.UpdateVideoWindowPosition(pos[0], pos[1], width, height)
+
         # For each Media Player ...
         for mp in self.mediaPlayers:
             # ... adjust to the current Window size
@@ -812,7 +832,12 @@ class VideoWindow(wx.Dialog):
     def OnSizeChange(self):
         """ Size Change called programatically from outside the Video Window """
         # If Auto Arrange is enabled ...
+
+##        print "VideoWindow.OnSizeChange():", TransanaGlobal.configData.autoArrange
+##        TransanaGlobal.configData.autoArrange = False
+            
         if TransanaGlobal.configData.autoArrange:
+
             # If there is no "current object" loaded in the main interface ...
             if self.ControlObject.currentObj == None:
                 # ... get the size of the graphic in the first media player window
@@ -820,14 +845,19 @@ class VideoWindow(wx.Dialog):
             # If there is a current object in the main interface ...
             else:
                 #  Establish the minimum size of the media player control (if media is audio-only, for example)
-                (sizeX, sizeY) = (300, 0)
+                (sizeX, sizeY) = (0, 0)
                 # Check the media players
                 for mp in self.mediaPlayers:
                     # Get the size of the video 
                     (newSizeX, newSizeY) = mp.movie.GetBestSize()
                     # We want the dimensions of the largest video.
-                    sizeX = max(sizeX, newSizeX)
+                    sizeX += newSizeX   # = max(sizeX, newSizeX)
                     sizeY = max(sizeY, newSizeY)
+
+                # If we have no WIDTH (Audio ONLY) ...
+                if sizeX == 0:
+                    # ... give the media player 1/4 of the screen
+                    sizeX = int(wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[2] * 0.25)
                 # Adjust Video Size
                 sizeAdjust = TransanaGlobal.configData.videoSize
                 # Take Video Size Menu spec into account (50%, 66%, 100%, 150%, 200%)
@@ -837,9 +867,7 @@ class VideoWindow(wx.Dialog):
                 # since we don't have a control bar in the media player, but causes problems with multiple media players.
                 # (It makes the visualization window too short.)
                 if (sizeY == 0) and (len(self.mediaPlayers) > 1):
-                    sizeY = int((wx.Display(0).GetClientArea()[3] - TransanaGlobal.menuHeight) * 0.2)  # wx.ClientDisplayRect()
-                # Adjust width for number of media players
-                sizeX *= len(self.mediaPlayers)
+                    sizeY = int((wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[3] - TransanaGlobal.menuHeight) * 0.2)  # wx.ClientDisplayRect()
                 # if the PlayPause button is defined ...
                 if self.btnPlayPause:
                     # ... adjust the vertical size to include it.
@@ -848,8 +876,20 @@ class VideoWindow(wx.Dialog):
                 else:
                     # ... then 24 pixels is a good approximation.
                     sizeY += 24
-            #  Determine the screen size 
-            screenSize = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+            #  Determine the screen size
+            # On Mac ...
+            if 'wxMac' in wx.PlatformInfo:
+                # ... use wx.Display.GetClientArea
+                screenSize = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()
+                # We need to adjust by 17 pixels
+                xAdjust = 17
+            # On Windows ...
+            else:
+                # ... use MenuWindow.GetClientWindow.GetSize
+                #screenSize = (0, 0, self.ControlObject.MenuWindow.GetClientWindow().GetSize()[0], self.ControlObject.MenuWindow.GetClientWindow().GetSize()[1])
+                screenSize = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
+                # We need to adjust by 23 pixels
+                xAdjust = 23
             # now check width against the screen size.  Allow no more than 2/3 of the screen to be take up by video.
             if sizeX > int(screenSize[2] * 0.66):
                 # Adjust Height proportionally (first, so we can calculate the proportion!)
@@ -865,7 +905,7 @@ class VideoWindow(wx.Dialog):
             # We need to know the height of the Window Header to adjust the size of the Graphic Area
             headerHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
             # Set the final screen dimensions
-            self.SetDimensions(screenSize[0] + screenSize[2] - sizeX - 3, pos[1], sizeX, sizeY + headerHeight)
+            self.SetDimensions(screenSize[0] + screenSize[2] - sizeX - xAdjust, pos[1], sizeX + 16, sizeY + headerHeight)
             # Call update to try to resolve the Mac display problem
             self.Update()
 
@@ -922,30 +962,60 @@ class VideoWindow(wx.Dialog):
         """ Update all prompts for the Video Window when changing interface languages """
         self.btnPlayPause.SetToolTipString(_("Play"))
         self.btnSnapshot.SetToolTipString(_("Snapshot"))
+
+    def GetNewRect(self):
+        """ Get (X, Y, W, H) for initial positioning """
+        pos = self.__pos()
+        size = self.__size()
+        return (pos[0], pos[1], size[0], size[1])
+
         
 # Private methods
 
     def __size(self):
         """Determine default size of MediaPlayer Frame."""
-        rect = wx.Display(0).GetClientArea()
-        if 'wxGTK' in wx.PlatformInfo:
-            rect2 = wx.Display(0).GetGeometry()
-            width = (rect2[2] - rect[0] - 4) * .28
-            height = (min(rect[3], rect2[3]) - max(rect[1], rect2[1]) - 6) * .35
+        # Determine which monitor to use and get its size and position
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            primaryScreen = TransanaGlobal.configData.primaryScreen
         else:
-            width = rect[2] * .28
-            height = (rect[3] - TransanaGlobal.menuHeight) * .35
+            primaryScreen = 0
+        rect = wx.Display(primaryScreen).GetClientArea()
+        if not 'wxGTK' in wx.PlatformInfo:
+            container = rect[2:4]
+        else:
+            screenDims = wx.Display(primaryScreen).GetClientArea()
+            # screenDims2 = wx.Display(primaryScreen).GetGeometry()
+            left = screenDims[0]
+            top = screenDims[1]
+            width = screenDims[2] - screenDims[0]  # min(screenDims[2], 1280 - self.left)
+            height = screenDims[3]
+            container = (width, height)
+        width = container[0] * .282   # rect[2] * .28
+        height = (container[1] - TransanaGlobal.menuHeight) * .339  # (rect[3] - TransanaGlobal.menuHeight) * .35
         return wx.Size(width, height)
 
     def __pos(self):
         """Determine default position of MediaPlayer Frame."""
-        rect = wx.Display(0).GetClientArea()
+        # Determine which monitor to use and get its size and position
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            primaryScreen = TransanaGlobal.configData.primaryScreen
+        else:
+            primaryScreen = 0
+        rect = wx.Display(primaryScreen).GetClientArea()
+        if not 'wxGTK' in wx.PlatformInfo:
+            container = rect[2:4]
+        else:
+            # Linux rect includes both screens, so we need to use an alternate method!
+            container = TransanaGlobal.menuWindow.GetSize()
         (width, height) = self.__size()
         # rect[0] compensates if the Start menu is on the left side of the screen.
         if 'wxGTK' in wx.PlatformInfo:
             x = rect[0] + min((rect[2] - 10), (1280 - rect[0])) - width
         else:
-            x = rect[0] + rect[2] - width - 3
+            x = rect[0] + container[0] - width - 2  # rect[0] + rect[2] - width - 3
         # rect[1] compensates if the Start menu is on the top of the screen
-        y = rect[1] + TransanaGlobal.menuHeight + 3
+        if 'wxMac' in wx.PlatformInfo:
+            y = rect[1] + 2
+        else:
+            y = rect[1] + TransanaGlobal.menuHeight + 1
         return wx.Point(x, y)

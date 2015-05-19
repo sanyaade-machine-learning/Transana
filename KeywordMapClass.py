@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2012  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2014  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -44,12 +44,18 @@ import Dialogs
 import Episode
 # Import Transana's Filter Dialog
 import FilterDialog
+# import Transana's Keyword Object
+import KeywordObject
 # import Transana Miscellaneous functions
 import Misc
+# import Transana's Constants
+import TransanaConstants
 # Import Transana's Exceptions
 import TransanaExceptions
 # import Transana's Globals
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 
 # Declare Control IDs
 # Menu Item and Toolbar Item for File > Filter
@@ -82,15 +88,25 @@ class KeywordMap(wx.Frame):
     """ This is the main class for the Keyword Map application.
         It can be instantiated as a free-standing report with a frame, or can be
         called as an embedded graphic display for the Visualization window. """
-    def __init__(self, parent, ID=-1, title="", embedded=False, topOffset=0):
+    def __init__(self, parent, ID=-1, title="", embedded=False, topOffset=0, controlObject=None):
         # It's always important to remember your ancestors.
         self.parent = parent
+        # Remember the title
+        self.title = title
+        # Initialize the Report Number
+        self.reportNumber = 0
         # We do some things differently if we're a free-standing Keyword Map report 
         # or if we're an embedded Keyword Visualization.  
         self.embedded = embedded
         # Remember the topOffset parameter value.  This is used to specify a larger top margin for the keyword visualization,
         # needed for the Hybrid Visualization.
         self.topOffset = topOffset
+        # Let's remember the Control Object, if one is passed in
+        self.ControlObject = controlObject
+        # If a Control Object has been passed in ...
+        if self.ControlObject != None:
+            # ... register this report with the Control Object (which adds it to the Windows Menu)
+            self.ControlObject.AddReportWindow(self)
         #  Create a connection to the database
         DBConn = DBInterface.get_db()
         #  Create a cursor and execute the appropriate query
@@ -98,7 +114,7 @@ class KeywordMap(wx.Frame):
         # If we're NOT embedded, we need to create a full frame etc.
         if not self.embedded:
             # Determine the screen size for setting the initial dialog size
-            rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+            rect = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
             width = rect[2] * .80
             height = rect[3] * .80
             # Create the basic Frame structure with a white background
@@ -133,8 +149,12 @@ class KeywordMap(wx.Frame):
         # Initialize Keyword Lists to empty
         self.unfilteredKeywordList = []
         self.filteredKeywordList = []
+        # Intialize the Clip List to empty
         self.clipList = []
         self.clipFilterList = []
+        # Initialize the Snapshot List to empty
+        self.snapshotList = []
+        self.snapshotFilterList = []
         # To be able to show only parts of an Episode Time Line, we need variables for the time boundaries.
         self.startTime = 0
         self.endTime = 0
@@ -179,20 +199,20 @@ class KeywordMap(wx.Frame):
         # Get the graphic for the Filter button
         bmp = wx.ArtProvider_GetBitmap(wx.ART_LIST_VIEW, wx.ART_TOOLBAR, (16,16))
         self.toolBar.AddTool(T_FILE_FILTER, bmp, shortHelpString=_("Filter"))
-        self.toolBar.AddTool(T_FILE_SAVEAS, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "SaveJPG16.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Save As'))
-        self.toolBar.AddTool(T_FILE_PRINTSETUP, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintSetup.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Set up Page'))
-        self.toolBar.AddTool(T_FILE_PRINTPREVIEW, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintPreview.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print Preview'))
+        self.toolBar.AddTool(T_FILE_SAVEAS, TransanaImages.SaveJPG16.GetBitmap(), shortHelpString=_('Save As'))
+        self.toolBar.AddTool(T_FILE_PRINTSETUP, TransanaImages.PrintSetup.GetBitmap(), shortHelpString=_('Set up Page'))
+        self.toolBar.AddTool(T_FILE_PRINTPREVIEW, TransanaImages.PrintPreview.GetBitmap(), shortHelpString=_('Print Preview'))
 
-        # Disable Print Preview on the PPC Mac
-        if platform.processor() == 'powerpc':
+        # Disable Print Preview on the PPC Mac and for Right-To-Left languages
+        if (platform.processor() == 'powerpc') or (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
             self.toolBar.EnableTool(T_FILE_PRINTPREVIEW, False)
             
-        self.toolBar.AddTool(T_FILE_PRINT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Print.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print'))
+        self.toolBar.AddTool(T_FILE_PRINT, TransanaImages.Print.GetBitmap(), shortHelpString=_('Print'))
         # Get the graphic for Help
         bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
         # create a bitmap button for the Move Down button
         self.toolBar.AddTool(T_HELP_HELP, bmp, shortHelpString=_("Help"))
-        self.toolBar.AddTool(T_FILE_EXIT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Exit.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Exit'))        
+        self.toolBar.AddTool(T_FILE_EXIT, TransanaImages.Exit.GetBitmap(), shortHelpString=_('Exit'))        
         self.toolBar.Realize()
         # Let's go ahead and keep the menu for non-Mac platforms
         if not '__WXMAC__' in wx.PlatformInfo:
@@ -231,6 +251,8 @@ class KeywordMap(wx.Frame):
         wx.EVT_MENU(self, T_FILE_EXIT, self.CloseWindow)                              # Attach CloseWindow to Toolbar Exit
         wx.EVT_MENU(self, M_HELP_HELP, self.OnHelp)
         wx.EVT_MENU(self, T_HELP_HELP, self.OnHelp)
+        # Bind the form's EVT_CLOSE method
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
 
         # Determine the window boundaries
         (w, h) = self.GetClientSizeTuple()
@@ -268,6 +290,10 @@ class KeywordMap(wx.Frame):
 
         # If we have a Series name and Episode Name, we are doing a Keyword Map
         if (self.seriesName != '') and (self.episodeName != ''):
+            # Initialize the Clip Filter List to be empty
+            self.clipFilterList = []
+            # Initialize the Snapshot Filter List to be empty
+            self.snapshotFilterList = []
             # Clear the drawing
             self.filteredKeywordList = []
             self.unfilteredKeywordList = []
@@ -297,8 +323,11 @@ class KeywordMap(wx.Frame):
         # Show the Frame
         self.Show(True)
 
-    def SetupEmbedded(self, episodeNum, seriesName, episodeName, startTime, endTime, filteredKeywordList=[],
-                      unfilteredKeywordList = [], keywordColors = None, clipNum=None, configName='', loadDefault=False):
+    def SetupEmbedded(self, episodeNum, seriesName, episodeName, startTime, endTime,
+                      filteredClipList=[], unfilteredClipList = [],
+                      filteredSnapshotList=[], unfilteredSnapshotList = [],
+                      filteredKeywordList=[], unfilteredKeywordList = [],
+                      keywordColors = None, clipNum=None, configName='', loadDefault=False):
         """ Complete setup for the embedded version of the Keyword Map. """
         # Remember the appropriate Episode information
         self.episodeNum = episodeNum
@@ -321,6 +350,12 @@ class KeywordMap(wx.Frame):
             self.Bounds = (0, 0, w, h - 25)
         # If we have a defined Episode (which we always should) ...
         if (self.seriesName != '') and (self.episodeName != ''):
+            # Set the initial Clip Lists
+            self.clipFilterList = filteredClipList[:]
+            self.clipList = unfilteredClipList[:]
+            # Set the initial Snapshot Lists
+            self.snapshotFilterList = filteredSnapshotList[:]
+            self.snapshotList = unfilteredSnapshotList[:]
             # set the initial keyword lists
             self.filteredKeywordList = filteredKeywordList[:]
             self.unfilteredKeywordList = unfilteredKeywordList[:]
@@ -364,35 +399,73 @@ class KeywordMap(wx.Frame):
                 # reportType=16 indicates it is for a Collection Keyword Map.  
                 reportType = 16
                 reportScope = self.collectionNum
-            # Keyword Map wants the Clip Filter
-            clipFilter = True
+            # See if there are Clips in the Filter List
+            clipFilter = (len(self.clipFilterList) > 0)
+            # See if there are Snapshots in the Snapshot Filter List
+            snapshotFilter = (len(self.snapshotFilterList) > 0)
+            # See if there are Keywords in the Filter List
+            keywordFilter = (len(self.unfilteredKeywordList) > 0)
             # Keyword Map and Collection Keyword Map now support Keyword Color customization, at least sometimes
-            keywordColors = True
+            keywordColors = (len(self.unfilteredKeywordList) > 0)
             # We want the Options tab
             options = True
             # Create a Filter Dialog, passing all the necessary parameters.
-            dlgFilter = FilterDialog.FilterDialog(parent, -1, title, reportType=reportType, loadDefault=loadDefault, configName=self.configName,
-                                                  reportScope=reportScope, clipFilter=clipFilter, keywordFilter=True, keywordSort=True,
-                                                  keywordColor=keywordColors, options=options, startTime=self.startTime, endTime=self.endTime,
-                                                  barHeight=self.barHeight, whitespace=self.whitespaceHeight, hGridLines=self.hGridLines,
-                                                  vGridLines=self.vGridLines, colorOutput=self.colorOutput, colorAsKeywords=self.colorAsKeywords)
+            dlgFilter = FilterDialog.FilterDialog(parent,
+                                                  -1,
+                                                  title,
+                                                  reportType=reportType,
+                                                  loadDefault=loadDefault,
+                                                  configName=self.configName,
+                                                  reportScope=reportScope,
+                                                  clipFilter=clipFilter,
+                                                  snapshotFilter=snapshotFilter,
+                                                  keywordFilter=keywordFilter,
+                                                  keywordSort=True,
+                                                  keywordColor=keywordColors,
+                                                  options=options,
+                                                  startTime=self.startTime,
+                                                  endTime=self.endTime,
+                                                  barHeight=self.barHeight,
+                                                  whitespace=self.whitespaceHeight,
+                                                  hGridLines=self.hGridLines,
+                                                  vGridLines=self.vGridLines,
+                                                  colorOutput=self.colorOutput,
+                                                  colorAsKeywords=self.colorAsKeywords)
         else:
             # For the keyword visualization, the parent that was passed in on initialization is the parent
             parent = self.parent
             title = unicode(_("Keyword Visualization Filter Dialog"), 'utf8')
-            # Keyword visualization does NOT want the Clip Filter
-            clipFilter = False
+            # See if there are Clips in the Filter List
+            clipFilter = (len(self.clipFilterList) > 0)
+            # See if there are Snapshots in the Snapshot Filter List
+            snapshotFilter = (len(self.snapshotFilterList) > 0)
+            # See if there are Keywords in the Filter List
+            keywordFilter = (len(self.unfilteredKeywordList) > 0)
             # Keyword visualization wants Keyword Color customization
-            keywordColors = True
+            keywordColors = (len(self.unfilteredKeywordList) > 0)
             # We want the Options tab
             options = True
             # reportType=2 indicates it is for a Keyword Visualization.  
             reportType = 2
             # Create a Filter Dialog, passing all the necessary parameters.
-            dlgFilter = FilterDialog.FilterDialog(parent, -1, title, reportType=reportType, loadDefault=loadDefault, configName=self.configName,
-                                                  reportScope=self.episodeNum, clipFilter=clipFilter, keywordFilter=True, keywordSort=True,
-                                                  keywordColor=keywordColors, options=options, startTime=self.startTime, endTime=self.endTime,
-                                                  barHeight=self.barHeight, whitespace=self.whitespaceHeight, hGridLines=self.hGridLines,
+            dlgFilter = FilterDialog.FilterDialog(parent,
+                                                  -1,
+                                                  title,
+                                                  reportType=reportType,
+                                                  loadDefault=loadDefault,
+                                                  configName=self.configName,
+                                                  reportScope=self.episodeNum,
+                                                  clipFilter=clipFilter,
+                                                  snapshotFilter=snapshotFilter,
+                                                  keywordFilter=keywordFilter,
+                                                  keywordSort=True,
+                                                  keywordColor=keywordColors,
+                                                  options=options,
+                                                  startTime=self.startTime,
+                                                  endTime=self.endTime,
+                                                  barHeight=self.barHeight,
+                                                  whitespace=self.whitespaceHeight,
+                                                  hGridLines=self.hGridLines,
                                                   vGridLines=self.vGridLines)
         # If we requested the Clip Filter ...
         if clipFilter:
@@ -401,12 +474,18 @@ class KeywordMap(wx.Frame):
             self.clipFilterList.sort()
             # Inform the Filter Dialog of the Clips
             dlgFilter.SetClips(self.clipFilterList)
-        # Keyword Colors must be specified before Keywords!  So if we want Keyword Colors, ...
-        if keywordColors:
-            # Inform the Filter Dialog of the colors used for each Keyword
-            dlgFilter.SetKeywordColors(self.keywordColors)
-        # Inform the Filter Dialog of the Keywords
-        dlgFilter.SetKeywords(self.unfilteredKeywordList)
+        # if there are Snapshots ...
+        if snapshotFilter:
+            # ... populate the Filter Dialog with Snapshots
+            dlgFilter.SetSnapshots(self.snapshotFilterList)
+        # if there are Keywords ...
+        if keywordFilter:
+            # Keyword Colors must be specified before Keywords!  So if we want Keyword Colors, ...
+            if keywordColors:
+                # Inform the Filter Dialog of the colors used for each Keyword
+                dlgFilter.SetKeywordColors(self.keywordColors)
+            # Populate the Filter Dialog with Keywords
+            dlgFilter.SetKeywords(self.unfilteredKeywordList)
         # Create a dummy error message to get our while loop started.
         errorMsg = 'Start Loop'
         # Keep trying as long as there is an error message
@@ -439,13 +518,19 @@ class KeywordMap(wx.Frame):
                 if clipFilter:
                     # ... then get the filtered clip data
                     self.clipFilterList = dlgFilter.GetClips()
-                # Get the complete list of keywords from the Filter Dialog.  We'll deduce the filter info in a moment.
-                # (This preserves the "check" info for later reuse.)
-                self.unfilteredKeywordList = dlgFilter.GetKeywords()
-                # If we requested Keyword Color data ...
-                if keywordColors:
-                    # ... then get the keyword color data from the Filter Dialog
-                    self.keywordColors = dlgFilter.GetKeywordColors()
+                # If we requested Snapshot Filtering ...
+                if snapshotFilter:
+                    # ... then get the filtered snapshot data
+                    self.snapshotFilterList = dlgFilter.GetSnapshots()
+                # If we requested Keyword filtering ...
+                if keywordFilter:
+                    # Get the complete list of keywords from the Filter Dialog.  We'll deduce the filter info in a moment.
+                    # (This preserves the "check" info for later reuse.)
+                    self.unfilteredKeywordList = dlgFilter.GetKeywords()
+                    # If we requested Keyword Color data ...
+                    if keywordColors:
+                        # ... then get the keyword color data from the Filter Dialog
+                        self.keywordColors = dlgFilter.GetKeywordColors()
                 # Reset the Filtered Keyword List
                 self.filteredKeywordList = []
                 # Iterate through the entire Keword List ...
@@ -560,8 +645,8 @@ class KeywordMap(wx.Frame):
         if not self.preview.Ok():
             self.SetStatusText(_("Print Preview Problem"))
             return
-        theWidth = max(wx.Display(0).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
-        theHeight = max(wx.Display(0).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
+        theWidth = max(wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
+        theHeight = max(wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
         frame2 = wx.PreviewFrame(self.preview, self, _("Print Preview"), size=(theWidth, theHeight))
         frame2.Centre()
         frame2.Initialize()
@@ -581,6 +666,15 @@ class KeywordMap(wx.Frame):
         # else:
         #     self.printData = printer.GetPrintDialogData().GetPrintData()
         printout.Destroy()
+
+    def OnClose(self, event):
+        """ Handle the Close Event """
+        # If the report has a defined Control Object ...
+        if self.ControlObject != None:
+            # ... remove this report from the Menu Window's Window Menu
+            self.ControlObject.RemoveReportWindow(self.title, self.reportNumber)
+        # Inherit the parent Close event so things will, you know, close.
+        event.Skip()
 
     # Define the Method that closes the Window on File > Exit
     def CloseWindow(self, event):
@@ -773,7 +867,9 @@ class KeywordMap(wx.Frame):
     def ProcessEpisode(self):
         """ Process a Keyword Map for an Episode """
         # Initialize the Clip Filter List to be empty
-        self.clipFilterList = []
+##        self.clipFilterList = []
+        # Initialize the Snapshot Filter List to be empty
+##        self.snapshotFilterList = []
         # We need a data struture to hold the data about what clips correspond to what keywords
         self.MediaFile = ''
         self.MediaLength = 0
@@ -801,7 +897,7 @@ class KeywordMap(wx.Frame):
             # If we deleted the last keyword in a filtered list, the Filter Dialog ended up with
             # duplicate entries.  This should prevent it!!
             self.unfilteredKeywordList = []
-            # Get the list of Keywords to be displayed
+            # Get the list of CLIP Keywords to be displayed
             SQLText = """SELECT ck.KeywordGroup, ck.Keyword
                            FROM Clips2 cl, ClipKeywords2 ck
                            WHERE cl.EpisodeNum = %s AND
@@ -812,10 +908,51 @@ class KeywordMap(wx.Frame):
             for (kwg, kw) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                 kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
-                self.filteredKeywordList.append((kwg, kw))
-                self.unfilteredKeywordList.append((kwg, kw, True))
+                if not (kwg, kw) in self.filteredKeywordList:
+                    self.filteredKeywordList.append((kwg, kw))
+                if not (kwg, kw, True) in self.unfilteredKeywordList:
+                    self.unfilteredKeywordList.append((kwg, kw, True))
 
-        # Create the Keyword Placement lines to be displayed.  We need them to be in ClipStart, ClipNum order so colors will be
+            if TransanaConstants.proVersion:
+                # Get the list of WHOLE SNAPSHOT Keywords to be displayed
+                SQLText = """SELECT ck.KeywordGroup, ck.Keyword
+                               FROM Snapshots2 sn, ClipKeywords2 ck
+                               WHERE sn.EpisodeNum = %s AND
+                                     sn.SnapshotNum = ck.SnapshotNum
+                               GROUP BY ck.keywordgroup, ck.keyword
+                               ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
+                self.DBCursor.execute(SQLText, self.episodeNum)
+                for (kwg, kw) in self.DBCursor.fetchall():
+                    kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                    kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                    if not (kwg, kw) in self.filteredKeywordList:
+                        self.filteredKeywordList.append((kwg, kw))
+                    if not (kwg, kw, True) in self.unfilteredKeywordList:
+                        self.unfilteredKeywordList.append((kwg, kw, True))
+
+                # Get the list of SNAPSHOT CODING Keywords to be displayed
+                SQLText = """SELECT ck.KeywordGroup, ck.Keyword
+                               FROM Snapshots2 sn, SnapshotKeywords2 ck
+                               WHERE sn.EpisodeNum = %s AND
+                                     sn.SnapshotNum = ck.SnapshotNum
+                               GROUP BY ck.keywordgroup, ck.keyword
+                               ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
+                self.DBCursor.execute(SQLText, self.episodeNum)
+                for (kwg, kw) in self.DBCursor.fetchall():
+                    kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                    kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                    if not (kwg, kw) in self.filteredKeywordList:
+                        self.filteredKeywordList.append((kwg, kw))
+                    if not (kwg, kw, True) in self.unfilteredKeywordList:
+                        self.unfilteredKeywordList.append((kwg, kw, True))
+
+        # If we haven't loaded a configuration (which contains its own sort order) ...
+        if self.configName == '':
+            # Sort the Keyword List
+            self.unfilteredKeywordList.sort()
+            self.filteredKeywordList.sort()
+        
+        # Create the Clip Keyword Placement lines to be displayed.  We need them to be in ClipStart, ClipNum order so colors will be
         # distributed properly across bands.
         SQLText = """SELECT ck.KeywordGroup, ck.Keyword, cl.ClipStart, cl.ClipStop, cl.ClipNum, cl.ClipID, cl.CollectNum
                        FROM Clips2 cl, ClipKeywords2 ck
@@ -830,33 +967,79 @@ class KeywordMap(wx.Frame):
             # If we're dealing with an Episode, self.clipNum will be None and we want all clips.
             # If we're dealing with a Clip, we only want to deal with THIS clip!
             if (self.clipNum == None) or (clipNum == self.clipNum):
-                self.clipList.append((kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum))
-                if not ((clipID, collectNum, True) in self.clipFilterList):
+                if (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) not in self.clipList:
+                    self.clipList.append((kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum))
+                if (not ((clipID, collectNum, True) in self.clipFilterList)) and \
+                   (not ((clipID, collectNum, False) in self.clipFilterList)):
                     self.clipFilterList.append((clipID, collectNum, True))
+
+        if TransanaConstants.proVersion:
+            # Create the WHOLE SNAPSHOT Keyword Placement lines to be displayed.  We need them to be in SnapshotTimeCode, SnapshotNum order so colors will be
+            # distributed properly across bands.
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword, sn.SnapshotTimeCode, sn.SnapshotDuration, sn.SnapshotNum, sn.SnapshotID, sn.CollectNum
+                           FROM Snapshots2 sn, ClipKeywords2 ck
+                           WHERE sn.EpisodeNum = %s AND
+                                 sn.SnapshotNum = ck.SnapshotNum
+                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
+            self.DBCursor.execute(SQLText, self.episodeNum)
+            for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                SnapshotID = DBInterface.ProcessDBDataForUTF8Encoding(SnapshotID)
+                # If we're dealing with an Episode, self.clipNum will be None and we want all clips.
+                # If we're dealing with a Clip, we only want to deal with THIS clip!
+                if (self.clipNum == None):
+                    if (kwg, kw, SnapshotTimeCode, SnapshotTimeCode + SnapshotDuration, SnapshotNum, SnapshotID, collectNum) not in self.snapshotList:
+                        self.snapshotList.append((kwg, kw, SnapshotTimeCode, SnapshotTimeCode + SnapshotDuration, SnapshotNum, SnapshotID, collectNum))
+                    if (not ((SnapshotID, collectNum, True) in self.snapshotFilterList)) and \
+                       (not ((SnapshotID, collectNum, False) in self.snapshotFilterList)):
+                        self.snapshotFilterList.append((SnapshotID, collectNum, True))
+
+            # Create the SNAPSHOT CODING Keyword Placement lines to be displayed.  We need them to be in SnapshotTimeCode, SnapshotNum order so colors will be
+            # distributed properly across bands.
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword, sn.SnapshotTimeCode, sn.SnapshotDuration, sn.SnapshotNum, sn.SnapshotID, sn.CollectNum
+                           FROM Snapshots2 sn, SnapshotKeywords2 ck
+                           WHERE sn.EpisodeNum = %s AND
+                                 sn.SnapshotNum = ck.SnapshotNum
+                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
+            self.DBCursor.execute(SQLText, self.episodeNum)
+            for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                SnapshotID = DBInterface.ProcessDBDataForUTF8Encoding(SnapshotID)
+                # If we're dealing with an Episode, self.clipNum will be None and we want all clips.
+                # If we're dealing with a Clip, we only want to deal with THIS clip!
+                if (self.clipNum == None):
+                    if (kwg, kw, SnapshotTimeCode, SnapshotTimeCode + SnapshotDuration, SnapshotNum, SnapshotID, collectNum) not in self.snapshotList:
+                        self.snapshotList.append((kwg, kw, SnapshotTimeCode, SnapshotTimeCode + SnapshotDuration, SnapshotNum, SnapshotID, collectNum))
+                    if (not ((SnapshotID, collectNum, True) in self.snapshotFilterList)) and \
+                       (not ((SnapshotID, collectNum, False) in self.snapshotFilterList)):
+                        self.snapshotFilterList.append((SnapshotID, collectNum, True))
 
     def ProcessCollection(self):
         """ Process a Collection for the Collection Keyword Map variation of the Keyword Map """
         # Initialize the Clip Filter List
         self.clipFilterList = []
+        # Initialize the Snapshot Filter List
+        self.snapshotFilterList = []
         # We don't have a single Media File here.  Leave it blank
         self.MediaFile = ''
         # Initialize the Media Length, which we will accumulate from the clips
         self.MediaLength = 0
 
-        # We need a data struture to hold the data about what clips correspond to what keywords.
+        # We need a data struture to hold the data about what clips and snapshots correspond to what keywords.
         # But we only need to process it once.
         if self.filteredKeywordList == []:
             # If we deleted the last keyword in a filtered list, the Filter Dialog ended up with
             # duplicate entries.  This should prevent it!!
             self.unfilteredKeywordList = []
-            # Get the list of Keywords to be displayed.  This query should do it.
+            # Get the list of CLIP Keywords to be displayed.  This query should do it.
             SQLText = """SELECT ck.KeywordGroup, ck.Keyword
                            FROM Clips2 cl, ClipKeywords2 ck
                            WHERE cl.CollectNum = %s AND
                                  cl.ClipNum = ck.ClipNum
                            GROUP BY ck.keywordgroup, ck.keyword
                            ORDER BY KeywordGroup, Keyword, ClipStart"""
-
             # Execute the query
             self.DBCursor.execute(SQLText, self.collectionNum)
             # For each record in the query results ...
@@ -868,57 +1051,217 @@ class KeywordMap(wx.Frame):
                 self.filteredKeywordList.append((kwg, kw))
                 self.unfilteredKeywordList.append((kwg, kw, True))
 
-        # Create the Keyword Placement lines to be displayed.  We need them to be in ClipSortOrder order so colors will be
-        # distributed properly across bands.
-        SQLText = """SELECT ck.KeywordGroup, ck.Keyword, cl.ClipStart, cl.ClipStop, cl.ClipNum, cl.ClipID, cl.CollectNum
+            if TransanaConstants.proVersion:
+                # Get the list of WHOLE SNAPSHOT Keywords to be displayed
+                SQLText = """SELECT ck.KeywordGroup, ck.Keyword
+                               FROM Snapshots2 sn, ClipKeywords2 ck
+                               WHERE sn.CollectNum = %s AND
+                                     sn.SnapshotNum = ck.SnapshotNum
+                               GROUP BY ck.keywordgroup, ck.keyword
+                               ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
+                # Execute the query
+                self.DBCursor.execute(SQLText, self.collectionNum)
+                # For each record in the query results ...
+                for (kwg, kw) in self.DBCursor.fetchall():
+                    # ... encode the KWG and KW
+                    kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                    kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                    # ... and IF they're not already there, add them to the filtered and unfiltered keyword lists.
+                    # Unlike with Clips, a Snapshot can have multiple instances of the same keyword!!
+                    if not (kwg, kw) in self.filteredKeywordList:
+                        self.filteredKeywordList.append((kwg, kw))
+                    if not (kwg, kw, True) in self.unfilteredKeywordList:
+                        self.unfilteredKeywordList.append((kwg, kw, True))
+
+                # Get the list of SNAPSHOT CODING Keywords to be displayed
+                SQLText = """SELECT ck.KeywordGroup, ck.Keyword
+                               FROM Snapshots2 sn, SnapshotKeywords2 ck
+                               WHERE sn.CollectNum = %s AND
+                                     sn.SnapshotNum = ck.SnapshotNum
+                               GROUP BY ck.keywordgroup, ck.keyword
+                               ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
+                # Execute the query
+                self.DBCursor.execute(SQLText, self.collectionNum)
+                # For each record in the query results ...
+                for (kwg, kw) in self.DBCursor.fetchall():
+                    # ... encode the KWG and KW
+                    kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                    kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                    # ... and IF they're not already there, add them to the filtered and unfiltered keyword lists.
+                    # Unlike with Clips, a Snapshot can have multiple instances of the same keyword!!
+                    if not (kwg, kw) in self.filteredKeywordList:
+                        self.filteredKeywordList.append((kwg, kw))
+                    if not (kwg, kw, True) in self.unfilteredKeywordList:
+                        self.unfilteredKeywordList.append((kwg, kw, True))
+
+        # Sort the Keyword Lists
+        self.unfilteredKeywordList.sort()
+        self.filteredKeywordList.sort()
+
+        # We need to track what clip we're looking at.  Initialize a variable for that.
+        currClip = 0
+        # We need to track what snapshot we're looking at too.
+        currSnapshot = 0
+        # Initialize the Collection Contents dictionary, which allows us to sort Clips and Snapshots in the right order
+        collectionOrder = {}
+
+        # Get the CLIP information for the Keyword Placement lines to be displayed.  
+        SQLText = """SELECT ck.KeywordGroup, ck.Keyword, cl.ClipStart, cl.ClipStop, cl.ClipNum, cl.ClipID, cl.CollectNum, cl.SortOrder
                        FROM Clips2 cl, ClipKeywords2 ck
                        WHERE cl.CollectNum = %s AND
                              cl.ClipNum = ck.ClipNum
                        ORDER BY SortOrder, KeywordGroup, Keyword"""
-        # We need to track what clip we're looking at.  Initialize a variable for that.
-        currClip = 0
         # Execute the query
         self.DBCursor.execute(SQLText, self.collectionNum)
         # Iterate through the query results
-        for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) in self.DBCursor.fetchall():
-            # If we have not yet added THIS clip to total time ...
-            if clipNum != currClip:
-                # ... add this clip's length, plus 100 ms, to the total length of the Collection Keyword Map's time line ...
-                self.MediaLength += (clipStop - clipStart + 100)
-                # ... and update the current clip number so this clip won't be counted again if it has multiple keywords
-                currClip = clipNum
-            # Decode the KWG, KW, and Clip ID
-            kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
-            kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
-            clipID = DBInterface.ProcessDBDataForUTF8Encoding(clipID)
-            # If we're dealing with a Collection, self.clipNum will be None and we want all clips.
-            # If we're dealing with a Clip, we only want to deal with THIS clip!  (I DON'T THINK THIS IF CLAUSE IS NEEDED HERE!)
-            if (self.clipNum == None) or (clipNum == self.clipNum):
-                # Add the current Clip/keyword combo to the Clip List, placing it to the right of the last clip.
-                self.clipList.append((kwg, kw, self.MediaLength - (clipStop - clipStart) - 50, self.MediaLength - 50, clipNum, clipID, collectNum))
-                # If the clip ID isn't already in the Clip Filter List ...
-                if not ((clipID, collectNum, True) in self.clipFilterList):
-                    # ... add the clip to the Clip Filter List
-                    self.clipFilterList.append((clipID, collectNum, True))
+        for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum, sortOrder) in self.DBCursor.fetchall():
+            # If there's no entry for this item in the Sort Order ...
+            if not collectionOrder.has_key(sortOrder):
+                # ... create a new list of Clip Keyword entries for this Sort Order item
+                collectionOrder[sortOrder] = [('Clip', kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum)]
+            # If there already is an entry for this item in the Sort Order ...
+            else:
+                # ... append the new Keyword to the list.  (We must allow multiple keywords per clip/snapshot!)
+                collectionOrder[sortOrder].append(('Clip', kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum))
+
+        if TransanaConstants.proVersion:
+            # Create the WHOLE SNAPSHOT Keyword Placement lines to be displayed.
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword, sn.SnapshotTimeCode, sn.SnapshotDuration, sn.SnapshotNum,
+                                sn.SnapshotID, sn.CollectNum, sn.SortOrder
+                           FROM Snapshots2 sn, ClipKeywords2 ck
+                           WHERE sn.CollectNum = %s AND
+                                 sn.SnapshotNum = ck.SnapshotNum
+                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
+            # Execute the query
+            self.DBCursor.execute(SQLText, self.collectionNum)
+            # Iterate through the query results
+            for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum, sortOrder) in self.DBCursor.fetchall():
+                # If the Snapshot does not have a defined duration ...
+                if SnapshotDuration <= 0:
+                    # ... let's give it a temporary length of 10 seconds so it will show up!
+                    SnapshotDuration = 10000
+                # If there's no entry for this item in the Sort Order ...
+                if not collectionOrder.has_key(sortOrder):
+                    # ... create a new list of Snapshot Keyword entries for this Sort Order item
+                    collectionOrder[sortOrder] = [('Snapshot', kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID,
+                                                   collectNum)]
+                # If there already is an entry for this item in the Sort Order ...
+                else:
+                    # ... append the new Keyword to the list.  (We must allow multiple keywords per clip/snapshot!)
+                    collectionOrder[sortOrder].append(('Snapshot', kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID,
+                                                       collectNum))
+
+            # Create the SNAPSHOT CODING Keyword Placement lines to be displayed.  
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword, sn.SnapshotTimeCode, sn.SnapshotDuration, sn.SnapshotNum,
+                                sn.SnapshotID, sn.CollectNum, sn.SortOrder
+                           FROM Snapshots2 sn, SnapshotKeywords2 ck
+                           WHERE sn.CollectNum = %s AND
+                                 sn.SnapshotNum = ck.SnapshotNum
+                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
+            # Execute the query
+            self.DBCursor.execute(SQLText, self.collectionNum)
+            # Iterate through the query results
+            for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum, sortOrder) in self.DBCursor.fetchall():
+                # If the Snapshot does not have a defined duration ...
+                if SnapshotDuration <= 0.0:
+                    # ... let's give it a temporary length of 10 seconds so it will show up!
+                    SnapshotDuration = 10000
+                # If there's no entry for this item in the Sort Order ...
+                if not collectionOrder.has_key(sortOrder):
+                    # ... create a new list of Snapshot Keyword entries for this Sort Order item
+                    collectionOrder[sortOrder] = [('Snapshot', kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID,
+                                                   collectNum)]
+                # If there already is an entry for this item in the Sort Order ...
+                else:
+                    # ... append the new Keyword to the list.  (We must allow multiple keywords per clip/snapshot!)
+                    collectionOrder[sortOrder].append(('Snapshot', kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID,
+                                                       collectNum))
+        # Get the Sort Order Keys (which are the Sort Order values)
+        keys = collectionOrder.keys()
+        # Sort the Sort Order Keys, so they're in Sort Order order!!
+        keys.sort()
+        # Iterate through the Collection Order dictionary KEYS, that is, the Collection items' Sort Order.
+        # (This allows us to combine Clips and Snapshots in the correct Sort Order!)
+        for sortOrder in keys:
+            # Get the LIST of data records for the next sort order and iterate through that list
+            for recData in collectionOrder[sortOrder]:
+                # If the next record is a CLIP ...
+                if recData[0] == 'Clip':
+                    # ... extract the Clip data
+                    (recType, kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) = recData
+                    # If we have not yet added THIS clip to total time ...
+                    if clipNum != currClip:
+                        # ... add this clip's length, plus 100 ms, to the total length of the Collection Keyword Map's time line ...
+                        self.MediaLength += (clipStop - clipStart + 100)
+                        # ... and update the current clip number so this clip won't be counted again if it has multiple keywords
+                        currClip = clipNum
+                    # Decode the KWG, KW, and Clip ID
+                    kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                    kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                    clipID = DBInterface.ProcessDBDataForUTF8Encoding(clipID)
+                    # If we're dealing with a Collection Keyword Report, self.clipNum will be None
+                    if (self.clipNum == None):
+                        # Add the current Clip/keyword combo to the Clip List, placing it to the right of the last clip.
+                        self.clipList.append((kwg, kw, self.MediaLength - (clipStop - clipStart) - 50, self.MediaLength - 50, clipNum, clipID, collectNum))
+                        # If the clip ID isn't already in the Clip Filter List ...
+                        if not ((clipID, collectNum, True) in self.clipFilterList):
+                            # ... add the clip to the Clip Filter List
+                            self.clipFilterList.append((clipID, collectNum, True))
+                # If the next record is a SNAPSHOT ...
+                elif recData[0] == 'Snapshot':
+                    # ... extract the Snapshot data
+                    (recType, kwg, kw, snapshotTimeCode, snapshotDuration, snapshotNum, snapshotID, collectNum) = recData
+                    # If we have not yet added THIS Snapshot to total time ...
+                    if snapshotNum != currSnapshot:
+                        # ... add this snapshot's length, plus 100 ms, to the total length of the Collection Keyword Map's time line ...
+                        self.MediaLength += (snapshotDuration + 100)
+                        # ... and update the current snapshot number so this snapshot won't be counted again if it has multiple keywords
+                        currSnapshot = snapshotNum
+                    # Decode the KWG, KW, and Snapshot ID
+                    kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                    kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                    snapshotID = DBInterface.ProcessDBDataForUTF8Encoding(snapshotID)
+                    # If we're dealing with a Collection Keyword Report, self.clipNum will be None and we want all data.
+                    if (self.clipNum == None):
+                        # Snapshots, unlike Clips, can have the same keyword multiple times.  Let's check to see if this Keyword is already
+                        # in the Snapshot List.
+                        if (kwg, kw, self.MediaLength - snapshotDuration - 50, self.MediaLength - 50, snapshotNum, snapshotID, collectNum) not in self.snapshotList:
+                            # Add the current Snapshot/keyword combo to the Snapshot List, placing it to the right of the last snapshot.
+                            self.snapshotList.append((kwg, kw, self.MediaLength - snapshotDuration - 50, self.MediaLength - 50, snapshotNum, snapshotID, collectNum))
+                        # If the snapshot ID isn't already in the Snapshot Filter List ...
+                        if (not ((snapshotID, collectNum, True) in self.snapshotFilterList)) and \
+                           (not ((snapshotID, collectNum, False) in self.snapshotFilterList)):
+                            # ... add it to the Snapshot Filter List
+                            self.snapshotFilterList.append((snapshotID, collectNum, True))
+
         # When we're done adding clips, we know the total width of the graphic.  Set self.endTime to the accumulated
         # Media Length so the graphic will render correctly.
         self.endTime = self.MediaLength
 
-    def UpdateKeywordVisualization(self):
-        """ Update the Keyword Visualization following something that could have changed it. """
+    def UpdateKeywordVisualization(self, reset=True):
+        """ Update the Keyword Visualization following something that could have changed it.
+            The reset variable (when false) allows the Hybrid Visualization's Filter box to work! """
         # If the Keyword Map hasn't been Setup yet, skip this.
         if self.episodeNum == None:
             return
-        # Clear the Clip List
-        self.clipList = []
-        # Clear the Filtered Clip List
-        self.clipFilterList = []
-        # Clear the graphic itself
-        self.graphic.Clear()
+
+        # if reset is true (always except Hybrid Visualization!) ...
+        if reset:
+            # Clear the Clip List
+            self.clipList = []
+            # Clear the Filtered Clip List
+            self.clipFilterList = []
+            # Clear the Snapshot List
+            self.snapshotList = []
+            # Clear the Filtered Snapshot List
+            self.snapshotFilterList = []
+        # Clear the graphic itself (Pass on Hybrid Visualization's reset variable!)
+        self.graphic.Clear(reset=reset)
 
         # Before we start, make a COPY of the keyword list so we can check for keywords that are no longer
         # included on the Map and need to be deleted from the KeywordLists
         delList = self.unfilteredKeywordList[:]
+        
         # Now let's create the SQL to get all relevant Clip and Clip Keyword records
         SQLText = """SELECT ck.KeywordGroup, ck.Keyword, cl.ClipStart, cl.ClipStop, cl.ClipNum, cl.ClipID, cl.CollectNum
                        FROM Clips2 cl, ClipKeywords2 ck
@@ -947,8 +1290,10 @@ class KeywordMap(wx.Frame):
             # If the keyword is not in either of the Keyword Lists, ...
             if not (((kwg, kw) in self.filteredKeywordList) or ((kwg, kw, False) in self.unfilteredKeywordList)):
                 # ... add it to both keyword lists.
-                self.filteredKeywordList.append((kwg, kw))
-                self.unfilteredKeywordList.append((kwg, kw, True))
+                if not (kwg, kw) in self.filteredKeywordList:
+                    self.filteredKeywordList.append((kwg, kw))
+                if not (kwg, kw) in self.unfilteredKeywordList:
+                    self.unfilteredKeywordList.append((kwg, kw, True))
 
             # If the keyword is in query results, it should be removed from the list of keywords to be deleted.
             # Check that list for either True or False versions of the keyword!
@@ -956,6 +1301,84 @@ class KeywordMap(wx.Frame):
                 del(delList[delList.index((kwg, kw, True))])
             if (kwg, kw, False) in delList:
                 del(delList[delList.index((kwg, kw, False))])
+
+        # If we're dealing with an Episode, self.clipNum will be None and we want all clips.
+        # If we're dealing with a Clip, we don't deal with Snapshots!
+        if (self.clipNum == None):
+            # Now let's create the SQL to get all relevant WHOLE SNAPSHOT and Clip Keyword records
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword, sn.SnapshotTimeCode, sn.SnapshotDuration, sn.SnapshotNum, sn.SnapshotID, sn.CollectNum
+                           FROM Snapshots2 sn, ClipKeywords2 ck
+                           WHERE sn.EpisodeNum = %s AND
+                                 sn.SnapshotNum = ck.SnapshotNum
+                           ORDER BY SnapshotTimecode, SnapshotNum, KeywordGroup, Keyword"""
+            # Execute the query
+            self.DBCursor.execute(SQLText, self.episodeNum)
+            # Iterate through the results ...
+            for (kwg, kw, snapshotStart, snapshotDuration, snapshotNum, snapshotID, collectNum) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                snapshotID = DBInterface.ProcessDBDataForUTF8Encoding(snapshotID)
+                # If a Snapshot is not found in the snapshotList ...
+                if not ((kwg, kw, snapshotStart, snapshotStart + snapshotDuration, snapshotNum, snapshotID, collectNum) in self.snapshotList):
+                    # ... add it to the snapshotList ...
+                    self.snapshotList.append((kwg, kw, snapshotStart, snapshotStart + snapshotDuration, snapshotNum, snapshotID, collectNum))
+                    # ... and if it's not in the snapshotFilter List (which it probably isn't!) ...
+                    if not ((snapshotID, collectNum, True) in self.snapshotFilterList):
+                        # ... add it to the snapshotFilterList.
+                        self.snapshotFilterList.append((snapshotID, collectNum, True))
+
+                # If the keyword is not in either of the Keyword Lists, ...
+                if not (((kwg, kw) in self.filteredKeywordList) or ((kwg, kw, False) in self.unfilteredKeywordList)):
+                    # ... add it to both keyword lists.
+                    if not (kwg, kw) in self.filteredKeywordList:
+                        self.filteredKeywordList.append((kwg, kw))
+                    if not (kwg, kw) in self.unfilteredKeywordList:
+                        self.unfilteredKeywordList.append((kwg, kw, True))
+
+                # If the keyword is in query results, it should be removed from the list of keywords to be deleted.
+                # Check that list for either True or False versions of the keyword!
+                if (kwg, kw, True) in delList:
+                    del(delList[delList.index((kwg, kw, True))])
+                if (kwg, kw, False) in delList:
+                    del(delList[delList.index((kwg, kw, False))])
+
+            # Now let's create the SQL to get all relevant SNAPSHOT CODING Keyword records
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword, sn.SnapshotTimeCode, sn.SnapshotDuration, sn.SnapshotNum, sn.SnapshotID, sn.CollectNum
+                           FROM Snapshots2 sn, SnapshotKeywords2 ck
+                           WHERE sn.EpisodeNum = %s AND
+                                 sn.SnapshotNum = ck.SnapshotNum
+                           ORDER BY SnapshotTimecode, SnapshotNum, KeywordGroup, Keyword"""
+            # Execute the query
+            self.DBCursor.execute(SQLText, self.episodeNum)
+            # Iterate through the results ...
+            for (kwg, kw, snapshotStart, snapshotDuration, snapshotNum, snapshotID, collectNum) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                snapshotID = DBInterface.ProcessDBDataForUTF8Encoding(snapshotID)
+                # If a Snapshot is not found in the snapshotList ...
+                if not ((kwg, kw, snapshotStart, snapshotStart + snapshotDuration, snapshotNum, snapshotID, collectNum) in self.snapshotList):
+                    # ... add it to the snapshotList ...
+                    self.snapshotList.append((kwg, kw, snapshotStart, snapshotStart + snapshotDuration, snapshotNum, snapshotID, collectNum))
+                    # ... and if it's not in the snapshotFilter List (which it probably isn't!) ...
+                    if not ((snapshotID, collectNum, True) in self.snapshotFilterList):
+                        # ... add it to the snapshotFilterList.
+                        self.snapshotFilterList.append((snapshotID, collectNum, True))
+
+                # If the keyword is not in either of the Keyword Lists, ...
+                if not (((kwg, kw) in self.filteredKeywordList) or ((kwg, kw, False) in self.unfilteredKeywordList)):
+                    # ... add it to both keyword lists.
+                    if not (kwg, kw) in self.filteredKeywordList:
+                        self.filteredKeywordList.append((kwg, kw))
+                    if not (kwg, kw) in self.unfilteredKeywordList:
+                        self.unfilteredKeywordList.append((kwg, kw, True))
+
+                # If the keyword is in query results, it should be removed from the list of keywords to be deleted.
+                # Check that list for either True or False versions of the keyword!
+                if (kwg, kw, True) in delList:
+                    del(delList[delList.index((kwg, kw, True))])
+                if (kwg, kw, False) in delList:
+                    del(delList[delList.index((kwg, kw, False))])
+
         # Iterate through ANY keywords left in the list of keywords to be deleted ...
         for element in delList:
             # ... and delete them from the unfiltered Keyword List
@@ -967,7 +1390,12 @@ class KeywordMap(wx.Frame):
 
         # Now that the underlying data structures have been corrected, we're ready to redraw the Keyword Visualization
         self.DrawGraph()
-        
+
+        # If we are in an embedded keyword visualization, we may need to apply the Default Configuration ...
+        if self.embedded:
+            # Trigger the load of the Default filter, if one exists.  An event of None signals we're loading the
+            # Default config, and the OnFilter method will handle drawing the graph!
+            self.OnFilter(None)
 
     def DrawGraph(self):
         """ Actually Draw the Keyword Map """
@@ -1008,7 +1436,10 @@ class KeywordMap(wx.Frame):
                     prompt = unicode(_('File: %s'), 'utf8')
                 else:
                     prompt = _('File: %s')
-                self.graphic.AddTextRight(prompt % DBInterface.ProcessDBDataForUTF8Encoding(self.MediaFile), self.Bounds[2] - self.Bounds[1], 2)
+                try:
+                    self.graphic.AddTextRight(prompt % DBInterface.ProcessDBDataForUTF8Encoding(self.MediaFile), self.Bounds[2] - self.Bounds[1], 2)
+                except ValueError:
+                    self.graphic.AddTextRight(prompt % self.MediaFile, self.Bounds[2] - self.Bounds[1], 2)
             # If we're doing a Collection Keyword Map, not a Keyword Map ...
             else:
                 if 'unicode' in wx.PlatformInfo:
@@ -1131,6 +1562,7 @@ class KeywordMap(wx.Frame):
 
         colourindex = self.keywordColors['lastColor']
         lastclip = 0
+        lastsnapshot = 0
         # some clip boundary lines for overlapping clips can get over-written, depeding on the nature of the overlaps.
         # Let's create a separate list of these lines, which we'll add to the END of the process so they can't get overwritten.
         overlapLines = []
@@ -1151,35 +1583,85 @@ class KeywordMap(wx.Frame):
         # Iterate through the keyword list in order ...
         for (KWG, KW) in self.filteredKeywordList:
             # ... and assign colors to Keywords
-            if self.keywordColors.has_key((KWG, KW)) and self.colorOutput:
-                colourindex = self.keywordColors[(KWG, KW)]
+            # If we want COLOR output ...
+            if self.colorOutput:
+                # If the color is already defined ...
+                if self.keywordColors.has_key((KWG, KW)):
+                    # ... get the index for the color
+                    colourindex = self.keywordColors[(KWG, KW)]
+                # If the color has NOT been defined ...
+                else:
+                    # Load the keyword
+                    tmpKeyword = KeywordObject.Keyword(KWG, KW)
+                    # If the Default Keyword Color is in the set of defined colors ...
+                    if tmpKeyword.lineColorName in colorSet:
+                        # ... define the color for this keyword
+                        self.keywordColors[(KWG, KW)] = colorSet.index(tmpKeyword.lineColorName)
+                    # If the Default Keyword Color is NOT in the defined colors ...
+                    elif tmpKeyword.lineColorName != '':
+                        # ... add the color name to the colorSet List
+                        colorSet.append(tmpKeyword.lineColorName)
+                        # ... add the color's definition to the colorLookup dictionary
+                        colorLookup[tmpKeyword.lineColorName] = (int(tmpKeyword.lineColorDef[1:3], 16), int(tmpKeyword.lineColorDef[3:5], 16), int(tmpKeyword.lineColorDef[5:7], 16))
+                        # ... determine the new color's index
+                        colourindex = colorSet.index(tmpKeyword.lineColorName)
+                        # ... define the new color for this keyword
+                        self.keywordColors[(KWG, KW)] = colourindex
+                    # If there is no Default Keyword Color defined
+                    else:
+                        # ... get the index for the next color in the color list
+                        colourindex = self.keywordColors['lastColor'] + 1
+                        # If we're at the end of the list ...
+                        if colourindex > len(colorSet) - 1:
+                            # ... reset the list to the beginning
+                            colourindex = 0
+                        # ... remember the color index used
+                        self.keywordColors['lastColor'] = colourindex
+                        # ... define the new color for this keyword
+                        self.keywordColors[(KWG, KW)] = colourindex
+            # If we want Grayscale output ...
             else:
+                # ... get the index for the next color in the color list
                 colourindex = self.keywordColors['lastColor'] + 1
+                # If we're at the end of the list ...
                 if colourindex > len(colorSet) - 1:
+                    # ... reset the list to the beginning
                     colourindex = 0
+                # ... remember the color index used
                 self.keywordColors['lastColor'] = colourindex
+                # ... define the new color for this keyword
                 self.keywordColors[(KWG, KW)] = colourindex
 
             # If we're in the Keyword Visualization and showEmbeddedLabels is enabled ...
             # NOTE:  This is ONLY to be used for testing the mouse-overs, not in production!
             if self.embedded and self.showEmbeddedLabels:
                 self.graphic.AddText("%s : %s" % (KWG, KW), 2, self.CalcY(self.filteredKeywordList.index((KWG, KW))) - 7)
-        for (KWG, KW, Start, Stop, ClipNum, ClipName, CollectNum) in self.clipList:
-            if ((ClipName, CollectNum, True) in self.clipFilterList) and ((KWG, KW) in self.filteredKeywordList):
 
+        # Set a counter for missing colors
+        nextColour = 0
+        # For each record in the Clip List ...
+        for (KWG, KW, Start, Stop, ClipNum, ClipName, CollectNum) in self.clipList:
+            # If the record should be displayed based on the Clip and Keyword sections of the Filter Dialog ...
+            if ((ClipName, CollectNum, True) in self.clipFilterList) and ((KWG, KW) in self.filteredKeywordList):
+                # See if the Clip's start is before the portion of the map being displayed
                 if Start < self.startTime:
                     Start = self.startTime
                 if Start > self.endTime:
                     Start = self.endTime
+                # See if the Clip's end is after the portion of the map being displayed
                 if Stop > self.endTime:
                     Stop = self.endTime
                 if Stop < self.startTime:
                     Stop = self.startTime
-
+                # If there's some Clip to be displayed ...
                 if Start != Stop:
+                    # Determine the line thickness
                     self.graphic.SetThickness(self.barHeight)
+                    # Initialize a list for Temporary Lines
                     tempLine = []
-                    tempLine.append((self.CalcX(Start), self.CalcY(self.filteredKeywordList.index((KWG, KW))), self.CalcX(Stop), self.CalcY(self.filteredKeywordList.index((KWG, KW)))))
+                    # Add the Coding Line
+                    tempLine.append((self.CalcX(Start), self.CalcY(self.filteredKeywordList.index((KWG, KW))),
+                                     self.CalcX(Stop), self.CalcY(self.filteredKeywordList.index((KWG, KW)))))
                     # If we're in the Keyword Map and are NOT using Colors as Keywords (i.e., colors are Clips) ....
                     if (not self.embedded) and (not self.colorAsKeywords):
                         # Update the color index here, at the clip transition
@@ -1188,26 +1670,42 @@ class KeywordMap(wx.Frame):
                                 colourindex = colourindex + 1
                             else:
                                 colourindex = 0
+                    # Otherwise ...
                     else:
+                        # ... use the keyword's defined color
                         colourindex = self.keywordColors[(KWG, KW)]
-                            
-                    self.graphic.SetColour(colorLookup[colorSet[colourindex]])
 
+                    # Make sure the colourindex is valid
+                    if colourindex > len(colorSet) - 1:
+                        # If not, we need to reset the colourindex
+                        colourindex = nextColour
+                        # replace the keywordColors enty, so the keyword is colored consistently!
+                        self.keywordColors[(KWG, KW)] = colourindex
+                        # Increment the next color counter
+                        nextColour += 1
+                        # If nextColour gets too large, reset to 0
+                        if nextColour >= len(colorSet):
+                            nextColour = 0
+
+                    # Set the Color of the line to be drawn
+                    self.graphic.SetColour(colorLookup[colorSet[colourindex]])
+                    # Add this line to the graphic
                     self.graphic.AddLines(tempLine)
 
+                # Note what Clip is being processed at the moment
                 lastclip = ClipNum
 
                 # Now add the Clip to the keywordClipList.  This holds all Keyword/Clip data in memory so it can be searched quickly
                 # This dictionary object uses the keyword pair as the key and holds a list of Clip data for all clips with that keyword.
                 # If the list for a given keyword already exists ...
                 if self.keywordClipList.has_key((KWG, KW)):
-                    # Let's look for overlap
-                    overlapStart = Stop
-                    overlapEnd = Start
                     # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
                     overlapClips = self.keywordClipList[(KWG, KW)]
                     # Iterate through the Clip List ...
-                    for (overlapStartTime, overlapEndTime, overlapClipNum, overlapClipName) in overlapClips:
+                    for (objType, overlapStartTime, overlapEndTime, overlapClipNum, overlapClipName) in overlapClips:
+                        # Let's look for overlap
+                        overlapStart = Stop
+                        overlapEnd = Start
 
                         if DEBUG and KWG == 'Transana Users' and KW == 'DavidW':
                             print "Start = %7d, overStart = %7s, Stop = %7s, overEnd = %7s" % (Start, overlapStartTime, Stop, overlapEndTime)
@@ -1228,43 +1726,153 @@ class KeywordMap(wx.Frame):
                         if (overlapEndTime > Start) and (overlapEndTime <= Stop):
                             overlapEnd = overlapEndTime
                             
-                    # If we've found an overlap, it will be indicated by Start being less than End!
-                    if overlapStart < overlapEnd:
-                        # Draw a multi-colored line to indicate overlap
-                        overlapThickness = int(self.barHeight/ 3) + 1
-                        self.graphic.SetThickness(overlapThickness)
-                        if self.colorOutput:
-                            self.graphic.SetColour("GREEN")
-                        else:
-                            self.graphic.SetColour("WHITE")
-                        tempLine = [(self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW))), self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW))))]
-                        self.graphic.AddLines(tempLine)
-                        if self.colorOutput:
-                            self.graphic.SetColour("RED")
-                        else:
-                            self.graphic.SetColour("BLACK")
-                        tempLine = [(self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-overlapThickness+1, self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-overlapThickness+1)]
-                        self.graphic.AddLines(tempLine)
-                        if self.colorOutput:
-                            self.graphic.SetColour("BLUE")
-                        else:
-                            self.graphic.SetColour("GRAY")
-                        tempLine = [(self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+overlapThickness, self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+overlapThickness)]
-                        self.graphic.AddLines(tempLine)
-                        # Let's remember the clip start and stop boundaries, to be drawn at the end so they won't get over-written
-                        overlapLines.append(((self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-(self.barHeight / 2), self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+(self.barHeight / 2)),))
-                        overlapLines.append(((self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-(self.barHeight / 2), self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+(self.barHeight / 2)),))
+                        # If we've found an overlap, it will be indicated by Start being less than End!
+                        if overlapStart < overlapEnd:
+                            # Draw a multi-colored line to indicate overlap
+                            overlapThickness = int(self.barHeight/ 3) + 1
+                            self.graphic.SetThickness(overlapThickness)
+                            if self.colorOutput:
+                                self.graphic.SetColour("GREEN")
+                            else:
+                                self.graphic.SetColour("WHITE")
+                            tempLine = [(self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW))), self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW))))]
+                            self.graphic.AddLines(tempLine)
+                            if self.colorOutput:
+                                self.graphic.SetColour("RED")
+                            else:
+                                self.graphic.SetColour("BLACK")
+                            tempLine = [(self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-overlapThickness+1, self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-overlapThickness+1)]
+                            self.graphic.AddLines(tempLine)
+                            if self.colorOutput:
+                                self.graphic.SetColour("BLUE")
+                            else:
+                                self.graphic.SetColour("GRAY")
+                            tempLine = [(self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+overlapThickness, self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+overlapThickness)]
+                            self.graphic.AddLines(tempLine)
+                            # Let's remember the clip start and stop boundaries, to be drawn at the end so they won't get over-written
+                            overlapLines.append(((self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-(self.barHeight / 2), self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+(self.barHeight / 2)),))
+                            overlapLines.append(((self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-(self.barHeight / 2), self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+(self.barHeight / 2)),))
 
                     # ... add the new Clip to the Clip List
-                    self.keywordClipList[(KWG, KW)].append((Start, Stop, ClipNum, ClipName))
+                    self.keywordClipList[(KWG, KW)].append(('Clip', Start, Stop, ClipNum, ClipName))
+
                 # If there is no entry for the given keyword ...
                 else:
                     # ... create a List object with the first clip's data for this Keyword Pair key
-                    self.keywordClipList[(KWG, KW)] = [(Start, Stop, ClipNum, ClipName)]
+                    self.keywordClipList[(KWG, KW)] = [('Clip', Start, Stop, ClipNum, ClipName)]
+
+        # For each record in the Snapshot List ...
+        for (KWG, KW, Start, Stop, SnapshotNum, SnapshotName, CollectNum) in self.snapshotList:
+            # If the record should be displayed based on the Snapshot and Keyword sections of the Filter Dialog ...
+            if ((SnapshotName, CollectNum, True) in self.snapshotFilterList) and ((KWG, KW) in self.filteredKeywordList):
+                # See if the Snapshot's start is before the portion of the map being displayed
+                if Start < self.startTime:
+                    Start = self.startTime
+                if Start > self.endTime:
+                    Start = self.endTime
+                # See if the Snapshot's end is after the portion of the map being displayed
+                if Stop > self.endTime:
+                    Stop = self.endTime
+                if Stop < self.startTime:
+                    Stop = self.startTime
+                # If there's some Snapshot to be displayed ...
+                if Start != Stop:
+                    # Determine the line thickness
+                    self.graphic.SetThickness(self.barHeight)
+                    # Initialize a list for Temporary Lines
+                    tempLine = []
+                    # Add the Coding Line
+                    tempLine.append((self.CalcX(Start), self.CalcY(self.filteredKeywordList.index((KWG, KW))),
+                                     self.CalcX(Stop), self.CalcY(self.filteredKeywordList.index((KWG, KW)))))
+                    # If we're in the Keyword Map and are NOT using Colors as Keywords (i.e., colors are Clips) ....
+                    if (not self.embedded) and (not self.colorAsKeywords):
+                        # Update the color index here, at the clip transition
+                        if (SnapshotNum != lastsnapshot) and (lastsnapshot != 0):
+                            if colourindex < len(colorSet) - 1:
+                                colourindex = colourindex + 1
+                            else:
+                                colourindex = 0
+                    # Otherwise ...
+                    else:
+                        # ... use the keyword's defined color
+                        colourindex = self.keywordColors[(KWG, KW)]
+                    # Set the Color of the line to be drawn
+                    self.graphic.SetColour(colorLookup[colorSet[colourindex]])
+                    # Add this line to the graphic
+                    self.graphic.AddLines(tempLine)
+
+                # Note what Snapshot is being processed at the moment
+                lastsnapshot = SnapshotNum
+
+                # Now add the Snapshot to the keywordClipList.  This holds all Keyword/Clip data in memory so it can be searched quickly
+                # This dictionary object uses the keyword pair as the key and holds a list of Clip data for all clips with that keyword.
+                # If the list for a given keyword already exists ...
+                if self.keywordClipList.has_key((KWG, KW)):
+                    # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
+                    overlapClips = self.keywordClipList[(KWG, KW)]
+                    # Iterate through the Clip List ...
+                    for (objType, overlapStartTime, overlapEndTime, overlapClipNum, overlapClipName) in overlapClips:
+                        # Let's look for overlap
+                        overlapStart = Stop
+                        overlapEnd = Start
+
+                        if DEBUG and KWG == 'Transana Users' and KW == 'DavidW':
+                            print "Start = %7d, overStart = %7s, Stop = %7s, overEnd = %7s" % (Start, overlapStartTime, Stop, overlapEndTime)
+
+                        # Look for Start between overlapStartTime and overlapEndTime
+                        if (Start >= overlapStartTime) and (Start < overlapEndTime):
+                            overlapStart = Start
+
+                        # Look for overlapStartTime between Start and Stop
+                        if (overlapStartTime >= Start) and (overlapStartTime < Stop):
+                            overlapStart = overlapStartTime
+
+                        # Look for Stop between overlapStartTime and overlapEndTime
+                        if (Stop > overlapStartTime) and (Stop <= overlapEndTime):
+                            overlapEnd = Stop
+
+                        # Look for overlapEndTime between Start and Stop
+                        if (overlapEndTime > Start) and (overlapEndTime <= Stop):
+                            overlapEnd = overlapEndTime
+
+                        # If we've found an overlap, it will be indicated by Start being less than End!
+                        if overlapStart < overlapEnd:
+                            # Draw a multi-colored line to indicate overlap
+                            overlapThickness = int(self.barHeight/ 3) + 1
+                            self.graphic.SetThickness(overlapThickness)
+                            if self.colorOutput:
+                                self.graphic.SetColour("GREEN")
+                            else:
+                                self.graphic.SetColour("WHITE")
+                            tempLine = [(self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW))), self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW))))]
+                            self.graphic.AddLines(tempLine)
+                            if self.colorOutput:
+                                self.graphic.SetColour("RED")
+                            else:
+                                self.graphic.SetColour("BLACK")
+                            tempLine = [(self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-overlapThickness+1, self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-overlapThickness+1)]
+                            self.graphic.AddLines(tempLine)
+                            if self.colorOutput:
+                                self.graphic.SetColour("BLUE")
+                            else:
+                                self.graphic.SetColour("GRAY")
+                            tempLine = [(self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+overlapThickness, self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+overlapThickness)]
+                            self.graphic.AddLines(tempLine)
+                            # Let's remember the clip start and stop boundaries, to be drawn at the end so they won't get over-written
+                            overlapLines.append(((self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-(self.barHeight / 2), self.CalcX(overlapStart), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+(self.barHeight / 2)),))
+                            overlapLines.append(((self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))-(self.barHeight / 2), self.CalcX(overlapEnd), self.CalcY(self.filteredKeywordList.index((KWG, KW)))+(self.barHeight / 2)),))
+
+                    # ... add the new Clip to the Clip List
+                    self.keywordClipList[(KWG, KW)].append(('Snapshot', Start, Stop, SnapshotNum, SnapshotName))
+
+                # If there is no entry for the given keyword ...
+                else:
+                    # ... create a List object with the first clip's data for this Keyword Pair key
+                    self.keywordClipList[(KWG, KW)] = [('Snapshot', Start, Stop, SnapshotNum, SnapshotName)]
 
         # If we are doing a Keyword Visualization, but there are no Clips in the picture, it can be confusing.
         # Let's place a message on the visualization saying it's intentionally left blank.
-        if self.embedded and (lastclip == 0):
+        if self.embedded and (lastclip == 0) and (lastsnapshot == 0):
             self.graphic.AddText(_("No keywords meet the visualization display criteria."), 5, self.CalcY(0))
                     
         # let's add the overlap boundary lines now
@@ -1280,7 +1888,9 @@ class KeywordMap(wx.Frame):
 
             if not '__WXMAC__' in wx.PlatformInfo:
                 self.menuFile.Enable(M_FILE_SAVEAS, True)
-                self.menuFile.Enable(M_FILE_PRINTPREVIEW, True)
+                # We can't enable Print Preview for Right-To-Left languages
+                if not (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+                    self.menuFile.Enable(M_FILE_PRINTPREVIEW, True)
                 self.menuFile.Enable(M_FILE_PRINT, True)
         else:
             # The DrawGraph routine destroys and recreates self.graphic.  We need to re-point the waveform to it.
@@ -1318,7 +1928,7 @@ class KeywordMap(wx.Frame):
                     # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
                     clips = self.keywordClipList[kw]
                     # Iterate through the Clip List ...
-                    for (startTime, endTime, clipNum, clipName) in clips:
+                    for (objType, startTime, endTime, clipNum, clipName) in clips:
                         # If the current Time value falls between the Clip's StartTime and EndTime ...
                         if (startTime < time) and (endTime > time):
                             # ... calculate the length of the Clip ...
@@ -1351,7 +1961,7 @@ class KeywordMap(wx.Frame):
                     # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
                     clips = self.keywordClipList[kw]
                     # Iterate through the Clip List ...
-                    for (startTime, endTime, clipNum, clipName) in clips:
+                    for (objType, startTime, endTime, clipNum, clipName) in clips:
                         # If the current Time value falls between the Clip's StartTime and EndTime ...
                         if (startTime < time) and (endTime > time):
                             # ... calculate the length of the Clip ...
@@ -1392,7 +2002,7 @@ class KeywordMap(wx.Frame):
             # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
             clips = self.keywordClipList[kw]
             # Iterate through the Clip List ...
-            for (startTime, endTime, clipNum, clipName) in clips:
+            for (objType, startTime, endTime, clipNum, clipName) in clips:
                 # If the current Time value falls between the Clip's StartTime and EndTime ...
                 if (startTime <= time) and (endTime >= time):
                     # Check to see if this is a duplicate Clip
@@ -1410,14 +2020,24 @@ class KeywordMap(wx.Frame):
                                 # ... increment the counter
                                 cnt += 1
                         # Add the clipname and counter to the Clip Names dictionary
-                        clipNames["%s (%d)" % (clipName, cnt)] = clipNum
+                        clipNames["%s (%d)" % (clipName, cnt)] = (objType, clipNum)
                     else:
                         # Add the Clip Name as a Dictionary key pointing to the Clip Number
-                        clipNames[clipName] = clipNum
+                        clipNames[clipName] = (objType, clipNum)
+
         # If only 1 Clip is found ...
         if len(clipNames) == 1:
-            # ... load that clip by looking up the clip's number
-            self.parent.KeywordMapLoadClip(clipNames[clipNames.keys()[0]])
+            # Get the data for the clicked object
+            (objType, objNum) = clipNames[clipNames.keys()[0]]
+            # If the object is a clip ..
+            if objType == 'Clip':
+                # ... load that clip
+                self.parent.KeywordMapLoadClip(objNum)
+            # If the object is a Snapshot ...
+            elif objType == 'Snapshot':
+                # ... load that snapshot
+                self.parent.KeywordMapLoadSnapshot(objNum)
+                
             # If left-click, close the Keyword Map.  If not, don't!
             if event.LeftUp():
                 # Close the Keyword Map
@@ -1429,8 +2049,16 @@ class KeywordMap(wx.Frame):
                                         clipNames.keys(), wx.CHOICEDLG_STYLE)
             # If the user selects a Clip and click OK ...
             if dlg.ShowModal() == wx.ID_OK:
-                # ... load the selected clip
-                self.parent.KeywordMapLoadClip(clipNames[dlg.GetStringSelection()])
+                # Get the data for the clicked object
+                (objType, objNum) = clipNames[dlg.GetStringSelection()]
+                # If the object is a clip ...
+                if objType == 'Clip':
+                    # ... load that clip
+                    self.parent.KeywordMapLoadClip(objNum)
+                # If the object is a Snapshot ...
+                elif objType == 'Snapshot':
+                    # ... load that snapshot
+                    self.parent.KeywordMapLoadSnapshot(objNum)
                 # Destroy the SingleChoiceDialog
                 dlg.Destroy()
                 # If left-click, close the Keyword Map.  If not, don't!

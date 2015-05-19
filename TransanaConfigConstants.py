@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -24,6 +24,8 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 # NOTE:  When you change this value, you MUST change the MySQL for Python installation you are using
 #        to match.
 singleUserVersion = False
+# Define Std vs. Pro feature set
+proVersion = True
 # Indicate if this is the Lab version
 labVersion = False
 # Set this flag to "True" to create the Demonstration version.  (But don't mix this with MU!)

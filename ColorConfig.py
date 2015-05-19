@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -26,6 +26,8 @@ import wx.lib.colourselect
 import Dialogs
 # import the TransanaGlobal variables
 import TransanaGlobal
+# import Python's codecs module to make reading and writing UTF-8 text files 
+import codecs
 # Import Python's os and sys modules
 import os, sys
 
@@ -253,7 +255,6 @@ class ColorConfig(wx.Dialog):
         # Position the form in the center of the screen
         self.CentreOnScreen()
 
-
     def PopulateList(self):
         """ Populate the Color List control """
         # Clear the color list
@@ -424,6 +425,9 @@ class ColorConfig(wx.Dialog):
 
     def OnHexKillFocus(self, event):
         """ Handle leaving the Hex Value field """
+        # Don't forget to call this, or things don't work right!
+        event.Skip()
+        
         # Assume we'll be successful
         success = True
         # Start exception handling
@@ -470,6 +474,9 @@ class ColorConfig(wx.Dialog):
 
     def OnRGBKillFocus(self, event):
         """ Handle leaving the Red, Green, or Blue Value fields """
+        # Don't forget to call this, or things don't work right!
+        event.Skip()
+
         if event.GetId() == self.txtColorRed.GetId():
             ctrl = self.txtColorRed
         elif event.GetId() == self.txtColorGreen.GetId():
@@ -617,7 +624,7 @@ class ColorConfig(wx.Dialog):
                     # ... then prepend the HOME folder
                     fs = os.getenv("HOME") + os.sep + fs
             # Save the Color Defs file.  First, open the file for writing.
-            f = file(fs, 'w')
+            f = codecs.open(fs, "w", 'utf8')  # file(fs, 'w')
             # Write the header text to the file
             f.write('# Transana Color Definitions file\n\n')
             f.write('# RULES for this file:\n')
@@ -625,7 +632,8 @@ class ColorConfig(wx.Dialog):
             f.write('# "#" in first column makes a line into a comment, to be ignored entirely\n')
             f.write('#\n')
             f.write("# The first column is the color name.  Names don't matter, except that they MUST be unique.  If you duplicate a name,\n")
-            f.write('# the color value of the first instance of that name will be used in all positions for that name.\n')
+            f.write('# the color value of the first instance of that name will be used in all positions for that name.  Color names are\n')
+            f.write('# encoded using UTF-8 encoding if needed.')
             f.write('#\n')
             f.write('# The second column is the RED value.  It must be between 0 and 255.\n')
             f.write('#\n')
@@ -634,7 +642,7 @@ class ColorConfig(wx.Dialog):
             f.write('# The fourth column is the BLUE value.  It must be between 0 and 255.\n')
             f.write('#\n')
             f.write('# The LAST ROW in this table must be "White, 255, 255, 255".  Don' + "'t mess with this.  It gets dropped in some places, \n")
-            f.write('# and added back in in some to be the "Don' + "'t include this keyword" + '" value.\n');
+            f.write('# and added back in some to be the "Don' + "'t include this keyword" + '" value.\n');
             f.write('\n')
 
             # Initialize the local internal color list
@@ -786,8 +794,15 @@ class ColorConfig(wx.Dialog):
         # Add the bitmap to the imagelist, capturing its index in the image index
         self.imageIndex.insert(self.currentItem, self.imageList.Add(bmp))
 
-        # Create a new item in the desired new position in the list and populate it with values from the form
-        index = self.colorList.InsertImageStringItem(self.currentItem, self.txtColorName.GetValue(), self.imageIndex[self.currentItem])
+        # We need to have something selected in the list.  See if we need to change the currentItem index.
+        if self.currentItem >= self.colorList.GetItemCount():
+            self.currentItem = self.colorList.GetItemCount() - 1
+
+        try:
+            # Create a new item in the desired new position in the list and populate it with values from the form
+            index = self.colorList.InsertImageStringItem(self.currentItem, self.txtColorName.GetValue(), self.imageIndex[self.currentItem])
+        except IndexError:
+            index = 0
         self.colorList.SetStringItem(index, 1, self.txtColorHex.GetValue())
         self.colorList.SetStringItem(index, 2, self.txtColorRed.GetValue())
         self.colorList.SetStringItem(index, 3, self.txtColorGreen.GetValue())

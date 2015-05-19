@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -29,6 +29,8 @@ import Misc
 import PyXML_RTCImportParser
 import TransanaConstants
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 
 import wx
 import os
@@ -109,7 +111,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
             # ... display a ListCtrl for the Merge Clips ...
             self.mergeClips = wx.ListCtrl(self.panel, -1, size=(300, 100), style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
             # Add the element to the sizer
-            mergeSizer.Add(self.mergeClips, 1)
+            mergeSizer.Add(self.mergeClips, 1, wx.EXPAND)
             # ... bind the Item Selected event for the List Control ...
             self.mergeClips.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnItemSelected)
 
@@ -128,7 +130,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
                 self.mergeClips.SetStringItem(index, 3, Misc.time_in_ms_to_str(ClipStop))
 
             # Add the row sizer to the main vertical sizer
-            mainSizer.Add(mergeSizer, 0, wx.EXPAND)
+            mainSizer.Add(mergeSizer, 3, wx.EXPAND)
 
             # Add a vertical spacer to the main sizer        
             mainSizer.Add((0, 10))
@@ -215,7 +217,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
         self.fname_lb.SetDropTarget(ListBoxFileDropTarget(self.fname_lb))
 
         # Add the row sizer to the main vertical sizer
-        mainSizer.Add(r3Sizer, 2, wx.EXPAND)
+        mainSizer.Add(r3Sizer, 3, wx.EXPAND)
 
         # Add a vertical spacer to the main sizer        
         mainSizer.Add((0, 10))
@@ -329,7 +331,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
             counter += 1
 
         # Add the row sizer to the main vertical sizer
-        mainSizer.Add(r6Sizer, 4, wx.EXPAND)
+        mainSizer.Add(r6Sizer, 6, wx.EXPAND)
 
         # Add a vertical spacer to the main sizer        
         mainSizer.Add((0, 10))
@@ -389,11 +391,10 @@ class ClipPropertiesForm(Dialogs.GenForm):
         v11.Add(rm_kw, 0, wx.EXPAND | wx.TOP, 10)
         wx.EVT_BUTTON(self, wx.ID_FILE3, self.OnRemoveKW)
 
-        bitmap = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KWManage.xpm"), wx.BITMAP_TYPE_XPM)
-        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, bitmap)
+        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, TransanaImages.KWManage.GetBitmap())
         v11.Add(kwm, 0, wx.EXPAND | wx.TOP, 10)
         # Add a spacer to increase the height of the Keywords section
-        v11.Add((0, 60))
+##        v11.Add((0, 60))
         kwm.SetToolTipString(_("Keyword Management"))
         wx.EVT_BUTTON(self, wx.ID_FILE4, self.OnKWManage)
 
@@ -421,7 +422,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
         r7Sizer.Add(v12, 2, wx.EXPAND)
 
         # Add the row sizer to the main vertical sizer
-        mainSizer.Add(r7Sizer, 5, wx.EXPAND)
+        mainSizer.Add(r7Sizer, 8, wx.EXPAND)
 
         # Add a vertical spacer to the main sizer        
         mainSizer.Add((0, 10))
@@ -455,12 +456,24 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Get the new size of the form
         (width, height) = self.GetSizeTuple()
+        # Determine which monitor to use and get its size and position
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            primaryScreen = TransanaGlobal.configData.primaryScreen
+        else:
+            primaryScreen = 0
+        rect = wx.Display(primaryScreen).GetClientArea()
+
         # Reset the form's size to be at least the specified minimum width
-        self.SetSize(wx.Size(max(minWidth, width), max(minHeight, height)))
+        self.SetSize(wx.Size(max(minWidth, width), min(max(minHeight, height), rect[3])))
         # Define the minimum size for this dialog as the current size
-        self.SetSizeHints(max(minWidth, width), max(minHeight, height))
+        self.SetSizeHints(max(minWidth, width), min(max(minHeight, height), rect[3]))
         # Center the form on screen
         self.CenterOnScreen()
+
+        # We need to set some minimum sizes so the sizers will work right
+        self.kw_group_lb.SetSizeHints(minW = 50, minH = 20)
+        self.kw_lb.SetSizeHints(minW = 50, minH = 20)
+        self.ekw_lb.SetSizeHints(minW = 50, minH = 20)
 
         # We populate the Keyword Groups, Keywords, and Clip Keywords lists AFTER we determine the Form Size.
         # Long Keywords in the list were making the form too big!
@@ -565,6 +578,26 @@ class ClipPropertiesForm(Dialogs.GenForm):
             self.kw_lb.Clear()
             self.kw_lb.InsertItems(self.kw_list, 0)
         
+    def highlight_bad_keyword(self):
+        """ Highlight the first bad keyword in the keyword list """
+        # Get the Keyword Group name
+        sel = self.kw_group_lb.GetStringSelection()
+        # If there was a selected Keyword Group ...
+        if sel:
+            # ... initialize a list of keywords
+            kwlist = []
+            # Iterate through the current keyword group's keywords ...
+            for item in range(self.kw_lb.GetCount()):
+                # ... and add them to the list of keywords 
+                kwlist.append("%s : %s" % (sel, self.kw_lb.GetString(item)))
+            # Now iterate through the list of Episode Keywords
+            for item in range(self.ekw_lb.GetCount()):
+                # If the keyword is from the current Keyword Group AND the keyword is not in the keyword list ...
+                if (self.ekw_lb.GetString(item)[:len(sel)] == sel) and (not self.ekw_lb.GetString(item) in kwlist):
+                    # ... select the current item in the Episode Keywords control ...
+                    self.ekw_lb.SetSelection(item)
+                    # ... and stop looking for bad keywords.  (We just highlight the first!)
+                    break
 
     def OnAddKW(self, evt):
         """Invoked when the user activates the Add Keyword (>>) button."""
@@ -713,6 +746,11 @@ class ClipPropertiesForm(Dialogs.GenForm):
                 self.transcript_clip_stop.append(self.obj.transcripts[x].clip_stop)
                 # If we're using the Rich Text Ctrl ...
                 if TransanaConstants.USESRTC:
+
+##                    print "ClipPropertiesForm.OnItemSelected(1):", x
+##                    print self.text_edit[x].GetFormattedSelection('XML')
+##                    print
+                    
                     # ... clear the transcript ...
                     self.text_edit[x].ClearDoc(skipUnlock = True)
                     # ... turn off read-only ...
@@ -779,6 +817,11 @@ class ClipPropertiesForm(Dialogs.GenForm):
                 self.transcript_clip_stop.append(mergeClip.transcripts[x].clip_stop)
                 # If we're using the Rich Text Ctrl ...
                 if TransanaConstants.USESRTC:
+
+##                    print "ClipPropertiesForm.OnItemSelected(2):", x
+##                    print self.text_edit[x].GetFormattedSelection('XML')
+##                    print
+                    
                     # ... clear the transcript ...
                     self.text_edit[x].ClearDoc(skipUnlock = True)
                     # ... turn off read-only ...

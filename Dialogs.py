@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -26,6 +26,8 @@ import copy
 import string
 import DBInterface
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 
 class ErrorDialog(wx.Dialog):
     """Error message dialog to the user."""
@@ -314,7 +316,7 @@ class QuestionDialog(wx.MessageDialog):
         # If we have a valid form ...
         else:
             # ... close the form
-            self.Close()
+            self.EndModal(self.result)
 
     def LocalShowModal(self):
         """ ShowModal wasn't working right.  This allows some modification. """
@@ -350,7 +352,8 @@ class PopupDialog(wx.Dialog):
         self.SetSizer(box)
         self.Fit()
         self.Layout()
-        self.CentreOnScreen()
+#        self.CentreOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
         # Display the Dialog
         self.Show()
         # Make sure the screen gets fully drawn before continuing.  (Needed for SAVE)
@@ -491,8 +494,16 @@ class GenForm(wx.Dialog):
         # Return the choice control
         return choice
  
-    def new_combo_box(self, label, layout, choices, default='', style=wx.CB_DROPDOWN | wx.CB_SORT):
+    def new_combo_box(self, label, layout, choices, default='', style=None):
         """Create a combo box with label above it."""
+        if style == None:
+            # As of wxPython 2.9.5.0, Mac doesn't support wx.CB_SORT and gives an ugly message about it!
+            if 'wxMac' in wx.PlatformInfo:
+                style = wx.CB_DROPDOWN
+                choices.sort()
+            else:
+                style = wx.CB_DROPDOWN | wx.CB_SORT
+
         txt = wx.StaticText(self.panel, -1, label)
 
         # If we're using LayoutContraints ...
@@ -541,7 +552,7 @@ class GenForm(wx.Dialog):
         # If the Propagation feature is enabled ...
         if self.propagateEnabled:
             # ... load the propagate button graphic
-            propagateBMP = wx.Bitmap(os.path.join("images", "Propagate.xpm"), wx.BITMAP_TYPE_XPM)
+            propagateBMP = TransanaImages.Propagate.GetBitmap()
             # Create a bitmap button for propagation
             self.propagate = wx.BitmapButton(self.panel, -1, propagateBMP)
             # Set the tool tip for the graphic button

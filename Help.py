@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -37,7 +37,7 @@ class Help(object):
     # Show the Manual's Welcome page if no context is supplied
     def __init__(self, HelpContext='Welcome'):
         self.help = wx.html.HtmlHelpController()
-        
+
         # This has emerged as the "preferred" method on the wxPython-users list.
         programDir = os.path.abspath(sys.path[0])
         # Okay, that doesn't work with wxversion, which adds to the path.  Here's the fix, I hope.
@@ -48,6 +48,18 @@ class Help(object):
                 break
         if os.path.isfile(programDir):
             programDir = os.path.dirname(programDir)
+
+        # If we've done a build on the Mac, we need to adjust the path!!
+        if hasattr(sys, "frozen") and ('wxMac' in wx.PlatformInfo):
+            # Split the path into it's element directories
+            pathElements = programDir.split(os.sep)
+            # Initialize the Program Directory
+            programDir = ''
+            # Iterate through the path elements, skipping the blank firt one and the last two, which get added in the
+            # build process
+            for element in pathElements[1:-2]:
+                # Add a path separator and the path element
+                programDir += os.sep + element
 
         if DEBUG:
             msg = "Help.__init__():  programDir = %s" % programDir
@@ -105,16 +117,23 @@ class Help(object):
         # Now that we have access to the Frame (because this is in a CallAfter situation),
         # we can change the size of the Help Window.  Yea!
         if parent != None:
+
+            # Load the Config Data.  wxConfig automatically uses the Registry on Windows and the appropriate file on Mac.
+            # Program Name is Transana, Vendor Name is Verception to remain compatible with Transana 1.0.
+            config = wx.Config('Transana', 'Verception')
+            # Load the Primary Screen setting
+            primaryScreen = config.ReadInt('/2.0/PrimaryScreen', 0)
+
             # Get the size of the screen
-            rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
-            # Set the top to 10% of the screen height
-            top = int(0.1 * rect[3])
+            rect = wx.Display(primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
+            # Set the top to 10% of the screen height (rect[1] is for secondary monitors)
+            top = int(0.1 * rect[3]) + rect[1]
             # Set the height so that the top and bottom will have equal boundaries
             height = rect[3] - (2 * top)
             # Set the window width to 80% of the screen or 1000 pixels, whichever is smaller
             width = min(int(rect[2] * 0.8), 1000)
-            # Set the left margin so that the window is centered
-            left = int(rect[2] / 2) - int(width / 2)
+            # Set the left margin so that the window is centered  (rect[0] is for secondary monitors)
+            left = int(rect[2] / 2) - int(width / 2) + rect[0]
             # Position the window based on the calculated position
             parent.SetPosition(wx.Point(left, top))
             # Size the window based on the calculated size

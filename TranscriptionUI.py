@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -368,8 +368,13 @@ class _TranscriptDialog(wx.Dialog):
             (left, top) = self.GetPositionTuple()
             # Get the size of the Transcript window
             (width, height) = self.GetSize()
+
+            if DEBUG:
+                print
+                print 'Call 7', 'Transcript', width + left, top - 1
+            
             # Call the ControlObject's routine for adjusting all windows
-            self.ControlObject.UpdateWindowPositions('Transcript', width + left, YUpper = top - 4)
+            self.ControlObject.UpdateWindowPositions('Transcript', width + left, YUpper = top - 1)
         # Call the Transcript Window's Layout.
         self.Layout()
         # We may need to scroll to keep the current selection in the visible part of the window.
@@ -441,14 +446,14 @@ class _TranscriptDialog(wx.Dialog):
 
     def __size(self):
         """Determine the default size for the Transcript frame."""
-        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        rect = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
         width = rect[2] * .715
         height = (rect[3] - TransanaGlobal.menuHeight) * .74
         return wx.Size(width, height)
 
     def __pos(self):
         """Determine default position of Transcript Frame."""
-        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        rect = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
         (width, height) = self.__size()
         # rect[0] compensates if Start menu is on Left
         x = rect[0]

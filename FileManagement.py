@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -285,9 +285,9 @@ class FileManagement(wx.Dialog):
         if __name__ != '__main__':
             # Set the initial directory
             self.dirLeft.SetPath(TransanaGlobal.configData.videoPath)
-        else:
-            if os.path.exists('E:\\Video'):
-                self.dirLeft.SetPath('E:\\Video')
+#        else:
+#            if os.path.exists('E:\\Video'):
+#                self.dirLeft.SetPath('E:\\Video')
 
         # Source SRB / sFTP Server Collections listing
         self.remoteDirLeft = wx.TreeCtrl(self, -1, style=wx.TR_HAS_BUTTONS | wx.TR_SINGLE | wx.BORDER_DOUBLE)
@@ -334,9 +334,14 @@ class FileManagement(wx.Dialog):
         # Buttons in the middle
         buttonSizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Get the BitMaps for the left and right arrow buttons
-        bmpLeft = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
-        bmpRight = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_LeftToRight:
+            # Get the BitMaps for the left and right arrow buttons
+            bmpLeft = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
+            bmpRight = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
+        else:
+            # Get the BitMaps for the left and right arrow buttons
+            bmpLeft = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
+            bmpRight = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
 
         # Top Spacer
         buttonSizer.Add((1,1), 1)
@@ -539,9 +544,9 @@ class FileManagement(wx.Dialog):
         if __name__ != '__main__':
             # ... set the initial directory to the video path
             self.dirRight.SetPath(TransanaGlobal.configData.videoPath)
-        else:
-            if os.path.exists('E:\\Video'):
-                self.dirRight.SetPath('E:\\Video')
+#        else:
+#            if os.path.exists('E:\\Video'):
+#                self.dirRight.SetPath('E:\\Video')
 
         # Destination SRB / sFTP Server Collections listing
         self.remoteDirRight = wx.TreeCtrl(self, -1, style=wx.TR_HAS_BUTTONS | wx.TR_SINGLE | wx.BORDER_DOUBLE)
@@ -1446,7 +1451,6 @@ class FileManagement(wx.Dialog):
             self.SetStatusText(prompt % (sourceFile, destDir))
             # Check if the destination file already exists.  If NOT ...
             if not os.path.exists(os.path.join(destDir, fileName)):
-                
                 if os.stat(sourceFile)[6] < 5000000:
                     # copy the file to the destination path
                     shutil.copyfile(sourceFile, os.path.join(destDir, fileName))
@@ -1463,6 +1467,7 @@ class FileManagement(wx.Dialog):
                 # Display the error message
                 dlg = Dialogs.ErrorDialog(self, errMsg % (sourceFile, os.path.join(destDir, fileName)))
                 dlg.Show()  # NOT Modal, and no Destroy prevents interruption
+
             # Update the status to indicate the copy is done
             self.SetStatusText(_('Copy complete.'))
             return success
@@ -3621,12 +3626,12 @@ class FileManagement(wx.Dialog):
                 if (selection == prompt) | (srch.count(string.lower(os.path.splitext(item)[1])) > 0):
                     itemList.append(item)            
             else:
-                #If it is not a directory
-                if os.path.isfile(os.path.join(path, item)): 
+                #If it is not a directory, and not a "hidden" file (one that starts with '.')
+                if os.path.isfile(os.path.join(path, item)) and (len(item) > 0) and (item[0] != '.'): 
                     # And if either *.* is selected or item's extension is present in the list srch
                     if (selection == prompt) | (srch.count(string.lower(os.path.splitext(item)[1])) > 0):
                         itemList.append(item)
-       
+
         return itemList
 
     def srbErrorMessage(self, errorCode):

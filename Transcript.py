@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -402,6 +402,16 @@ class Transcript(DataObject.DataObject):
                         prompt = unicode(prompt, 'utf8')
                     # ... and use a DeleteError Exception to interupt the deletion.
                     raise DeleteError(prompt % self.id)
+
+
+
+            # We need a user confirmation when Snapshot will be orphaned.
+
+
+
+            # Determine if any Snapshots are linked to THIS Transcript
+            # snapshots = DBInterface.list_of_snapshots_by_transcriptnum(self.number)
+            
             
             # Detect, Load, and Delete all Transcript Notes.
             notes = self.get_note_nums()
@@ -412,7 +422,8 @@ class Transcript(DataObject.DataObject):
             del notes
 
             # Episode Transcripts with this transcript's number need to be cleared from Clip Transcripts
-            # SourceTranscriptNumber records.  This must be done LAST, after everything else.
+            # SourceTranscriptNumber records.  Snapshots with this Transcript's number  need to be cleared
+            # too.  This must be done LAST, after everything else.
             if result and (self.clip_num == 0):
                 DBInterface.ClearSourceTranscriptRecords(self.number)
 
@@ -636,7 +647,7 @@ class Transcript(DataObject.DataObject):
 
                     # check to see if we're working with RTF
                     try:
-                        if temp == u'rtf':
+                        if temp.encode('utf8') == u'rtf':
                             # convert the data to unicode just to be safe.
                             self.text = unicode(self.text, 'utf-8')
                     

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -83,7 +83,10 @@ class Episode(DataObject.DataObject):
         str += "Total adjusted Episode Length = %d (%s)\n" % (self.episode_length(), Misc.time_in_ms_to_str(self.episode_length()))
         str = str + "Date = %s\n" % self.tape_date
         str = str + "Series ID = %s\n" % self.series_id
-        str = str + "Series Num = %s\n\n" % self.series_num
+        str = str + "Series Num = %s\n" % self.series_num
+        str += "Keywords:\n"
+        for kw in self._kwlist:
+            str += '  ' + kw.keywordPair + '\n'
         return str.encode('utf8')
 
 
@@ -277,9 +280,13 @@ class Episode(DataObject.DataObject):
             values = values + (self.number,)
 
         c = DBInterface.get_db().cursor()
+
+        c.execute('BEGIN')
+        
         c.execute(query, values)
 
         if self.number == 0:
+            numberChanged = True
             # If we are dealing with a brand new Episode, it does not yet know its
             # record number.  It HAS a record number, but it is not known yet.
             # The following query should produce the correct record number.
@@ -293,12 +300,14 @@ class Episode(DataObject.DataObject):
             if tempDBCursor.rowcount == 1:
                 self.number = tempDBCursor.fetchone()[0]
             else:
+                c.execute('ROLLBACK')
                 raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
             tempDBCursor.close()
         else:
+            numberChanged = False
             # If we are dealing with an existing Episode, delete all the Keywords
             # in anticipation of putting them all back later
-            DBInterface.delete_all_keywords_for_a_group(self.number, 0)
+            DBInterface.delete_all_keywords_for_a_group(self.number, 0, 0)
 
         # To save the additional video file names, we must first delete them from the database!
         # Craft a query to remove all existing Additonal Videos
@@ -321,12 +330,41 @@ class Episode(DataObject.DataObject):
             # Execute the query
             c.execute(query, data)
 
-        # Add the Episode keywords back
+        # Initialize a blank error prompt
+        prompt = ''
+        # Add the Episode keywords back.  Iterate through the Keyword List
         for kws in self._kwlist:
-            DBInterface.insert_clip_keyword(self.number, 0, kws.keywordGroup, kws.keyword, kws.example)
+            # Try to add the Clip Keyword record.  If it is NOT added, the keyword has been changed by another user!
+            if not DBInterface.insert_clip_keyword(self.number, 0, 0, kws.keywordGroup, kws.keyword, kws.example):
+                # if the prompt isn't blank ...
+                if prompt != '':
+                    # ... add a couple of line breaks to it
+                    prompt += u'\n\n'
+                # Add the current keyword to the error prompt
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt += unicode(_('Keyword "%s : %s" cannot be added to Episode "%s".\nAnother user must have edited the keyword while you were adding it.'), 'utf8') % (kws.keywordGroup, kws.keyword, self.id)
 
-        c.close()
-            
+        # If there is an error prompt ...
+        if prompt != '':
+            # If the Episode Number was changed ...
+            if numberChanged:
+                # ... change it back to zero!!
+                self.number = 0
+            # Undo the database save transaction
+            c.execute('ROLLBACK')
+            # Close the Database Cursor
+            c.close()
+            # Complete the error prompt
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt += u'\n\n' + unicode(_('Please remove, and possibly replace, this keyword.'), 'utf8')
+            # ... raise a SaveError exception using the error prompt
+            raise SaveError, prompt
+        # If there's no error prompt ...
+        else:
+            # ... Commit the database transaction
+            c.execute('COMMIT')
+            # Close the Database Cursor
+            c.close()
             
     def db_delete(self, use_transactions=1):
         """Delete this object record from the database."""
@@ -364,13 +402,24 @@ class Episode(DataObject.DataObject):
 
             # Delete all related references in the ClipKeywords table
             if result:
-                DBInterface.delete_all_keywords_for_a_group(self.number, 0)
+                DBInterface.delete_all_keywords_for_a_group(self.number, 0, 0)
 
             if result:
                 # Craft a query to remove all existing Additonal Videos
                 query = "DELETE FROM AdditionalVids2 WHERE EpisodeNum = %d" % self.number
                 # Execute the query
                 c.execute(query)
+
+
+
+            # We need a user confirmation when Snapshot will be orphaned.
+
+
+
+            # Snapshots with this Episode number need to be cleared.
+            # This must be done LAST, after everything else.
+            if result:
+                DBInterface.ClearSourceEpisodeRecords(self.number)
 
             # Delete the actual record.
             self._db_do_delete(use_transactions, c, result)

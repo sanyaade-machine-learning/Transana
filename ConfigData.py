@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -70,12 +70,16 @@ class ConfigData(object):
         str = str + 'Visualization style = %s\n' % self.visualizationStyle
         str = str + 'messageServer = %s\n' % self.messageServer
         str = str + 'messageServerPort = %s\n' % self.messageServerPort
+        str = str + 'ssl = %s\n' % self.ssl
+        str = str + 'sslClientCert = %s\n' % self.sslClientCert
+        str = str + 'sslClientKey = %s\n' % self.sslClientKey
         str = str + 'language = %s\n\n' % self.language
         str = str + 'databaseList = %s\n\n' % self.databaseList
         str += 'pathsByDB = %s\n' % self.pathsByDB
         str += 'tabSize = %s\n' % self.tabSize
         str += 'wordWrap = %s\n' % self.wordWrap
         str += 'autoSave = %s\n' % self.autoSave
+        str += 'maxTranscriptImageWidth = %s\n' % self.maxTranscriptImageWidth
         str = str + 'defaultFontFace = %s\n' % self.defaultFontFace
         str = str + 'defaultFontSize = %s\n' % self.defaultFontSize
         str = str + 'specialFontFace = %s\n' % self.specialFontFace
@@ -188,6 +192,12 @@ class ConfigData(object):
             self.messageServer = config.Read('/2.0/MessageHost', '')
             # Load Message Server Port Setting
             self.messageServerPort = config.ReadInt('/2.0/MessagePort', 17595)
+            # Load SSL Setting
+            self.ssl = config.ReadInt('/2.0/SSL', 0)
+            # Load SSL Client Certificate File Setting
+            self.sslClientCert = config.Read('/2.0/SSLClientCert', '')
+            # Load SSL Client Key File Setting
+            self.sslClientKey = config.Read('/2.0/SSLClientKey', '')
             # Load Language Setting
             self.language = config.Read('/2.0/Language', '')
             # Load the Tab Size Setting
@@ -196,6 +206,8 @@ class ConfigData(object):
             self.wordWrap = config.ReadInt('/2.0/WordWrap', stc.STC_WRAP_WORD)
             # Load the Auto Save setting
             self.autoSave = config.ReadInt('2.0/AutoSave', True)
+            # Load Max Transcript Image Width
+            self.maxTranscriptImageWidth = config.ReadInt('2.0/MaxTranscriptImageWidth', 1)
             # Load Default Font Face Setting
             self.defaultFontFace = config.Read('/2.0/FontFace', self.defaultFontFace)
             # Load Default Font Size Setting
@@ -261,6 +273,12 @@ class ConfigData(object):
                 self.messageServer = ''
                 # Set Default Message Server Port
                 self.messageServerPort = 17595
+                # Set SSL Setting
+                self.ssl = 0
+                # Set SSL Client Certificate File Setting
+                self.sslClientCert = ''
+                # Set SSL Client Key File Setting
+                self.sslClientKey = ''
 
             # Default Database Host
             self.host = defaultHost
@@ -283,6 +301,8 @@ class ConfigData(object):
             self.wordWrap = stc.STC_WRAP_WORD
             # Auto Save
             self.autoSave = True
+            # Max Transcript Image Width
+            self.maxTranscriptImageWidth = 1
             # Language setting
             self.language = ''
             # Format Units
@@ -333,6 +353,12 @@ class ConfigData(object):
         self.colorConfigFilename = config.Read('/2.0/ColorConfigFilename', '')
         # Load the Quick Clips Warning setting
         self.quickClipWarning = config.ReadInt('/2.0/QuickClipWarning', True)
+        # Load the Primary Screen setting
+        self.primaryScreen = config.ReadInt('/2.0/PrimaryScreen', 0)
+        # Check for screen set to higher than current number of monitors
+        if self.primaryScreen >= wx.Display.GetCount():
+            # If so, set to main screen (0)
+            self.primaryScreen = 0
 
         # Load the databaseList, if it exists
         # NOTE:  if using Unicode, this MUST be a String object!
@@ -449,6 +475,12 @@ class ConfigData(object):
         config.Write('/2.0/MessageHost', self.messageServer)
         # Save the Message Server Port
         config.WriteInt('/2.0/MessagePort', self.messageServerPort)
+        # Save the SSL Setting
+        config.WriteInt('/2.0/SSL', self.ssl)
+        # Save the SSL Client Certificate File
+        config.Write('/2.0/SSLClientCert', self.sslClientCert)
+        # Save the SSL Client Certificate Key
+        config.Write('/2.0/SSLClientKey', self.sslClientKey)
         # Save the Language setting
         config.Write('/2.0/Language', self.language)
         # NOTE:  Video Speed, Auto-Arrange, and Waveform Quickload are NOT saved to the config file.
@@ -482,6 +514,8 @@ class ConfigData(object):
         config.WriteInt('/2.0/WordWrap', self.wordWrap)
         # Save the AutoSave Setting
         config.WriteInt('/2.0/AutoSave', self.autoSave)
+        # Save the Max Transcript Image Width Setting
+        config.WriteInt('/2.0/MaxTranscriptImageWidth', self.maxTranscriptImageWidth)
         # Save Default Font Face Setting
         config.Write('/2.0/FontFace', self.defaultFontFace)
         # Save Default Font Size Setting
@@ -528,7 +562,10 @@ class ConfigData(object):
         if 'wxMSW' in wx.PlatformInfo:
             # ... save the Media Player selection
             config.WriteInt('/2.0/MediaPlayer', self.mediaPlayer)
-
+        # if the current primary display is valid ...
+        if self.primaryScreen < wx.Display.GetCount():
+            # ... save the Primary Screen setting
+            config.WriteInt('/2.0/PrimaryScreen', self.primaryScreen)
 
     def GetDefaultProfilePath(self):
         """ Query the operating system and get the default path for user data. """

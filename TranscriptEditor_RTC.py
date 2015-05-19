@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -30,10 +30,10 @@ if SHOWHIDDEN:
 import wx
 # Import the Rich Text Control
 from RichTextEditCtrl_RTC import RichTextEditCtrl
-# If we're on Windows ...
-if 'wxMSW' in wx.PlatformInfo:
-    # import the GDI Report class from RichTextEditCtrl_RTC
-    from RichTextEditCtrl_RTC import GDIReport
+### If we're on Windows ...
+##if 'wxMSW' in wx.PlatformInfo:
+##    # import the GDI Report class from RichTextEditCtrl_RTC
+##    from RichTextEditCtrl_RTC import GDIReport
 # import wxPython's RichTextCtrl
 import wx.richtext as richtext
 # Import the Format Dialog
@@ -123,10 +123,6 @@ class TranscriptEditor(RichTextEditCtrl):
         # Define the Time Event
         self.autoSaveTimer.Bind(wx.EVT_TIMER, self.OnAutoSave)
 
-        # Initialize Mac Formatting Counter  (Tracks formatting changes to prevent wxPython 2.8.12.1 CRASH!)
-        if 'wxMac' in wx.PlatformInfo:
-            self.macFormatCounter = 0
-
         # We should start out in Read Only mode so that we get Word Tracking
         self.set_read_only(True)
 
@@ -147,7 +143,7 @@ class TranscriptEditor(RichTextEditCtrl):
         # EVT_CHAR is used to detect normal typing.  Characters are case sensitive here.
 #        wx.EVT_CHAR(self, self.OnKey)
         # We need to catch EVT_KEY_UP as well
-#        wx.EVT_KEY_UP(self, self.OnKeyUp)
+        wx.EVT_KEY_UP(self, self.OnKeyUp)
         # EVT_LEFT_DOWN is used to detect the left mouse button going down.  Needed (with Left_Up) for unselecting selections.
 #        wx.EVT_LEFT_DOWN(self, self.OnLeftDown)
         # EVT_LEFT_UP is used to detect the left click positioning in the Transcript.
@@ -215,7 +211,7 @@ class TranscriptEditor(RichTextEditCtrl):
                 text = transcript.text[4:]
             else:
                 text = transcript.text
-            
+
             # Let's scan the file for characters we need to handle.  Start at the beginning of the file.
             # NOTE:  This is a very preliminary implementation.  It only deals with English, and only with ASCII or UTF-8
             #        encoding of time codes (chr(164) or chr(194) + chr(164)).
@@ -485,9 +481,6 @@ class TranscriptEditor(RichTextEditCtrl):
 	self.DiscardEdits()
         # Destroy the Save Popup Dialog
         self.saveDlg.Destroy()
-        # Reset Mac Formatting Counter  (Tracks formatting changes to prevent wxPython 2.8.12.1 CRASH!)
-        # NOTE:  Reset to 5000 rather than 0 because otherwise, we'll get a crash.  Later rounds have stricter limits!
-        self.macFormatCounter = 5000
 
     def export_transcript(self, fname):
         """Export the transcript to an RTF file."""
@@ -669,6 +662,10 @@ class TranscriptEditor(RichTextEditCtrl):
             if self.scroll_to_time(tc - 2):
                 # Note the Cursor's Current Position
                 curpos = self.GetCurrentPos() + 1
+
+                # The time code in position 0 of the document doesn't get hidden correctly!  This adjusts for that!
+                if curpos < 1:
+                    curpos = 1
 
                 # Get the range for the Time Code character itself.  It starts the character BEFORE the insertion point.
                 r = richtext.RichTextRange(curpos - 1, curpos)
@@ -871,7 +868,12 @@ class TranscriptEditor(RichTextEditCtrl):
         else:
             # ... not the current insertion point
             ip = self.GetInsertionPoint()
-
+        # Search doesn't work right on transcripts after the first one without this code.
+        # If there is no defined Insertion Point ...
+        if ip < 0:
+            # ... select the start of the document
+            ip = 0
+            
         # RTC doesn't provide a FIND function.  We'll use Python's string find because it's FAST.
         #
         # But once Images are inserted in the RTC, the Python FIND function
@@ -1762,13 +1764,15 @@ class TranscriptEditor(RichTextEditCtrl):
                 # Prevent doubling of backspace by blocking event.skip()
                 blockSkip = True
 
-            elif event.AltDown() and (c == wx.WXK_F1):
-
-                (s, e) = self.get_selected_time_range()
-
-                print "Current Pos:", s, Misc.time_in_ms_to_str(s), e, Misc.time_in_ms_to_str(e), self.GetLastPosition()
-                
-                print '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -'
+##            elif event.AltDown() and (c == wx.WXK_F1):
+##
+##                (s, e) = self.get_selected_time_range()
+##
+##                print "Current Pos:", s, Misc.time_in_ms_to_str(s), e, Misc.time_in_ms_to_str(e), self.GetLastPosition()
+##                
+##                print '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -'
+##                print self.timecodes
+##                print '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -'
 
             elif c == wx.WXK_F12:
                 # F12 is Quick Save
@@ -1783,10 +1787,11 @@ class TranscriptEditor(RichTextEditCtrl):
         if not(blockSkip) and not event.ControlDown():
             # ... skip to the next (parent) level event handler.
             event.Skip()
- 
-        # Always check the styles to see if the Transcript Toolbar needs to be updated.  But we need to defer the call
-        # until everything else has been handled so it's always correct.
-        wx.CallAfter(self.StyleChanged, self)
+
+        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptDialog):
+            # Always check the styles to see if the Transcript Toolbar needs to be updated.  But we need to defer the call
+            # until everything else has been handled so it's always correct.
+            wx.CallAfter(self.StyleChanged, self)
 
     def OnKey(self, event):
         """Called when a character key is pressed.  Works with case-sensitive characters.  """
@@ -1801,44 +1806,49 @@ class TranscriptEditor(RichTextEditCtrl):
 
     def OnKeyUp(self, event):
         """ Catch the release of each key """
-
         # Call the super object's OnKeyUp method
         RichTextEditCtrl.OnKeyUp(self, event)
-    
-        # If we're supposed to update the SelectionText (i.e. we're in a Transcript Window, not a Clip Properties Dialog) ...
-        if self.updateSelectionText:
-            # We need to update the Selection Text for changes in the cursor position / selection
-            self.parent.ControlObject.UpdateSelectionTextLater(self.parent.transcriptWindowNumber)
-        # Also call the parent object's OnKeyUp method
-        event.Skip()
+        # If a Style Changed method has been defined ...
+        if self.StyleChanged != None:
+            # ... make sure any style change is reflected on screen
+            self.StyleChanged(self)
+            
+#        event.Skip()
 
-        # This doesn't DO anything, so skip it.
-        if False:
-            # If we are moving the cursor or deleting a character ...
-            if event.GetKeyCode() in [wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_UP, wx.WXK_DOWN,
-                                      wx.WXK_HOME, wx.WXK_END, wx.WXK_PAGEUP, wx.WXK_PAGEDOWN,
-                                      wx.WXK_DELETE]:
-                # Get the style at the insertion point
-                tmpStyle1 = self.GetStyleAt(self.GetInsertionPoint())
-                
-                # ... we need to check for formatting changes
-                self.CheckFormatting()
-                
-                # Now get the style at the insertion point again
-                tmpStyle2 = self.GetStyleAt(self.GetInsertionPoint())
-
-                # See if the style has changed 
-                if (not self.CompareFormatting(tmpStyle1, tmpStyle2, fullCompare=True)):
-
-                    self.PrintTextAttr("before:", tmpStyle1)
-                    self.PrintTextAttr("after:", tmpStyle2)
-                    print
-                    print
-
-        # If the SHIFT key is being released and we have a selection, the text selection process has just been completed.
-        if event.GetKeyCode() in [wx.WXK_SHIFT] and (self.GetSelection()[0] != self.GetSelection()[1]):
-            # ... so check the selection for time codes at the beginning and end.
-            self.CheckTimeCodesAtSelectionBoundaries()
+##        # If we're supposed to update the SelectionText (i.e. we're in a Transcript Window, not a Clip Properties Dialog) ...
+##        if self.updateSelectionText:
+##            # We need to update the Selection Text for changes in the cursor position / selection
+##            self.parent.ControlObject.UpdateSelectionTextLater(self.parent.transcriptWindowNumber)
+##        # Also call the parent object's OnKeyUp method
+##        event.Skip()
+##
+##        # This doesn't DO anything, so skip it.
+##        if False:
+##            # If we are moving the cursor or deleting a character ...
+##            if event.GetKeyCode() in [wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_UP, wx.WXK_DOWN,
+##                                      wx.WXK_HOME, wx.WXK_END, wx.WXK_PAGEUP, wx.WXK_PAGEDOWN,
+##                                      wx.WXK_DELETE]:
+##                # Get the style at the insertion point
+##                tmpStyle1 = self.GetStyleAt(self.GetInsertionPoint())
+##                
+##                # ... we need to check for formatting changes
+##                self.CheckFormatting()
+##                
+##                # Now get the style at the insertion point again
+##                tmpStyle2 = self.GetStyleAt(self.GetInsertionPoint())
+##
+##                # See if the style has changed 
+##                if (not self.CompareFormatting(tmpStyle1, tmpStyle2, fullCompare=True)):
+##
+##                    self.PrintTextAttr("before:", tmpStyle1)
+##                    self.PrintTextAttr("after:", tmpStyle2)
+##                    print
+##                    print
+##
+##        # If the SHIFT key is being released and we have a selection, the text selection process has just been completed.
+##        if event.GetKeyCode() in [wx.WXK_SHIFT] and (self.GetSelection()[0] != self.GetSelection()[1]):
+##            # ... so check the selection for time codes at the beginning and end.
+##            self.CheckTimeCodesAtSelectionBoundaries()
 
     def OnAutoSave(self, event):
         """ Process the AutoSave Timer Event """
@@ -2238,6 +2248,17 @@ class TranscriptEditor(RichTextEditCtrl):
             # ... then check Formatting to make sure our current style is correct
             self.CheckFormatting()
 
+        ip = self.GetInsertionPoint()
+        # If we're not at the first character in the document AND
+        # we're not at the first character following a time code ...
+        if (ip > 1) and not self.IsStyleHiddenAt(ip - 1):
+            # ... update the style to the style for the character PRECEEDING the cursor
+            self.txtAttr = self.GetStyleAt(ip - 1)
+        # Otherwise ...
+        else:
+            # update the style to the style for the character FOLLOWING the cursor
+            self.txtAttr = self.GetStyleAt(ip)
+
     def OnMotion(self, event):
         """ Process the EVT_MOTION event for the Rich Text Ctrl """
         # Call the parent EVT_MOTION event
@@ -2444,6 +2465,39 @@ class TranscriptEditor(RichTextEditCtrl):
         self.RestoreCursor()
         self.Update()
 
+    def TextTimeCodeConversion(self):
+        """ Convert Text (H:MM:SS.hh) Time Codes to Transana's Format """
+        # Create a popup telling the user about the conversion (needed for large files)
+        convertDlg = Dialogs.PopupDialog(None, _("Converting..."), _("Converting Time Codes.\nPlease wait...."))
+        # Go to the beginning of the transcript
+        self.GotoPos(0)
+        # Define a Regular Expression to find "(H:MM:SS.hh)" format time code information
+        regex = "([0-9]+:[0-5][0-9]:[0-5][0-9].[0-9]+)"
+        # Get the String (plain text) value of the contents of the editor
+        transcriptText = self.GetValue()
+        # Execute the Regular Expression so we can iterate through the results
+        regexResults = re.finditer(regex, transcriptText)
+        # For each result found by the Regular Expression search ...
+        for regexResult in regexResults:
+            # ... Get the string value for the time, in HH:MM:SS.hh format, excluding the surrounding parentheses
+            tcString = transcriptText[regexResult.start() + 1 : regexResult.end() - 1]
+            # Convert the string to a Time Code value in milliseconds
+            tcVal = Misc.time_in_str_to_ms(tcString)
+            # Find the text in the Transcript that matches the current Regular Expression result
+            self.find_text(transcriptText[regexResult.start() : regexResult.end()], 'next')
+            # If we are looking at a value larger than the last Time Code entered ...
+            if (len(self.timecodes) == 0) or (tcVal > self.timecodes[-1]):
+                # ... delete the current selection, which is the (H:MM:SS.hh) string 
+                self.DeleteSelection()
+                # ... insert the new Time Code in Transana Format
+                self.InsertTimeCode(tcVal)
+                # ... add the new Time Code to the Time Codes list
+                self.timecodes.append(tcVal)
+        # Go to the beginning of the transcript
+        self.GotoPos(0)
+        # Destroy the popup
+        convertDlg.Destroy()
+
     def IsStyleHiddenAt(self, pos):
         """ Is the style at the specified position hidden? """
         # Get the style at the specified position
@@ -2456,7 +2510,6 @@ class TranscriptEditor(RichTextEditCtrl):
             changing the the font settingss for the current cursor position. """
         # Let's try to remember the cursor position, getting the first character of the first and last lines
         firstChar = self.GetFirstVisiblePosition()
-#        lastChar = self.HitTest(wx.Point(5, self.GetSize()[1] - 10))[1]
         # If we're using wxPython 2.8.x.x ...
         if wx.VERSION[:2] == (2, 8):
             # ... use HitTest()
@@ -2546,12 +2599,16 @@ class TranscriptEditor(RichTextEditCtrl):
             tmpStyle = self.GetStyleAt(selPos)
             tmpFont = tmpStyle.GetFont()
 
+            if tmpFont.IsOk():
+                isTC = (self.CompareFormatting(tmpStyle, self.txtTimeCodeAttr, fullCompare=False)) or \
+                       (self.CompareFormatting(tmpStyle, self.txtHiddenAttr, fullCompare=False)) or \
+                       (self.CompareFormatting(tmpStyle, self.txtTimeCodeHRFAttr, fullCompare=False))
+            else:
+                isTC = False
+
             # We don't touch the settings for TimeCodes or Hidden TimeCode Data, so these characters can be ignored.
             # Also check that the tmpFont is valid, or we can't do the comparisons.
-            if (not self.CompareFormatting(tmpStyle, self.txtTimeCodeAttr, fullCompare=False)) and \
-               (not self.CompareFormatting(tmpStyle, self.txtHiddenAttr, fullCompare=False)) and \
-               (not self.CompareFormatting(tmpStyle, self.txtTimeCodeHRFAttr, fullCompare=False)) and \
-               tmpFont.IsOk():
+            if (not isTC) and tmpFont.IsOk():
                 
                 # Now look for specs that are different, and flag the TransanaFontDef object if one is found.
                 # If the the Symbol Font is used, we ignore this.  (We don't want to change the Font Face of Special Characters.)
@@ -2583,12 +2640,14 @@ class TranscriptEditor(RichTextEditCtrl):
                     fontData.fontUnderline = FormatDialog.fd_AMBIGUOUS
 
                 if (fontData.fontColorDef != None) and (fontData.fontColorDef != tmpStyle.GetTextColour()):
+                    fontData.fontColorName = ''
                     # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
                     # when you've imported a file with font problems
                     # del(fontData.fontColorDef)
                     fontData.fontColorDef = None
         
                 if (fontData.fontBackgroundColorDef != None) and (fontData.fontBackgroundColorDef != tmpStyle.GetBackgroundColour()):
+                    fontData.fontBackgroundColorName = ''
                     # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
                     # when you've imported a file with font problems
                     # del(fontData.fontBackgroundColorDef)
@@ -2657,10 +2716,14 @@ class TranscriptEditor(RichTextEditCtrl):
         # Set the cursor back to normal
         self.parent.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
+        originalFontData = fontData.copy()
+        # Make a COPY of the font to change.  If you don't, changes to a selection seem to affect the whole paragraph!!
+        fontToChange = fontData.copy()
+
         # Create the Format Dialog.
         # Note:  We used to use the wx.FontDialog, but this proved inadequate for a number of reasons.
         #        It offered very few font choices on the Mac, and it couldn't handle font ambiguity.
-        formatDialog = FormatDialog.FormatDialog(self, fontData, tabToShow)
+        formatDialog = FormatDialog.FormatDialog(self, fontToChange, tabToShow)
 
         self.Freeze()
 
@@ -2673,21 +2736,77 @@ class TranscriptEditor(RichTextEditCtrl):
                 # Get the wxFontData from the Font Dialog
                 newFontDef = formatDialog.GetFormatDef()
 
-                # Set the current font
-                self.SetTxtStyle(fontColor = newFontDef.fontColorDef,
-                                 fontBgColor = newFontDef.fontBackgroundColorDef,
-                                 fontFace = newFontDef.fontFace,
-                                 fontSize = newFontDef.fontSize,
-                                 fontBold = (newFontDef.fontWeight != 0),
-                                 fontItalic = (newFontDef.fontStyle != 0),
-                                 fontUnderline = newFontDef.fontUnderline,
-                                 parAlign = newFontDef.paragraphAlignment,
-                                 parLeftIndent = (newFontDef.paragraphLeftIndent, newFontDef.paragraphLeftSubIndent),
-                                 parRightIndent = newFontDef.paragraphRightIndent,
-                                 parLineSpacing = newFontDef.paragraphLineSpacing,
-                                 parSpacingBefore = newFontDef.paragraphSpaceBefore,
-                                 parSpacingAfter = newFontDef.paragraphSpaceAfter,
-                                 parTabs = newFontDef.tabs)
+#                print "TranscriptEditor_RTC.CallFormatDialog():"
+#                self.PrintTextAttr("Before:", currentStyle)
+#                print "AFTER:", newFontDef
+#                print
+
+##                # Set the current font
+##                self.SetTxtStyle(fontColor = newFontDef.fontColorDef,
+##                                 fontBgColor = newFontDef.fontBackgroundColorDef,
+##                                 fontFace = newFontDef.fontFace,
+##                                 fontSize = newFontDef.fontSize,
+##                                 fontBold = (newFontDef.fontWeight != 0),
+##                                 fontItalic = (newFontDef.fontStyle != 0),
+##                                 fontUnderline = newFontDef.fontUnderline,
+##                                 parAlign = newFontDef.paragraphAlignment,
+##                                 parLeftIndent = (newFontDef.paragraphLeftIndent, newFontDef.paragraphLeftSubIndent),
+##                                 parRightIndent = newFontDef.paragraphRightIndent,
+##                                 parLineSpacing = newFontDef.paragraphLineSpacing,
+##                                 parSpacingBefore = newFontDef.paragraphSpaceBefore,
+##                                 parSpacingAfter = newFontDef.paragraphSpaceAfter,
+##                                 parTabs = newFontDef.tabs)
+
+                # Problem:  Changing font and paragraph styles at the same time applies the font change to
+                #           the whole paragraph when it should only be applied to the insertion point.
+
+                # Solution:  Separate out the formatting calls and only apply those that change.
+
+                # Hypothesis:  Changing all the Paragraph characteristics BEFORE moving onto the font
+                #              characteristics may also help.
+
+                if newFontDef.paragraphAlignment != currentStyle.GetAlignment():
+                    self.SetTxtStyle(parAlign = newFontDef.paragraphAlignment)
+
+                if (newFontDef.paragraphLeftIndent != currentStyle.GetLeftIndent()) or \
+                   (newFontDef.paragraphLeftSubIndent != currentStyle.GetLeftSubIndent()):
+                    self.SetTxtStyle(parLeftIndent = (newFontDef.paragraphLeftIndent, newFontDef.paragraphLeftSubIndent))
+
+                if newFontDef.paragraphRightIndent != currentStyle.GetRightIndent():
+                    self.SetTxtStyle(parRightIndent = newFontDef.paragraphRightIndent)
+
+                if newFontDef.paragraphLineSpacing != currentStyle.GetLineSpacing():
+                    self.SetTxtStyle(parLineSpacing = newFontDef.paragraphLineSpacing)
+
+                if newFontDef.paragraphSpaceBefore != currentStyle.GetParagraphSpacingBefore():
+                    self.SetTxtStyle(parSpacingBefore = newFontDef.paragraphSpaceBefore)
+
+                if newFontDef.paragraphSpaceAfter != currentStyle.GetParagraphSpacingAfter():
+                    self.SetTxtStyle(parSpacingAfter = newFontDef.paragraphSpaceAfter)
+
+                if newFontDef.tabs != currentStyle.GetTabs():
+                    self.SetTxtStyle(parTabs = newFontDef.tabs)
+
+                if newFontDef.fontFace != currentFont.GetFaceName():
+                    self.SetTxtStyle(fontFace = newFontDef.fontFace)
+
+                if newFontDef.fontSize != currentFont.GetPointSize():
+                    self.SetTxtStyle(fontSize = newFontDef.fontSize)
+
+                if newFontDef.fontWeight != (currentFont.GetWeight() == wx.FONTWEIGHT_BOLD):
+                    self.SetTxtStyle(fontBold = (newFontDef.fontWeight != 0))
+
+                if newFontDef.fontStyle != (currentFont.GetStyle() == wx.FONTSTYLE_ITALIC):
+                    self.SetTxtStyle(fontItalic = (newFontDef.fontStyle != 0))
+
+                if newFontDef.fontUnderline != currentFont.GetUnderlined():
+                    self.SetTxtStyle(fontUnderline = newFontDef.fontUnderline)
+
+                if newFontDef.fontColorDef != currentStyle.GetTextColour():
+                    self.SetTxtStyle(fontColor = newFontDef.fontColorDef)
+
+                if newFontDef.fontBackgroundColorDef != currentStyle.GetBackgroundColour():
+                    self.SetTxtStyle(fontBgColor = newFontDef.fontBackgroundColorDef)
 
             else:
                 # Set the Wait cursor
@@ -2703,159 +2822,302 @@ class TranscriptEditor(RichTextEditCtrl):
                 # when processing a selection
                 # Get the TransanaFontDef data from the Font Dialog.
                 newFontData = formatDialog.GetFormatDef()
+
                 # Now we need to iterate through the selection and update the font information.
                 # It doesn't work to try to apply formatting to the whole block, as ambiguous attributes
                 # lose their values.
 
-                # Create a Text Attribute Object
-                tmpAttr = richtext.RichTextAttr()
+                # It appears that we need to separate FONT attributes from PARAGRAPH atttibutes to prevent
+                # font attributes from being applied to more than just the current selection when both
+                # types of attributes are updated at once in wxPython 2.9.5.0
 
-                # For each character position in the current selection ...
-                for selPos in range(currentSelection[0], currentSelection[1]):
+                # Create a Text Attribute Object for FONT attributes
+                tmpFontAttr = richtext.RichTextAttr()
+                # Create a Text Attribute Object for the Paragraph attributes
+                tmpParagraphAttr = richtext.RichTextAttr()
 
-                    # If we're on Windows and are running out of GDI resources ...   (8800 allows room for the SAVE!) 
-                    if ('wxMSW' in wx.PlatformInfo) and (GDIReport() > 8800):
-                        if formatDlg:
-                            formatDlg.Destroy()
-                        prompt = _("Your formatting request was interrupted due to problems with Windows GDI Resources.\nPlease save your document immediately.")
-                        dlg = Dialogs.ErrorDialog(self, prompt)
-                        dlg.ShowModal()
-                        dlg.Destroy()
-                        break
+                # We also need to track whether either of these types of attributes gets changed.
+                fontAttrChanged = False
+                paragraphAttrChanged = False
 
-                    # If we're on OS X ...
-                    if ('wxMac' in wx.PlatformInfo):
-                        # Update Mac Formatting Counter  (Tracks formatting changes to prevent wxPython 2.8.12.1 CRASH!)
-                        self.macFormatCounter += 1
-                        # I've found that 45,000 changes seem to be as many as the system can handle
-                        if self.macFormatCounter > 45000:
-                            # Create and display a prompt for the user.
-                            prompt = _("Your formatting request was interrupted due to problems with wxWidgets on OS X.\nPlease save your document immediately.")
-                            prompt += "\n\n" + _("If Transana is slow following this message, it may help to quit and restart the program.")
-                            dlg = Dialogs.ErrorDialog(self, prompt)
-                            dlg.ShowModal()
-                            dlg.Destroy()
-                            break
-                        
-                    # Get the Font Attributes of the current Character
-                    tmpStyle = self.GetStyleAt(selPos)
-                    tmpFont = tmpStyle.GetFont()
+                # Initialize a variable to hold the last style, so we can see if style has changed
+                lastStyle = None
+                # See if Underline was turned ON
+                setUnderline = (newFontData.fontUnderline == FormatDialog.fd_UNDERLINE)
 
-                    # We don't update the formatting for TimeCodes or Hidden TimeCode Data, so these characters can be ignored.
-                    # Also check that the tmpFont is valid, or we can't do the comparisons.
-                    if (not self.CompareFormatting(tmpStyle, self.txtTimeCodeAttr, fullCompare=False)) and \
-                       (not self.CompareFormatting(tmpStyle, self.txtHiddenAttr, fullCompare=False)) and \
-                       (not self.CompareFormatting(tmpStyle, self.txtTimeCodeHRFAttr, fullCompare=False)) and \
-                       tmpFont.IsOk():
+                if DEBUG:
+                    print "TranscriptEditor_RTC.CallFormatDialog()", currentSelection, setUnderline
+                    print newFontData
+                    print
 
-                        # Now alter those characteristics that are not ambiguous in the newFontData.
-                        # Where the specification is ambiguous, use the old value from attrs.
-                        
-                        # We don't want to change the font of special symbols!  Therefore, we don't change
-                        # the font name for anything in Symbol font.
-                        if (newFontData.fontFace != None) and \
-                           (tmpFont.GetFaceName() != 'Symbol'):
-                            tmpAttr.SetFontFaceName(newFontData.fontFace)
+                try:
+                    if DEBUG:
+                        print "TranscriptEditor_RTC.CallFormatDialog():"
+                        print "Selection:", currentSelection
+                        self.PrintTextAttr("initial FONT attributes", tmpFontAttr)
+                        self.PrintTextAttr("initial PARAGRAPH attributes", tmpParagraphAttr)
+                        print
+
+                    # For each character position in the current selection ...
+                    for selPos in range(currentSelection[0], currentSelection[1]):
+
+                        # Get the Font Attributes of the current Character
+                        tmpStyle = self.GetStyleAt(selPos)
+                        tmpFont = tmpStyle.GetFont()
+
+                        if tmpFont.IsOk():
+                            isTC = (self.CompareFormatting(tmpStyle, self.txtTimeCodeAttr, fullCompare=False)) or \
+                                   (self.CompareFormatting(tmpStyle, self.txtHiddenAttr, fullCompare=False)) or \
+                                   (self.CompareFormatting(tmpStyle, self.txtTimeCodeHRFAttr, fullCompare=False))
                         else:
-                            tmpAttr.SetFontFaceName(tmpFont.GetFaceName())
+                            isTC = False
 
-                        if newFontData.fontSize != None:
-                            tmpAttr.SetFontSize(newFontData.fontSize)
-                        else:
-                            tmpAttr.SetFontSize(tmpFont.GetPointSize())
+                        # if this is the LAST character of a selection AND
+                        # if we are at the first character of a new block AND
+                        # if this character is NOT a time code AND
+                        # if the font is valid 
+                        # (then we have a special circumstance where we need to do this at the START if the
+                        #  conditional block or else the style change never gets applied!)
+                        if (selPos == currentSelection[1] - 1) and\
+                           (lastStyle is None) and \
+                           (not isTC) and \
+                           tmpFont.IsOk():
+                            # Note the new style
+                            lastStyle = tmpStyle
+                            # Note the new Font
+                            lastFont = tmpFont
+                            # Note the starting Position
+                            updateStart = selPos
 
-                        if newFontData.fontWeight == FormatDialog.fd_BOLD:
-                            tmpAttr.SetFontWeight(wx.FONTWEIGHT_BOLD)
-                        elif newFontData.fontWeight == FormatDialog.fd_OFF:
-                            tmpAttr.SetFontWeight(wx.FONTWEIGHT_NORMAL)
-                        else:
-                            # if fontWeight is ambiguous, use the old value
-                            tmpAttr.SetFontWeight(tmpFont.GetWeight())
+                        # if we don't already have a lastStyle defined ... (we are at the first character of a new block)
+                        if (not lastStyle is None):
+                            # if we are at a Time Code OR
+                            # if the formatting is changing OR
+                            # if we're at the end of our selection OR
+                            # if we have run up against an invalid font ...
+                            if isTC or \
+                               not self.CompareFormatting(lastStyle, tmpStyle, fullCompare=True) or \
+                               (selPos == currentSelection[1] - 1) or \
+                               (not tmpFont.IsOk()):
 
-                        if newFontData.fontStyle == FormatDialog.fd_ITALIC:
-                            tmpAttr.SetFontStyle(wx.FONTSTYLE_ITALIC)
-                        elif newFontData.fontStyle == FormatDialog.fd_OFF:
-                            tmpAttr.SetFontStyle(wx.FONTSTYLE_NORMAL)
-                        else:
-                            # if fontUnderline is ambiguous, use the old value
-                            tmpAttr.SetFontStyle(tmpFont.GetStyle())
+                            # Now alter those characteristics of the previous block that are not ambiguous in the newFontData.
+                            # Where the specification is ambiguous, use the old value from attrs.
 
-                        if newFontData.fontUnderline == FormatDialog.fd_UNDERLINE:
-                            tmpAttr.SetFontUnderlined(True)
-                        elif newFontData.fontUnderline == FormatDialog.fd_OFF:
-                            tmpAttr.SetFontUnderlined(False)
-                        else:
-                            # if fontUnderline is ambiguous, use the old value
-                            tmpAttr.SetFontUnderlined(tmpFont.GetUnderlined())
+                                # We don't want to change the font of special symbols!  Therefore, we don't change
+                                # the font name for anything in Symbol font.
+                                if (newFontData.fontFace != None) and \
+                                   (newFontData.fontFace != '') and \
+                                   (lastFont.GetFaceName() != 'Symbol') and \
+                                   (newFontData.fontFace != originalFontData.fontFace):
+                                    tmpFontAttr.SetFontFaceName(newFontData.fontFace)
+                                    fontAttrChanged = True
 
-                        if newFontData.fontColorDef != None:
-                            color = newFontData.fontColorDef
-                        else:
-                            color = tmpStyle.GetTextColour()
-                        # Now apply the font settings for the current character
-                        tmpAttr.SetTextColour(color)
+                                    if DEBUG:
+                                        print "Set font to:", newFontData.fontFace
+                                    
+                                if (newFontData.fontSize != None) and \
+                                   (newFontData.fontSize != originalFontData.fontSize):
+                                    tmpFontAttr.SetFontSize(newFontData.fontSize)
+                                    fontAttrChanged = True
 
-                        if newFontData.fontBackgroundColorDef != None:
-                            color = newFontData.fontBackgroundColorDef
-                        else:
-                            color = tmpStyle.GetBackgroundColour()
-                        # Now apply the font settings for the current character
-                        tmpAttr.SetBackgroundColour(color)
+                                    if DEBUG:
+                                        print "Set font size to:", newFontData.fontSize
+                                    
+                                if (newFontData.fontWeight != originalFontData.fontWeight):
+                                    if newFontData.fontWeight == FormatDialog.fd_BOLD:
+                                        tmpFontAttr.SetFontWeight(wx.FONTWEIGHT_BOLD)
+                                        fontAttrChanged = True
 
-                        if newFontData.paragraphAlignment != None:
-                            tmpAttr.SetAlignment(newFontData.paragraphAlignment)
-                        else:
-                            tmpAttr.SetAlignment(tmpStyle.GetAlignment())
+                                        if DEBUG:
+                                            print "Set Bold to: BOLD"
+                                        
+                                    elif newFontData.fontWeight == FormatDialog.fd_OFF:
+                                        tmpFontAttr.SetFontWeight(wx.FONTWEIGHT_NORMAL)
+                                        fontAttrChanged = True
 
-                        if newFontData.paragraphLeftSubIndent != None:
-                            tmpLeftSubIndent = newFontData.paragraphLeftSubIndent
+                                        if DEBUG:
+                                            print "Set Bold to: normal"
+                                    
+                                if (newFontData.fontStyle != originalFontData.fontStyle):
+                                    if newFontData.fontStyle == FormatDialog.fd_ITALIC:
+                                        tmpFontAttr.SetFontStyle(wx.FONTSTYLE_ITALIC)
+                                        fontAttrChanged = True
 
-                        else:
-                            tmpLeftSubIndent = tmpStyle.GetLeftSubIndent()
+                                        if DEBUG:
+                                            print "Set Italics to Italics"
+                                        
+                                    elif newFontData.fontStyle == FormatDialog.fd_OFF:
+                                        tmpFontAttr.SetFontStyle(wx.FONTSTYLE_NORMAL)
+                                        fontAttrChanged = True
 
-                        if newFontData.paragraphLeftIndent != None:
-                            tmpLeftIndent = newFontData.paragraphLeftIndent
+                                        if DEBUG:
+                                            print "Set Italics to normal"
 
-                        else:
-                            # Here's where it gets interesting.  The Left Indent is ambiguous.
-                            # if the Left SubIndent / First Line Adjust is known ...
-                            if newFontData.paragraphLeftSubIndent != None:
-                                # Determine the original Left Indent by adjusting for SubIndent, then add the new SubIndent
-                                tmpLeftIndent = tmpStyle.GetLeftIndent() - tmpStyle.GetLeftSubIndent() + tmpLeftSubIndent
-                            # If the Left SubIndent is also ambiguous ...
-                            else:
-                                # just use the original value!
-                                tmpLeftIndent = tmpStyle.GetLeftIndent()
+                                if (newFontData.fontUnderline != originalFontData.fontUnderline):
+                                    if newFontData.fontUnderline == FormatDialog.fd_UNDERLINE:
+                                        tmpFontAttr.SetFontUnderlined(True)
+                                        fontAttrChanged = True
 
-                        tmpAttr.SetLeftIndent(tmpLeftIndent, tmpLeftSubIndent)
+                                        if DEBUG:
+                                            print "Turn Underline ON"
+                                        
+                                    elif newFontData.fontUnderline == FormatDialog.fd_OFF:
+                                        tmpFontAttr.SetFontUnderlined(False)
+                                        fontAttrChanged = True
 
-                        if newFontData.paragraphRightIndent != None:
-                            tmpAttr.SetRightIndent(newFontData.paragraphRightIndent)
-                        else:
-                            tmpAttr.SetRightIndent(tmpStyle.GetRightIndent())
+                                        if DEBUG:
+                                            print "Turn Underline off"
+                                        
+                                if (newFontData.fontColorDef != originalFontData.fontColorDef):
+                                    if newFontData.fontColorDef != None:
+                                        color = newFontData.fontColorDef
+                                        # Now apply the font settings for the current character
+                                        tmpFontAttr.SetTextColour(color)
+                                        fontAttrChanged = True
 
-                        if newFontData.paragraphLineSpacing != None:
-                            tmpAttr.SetLineSpacing(newFontData.paragraphLineSpacing)
-                        else:
-                            tmpAttr.SetLineSpacing(tmpStyle.GetLineSpacing())
-                            
-                        if newFontData.paragraphSpaceBefore != None:
-                            tmpAttr.SetParagraphSpacingBefore(newFontData.paragraphSpaceBefore)
-                        else:
-                            tmpAttr.SetParagraphSpacingBefore(tmpStyle.GetParagraphSpacingBefore())
+                                        if DEBUG:
+                                            print "Color changed to", newFontData.fontColorName
 
-                        if newFontData.paragraphSpaceAfter != None:
-                            tmpAttr.SetParagraphSpacingAfter(newFontData.paragraphSpaceAfter)
-                        else:
-                            tmpAttr.SetParagraphSpacingAfter(tmpStyle.GetParagraphSpacingAfter())
+                                if (newFontData.fontBackgroundColorDef != originalFontData.fontBackgroundColorDef):
+                                    if newFontData.fontBackgroundColorDef != None:
+                                        color = newFontData.fontBackgroundColorDef
+                                        # Now apply the font settings for the current character
+                                        tmpFontAttr.SetBackgroundColour(color)
+                                        fontAttrChanged = True
 
-                        if newFontData.tabs != None:
-                            tmpAttr.SetTabs(newFontData.tabs)
-                        else:
-                            tmpAttr.SetRightIndent(tmpStyle.GetTabs())
+                                        if DEBUG:
+                                            print "Background Color changed to", newFontData.fontBackgroundColorDef
 
-                        # Apply the style
-                        self.SetStyle((selPos, selPos + 1), tmpAttr)
+                                if (newFontData.paragraphAlignment != originalFontData.paragraphAlignment):
+                                    if newFontData.paragraphAlignment != None:
+                                        tmpParagraphAttr.SetAlignment(newFontData.paragraphAlignment)
+                                        paragraphAttrChanged = True
+
+                                        if DEBUG:
+                                            print "Set paragraph alignment to:", newFontData.paragraphAlignment
+
+                                tmpLeftSubIndent = originalFontData.paragraphLeftSubIndent
+                                tmpLeftIndent = originalFontData.paragraphLeftIndent
+                                if (newFontData.paragraphLeftSubIndent != originalFontData.paragraphLeftSubIndent):
+                                    if newFontData.paragraphLeftSubIndent != None:
+                                        tmpLeftSubIndent = newFontData.paragraphLeftSubIndent
+                                        tmpParagraphAttr.SetLeftIndent(tmpLeftIndent, tmpLeftSubIndent)
+                                        paragraphAttrChanged = True
+
+                                        if DEBUG:
+                                            print "Set paragraph left sub-indent to:", newFontData.paragraphLeftSubIndent
+
+                                if (newFontData.paragraphLeftIndent != originalFontData.paragraphLeftIndent):
+                                    if newFontData.paragraphLeftIndent != None:
+                                        tmpLeftIndent = newFontData.paragraphLeftIndent
+                                        tmpParagraphAttr.SetLeftIndent(tmpLeftIndent, tmpLeftSubIndent)
+                                        paragraphAttrChanged = True
+
+                                        if DEBUG:
+                                            print "Set paragraph left indent to:", tmpLeftIndent, tmpLeftSubIndent
+
+                                if (newFontData.paragraphRightIndent != originalFontData.paragraphRightIndent):
+                                    if newFontData.paragraphRightIndent != None:
+                                        tmpParagraphAttr.SetRightIndent(newFontData.paragraphRightIndent)
+                                        paragraphAttrChanged = True
+
+                                        if DEBUG:
+                                            print "Set paragraph right indent to:", newFontData.paragraphRightIndent
+
+                                if (newFontData.paragraphLineSpacing != originalFontData.paragraphLineSpacing):
+                                    if newFontData.paragraphLineSpacing != None:
+                                        tmpParagraphAttr.SetLineSpacing(newFontData.paragraphLineSpacing)
+                                        paragraphAttrChanged = True
+
+                                        if DEBUG:
+                                            print "Set paragraph line spacing to:", newFontData.paragraphLineSpacing
+                                        
+                                if (newFontData.paragraphSpaceBefore != originalFontData.paragraphSpaceBefore):
+                                    if newFontData.paragraphSpaceBefore != None:
+                                        tmpParagraphAttr.SetParagraphSpacingBefore(newFontData.paragraphSpaceBefore)
+                                        paragraphAttrChanged = True
+
+                                        if DEBUG:
+                                            print "Set paragraph spacing before:", newFontData.paragraphSpaceBefore
+
+                                if (round(newFontData.paragraphSpaceAfter) != originalFontData.paragraphSpaceAfter):
+                                    if newFontData.paragraphSpaceAfter != None:
+                                        tmpParagraphAttr.SetParagraphSpacingAfter(newFontData.paragraphSpaceAfter)
+                                        paragraphAttrChanged = True
+
+                                        if DEBUG:
+                                            print "Set Paragraph Space After:", newFontData.paragraphSpaceAfter, originalFontData.paragraphSpaceAfter
+                                        
+                                if (newFontData.tabs != originalFontData.tabs):
+                                    if newFontData.tabs != None:
+                                        tmpParagraphAttr.SetTabs(newFontData.tabs)
+                                        paragraphAttrChanged = True
+
+                                        if DEBUG:
+                                            print "Set tabs to:", newFontData.tabs, originalFontData.tabs
+                                        
+                                if selPos == currentSelection[1] - 1:
+                                    updateEnd = selPos + 1
+                                else:
+                                    updateEnd = selPos
+                                
+                                # Apply the style to the previous block
+                                if fontAttrChanged:
+                                    self.SetStyle((updateStart, updateEnd), tmpFontAttr)
+
+                                    if DEBUG:
+                                        self.PrintTextAttr("Setting Font: (%d, %d)" % (updateStart, updateEnd), tmpFontAttr)
+                                        
+                                if paragraphAttrChanged:
+                                    self.SetStyle((updateStart, updateEnd), tmpParagraphAttr)
+
+                                    if DEBUG:
+                                        self.PrintTextAttr("Setting Paragraph: (%d, %d)" % (updateStart, updateEnd), tmpParagraphAttr)
+                                
+                                # Since we've just applied the style, we can reset lastStyle to None
+                                lastStyle = None
+
+                        # if we are at the first character of a new block AND
+                        # this character is NOT a time code AND
+                        # the font is valid ...
+                        if (lastStyle is None) and (not isTC) and tmpFont.IsOk():
+                            # Note the new style
+                            lastStyle = tmpStyle
+                            # Note the new Font
+                            lastFont = tmpFont
+                            # Note the starting Position
+                            updateStart = selPos
+
+                except:
+
+                    print sys.exc_info()[0]
+                    print sys.exc_info()[1]
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+
+                # There's a bug in wxWidgets on Windows such that underlining doesn't always show up correctly.
+                # The following code changes the window size slightly so that a re-draw is forced, thus
+                # causing the underlining to show up.  Update() and Refresh() don't work.
+
+                # if we're turning Underline ON ...
+                if setUnderline:
+                    # If we're on Windows, resize the parent window to force the redraw ...
+                    if ('wxMSW' in wx.PlatformInfo):
+
+                        # ... find the size of the parent window
+                        size = self.parent.GetSizeTuple()
+                        # Move the Insertion Point to the end of the selection (or this won't work!)
+                        self.SetInsertionPoint(currentSelection[1])
+                        # Shrink the parent window slightly
+                        self.parent.SetSize((size[0], size[1] - 5))
+                        # Set the Parent Window back to the original size
+                        self.parent.SetSize(size)
+
+
+
+
+                    if DEBUG:
+                        print "surroundingUnderline correction DISABLED"
 
                 # Mark the transcript as changed.
                 self.MarkDirty()
@@ -2877,15 +3139,22 @@ class TranscriptEditor(RichTextEditCtrl):
         # Enable control updating now that all changes have been processed
         self.Thaw()
 
+        if self.StyleChanged != None:
+            self.StyleChanged(self)
+
         # If we added a space for formatting purposes ...
         if ip != None:
             # ... we need to get rid of the space
             self.DeleteSelection()
 
-        # Let's try restoring the screen position when all is said and done.  For unknown reasons, working with fonts scrolls the control
+        # Let's try restoring the screen position when all is said and done.  For unknown reasons, working with fonts scrolls
+        # the control
         if self.GetFirstVisiblePosition() != firstChar:
+            # The ShowPosition calls get over-ridden somewhere, so using wx.CallAfter is necessary so they'll be called last.
+            # First, show the first character
+            wx.CallLater(100, self.ShowPosition, firstChar)
             # Since we generally see scrolling UP, we need to show the LAST Character to restore the screen position.
-            self.ShowPosition(lastChar)
+            wx.CallLater(125, self.ShowPosition, lastChar)
 
         # We've probably taken the focus from the editor.  Let's return it.
         self.SetFocus()
@@ -2913,10 +3182,17 @@ class TranscriptEditor(RichTextEditCtrl):
                 # Get the original dimensions of the image
                 imgWidth = image.GetWidth()
                 imgHeight = image.GetHeight()
-                # We need the SMALLER of the current image size and the current Transcript Window size
-                # (Adjust width for scrollbar size!)
-                maxWidth = min(float(imgWidth), (self.GetSize()[0] - 20.0) * 0.98)
-                maxHeight = min(float(imgHeight), self.GetSize()[1] * 0.98)
+                if TransanaGlobal.configData.maxTranscriptImageWidth == 1:
+                    # We need the SMALLER of the current image size and the current Transcript Window size
+                    # (Adjust width for scrollbar size!)
+                    maxWidth = min(520, float(imgWidth), (self.GetSize()[0] - 20.0) * 0.98)
+                else:
+                    # We need the SMALLER of the current image size and the current Transcript Window size
+                    # (Adjust width for scrollbar size!)
+                    maxWidth = min(float(imgWidth), (self.GetSize()[0] - 20.0) * 0.98)
+                # It doesn't make sense to limit the image's height.
+                # When we have multiple transcripts, window heights can be VERY small!
+                maxHeight = imgHeight  # min(float(imgHeight), self.GetSize()[1] * 0.98)
                 # Determine the scaling factor for adjusting the image size
                 scaleFactor = min(maxWidth / float(imgWidth), maxHeight / float(imgHeight))
                 # If the image needs to be re-scaled ...
@@ -3072,31 +3348,11 @@ class TranscriptEditorDropTarget(wx.PyDropTarget):
                             targetRecNum = self.editor.TranscriptObj.episode_num
                             epObj = Episode.Episode(targetRecNum)
                             targetName = epObj.id
-                        # If there's more than one keyword in the drop list ...
-                        if len(sourceList) > 1:
-                            # Get user confirmation of the Keyword Add request
-                            if 'unicode' in wx.PlatformInfo:
-                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                prompt = unicode(_('Do you want to add multiple Keywords to %s "%s"?'), 'utf8')
-                                targetLabel = unicode(targetLabel, 'utf8')
-                            else:
-                                prompt = _('Do you want to add multiple Keywords to %s "%s"?')
-                            # Assemble the prompt data
-                            data = (targetLabel, targetName)
-                            # Display the prompt and get user feedback
-                            dlg = Dialogs.QuestionDialog(None, prompt % data)
-                            result = dlg.LocalShowModal()
-                            dlg.Destroy()
-                        # If there's only one keyword, we'll let DropKeyword handle the confirmation ...
-                        else:
-                            # ... so can just act like the user said Yes here.
-                            result = wx.ID_YES
-                        # If the user said Yes or we skipped the prompts ...
-                        if result == wx.ID_YES:
-                            # For each keyword in the sourceList list ...
-                            for element in sourceList:
-                                # ... add the keyword to the current element by simulating a keyword drop on the appropriate target
-                                DragAndDropObjects.DropKeyword(self.editor, element, targetType, targetName, targetRecNum, 0, confirmations=(len(sourceList) == 1))
+
+                        # For each keyword in the sourceList list ...
+                        for element in sourceList:
+                            # ... add the keyword to the current element by simulating a keyword drop on the appropriate target
+                            DragAndDropObjects.DropKeyword(self.editor, element, targetType, targetName, targetRecNum, 0, confirmations=True)  # confirmations=(len(sourceList) == 1))
                     else:
                         # No transcript Object loaded, do nothing
                         pass
@@ -3197,10 +3453,11 @@ class TranscriptDropSource(wx.DropSource):
                    elif last:
                       self.parent.ControlObject.DataWindow.DBTab.tree.EnsureVisible(last)
 
-            # Regular Clips are dropped on Collections or Clips.  Quick Clips are dropped on Keywords.
+            # Regular Clips are dropped on Collections, Clips, or Snapshots.  Quick Clips are dropped on Keywords.
             # Text dropped on a Keyword Group can create a Keyword.
             if (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'CollectionNode') or \
                (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'ClipNode') or \
+               (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'SnapshotNode') or \
                (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'KeywordNode') or\
                (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'KeywordGroupNode'):
                 # Make sure the cursor reflects an acceptable drop.  (This resets it if it was previously changed

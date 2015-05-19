@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -38,6 +38,8 @@ import FilterDialog
 import Note
 # Import Transana's Series Object
 import Series
+# import Transana's Snapshot Object
+import Snapshot
 # Import Transana's Text Report infrastructure
 import TextReport
 # import Transana's Constants
@@ -53,11 +55,16 @@ class ReportGenerator(wx.Object):
     def __init__(self, **kwargs):
         """ Create the Notes Report """
         # Parameters can include:
+        # controlObject=None
         # title=''
         # reportType       One of RootNode, SeriesNode, EpisodeNode, TranscriptNode, CollectionNode, or ClipNode
         # searchText=None  Search Text for Notes Report based on Notes Text Search results
 
         # Remember the parameters passed in and set values for all variables, even those NOT passed in.
+        if kwargs.has_key('controlObject'):
+            self.controlObject = kwargs['controlObject']
+        else:
+            self.controlObject = None
         # Specify the Report Title
         if kwargs.has_key('title'):
             self.title = kwargs['title']
@@ -79,7 +86,12 @@ class ReportGenerator(wx.Object):
         # Create the TextReport object, which forms the basis for text-based reports.
         self.report = TextReport.TextReport(None, title=self.title, displayMethod=self.OnDisplay,
                                             filterMethod=self.OnFilter, helpContext="Series, Episode, Collection, and Notes Reports")
-
+        # If a Control Object has been passed in ...
+        if self.controlObject != None:
+            # ... register this report with the Control Object (which adds it to the Windows Menu)
+            self.controlObject.AddReportWindow(self.report)
+            # Register the Control Object with the Report
+            self.report.controlObject = self.controlObject
         # Define the Filter List
         self.filterList = []
         # To speed report creation, freeze GUI updates based on changes to the report text
@@ -204,6 +216,8 @@ class ReportGenerator(wx.Object):
             majorList += DBInterface.list_of_all_notes(reportType='TranscriptNode', searchText=self.searchText)
             majorList += DBInterface.list_of_all_notes(reportType='CollectionNode', searchText=self.searchText)
             majorList += DBInterface.list_of_all_notes(reportType='ClipNode', searchText=self.searchText)
+            if TransanaConstants.proVersion:
+                majorList += DBInterface.list_of_all_notes(reportType='SnapshotNode', searchText=self.searchText)
         # if a specific Node flag is passed in ...
         else:
             # ... and use the Clips from the Episode for the majorList. 
@@ -254,6 +268,7 @@ class ReportGenerator(wx.Object):
                 tempTranscript = None
                 tempCollection = None
                 tempClip = None
+                tempSnapshot = None
                 # If we have a Series Note ...
                 if tempNote.series_num > 0:
                     # ... load the Series data
@@ -284,6 +299,12 @@ class ReportGenerator(wx.Object):
                     tempClip = Clip.Clip(tempNote.clip_num, skipText=True)
                     tempCollection = Collection.Collection(tempClip.collection_num)
                     noteParent = unicode(_('Clip'), 'utf8') + ' ' + tempCollection.GetNodeString() + ' > ' + tempClip.id
+                # If we have a Snapshot Note ...
+                elif tempNote.snapshot_num > 0:
+                    # ... load the Snapshot and Collection data.
+                    tempSnapshot = Snapshot.Snapshot(tempNote.snapshot_num)
+                    tempCollection = Collection.Collection(tempSnapshot.collection_num)
+                    noteParent = unicode(_('Snapshot'), 'utf8') + ' ' + tempCollection.GetNodeString() + ' > ' + tempSnapshot.id
 
                 # If we have Series data ...
                 if tempSeries != None:
@@ -318,7 +339,7 @@ class ReportGenerator(wx.Object):
                         reportText.WriteText(_('Episode: '))
                         # Turn bold off.
                         reportText.SetTxtStyle(fontBold = False)
-                        # Add the Series ID
+                        # Add the Episode ID
                         reportText.WriteText('%s' % tempEpisode.id)
                         reportText.Newline()
                     # If we're using the Styled Text Control ...
@@ -341,7 +362,7 @@ class ReportGenerator(wx.Object):
                         reportText.WriteText(_('Transcript: '))
                         # Turn bold off.
                         reportText.SetTxtStyle(fontBold = False)
-                        # Add the Series ID
+                        # Add the Transcript ID
                         reportText.WriteText('%s' % tempTranscript.id)
                         reportText.Newline()
                     # If we're using the Styled Text Control ...
@@ -364,7 +385,7 @@ class ReportGenerator(wx.Object):
                         reportText.WriteText(_('Collection: '))
                         # Turn bold off.
                         reportText.SetTxtStyle(fontBold = False)
-                        # Add the Series ID
+                        # Add the Collection ID
                         reportText.WriteText('%s' % tempCollection.GetNodeString())
                         reportText.Newline()
                     # If we're using the Styled Text Control ...
@@ -387,7 +408,7 @@ class ReportGenerator(wx.Object):
                         reportText.WriteText(_('Clip: '))
                         # Turn bold off.
                         reportText.SetTxtStyle(fontBold = False)
-                        # Add the Series ID
+                        # Add the Clip ID
                         reportText.WriteText('%s' % tempClip.id)
                         reportText.Newline()
                     # If we're using the Styled Text Control ...
@@ -400,6 +421,29 @@ class ReportGenerator(wx.Object):
                         reportText.SetBold(False)
                         # Add the Clip ID
                         reportText.InsertStyledText('%s\n' % tempClip.id)
+                # If we have Snapshot data ...
+                if tempSnapshot != None:
+                    # If we're using the Rich Text Control ...
+                    if TransanaConstants.USESRTC:
+                        # Turn bold on.
+                        reportText.SetTxtStyle(fontBold = True)
+                        # Add the note ID to the report
+                        reportText.WriteText(_('Snapshot: '))
+                        # Turn bold off.
+                        reportText.SetTxtStyle(fontBold = False)
+                        # Add the Snapshot ID
+                        reportText.WriteText('%s' % tempSnapshot.id)
+                        reportText.Newline()
+                    # If we're using the Styled Text Control ...
+                    else:
+                        # Turn bold on.
+                        reportText.SetBold(True)
+                        # Add the note ID to the report
+                        reportText.InsertStyledText(_('Snapshot: '))
+                        # Turn bold off.
+                        reportText.SetBold(False)
+                        # Add the Snapshot ID
+                        reportText.InsertStyledText('%s\n' % tempSnapshot.id)
 
                 # If we're going through the list for the first time and need to populate the filter list ...
                 if populateFilterList:
@@ -424,8 +468,8 @@ class ReportGenerator(wx.Object):
                     reportText.Newline()
                     # Turn bold off.
                     reportText.SetTxtStyle(fontBold = False, parLeftIndent = 127)
-                    # Add the note text to the report
-                    reportText.WriteText('%s' % tempNote.text)
+                    # Add the note text to the report (rstrip() prevents formatting problems when notes end with blank lines)
+                    reportText.WriteText('%s' % tempNote.text.rstrip())
                     reportText.Newline()
                 # If we're using the Styled Text Control ...
                 else:
@@ -444,7 +488,7 @@ class ReportGenerator(wx.Object):
                     # Turn bold off.
                     reportText.SetBold(False)
                     # Add the note text to the report
-                    reportText.InsertStyledText('%s\n' % tempNote.text)
+                    reportText.InsertStyledText('%s\n' % tempNote.text.rstrip())
 
                     # Add a blank line after each group
                     reportText.InsertStyledText('\n')
@@ -475,6 +519,8 @@ class ReportGenerator(wx.Object):
             reportScope = 5
         elif self.reportType == 'ClipNode':
             reportScope = 6
+        elif self.reportType == 'SnapshotNode':
+            reportScope = 7
         # Define the Filter Dialog.  We need reportType 13 to identify the Notes Report, the appropriate reportScope,
         # and the capacity to filter Notes.
         dlgFilter = FilterDialog.FilterDialog(self.report, -1, self.title, reportType=13,

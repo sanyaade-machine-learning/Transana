@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -31,6 +31,8 @@ import Dialogs
 import TransanaConstants
 # import Transana's Global variables
 import TransanaGlobal
+# Import Transana Images
+import TransanaImages
 # import Transana's Printout Class
 import TranscriptPrintoutClass
 
@@ -51,7 +53,7 @@ class NoteEditor(wx.Dialog):
     def __init__(self, parent, default_text=""):
         """Initialize an NoteEditor object."""
         # Determine the screen size
-        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        rect = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
         # We'll make our default window 60% of the size of the screen
         self.width = rect[2] * .60
         self.height = rect[3] * .60
@@ -117,26 +119,26 @@ class _NotePanel(wx.Panel):
         # Place a Tool Bar on the Panel
         self.toolbar = wx.ToolBar(self, style = wx.TB_HORIZONTAL | wx.TB_TEXT)   # wx.RAISED_BORDER | 
         # Add an Insert Date/Time button to the Toolbar
-        self.toolbar.AddTool(T_DATETIME, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Time16.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Insert Date / Time'))
+        self.toolbar.AddTool(T_DATETIME, TransanaImages.Time16.GetBitmap(), shortHelpString=_('Insert Date / Time'))
         # Add a Save As Text button to the Toolbar
-        self.toolbar.AddTool(T_SAVEAS, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "SaveTXT16.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Save As'))
+        self.toolbar.AddTool(T_SAVEAS, TransanaImages.SaveTXT16.GetBitmap(), shortHelpString=_('Save As'))
         # Add a Page Setup button to the toolbar
-        self.toolbar.AddTool(T_PAGESETUP, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintSetup.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Page Setup'))
+        self.toolbar.AddTool(T_PAGESETUP, TransanaImages.PrintSetup.GetBitmap(), shortHelpString=_('Page Setup'))
         # Add a Print Preview button to the Toolbar
-        self.toolbar.AddTool(T_PRINTPREVIEW, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintPreview.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print Preview'))
+        self.toolbar.AddTool(T_PRINTPREVIEW, TransanaImages.PrintPreview.GetBitmap(), shortHelpString=_('Print Preview'))
 
-        # Disable Print Preview on the PPC Mac
-        if platform.processor() == 'powerpc':
+        # Disable Print Preview on the PPC Mac and for Right-To-Left languages
+        if (platform.processor() == 'powerpc') or (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
             self.toolbar.EnableTool(T_PRINTPREVIEW, False)
             
         # Add a Print button to the Toolbar
-        self.toolbar.AddTool(T_PRINT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Print.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print'))
+        self.toolbar.AddTool(T_PRINT, TransanaImages.Print.GetBitmap(), shortHelpString=_('Print'))
         # Get the graphic for Help ...
         bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
         # ... and create a bitmap button for the Help button
         self.toolbar.AddTool(T_HELP, bmp, shortHelpString=_("Help"))
         # Add an Exit button to the Toolbar
-        self.toolbar.AddTool(T_EXIT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Exit.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Exit'))
+        self.toolbar.AddTool(T_EXIT, TransanaImages.Exit.GetBitmap(), shortHelpString=_('Exit'))
         # Adding a separator here helps things look better on the Mac.
         self.toolbar.AddSeparator()
         # Cause the Toolbar to be built
@@ -151,8 +153,14 @@ class _NotePanel(wx.Panel):
         # Add Quick Search tools
         # Get the icon for the Search Backwards button
         bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
+        # If we're in a Right-To-Left language ...
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+            # ... reverse the direction of the image arrow
+            bmp = bmp.ConvertToImage().Mirror().ConvertToBitmap()
         # Create the Bitmap Button for Search Back
         self.searchBack = wx.BitmapButton(self, CMD_SEARCH_BACK_ID, bmp, style=wx.NO_BORDER)
+        # Add LayoutDirection to prevent problems with Right-To-Left languages
+        self.searchBack.SetLayoutDirection(wx.Layout_LeftToRight)
         # Add this button to the Toolbar Sizer
         hsizer.Add(self.searchBack, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
         # Connect the button to the OnSearch Method
@@ -169,6 +177,10 @@ class _NotePanel(wx.Panel):
         hsizer.Add((10, 1))
         # Get the icon for the Search Forwards button
         bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
+        # If we're in a Right-To-Left language ...
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+            # ... reverse the direction of the image arrow
+            bmp = bmp.ConvertToImage().Mirror().ConvertToBitmap()
         # Create the Bitmap Button for Search Back
         self.searchNext = wx.BitmapButton(self, CMD_SEARCH_NEXT_ID, bmp, style=wx.NO_BORDER)
         # Add this button to the Toolbar Sizer
@@ -180,7 +192,7 @@ class _NotePanel(wx.Panel):
 
         # add the note editing widget to the panel.  User a multi-line TextCtrl, and TE_RICH style to enable
         # font size change on Windows.
-        self.txt = wx.TextCtrl(self, -1, style=wx.TE_MULTILINE | wx.TE_RICH)
+        self.txt = wx.TextCtrl(self, -1, style=wx.TE_MULTILINE | wx.TE_RICH2)
         # Get the Default Style
         txtStyle = self.txt.GetDefaultStyle()
         # Get the Default Font from the Default Style
@@ -230,9 +242,11 @@ class _NotePanel(wx.Panel):
         wx.EVT_MENU(self, T_EXIT, self.OnClose)
 
         # Define the SetFocus Event for the Text Control.  This is where the SetSelection can get called so it will work.
-        wx.EVT_SET_FOCUS(self.txt, self.OnSetFocus)
+##        wx.EVT_SET_FOCUS(self.txt, self.OnSetFocus)
         # Put the focus on the Text Control (needed for Mac)
         self.txt.SetFocus()
+
+        wx.CallAfter(self.txt.SetSelection, 0, 0)
 
     def set_text(self, text):
         """ Place text in the editor control. """
@@ -255,8 +269,8 @@ class _NotePanel(wx.Panel):
         self.toolbar.EnableTool(T_SAVEAS, enable)
         self.toolbar.EnableTool(T_PAGESETUP, enable)
 
-        # Disable Print Preview on the PPC Mac.
-        if not (platform.processor() == 'powerpc'):
+        # Disable Print Preview on the PPC Mac and for Right-To-Left languages
+        if (platform.processor() != 'powerpc') and (TransanaGlobal.configData.LayoutDirection != wx.Layout_RightToLeft):
             self.toolbar.EnableTool(T_PRINTPREVIEW, enable)
             
         self.toolbar.EnableTool(T_PRINT, enable)
@@ -345,12 +359,12 @@ class _NotePanel(wx.Panel):
         # Get the current Date / Time information from the system
         (year, month, day, hour, minute, second, weekday, yearday, dst) = time.localtime()
         # Are we in the morning?
-        ampm = 'am'
+        ampm = _('am')
         # Let's use 12-hour time.  If it's afternoon ...
         if hour > 12:
             # ... decrement the hour value and signal that it's afternoon
             hour -= 12
-            ampm = 'pm'
+            ampm = _('pm')
         # Add the Date / Time stamp to the Note Text
         if TransanaConstants.singleUserVersion:
             # TODO:  Localize this!
@@ -384,13 +398,27 @@ class _NotePanel(wx.Panel):
                 # If the user chooses to overwrite ...
                 if dlg2.LocalShowModal() == wx.ID_YES:
                     # ... Export the data to the file
-                    self.txt.SaveFile(fname)
+##                    self.txt.SaveFile(fname)
+
+                    import codecs
+                    tmpFile = codecs.open(fname, 'w', 'utf8')
+                    tmpFile.write(self.txt.GetValue())
+                    tmpFile.flush()
+                    tmpFile.close()
+                    
                 # Destroy the error dialog
                 dlg2.Destroy()
             # If the specified file doesn't already exist ...
             else:
                 # ... export the data to the file
-                self.txt.SaveFile(fname)
+##                self.txt.SaveFile(fname)
+
+                import codecs
+                tmpFile = codecs.open(fname, 'w', 'utf8')
+                tmpFile.write(self.txt.GetValue())
+                tmpFile.flush()
+                tmpFile.close()
+
         # Destroy the File Dialog
         dlg.Destroy()
         
@@ -430,8 +458,8 @@ class _NotePanel(wx.Panel):
             self.SetStatusText(_("Print Preview Problem"))
             return
         # Calculate the best size for the Print Preview window
-        theWidth = max(wx.Display(0).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
-        theHeight = max(wx.Display(0).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
+        theWidth = max(wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
+        theHeight = max(wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
         # Create the dialog to hold the wx.PrintPreview object
         frame2 = wx.PreviewFrame(self.preview, TransanaGlobal.menuWindow, _("Print Preview"), size=(theWidth, theHeight))
         frame2.Centre()
@@ -485,3 +513,5 @@ class _NotePanel(wx.Panel):
             # cursor moves to the beginning of the text every time we focus on this control
             # instead of only the first.
             self.initialized = True
+
+        event.Skip()

@@ -1,4 +1,4 @@
-# Copyright (C) 2006 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2006 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -39,6 +39,8 @@ import wx.media
 import Dialogs
 # import the Transana Global data
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 # import the Transana VideoWindow
 import VideoWindow
 
@@ -72,18 +74,20 @@ class VideoPlayer(wx.Panel):
         self.playWhenLoaded = False
         # We're having trouble knowing the media length.  Let's track whether we know it yet.
         self.mediaLengthKnown = False
-        # The Mac requires the following so that versions look more similar across platforms
+        # Set "Window Variant" to small only for Mac to use small icons
         if 'wxMac' in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
-        # Set the background color to Black.  
+        # Set the background color to White.
         self.SetBackgroundColour(wx.WHITE)
         # If Transana is installed in a folder that contains accented characters, we need to adjust the programDir to handle that
         if ('unicode' in wx.PlatformInfo) and isinstance(TransanaGlobal.programDir, str):
             TransanaGlobal.programDir = TransanaGlobal.programDir.decode('cp1250')
         # Build the full file name for the Splash Screen image
-        imgFileName = os.path.join(TransanaGlobal.programDir, 'images', 'splash.gif')
+#        imgFileName = os.path.join(TransanaGlobal.programDir, 'images', 'splash.gif')
         # Get the Splash Srceen image
-        self.splashImage = wx.Image(imgFileName)
+        self.splashImage = TransanaImages.splash.GetImage()
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+            self.splashImage = self.splashImage.Mirror()
         # Get the size of the Video Player Panel
         (width, height) = self.GetClientSize()
         # Get a copy of the original image so the original is preserved, doesn't lose resolution.
@@ -162,6 +166,12 @@ class VideoPlayer(wx.Panel):
         # Create a sizer to handle the media control
         box = wx.BoxSizer(wx.VERTICAL)
         box.Add(self.movie, 1, wx.EXPAND | wx.ALL, 0)
+
+        # With wxPython 2.9.4.0, panels get assigned a minimum size below which they try not to shrink
+        # when the frame shrinks.  This was making the video files become different sizes when smaller
+        # than their original size (or perhaps below 320 x 240).  This fixes that.
+        self.SetMinSize((10, 10))
+        
         # If we are including check boxes ...
         if self.includeCheckBoxes:
             # ... create a checkbox sizer
@@ -629,55 +639,6 @@ class VideoPlayer(wx.Panel):
         # Explicitly call the parent's OnRightUp method.
         self.parent.OnRightUp(event)
 
-    def OnSizeChange(self):
-        """ OBSOLETE.  Handle size changes that are not event-driven """
-        
-        print "video_player.OnSizeChange() disabled as obsolete"
-        
-        # Only change the size of the video window if Auto Arrange is ON!
-        if FALSE and TransanaGlobal.configData.autoArrange:
-            (sizeX, sizeY) = self.movie.GetBestSize()
-            # Now that we have a size, let's position the window
-            #  Determine the screen size 
-            rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
-            #  Get the current position of the Video Window
-            pos = self.GetPosition()
-            #  Establish the minimum width of the media player control 
-            # (if media is audio-only, for example)
-            minWidth = max(sizeX, 300)
-            # use Movie Height
-            minHeight = sizeY 
-            # Adjust Video Size, unless you are showing the Splash Screen
-            sizeAdjust = TransanaGlobal.configData.videoSize
-            # Take Video Size Menu spec into account (50%, 66%, 100%, 150%, 200%)
-            minWidth = int(minWidth * sizeAdjust / 100.0)
-            minHeight = int(minHeight * sizeAdjust / 100.0)
-
-            # We need to know the height of the Window Header to adjust the size of the Graphic Area
-            headerHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
-            #  Set the dimensions of the video window as follows:
-            #    left:    right-justify to the screen 
-            #           (left side of screen - media player width - 3 pixel margin)
-            #    top:     leave top position unchanged
-            #    width:   use minimum media player width established above
-            #    height:  use height of Movie  + ControlBarSize + headerHeight pixels for the player controls
-            # rect[0] compensates if the Start Menu is on the left side of the screen
-            if self.backend in [wx.media.MEDIABACKEND_DIRECTSHOW, wx.media.MEDIABACKEND_WMP10]:
-                controlBarSize = 65
-            elif self.backend == wx.media.MEDIABACKEND_QUICKTIME:
-                controlBarSize = 10
-            else:
-                controlBarSize = 100  # This'll be quite noticable!
-            self.SetDimensions(rect[0] + rect[2] - minWidth - 3, 
-                               pos[1], 
-                               minWidth, 
-                               minHeight + controlBarSize + headerHeight)
-            if self.parent != None:
-                self.parent.UpdateVideoWindowPosition(rect[0] + rect[2] - minWidth - 3, 
-                                                      pos[1], 
-                                                      minWidth, 
-                                                      minHeight + controlBarSize + headerHeight)
-
     def OnSize(self, event):
         """ Process Size Change event and notify the ControlObject """
         # if event is not None (which it can be if this is called from non-event-driven code rather than
@@ -690,6 +651,10 @@ class VideoPlayer(wx.Panel):
 
                 # Force the media player to preserve Aspect Ratio
                 (sizex, sizey) = self.movie.GetBestSize()
+                if self.GetMaxSize()[0] > 0:
+                    sizex = min(sizex, self.GetMaxSize()[0])
+                if self.GetMaxSize()[1] > 0:
+                    sizey = min(sizey, self.GetMaxSize()[1])
                 # If the video HAS a width ...
                 if sizex > 0:
                     # ... determine the original aspect ratio of the media file
@@ -697,7 +662,6 @@ class VideoPlayer(wx.Panel):
                     # Reset the height of the media player AND the media itself based on width and original aspect ratio
                     self.SetSize((self.GetSize()[0], self.GetSize()[0] * aspectRatio))
                     self.movie.SetSize((self.GetSize()[0], self.GetSize()[0] * aspectRatio))
-                    
                 # ... refresh the media player
                 self.movie.Refresh()
                 self.Refresh()

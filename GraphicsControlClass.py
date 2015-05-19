@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2012  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2014  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -176,8 +176,9 @@ class GraphicsControl(wx.ScrolledWindow):
     def getHeight(self):
         return self.canvassize[1]
 
-    def Clear(self):
-        """ Clear the Graphic Control """
+    def Clear(self, reset=True):
+        """ Clear the Graphic Control
+            The reset variable (when false) allows the Hybrid Visualization's Filter box to work! """
         # Remove all lines in both layers
         self.lines = []
         self.lines2 = []
@@ -185,9 +186,11 @@ class GraphicsControl(wx.ScrolledWindow):
         self.cursorPosition = None
         # Remove all text
         self.text = []
-        # Remove background graphic
-        self.backgroundGraphicName = ''
-        self.backgroundImage = None
+        # if reset is true (always except Hybrid Visualization) ...
+        if reset:
+            # ... remove background graphic
+            self.backgroundGraphicName = ''
+            self.backgroundImage = None
         # Initialize the Temporary Visualization Image to None to trigger creation when needed
         self.visualizationImage = None
         # Signal the need to redraw the control
@@ -277,7 +280,6 @@ class GraphicsControl(wx.ScrolledWindow):
                     self.LoadFile(self.backgroundGraphicName)
                 # Create a Buffered Device Context using the initial bitmap
                 dc = wx.BufferedDC(None, self.bmpBuffer)
-
             else:
                 # Create a Buffered Device Context using the initial bitmap
                 dc = wx.BufferedDC(None, self.bmpBuffer)
@@ -667,7 +669,13 @@ class GraphicsControl(wx.ScrolledWindow):
             #   Unpaint previously drawn vertical tracking line
             #   pixelList is [(colour, y)...], saved over from previous event
             for segment in self.pixelList:
-                dc.SetPen(wx.Pen(segment[0],1))
+                # Get the pen color
+                colour = segment[0]
+                # If the pen color is not valid (as on OS X with wxPthon 2.9.5.0.b) ...
+                if not colour.IsOk():
+                    # ... then just use this valid color
+                    colour = wx.Colour(255, 255, 255, 255)
+                dc.SetPen(wx.Pen(colour,1))
                 dc.DrawLine(int(self.lastX), int(segment[1]), int(self.lastX), int(self.canvassize[1]))
             
             # Save a new pixelList to be used in next event
@@ -677,7 +685,7 @@ class GraphicsControl(wx.ScrolledWindow):
                 colour = dc.GetPixel(int(self.x), int(y))
                 if colour != prevColour: # If color has changed, save color and position of change
                     self.pixelList.append((colour, y)) 
-                    prevColour = colour # Update prevColoyr
+                    prevColour = colour # Update prevColor
             
             # Draw black rectangle
             #   Draw initial vertical line
@@ -803,7 +811,7 @@ class GraphicsControl(wx.ScrolledWindow):
         # Set the active image (self.bmpBuffer) to the Bitmap
         self.bmpBuffer = tempBitmap
         # Required to get the image to show up!
-        self.Refresh(False)
+        self.Refresh()
 
     # Define the Method that Saves the image as a Graphic
     def SaveAs(self):
@@ -830,6 +838,7 @@ class GraphicsControl(wx.ScrolledWindow):
             # Therefore, let's go with reloading the image entirely. 
             # To do this, set the Background Image to None, and it will be loaded when the buffer is redrawn, via OnIdle.
             self.backgroundImage = None
+
         self.reInitBuffer = True
         self.reSetSelection = True
 

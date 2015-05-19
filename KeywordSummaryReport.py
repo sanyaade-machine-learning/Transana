@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2012  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2014  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -39,21 +39,27 @@ import Dialogs
 import FilterDialog
 # Import Transana's keyword object
 import KeywordObject as Keyword
+# Import Transana's SnapshotWindow so we can get CodingStyleGraphics for keywords that have color and style defined
+import SnapshotWindow
 # Import Transana's Text Report infrastructure
 import TextReport
 # Import Transana's Global variables
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 # Import Transana's Printout Class (for DPI definition)
 import TranscriptPrintoutClass
 
 
 class KeywordSummaryReport(wx.Object):
     """ This class creates and displays the Keyword Summary Report """
-    def __init__(self, keywordGroupName=None):
+    def __init__(self, keywordGroupName=None, controlObject = None):
         """ Create the Keyword Summary Report.  If the keywordGroupName parameter is specified, the report scope
             is a single (specified) keyword group.  Otherwise, it should encompass all Keyword Groups. """
         # Remember the keyword group name passed if, if any
         self.keywordGroupName = keywordGroupName
+        # Remember the Control Object, if any
+        self.controlObject = controlObject
         # Specify the Report Title
         self.title = unicode(_("Keyword Summary Report"), 'utf8')
         # If no Keyword Group Name is specified ...
@@ -68,6 +74,12 @@ class KeywordSummaryReport(wx.Object):
             # that specifies a single Keyword Group, so no filtering is needed.
             self.report = TextReport.TextReport(None, title=self.title, displayMethod=self.OnDisplay,
                                                 helpContext="Keyword Summary Report")
+        # If a Control Object has been passed in ...
+        if self.controlObject != None:
+            # ... register this report with the Control Object (which adds it to the Windows Menu)
+            self.controlObject.AddReportWindow(self.report)
+            # Register the Control Object with the Report
+            self.report.controlObject = self.controlObject
         # Initialize the Keyword Group list for the Filter Dialog.  Start with an empty list.
         self.keywordGroupFilterList = []
         # Get a list of all Keyword Groups
@@ -172,10 +184,10 @@ class KeywordSummaryReport(wx.Object):
         # Iterate through the list of all keyword examples ...
         for KWE in DBInterface.list_of_keyword_examples():
             # ... adding the keywords to the KeywordExamples List
-            keywordExamplesList.append((KWE[2], KWE[3]))
+            keywordExamplesList.append((KWE[3], KWE[4]))
 
         # Get the graphic for the Keyword Example indicator
-        kweGraphic = wx.Image(os.path.join(TransanaGlobal.programDir, "images", "Clip16.xpm"), wx.BITMAP_TYPE_XPM)
+        kweGraphic = TransanaImages.Clip16.GetImage()
 
         # Iterate through the list of Keyword Groups
         for keywordGroup in keywordGroupList:
@@ -238,7 +250,31 @@ class KeywordSummaryReport(wx.Object):
                             # If so, add the Keyword Example Indicator Graphic
                             reportText.WriteText(' ')
                             reportText.WriteImage(kweGraphic)
-                            
+
+                        # If the Keyword has a defined Color ...
+                        if keywordObject.lineColorDef != '':
+                            # ... let's create a Keyword Style dictionary to hold style data.
+                            #     Use the color and default to FilledRectangle, Solid, 3.
+                            keywordStyle = {'lineColorDef' :  keywordObject.lineColorDef,
+                                            'drawMode'     :  'FilledRectangle',
+                                            'lineStyle'    :  'Solid',
+                                            'lineWidth'    :  3 
+                                            }
+                            # If the Keyword has a defined Coding Shape, use that.
+                            if keywordObject.drawMode != '':
+                                keywordStyle['drawMode'] = keywordObject.drawMode
+                            # If the Keyword has a defined Line Style, use that.
+                            if keywordObject.lineStyle != '':
+                                keywordStyle['lineStyle'] = keywordObject.lineStyle
+                            # If the Keyword has a defined Line Width, use that
+                            if keywordObject.lineWidth != '':
+                                keywordStyle['lineWidth'] = keywordObject.lineWidth
+                            # Create a graphic showing the appropriate Coding Style
+                            codingGraphic = SnapshotWindow.CodingKeyGraphic(keywordStyle)
+                            # Add the Coding Graphic to the Report
+                            reportText.WriteText(' ')
+                            reportText.WriteImage(codingGraphic)
+
                         # Finish the paragraph
                         reportText.Newline()
 

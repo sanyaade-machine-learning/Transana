@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -26,6 +26,8 @@ import ConfigData
 import Dialogs
 # import Transana's Constants
 import TransanaConstants
+# import Python's codecs module to handle UTF-8 encoded text files
+import codecs
 # import Python's os and sys modules
 import os
 import sys
@@ -43,18 +45,29 @@ for path in sys.path:
 if os.path.isfile(programDir):
     programDir = os.path.dirname(programDir)
 
+# If we've done a build on the Mac, we need to adjust the path!!
+if hasattr(sys, "frozen") and ('wxMac' in wx.PlatformInfo):
+    # Split the path into its element directories
+    pathElements = programDir.split(os.sep)
+    # Initialize the Program Directory
+    programDir = ''
+    # Iterate through the path elements, skipping the blank first one and the last two, which get added in the
+    # build process
+    for element in pathElements[1:-2]:
+        # Add a path separator and the path element
+        programDir += os.sep + element
 
 # Determine the height of the Menu Window.  
 if 'wxMac' in wx.PlatformInfo:
     # We set it to 24 on the Mac!  It used to be 0, but seems to need to be 24 for wxPython 2.6.1.0.
-    menuHeight = 24
+    menuHeight = 0
 elif 'wxGTK' in wx.PlatformInfo:
-    # Ubuntu 12.04 seems to use 24 points for the menu area, then another 4 for window borders
-    menuHeight = 24 + 4  # wx.Display(0).GetClientArea()[1]
+    # Ubuntu menu height is handled by window size and pos logic
+    menuHeight = 0
 else:
     # While we default to 44, this value actually can get altered elsewhere to reflect the height of
     # the title/header bar.  XP using Large Fonts, for example, needs a larger value.
-    menuHeight = 44
+    menuHeight = 56
 
 # Menu Window, defined in Transana.py
 menuWindow = None
@@ -102,7 +115,7 @@ def getColorDefs(filename):
         # Start exception handling
         try:
             # Open the file to be read
-            f = file(filename, 'r')
+            f = codecs.open(filename, "r", 'utf8')  # file(filename, 'r')
             # Initialize the line counter
             lineCount = 1
             # Read each line in the file
@@ -125,6 +138,10 @@ def getColorDefs(filename):
                        (redVal < 0) or (redVal > 255):
                         # ... use a ValueError exception to signal the problem
                         raise ValueError
+                    try:
+                        colName = colName.decode('utf8')
+                    except UnicodeError:
+                        pass
                     colorList.append((colName, (redVal, greenVal, blueVal)))
                 # increment the line counter
                 lineCount += 1
@@ -170,6 +187,7 @@ def getColorDefs(filename):
                      ('Dark Slate Gray',   ( 47,  79,  79)),
                      ('Dark Green',        (  0, 128,   0)),
                      ('Green Blue',        (  0, 255, 128)),
+#                     ('Green',             (  0, 255,   0)),
                      ('Chartreuse',        (128, 255,   0)),
                      ('Olive',             (128, 128,   0)),
                      ('Sienna',            (142, 107,  35)),
@@ -209,12 +227,13 @@ transana_textColorList = [('Black',             (  0,   0,   0)),
                           ('Dark Slate Gray',   ( 47,  79,  79)),
                           ('Dark Green',        (  0, 128,   0)),
                           ('Green Blue',        (  0, 255, 128)),
-                          ('Green',             (  0, 255,   0)),
+#                          ('Green',             (  0, 255,   0)),
                           ('Chartreuse',        (128, 255,   0)),
                           ('Light Green',       (128, 255, 128)),
                           ('Olive',             (128, 128,   0)),
                           ('Sienna',            (142, 107,  35)),
-                          ('Gray',               (128, 128, 128)),
+                          ('Gray',              (128, 128, 128)),
+                          ('Light Gray',        (192, 192, 192)),
                           ('Purple',            (128,   0, 255)),
                           ('Light Purple',      (176,  0, 255)),
                           ('Dark Purple',       (128,   0, 128)),
@@ -260,9 +279,10 @@ def SetColorVariables():
 # (I had to take the translation code out of the color definition data structure, as color names were only showing up in
 #  the initial language.) This is needed for Text Colors, not for Graphics Colors, and is displayed in the Font Dialog.
 tmpColorList = (_('Black'), _('Dark Blue'), _('Blue'), _('Light Blue'), _('Cyan'), _('Light Aqua'), _('Green Blue'),
-                 _('Dark Green'), _('Blue Green'),_('Green'), _('Chartreuse'), _('Light Green'), _('Olive'), _('Gray'),
-                _('Lavender'), _('Purple'), _('Dark Purple'), _('Maroon'), _('Magenta'), _('Light Fuchsia'), _('Rose'),
-                _('Red'), _('Salmon'), _('Orange'), _('Yellow'), _('Light Yellow'), _('White'),
+                _('Dark Green'), _('Blue Green'), #_('Green'),
+                _('Chartreuse'), _('Light Green'), _('Olive'), _('Gray'),
+                _('Light Gray'), _('Lavender'), _('Purple'), _('Dark Purple'), _('Maroon'), _('Magenta'), 
+                _('Light Fuchsia'), _('Rose'), _('Red'), _('Salmon'), _('Orange'), _('Yellow'), _('Light Yellow'), _('White'),
                 _('Violet Red'), _('Sienna'), _('Indian Red'), _('Goldenrod'), _('Dark Slate Gray'), _('Red Orange'),
                 _('Light Purple'))
 
@@ -284,3 +304,21 @@ transana_grayLookup = {}
 # Iterate through the list of Graphics "Black and White" colors and build a dictionary for looking up color definition based on name
 for (colorName, colorDef) in transana_grayList:
     transana_grayLookup[colorName] = colorDef
+
+def CenterOnPrimary(win):
+    """ a wxWindow is passed in as the win parameter.
+        This window should be centered on the primary monitor used by Transana on a multi-monitor system. """
+    (x1, y1, w1, h1) = wx.Display(configData.primaryScreen).GetClientArea()
+    (x2, y2, w2, h2) = win.GetRect()
+    win.SetPosition((x1 + ((w1 - w2) / 2), y1 + ((h1 - h2) / 2)))
+
+##    print "Misc.CenterOnPrimary():", (x1, y1, w1, h1), (x2, y2, w2, h2)
+##    print "     Window centered on", (x1 + ((w1 - w2) / 2), y1 + ((h1 - h2) / 2))
+##    print
+
+def GetImage(imagename):
+    if configData.LayoutDirection == wx.Layout_RightToLeft:
+        img = imagename.GetImage().Mirror()
+        return img.ConvertToBitmap()
+    else:
+        return imagename.GetBitmap()

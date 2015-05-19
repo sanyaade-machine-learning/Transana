@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -25,9 +25,12 @@ import DBInterface
 import Dialogs
 import Episode
 import Series
+import Snapshot
 import KWManager
 import Misc
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 
 import wx
 import os
@@ -115,8 +118,7 @@ class KeywordListEditForm(Dialogs.GenForm):
         v3.Add(rm_kw, 0, wx.EXPAND | wx.TOP, 10)
         wx.EVT_BUTTON(self, wx.ID_FILE3, self.OnRemoveKW)
 
-        bitmap = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KWManage.xpm"), wx.BITMAP_TYPE_XPM)
-        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, bitmap)
+        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, TransanaImages.KWManage.GetBitmap())
         v3.Add(kwm, 0, wx.EXPAND | wx.TOP, 10)
         # Add a spacer to increase the height of the Keywords section
         v3.Add((0, 60))
@@ -180,7 +182,12 @@ class KeywordListEditForm(Dialogs.GenForm):
         self.SetSizeHints(max(600, width), max(385, height))
         # Center the form on screen
         self.CenterOnScreen()
-        
+
+        # We need to set some minimum sizes so the sizers will work right
+        self.kw_group_lb.SetSizeHints(minW = 50, minH = 20)
+        self.kw_lb.SetSizeHints(minW = 50, minH = 20)
+        self.ekw_lb.SetSizeHints(minW = 50, minH = 20)
+
         # We need to capture the OK and Cancel button clicks locally.  We'll use FindWindowByID to locate the correct widgets.
         self.Bind(wx.EVT_BUTTON, self.OnOK, self.FindWindowById(wx.ID_OK))
         self.Bind(wx.EVT_BUTTON, self.OnCancel, self.FindWindowById(wx.ID_CANCEL))
@@ -194,9 +201,9 @@ class KeywordListEditForm(Dialogs.GenForm):
             self.kw_group_lb.Append(keywordGroup)
 
         # Get the Parent Object, so we can know the Default Keyword Group
-        if type(self.obj) == type(Episode.Episode()):
+        if isinstance(self.obj, Episode.Episode):
             objParent = Series.Series(self.obj.series_num)
-        elif type(self.obj) == type(Clip.Clip()):
+        elif isinstance(self.obj, Clip.Clip) or isinstance(self.obj, Snapshot.Snapshot):
             objParent = Collection.Collection(self.obj.collection_num)
         if len(self.kw_groups) > 0:
             # Set the Keyword Group to the Default keyword Group
@@ -246,7 +253,28 @@ class KeywordListEditForm(Dialogs.GenForm):
             self.kw_list = DBInterface.list_of_keywords_by_group(sel)
             self.kw_lb.Clear()
             self.kw_lb.InsertItems(self.kw_list, 0)
-        
+
+    def highlight_bad_keyword(self):
+        """ Highlight the first bad keyword in the keyword list """
+        # Get the Keyword Group name
+        sel = self.kw_group_lb.GetStringSelection()
+        # If there was a selected Keyword Group ...
+        if sel:
+            # ... initialize a list of keywords
+            kwlist = []
+            # Iterate through the current keyword group's keywords ...
+            for item in range(self.kw_lb.GetCount()):
+                # ... and add them to the list of keywords 
+                kwlist.append("%s : %s" % (sel, self.kw_lb.GetString(item)))
+            # Now iterate through the list of Episode Keywords
+            for item in range(self.ekw_lb.GetCount()):
+                # If the keyword is from the current Keyword Group AND the keyword is not in the keyword list ...
+                if (self.ekw_lb.GetString(item)[:len(sel)] == sel) and (not self.ekw_lb.GetString(item) in kwlist):
+                    # ... select the current item in the Episode Keywords control ...
+                    self.ekw_lb.SetSelection(item)
+                    # ... and stop looking for bad keywords.  (We just highlight the first!)
+                    break
+
     def OnAddKW(self, evt):
         """Invoked when the user activates the Add Keyword (>>) button."""
         # For each selected Keyword ...

@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2003 - 2013 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -57,7 +57,23 @@ class AboutBox(wx.Dialog):
         mainSizer.Add(title, 0, wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
 
         # Create a label for the Program Version
-        version = wx.StaticText(self, -1, _("Version %s") % TransanaConstants.versionNumber, style=wx.ALIGN_CENTRE)
+        # Build the Version label
+        if TransanaConstants.singleUserVersion:
+            if TransanaConstants.labVersion:
+                versionLbl = _("Computer Lab Version")
+            elif TransanaConstants.demoVersion:
+                versionLbl = _("Demonstration Version")
+            elif TransanaConstants.workshopVersion:
+                versionLbl = _("Workshop Version")
+            else:
+                if TransanaConstants.proVersion:
+                    versionLbl = _("Professional Version")
+                else:
+                    versionLbl = _("Standard Version")
+        else:
+            versionLbl = _("Multi-user Version")
+        versionLbl += " %s"
+        version = wx.StaticText(self, -1, versionLbl % TransanaConstants.versionNumber, style=wx.ALIGN_CENTRE)
         # Specify 10pt Bold font 
         font = wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD)
         # Apply the font to the Version Label
@@ -66,7 +82,7 @@ class AboutBox(wx.Dialog):
         mainSizer.Add(version, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
 
         # Create a label for the Program Copyright
-        str = _("Copyright 2002-2013\nThe Board of Regents of the University of Wisconsin System")
+        str = _("Copyright 2002-2014\nThe Board of Regents of the University of Wisconsin System")
         copyright = wx.StaticText(self, -1, str, style=wx.ALIGN_CENTRE)
         # Apply the last specified font (from Program Version) to the copyright label
         font = self.GetFont()
@@ -149,7 +165,8 @@ class AboutBox(wx.Dialog):
         # Fit the form to the contained controls
         self.Fit()
         # Center on screen
-	self.CentreOnScreen()
+#	self.CentreOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # Show the About Dialog Box modally
         val = self.ShowModal()
@@ -167,7 +184,7 @@ class AboutBox(wx.Dialog):
             # ... get the key that was pressed
             key = event.GetKeyCode()
             # If F11 is pressed, show COMPONENT VERSION information
-            if key == wx.WXK_F11:
+            if (key == wx.WXK_F11) or (key in [ord('S'), ord('s')]):
                 # Import Python's ctypes, Transana's DBInterface, MySQLdb, and Python's sys modules
                 import Crypto, ctypes, DBInterface, MySQLdb, paramiko, sys
                 # Build a string that contains the version information for crucial programming components
@@ -197,7 +214,7 @@ class AboutBox(wx.Dialog):
                 # Eliminate the Credits text
                 self.credits.SetLabel('')
             # If F12 is pressed ...
-            elif key == wx.WXK_F12:
+            elif (key == wx.WXK_F12) or (key in [ord('H'), ord('h')]):
                 # Replace the Version information text with the original description text
                 self.description.SetLabel(self.description_str)
                 # Replace the blank credits text with the original credits text

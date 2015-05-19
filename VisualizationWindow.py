@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -38,6 +38,8 @@ import KeywordMapClass
 import TransanaGlobal
 import TransanaConstants
 import TransanaExceptions
+# Import Transana Images
+import TransanaImages
 import GraphicsControlClass
 import WaveformGraphic
 import WaveformProgress       # Waveform Creation Progress Dialog, used in Wave Extraction Callback function
@@ -50,7 +52,7 @@ import string
 import time
 import ctypes                 # used to access wceraudio DLL/Shared Library
 
-class VisualizationWindow(wx.Dialog):
+class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
     """This class encompasses the others into a single wxPython window,
     and provides the primary interface for the Control objects.  This
     object will be passed a memory-mapped wave file as input for the
@@ -65,11 +67,17 @@ class VisualizationWindow(wx.Dialog):
             topAdjust = 2
             
         wx.Dialog.__init__(self, parent, -1, _('Visualization'), pos=self.__pos(), size=self.__size(), style=wx.CAPTION | wx.RESIZE_BORDER | wx.WANTS_CHARS)
-        # Set "Window Variant" to small only for Mac to make fonts match better
+#        wx.MDIChildFrame.__init__(self, parent, -1, _('Visualization'), pos=self.__pos(), size=self.__size(), style=wx.CAPTION | wx.RESIZE_BORDER | wx.WANTS_CHARS)
+        # Set "Window Variant" to small only for Mac to use small icons
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
-        self.SetBackgroundColour(wx.WHITE)
+        # if we're not on Linux ...
+        if not 'wxGTK' in wx.PlatformInfo:
+            self.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_FRAMEBK))
+        else:
+            self.SetBackgroundColour(wx.WHITE)
+
         self.SetSizeHints(250, 100)
         (width, height) = self.GetSize()
 
@@ -112,12 +120,13 @@ class VisualizationWindow(wx.Dialog):
         box.Add(self.waveform, 1, wx.EXPAND, 0)
 
         # Add the Timeline Panel, which holds the time line and scale information
-        self.timeline = wx.Panel(self, -1, style=wx.SUNKEN_BORDER) # wx.Point(0, height-44-headerHeight), wx.Size(int(width - 6), 24), 
+        self.timeline = wx.Panel(self, -1, style=wx.SUNKEN_BORDER)
         box.Add(self.timeline, 0, wx.EXPAND | wx.ALL, 1)
 
         # Add the Toolbar at the bottom of the screen
         # NOTE:  Because of the way XP handles the screen, we'll start at the bottom and work our way up!
-        self.toolbar = wx.Panel(self, -1, style=wx.SUNKEN_BORDER)
+        self.toolbar = wx.Panel(self, -1, size=(width, 100), style=wx.SUNKEN_BORDER)
+        self.toolbar.SetMinSize((-1, 32))
 
         # Add GUI elements to the Toolbar
         toolbarSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -126,43 +135,56 @@ class VisualizationWindow(wx.Dialog):
         bmp = wx.ArtProvider_GetBitmap(wx.ART_LIST_VIEW, wx.ART_TOOLBAR, (16,16))
         # Add Filter Button
         self.filter = wx.BitmapButton(self.toolbar, -1, bmp)
-        toolbarSizer.Add(self.filter, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL , 2)
+        toolbarSizer.Add(self.filter, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
         self.filter.Enable(False)
         wx.EVT_BUTTON(self, self.filter.GetId(), self.OnFilter)
 
         # Add Zoom In Button
-        self.zoomIn = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOMIN, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", 'ZoomIn.xpm'), wx.BITMAP_TYPE_XPM))
-        toolbarSizer.Add(self.zoomIn, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL , 2)
+        self.zoomIn = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOMIN, TransanaGlobal.GetImage(TransanaImages.ZoomIn))
+        toolbarSizer.Add(self.zoomIn, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_ZOOMIN, self.OnZoomIn)
 
         # Add Zoom Out Button
-        self.zoomOut = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOMOUT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", 'ZoomOut.xpm'), wx.BITMAP_TYPE_XPM))
-        toolbarSizer.Add(self.zoomOut, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL , 2)
+        self.zoomOut = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOMOUT, TransanaGlobal.GetImage(TransanaImages.ZoomOut))
+        toolbarSizer.Add(self.zoomOut, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_ZOOMOUT, self.OnZoomOut)
 
         # Add Zoom to 100% Button
-        self.zoom100 = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOM100, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", 'Zoom100.xpm'), wx.BITMAP_TYPE_XPM))
-        toolbarSizer.Add(self.zoom100, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL , 2)
+        self.zoom100 = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOM100, TransanaGlobal.GetImage(TransanaImages.Zoom100))
+        toolbarSizer.Add(self.zoom100, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_ZOOM100, self.OnZoom100)
 
         # Put in a tiny horizontal spacer
         toolbarSizer.Add((4, 0))
 
-        # Add a button for looping playback
-        # We need to use a Generic Bitmap Toggle Button!
-        self.loop = wx.lib.buttons.GenBitmapToggleButton(self.toolbar, -1, None)
-        # Define the image for the "un-pressed" state
-        bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", 'loop_up.xpm'), wx.BITMAP_TYPE_XPM)
-        self.loop.SetBitmapLabel(bmp)
-        # Define the image for the "pressed" state
-        bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", 'loop_down.xpm'), wx.BITMAP_TYPE_XPM)
-        self.loop.SetBitmapSelected(bmp)
-        # Set the button to "un-pressed"
-        self.loop.SetToggle(False)
+        # There is a problem with the lib.buttons.GenBitmapToggleButton in Arabic.  I don't know if it's limited to Arabic,
+        # or if other right-to-left languages are also affected because of image reversal.  For the moment, we'll use
+        # LayoutDirection to detect this issue.
+
+        # if we have a left-to-right language, use the wx.lib.buttons.GenBitmapToggleButton
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_LeftToRight:
+            # Add a button for looping playback
+            # We need to use a Generic Bitmap Toggle Button!
+            self.loop = wx.lib.buttons.GenBitmapToggleButton(self.toolbar, -1, None)
+            # Define the image for the "un-pressed" state
+            self.loop.SetBitmapLabel(TransanaGlobal.GetImage(TransanaImages.loop_up))
+            # Define the image for the "pressed" state
+            self.loop.SetBitmapSelected(TransanaGlobal.GetImage(TransanaImages.loop_down))
+            # Set the button to "un-pressed"
+            self.loop.SetToggle(False)
+        # If we have a right-to-left language, use a standard BitmapButton
+        else:
+            # Add a button for looping playback
+            # We need to use the regular Bitmap Button!
+            self.loop = wx.BitmapButton(self.toolbar, -1, TransanaGlobal.GetImage(TransanaImages.loop_up))
+            # Since we don't have the GetValue function, let's create a variable called Looping to tell us if we're
+            # looping or not.  Initialize to False.
+            self.looping = False
+            
         # Set the button's initial size
         self.loop.SetInitialSize((20, 20))
         # Add the button to the toolbar
-        toolbarSizer.Add(self.loop, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL , 2)
+        toolbarSizer.Add(self.loop, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
         # Bind the OnLoop event handler to the button
         self.loop.Bind(wx.EVT_BUTTON, self.OnLoop)
 
@@ -184,7 +206,7 @@ class VisualizationWindow(wx.Dialog):
 
         # Add "Current" label
         self.btn_Current = wx.Button(self.toolbar, TransanaConstants.VISUAL_BUTTON_CURRENT, _("Current:"))
-        toolbarSizer.Add(self.btn_Current, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL, 2)
+        toolbarSizer.Add(self.btn_Current, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_CURRENT, self.OnCurrent)
 
         # Add "Current" Time label
@@ -197,7 +219,7 @@ class VisualizationWindow(wx.Dialog):
 
         # Add "Selected" label
         self.btn_Selected = wx.Button(self.toolbar, TransanaConstants.VISUAL_BUTTON_SELECTED, _("Selected:"))
-        toolbarSizer.Add(self.btn_Selected, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.ALL, 2)
+        toolbarSizer.Add(self.btn_Selected, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_SELECTED, self.OnSelected)
 
         # Add "Selected" Time label
@@ -236,13 +258,14 @@ class VisualizationWindow(wx.Dialog):
         self.SetSizer(box)
         
         self.SetAutoLayout(True)
+        self.Fit()
         self.Layout()
 
         # We need to adjust the screen position on the Mac.  I don't know why.
-        if "__WXMAC__" in wx.PlatformInfo:
-            pos = self.GetPosition()
-            self.SetPosition((pos[0]-20, pos[1]-25))
-        
+#        if "__WXMAC__" in wx.PlatformInfo:
+#            pos = self.GetPosition()
+#            self.SetPosition((pos[0]-20, pos[1]-25))
+
         # GraphicsControlClass is not Sizer or Constraints aware, so we'll to screen positioning the old fashion way, with a
         # Resize Event
         wx.EVT_SIZE(self, self.OnSize)
@@ -254,6 +277,8 @@ class VisualizationWindow(wx.Dialog):
         # NOTE that we assign this event to the waveform, not to self.
         wx.EVT_KEY_DOWN(self.waveform, self.OnKeyDown)
 
+        if DEBUG:
+            print "VisualizationWindow.__init__():  Initial size:", self.GetSize()
 
     def OnSize(self, event):
         """ Handles widget positioning on Resize Event """
@@ -264,6 +289,11 @@ class VisualizationWindow(wx.Dialog):
             # ... Get the Visualization Window position ...
             (left, top) = self.GetPositionTuple()
             # ... can call the ControlObject's Update Window Position routine with the appropiate parameters
+
+            if DEBUG:
+                print
+                print "Call 5", 'Visualization', width + left, height + top, "(", top, ')'
+            
             self.ControlObject.UpdateWindowPositions('Visualization', width + left, YUpper = height + top)
 
         # Determine NEW Frame Size
@@ -273,16 +303,16 @@ class VisualizationWindow(wx.Dialog):
         headerHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
 
         # Set size of Waveform Window (Do this first, or the timeline is not scaled properly.)
-        self.waveform.SetDim(1, 1, width-12, height-49-headerHeight)
+        self.waveform.SetDim(0, 1, width, height-50-headerHeight)
 
         # Position toolbar Panel
-        self.toolbar.SetDimensions(0, height-24-headerHeight, width-8, 22)
+        self.toolbar.SetDimensions(0, height-28-headerHeight, width, self.toolbar.GetMinSize()[1])
 
         # Draw the appropriate time line
         self.draw_timeline(self.waveformLowerLimit, self.waveformUpperLimit - self.waveformLowerLimit)
 
         # Position timeline Panel
-        self.timeline.SetDimensions(0, height-46-headerHeight, width-6, 24)
+        self.timeline.SetDimensions(0, height-50-headerHeight, width, 24)
         # Tell the Waveform to redraw
         self.redrawWhenIdle = True
 
@@ -312,6 +342,14 @@ class VisualizationWindow(wx.Dialog):
         # Check to see if the waveform control needs to be redrawn.  Under the new Media Player, GetMediaLength takes a while to
         # be set, so we should wait for that too.
         if self.redrawWhenIdle  and (not self.ControlObject.shuttingDown) and (self.ControlObject.GetMediaLength() > 0):
+
+            # Because of recusive calls, this line, adjusting Transcript Windows to accomodate for Visualization Resizing, had
+            # to be moved here from ControlObject.UpdateWindowPositions()
+            # If there are multiple transcripts ...
+            if len(self.ControlObject.TranscriptWindow) > 1:
+                # ... adjust the positions of transcripts after the first
+                self.ControlObject.AutoArrangeTranscriptWindows()
+
             # Remove old Waveform Selection and Cursor data
             self.waveform.ClearTransanaSelection()
 
@@ -445,10 +483,17 @@ class VisualizationWindow(wx.Dialog):
             if TransanaGlobal.configData.visualizationStyle in ['Keyword', 'Hybrid']:
                 # Clear the Visualization
                 self.waveform.Clear()
+
                 # Enable the Filter button
                 self.filter.Enable(True)
                 # If there's an existing Keyword Visualization ...
                 if self.kwMap != None:
+                    # ... remember the values for the Clip List
+                    filteredClipList = self.kwMap.clipFilterList[:]
+                    unfilteredClipList = self.kwMap.clipList[:]
+                    # ... remember the values for the Snapshot List
+                    filteredSnapshotList = self.kwMap.snapshotFilterList[:]
+                    unfilteredSnapshotList = self.kwMap.snapshotList[:]
                     # ... remember the values for the filtered Keyword List
                     filteredKeywordList = self.kwMap.filteredKeywordList[:]
                     # ... remember the values from the unfiltered keyword list
@@ -463,6 +508,12 @@ class VisualizationWindow(wx.Dialog):
                     self.kwMap = None
                 # If we're creating a brand new Keyword Visualization ...
                 else:
+                    # Initialize the Clip Lists
+                    filteredClipList = []
+                    unfilteredClipList = []
+                    # Initialize teh Snapshot Lists
+                    filteredSnapshotList = []
+                    unfilteredSnapshotList = []
                     # Initialize the filtered keyword list ...
                     filteredKeywordList = []
                     # ... the unfiltered keyword list ...
@@ -482,6 +533,7 @@ class VisualizationWindow(wx.Dialog):
 
                 # Create a Keyword Visualization object as an embedded graphic, not a free-standing report.
                 self.kwMap = KeywordMapClass.KeywordMap(self, -1, "", embedded=True, topOffset=topOffset)
+
                 # We populate the keyword visualization differently for an episode and a clip.
                 if type(self.ControlObject.currentObj) == Episode.Episode:
                     # On the Mac, the video length cannot be determined before the video load is complete.
@@ -504,6 +556,8 @@ class VisualizationWindow(wx.Dialog):
                     # Set up the embedded Keyword Visualization, sending it all the data it needs so it can draw or redraw itself.
                     self.kwMap.SetupEmbedded(self.ControlObject.currentObj.number, self.ControlObject.currentObj.series_id, \
                                              self.ControlObject.currentObj.id, kwMapStartPoint, kwMapEndPoint, \
+                                             filteredClipList = filteredClipList, unfilteredClipList = unfilteredClipList, \
+                                             filteredSnapshotList = filteredSnapshotList, unfilteredSnapshotList = unfilteredSnapshotList, \
                                              filteredKeywordList = filteredKeywordList, unfilteredKeywordList = unfilteredKeywordList, \
                                              keywordColors = keywordColorList, configName=configName, loadDefault=self.loadDefault)
 
@@ -519,23 +573,6 @@ class VisualizationWindow(wx.Dialog):
                         tmpEpisode.series_id = 'None'
                         tmpEpisode.id = 'None'
 
-##                    print "VisualizationWindow.OnIdle():  CLIP"
-##                    print self.zoomInfo
-##                    print
-                    
-                    # Set the current global video selection based on the Clip.
-##                    self.ControlObject.SetVideoSelection(self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop)
-
-                    # Set up the embedded Keyword Visualization, sending it all the data it needs so it can draw or redraw itself.
-##                    self.kwMap.SetupEmbedded(self.ControlObject.currentObj.episode_num, tmpEpisode.series_id, \
-##                                             tmpEpisode.id, self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop, \
-##                                             filteredKeywordList = filteredKeywordList, unfilteredKeywordList = unfilteredKeywordList, \
-##                                             keywordColors = keywordColorList, clipNum=self.ControlObject.currentObj.number,
-##                                             configName=configName, loadDefault=self.loadDefault)
-
-                    # Draw the TimeLine values
-##                    self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
-
                     start = self.zoomInfo[-1][0]
                     length = max(self.zoomInfo[-1][1], 500)
                     # Set the current global video selection based on the Clip.
@@ -544,6 +581,8 @@ class VisualizationWindow(wx.Dialog):
                     # Set up the embedded Keyword Visualization, sending it all the data it needs so it can draw or redraw itself.
                     self.kwMap.SetupEmbedded(self.ControlObject.currentObj.episode_num, tmpEpisode.series_id, \
                                              tmpEpisode.id, start, start + length, \
+                                             filteredClipList = filteredClipList, unfilteredClipList = unfilteredClipList, \
+                                             filteredSnapshotList = filteredSnapshotList, unfilteredSnapshotList = unfilteredSnapshotList, \
                                              filteredKeywordList = filteredKeywordList, unfilteredKeywordList = unfilteredKeywordList, \
                                              keywordColors = keywordColorList, clipNum=self.ControlObject.currentObj.number,
                                              configName=configName, loadDefault=self.loadDefault)
@@ -595,17 +634,18 @@ class VisualizationWindow(wx.Dialog):
         if TransanaGlobal.configData.autoArrange and not self.heightIsSet and (len(self.waveFilename) == 1):
             # ... start by getting the current dimensions of the visualization window.
             (a, b, c, d) = self.GetDimensions()
+            (x, y, w, h) = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()
             # We need to make different adjustments based on whether we're on the Mac or Windows.
             if "wxMac" in wx.PlatformInfo:
                 # On Mac, the window height is the smaller of the Keyword Visualization + 100 for the rest of the
                 # window or 2/3 of the screen height
-                newHeight = min(self.kwMap.GetKeywordCount()[1] + 100, 2 * wx.Display(0).GetClientArea()[3] / 3)  # wx.ClientDisplayRect()
+                newHeight = min(self.kwMap.GetKeywordCount()[1] + 100, 2 * h / 3)  # wx.ClientDisplayRect()
             else:
                 # On Windows, the window height is the smaller of the Keyword Visualization + 142 for the rest of the
                 # window or 2/3 of the screen height
-                newHeight = min(self.kwMap.GetKeywordCount()[1] + 142, 2 * wx.Display(0).GetClientArea()[3] / 3)  # wx.ClientDisplayRect()
+                newHeight = min(self.kwMap.GetKeywordCount()[1] + 142, 2 * h / 3)  # wx.ClientDisplayRect()
             # Let's say that 1/4 of the screen is the minimum Waveform height!
-            newHeight = max(newHeight, round(wx.Display(0).GetClientArea()[3] / 4))  # wx.ClientDisplayRect()
+            newHeight = max(newHeight, round(h / 4))  # wx.ClientDisplayRect()
 
             # The Hybrid Visualization was losing the waveform when the Filter Dialog was called.  So when this happens ...
             if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
@@ -613,7 +653,13 @@ class VisualizationWindow(wx.Dialog):
                 self.redrawWhenIdle = True
 
             # now let's adjust the window sizes for the main Transana interface.
-            self.ControlObject.UpdateWindowPositions('Visualization', c, YUpper = newHeight)
+
+            if DEBUG:
+                print
+                print "Call 6", 'Visualization', c + a, newHeight + b
+                print
+            
+            self.ControlObject.UpdateWindowPositions('Visualization', c + a, YUpper = newHeight + b)
             # once we do this, we don't need to do it again unless something changes.
             self.heightIsSet = True
         
@@ -674,6 +720,7 @@ class VisualizationWindow(wx.Dialog):
                     self.startPoint = currentPos - timePerPixel
                     self.endPoint = 0
                     self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
+                    self.waveform.SetFocus()
 
             # Cursor Right ...
             elif c in [wx.WXK_RIGHT, wx.WXK_NUMPAD_RIGHT]:
@@ -682,6 +729,7 @@ class VisualizationWindow(wx.Dialog):
                     self.startPoint = currentPos + timePerPixel
                     self.endPoint = 0
                     self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
+                    self.waveform.SetFocus()
 
         except:
 
@@ -699,7 +747,9 @@ class VisualizationWindow(wx.Dialog):
         # The Hybrid Visualization was losing the waveform when the Filter Dialog was called.  So when this happens ...
         if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
             # ... signal that the whole visualization has to be re-drawn!
-            self.redrawWhenIdle = True
+            #     Setting the reset parameter to false signals this is a Hybrid Visualization, preventing the
+            #     waveform part of the Hybrid Visualization from being erased.
+            self.kwMap.UpdateKeywordVisualization(reset=False)
         else:
             # If we'd cleared the waveform before calling OnFilter, we'd be done.  But that clears the graphic
             # BEFORE bringing up the filter dialog, which I didn't like.  So even though OnFilter re-draws the
@@ -824,13 +874,36 @@ class VisualizationWindow(wx.Dialog):
                     self.endPoint = self.startPoint + 5000
                 # Set the video selection to include this new end point
                 self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
-                
-            # Signal the Control Object to start or stop looped playback
-            self.ControlObject.PlayLoop(self.loop.GetValue())
+
+            # If we're using a LtR language ...
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_LeftToRight:
+                # Signal the Control Object to start or stop looped playback
+                self.ControlObject.PlayLoop(self.loop.GetValue())
+            # If we're using a RtL language ...
+            else:
+                # If we're currently looping ...
+                if self.looping:
+                    # Set the image for the "un-pressed" state ...
+                    self.loop.SetBitmap(TransanaGlobal.GetImage(TransanaImages.loop_up))
+                    # ... and signal that we're STOPPING looping
+                    self.looping = False
+                # If we're NOT currently looping ...
+                else:
+                    # Set the image for the "pressed" state ...
+                    self.loop.SetBitmap(TransanaGlobal.GetImage(TransanaImages.loop_down))
+                    # ... and signal that we're STARTING to loop
+                    self.looping = True
+                # Signal the Control Object to start or stop looped playback
+                self.ControlObject.PlayLoop(self.looping)
         # if no data object is currently loaded ...
         else:
-            # then forcibly reject the button press by un-pressing the button.
-            self.loop.SetValue(False)
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_LeftToRight:
+                # then forcibly reject the button press by un-pressing the button.
+                self.loop.SetValue(False)
+            else:
+                # Define the image for the "un-pressed" state
+                self.loop.SetBitmap(TransanaGlobal.GetImage(TransanaImages.loop_up))
+                self.looping = False
 
     def OnCurrent(self, event):
         """ Click the "Current" button to place a time code in the Transcript """
@@ -1308,8 +1381,12 @@ class VisualizationWindow(wx.Dialog):
             self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(self.endPoint - self.startPoint))
         # If we have a CLICK ...
         else:
+            # if we have a LtR language ...
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_LeftToRight:
+                # ... define the self.looping variable based on the button state
+                self.looping = self.loop.GetValue()
             # If we're Looping ...
-            if self.loop.GetValue():
+            if self.looping:
                 # ... then set the end point to 5 seconds after start the video length, whichever is smaller
                 self.endPoint = self.startPoint + min(self.zoomInfo[0][1], 5000)
             # If we're NOT looping ...
@@ -1342,10 +1419,12 @@ class VisualizationWindow(wx.Dialog):
     def GetDimensions(self):
         (left, top) = self.GetPositionTuple()
         (width, height) = self.GetSizeTuple()
+        
         # Mac was having problems with the default window position being at -20.
         # Don't accept anything less than 0 for the left parameter.
-        if left < 0:
-            left = 0
+        (adjustX, adjustY, adjustW, adjustH) = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()
+        if left < adjustX:
+            left = adjustX
         return (left, top, width, height)
 
     def SetDims(self, left, top, width, height):
@@ -1361,26 +1440,69 @@ class VisualizationWindow(wx.Dialog):
         self.btn_Current.SetLabel(_("Current:"))
         self.btn_Selected.SetLabel(_("Selected:"))
         self.lbl_Total.SetLabel(_("Total:"))
+
+    def GetNewRect(self):
+        """ Get (X, Y, W, H) for initial positioning """
+        pos = self.__pos()
+        size = self.__size()
+        return (pos[0], pos[1], size[0], size[1])
         
 
 # Private methods    
 
     def __size(self):
-        rect = wx.Display(0).GetClientArea()
-        if 'wxGTK' in wx.PlatformInfo:
-            rect2 = wx.Display(0).GetGeometry()
-            width = (rect2[2] - rect[0] - 4) * .715
+        # Determine the correct monitor and get its size and position
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            primaryScreen = TransanaGlobal.configData.primaryScreen
         else:
-            width = rect[2] * .715
-        height = (rect[3] - TransanaGlobal.menuHeight) * .25
+            primaryScreen = 0
+        rect = wx.Display(primaryScreen).GetClientArea()
+
+        if not 'wxGTK' in wx.PlatformInfo:
+            container = rect[2:4]
+        elif 'wxGTK' in wx.PlatformInfo:
+            screenDims = wx.Display(primaryScreen).GetClientArea()
+            # screenDims2 = wx.Display(primaryScreen).GetGeometry()
+            left = screenDims[0]
+            top = screenDims[1]
+            width = screenDims[2] - screenDims[0]  # min(screenDims[2], 1280 - self.left)
+            height = screenDims[3]
+            container = (width, height)
+
+        width = container[0] * .71  # rect[2] * .715
+        height = (container[1] - TransanaGlobal.menuHeight) * .24  # (rect[3] - TransanaGlobal.menuHeight) * .25
+
+        if DEBUG:
+            print "Visualization width:", container[0], container[0] * 0.715, width
+            print "VisualizationWindow.__size():", width, height
+            
         return wx.Size(int(width), int(height))
 
     def __pos(self):
-        rect = wx.Display(0).GetClientArea()
+        # Determine the correct monitor and get its size and position
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            primaryScreen = TransanaGlobal.configData.primaryScreen
+        else:
+            primaryScreen = 0
+        rect = wx.Display(primaryScreen).GetClientArea()
+        if not 'wxGTK' in wx.PlatformInfo:
+            container = rect[2:4]
+        else:
+            # Linux rect includes both screens, so we need to use an alternate method!
+            container = TransanaGlobal.menuWindow.GetSize()
         # If the Start Menu is on the left side, 0 is incorrect!  Get starting position from wx.Display.
-        x = rect[0]
+        x = rect[0] + 1 # 1
         # rect[1] compensated if the Start menu is at the top of the screen
-        y = rect[1] + TransanaGlobal.menuHeight + 3
+#        y = rect[1] + TransanaGlobal.menuHeight + 3
+
+        if 'wxMac' in wx.PlatformInfo:
+            y = rect[1] + 2
+        else:
+            y = rect[1] + TransanaGlobal.menuHeight + 1
+
+        if DEBUG:
+            print "VisualizationWindow.__pos():", x, y
+            
         return wx.Point(int(x), int(y))
 
 if __name__ == '__main__':

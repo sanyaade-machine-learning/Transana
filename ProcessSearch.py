@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -31,6 +31,8 @@ import Collection
 import DBInterface
 # Import the Transana Search Dialog Box
 import SearchDialog
+# import Transana's Constants
+import TransanaConstants
 # Import Transana's Globals
 import TransanaGlobal
 
@@ -40,7 +42,8 @@ import string
 
 class ProcessSearch(object):
     """ This class handles all processing related to Searching. """
-    def __init__(self, dbTree, searchCount, kwg=None, kw=None):
+    # searchName and searchTerms are used by unit_test_search
+    def __init__(self, dbTree, searchCount, kwg=None, kw=None, searchName=None, searchTerms=None):
         """ Initialize the ProcessSearch class.  The dbTree parameter accepts a wxTreeCtrl as the Database Tree where
             Search Results should be displayed.  The searchCount parameter accepts the number that should be included
             in the Default Search Title. Optional kwg (Keyword Group) and kw (Keyword) parameters implement Quick Search
@@ -49,7 +52,7 @@ class ProcessSearch(object):
         # Note the Database Tree that accepts Search Results
         self.dbTree = dbTree
         # If kwg and kw are None, we are doing a regular (full) search.
-        if (kwg == None) or (kw == None):
+        if ((kwg == None) or (kw == None)) and (searchTerms == None):
             # Create the Search Dialog Box
             dlg = SearchDialog.SearchDialog(_("Search") + " %s" % searchCount)
             # Display the Search Dialog Box and record the Result
@@ -63,8 +66,24 @@ class ProcessSearch(object):
                     searchName = _("Search") + " %s" % searchCount
                 # ... and get the search terms from the dialog
                 searchTerms = dlg.searchQuery.GetValue().split('\n')
+                # Get the includeEpisodes info
+                includeEpisodes = dlg.includeEpisodes.IsChecked()
+                # Get the includeClips info
+                includeClips = dlg.includeClips.IsChecked()
+                # Get the includeSnapshots info
+                includeSnapshots = dlg.includeSnapshots.IsChecked()
             # Destroy the Search Dialog Box
             dlg.Destroy()
+        elif (searchTerms != None):
+            # There's no dialog.  Just say the user said OK.
+            result = wx.ID_OK
+            # Include Episodes, Clips, and Snapshots
+            includeEpisodes = True
+            includeClips = True
+            if TransanaConstants.proVersion:
+                includeSnapshots = True
+            else:
+                includeSnapshots = False
         # if kwg and kw are passed in, we're doing a Quick Search
         else:
             # There's no dialog.  Just say the user said OK.
@@ -73,6 +92,13 @@ class ProcessSearch(object):
             searchName = "%s : %s" % (kwg, kw)
             # The Search Terms are just the keyword group and keyword passed in
             searchTerms = ["%s:%s" % (kwg, kw)]
+            # Include Episodes, Clips and Snapshots
+            includeEpisodes = True
+            includeClips = True
+            if TransanaConstants.proVersion:
+                includeSnapshots = True
+            else:
+                includeSnapshots = False
 
         # If OK is pressed (or Quick Search), process the requested Search
         if result == wx.ID_OK:
@@ -108,74 +134,157 @@ class ProcessSearch(object):
             if searchName != '':
                 # Add a Search Results Node to the Database Tree
                 nodeListBase = [_("Search"), searchName]
-                self.dbTree.add_Node('SearchResultsNode', nodeListBase, 0, 0, True)
+                self.dbTree.add_Node('SearchResultsNode', nodeListBase, 0, 0, expandNode=True)
 
                 # Build the appropriate Queries based on the Search Query specified in the Search Dialog.
                 # (This method parses the Natural Language Search Terms into queries for Episode Search
-                #  Terms and for Clip Search Terms, and includes the appropriate Parameters to be used
-                #  with the queries.  Parameters are not integrated into the queries in order to allow
-                #  for automatic processing of apostrophes and other text that could otherwise interfere
-                #  with the SQL execution.)
-                (seriesQuery, collectionQuery, params) = self.BuildQueries(searchTerms)
+                #  Terms, for Clip Search Terms, and for Snapshot Search Terms, and includes the appropriate 
+                #  Parameters to be used with the queries.  Parameters are not integrated into the queries 
+                #  in order to allow for automatic processing of apostrophes and other text that could 
+                #  otherwise interfere with the SQL execution.)
+                (episodeQuery, clipQuery, wholeSnapshotQuery, snapshotCodingQuery, params) = self.BuildQueries(searchTerms)
 
                 # Get a Database Cursor
                 dbCursor = DBInterface.get_db().cursor()
-                # Execute the Series/Episode query
-                dbCursor.execute(seriesQuery, params)
 
-                # Process the results of the Series/Episode query
-                for line in DBInterface.fetchall_named(dbCursor):
-                    # Add the new Transcript(s) to the Database Tree Tab.
-                    # To add a Transcript, we need to build the node list for the tree's add_Node method to climb.
-                    # We need to add the Series, Episode, and Transcripts to our Node List, so we'll start by loading
-                    # the current Series and Episode
-                    tempSeries = Series.Series(line['SeriesNum'])
-                    tempEpisode = Episode.Episode(line['EpisodeNum'])
-                    # Add the Search Root Node, the Search Name, and the current Series and Episode Names.
-                    nodeList = (_('Search'), searchName, tempSeries.id, tempEpisode.id)
-                    # Find out what Transcripts exist for each Episode
-                    transcriptList = DBInterface.list_transcripts(tempSeries.id, tempEpisode.id)
-                    # If the Episode HAS defined transcripts ...
-                    if len(transcriptList) > 0:
-                        # Add each Transcript to the Database Tree
-                        for (transcriptNum, transcriptID, episodeNum) in transcriptList:
-                            # Add the Transcript Node to the Tree.  
-                            self.dbTree.add_Node('SearchTranscriptNode', nodeList + (transcriptID,), transcriptNum, episodeNum)
-                    # If the Episode has no transcripts, it still has the keywords and SHOULD be displayed!
-                    else:
-                        # Add the Transcript-less Episode Node to the Tree.  
-                        self.dbTree.add_Node('SearchEpisodeNode', nodeList, tempEpisode.number, tempSeries.number)
+                if includeEpisodes:
+                    # Execute the Series/Episode query
+                    dbCursor.execute(episodeQuery, params)
 
-                # Execute the Collection/Clip query
-                dbCursor.execute(collectionQuery, params)
+                    # Process the results of the Series/Episode query
+                    for line in DBInterface.fetchall_named(dbCursor):
+                        # Add the new Transcript(s) to the Database Tree Tab.
+                        # To add a Transcript, we need to build the node list for the tree's add_Node method to climb.
+                        # We need to add the Series, Episode, and Transcripts to our Node List, so we'll start by loading
+                        # the current Series and Episode
+                        tempSeries = Series.Series(line['SeriesNum'])
+                        tempEpisode = Episode.Episode(line['EpisodeNum'])
+                        # Add the Search Root Node, the Search Name, and the current Series and Episode Names.
+                        nodeList = (_('Search'), searchName, tempSeries.id, tempEpisode.id)
+                        # Find out what Transcripts exist for each Episode
+                        transcriptList = DBInterface.list_transcripts(tempSeries.id, tempEpisode.id)
+                        # If the Episode HAS defined transcripts ...
+                        if len(transcriptList) > 0:
+                            # Add each Transcript to the Database Tree
+                            for (transcriptNum, transcriptID, episodeNum) in transcriptList:
+                                # Add the Transcript Node to the Tree.  
+                                self.dbTree.add_Node('SearchTranscriptNode', nodeList + (transcriptID,), transcriptNum, episodeNum)
+                        # If the Episode has no transcripts, it still has the keywords and SHOULD be displayed!
+                        else:
+                            # Add the Transcript-less Episode Node to the Tree.  
+                            self.dbTree.add_Node('SearchEpisodeNode', nodeList, tempEpisode.number, tempSeries.number)
 
-                # Process all results of the Collection/Clip query 
-                for line in DBInterface.fetchall_named(dbCursor):
-                    # Add the new Clip to the Database Tree Tab.
-                    # To add a Clip, we need to build the node list for the tree's add_Node method to climb.
-                    # We need to add all of the Collection Parents to our Node List, so we'll start by loading
-                    # the current Collection
-                    tempCollection = Collection.Collection(line['CollectNum'])
+                if includeClips:
+                    # Execute the Collection/Clip query
+                    dbCursor.execute(clipQuery, params)
 
-                    # Add the current Collection Name, and work backwards from here.
-                    nodeList = (tempCollection.id,)
-                    # Repeat this process as long as the Collection we're looking at has a defined Parent...
-                    while tempCollection.parent > 0:
-                       # Load the Parent Collection
-                       tempCollection = Collection.Collection(tempCollection.parent)
-                       # Add this Collection's name to the FRONT of the Node List
-                       nodeList = (tempCollection.id,) + nodeList
-                    # Get the DB Values
-                    tempID = line['ClipID']
-                    # If we're in Unicode mode, format the strings appropriately
-                    if 'unicode' in wx.PlatformInfo:
-                        tempID = DBInterface.ProcessDBDataForUTF8Encoding(tempID)
-                    # Now add the Search Root Node and the Search Name to the front of the Node List and the
-                    # Clip Name to the back of the Node List
-                    nodeList = (_('Search'), searchName) + nodeList + (tempID, )
+                    # Process all results of the Collection/Clip query 
+                    for line in DBInterface.fetchall_named(dbCursor):
+                        # Add the new Clip to the Database Tree Tab.
+                        # To add a Clip, we need to build the node list for the tree's add_Node method to climb.
+                        # We need to add all of the Collection Parents to our Node List, so we'll start by loading
+                        # the current Collection
+                        tempCollection = Collection.Collection(line['CollectNum'])
 
-                    # Add the Node to the Tree
-                    self.dbTree.add_Node('SearchClipNode', nodeList, line['ClipNum'], line['CollectNum'])
+                        # Add the current Collection Name, and work backwards from here.
+                        nodeList = (tempCollection.id,)
+                        # Repeat this process as long as the Collection we're looking at has a defined Parent...
+                        while tempCollection.parent > 0:
+                           # Load the Parent Collection
+                           tempCollection = Collection.Collection(tempCollection.parent)
+                           # Add this Collection's name to the FRONT of the Node List
+                           nodeList = (tempCollection.id,) + nodeList
+                        # Get the DB Values
+                        tempID = line['ClipID']
+                        # If we're in Unicode mode, format the strings appropriately
+                        if 'unicode' in wx.PlatformInfo:
+                            tempID = DBInterface.ProcessDBDataForUTF8Encoding(tempID)
+                        # Now add the Search Root Node and the Search Name to the front of the Node List and the
+                        # Clip Name to the back of the Node List
+                        nodeList = (_('Search'), searchName) + nodeList + (tempID, )
+
+                        # Add the Node to the Tree
+                        self.dbTree.add_Node('SearchClipNode', nodeList, line['ClipNum'], line['CollectNum'], sortOrder=line['SortOrder'])
+
+                if includeSnapshots:
+                    # Execute the Whole Snapshot query
+                    dbCursor.execute(wholeSnapshotQuery, params)
+
+                    # Since we have two sources of Snapshots that get included, we need to track what we've already
+                    # added so we don't add the same Snapshot twice
+                    addedSnapshots = []
+
+                    # Process all results of the Whole Snapshot query 
+                    for line in DBInterface.fetchall_named(dbCursor):
+                        # Add the new Snapshot to the Database Tree Tab.
+                        # To add a Snapshot, we need to build the node list for the tree's add_Node method to climb.
+                        # We need to add all of the Collection Parents to our Node List, so we'll start by loading
+                        # the current Collection
+                        tempCollection = Collection.Collection(line['CollectNum'])
+
+                        # Add the current Collection Name, and work backwards from here.
+                        nodeList = (tempCollection.id,)
+                        # Repeat this process as long as the Collection we're looking at has a defined Parent...
+                        while tempCollection.parent > 0:
+                           # Load the Parent Collection
+                           tempCollection = Collection.Collection(tempCollection.parent)
+                           # Add this Collection's name to the FRONT of the Node List
+                           nodeList = (tempCollection.id,) + nodeList
+                        # Get the DB Values
+                        tempID = line['SnapshotID']
+                        # If we're in Unicode mode, format the strings appropriately
+                        if 'unicode' in wx.PlatformInfo:
+                            tempID = DBInterface.ProcessDBDataForUTF8Encoding(tempID)
+                        # Now add the Search Root Node and the Search Name to the front of the Node List and the
+                        # Clip Name to the back of the Node List
+                        nodeList = (_('Search'), searchName) + nodeList + (tempID, )
+
+                        # Add the Node to the Tree
+                        self.dbTree.add_Node('SearchSnapshotNode', nodeList, line['SnapshotNum'], line['CollectNum'], sortOrder=line['SortOrder'])
+                        # Add the Snapshot to the list of Snapshots added to the Search Result
+                        addedSnapshots.append(line['SnapshotNum'])
+                        
+                        tmpNode = self.dbTree.select_Node(nodeList[:-1], 'SearchCollectionNode', ensureVisible=False)
+                        self.dbTree.SortChildren(tmpNode)
+
+                    # Execute the Snapshot Coding query
+                    dbCursor.execute(snapshotCodingQuery, params)
+
+                    # Process all results of the Snapshot Coding query 
+                    for line in DBInterface.fetchall_named(dbCursor):
+                        # If the Snapshot is NOT already in the Search Results ...
+                        if not (line['SnapshotNum'] in addedSnapshots):
+                            # Add the new Snapshot to the Database Tree Tab.
+                            # To add a Snapshot, we need to build the node list for the tree's add_Node method to climb.
+                            # We need to add all of the Collection Parents to our Node List, so we'll start by loading
+                            # the current Collection
+                            tempCollection = Collection.Collection(line['CollectNum'])
+
+                            # Add the current Collection Name, and work backwards from here.
+                            nodeList = (tempCollection.id,)
+                            # Repeat this process as long as the Collection we're looking at has a defined Parent...
+                            while tempCollection.parent > 0:
+                               # Load the Parent Collection
+                               tempCollection = Collection.Collection(tempCollection.parent)
+                               # Add this Collection's name to the FRONT of the Node List
+                               nodeList = (tempCollection.id,) + nodeList
+                            # Get the DB Values
+                            tempID = line['SnapshotID']
+                            # If we're in Unicode mode, format the strings appropriately
+                            if 'unicode' in wx.PlatformInfo:
+                                tempID = DBInterface.ProcessDBDataForUTF8Encoding(tempID)
+                            # Now add the Search Root Node and the Search Name to the front of the Node List and the
+                            # Clip Name to the back of the Node List
+                            nodeList = (_('Search'), searchName) + nodeList + (tempID, )
+
+                            # Add the Node to the Tree
+                            self.dbTree.add_Node('SearchSnapshotNode', nodeList, line['SnapshotNum'], line['CollectNum'], sortOrder=line['SortOrder'])
+                            # Add the Snapshot to the list of Snapshots added to the Search Result
+                            addedSnapshots.append(line['SnapshotNum'])
+                            
+                            tmpNode = self.dbTree.select_Node(nodeList[:-1], 'SearchCollectionNode', ensureVisible=False)
+                            self.dbTree.SortChildren(tmpNode)
+
             else:
                 self.searchCount = searchCount
 
@@ -188,7 +297,7 @@ class ProcessSearch(object):
             search was performed or cancelled. """
         return self.searchCount
 
-        
+
     def BuildQueries(self, queryText):
         """ Convert natural language search terms (as structured by the Transana Search Dialog) into
             executable SQL that runs on MySQL. """
@@ -316,9 +425,13 @@ class ProcessSearch(object):
         # SQL Statements for the searches.
 
         # Define the start of the Series/Episode Query
-        seriesSQL = 'SELECT Ep.SeriesNum, SeriesID, Ep.EpisodeNum, EpisodeID, '
+        episodeSQL = 'SELECT Ep.SeriesNum, SeriesID, Ep.EpisodeNum, EpisodeID, '
         # Define the start of the Collection/Clip Query
-        collectionSQL = 'SELECT Cl.CollectNum, ParentCollectNum, Cl.ClipNum, CollectID, ClipID, '
+        clipSQL = 'SELECT Cl.CollectNum, ParentCollectNum, Cl.ClipNum, CollectID, ClipID, SortOrder, '
+        # Define the start of the Whole Snapshot Query
+        wholeSnapshotSQL = 'SELECT Sn.CollectNum, ParentCollectNum, Sn.SnapshotNum, CollectID, SnapshotID, SortOrder, '
+        # Define the start of the Snapshot Coding Query
+        snapshotCodingSQL = 'SELECT Sn.CollectNum, ParentCollectNum, Sn.SnapshotNum, CollectID, SnapshotID, SortOrder, '
 
         # Add in the SQL "COUNT" variables that signal the presence or absence of Keyword Group : Keyword pairs
         for lineNum in range(len(countStrings)):
@@ -330,42 +443,78 @@ class ProcessSearch(object):
                 tempStr = ' '
 
             # Add the SQL "COUNT" Line and seperator to the Series/Episode Query
-            seriesSQL += countStrings[lineNum] + tempStr
+            episodeSQL += countStrings[lineNum] + tempStr
             # Add the SQL "COUNT" Line and seperator to the Collection/Clip Query
-            collectionSQL += countStrings[lineNum] + tempStr
+            clipSQL += countStrings[lineNum] + tempStr
+            # Add the SQL "COUNT" Line and seperator to the Whole Snapshot Query
+            wholeSnapshotSQL += countStrings[lineNum] + tempStr
+            # Add the SQL "COUNT" Line and seperator to the Snapshot Coding Query
+            snapshotCodingSQL += countStrings[lineNum] + tempStr
 
         # Now add the rest of the SQL for the Series/Episode Query
-        seriesSQL += 'FROM ClipKeywords2 CK1, Series2 Se, Episodes2 Ep '
-        seriesSQL += 'WHERE (Ep.EpisodeNum = CK1.EpisodeNum) AND '
-        seriesSQL += '(Ep.SeriesNum = Se.SeriesNum) AND '
-        seriesSQL += '(CK1.EpisodeNum > 0) '
-        seriesSQL += 'GROUP BY SeriesNum, SeriesID, EpisodeNum, EpisodeID '
+        episodeSQL += 'FROM ClipKeywords2 CK1, Series2 Se, Episodes2 Ep '
+        episodeSQL += 'WHERE (Ep.EpisodeNum = CK1.EpisodeNum) AND '
+        episodeSQL += '(Ep.SeriesNum = Se.SeriesNum) AND '
+        episodeSQL += '(CK1.EpisodeNum > 0) '
+        episodeSQL += 'GROUP BY SeriesNum, SeriesID, EpisodeNum, EpisodeID '
         # Add in the SQL "HAVING" Clause that was constructed above
-        seriesSQL += 'HAVING %s' % havingStr
+        episodeSQL += 'HAVING %s ' % havingStr
 
         # Now add the rest of the SQL for the Collection/Clip Query
-        collectionSQL += 'FROM ClipKeywords2 CK1, Collections2 Co, Clips2 Cl '
-        collectionSQL += 'WHERE (Cl.ClipNum = CK1.ClipNum) AND '
-        collectionSQL += '(Cl.CollectNum = Co.CollectNum) AND '
-        collectionSQL += '(CK1.ClipNum > 0) '
-        collectionSQL += 'GROUP BY Cl.CollectNum, CollectID, ClipID '
+        clipSQL += 'FROM ClipKeywords2 CK1, Collections2 Co, Clips2 Cl '
+        clipSQL += 'WHERE (Cl.ClipNum = CK1.ClipNum) AND '
+        clipSQL += '(Cl.CollectNum = Co.CollectNum) AND '
+        clipSQL += '(CK1.ClipNum > 0) '
+        clipSQL += 'GROUP BY Cl.CollectNum, CollectID, ClipID '
         # Add in the SQL "HAVING" Clause that was constructed above
-        collectionSQL += 'HAVING %s' % havingStr
+        clipSQL += 'HAVING %s ' % havingStr
         # Add an "ORDER BY" Clause to preserve Clip Sort Order
-        collectionSQL += 'ORDER BY CollectID, SortOrder'
+        clipSQL += 'ORDER BY CollectID, SortOrder'
+
+        # Now add the rest of the SQL for the Whole Snapshot Query
+        wholeSnapshotSQL += 'FROM ClipKeywords2 CK1, Collections2 Co, Snapshots2 Sn '
+        wholeSnapshotSQL += 'WHERE (Sn.SnapshotNum = CK1.SnapshotNum) AND '
+        wholeSnapshotSQL += '(Sn.CollectNum = Co.CollectNum) AND '
+        wholeSnapshotSQL += '(CK1.SnapshotNum > 0) '
+        wholeSnapshotSQL += 'GROUP BY Sn.CollectNum, CollectID, SnapshotID '
+        # Add in the SQL "HAVING" Clause that was constructed above
+        wholeSnapshotSQL += 'HAVING %s ' % havingStr
+        # Add an "ORDER BY" Clause to preserve Snapshot Sort Order
+        wholeSnapshotSQL += 'ORDER BY CollectID, SortOrder'
+
+        # Now add the rest of the SQL for the Snapshot Coding Query
+        snapshotCodingSQL += 'FROM SnapshotKeywords2 CK1, Collections2 Co, Snapshots2 Sn '
+        snapshotCodingSQL += 'WHERE (Sn.SnapshotNum = CK1.SnapshotNum) AND '
+        snapshotCodingSQL += '(Sn.CollectNum = Co.CollectNum) AND '
+        snapshotCodingSQL += '(CK1.SnapshotNum > 0) '
+        # For Snapshot Coding, we ONLY want VISIBLE Keywords
+        snapshotCodingSQL += 'AND (CK1.Visible = 1) '
+        snapshotCodingSQL += 'GROUP BY Sn.CollectNum, CollectID, SnapshotID '
+        # Add in the SQL "HAVING" Clause that was constructed above
+        snapshotCodingSQL += 'HAVING %s ' % havingStr
+        # Add an "ORDER BY" Clause to preserve Snapshot Sort Order
+        snapshotCodingSQL += 'ORDER BY CollectID, SortOrder'
 
         # tempParams = ()
         # for p in params:
         #     tempParams = tempParams + (p,)
             
-        # dlg = wx.TextEntryDialog(None, "Transana Series/Episode SQL Statement:", "Transana", seriesSQL % tempParams, style=wx.OK)
+        # dlg = wx.TextEntryDialog(None, "Transana Series/Episode SQL Statement:", "Transana", episodeSQL % tempParams, style=wx.OK)
         # dlg.ShowModal()
         # dlg.Destroy()
 
-        # dlg = wx.TextEntryDialog(None, "Transana Collection/Clip SQL Statement:", "Transana", collectionSQL % tempParams, style=wx.OK)
+        # dlg = wx.TextEntryDialog(None, "Transana Collection/Clip SQL Statement:", "Transana", clipSQL % tempParams, style=wx.OK)
         # dlg.ShowModal()
         # dlg.Destroy()
 
-        # Return the Series/Episode Query, the Collection/Clip Query, and the list of parameters to use with
-        # both queries to the calling routine.
-        return (seriesSQL, collectionSQL, params)
+        # dlg = wx.TextEntryDialog(None, "Transana Whole Snapshot SQL Statement:", "Transana", wholeSnapshotSQL % tempParams, style=wx.OK)
+        # dlg.ShowModal()
+        # dlg.Destroy()
+
+        # dlg = wx.TextEntryDialog(None, "Transana Snapshot Coding SQL Statement:", "Transana", snapshotCodingSQL % tempParams, style=wx.OK)
+        # dlg.ShowModal()
+        # dlg.Destroy()
+
+        # Return the Series/Episode Query, the Collection/Clip Query, the Whole Snapshot Query, the Snapshot Coding Query, 
+        # and the list of parameters to use with these queries to the calling routine.
+        return (episodeSQL, clipSQL, wholeSnapshotSQL, snapshotCodingSQL, params)

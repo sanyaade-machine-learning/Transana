@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -25,12 +25,6 @@ if DEBUG:
 # Show the Formatting Panel (used for debugging)
 SHOWFORMATTINGPANEL = False
 
-# For testing purposes, there can be a small input box that allows the entry of Unicode codes
-# for characters.
-ALLOW_UNICODE_ENTRY = False
-if ALLOW_UNICODE_ENTRY:
-    print "TranscriptionUI ALLOW_UNICODE_ENTRY is ON!"
-
 # import wxPython
 import wx
 
@@ -42,6 +36,8 @@ import os
 import TransanaGlobal
 # Import Transana's Dialogs
 import Dialogs
+# Import Transana's Images
+import TransanaImages
 # import Transana's Transcript Toolbar
 from TranscriptToolbar import TranscriptToolbar
 # Import Transana's Transcript Editor for the wx.RichTextCtrl
@@ -50,7 +46,7 @@ import TranscriptEditor_RTC
 import time
 #print "TranscriptionUI_RTC -- import time"
 
-class TranscriptionUI(wx.Dialog):
+class TranscriptionUI(wx.Frame):  # (wx.MDIChildFrame):
     """This class manages the graphical user interface for the transcription
     editors component.  It creates the transcript window containing a
     TranscriptToolbar and a TranscriptEditor object."""
@@ -262,6 +258,11 @@ class TranscriptionUI(wx.Dialog):
             # ... show them again!
             self.dlg.editor.changeTimeCodeValueStatus(True)
 
+    def TextTimeCodeConversion(self):
+        """ Convert Text (H:MM:SS.hh) Time Codes to Transana's format """
+        # Call the Editor's Text Time Code Conversion Method
+        self.dlg.editor.TextTimeCodeConversion()
+
     def UpdateSelectionText(self, text):
         """ Update the text indicating the start and end points of the current selection """
         # Pass through to the Dialog
@@ -273,13 +274,16 @@ class TranscriptionUI(wx.Dialog):
         self.dlg.toolbar.ChangeLanguages()
         # Instruct the Dialog (Editor) to change languages
         self.dlg.ChangeLanguages()
-        
 
+    def GetNewRect(self):
+        """ Get (X, Y, W, H) for initial positioning """
+        return self.dlg.GetNewRect()
+        
 # import the wxRTC-based RichTextEditCtrl
 import RichTextEditCtrl_RTC
 
-class _TranscriptDialog(wx.Dialog):
-    """ Implement a wx.Dialog-based control for the private use of the TranscriptionUI object """
+class _TranscriptDialog(wx.Frame):  # (wx.MDIChildFrame):
+    """ Implement a wx.Frame-based control for the private use of the TranscriptionUI object """
 
     def __init__(self, parent, id=-1, includeClose=False, showLineNumbers=False):
         # If we're including an optional Close button ...
@@ -292,10 +296,17 @@ class _TranscriptDialog(wx.Dialog):
             style = wx.CAPTION | wx.RESIZE_BORDER | wx.WANTS_CHARS
         # Remember whether we're including line numbers
         self.showLineNumbers = showLineNumbers
-        # Create the Dialog with the appropriate style
-        wx.Dialog.__init__(self, parent, id, _("Transcript"), self.__pos(), self.__size(), style=style)
+        # Create the Frame with the appropriate style
+        wx.Frame.__init__(self, parent, id, _("Transcript"), self.__pos(), self.__size(), style=style)
+#        wx.MDIChildFrame.__init__(self, parent, id, _("Transcript"), self.__pos(), self.__size(), style=style)
+        # if we're not on Linux ...
+        if not 'wxGTK' in wx.PlatformInfo:
+            # Set the Background Colour to the standard system background (not sure why this is necessary here.)
+            self.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_FRAMEBK))
+        else:
+            self.SetBackgroundColour(wx.WHITE)
 
-        # Set "Window Variant" to small only for Mac to make fonts match better
+        # Set "Window Variant" to small only for Mac to use small icons
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
@@ -307,69 +318,18 @@ class _TranscriptDialog(wx.Dialog):
         # add the widgets to the panel
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        hsizer = wx.BoxSizer(wx.HORIZONTAL)
+        # Define the Transcript Toolbar object
         self.toolbar = TranscriptToolbar(self)
-        hsizer.Add(self.toolbar, 0, wx.ALIGN_TOP, 10)
 
-        # On Windows, we need to display a "Transcript Health" indicator related to GDI resources.
-        # I tried to handle this through changing the "Save" button graphic in the Toolbar, but that
-        # caused the Search box to be disabled when the graphic was updated.  Weird.
-        if 'wxMSW' in wx.PlatformInfo:
-            # Create Bitmap objects for the four images used to populate the health indicator
-            self.GDIBmpAll = wx.Bitmap(os.path.join(TransanaGlobal.programDir, 'images', "StoplightAll.xpm"), wx.BITMAP_TYPE_XPM)
-            self.GDIBmpRed = wx.Bitmap(os.path.join(TransanaGlobal.programDir, 'images', "StoplightRed.xpm"), wx.BITMAP_TYPE_XPM)
-            self.GDIBmpYellow = wx.Bitmap(os.path.join(TransanaGlobal.programDir, 'images', "StoplightYellow.xpm"), wx.BITMAP_TYPE_XPM)
-            self.GDIBmpGreen = wx.Bitmap(os.path.join(TransanaGlobal.programDir, 'images', "StoplightGreen.xpm"), wx.BITMAP_TYPE_XPM)
-            # Create a Static Bitmap to display the Transcript Health indicator.  Start it with the neutral graphic
-            self.GDIBmp = wx.StaticBitmap(self, -1, self.GDIBmpAll)
-            # Set the proper Tool Tip
-            self.GDIBmp.SetToolTip(wx.ToolTip(_("Transcript Healthy")))
-            # Add the Health Indicator graphic to the horizontal sizer just after the Toolbar.
-            hsizer.Add(self.GDIBmp, 0, wx.ALL, 4)
-
-        # Add Quick Search tools
-        # Start with the Search Backwards button
-        self.CMD_SEARCH_BACK_ID = wx.NewId()
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
-        self.searchBack = wx.BitmapButton(self, self.CMD_SEARCH_BACK_ID, bmp, style=wx.NO_BORDER)
-        hsizer.Add(self.searchBack, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
-        wx.EVT_BUTTON(self, self.CMD_SEARCH_BACK_ID, self.OnSearch)
-        hsizer.Add((10, 1), 0)
-        self.searchBackToolTip = wx.ToolTip(_("Search backwards"))
-        self.searchBack.SetToolTip(self.searchBackToolTip)
-
-        # Add the Search Text box
-        self.searchText = wx.TextCtrl(self, -1, size=(100, 20), style=wx.TE_PROCESS_ENTER)
-        hsizer.Add(self.searchText, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
-        self.Bind(wx.EVT_TEXT_ENTER, self.OnSearch, self.searchText)
-        hsizer.Add((10, 1), 0)
-
-        # Add the Search Forwards button
-        self.CMD_SEARCH_NEXT_ID = wx.NewId()
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
-        self.searchNext = wx.BitmapButton(self, self.CMD_SEARCH_NEXT_ID, bmp, style=wx.NO_BORDER)
-        hsizer.Add(self.searchNext, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
-        wx.EVT_BUTTON(self, self.CMD_SEARCH_NEXT_ID, self.OnSearch)
-        self.searchNextToolTip = wx.ToolTip(_("Search forwards"))
-        self.searchNext.SetToolTip(self.searchNextToolTip)
-
-        # If Unicode Entry is enabled ...
-        if ALLOW_UNICODE_ENTRY:
-            # ... add the Unicode Entry box
-            self.UnicodeEntry = wx.TextCtrl(self, -1, size=(40, 16), style=wx.TE_PROCESS_ENTER)
-            self.UnicodeEntry.SetMaxLength(4)
-            hsizer.Add((10,1), 0, wx.ALIGN_CENTER | wx.GROW)
-            hsizer.Add(self.UnicodeEntry, 0, wx.ALIGN_RIGHT | wx.TOP | wx.RIGHT, 8)
-            self.UnicodeEntry.Bind(wx.EVT_TEXT, self.OnUnicodeText)
-            self.UnicodeEntry.Bind(wx.EVT_TEXT_ENTER, self.OnUnicodeEnter)
-
-        # Add a text label that will indicate the start and end points of the current transcript selection
-        self.selectionText = wx.StaticText(self, -1, "")
-        hsizer.Add(self.selectionText, 1, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 20)
-        sizer.Add(hsizer, 0, wx.ALIGN_TOP | wx.EXPAND, 10)
-
+        # Set this as the Frame's Toolbar.  (Skipping this means toggle images disappear on OS X!)
+        self.SetToolBar(self.toolbar)
         # Call toolbar.Realize() to initialize the toolbar            
         self.toolbar.Realize()
+
+        # Adding the Toolbar changes the Window Size on Mac!
+        if 'wxMac' in wx.PlatformInfo:
+            # Better reset the size!
+            self.SetSize(self.__size())
 
         # If the Format Panel is enabled ...
         if SHOWFORMATTINGPANEL:
@@ -400,10 +360,13 @@ class _TranscriptDialog(wx.Dialog):
         self.editor = TranscriptEditor_RTC.TranscriptEditor(self, id, self.toolbar.OnStyleChange, updateSelectionText=True)
         # Place the editor on the horizontal sizer
         hsizer2.Add(self.editor, 1, wx.EXPAND | wx.ALL, 3)
+
+        self.redraw = False
+
         # Create a timer to update the Line Numbers
         self.LineNumTimer = wx.Timer()
         # Bind the method to the Timer event
-        self.LineNumTimer.Bind(wx.EVT_TIMER, self.EditorPaint)
+        self.LineNumTimer.Bind(wx.EVT_TIMER, self.OnTimer)  # EditorPaint)
 
         # Disable the Search components initially
         self.EnableSearch(False)
@@ -426,14 +389,17 @@ class _TranscriptDialog(wx.Dialog):
         # Capture Size Changes
         wx.EVT_SIZE(self, self.OnSize)
 
-        # If we're on Windows ...
-        if 'wxMSW' in wx.PlatformInfo:
-            # Create a timer to update the GDI Resource label
-            self.GDITimer = wx.Timer()
-            # Bind the method to the Timer event
-            self.GDITimer.Bind(wx.EVT_TIMER, self.OnGDITimer)
-            # update the GDI Resources label every few seconds
-            self.GDITimer.Start(5000)
+        wx.EVT_IDLE(self, self.OnIdle)
+
+##        # If we're on Windows ...
+##        if 'wxMSW' in wx.PlatformInfo:
+##
+##            # Create a timer to update the GDI Resource label
+##            self.GDITimer = wx.Timer()
+##            # Bind the method to the Timer event
+##            self.GDITimer.Bind(wx.EVT_TIMER, self.OnGDITimer)
+##            # update the GDI Resources label every few seconds
+##            self.GDITimer.Start(5000)
 
         try:
             # Defind the Activate event (for setting the active window)
@@ -447,6 +413,9 @@ class _TranscriptDialog(wx.Dialog):
             print sys.exc_info()[0]
             print sys.exc_info()[1]
             print
+
+        if DEBUG:
+            print "TranscriptionUI_RTC._TranscriptDialog.__init__():  Initial size:", self.GetSize()
 
     def OnActivate(self, event):
         """ Activate Event for a Transcript Window """
@@ -490,7 +459,12 @@ class _TranscriptDialog(wx.Dialog):
             # Get the size of the Transcript window
             (width, height) = self.GetSize()
             # Call the ControlObject's routine for adjusting all windows
-            self.ControlObject.UpdateWindowPositions('Transcript', width + left, YUpper = top - 4)
+
+            if DEBUG:
+                print
+                print "Call 4", 'Transcript', width + left, top - 1
+            
+            self.ControlObject.UpdateWindowPositions('Transcript', width + left, YUpper = top - 1)
         # Call the Transcript Window's Layout.
         self.Layout()
         # We may need to scroll to keep the current selection in the visible part of the window.
@@ -525,11 +499,11 @@ class _TranscriptDialog(wx.Dialog):
     def AddLineNum(self, num, yPos):
         """ Add Line Numbers to the Line Number Control """
         # First line correction!  (This compensates for the RTC's control border)
-        if yPos == 0:
-            if 'wxMac' in wx.PlatformInfo:
-                yPos = 6
-            else:
-                yPos = 4
+#        if yPos == 0:
+#            if 'wxMac' in wx.PlatformInfo:
+#                yPos = 6
+#            else:
+#                yPos = 4
 
         # Get a buffered Device Context based on the line number bitmap
         dc = wx.BufferedDC(None, self.lineNumBmp)
@@ -558,6 +532,25 @@ class _TranscriptDialog(wx.Dialog):
             pass
         # The Device Context won't be edited any more here.
         dc.EndDrawing()
+
+    def OnTimer(self, event):
+        # Instead of drawing the numbers, just signal that can be done on idle
+        self.redraw = True
+
+    def OnIdle(self, event):
+        """ IDLE event handler """
+        # If we have line numbers to draw ...
+        if self.redraw:
+            # if the media file is NOT playing ...
+            if not self.ControlObject.IsPlaying():
+                # ... update the line numbers
+                self.EditorPaint(event)
+                # ... and signal that they've been re-drawn
+                self.redraw = False
+            # If the media file IS playing ...
+            else:
+                # ... Clear the line numbers.  (We don't have time to redraw them during HD playback!)
+                self.ClearLineNum()
 
     def EditorPaint(self, event):
         """ Paint Event Handler for the Editor control.  This is used to display Line Numbers. """
@@ -592,8 +585,13 @@ class _TranscriptDialog(wx.Dialog):
         for y in range(10, self.editor.GetSize()[1], stepSize):
             # This raises an exception sometimes on OS X.  I can't recreate it, but I have gotten a couple reports from the field.
             try:
-                # ... get the character position (pos) of the character at the (10, y) pixel
-                (result, pos) = self.editor.HitTest((10, y))
+                # If we're using wxPython 2.8.x.x ...
+                if wx.VERSION[:2] == (2, 8):
+                    # ... get the character position (pos) of the character at the (10, y) pixel
+                    (result, pos) = self.editor.HitTest((10, y))
+                else:
+                    # ... get the character position (pos) of the character at the (10, y) pixel
+                    (result, pos) = self.editor.HitTestPos((10, y))
             # If there's an exception ...
             except:
                 # ... we probably don't actually HAVE a transcript yet, so initial values should do
@@ -606,14 +604,19 @@ class _TranscriptDialog(wx.Dialog):
                 # Adjust the positioning offset for Paragraph Space Before.
                 # (Dividing by three approximately translates centimeters to pixels!)
                 offset += int(textAttr.GetParagraphSpacingBefore() / 3)
+                # Calculate the Line Number
+                tmpLine = self.editor.PositionToXY(pos + 1)[1] + 1
+                # Let's not get carried away here!
+                if tmpLine > 1000000:
+                    tmpLine = 1
                 # Use PositionToXY to translate character position into text row/column, then
                 # see if we've moved on to the next LINE.  (Line is paragraph number, not physical
                 # screen line!)  If so ...
-                if curLine < self.editor.PositionToXY(pos + 1)[1] + 1:
+                if curLine < tmpLine:
                     # ... add the line number to to the Line Number display at the proper (adjusted) vertical value
-                    self.AddLineNum(self.editor.PositionToXY(pos + 1)[1] + 1, y + offset)
+                    self.AddLineNum(tmpLine, y + offset)
                     # Since we've added the line number, update the current line number value
-                    curLine = self.editor.PositionToXY(pos + 1)[1] + 1
+                    curLine = tmpLine
                 # Update the current character position value
                 curPos = pos
                 # We need to adjust the NEXT line number position for Paragraph Space After.  Note that this
@@ -627,64 +630,66 @@ class _TranscriptDialog(wx.Dialog):
         # note the End Time
         end = time.time()
 
+        val = 0
+
         # If updating line numbers takes more than an acceptable amount of time, adjust the frequency of updates.
         if (end - start > 0.36) and (self.LineNumTimer.GetInterval() < 10000):
             # Reset to 10 seconds
-            self.LineNumTimer.Stop()
-            self.LineNumTimer.Start(10000)
+            val = 10000
         elif (end - start > 0.30) and (self.LineNumTimer.GetInterval() < 7000):
             # Reset to 7 seconds
-            self.LineNumTimer.Stop()
-            self.LineNumTimer.Start(7000)
+            val = 7000
         elif (end - start > 0.22) and (self.LineNumTimer.GetInterval() < 4000):
             # Reset to 4 seconds
-            self.LineNumTimer.Stop()
-            self.LineNumTimer.Start(4000)
+            val = 4000
         elif (end - start < 0.22) and (self.LineNumTimer.GetInterval() > 1000):
             # Reset to 1 second
+            val = 1000
+
+        if val > 0:
             self.LineNumTimer.Stop()
-            self.LineNumTimer.Start(1000)
-            
+            self.LineNumTimer.Start(val)
+
             # .. then we have to make them go away.
             # First, flag them as disabled
-#            self.showLineNumbers = False
+#                self.showLineNumbers = False
             # Stop the Line Number Timer
-#            self.LineNumTimer.Stop()
+#                self.LineNumTimer.Stop()
             # Hide the Line Number control
-#            self.lineNum.Show(False)
+#                self.lineNum.Show(False)
             # Re-do the dialog layout without the line number control
-#            self.Layout()
+#                self.Layout()
             # And inform the user.
-#            prompt = _("Line Numbers have been disabled.  They were starting to interfere with Transana's performance.")
-#            dlg = Dialogs.InfoDialog(None, prompt)
-#            dlg.ShowModal()
-#            dlg.Destroy()
+#                prompt = _("Line Numbers have been disabled.  They were starting to interfere with Transana's performance.")
+#                dlg = Dialogs.InfoDialog(None, prompt)
+#                dlg.ShowModal()
+#                dlg.Destroy()
 
     def OnSearch(self, event):
         """ Implement the Toolbar's QuickSearch """
         # Get the text for the search
-        txt = self.searchText.GetValue()
+        txt = self.toolbar.searchText.GetValue()
         # If there is text ...
         if txt != '':
             # Determine whether we're searching forward or backward
-            if event.GetId() == self.CMD_SEARCH_BACK_ID:
+            if event.GetId() == self.toolbar.CMD_SEARCH_BACK_ID:
                 direction = "back"
             # Either CMD_SEARCH_FORWARD_ID or ENTER in the text box indicate forward!
             else:
                 direction = "next"
-            # Perform the search in the Editor
-            self.editor.find_text(txt, direction)
             # Set the focus back on the editor component, rather than the button, so Paste or typing work.
             self.editor.SetFocus()
+            # Perform the search in the Editor
+            self.editor.find_text(txt, direction)
 
     def EnableSearch(self, enable):
         """ Change the "Enabled" status of the Search controls """
         # Enable / Disable the Back Button
-        self.searchBack.Enable(enable)
+        self.toolbar.EnableTool(self.toolbar.CMD_SEARCH_BACK_ID, enable)
         # Enable / Disable the Search Text Box
-        self.searchText.Enable(enable)
+        self.toolbar.searchText.Enable(enable)
         # Enable / Disable the Forward Button
-        self.searchNext.Enable(enable)
+        self.toolbar.EnableTool(self.toolbar.CMD_SEARCH_NEXT_ID, enable)
         # If we're enabling Search and are showing Line Numbers ...
         if enable and self.showLineNumbers:
             # update the Line Numbers every second.  (This isn't Search specific, but it's convenient!)
@@ -696,7 +701,7 @@ class _TranscriptDialog(wx.Dialog):
     def ClearSearch(self):
         """ Clear the Search Box """
         # Clear the Search Text box
-        self.searchText.SetValue('')
+        self.toolbar.searchText.SetValue('')
         
     def OnUnicodeText(self, event):
         """ The Unicode Entry box should only accept HEX character values """
@@ -742,13 +747,12 @@ class _TranscriptDialog(wx.Dialog):
     def UpdateSelectionText(self, text):
         """ Update the text indicating the start and end points of the current selection """
         # Update the selectionText label with the supplied text
-        self.selectionText.SetLabel(text)
+        if self.toolbar.selectionText.GetLabel() != text:
+            self.toolbar.selectionText.SetLabel(text)
 
     def ChangeLanguages(self):
         """ Change Languages """
-        # update the Tool Tips for the Search Buttons
-        self.searchBackToolTip.SetTip(_("Search backwards"))
-        self.searchNextToolTip.SetTip(_("Search forwards"))
+        pass
 
     def FormatUpdate(self, textAttr):
         """ Update the Format Panel """
@@ -757,80 +761,94 @@ class _TranscriptDialog(wx.Dialog):
             # ... update it based on the style passed in
             self.formatPanel.Update(textAttr)
 
-    def OnGDITimer(self, event):
-        """ A timer method to update the GDI Resources Label on Windows """
-        # If we are in Read Only mode ...
-        if self.editor.get_read_only():
-            # ... then skip this!
-            return
-        
-        # Get the number of GDI Resources in use
-        GDI = RichTextEditCtrl_RTC.GDIReport()
-        # If the GDI usage is greater than 7,500 ...
-        if GDI > 7500:
-            # ... show the Trancript Health indicator as RED
-            self.GDIBmp.SetBitmap(self.GDIBmpRed)
-            # ... and set the appropriate Tool Tip
-            self.GDIBmp.SetToolTip(wx.ToolTip(_("GDI Resources very low.\nSave immediately.")))
+##    def OnGDITimer(self, event):
+##        """ A timer method to update the GDI Resources Label on Windows """
+##        # If we are in Read Only mode ...
+##        if self.editor.get_read_only():
+##            # ... then skip this!
+##            return
+##        
+##        # Get the number of GDI Resources in use
+##        GDI = RichTextEditCtrl_RTC.GDIReport()
+##
+###        print "GDI:", GDI
+##        
+##        # If the GDI usage is greater than 7,500 ...
+##        if GDI > 7500:
+##            # ... show the Trancript Health indicator as RED
+##            self.toolbar.GDIBmp.SetBitmap(self.toolbar.GDIBmpRed)
+##            # ... and set the appropriate Tool Tip
+##            self.toolbar.GDIBmp.SetToolTip(wx.ToolTip(_("GDI Resources very low.\nSave immediately.")))
+##
+##        # If the GDI usage is greater than 5000 ...
+##        elif GDI > 5000:
+##            # ... show the Trancript Health indicator as YELLOW
+##            self.toolbar.GDIBmp.SetBitmap(self.toolbar.GDIBmpYellow)
+##            # ... and set the appropriate Tool Tip
+##            self.toolbar.GDIBmp.SetToolTip(wx.ToolTip(_("GDI Resources low.\nSave soon.")))
+##
+##        # Otherwise ...
+##        else:
+##            # ... show the Trancript Health indicator as GREEN
+##            self.toolbar.GDIBmp.SetBitmap(self.toolbar.GDIBmpGreen)
+##            # ... and set the appropriate Tool Tip
+##            self.toolbar.GDIBmp.SetToolTip(wx.ToolTip(_("Transcript Healthy")))
 
-        # If the GDI usage is greater than 5000 ...
-        elif GDI > 5000:
-            # ... show the Trancript Health indicator as YELLOW
-            self.GDIBmp.SetBitmap(self.GDIBmpYellow)
-            # ... and set the appropriate Tool Tip
-            self.GDIBmp.SetToolTip(wx.ToolTip(_("GDI Resources low.\nSave soon.")))
-
-        # Otherwise ...
-        else:
-            # ... show the Trancript Health indicator as GREEN
-            self.GDIBmp.SetBitmap(self.GDIBmpGreen)
-            # ... and set the appropriate Tool Tip
-            self.GDIBmp.SetToolTip(wx.ToolTip(_("Transcript Healthy")))
-
+    def GetNewRect(self):
+        """ Get (X, Y, W, H) for initial positioning """
+        pos = self.__pos()
+        size = self.__size()
+        return (pos[0], pos[1], size[0], size[1])
 
     def __size(self):
         """Determine the default size for the Transcript frame."""
-        # Get the size of the first monitor
-        rect = wx.Display(0).GetClientArea()
-
-        # If we're on Linux, we may not be getting the right screen size value
-        if 'wxGTK' in wx.PlatformInfo:
-            rect2 = wx.Display(0).GetGeometry()
-            width = (rect2[2] - rect[0] - 4) * .715
-
-            # Transcript Compontent should be 74% of the HEIGHT, adjusted for the menu height
-            height = (min(rect[3], rect2[3]) - max(rect[1], rect2[1]) - 6) * .74
-
-        # If we're on Windows or OS X ...
+        # Get the size of the correct monitor
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            primaryScreen = TransanaGlobal.configData.primaryScreen
         else:
-            # Transcript Compontent should be 71.5% of the WIDTH
-            width = rect[2] * .715
+            primaryScreen = 0
+        rect = wx.Display(primaryScreen).GetClientArea()
+        if not ('wxGTK' in wx.PlatformInfo):
+            container = rect[2:4]
+        else:
+            screenDims = wx.Display(primaryScreen).GetClientArea()
+            # screenDims2 = wx.Display(primaryScreen).GetGeometry()
+            left = screenDims[0]
+            top = screenDims[1]
+            width = screenDims[2] - screenDims[0]  # min(screenDims[2], 1280 - self.left)
+            height = screenDims[3]
+            container = (width, height)
 
-            # Transcript Compontent should be 74% of the HEIGHT, adjusted for the menu height
-            height = (rect[3] - TransanaGlobal.menuHeight) * .74
-
-        # Compensate in Linux.  I'm not sure why this is necessary, but it seems to be.
-        # SEE IF CHANGINGING TransanaGlobal.menuHeight fixes this.
-#        if 'wxGTK' in wx.PlatformInfo:
-#            height -= 50
-
+        # Transcript Compontent should be 71.5% of the WIDTH
+        width = container[0] * .716  # rect[2] * .715
+        # Transcript Compontent should be 74% of the HEIGHT, adjusted for the menu height
+        height = (container[1] - TransanaGlobal.menuHeight) * .741  # (rect[3] - TransanaGlobal.menuHeight) * .74
         # Return the SIZE values
         return wx.Size(width, height)
 
     def __pos(self):
         """Determine default position of Transcript Frame."""
-        # Get the size of the first monitor
-        rect = wx.Display(0).GetClientArea()
+        # Get the size of the correct monitor
+        if TransanaGlobal.configData.primaryScreen < wx.Display.GetCount():
+            primaryScreen = TransanaGlobal.configData.primaryScreen
+        else:
+            primaryScreen = 0
+        rect = wx.Display(primaryScreen).GetClientArea()
+        if not ('wxGTK' in wx.PlatformInfo):
+            container = rect[2:4]
+        else:
+            # Linux rect includes both screens, so we need to use an alternate method!
+            container = TransanaGlobal.menuWindow.GetSize()
         # Get the adjusted default SIZE of the Transcription UI area of the screen
         (width, height) = self.__size()
         # rect[0] compensates if Start menu is on Left
-        x = rect[0]
+        x = rect[0] + 1
         # rect[1] compensates if Start menu is on Top
         if 'wxGTK' in wx.PlatformInfo:
-            rect2 = wx.Display(0).GetGeometry()
-            y = (min(rect[3], rect2[3]) - max(rect[1], rect2[1]) - 6) * .35 + 24
+            # rect2 = wx.Display(primaryScreen).GetGeometry()
+            y = (rect[3] - rect[1] - 6) * .35 + 24
         else:
-            y = rect[1] + rect[3] - height - 3
+            y = rect[1] + container[1] - height  # rect[1] + rect[3] - height - 3
         # Return the POSITION values
         return (x, y)    
 
@@ -850,15 +868,15 @@ class FormatPanel(wx.Panel):
         self.fontSize = wx.TextCtrl(self, -1, size=(24, 16))
         sizer.Add(self.fontSize, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.BOTTOM, 3)
 
-        bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Bold.xpm"))
+        bmp = TransanaImages.Bold.GetBitmap()
         self.bold = wx.StaticBitmap(self, -1, bmp)
         sizer.Add(self.bold, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.BOTTOM, 3)
 
-        bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Italic.xpm"))
+        bmp = TransanaImages.Italic.GetBitmap()
         self.italic = wx.StaticBitmap(self, -1, bmp)
         sizer.Add(self.italic, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.BOTTOM, 3)
 
-        bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Underline.xpm"))
+        bmp = TransanaImages.Underline.GetBitmap()
         self.underline = wx.StaticBitmap(self, -1, bmp)
         sizer.Add(self.underline, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.BOTTOM, 3)
 
@@ -914,21 +932,21 @@ class FormatPanel(wx.Panel):
             self.fontSize.SetValue(str(font.GetPointSize()))
 
             if font.GetWeight() == wx.FONTWEIGHT_NORMAL:
-                bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Bold.xpm"))
+                bmp = TransanaImages.Bold.GetBitmap()
             else:
-                bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "BoldOn.xpm"))
+                bmp = TransanaImages.BoldOn.GetBitmap()
             self.bold.SetBitmap(bmp)
 
             if font.GetStyle() == wx.FONTSTYLE_NORMAL:
-                bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Italic.xpm"))
+                bmp = TransanaImages.Italic.GetBitmap()
             else:
-                bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "ItalicOn.xpm"))
+                bmp = TransanaImages.ItalicOn.GetBitmap()
             self.italic.SetBitmap(bmp)
 
             if not font.GetUnderlined():
-                bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Underline.xpm"))
+                bmp = TransanaImages.Underline.GetBitmap()
             else:
-                bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "UnderlineOn.xpm"))
+                bmp = TransanaImages.UnderlineOn.GetBitmap()
             self.underline.SetBitmap(bmp)
 
         bmp = self.GetColorBitmap(textAttr.GetTextColour())
@@ -953,11 +971,15 @@ class FormatPanel(wx.Panel):
         self.parRightIndent.SetValue("%0.2f" % (textAttr.GetRightIndent() / convertVal))
 
         lineSpacing = textAttr.GetLineSpacing()
-        if lineSpacing == rt.TEXT_ATTR_LINE_SPACING_NORMAL:
+        if lineSpacing == wx.TEXT_ATTR_LINE_SPACING_NORMAL:
             strLineSpacing = 'Single'
-        elif lineSpacing == rt.TEXT_ATTR_LINE_SPACING_HALF:
+        elif lineSpacing == 11:
+            strLineSpacing = '1.1'
+        elif lineSpacing == 12:
+            strLineSpacing = '1.2'
+        elif lineSpacing == wx.TEXT_ATTR_LINE_SPACING_HALF:
             strLineSpacing = '1.5'
-        elif lineSpacing == rt.TEXT_ATTR_LINE_SPACING_TWICE:
+        elif lineSpacing == wx.TEXT_ATTR_LINE_SPACING_TWICE:
             strLineSpacing = 'Double'
         elif lineSpacing == 25:
             strLineSpacing = '2.5'

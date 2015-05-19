@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2012  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2014  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -40,8 +40,12 @@ import DBInterface
 import Dialogs
 # Import Transana's Filter Dialog
 import FilterDialog
+# import Transana's Keyword Object
+import KeywordObject
 # import Transana's Globals
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 # import Transana Miscellaneous functions
 import Misc
 
@@ -74,7 +78,7 @@ ID_EPISODELIST       = wx.NewId()
 
 class SeriesMap(wx.Frame):
     """ This is the main class for the Series Map application. """
-    def __init__(self, parent, title, seriesNum, seriesName, reportType):
+    def __init__(self, parent, title, seriesNum, seriesName, reportType, controlObject=None):
         # reportType 1 is the Sequence Mode, showing relative position of keywords in the Episodes
         # reportType 2 is the Bar Graph mode, showing a bar graph of total time for each keyword
         # reportType 3 is the Percentage mode, showing percentage of total Episode length for each keyword
@@ -86,14 +90,22 @@ class SeriesMap(wx.Frame):
         self.parent = parent
         # Remember the title
         self.title = title
+        # Initialize the Report Number
+        self.reportNumber = 0
         # Remember the Report Type
         self.reportType = reportType
+        # Let's remember the Control Object, if one is passed in
+        self.ControlObject = controlObject
+        # If a Control Object has been passed in ...
+        if self.ControlObject != None:
+            # ... register this report with the Control Object (which adds it to the Windows Menu)
+            self.ControlObject.AddReportWindow(self)
         #  Create a connection to the database
         DBConn = DBInterface.get_db()
         #  Create a cursor and execute the appropriate query
         self.DBCursor = DBConn.cursor()
         # Determine the screen size for setting the initial dialog size
-        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        rect = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
         width = rect[2] * .80
         height = rect[3] * .80
         # Create the basic Frame structure with a white background
@@ -110,6 +122,8 @@ class SeriesMap(wx.Frame):
         self.filteredEpisodeList = []
         self.clipList = []
         self.clipFilterList = []
+        self.snapshotList = []
+        self.snapshotFilterList = []
         self.unfilteredKeywordList = []
         self.filteredKeywordList = []
 
@@ -154,20 +168,20 @@ class SeriesMap(wx.Frame):
         # Get the graphic for the Filter button
         bmp = wx.ArtProvider_GetBitmap(wx.ART_LIST_VIEW, wx.ART_TOOLBAR, (16,16))
         self.toolBar.AddTool(T_FILE_FILTER, bmp, shortHelpString=_("Filter"))
-        self.toolBar.AddTool(T_FILE_SAVEAS, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "SaveJPG16.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Save As'))
-        self.toolBar.AddTool(T_FILE_PRINTSETUP, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintSetup.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Set up Page'))
-        self.toolBar.AddTool(T_FILE_PRINTPREVIEW, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintPreview.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print Preview'))
+        self.toolBar.AddTool(T_FILE_SAVEAS, TransanaImages.SaveJPG16.GetBitmap(), shortHelpString=_('Save As'))
+        self.toolBar.AddTool(T_FILE_PRINTSETUP, TransanaImages.PrintSetup.GetBitmap(), shortHelpString=_('Set up Page'))
+        self.toolBar.AddTool(T_FILE_PRINTPREVIEW, TransanaImages.PrintPreview.GetBitmap(), shortHelpString=_('Print Preview'))
 
-        # Disable Print Preview on the PPC Mac
-        if platform.processor() == 'powerpc':
+        # Disable Print Preview on the PPC Mac and for Right-To-Left languages
+        if (platform.processor() == 'powerpc') or (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
             self.toolBar.EnableTool(T_FILE_PRINTPREVIEW, False)
             
-        self.toolBar.AddTool(T_FILE_PRINT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Print.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print'))
+        self.toolBar.AddTool(T_FILE_PRINT, TransanaImages.Print.GetBitmap(), shortHelpString=_('Print'))
         # Get the graphic for Help
         bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
         # create a bitmap button for the Move Down button
         self.toolBar.AddTool(T_HELP_HELP, bmp, shortHelpString=_("Help"))
-        self.toolBar.AddTool(T_FILE_EXIT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Exit.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Exit'))        
+        self.toolBar.AddTool(T_FILE_EXIT, TransanaImages.Exit.GetBitmap(), shortHelpString=_('Exit'))        
         self.toolBar.Realize()
         # Let's go ahead and keep the menu for non-Mac platforms
         if not '__WXMAC__' in wx.PlatformInfo:
@@ -203,6 +217,8 @@ class SeriesMap(wx.Frame):
         wx.EVT_MENU(self, T_FILE_EXIT, self.CloseWindow)                              # Attach CloseWindow to Toolbar Exit
         wx.EVT_MENU(self, M_HELP_HELP, self.OnHelp)
         wx.EVT_MENU(self, T_HELP_HELP, self.OnHelp)
+        # Bind the form's EVT_CLOSE method
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
 
         # Determine the window boundaries
         (w, h) = self.GetClientSizeTuple()
@@ -256,10 +272,14 @@ class SeriesMap(wx.Frame):
         TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
         # Set up parameters for creating the Filter Dialog.  Series Map Filter requires Series Number (as episodeNum) for the Config Save.
         title = string.join([self.title, unicode(_("Filter Dialog"), 'utf8')], ' ')
-        # Series Map wants the Clip Filter
-        clipFilter = True
-        # Series Map wants Keyword Color customization.
-        keywordColors = True
+        # See if the Series Map wants the Clip Filter
+        clipFilter = (len(self.clipFilterList) > 0)
+        # See if there are Snapshots in the Snapshot Filter List
+        snapshotFilter = (len(self.snapshotFilterList) > 0)
+        # See if there are Keywords in the Filter List
+        keywordFilter = (len(self.unfilteredKeywordList) > 0)
+        # Series Map wants Keyword Color customization if it has keywords.
+        keywordColors = (len(self.unfilteredKeywordList) > 0)
         # We want the Options tab
         options = True
         # reportType=5 indicates it is for a Series Sequence Map.
@@ -270,21 +290,53 @@ class SeriesMap(wx.Frame):
         # The Series Keyword Sequence Map has all the usual parameters plus Time Range data and the Single Line Display option
         if self.reportType in [1]:
             # Create a Filter Dialog, passing all the necessary parameters.
-            dlgFilter = FilterDialog.FilterDialog(self, -1, title, reportType=reportType, loadDefault=loadDefault, configName=self.configName,
-                                                  reportScope=self.seriesNum, episodeFilter=True, episodeSort=True,
-                                                  clipFilter=clipFilter, keywordFilter=True, keywordSort=True,
-                                                  keywordColor=keywordColors, options=options, startTime=self.startTime, endTime=self.endTime,
-                                                  barHeight=self.barHeight, whitespace=self.whitespaceHeight, hGridLines=self.hGridLines,
-                                                  vGridLines=self.vGridLines, singleLineDisplay=self.singleLineDisplay, showLegend=self.showLegend,
+            dlgFilter = FilterDialog.FilterDialog(self,
+                                                  -1,
+                                                  title,
+                                                  reportType=reportType,
+                                                  loadDefault=loadDefault,
+                                                  configName=self.configName,
+                                                  reportScope=self.seriesNum,
+                                                  episodeFilter=True,
+                                                  episodeSort=True,
+                                                  clipFilter=clipFilter,
+                                                  snapshotFilter=snapshotFilter,
+                                                  keywordFilter=keywordFilter,
+                                                  keywordSort=True,
+                                                  keywordColor=keywordColors,
+                                                  options=options,
+                                                  startTime=self.startTime,
+                                                  endTime=self.endTime,
+                                                  barHeight=self.barHeight,
+                                                  whitespace=self.whitespaceHeight,
+                                                  hGridLines=self.hGridLines,
+                                                  vGridLines=self.vGridLines,
+                                                  singleLineDisplay=self.singleLineDisplay,
+                                                  showLegend=self.showLegend,
                                                   colorOutput=self.colorOutput)
         elif self.reportType in [2, 3]:
             # Create a Filter Dialog, passing all the necessary parameters.
-            dlgFilter = FilterDialog.FilterDialog(self, -1, title, reportType=reportType, loadDefault=loadDefault, configName=self.configName,
-                                                  reportScope=self.seriesNum, episodeFilter=True, episodeSort=True,
-                                                  clipFilter=clipFilter, keywordFilter=True, keywordSort=True,
-                                                  keywordColor=keywordColors, options=options, 
-                                                  barHeight=self.barHeight, whitespace=self.whitespaceHeight, hGridLines=self.hGridLines,
-                                                  vGridLines=self.vGridLines, showLegend=self.showLegend, colorOutput=self.colorOutput)
+            dlgFilter = FilterDialog.FilterDialog(self,
+                                                  -1,
+                                                  title,
+                                                  reportType=reportType,
+                                                  loadDefault=loadDefault,
+                                                  configName=self.configName,
+                                                  reportScope=self.seriesNum,
+                                                  episodeFilter=True,
+                                                  episodeSort=True,
+                                                  clipFilter=clipFilter,
+                                                  snapshotFilter=snapshotFilter,
+                                                  keywordFilter=keywordFilter,
+                                                  keywordSort=True,
+                                                  keywordColor=keywordColors,
+                                                  options=options, 
+                                                  barHeight=self.barHeight,
+                                                  whitespace=self.whitespaceHeight,
+                                                  hGridLines=self.hGridLines,
+                                                  vGridLines=self.vGridLines,
+                                                  showLegend=self.showLegend,
+                                                  colorOutput=self.colorOutput)
         # Sort the Episode List
         self.episodeList.sort()
         # Inform the Filter Dialog of the Episodes
@@ -296,6 +348,10 @@ class SeriesMap(wx.Frame):
             self.clipFilterList.sort()
             # Inform the Filter Dialog of the Clips
             dlgFilter.SetClips(self.clipFilterList)
+        # if there are Snapshots ...
+        if snapshotFilter:
+            # ... populate the Filter Dialog with Snapshots
+            dlgFilter.SetSnapshots(self.snapshotFilterList)
         # Keyword Colors must be specified before Keywords!  So if we want Keyword Colors, ...
         if keywordColors:
             # If we're in grayscale mode, the colors are probably mangled, so let's fix them before
@@ -305,8 +361,9 @@ class SeriesMap(wx.Frame):
                 self.keywordColors = self.rememberedKeywordColors.copy()
             # Inform the Filter Dialog of the colors used for each Keyword
             dlgFilter.SetKeywordColors(self.keywordColors)
-        # Inform the Filter Dialog of the Keywords
-        dlgFilter.SetKeywords(self.unfilteredKeywordList)
+        if keywordFilter:
+            # Inform the Filter Dialog of the Keywords
+            dlgFilter.SetKeywords(self.unfilteredKeywordList)
         # Set the Cursor to the Arrow now that the filter dialog is assembled
         TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
         # Create a dummy error message to get our while loop started.
@@ -342,6 +399,8 @@ class SeriesMap(wx.Frame):
                 if clipFilter:
                     # ... then get the filtered clip data
                     self.clipFilterList = dlgFilter.GetClips()
+                if snapshotFilter:
+                    self.snapshotFilterList = dlgFilter.GetSnapshots()
                 # Get the complete list of keywords from the Filter Dialog.  We'll deduce the filter info in a moment.
                 # (This preserves the "check" info for later reuse.)
                 self.unfilteredKeywordList = dlgFilter.GetKeywords()
@@ -471,8 +530,8 @@ class SeriesMap(wx.Frame):
         if not self.preview.Ok():
             self.SetStatusText(_("Print Preview Problem"))
             return
-        theWidth = max(wx.Display(0).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
-        theHeight = max(wx.Display(0).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
+        theWidth = max(wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[2] - 180, 760)  # wx.ClientDisplayRect()
+        theHeight = max(wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()[3] - 200, 560)  # wx.ClientDisplayRect()
         frame2 = wx.PreviewFrame(self.preview, self, _("Print Preview"), size=(theWidth, theHeight))
         frame2.Centre()
         frame2.Initialize()
@@ -494,8 +553,18 @@ class SeriesMap(wx.Frame):
         #     self.printData = printer.GetPrintDialogData().GetPrintData()
         printout.Destroy()
 
+    def OnClose(self, event):
+        """ Handle the Close Event """
+        # If the report has a defined Control Object ...
+        if self.ControlObject != None:
+            # ... remove this report from the Menu Window's Window Menu
+            self.ControlObject.RemoveReportWindow(self.title, self.reportNumber)
+        # Inherit the parent Close event so things will, you know, close.
+        event.Skip()
+
     # Define the Method that closes the Window on File > Exit
     def CloseWindow(self, event):
+        # Close!
         self.Close()
 
     def OnHelp(self, event):
@@ -719,6 +788,8 @@ class SeriesMap(wx.Frame):
         self.filteredEpisodeList = []
         self.clipList = []
         self.clipFilterList = []
+        self.snapshotList = []
+        self.snapshotFilterList = []
         self.unfilteredKeywordList = []
         self.filteredKeywordList = []
 
@@ -765,6 +836,38 @@ class SeriesMap(wx.Frame):
                 if not (kwg, kw, True) in self.unfilteredKeywordList:
                     self.unfilteredKeywordList.append((kwg, kw, True))
 
+            # Get the list of WHOLE SNAPSHOT Keywords to be displayed
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword
+                           FROM Snapshots2 sn, ClipKeywords2 ck
+                           WHERE sn.EpisodeNum = %s AND
+                                 sn.SnapshotNum = ck.SnapshotNum
+                           GROUP BY ck.keywordgroup, ck.keyword
+                           ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
+            self.DBCursor.execute(SQLText, EpisodeNum)
+            for (kwg, kw) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                if not (kwg, kw) in self.filteredKeywordList:
+                    self.filteredKeywordList.append((kwg, kw))
+                if not (kwg, kw, True) in self.unfilteredKeywordList:
+                    self.unfilteredKeywordList.append((kwg, kw, True))
+
+            # Get the list of SNAPSHOT CODING Keywords to be displayed
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword
+                           FROM Snapshots2 sn, SnapshotKeywords2 ck
+                           WHERE sn.EpisodeNum = %s AND
+                                 sn.SnapshotNum = ck.SnapshotNum
+                           GROUP BY ck.keywordgroup, ck.keyword
+                           ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
+            self.DBCursor.execute(SQLText, EpisodeNum)
+            for (kwg, kw) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                if not (kwg, kw) in self.filteredKeywordList:
+                    self.filteredKeywordList.append((kwg, kw))
+                if not (kwg, kw, True) in self.unfilteredKeywordList:
+                    self.unfilteredKeywordList.append((kwg, kw, True))
+
             # Sort the Keyword List
             self.unfilteredKeywordList.sort()
 
@@ -788,11 +891,52 @@ class SeriesMap(wx.Frame):
                     if not ((clipID, collectNum, True) in self.clipFilterList):
                         self.clipFilterList.append((clipID, collectNum, True))
 
+            # Create the WHOLE SNAPSHOT Keyword Placement lines to be displayed.  We need them to be in SnapshotTimeCode, SnapshotNum order so colors will be
+            # distributed properly across bands.
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword, sn.SnapshotTimeCode, sn.SnapshotDuration, sn.SnapshotNum, sn.SnapshotID, sn.CollectNum
+                           FROM Snapshots2 sn, ClipKeywords2 ck
+                           WHERE sn.EpisodeNum = %s AND
+                                 sn.SnapshotNum = ck.SnapshotNum
+                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
+            self.DBCursor.execute(SQLText, EpisodeNum)
+            for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                SnapshotID = DBInterface.ProcessDBDataForUTF8Encoding(SnapshotID)
+                # If we're dealing with an Episode, self.clipNum will be None and we want all clips.
+                # If we're dealing with a Clip, we only want to deal with THIS clip!
+                if (self.clipNum == None):
+                    self.snapshotList.append((kwg, kw, SnapshotTimeCode, SnapshotTimeCode + SnapshotDuration, SnapshotNum, SnapshotID, collectNum, EpisodeID, SeriesID))
+                    if not ((SnapshotID, collectNum, True) in self.snapshotFilterList):
+                        self.snapshotFilterList.append((SnapshotID, collectNum, True))
+
+            # Create the SNAPSHOT CODING Keyword Placement lines to be displayed.  We need them to be in SnapshotTimeCode, SnapshotNum order so colors will be
+            # distributed properly across bands.
+            SQLText = """SELECT ck.KeywordGroup, ck.Keyword, sn.SnapshotTimeCode, sn.SnapshotDuration, sn.SnapshotNum, sn.SnapshotID, sn.CollectNum
+                           FROM Snapshots2 sn, SnapshotKeywords2 ck
+                           WHERE sn.EpisodeNum = %s AND
+                                 sn.SnapshotNum = ck.SnapshotNum
+                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
+            self.DBCursor.execute(SQLText, EpisodeNum)
+            for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                SnapshotID = DBInterface.ProcessDBDataForUTF8Encoding(SnapshotID)
+                # If we're dealing with an Episode, self.clipNum will be None and we want all clips.
+                # If we're dealing with a Clip, we only want to deal with THIS clip!
+                if (self.clipNum == None):
+                    self.snapshotList.append((kwg, kw, SnapshotTimeCode, SnapshotTimeCode + SnapshotDuration, SnapshotNum, SnapshotID, collectNum, EpisodeID, SeriesID))
+                    if not ((SnapshotID, collectNum, True) in self.snapshotFilterList):
+                        self.snapshotFilterList.append((SnapshotID, collectNum, True))
+
         # Sort the Keyword List
         self.filteredKeywordList.sort()
 
     def UpdateKeywordVisualization(self):
         """ Update the Keyword Visualization following something that could have changed it. """
+
+        print "SeriesMap.UpdateKeywordVisualization():  This should NEVER get called!!"
+        
         # Clear the Clip List
         self.clipList = []
         # Clear the Filtered Clip List
@@ -913,13 +1057,13 @@ class SeriesMap(wx.Frame):
                         # This dictionary object uses the episode name and keyword pair as the key and holds a list of Clip data for all clips with that keyword.
                         # If the list for a given keyword already exists ...
                         if self.keywordClipList.has_key(overlapKey):
-                            # Let's look for overlap.  Overlap artificially inflates the size of the bars, and must be eliminated.
-                            overlapStart = Stop
-                            overlapEnd = Start
                             # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
                             overlapClips = self.keywordClipList[overlapKey]
                             # Iterate through the Clip List ...
-                            for (overlapStartTime, overlapEndTime, overlapClipNum, overlapClipName) in overlapClips:
+                            for (objType, overlapStartTime, overlapEndTime, overlapClipNum, overlapClipName) in overlapClips:
+                                # Let's look for overlap.  Overlap artificially inflates the size of the bars, and must be eliminated.
+                                overlapStart = Stop
+                                overlapEnd = Start
 
                                 if DEBUG and KWG == 'Transana Users' and KW == 'DavidW':
                                     print "Start = %7d, overStart = %7s, Stop = %7s, overEnd = %7s" % (Start, overlapStartTime, Stop, overlapEndTime)
@@ -940,20 +1084,96 @@ class SeriesMap(wx.Frame):
                                 if (overlapEndTime > Start) and (overlapEndTime <= Stop):
                                     overlapEnd = overlapEndTime
                                     
-                            # If we've found an overlap, it will be indicated by Start being less than End!
-                            if overlapStart < overlapEnd:
-                                # We need to SUBTRACT the overlap time from the barData structure.
-                                barData[overlapKey] -= overlapEnd - overlapStart
+                                # If we've found an overlap, it will be indicated by Start being less than End!
+                                if overlapStart < overlapEnd:
+                                    # We need to SUBTRACT the overlap time from the barData structure.
+                                    barData[overlapKey] -= overlapEnd - overlapStart
 
-                                if DEBUG:
-                                    print "Bar Graph overlap found:", overlapKey, overlapEnd - overlapStart
+                                    if DEBUG:
+                                        print "Bar Graph overlap found:", overlapKey, overlapEnd - overlapStart
 
                             # ... add the new Clip to the Clip List
-                            self.keywordClipList[overlapKey].append((Start, Stop, ClipNum, ClipName))
+                            self.keywordClipList[overlapKey].append(('Clip', Start, Stop, ClipNum, ClipName))
                         # If there is no entry for the given keyword ...
                         else:
                             # ... create a List object with the first clip's data for this Keyword Pair key
-                            self.keywordClipList[overlapKey] = [(Start, Stop, ClipNum, ClipName)]
+                            self.keywordClipList[overlapKey] = [('Clip', Start, Stop, ClipNum, ClipName)]
+
+            # Now we iterate through the Snapshot List.
+            for (KWG, KW, Start, Stop, SnapshotNum, SnapshotName, CollectNum, episodeName, seriesName) in self.snapshotList:
+                # We make sure they are selected in the Filter, checking the Episode, Clips and Keyword selections
+                if ((episodeName, seriesName, True) in self.episodeList) and \
+                   ((SnapshotName, CollectNum, True) in self.snapshotFilterList) and \
+                   ((KWG, KW) in self.filteredKeywordList):
+                    # Now we track the start and end times compared to the current display limits
+                    if Start < self.startTime:
+                        Start = self.startTime
+                    if Start > self.endTime:
+                        Start = self.endTime
+                    if Stop > self.endTime:
+                        Stop = self.endTime
+                    if Stop < self.startTime:
+                        Stop = self.startTime
+
+                    # Set up the key we use to mark overlaps
+                    overlapKey = (episodeName, KWG, KW)
+
+                    # If Start and Stop are the same, the Clip is off the graph and should be ignored.
+                    if Start != Stop:
+                        # If the snapshot is ON the graph, let's check for overlap with other clips/snapshots with the same keyword at the same spot
+                        if not barData.has_key(overlapKey):
+                            barData[overlapKey] = 0
+                        # Add the bar length to the bar Data dictionary.
+                        barData[overlapKey] += Stop - Start
+
+                    # For the Series Keyword Bar Graph and the Series Keyword Percentage Graph ...
+                    if self.reportType in [2, 3]:
+                        # Now add the Clip to the keywordClipList.  This holds all Keyword/Clip data in memory so it can be searched quickly
+                        # This dictionary object uses the episode name and keyword pair as the key and holds a list of Clip data for all clips with that keyword.
+                        # If the list for a given keyword already exists ...
+                        if self.keywordClipList.has_key(overlapKey):
+                            # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
+                            overlapClips = self.keywordClipList[overlapKey]
+                            # Iterate through the Clip List ...
+                            for (objType, overlapStartTime, overlapEndTime, overlapClipNum, overlapClipName) in overlapClips:
+
+                                # Let's look for overlap.  Overlap artificially inflates the size of the bars, and must be eliminated.
+                                overlapStart = Stop
+                                overlapEnd = Start
+
+                                if DEBUG and KWG == 'Transana Users' and KW == 'DavidW':
+                                    print "Start = %7d, overStart = %7s, Stop = %7s, overEnd = %7s" % (Start, overlapStartTime, Stop, overlapEndTime)
+
+                                # Look for Start between overlapStartTime and overlapEndTime
+                                if (Start >= overlapStartTime) and (Start < overlapEndTime):
+                                    overlapStart = Start
+
+                                # Look for overlapStartTime between Start and Stop
+                                if (overlapStartTime >= Start) and (overlapStartTime < Stop):
+                                    overlapStart = overlapStartTime
+
+                                # Look for Stop between overlapStartTime and overlapEndTime
+                                if (Stop > overlapStartTime) and (Stop <= overlapEndTime):
+                                    overlapEnd = Stop
+
+                                # Look for overlapEndTime between Start and Stop
+                                if (overlapEndTime > Start) and (overlapEndTime <= Stop):
+                                    overlapEnd = overlapEndTime
+                                    
+                                # If we've found an overlap, it will be indicated by Start being less than End!
+                                if overlapStart < overlapEnd:
+                                    # We need to SUBTRACT the overlap time from the barData structure.
+                                    barData[overlapKey] -= overlapEnd - overlapStart
+
+                                    if DEBUG:
+                                        print "Bar Graph overlap found:", overlapKey, overlapEnd - overlapStart
+
+                            # ... add the new Snapshot to the Clip List
+                            self.keywordClipList[overlapKey].append(('Snapshot', Start, Stop, SnapshotNum, SnapshotName))
+                        # If there is no entry for the given keyword ...
+                        else:
+                            # ... create a List object with the first Snapshot's data for this Keyword Pair key
+                            self.keywordClipList[overlapKey] = [('Snapshot', Start, Stop, SnapshotNum, SnapshotName)]
 
             # once we're done with checking overlaps here, let's clear out this variable,
             # as it may get re-used later for other purposes!
@@ -1093,7 +1313,7 @@ class SeriesMap(wx.Frame):
                     if self.reportType == 2:
                         # ... we need to adjust the timelineMax value for the length of the whole Episode, if it's larger.
                         self.timelineMax = max(self.timelineMax, self.episodeLengths[(episodeName, seriesName)])
-                    
+
             # The Series Keyword Bar Graph extends from 0 to the timeLineMax value we just determined.
             if self.reportType == 2:
                 self.DrawTimeLine(0, self.timelineMax)
@@ -1119,21 +1339,54 @@ class SeriesMap(wx.Frame):
 
         # Iterate through the keyword list in order ...
         for (KWG, KW) in self.filteredKeywordList:
-            # Check to see if the color for this keyword has already been assigned, and if we're using Colors.
-            if self.keywordColors.has_key((KWG, KW)) and self.colorOutput:
-                # If so, set the index to match the current keyword's assigned color
-                colourindex = self.keywordColors[(KWG, KW)]
-            # If no color has been assigned, or if we're in GrayScale mode ...
+            # ... and assign colors to Keywords
+            # If we want COLOR output ...
+            if self.colorOutput:
+                # If the color is already defined ...
+                if self.keywordColors.has_key((KWG, KW)):
+                    # ... get the index for the color
+                    colourindex = self.keywordColors[(KWG, KW)]
+                # If the color has NOT been defined ...
+                else:
+                    # Load the keyword
+                    tmpKeyword = KeywordObject.Keyword(KWG, KW)
+                    # If the Default Keyword Color is in the set of defined colors ...
+                    if tmpKeyword.lineColorName in colorSet:
+                        # ... define the color for this keyword
+                        self.keywordColors[(KWG, KW)] = colorSet.index(tmpKeyword.lineColorName)
+                    # If the Default Keyword Color is NOT in the defined colors ...
+                    elif tmpKeyword.lineColorName != '':
+                        # ... add the color name to the colorSet List
+                        colorSet.append(tmpKeyword.lineColorName)
+                        # ... add the color's definition to the colorLookup dictionary
+                        colorLookup[tmpKeyword.lineColorName] = (int(tmpKeyword.lineColorDef[1:3], 16), int(tmpKeyword.lineColorDef[3:5], 16), int(tmpKeyword.lineColorDef[5:7], 16))
+                        # ... determine the new color's index
+                        colourindex = colorSet.index(tmpKeyword.lineColorName)
+                        # ... define the new color for this keyword
+                        self.keywordColors[(KWG, KW)] = colourindex
+                    # If there is no Default Keyword Color defined
+                    else:
+                        # ... get the index for the next color in the color list
+                        colourindex = self.keywordColors['lastColor'] + 1
+                        # If we're at the end of the list ...
+                        if colourindex > len(colorSet) - 1:
+                            # ... reset the list to the beginning
+                            colourindex = 0
+                        # ... remember the color index used
+                        self.keywordColors['lastColor'] = colourindex
+                        # ... define the new color for this keyword
+                        self.keywordColors[(KWG, KW)] = colourindex
+            # If we want Grayscale output ...
             else:
-                # ... assign the next available color to the index
+                # ... get the index for the next color in the color list
                 colourindex = self.keywordColors['lastColor'] + 1
-                # If we've exceeded the number of available colors (or shades of gray) ...
+                # If we're at the end of the list ...
                 if colourindex > len(colorSet) - 1:
-                    # ... that start over again at the beginning of the list.
+                    # ... reset the list to the beginning
                     colourindex = 0
-                # Update the dictionary element that tracks the last new color assigned.
+                # ... remember the color index used
                 self.keywordColors['lastColor'] = colourindex
-                # Remember that this color is now associated with this keyword for future reference
+                # ... define the new color for this keyword
                 self.keywordColors[(KWG, KW)] = colourindex
 
         # If we're producing a Series Keyword Sequence Map ..
@@ -1143,10 +1396,11 @@ class SeriesMap(wx.Frame):
             overlapLines = []
             # Iterate through all the Clip/Keyword records in the Clip List ...
             for (KWG, KW, Start, Stop, ClipNum, ClipName, CollectNum, episodeName, seriesName) in self.clipList:
-                # Check the clip against the Episode List, the Clip Filter List, and the Keyword Filter list to see if
-                # it should be included in the report.
+                # Check the clip against the Episode List, the Clip Filter List, the Snapshot Filter List, and the 
+                # Keyword Filter list to see if it should be included in the report.
                 if ((episodeName, seriesName, True) in self.episodeList) and \
-                   ((ClipName, CollectNum, True) in self.clipFilterList) and \
+                   (((ClipName, CollectNum, True) in self.clipFilterList) or
+                    ((ClipName, CollectNum, True) in self.snapshotFilterList))and \
                    ((KWG, KW) in self.filteredKeywordList):
 
                     # We compare the Clip's Start Time with the Map's boundaries.  We only want the portion of the clip
@@ -1176,6 +1430,7 @@ class SeriesMap(wx.Frame):
                         tempLine.append((self.CalcX(Start), yPos, self.CalcX(Stop), yPos))
                         # Determine the appropriate color for the keyword
                         colourindex = self.keywordColors[(KWG, KW)]
+
                         # Tell the graph to use the selected color, using the appropriate lookup table
                         self.graphic.SetColour(colorLookup[colorSet[colourindex]])
                         # Add the line data to the graph
@@ -1212,13 +1467,14 @@ class SeriesMap(wx.Frame):
                     # This dictionary object uses the keyword pair as the key and holds a list of Clip data for all clips with that keyword.
                     # If the list for a given keyword already exists ...
                     if self.keywordClipList.has_key(overlapKey):
-                        # Let's look for overlap
-                        overlapStart = Stop
-                        overlapEnd = Start
                         # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
                         overlapClips = self.keywordClipList[overlapKey]
                         # Iterate through the Clip List ...
-                        for (overlapStartTime, overlapEndTime, overlapClipNum, overlapClipName) in overlapClips:
+                        for (objType, overlapStartTime, overlapEndTime, overlapClipNum, overlapClipName) in overlapClips:
+
+                            # Let's look for overlap
+                            overlapStart = Stop
+                            overlapEnd = Start
 
                             if DEBUG and KWG == 'Transana Users' and KW == 'DavidW':
                                 print "Start = %7d, overStart = %7s, Stop = %7s, overEnd = %7s" % (Start, overlapStartTime, Stop, overlapEndTime)
@@ -1239,39 +1495,173 @@ class SeriesMap(wx.Frame):
                             if (overlapEndTime > Start) and (overlapEndTime <= Stop):
                                 overlapEnd = overlapEndTime
                                 
-                        # If we've found an overlap, it will be indicated by Start being less than End!
-                        if overlapStart < overlapEnd:
-                            # Draw a multi-colored line to indicate overlap
-                            overlapThickness = int(self.barHeight/ 3) + 1
-                            self.graphic.SetThickness(overlapThickness)
-                            if self.colorOutput:
-                                self.graphic.SetColour("GREEN")
-                            else:
-                                self.graphic.SetColour("WHITE")
-                            tempLine = [(self.CalcX(overlapStart), yPos, self.CalcX(overlapEnd), yPos)]
-                            self.graphic.AddLines(tempLine)
-                            if self.colorOutput:
-                                self.graphic.SetColour("RED")
-                            else:
-                                self.graphic.SetColour("BLACK")
-                            tempLine = [(self.CalcX(overlapStart), yPos - overlapThickness+1, self.CalcX(overlapEnd), yPos - overlapThickness+1)]
-                            self.graphic.AddLines(tempLine)
-                            if self.colorOutput:
-                                self.graphic.SetColour("BLUE")
-                            else:
-                                self.graphic.SetColour("GRAY")
-                            tempLine = [(self.CalcX(overlapStart), yPos + overlapThickness, self.CalcX(overlapEnd), yPos + overlapThickness)]
-                            self.graphic.AddLines(tempLine)
-                            # Let's remember the clip start and stop boundaries, to be drawn at the end so they won't get over-written
-                            overlapLines.append(((self.CalcX(overlapStart), yPos - (self.barHeight / 2), self.CalcX(overlapStart), yPos + (self.barHeight / 2)),))
-                            overlapLines.append(((self.CalcX(overlapEnd), yPos - (self.barHeight / 2), self.CalcX(overlapEnd), yPos + (self.barHeight / 2)),))
+                            # If we've found an overlap, it will be indicated by Start being less than End!
+                            if overlapStart < overlapEnd:
+                                # Draw a multi-colored line to indicate overlap
+                                overlapThickness = int(self.barHeight/ 3) + 1
+                                self.graphic.SetThickness(overlapThickness)
+                                if self.colorOutput:
+                                    self.graphic.SetColour("GREEN")
+                                else:
+                                    self.graphic.SetColour("WHITE")
+                                tempLine = [(self.CalcX(overlapStart), yPos, self.CalcX(overlapEnd), yPos)]
+                                self.graphic.AddLines(tempLine)
+                                if self.colorOutput:
+                                    self.graphic.SetColour("RED")
+                                else:
+                                    self.graphic.SetColour("BLACK")
+                                tempLine = [(self.CalcX(overlapStart), yPos - overlapThickness+1, self.CalcX(overlapEnd), yPos - overlapThickness+1)]
+                                self.graphic.AddLines(tempLine)
+                                if self.colorOutput:
+                                    self.graphic.SetColour("BLUE")
+                                else:
+                                    self.graphic.SetColour("GRAY")
+                                tempLine = [(self.CalcX(overlapStart), yPos + overlapThickness, self.CalcX(overlapEnd), yPos + overlapThickness)]
+                                self.graphic.AddLines(tempLine)
+                                # Let's remember the clip start and stop boundaries, to be drawn at the end so they won't get over-written
+                                overlapLines.append(((self.CalcX(overlapStart), yPos - (self.barHeight / 2), self.CalcX(overlapStart), yPos + (self.barHeight / 2)),))
+                                overlapLines.append(((self.CalcX(overlapEnd), yPos - (self.barHeight / 2), self.CalcX(overlapEnd), yPos + (self.barHeight / 2)),))
 
                         # ... add the new Clip to the Clip List
-                        self.keywordClipList[overlapKey].append((Start, Stop, ClipNum, ClipName))
+                        self.keywordClipList[overlapKey].append(('Clip', Start, Stop, ClipNum, ClipName))
                     # If there is no entry for the given keyword ...
                     else:
                         # ... create a List object with the first clip's data for this Keyword Pair key.
-                        self.keywordClipList[overlapKey] = [(Start, Stop, ClipNum, ClipName)]
+                        self.keywordClipList[overlapKey] = [('Clip', Start, Stop, ClipNum, ClipName)]
+
+            # Iterate through all the Snapshot/Keyword records in the Snapshot List ...
+            for (KWG, KW, Start, Stop, SnapshotNum, SnapshotName, CollectNum, episodeName, seriesName) in self.snapshotList:
+                # Check the clip against the Episode List, the Snapshot Filter List, and the Keyword Filter list to see if
+                # it should be included in the report.
+                if ((episodeName, seriesName, True) in self.episodeList) and \
+                   ((SnapshotName, CollectNum, True) in self.snapshotFilterList) and \
+                   ((KWG, KW) in self.filteredKeywordList):
+
+                    # We compare the Snapshot's Start Time with the Map's boundaries.  We only want the portion of the clip
+                    # that falls within the Map's upper and lower boundaries.
+                    if Start < self.startTime:
+                        Start = self.startTime
+                    if Start > self.endTime:
+                        Start = self.endTime
+                    if Stop > self.endTime:
+                        Stop = self.endTime
+                    if Stop < self.startTime:
+                        Stop = self.startTime
+
+                    # If Start and Stop match, the clip is off the Map and can be ignored.  Otherwise ...
+                    if Start != Stop:
+                        # ... we start drawing the clip's bar by setting the bar thickness.
+                        self.graphic.SetThickness(self.barHeight)
+                        # Initialize a variable for building the line's data record
+                        tempLine = []
+                        # Determine the vertical placement of the line, which requires a different lookup key for the
+                        # single-line report than the multi-line report.
+                        if self.singleLineDisplay:
+                            yPos = self.CalcY(yValLookup[episodeName])
+                        else:
+                            yPos = self.CalcY(yValLookup[(episodeName, KWG, KW)])
+                        # Add the line data
+                        tempLine.append((self.CalcX(Start), yPos, self.CalcX(Stop), yPos))
+                        # Determine the appropriate color for the keyword
+                        colourindex = self.keywordColors[(KWG, KW)]
+
+                        # Tell the graph to use the selected color, using the appropriate lookup table
+                        self.graphic.SetColour(colorLookup[colorSet[colourindex]])
+                        # Add the line data to the graph
+                        self.graphic.AddLines(tempLine)
+
+                        # We need to track the bar positions so that the MouseOver can display data correctly.  We need to do it
+                        # later for the multi-line report, but here for the single-line report.
+                        if self.singleLineDisplay:
+                            # The first stage of the lookup is the Y-coordinate.  If there's not already an
+                            # EpisodeNameKeywordGroupKeywordLookup record for this Y-Coordinate ...
+                            if not self.epNameKWGKWLookup.has_key(self.CalcY(yValLookup[episodeName]) - int((self.barHeight + self.whitespaceHeight)/2)):
+                                # ... create an empty dictionary object for the first part of the Lookup Line
+                                self.epNameKWGKWLookup[self.CalcY(yValLookup[episodeName]) - int((self.barHeight + self.whitespaceHeight)/2)] = {}
+                            # The second stage of the lookup is the X range in a tuple.  If the X range isn't already in the dictionary,
+                            # then add an empty List object for the X range.
+                            if not self.epNameKWGKWLookup[self.CalcY(yValLookup[episodeName]) - int((self.barHeight + self.whitespaceHeight)/2)].has_key((self.CalcX(Start), self.CalcX(Stop))):
+                                self.epNameKWGKWLookup[self.CalcY(yValLookup[episodeName]) - int((self.barHeight + self.whitespaceHeight)/2)][(self.CalcX(Start), self.CalcX(Stop))] = []
+                            # Add a Lookup Line for this Y-coordinate and X range containing the Episode Name, the keyword data,
+                            # and the Clip Length.
+                            self.epNameKWGKWLookup[self.CalcY(yValLookup[episodeName]) - int((self.barHeight + self.whitespaceHeight)/2)][(self.CalcX(Start), self.CalcX(Stop))].append((episodeName, KWG, KW, Stop - Start))
+
+                    if DEBUG and KWG == 'Transana Users' and KW == 'DavidW':
+                        print "Looking at %s (%d)" % (SnapshotName, CollectNum)
+
+                    # We need to indicate where there is overlap in this map.
+
+                    # We use a different key to mark overlaps depending on whether we're in singleLineDisplay mode or not.
+                    if self.singleLineDisplay:
+                        overlapKey = (episodeName)
+                    else:
+                        overlapKey = (episodeName, KWG, KW)
+                                
+                    # Now add the Clip to the keywordClipList.  This holds all Keyword/Clip data in memory so it can be searched quickly
+                    # This dictionary object uses the keyword pair as the key and holds a list of Clip data for all clips with that keyword.
+                    # If the list for a given keyword already exists ...
+                    if self.keywordClipList.has_key(overlapKey):
+                        # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
+                        overlapClips = self.keywordClipList[overlapKey]
+                        # Iterate through the Clip List ...
+                        for (objType, overlapStartTime, overlapEndTime, overlapClipNum, overlapClipName) in overlapClips:
+
+                            # Let's look for overlap
+                            overlapStart = Stop
+                            overlapEnd = Start
+
+                            if DEBUG and KWG == 'Transana Users' and KW == 'DavidW':
+                                print "Start = %7d, overStart = %7s, Stop = %7s, overEnd = %7s" % (Start, overlapStartTime, Stop, overlapEndTime)
+
+                            # Look for Start between overlapStartTime and overlapEndTime
+                            if (Start >= overlapStartTime) and (Start < overlapEndTime):
+                                overlapStart = Start
+
+                            # Look for overlapStartTime between Start and Stop
+                            if (overlapStartTime >= Start) and (overlapStartTime < Stop):
+                                overlapStart = overlapStartTime
+
+                            # Look for Stop between overlapStartTime and overlapEndTime
+                            if (Stop > overlapStartTime) and (Stop <= overlapEndTime):
+                                overlapEnd = Stop
+
+                            # Look for overlapEndTime between Start and Stop
+                            if (overlapEndTime > Start) and (overlapEndTime <= Stop):
+                                overlapEnd = overlapEndTime
+                                
+                            # If we've found an overlap, it will be indicated by Start being less than End!
+                            if overlapStart < overlapEnd:
+                                # Draw a multi-colored line to indicate overlap
+                                overlapThickness = int(self.barHeight/ 3) + 1
+                                self.graphic.SetThickness(overlapThickness)
+                                if self.colorOutput:
+                                    self.graphic.SetColour("GREEN")
+                                else:
+                                    self.graphic.SetColour("WHITE")
+                                tempLine = [(self.CalcX(overlapStart), yPos, self.CalcX(overlapEnd), yPos)]
+                                self.graphic.AddLines(tempLine)
+                                if self.colorOutput:
+                                    self.graphic.SetColour("RED")
+                                else:
+                                    self.graphic.SetColour("BLACK")
+                                tempLine = [(self.CalcX(overlapStart), yPos - overlapThickness+1, self.CalcX(overlapEnd), yPos - overlapThickness+1)]
+                                self.graphic.AddLines(tempLine)
+                                if self.colorOutput:
+                                    self.graphic.SetColour("BLUE")
+                                else:
+                                    self.graphic.SetColour("GRAY")
+                                tempLine = [(self.CalcX(overlapStart), yPos + overlapThickness, self.CalcX(overlapEnd), yPos + overlapThickness)]
+                                self.graphic.AddLines(tempLine)
+                                # Let's remember the clip start and stop boundaries, to be drawn at the end so they won't get over-written
+                                overlapLines.append(((self.CalcX(overlapStart), yPos - (self.barHeight / 2), self.CalcX(overlapStart), yPos + (self.barHeight / 2)),))
+                                overlapLines.append(((self.CalcX(overlapEnd), yPos - (self.barHeight / 2), self.CalcX(overlapEnd), yPos + (self.barHeight / 2)),))
+
+                        # ... add the new Clip to the Clip List
+                        self.keywordClipList[overlapKey].append(('Snapshot', Start, Stop, SnapshotNum, SnapshotName))
+                    # If there is no entry for the given keyword ...
+                    else:
+                        # ... create a List object with the first clip's data for this Keyword Pair key.
+                        self.keywordClipList[overlapKey] = [('Snapshot', Start, Stop, SnapshotNum, SnapshotName)]
 
             # For the single-line display only ...
             if self.singleLineDisplay:
@@ -1287,7 +1677,9 @@ class SeriesMap(wx.Frame):
 
             if not '__WXMAC__' in wx.PlatformInfo:
                 self.menuFile.Enable(M_FILE_SAVEAS, True)
-                self.menuFile.Enable(M_FILE_PRINTPREVIEW, True)
+                # We can't enable Print Preview for Right-To-Left languages
+                if not (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+                    self.menuFile.Enable(M_FILE_PRINTPREVIEW, True)
                 self.menuFile.Enable(M_FILE_PRINT, True)
 
         # For the Series Keyword Bar Graph  and the Series keyword Percentage Graph, which are VERY similar and therefore use the same
@@ -1562,7 +1954,7 @@ class SeriesMap(wx.Frame):
                     # If we have the Series Keyword Sequence Map multi-line display ...
                     else:
                         # Iterate through the Clip List ...
-                        for (startTime, endTime, clipNum, clipName) in clips:
+                        for (objType, startTime, endTime, clipNum, clipName) in clips:
                             # If the current Time value falls between the Clip's StartTime and EndTime ...
                             if (startTime < time) and (endTime > time):
                                 # ... calculate the length of the Clip ...
@@ -1663,7 +2055,7 @@ class SeriesMap(wx.Frame):
                 # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
                 clips = self.keywordClipList[kw]
                 # Iterate through the Clip List ...
-                for (startTime, endTime, clipNum, clipName) in clips:
+                for (objType, startTime, endTime, clipNum, clipName) in clips:
                     # If the current Time value falls between the Clip's StartTime and EndTime ...
                     if (startTime <= time) and (endTime >= time):
                         # Check to see if this is a duplicate Clip
@@ -1681,14 +2073,20 @@ class SeriesMap(wx.Frame):
                                     # ... increment the counter
                                     cnt += 1
                             # Add the clipname and counter to the Clip Names dictionary
-                            clipNames["%s (%d)" % (clipName, cnt)] = clipNum
+                            clipNames["%s (%d)" % (clipName, cnt)] = (objType, clipNum)
                         else:
                             # Add the Clip Name as a Dictionary key pointing to the Clip Number
-                            clipNames[clipName] = clipNum
-        # If only 1 Clip is found ...
+                            clipNames[clipName] = (objType, clipNum)
+        # If only 1 Item is found ...
         if len(clipNames) == 1:
-            # ... load that clip by looking up the clip's number
-            self.parent.KeywordMapLoadClip(clipNames[clipNames.keys()[0]])
+            # ... if that Item is a Clip ...
+            if clipNames[clipNames.keys()[0]][0] == 'Clip':
+                # ... load that clip by looking up the clip's number
+                self.parent.KeywordMapLoadClip(clipNames[clipNames.keys()[0]][1])
+            # ... if that Item is a Snapshot ...
+            elif clipNames[clipNames.keys()[0]][0] == 'Snapshot':
+                # ... load that Snapshot by looking up the snapshot's number
+                self.parent.KeywordMapLoadSnapshot(clipNames[clipNames.keys()[0]][1])
             # If left-click, close the Series Map.  If not, don't!
             if event.LeftUp():
                 # Close the Series Map
@@ -1698,10 +2096,16 @@ class SeriesMap(wx.Frame):
             # Use a wx.SingleChoiceDialog to allow the user to make the choice between multiple clips here.
             dlg = wx.SingleChoiceDialog(self, _("Which Clip would you like to load?"), _("Select a Clip"),
                                         clipNames.keys(), wx.CHOICEDLG_STYLE)
-            # If the user selects a Clip and click OK ...
+            # If the user selects an Item and click OK ...
             if dlg.ShowModal() == wx.ID_OK:
-                # ... load the selected clip
-                self.parent.KeywordMapLoadClip(clipNames[dlg.GetStringSelection()])
+                # ... if that Item is a Clip ...
+                if clipNames[dlg.GetStringSelection()][0] == 'Clip':
+                    # ... load the selected clip
+                    self.parent.KeywordMapLoadClip(clipNames[dlg.GetStringSelection()][1])
+                # ... if that Item is a Snapshot ...
+                elif clipNames[dlg.GetStringSelection()][0] == 'Snapshot':
+                    # ... load the selected snapshot
+                    self.parent.KeywordMapLoadSnapshot(clipNames[dlg.GetStringSelection()][1])
                 # Destroy the SingleChoiceDialog
                 dlg.Destroy()
                 # If left-click, close the Series Map.  If not, don't!

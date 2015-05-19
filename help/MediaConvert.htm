@@ -7,7 +7,7 @@
 
 <H1>Media File Conversion, Clip Video Export, and Snapshots</H1><HR>
 
-A major obstacle for some researchers is manipulating media files for work with Transana.  Transana's Media File Conversion Tool attempts to simplify this process.  This same interface is also used for Clip Video Export and for Video Snapshots.<P>
+A major obstacle for some researchers is manipulating media files for work with Transana.  Transana's Media File Conversion Tool attempts to simplify this process.  This same interface is also used for Clip Video Export and for capturing still images from video.<P>
 
 <IMG SRC="images/mediaconvert.gif"><P>
 
@@ -15,23 +15,23 @@ Media files come in many different formats.  The media players that Transana use
 
 Please read the following description carefully.  The settings you choose matter.  In our experience, getting things "right" the first time takes a bit of trial and error, but it quickly becomes routine once you discover the formula that works well for your particular situation.<P>
 
-Media files do not necessarily need to be extremely high quality for the purposes of analysis.  Some research projects require higher quality video than others, but there are tradeoffs to take into account.  There are a number of analytic and practical factors to consider in deciding how best to encode your analytic media files.<P>
+Media files do not necessarily need to be extremely high quality for the purposes of qualitative analysis.  Some research projects require higher quality video than others, but there are tradeoffs to take into account.  There are a number of analytic and practical factors to consider in deciding how best to encode your analytic media files.<P>
 
 The <B>Source Media File</B> is the media file that needs to be converted.  You can select a wide variety of media files with a wide variety of formats, so many that we cannot come up with a comprehensive list.  (If you are using this tool for Clip Video Export, however, this field will be disabled, as the Clip provides the source media information and it cannot be changed.)<P>
 
 There are three options for the <B>Format</B> of the media file to be created.<P>
 
 <UL>
-  <LI><B>MPEG-4</B> - MPEG-4 is a newer video file specification, and is more flexible about the video and audio formats it can contain.  It appears to produce higher quality video in smaller files than MPEG-1, but can sometimes be less precise and less responsive than other formats.  It is an excellent all-purpose format that will meet most analytic needs.<BR></LI>
+  <LI><B>MPEG-4</B> - MPEG-4 is a video file specification, and is flexible about the video and audio formats it can contain.  It appears to produce higher quality video in smaller files than MPEG-1, but can sometimes be less precise and less responsive than other formats.  It is an excellent all-purpose format that will meet most analytic needs.<BR></LI>
 
-  <LI><B>WAV</B> - WAV is an uncompressed audio-only format that is almost universally supported.  While it is an excellent quality format, it tends to produce extremely large files.<BR></LI>
+  <LI><B>WAV</B> - WAV is an uncompressed audio-only format that is almost universally supported.  While it is an excellent quality format, it tends to produce large files compared to compressed formats such as MP3.<BR></LI>
 
-  <LI><B>JPEG</B> - JPEG is a still-image format that is almost universally supported.  Select this option if you want to create a large number of still images from your video file.  This option is automatically selected for Snapshots.<BR></LI>
+  <LI><B>JPEG</B> - JPEG is a still-image format that is almost universally supported.  Select this option if you want to create still images from your video file.  This option is automatically selected for still-image capture.<BR></LI>
 </UL>
 
 When we refer to precision and responsiveness in our discussion of the different media formats, we are particularly referring to how accurately time codes can be placed within a given format.  It doesn't matter for some research projects if the clip boundaries are off by a fraction of a second in places, while other projects, particularly those creating very short clips, require a greater degree of accuracy.<P>
 
-While there are a great many formats that can be used with Transana, we have selected this small subset as formats that work particularly well with Transana and can be created without requiring prohibitive royalty fees.  If the files you have work well with Transana on your computer, you don't need to convert them just because they are not in one of the formats listed above.<P>
+While there are a great many formats that can be used with Transana, we have selected this small subset as formats that work particularly well with Transana and can be created without incurring prohibitive royalty fees.  If the files you have work well with Transana on your computer, you don't need to convert them just because they are not in one of the formats listed above.<P>
 
 While MPEG-1 is an excellent video format, Transana's Media File Conversion tool cannot produce MPEG-1 files due to the prohibitive licensing costs involved with producing this format.  The same is true of the MP3 audio format. There are many great tools available on the internet for producing these formats should you want to use them, and they work very well with Transana.<P>
 
@@ -39,13 +39,13 @@ The <B>Destination Media File</B> is the name of the file that will be created b
 
 For Clip Video Export, Transana will name the video file after the Clip being exported. <P>
 
-Please note that Transana will automatically over-write existing files with the same name as the one supplied, so proceed with care if you have duplicate Clip IDs.  You are free to change the path and file name of the Destination Media File, but you should only do so after you have selected the Source Media File and Format you intend to use.  Please note, however, that you <I>MUST</I> use the file extension automatically assigned by Transana.<P>
+Please note that Transana will automatically over-write existing files with the same name as the one supplied, so proceed with care if you have duplicate Clip IDs or are creating multiple Snapshots from the same video file.  You are free to change the path and file name of the Destination Media File, but you should only do so after you have selected the Source Media File and Format you intend to use.  Please note, however, that you <I>MUST</I> use the file extension automatically assigned by Transana.<P>
 
-The <B>Video Size</B> parameter provides one or more options for the size of the video file display.  The Media File Conversion tool can make destination video file images smaller but cannot make them larger than the source video file.  If you have a large group, or need to observe subtle details such as gesture, facial expression, or body posture, you will need a larger image size than if these sorts of issues are not important to your analysis.  If you are converting files for use with Transana's Multiple Simultaneous Video feature, you should select the smallest video size option, probably with a video width of 320 or 360 pixels.  Your images will probably be displayed that small anyway because of screen size limitations, and the additional size only uses up processing power that could be better used for displaying multiple media files with a better overall quality.<P>
+The <B>Video Size</B> parameter provides one or more options for the size of the video file display.  The Media File Conversion tool can make destination video file images smaller but cannot make them larger than the source video file.  If you have a large group, or need to observe subtle details such as gesture, facial expression, or body posture, you will need a larger image size than if these sorts of issues are not important to your analysis.  If you are converting files for use with Transana's Multiple Simultaneous Video feature, you should select the smallest video size option, probably with a video width of 640 pixels or less.  Your images will probably be displayed that small anyway because of screen size limitations, and the additional size only uses up processing power that could be better used for displaying multiple media files with a better overall quality.<P>
 
-<B>Video Bit Rate</B> affects the overall quality of the picture of your video files, with higher bit rates producing better quality images.  Unless your video size is large, however, differences from bit rates over 1,500 kb/s are rarely noticeable, and bit rates of 500 kb/s can be quite acceptable for many analyses.  If you will be displaying three or four simultaneous media files, bit rates of 1,000 kb/s or lower are recommended, particularly on older computers.  If your video files do not play smoothly within Transana, lowering the video bit rate is recommended as a potential solution.<P>
+<B>Video Bit Rate</B> affects the overall quality of the picture of your video files, with higher bit rates producing better quality images.  Unless your video size is large, however, differences from bit rates over 1,500 kb/s are rarely noticeable, and bit rates of 500 kb/s can be quite acceptable for many analyses.  If you will be displaying three or four simultaneous media files, bit rates of 1,500 kb/s or lower are recommended, particularly on older computers.  If your video files do not play smoothly within Transana, lowering the video bit rate is recommended as a potential solution.<P>
 
-Audio quality is usually more important than video quality in research media files.  Audio also takes up a lot less space and processing power than video, so researchers usually keep the audio quality of their analytic files relatively high.  An <B>Audio Bit Rate</B> setting of 192 kb/s usually works well, although it is unclear if most people can really tell a difference between that setting and some of the lower settings.  Similarly, an <B>Audio Sample Rate</B> of 44,100 Hz is commonly used, and in fact MPEG-1 video does not accept settings below 32,000 Hz.<P>
+Audio quality is usually more important than video quality in research media files.  Audio also takes up a lot less space and processing power than video, so researchers usually keep the audio quality of their analytic files relatively high.  An <B>Audio Bit Rate</B> setting of 192 kb/s usually works well, although it is unclear if most people can really tell a difference between that setting and some of the lower settings.  Similarly, an <B>Audio Sample Rate</B> of 44,100 Hz is commonly used.<P>
 
 For Clip Video Export, <B>Clip Start Time</B> and <B>Clip Duration</B> values are displayed, but these values cannot be edited.<P>
 
@@ -56,8 +56,6 @@ Finally, Transana's Media File Conversion tool is also used for capturing still 
 First, capturing still images from media files can be surprisingly time-consuming.  The further into your media file you are, the longer this capture process will take.  At present, Transana cannot predict how long such a capture will take, so it provides no useful feedback during the process.  Please be patient when you have requested a Snapshot.<P>
 
 Second, it is important that your Destination Media File name include the "%06d" parameter.  This allows the Media File Conversion tool to automatically number the files it produces, which is necessary to ensure you get the right image.<P>
-
-Third, if your transcript is in Edit Mode when you take a Snapshot, the image will be automatically placed in your transcript, and will be reduced in size to fit the transcript's width if necessary.  If you take a Snapshot when your transcript is in Read-Only Mode, the image obviously cannot be inserted, but will be saved to your hard disk and can be inserted into your transcript manually if you wish.<P>
 
 <A HREF="programoptionsmu.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;

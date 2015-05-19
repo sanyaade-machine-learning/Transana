@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -19,8 +19,7 @@
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
 import wx
-
-# RB_STORAGESPACE   =   wx.NewId()
+import TransanaGlobal
 
 class sFTPConnection(wx.Dialog):
     """ Implements the logon screen used in connecting to an sFTP Server). """
@@ -68,7 +67,8 @@ class sFTPConnection(wx.Dialog):
         box.Add(lblsFTPPublicKey, 0, wx.LEFT, 10)
 
         self.editsFTPPublicKey = wx.TextCtrl(self, -1, self.sFTPPublicKey)
-        if self.sFTPPublicKeyType == _("None"):
+
+        if self.sFTPPublicKeyType.encode('utf8') == _("None"):
             self.editsFTPPublicKey.Enable(False)
         box.Add(self.editsFTPPublicKey, 2, wx.LEFT | wx.RIGHT | wx.BOTTOM| wx.EXPAND, 10)
 
@@ -97,7 +97,8 @@ class sFTPConnection(wx.Dialog):
         self.Layout()
         self.SetAutoLayout(True)
         # Center on the Screen
-        self.CenterOnScreen()
+#        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # Set Focus
         self.editUserName.SetFocus()
@@ -113,7 +114,6 @@ class sFTPConnection(wx.Dialog):
         # Load the Config Data.  wxConfig automatically uses the Registry on Windows and the appropriate file on Mac.
         # Program Name is Transana, Vendor Name is Verception to remain compatible with Transana 1.0.
         config = wx.Config('Transana', 'Verception')
-#        self.sFTPUserName       = config.Read('/2.0/sFTP/sFTPUserName', '')
         self.sFTPServer         = config.Read('/2.0/sFTP/sFTPServer', 'ftp.wcer.wisc.edu')
         self.sFTPPort           = config.Read('/2.0/sFTP/sFTPPort', '22')
         self.sFTPPublicKeyType  = config.Read('/2.0/sFTP/sFTPPublicKeyType', 'ssh-rsa')
@@ -124,8 +124,6 @@ class sFTPConnection(wx.Dialog):
         # Save the Config Data.  wxConfig automatically uses the Registry on Windows and the appropriate file on Mac.
         # Program Name is Transana, Vendor Name is Verception to remain compatible with Transana 1.0.
         config = wx.Config('Transana', 'Verception')
-#        self.sFTPUserName = self.editUserName.GetValue()
-#        config.Write('/2.0/sFTP/sFTPUserName', self.sFTPUserName)
         self.sFTPServer = self.editsFTPServer.GetValue()
         config.Write('/2.0/sFTP/sFTPServer', self.sFTPServer)
         self.sFTPPort = self.editsFTPPort.GetValue()

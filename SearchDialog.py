@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -25,8 +25,12 @@ import wx
 import DBInterface
 # import Transana's common Dialogs
 import Dialogs
+# import Transana's Constants
+import TransanaConstants
 # import Transana's Globals
 import TransanaGlobal
+# import Transana's Images
+import TransanaImages
 # import Python's os module
 import os
 
@@ -37,7 +41,7 @@ class SearchDialog(wx.Dialog):
     def __init__(self, searchName=''):
         """ Initialize the Search Dialog, passing in the default Search Name. """
         # Define the SearchDialog as a resizable wxDialog Box
-        wx.Dialog.__init__(self, TransanaGlobal.menuWindow, -1, _("Boolean Keyword Search"), wx.DefaultPosition, wx.Size(500, 480),
+        wx.Dialog.__init__(self, TransanaGlobal.menuWindow, -1, _("Boolean Keyword Search"), wx.DefaultPosition, wx.Size(500, 600),
                            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
 
         # To look right, the Mac needs the Small Window Variant.
@@ -54,7 +58,7 @@ class SearchDialog(wx.Dialog):
         self.reportType = 15
 
         # Specify the minimum acceptable width and height for this window
-        self.SetSizeHints(500, 440)
+        self.SetSizeHints(500, 550)
 
         # Define all GUI Elements for the Form
         
@@ -69,7 +73,65 @@ class SearchDialog(wx.Dialog):
         # Add Search Name Text Box
         self.searchName = wx.TextCtrl(self, -1)
         self.searchName.SetValue(searchName)
-        mainSizer.Add(self.searchName, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        mainSizer.Add(self.searchName, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+        # Add Scope Label
+        scopeText = wx.StaticText(self, -1, _('Search Scope:'))
+        mainSizer.Add(scopeText, 0, wx.LEFT | wx.RIGHT, 10)
+        mainSizer.Add((0, 3))
+        
+        # Create a Row Sizer for the "include" checkboxes
+        includeSizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Add a spacer
+        includeSizer.Add((1,1), 1, wx.EXPAND)
+
+        # Add a checkbox for including Episodes in the Search Results
+        self.includeEpisodes = wx.CheckBox(self, -1, _('Search Episodes'))
+        # Include Episodes by default
+        self.includeEpisodes.SetValue(True)
+        # Bind the Check event
+        self.includeEpisodes.Bind(wx.EVT_CHECKBOX, self.OnBtnClick)
+        # Add the checkbox to the Include Sizer
+        includeSizer.Add(self.includeEpisodes, 0)
+
+        # Add a spacer
+        includeSizer.Add((1,1), 1, wx.EXPAND)
+
+        # Add a checkbox for including Clips in the Search Results
+        self.includeClips = wx.CheckBox(self, -1, _('Search Clips'))
+        # Include Clips by default
+        self.includeClips.SetValue(True)
+        # Bind the Check event
+        self.includeClips.Bind(wx.EVT_CHECKBOX, self.OnBtnClick)
+        # Add the checkbox to the Include Sizer
+        includeSizer.Add(self.includeClips, 0)
+
+        if TransanaConstants.proVersion:
+            # Add a spacer
+            includeSizer.Add((1,1), 1, wx.EXPAND)
+
+            # Add a checkbox for including Snapshots in the Search Results
+            self.includeSnapshots = wx.CheckBox(self, -1, _('Search Snapshots'))
+            # Include Snapshots by default
+            self.includeSnapshots.SetValue(True)
+            # Bind the Check event
+            self.includeSnapshots.Bind(wx.EVT_CHECKBOX, self.OnBtnClick)
+            # Add the checkbox to the Include Sizer
+            includeSizer.Add(self.includeSnapshots)
+        else:
+            # Add a checkbox for including Snapshots in the Search Results
+            self.includeSnapshots = wx.CheckBox(self, -1, _('Search Snapshots'))
+            # Don't Display this checkbox!
+            self.includeSnapshots.Show(False)
+            # Include Snapshots by default
+            self.includeSnapshots.SetValue(False)
+
+        # Add a spacer
+        includeSizer.Add((1,1), 1, wx.EXPAND)
+
+        # Add the Include Sizer on the Main Sizer
+        mainSizer.Add(includeSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Add Boolean Operators Label
         operatorsText = wx.StaticText(self, -1, _('Operators:'))
@@ -118,7 +180,7 @@ class SearchDialog(wx.Dialog):
 
         # Add "Undo" Button
         # Get the image for Undo
-        bmp = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Undo16.xpm"), wx.BITMAP_TYPE_XPM)
+        bmp = TransanaImages.Undo16.GetBitmap()
         self.btnUndo = wx.BitmapButton(self, -1, bmp, size=wx.Size(30, 24))
         self.btnUndo.SetToolTip(wx.ToolTip(_('Undo')))
         r1Sizer.Add(self.btnUndo, 0)
@@ -182,6 +244,7 @@ class SearchDialog(wx.Dialog):
         self.searchQuery = wx.TextCtrl(self, -1, size = wx.Size(200, 120), style=wx.TE_MULTILINE | wx.TE_READONLY)
         mainSizer.Add(self.searchQuery, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
+        # Create a Row sizer for the buttons at the bottom of the form
         btnSizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # Add the File Open button
@@ -468,6 +531,28 @@ class SearchDialog(wx.Dialog):
         elif event.GetId() == self.btnHelp.GetId():
             if TransanaGlobal.menuWindow != None:
                 TransanaGlobal.menuWindow.ControlObject.Help('Search')
+
+        # The "include" checkboxes
+        elif event.GetId() in [self.includeEpisodes.GetId(), self.includeClips.GetId(), self.includeSnapshots.GetId()]:
+            # If we are CHECKING one of the boxes ...
+            if event.IsChecked():
+                # Detect the current status of the query to see if it's a valid search.  If so ...
+                if (len(self.searchQuery.GetValue()) > 0) and (self.parensOpen == 0) and \
+                   not (self.searchQuery.GetValue().rstrip().upper()[-4:] == ' AND') and \
+                   not (self.searchQuery.GetValue().rstrip().upper()[-3:] == ' OR') and \
+                   not (self.searchQuery.GetValue().rstrip().upper()[-4:] in ['\nNOT', '(NOT']):
+                    # Enable the Search Button
+                    self.btnSearch.Enable(True)
+                    # and the save button
+                    self.btnFileSave.Enable(True)
+
+        # At least one of the "Include" checkboxes MUST be checked for the Search to be valid
+        if not (self.includeEpisodes.IsChecked() or self.includeClips.IsChecked() or self.includeSnapshots.IsChecked()):
+            # If no results are included, disable the "Search" button
+            self.btnSearch.Enable(False)
+            # and the save button
+            self.btnFileSave.Enable(False)
+            
 
     def OnKeywordGroupSelect(self, event):
         """ Implement Interface Changes needed when a Keyword Group is selected. """

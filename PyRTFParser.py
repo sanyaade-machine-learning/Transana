@@ -1,5 +1,5 @@
 # -*- coding: utf8 -*-
-# Copyright (C) 2009-2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2009-2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -21,8 +21,9 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 # Based on work by Donald N. Allingham and Gary Shao in 2000 and 2002 respectively
 # Thanks to Tim Morton for help with output optimization
 
-DEBUG = False   # Shows debug messages
+DEBUG = False    # Shows debug messages
 DEBUG2 = False   # Shows unknown control words, not those explicitly ignored
+DEBUG3 = False    # SHOW CHARACTERS ONLY
 
 # Transana is my program, and has some special requirements.  These can be skipped using this GLOBAL.
 IN_TRANSANA = True
@@ -196,7 +197,7 @@ class XMLToRTFHandler(xml.sax.handler.ContentHandler):
         self.fontAttributes = {}
         self.fontAttributes[u'text'] = {u'bgcolor' : '#FFFFFF',
                                     u'fontface' : 'Courier New',
-                                    u'fontsize' : 12,
+                                    u'fontpointsize' : 12,
                                     u'fontstyle' : wx.FONTSTYLE_NORMAL,
                                     u'fontunderlined' : u'0',
                                     u'fontweight' : wx.FONTSTYLE_NORMAL,
@@ -204,7 +205,7 @@ class XMLToRTFHandler(xml.sax.handler.ContentHandler):
 
         self.fontAttributes[u'symbol'] = {u'bgcolor' : '#FFFFFF',
                                     u'fontface' : 'Courier New',
-                                    u'fontsize' : 12,
+                                    u'fontpointsize' : 12,
                                     u'fontstyle' : wx.FONTSTYLE_NORMAL,
                                     u'fontunderlined' : u'0',
                                     u'fontweight' : wx.FONTSTYLE_NORMAL,
@@ -212,7 +213,7 @@ class XMLToRTFHandler(xml.sax.handler.ContentHandler):
 
         self.fontAttributes[u'paragraph'] = {u'bgcolor' : '#FFFFFF',
                                          u'fontface' : 'Courier New',
-                                         u'fontsize' : 12,
+                                         u'fontpointsize' : 12,
                                          u'fontstyle' : wx.FONTSTYLE_NORMAL,
                                          u'fontunderlined' : u'0',
                                          u'fontweight' : wx.FONTSTYLE_NORMAL,
@@ -220,7 +221,7 @@ class XMLToRTFHandler(xml.sax.handler.ContentHandler):
 
         self.fontAttributes[u'paragraphlayout'] = {u'bgcolor' : '#FFFFFF',
                                                u'fontface' : 'Courier New',
-                                               u'fontsize' : 12,
+                                               u'fontpointsize' : 12,
                                                u'fontstyle' : wx.FONTSTYLE_NORMAL,
                                                u'fontunderlined' : u'0',
                                                u'fontweight' : wx.FONTSTYLE_NORMAL,
@@ -357,10 +358,12 @@ class XMLToRTFHandler(xml.sax.handler.ContentHandler):
 
             # ... iterate through the element attributes looking for font attributes
             for x in attributes.keys():
+                if x == u'fontsize':
+                    x = u'fontpointsize'
                 # If the attribute is a font format attribute ...
                 if x in [u'bgcolor',
                          u'fontface',
-                         u'fontsize',
+                         u'fontpointsize',
                          u'fontstyle',
                          u'fontunderlined',
                          u'fontweight',
@@ -379,6 +382,15 @@ class XMLToRTFHandler(xml.sax.handler.ContentHandler):
                 if (name == u'text') and (x == u'url'):
                     # ... capture the URL data.
                     self.url = attributes[x]
+
+            # If the URL is a Transana Object link ...
+            # (This should be done after all text attributes are processed so formatting can be corrected.)
+            if (len(self.url) > 9) and (self.url[:9].lower() == 'transana:'):
+                # ... completely remove the URL value
+                self.url = ''
+                # Let's remove the Hyperlink formatting too!
+                self.fontAttributes[u'text'][u'textcolor'] = '#000000'
+                self.fontAttributes[u'text'][u'fontunderlined'] = u'0'
 
             # Let's cascade the font and paragraph settings we've just changed.
             # First, let's create empty character and paragraph cascade lists
@@ -412,7 +424,7 @@ class XMLToRTFHandler(xml.sax.handler.ContentHandler):
                 for x in attributes.keys():
                     if not x in [u'bgcolor',
                                  u'fontface',
-                                 u'fontsize',
+                                 u'fontpointsize',
                                  u'fontstyle',
                                  u'fontunderlined',
                                  u'fontweight',
@@ -568,16 +580,30 @@ class XMLToRTFHandler(xml.sax.handler.ContentHandler):
             # line spacing u'10' is single line spacing, which is NOT included in the RTF as it is the default.
             if self.paragraphAttributes[u'paragraph'][u'linespacing'] in [u'0', u'10']:
                 pass
+            # 11 point line spacing is u'11'
+            elif self.paragraphAttributes[u'paragraph'][u'linespacing'] == u'11':
+                # I'm not exactly sure why 11 point spacing for lines is 264 but that seems to be what Word uses.
+                self.outputString.write('\\sl264\\slmult1')
+            # 12 point line spacing is u'12'
+            elif self.paragraphAttributes[u'paragraph'][u'linespacing'] == u'12':
+                # I'm not exactly sure why 12 point spacing for lines is 288 but that seems to be what Word uses.
+                self.outputString.write('\\sl288\\slmult1')
             # 1.5 line spacing is u'15'
             elif self.paragraphAttributes[u'paragraph'][u'linespacing'] == u'15':
-                # I'm not exactly sure why spacing for lines of 360, a multiple of normal, is the right specifier,
-                # but that seems to be what Word uses.
+                # I'm not exactly sure why 1.5 spacing for lines is 360 but that seems to be what Word uses.
                 self.outputString.write('\\sl360\\slmult1')
             # double line spacing is u'20'
             elif self.paragraphAttributes[u'paragraph'][u'linespacing'] == u'20':
-                # I'm not exactly sure why spacing for lines of 480, a multiple of normal, is the right specifier,
-                # but that seems to be what Word uses.
+                # I'm not exactly sure why double spacing for lines is 480 but that seems to be what Word uses.
                 self.outputString.write('\\sl480\\slmult1')
+            # 2.5 line spacing is u'25'
+            elif self.paragraphAttributes[u'paragraph'][u'linespacing'] == u'25':
+                # I'm not exactly sure why 2.5 spacing for lines is 600 but that seems to be what Word uses.
+                self.outputString.write('\\sl600\\slmult1')
+            # triple line spacing is u'30'
+            elif self.paragraphAttributes[u'paragraph'][u'linespacing'] == u'30':
+                # I'm not exactly sure why triple spacing for lines is 720 but that seems to be what Word uses.
+                self.outputString.write('\\sl720\\slmult1')
             else:
                 print "Unknown linespacing:", self.paragraphAttributes[u'paragraph'][u'linespacing'], type(self.paragraphAttributes[u'paragraph'][u'linespacing'])
 
@@ -627,7 +653,7 @@ class XMLToRTFHandler(xml.sax.handler.ContentHandler):
             # Add Font Face information
             self.outputString.write('\\f%d' % self.fontTable.index(self.fontAttributes[name][u'fontface']))
             # Add Font Size information
-            self.outputString.write('\\fs%d' % (int(self.fontAttributes[name][u'fontsize']) * 2))
+            self.outputString.write('\\fs%d' % (int(self.fontAttributes[name][u'fontpointsize']) * 2))
             # If bold, add Bold
             if self.fontAttributes[name][u'fontweight'] == str(wx.FONTWEIGHT_BOLD):
                 self.outputString.write('\\b')
@@ -877,7 +903,7 @@ class RTFTowxRichTextCtrlParser:
 
         # Create a default font specification.  I've chosen Courier New, 12 point, black on white,
         self.font = {'fontfacename'  :  'Courier New',
-                     'fontsize'      :  12,
+                     'fontpointsize' :  12,
                      'fontcolor'     :  wx.Colour(0, 0, 0),
                      'fontbgcolor'   :  wx.Colour(255, 255, 255)}
 
@@ -885,7 +911,7 @@ class RTFTowxRichTextCtrlParser:
         self.txtAttr = richtext.RichTextAttr()
         
         # Apply the default font specifications to the current font object
-        self.SetTxtStyle(fontFace = self.font['fontfacename'], fontSize = self.font['fontsize'],
+        self.SetTxtStyle(fontFace = self.font['fontfacename'], fontSize = self.font['fontpointsize'],
                           fontColor = self.font['fontcolor'], fontBgColor = self.font['fontbgcolor'],
                           fontBold = False, fontItalic = False, fontUnderline = False)
 
@@ -925,7 +951,7 @@ class RTFTowxRichTextCtrlParser:
 
         # Initialize Paragraph settings
         self.paragraph = {'alignment'       : 'left',
-                          'linespacing'     : richtext.TEXT_ATTR_LINE_SPACING_NORMAL,
+                          'linespacing'     : wx.TEXT_ATTR_LINE_SPACING_NORMAL,
                           'leftindent'      : 0,
                           'rightindent'     : 0,
                           'firstlineindent' : 0,
@@ -979,7 +1005,7 @@ class RTFTowxRichTextCtrlParser:
         # If the font size is specified, set the font size
         if fontSize:
             self.txtAttr.SetFontSize(fontSize)
-            self.font['fontsize'] = fontSize
+            self.font['fontpointsize'] = fontSize
 
         # If a color is specified, set text color
         if fontColor:
@@ -1081,6 +1107,8 @@ class RTFTowxRichTextCtrlParser:
                 print
 
                 print "PyRTFParser.RTFTowxRichTextCtrlParser.process_doc():  Processing", c
+            elif DEBUG3:
+                print c,
 
             # Handle curly brackets and backslash characters
             if "{}\\".count(c) > 0:
@@ -1090,7 +1118,7 @@ class RTFTowxRichTextCtrlParser:
                     # Reset Default Font.  Size MUST be hard-coded.  Otherwise, RTF from Word doesn't work right.
                     self.SetTxtStyle(fontFace = self.font['fontfacename'], fontSize = 12,
                                       fontColor = self.font['fontcolor'], fontBgColor = self.font['fontbgcolor'], 
-                                      fontBold = False, fontItalic = False, fontUnderline = False)   # self.font['fontsize']
+                                      fontBold = False, fontItalic = False, fontUnderline = False)   # self.font['fontpointsize']
 
                 # If the characters are preceded by a backslash, skip that backslash character
                 if self.buffer[self.index : self.index + 2] in ['\{', '\}', '\\\\']:
@@ -1166,7 +1194,7 @@ class RTFTowxRichTextCtrlParser:
                     elif (self.codePage == 10000) and \
                          (val in [142, 146, 150, 151]):  # [210, 211]):
 
-                        if DEBUG or True:
+                        if DEBUG:
                             print "***********************************************", val, self.in_font_table
 
                         val = 32
@@ -1230,8 +1258,6 @@ class RTFTowxRichTextCtrlParser:
                         elif val > 138:
                             # ... then unichr() and chr() disagree, and we need the chr() character instead.
                             self.process_text(chr(val))
-
-                            print "process_text(", chr(val), "(", val, "))"
 
                     # We are now done inserting the character, so can move 4 positions in the buffer to get past it.
                     self.index += 4
@@ -1351,7 +1377,7 @@ class RTFTowxRichTextCtrlParser:
                                     # ... then create a URL style for the text
                                     urlStyle = richtext.RichTextAttr()
                                     urlStyle.SetFontFaceName(self.font['fontfacename'])
-                                    urlStyle.SetFontSize(self.font['fontsize'])
+                                    urlStyle.SetFontSize(self.font['fontpointsize'])
                                     urlStyle.SetTextColour(wx.BLUE)
                                     urlStyle.SetFontUnderlined(True)
                                     # Apply the URL style
@@ -1408,7 +1434,10 @@ class RTFTowxRichTextCtrlParser:
             self.txtCtrl.SetReadOnly(True)
 
         if progressDlg:
+            progressDlg.Close()
             progressDlg.Destroy()
+
+            wx.YieldIfNeeded()
 
         if DEBUG:
             print "Exiting PyRTFParser.RTFTowxRichTextCtrlParser.process_doc():", time.time() - startTime
@@ -1544,7 +1573,7 @@ class RTFTowxRichTextCtrlParser:
                             print ord(x),
                         print
 
-    def process_control_word(self):        
+    def process_control_word(self):
         """ Process a Rich Text Format control word """
         # The \ character signals an RTF Control Word.  Confirm that.
         if self.buffer[self.index] != "\\":
@@ -1731,14 +1760,14 @@ class RTFTowxRichTextCtrlParser:
                 # Get the Color definition from the Color Table
                 colorDef = "%06x" % self.colorTable[num]
                 # Set the Font Color based on the Color Definition by converting from Hex to Integers
-                self.SetTxtStyle(fontBgColor = wx.Color(int(colorDef[:2], 16), int(colorDef[2:4], 16), int(colorDef[4:6], 16)))
+                self.SetTxtStyle(fontBgColor = wx.Colour(int(colorDef[:2], 16), int(colorDef[2:4], 16), int(colorDef[4:6], 16)))
 
             # Foreground (text) color
             elif cw == "cf":
                 # Get the Color definition from the Color Table
                 colorDef = "%06x" % self.colorTable[num]
                 # Set the Font Color based on the Color Definition by converting from Hex to Integers
-                self.SetTxtStyle(fontColor = wx.Color(int(colorDef[:2], 16), int(colorDef[2:4], 16), int(colorDef[4:6], 16)))
+                self.SetTxtStyle(fontColor = wx.Colour(int(colorDef[:2], 16), int(colorDef[2:4], 16), int(colorDef[4:6], 16)))
 
             # Default font
             elif cw == "deff":
@@ -1911,7 +1940,7 @@ class RTFTowxRichTextCtrlParser:
                 if not self.in_list:
                     # ... reset all paragraph formatting.
                     self.paragraph = {'alignment'       : 'left',
-                                      'linespacing'     : richtext.TEXT_ATTR_LINE_SPACING_NORMAL,
+                                      'linespacing'     : wx.TEXT_ATTR_LINE_SPACING_NORMAL,
                                       'leftindent'      : 0,
                                       'rightindent'     : 0,
                                       'firstlineindent' : 0,
@@ -1920,7 +1949,7 @@ class RTFTowxRichTextCtrlParser:
                                       'tabs'            : []}
 
                     # (We need to reset the paragraph formatting in self.txtAttr as well.)
-                    self.SetTxtStyle(parAlign = wx.TEXT_ALIGNMENT_LEFT, parLineSpacing = richtext.TEXT_ATTR_LINE_SPACING_NORMAL,
+                    self.SetTxtStyle(parAlign = wx.TEXT_ALIGNMENT_LEFT, parLineSpacing = wx.TEXT_ATTR_LINE_SPACING_NORMAL,
                                      parTabs = [], parLeftIndent = (0, 0), parRightIndent = 0, parSpacingBefore = 0, parSpacingAfter = 0)
 
             # Picture (image) processing
@@ -1999,17 +2028,17 @@ class RTFTowxRichTextCtrlParser:
             elif cw == 'sl':
                 # NOTE:  The wxRichTextCtrl has limited line spacing options.
                 # Double Spacing is 3 lines per inch, or 480 twips
-                if num >= 480:
+                if num == 480:
                     # Update the paragraph linespacing
-                    self.paragraph['linespacing'] = richtext.TEXT_ATTR_LINE_SPACING_TWICE
+                    self.paragraph['linespacing'] = wx.TEXT_ATTR_LINE_SPACING_TWICE
                 # Line and a half spacing is 4 lines per inch, or 360 twips
-                elif num >= 360:
+                elif num == 360:
                     # Update the paragraph linespacing
-                    self.paragraph['linespacing'] = richtext.TEXT_ATTR_LINE_SPACING_HALF
-                # Single spacing is 6 lines per inch, or 240 twips, but that is the default for RTF.
+                    self.paragraph['linespacing'] = wx.TEXT_ATTR_LINE_SPACING_HALF
+                # Otherwise, convert twips to points for line spacing
                 else:
-                    # Update the paragraph linespacing
-                    self.paragraph['linespacing'] = richtext.TEXT_ATTR_LINE_SPACING_NORMAL
+                    # Update the paragraph linespacing at 24 twips per point
+                    self.paragraph['linespacing'] = int(num / 24.0)
 
             # Shape Name and Shape Value
             elif cw in ["sn", "sv"]:
@@ -2340,6 +2369,8 @@ class RTFTowxRichTextCtrlParser:
 
         # If we're in a list specification ...
         if self.in_list:
+            # Reset the Font (Added by Che M)
+            self.SetTxtStyle(fontFace = self.fontTable[self.defaultFontNumber])
             # ... then the list specification is probably over now.
             self.in_list = False
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -31,6 +31,9 @@ import FilterDialog
 import TransanaConstants
 import TransanaGlobal
 import Misc
+# import Python's codecs module to make reading and writing UTF-8 text files 
+import codecs
+
 
 class ClipDataExport(Dialogs.GenForm):
     """ This class creates the tab-delimited text file that is the Clip Data Export. """
@@ -132,22 +135,22 @@ class ClipDataExport(Dialogs.GenForm):
 
     def Export(self):
         """ Export the Clip Data to a Tab-delimited file """
-        # Determine the appropriate encoding for the export file.  UTF8 does not import into either Excel
-        # or SPSS on my computer.  All values other than "latin1" are untested guesses on my part.
-        if TransanaGlobal.configData.language == 'ru':
-            EXPORT_ENCODING = 'koi8_r'
-        elif (TransanaGlobal.configData.language == 'zh'):
-            EXPORT_ENCODING = TransanaConstants.chineseEncoding
-        elif (TransanaGlobal.configData.language == 'easteurope'):
-            EXPORT_ENCODING = 'iso8859_2'
-        elif (TransanaGlobal.configData.language == 'el'):
-            EXPORT_ENCODING = 'iso8859_7'
-        elif (TransanaGlobal.configData.language == 'ja'):
-            EXPORT_ENCODING = 'cp932'
-        elif (TransanaGlobal.configData.language == 'ko'):
-            EXPORT_ENCODING = 'cp949'
-        else:
-            EXPORT_ENCODING = 'latin1'
+##        # Determine the appropriate encoding for the export file.  UTF8 does not import into either Excel
+##        # or SPSS on my computer.  All values other than "latin1" are untested guesses on my part.
+##        if TransanaGlobal.configData.language == 'ru':
+##            EXPORT_ENCODING = 'koi8_r'
+##        elif (TransanaGlobal.configData.language == 'zh'):
+##            EXPORT_ENCODING = TransanaConstants.chineseEncoding
+##        elif (TransanaGlobal.configData.language == 'easteurope'):
+##            EXPORT_ENCODING = 'iso8859_2'
+##        elif (TransanaGlobal.configData.language == 'el'):
+##            EXPORT_ENCODING = 'iso8859_7'
+##        elif (TransanaGlobal.configData.language == 'ja'):
+##            EXPORT_ENCODING = 'cp932'
+##        elif (TransanaGlobal.configData.language == 'ko'):
+##            EXPORT_ENCODING = 'cp949'
+##        else:
+##            EXPORT_ENCODING = 'latin1'
 
         # Initialize values for data structures for this report
         # The Episode List is the list of Episodes to be sent to the Filter Dialog for the Series report
@@ -354,18 +357,27 @@ class ClipDataExport(Dialogs.GenForm):
                     # ... then prepend the HOME folder
                     fs = os.getenv("HOME") + os.sep + fs
             # Open the output file for writing.
-            f = file(fs, 'w')
+            f = codecs.open(fs, 'w', 'utf8')    # file(fs, 'w')
 
             prompt = unicode(_('Collection Name\tClip Name\tMedia File\tClip Start\tClip End\tClip Length (seconds)'), 'utf8')
+            # If the user does NOT want UTF-8 Encoding, then encode the data using EXPORT_ENCODING
+##            if not utfEncodingRequested:
+##                prompt = prompt.encode(EXPORT_ENCODING, 'backslashreplace')
             # Write the Header line.  We're creating a tab-delimited file, so we'll use tabs to separate the items.
-            f.write(prompt.encode(EXPORT_ENCODING, 'backslashreplace'))
+            f.write(prompt)
             # Add keywords to the Header.  Iterate through the Keyword List.
             for keyword in keywordList:
                 # See if the user has left the keyword "checked" in the filter dialog.
                 if keyword[2]:
+##                    # If the user does NOT want UTF-8 Encoding, then encode the data using EXPORT_ENCODING
+##                    if not utfEncodingRequested:
+##                        # Encode and write all "checked" keywords to the Header.
+##                        kwg = keyword[0].encode(EXPORT_ENCODING, 'backslashreplace')
+##                        kw = keyword[1].encode(EXPORT_ENCODING, 'backslashreplace')
+##                    else:
                     # Encode and write all "checked" keywords to the Header.
-                    kwg = keyword[0].encode(EXPORT_ENCODING, 'backslashreplace')
-                    kw = keyword[1].encode(EXPORT_ENCODING, 'backslashreplace')
+                    kwg = keyword[0]
+                    kw = keyword[1]
                     f.write('\t%s : %s' % (kwg, kw))
             # Add a line break to signal the end of the Header line. 
             f.write('\n')
@@ -381,10 +393,17 @@ class ClipDataExport(Dialogs.GenForm):
                     clip = Clip.Clip(clipLookup[clipRec[0], clipRec[1]], skipText=True)
                     # Get the collection the clip is from.
                     collection = Collection.Collection(clip.collection_num)
+##                    # If the user does NOT want UTF-8 Encoding, then encode the data using EXPORT_ENCODING
+##                    if not utfEncodingRequested:
+##                        # Encode string values using the Export Encoding
+##                        collectionID = collection.GetNodeString().encode(EXPORT_ENCODING, 'backslashreplace')  # clip.collection_id.encode(EXPORT_ENCODING)
+##                        clipID = clip.id.encode(EXPORT_ENCODING, 'backslashreplace')
+##                        clipMediaFilename = clip.media_filename.encode(EXPORT_ENCODING, 'backslashreplace')
+##                    else:
                     # Encode string values using the Export Encoding
-                    collectionID = collection.GetNodeString().encode(EXPORT_ENCODING, 'backslashreplace')  # clip.collection_id.encode(EXPORT_ENCODING)
-                    clipID = clip.id.encode(EXPORT_ENCODING, 'backslashreplace')
-                    clipMediaFilename = clip.media_filename.encode(EXPORT_ENCODING, 'backslashreplace')
+                    collectionID = collection.GetNodeString()
+                    clipID = clip.id
+                    clipMediaFilename = clip.media_filename
                     # If we're doing a Series report, we need the clip's source episode and Series for Episode Filter comparison.
                     if self.seriesNum != 0:
                         episode = Episode.Episode(clip.episode_num)

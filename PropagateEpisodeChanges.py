@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -58,7 +58,7 @@ class PropagateEpisodeChanges(wx.Dialog):
         # Define the main Frame for the Propagate Changes report Window
         wx.Dialog.__init__(self, self.parent.MenuWindow, -1, _("Episode Transcript Change Propagation"), size = (710,650), style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER|wx.NO_FULL_REPAINT_ON_RESIZE)
         # Set the background to White
-        self.SetBackgroundColour(wx.WHITE)
+#        self.SetBackgroundColour(wx.WHITE)
         # To look right, the Mac needs the Small Window Variant.
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
@@ -291,7 +291,7 @@ class PropagateClipChanges(wx.Dialog):
         # Define the main Frame for the Propagate Changes report Window
         wx.Dialog.__init__(self, parent, -1, _("Clip Change Propagation"), size = (710,650), style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER|wx.NO_FULL_REPAINT_ON_RESIZE)
         # Set the background to White
-        self.SetBackgroundColour(wx.WHITE)
+#        self.SetBackgroundColour(wx.WHITE)
         # To look right, the Mac needs the Small Window Variant.
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
@@ -512,7 +512,7 @@ class PropagateClipChanges(wx.Dialog):
                                     self.memo.AppendText(prompt % (oldClipID, clipObj.GetNodeString(False), kw[0], kw[1]))
 
                         # Save the Clip
-                        clipObj.db_save()
+                        clipObj.db_save(usetransactions=False)
                         # unlock the clip
                         clipObj.unlock_record()
                         
@@ -769,7 +769,7 @@ class AcceptClipTranscriptChanges(wx.Dialog):
         # Define the main Frame for the Accept Clip Transcript Changes Window
         wx.Dialog.__init__(self, parent, -1, _("Review Transcript Changes"), size = (610,550), style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER|wx.NO_FULL_REPAINT_ON_RESIZE)
         # Set the background to White
-        self.SetBackgroundColour(wx.WHITE)
+#        self.SetBackgroundColour(wx.WHITE)
         # To look right, the Mac needs the Small Window Variant.
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
@@ -1089,8 +1089,9 @@ class AcceptClipTranscriptChanges(wx.Dialog):
         """ Button Pressed handler for most buttons """
         # Set the Results flag to the calling Button's ID
         self.results = event.GetId()
-        # Close the form
-        self.Close()
+        # Close the form (Requires EndModal() rather than Close() for wxPython 2.9.4.0 ??)
+#        self.Close()
+        self.EndModal(self.results)
         
     def OnHelp(self, event):
         """ Method to use when the Help Button is pressed """

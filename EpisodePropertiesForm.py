@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -28,6 +28,8 @@ from TransanaExceptions import *
 import TransanaConstants
 # Import Transana's Global Variables
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 
 # import wxPython
 import wx
@@ -40,7 +42,10 @@ import sys
 import string
 
 # Define the maximum number of video files allowed.  (This could change!)
-MEDIAFILEMAX = 4
+if TransanaConstants.proVersion:
+    MEDIAFILEMAX = 4
+else:
+    MEDIAFILEMAX = 1
 
 class EpisodePropertiesForm(Dialogs.GenForm):
     """Form containing Episode fields."""
@@ -162,10 +167,11 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         v4.Add(removeFile, 0, wx.EXPAND | wx.BOTTOM, 3)
         wx.EVT_BUTTON(self, removeFile.GetId(), self.OnRemoveFile)
 
-        # SynchronizeFiles button layout
-        synchronize = wx.Button(self.panel, -1, _("Synchronize"), wx.DefaultPosition)
-        v4.Add(synchronize, 0, wx.EXPAND)
-        synchronize.Bind(wx.EVT_BUTTON, self.OnSynchronize)
+        if TransanaConstants.proVersion:
+            # SynchronizeFiles button layout
+            synchronize = wx.Button(self.panel, -1, _("Synchronize"), wx.DefaultPosition)
+            v4.Add(synchronize, 0, wx.EXPAND)
+            synchronize.Bind(wx.EVT_BUTTON, self.OnSynchronize)
 
         # Add the element to the sizer
         r3Sizer.Add(v4, 1, wx.EXPAND)
@@ -251,8 +257,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         v8.Add(rm_kw, 0, wx.EXPAND | wx.TOP, 10)
         wx.EVT_BUTTON(self, wx.ID_FILE3, self.OnRemoveKW)
 
-        bitmap = wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "KWManage.xpm"), wx.BITMAP_TYPE_XPM)
-        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, bitmap)
+        kwm = wx.BitmapButton(self.panel, wx.ID_FILE4, TransanaImages.KWManage.GetBitmap())
         v8.Add(kwm, 0, wx.EXPAND | wx.TOP, 10)
         # Add a spacer to increase the height of the Keywords section
         v8.Add((0, 60))
@@ -330,6 +335,11 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         # Center the form on screen
         self.CenterOnScreen()
 
+        # We need to set some minimum sizes so the sizers will work right
+        self.kw_group_lb.SetSizeHints(minW = 50, minH = 20)
+        self.kw_lb.SetSizeHints(minW = 50, minH = 20)
+        self.ekw_lb.SetSizeHints(minW = 50, minH = 20)
+
         # We populate the Keyword Groups, Keywords, and Clip Keywords lists AFTER we determine the Form Size.
         # Long Keywords in the list were making the form too big!
 
@@ -379,6 +389,27 @@ class EpisodePropertiesForm(Dialogs.GenForm):
             self.kw_lb.Clear()
             self.kw_lb.InsertItems(self.kw_list, 0)
 
+    def highlight_bad_keyword(self):
+        """ Highlight the first bad keyword in the keyword list """
+        # Get the Keyword Group name
+        sel = self.kw_group_lb.GetStringSelection()
+        # If there was a selected Keyword Group ...
+        if sel:
+            # ... initialize a list of keywords
+            kwlist = []
+            # Iterate through the current keyword group's keywords ...
+            for item in range(self.kw_lb.GetCount()):
+                # ... and add them to the list of keywords 
+                kwlist.append("%s : %s" % (sel, self.kw_lb.GetString(item)))
+            # Now iterate through the list of Episode Keywords
+            for item in range(self.ekw_lb.GetCount()):
+                # If the keyword is from the current Keyword Group AND the keyword is not in the keyword list ...
+                if (self.ekw_lb.GetString(item)[:len(sel)] == sel) and (not self.ekw_lb.GetString(item) in kwlist):
+                    # ... select the current item in the Episode Keywords control ...
+                    self.ekw_lb.SetSelection(item)
+                    # ... and stop looking for bad keywords.  (We just highlight the first!)
+                    break
+
     def OnMediaFilenameEdit(self, event):
         """ Invoked when Media Filename is changed. """
         self.len_edit.SetValue('00:00:00')
@@ -387,7 +418,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
     def OnBrowse(self, evt):
         """Invoked when the user activates the Browse button."""
         # As long as we have fewer files than the max allowed ...
-        if self.fname_lb.GetCount() < MEDIAFILEMAX:
+        if (self.fname_lb.GetCount() < MEDIAFILEMAX) or (self.fname_lb.GetString(0) == ''):
             # ... reset the object's MAIN filename to the top item in the list (if there is one)
             if self.fname_lb.GetCount() > 0:
                 self.obj.media_filename = self.fname_lb.GetString(0)
@@ -447,14 +478,18 @@ class EpisodePropertiesForm(Dialogs.GenForm):
                 self.OnMediaFilenameEdit(evt)
         # If we have the maximum number of media files already selected ...
         else:
-            # ... Display an error message to the user.
-             msg = _('A maximum of %d media files is allowed.')
-             if 'unicode' in wx.PlatformInfo:
+            if MEDIAFILEMAX == 1:
+                # ... Display an error message to the user.
+                msg = _('Only one media file is allowed at a time in this version of Transana.')
+            else:
+                # ... Display an error message to the user.
+                msg = _('A maximum of %d media files is allowed.') % MEDIAFILEMAX
+            if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                  msg = unicode(msg, 'utf8')
-             dlg = Dialogs.ErrorDialog(self, msg % MEDIAFILEMAX)
-             dlg.ShowModal()
-             dlg.Destroy()
+            dlg = Dialogs.ErrorDialog(self, msg)
+            dlg.ShowModal()
+            dlg.Destroy()
 
     def OnRemoveFile(self, event):
         """ Remove File button event handler """

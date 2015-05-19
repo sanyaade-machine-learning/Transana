@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -216,10 +216,11 @@ class XMLExport(Dialogs.GenForm):
             # Version 1.5 -- Database structure changed to accomodate Multiple Simultaneous Media Files for the
             #                Transana 2.40 release.
             # Version 1.6 -- Added XML format for transcripts and character escapes for Transana 2.50 release
-            f.write('    1.6\n');
+            # Version 1.7 -- Database Structure changed for Still Image Snapshots for Transana 2.60 release
+            f.write('    1.7\n');
             f.write('  </TransanaXMLVersion>\n');
 
-            progress.Update(8, _('Writing Series Records'))
+            progress.Update(7, _('Writing Series Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT SeriesNum, SeriesID, SeriesComment, SeriesOwner, DefaultKeywordGroup FROM Series2'
@@ -231,7 +232,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </SeriesFile>\n')
                 dbCursor.close()
 
-            progress.Update(16, _('Writing Episode Records'))
+            progress.Update(13, _('Writing Episode Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT EpisodeNum, EpisodeID, SeriesNum, TapingDate, MediaFile, EpLength, EpComment FROM Episodes2'
@@ -243,7 +244,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </EpisodeFile>\n')
                 dbCursor.close()
 
-            progress.Update(24, _('Writing Core Data Records'))
+            progress.Update(20, _('Writing Core Data Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = """SELECT CoreDataNum, Identifier, Title, Creator, Subject, Description, Publisher,
@@ -257,7 +258,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </CoreDataFile>\n')
                 dbCursor.close()
 
-            progress.Update(32, _('Writing Collection Records'))
+            progress.Update(27, _('Writing Collection Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT CollectNum, CollectID, ParentCollectNum, CollectComment, CollectOwner, DefaultKeywordGroup FROM Collections2'
@@ -269,10 +270,11 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </CollectionFile>\n')
                 dbCursor.close()
 
-            progress.Update(40, _('Writing Clip Records'))
+            progress.Update(33, _('Writing Clip Records'))
             if db != None:
                 dbCursor = db.cursor()
-                SQLText = 'SELECT ClipNum, ClipID, CollectNum, EpisodeNum, MediaFile, ClipStart, ClipStop, ClipOffset, Audio, ClipComment, SortOrder FROM Clips2'
+                SQLText = 'SELECT ClipNum, ClipID, CollectNum, EpisodeNum, MediaFile, ClipStart, ClipStop, ClipOffset, Audio, '
+                SQLText += 'ClipComment, SortOrder FROM Clips2'
                 dbCursor.execute(SQLText)
                 if dbCursor.rowcount > 0:
                     f.write('  <ClipFile>\n')
@@ -281,7 +283,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </ClipFile>\n')
                 dbCursor.close()
 
-            progress.Update(48, _('Writing Additional Media File Records'))
+            progress.Update(40, _('Writing Additional Media File Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT AddVidNum, EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio FROM AdditionalVids2'
@@ -293,7 +295,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </AdditionalVidsFile>\n')
                 dbCursor.close()
 
-            progress.Update(56, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
+            progress.Update(47, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum, ClipNum, SortOrder, Transcriber, '
@@ -314,10 +316,49 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </TranscriptFile>\n')
                 dbCursor.close()
 
-            progress.Update(68, _('Writing Keyword Records'))
+            progress.Update(53, _('Writing Snapshot Records'))
             if db != None:
                 dbCursor = db.cursor()
-                SQLText = 'SELECT KeywordGroup, Keyword, Definition FROM Keywords2'
+                SQLText = 'SELECT SnapshotNum, SnapshotID, CollectNum, ImageFile, ImageScale, ImageCoordsX, ImageCoordsY, '
+                SQLText += 'ImageSizeW, ImageSizeH, EpisodeNum, TranscriptNum, SnapshotTimeCode, SnapshotDuration, '
+                SQLText += 'SnapshotComment, SortOrder FROM Snapshots2'
+                dbCursor.execute(SQLText)
+                if dbCursor.rowcount > 0:
+                    f.write('  <SnapshotFile>\n')
+                    for snapshotRec in dbCursor.fetchall():
+                        self.WriteSnapshotRec(f, snapshotRec)
+                    f.write('  </SnapshotFile>\n')
+                dbCursor.close()
+
+            progress.Update(60, _('Writing Snapshot Keywords Records'))
+            if db != None:
+                dbCursor = db.cursor()
+                SQLText = 'SELECT SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible FROM SnapshotKeywords2'
+                dbCursor.execute(SQLText)
+                if dbCursor.rowcount > 0:
+                    f.write('  <SnapshotKeywordFile>\n')
+                    for snapshotKeywordRec in dbCursor.fetchall():
+                        self.WriteSnapshotKeywordRec(f, snapshotKeywordRec)
+                    f.write('  </SnapshotKeywordFile>\n')
+                dbCursor.close()
+
+            progress.Update(67, _('Writing Snapshot Coding Style Records'))
+            if db != None:
+                dbCursor = db.cursor()
+                SQLText = 'SELECT SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle '
+                SQLText += 'FROM SnapshotKeywordStyles2'
+                dbCursor.execute(SQLText)
+                if dbCursor.rowcount > 0:
+                    f.write('  <SnapshotKeywordStyleFile>\n')
+                    for snapshotKeywordStyleRec in dbCursor.fetchall():
+                        self.WriteSnapshotKeywordStyleRec(f, snapshotKeywordStyleRec)
+                    f.write('  </SnapshotKeywordStyleFile>\n')
+                dbCursor.close()
+
+            progress.Update(73, _('Writing Keyword Records'))
+            if db != None:
+                dbCursor = db.cursor()
+                SQLText = 'SELECT KeywordGroup, Keyword, Definition, LineColorName, LineColorDef, DrawMode, LineWidth, LineStyle FROM Keywords2'
                 dbCursor.execute(SQLText)
                 if dbCursor.rowcount > 0:
                     f.write('  <KeywordFile>\n')
@@ -326,10 +367,10 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </KeywordFile>\n')
                 dbCursor.close()
 
-            progress.Update(76, _('Writing Clip Keyword Records'))
+            progress.Update(80, _('Writing Clip Keyword Records'))
             if db != None:
                 dbCursor = db.cursor()
-                SQLText = 'SELECT EpisodeNum, ClipNum, KeywordGroup, Keyword, Example FROM ClipKeywords2'
+                SQLText = 'SELECT EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example FROM ClipKeywords2'
                 dbCursor.execute(SQLText)
                 if dbCursor.rowcount > 0:
                     f.write('  <ClipKeywordFile>\n')
@@ -338,10 +379,11 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </ClipKeywordFile>\n')
                 dbCursor.close()
 
-            progress.Update(84, _('Writing Note Records'))
+            progress.Update(87, _('Writing Note Records'))
             if db != None:
                 dbCursor = db.cursor()
-                SQLText = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, TranscriptNum, NoteTaker, NoteText FROM Notes2'
+                SQLText = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, SnapshotNum, TranscriptNum, '
+                SQLText += 'NoteTaker, NoteText FROM Notes2'
                 dbCursor.execute(SQLText)
                 if dbCursor.rowcount > 0:
                     f.write('  <NoteFile>\n')
@@ -350,7 +392,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </NoteFile>\n')
                 dbCursor.close()
 
-            progress.Update(92, _('Writing Filter Records'))
+            progress.Update(93, _('Writing Filter Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT ReportType, ReportScope, ConfigName, FilterDataType, FilterData FROM Filters2'
@@ -361,6 +403,7 @@ class XMLExport(Dialogs.GenForm):
                         self.WriteFilterRec(f, filterRec)
                     f.write('  </FilterFile>\n')
                 dbCursor.close()
+
             f.write('</Transana>\n');
 
             f.flush()
@@ -387,112 +430,143 @@ class XMLExport(Dialogs.GenForm):
         progress.Destroy()
 
     def WriteXMLDTD(self, f):
-        f.write('<?xml version="1.0" encoding="UTF-8"?>\n');
-        f.write('<!DOCTYPE TransanaData [\n');
-        f.write('  <!ELEMENT TransanaXMLVersion (#PCDATA)>\n');
-        f.write('  <!ELEMENT SeriesFile (Series)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Num (#PCDATA)>\n');
-        f.write('  <!ELEMENT ID (#PCDATA)>\n');
-        f.write('  <!ELEMENT Comment (#PCDATA)>\n');
-        f.write('  <!ELEMENT Owner (#PCDATA)>\n');
-        f.write('  <!ELEMENT DefaultKeywordGroup (#PCDATA)>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Series (#PCDATA|Num|ID|Comment|Owner|DefaultKeywordGroup)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT EpisodeFile (Episode)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT SeriesNum (#PCDATA)>\n');
-        f.write('  <!ELEMENT Date (#PCDATA)>\n');
-        f.write('  <!ELEMENT MediaFile (#PCDATA)>\n');
-        f.write('  <!ELEMENT Length (#PCDATA)>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Episode (#PCDATA|Num|ID|SeriesNum|Date|MediaFile|Length|Comment)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT CoreDataFile (CoreData)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Title (#PCDATA)>\n');
-        f.write('  <!ELEMENT Creator (#PCDATA)>\n');
-        f.write('  <!ELEMENT Subject (#PCDATA)>\n');
-        f.write('  <!ELEMENT Description (#PCDATA)>\n');
-        f.write('  <!ELEMENT Publisher (#PCDATA)>\n');
-        f.write('  <!ELEMENT Contributor (#PCDATA)>\n');
-        f.write('  <!ELEMENT Type (#PCDATA)>\n');
-        f.write('  <!ELEMENT Format (#PCDATA)>\n');
-        f.write('  <!ELEMENT Source (#PCDATA)>\n');
-        f.write('  <!ELEMENT Language (#PCDATA)>\n');
-        f.write('  <!ELEMENT Relation (#PCDATA)>\n');
-        f.write('  <!ELEMENT Coverage (#PCDATA)>\n');
-        f.write('  <!ELEMENT Rights (#PCDATA)>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT CoreData (#PCDATA|Num|ID|Title|Creator|Subject|Description|Publisher|Contributor|Date|Type|Format|Source|Language|Relation|Coverage|Rights)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT TranscriptFile (Transcript)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT EpisodeNum (#PCDATA)>\n');
-        f.write('  <!ELEMENT TranscriptNum (#PCDATA)>\n');
-        f.write('  <!ELEMENT ClipNum (#PCDATA)>\n');
-        f.write('  <!ELEMENT SortOrder (#PCDATA)>\n');
-        f.write('  <!ELEMENT Transcriber (#PCDATA)>\n');
-        f.write('  <!ELEMENT ClipStart (#PCDATA)>\n');
-        f.write('  <!ELEMENT ClipStop (#PCDATA)>\n');
-        f.write('  <!ELEMENT MinTranscriptWidth (#PCDATA)>\n');
-        f.write('  <!ELEMENT RTFText (#PCDATA)>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Transcript (#PCDATA|Num|ID|EpisodeNum|TranscriptNum|ClipNum|SortOrder|Transcriber|ClipStart|ClipStop|Comment|RTFText)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT CollectionFile (Collection)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT ParentCollectNum (#PCDATA)>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Collection (#PCDATA|Num|ID|ParentCollectNum|Comment|Owner|DefaultKeywordGroup)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT ClipFile (Clip)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT CollectNum (#PCDATA)>\n');
-        f.write('  <!ELEMENT Offset (#PCDATA)>\n');
-        f.write('  <!ELEMENT Audio (#PCDATA)>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Clip (#PCDATA|Num|ID|CollectNum|EpisodeNum|MediaFile|ClipStart|ClipStop|Offset|Audio|Comment|SortOrder)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT AdditionalVids (AdditionalVidRec)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT AddVid (#PCDATA|Num|EpisodeNum|ClipNum|MediaFile|Length|Offset|Audio)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT KeywordFile (KeywordRec)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT KeywordGroup (#PCDATA)>\n');
-        f.write('  <!ELEMENT Keyword (#PCDATA)>\n');
-        f.write('  <!ELEMENT Definition (#PCDATA)>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT KeywordRec (#PCDATA|KeywordGroup|Keyword|Definition)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT ClipKeywordFile (ClipKeyword)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Example (#PCDATA)>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT ClipKeyword (#PCDATA|EpisodeNum|ClipNum|KeywordGroup|Keyword|Example)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT NoteFile (Note)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT NoteTaker (#PCDATA)>\n');
-        f.write('  <!ELEMENT NoteText (#PCDATA)>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Note (#PCDATA|Num|ID|SeriesNum|EpisodeNum|CollectNum|ClipNum|TranscriptNum|NoteTaker|NoteText)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT FilterFile (Filter)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT ReportType (#PCDATA)>\n');
-        f.write('  <!ELEMENT ReportScope (#PCDATA)>\n');
-        f.write('  <!ELEMENT ConfigName (#PCDATA)>\n');
-        f.write('  <!ELEMENT FilterDataType (#PCDATA)>\n');
-        f.write('  <!ELEMENT FilterData (#PCDATA)>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Filter (#PCDATA|ReportType|ReportScope|ConfigName|FilterDataType|FilterData)*>\n');
-        f.write('\n');
-        f.write('  <!ELEMENT Transana (#PCDATA|SeriesFile|EpisodeFile|CoreDataFile|TranscriptFile|CollectionFile|ClipFile|KeywordFile|ClipKeywordFile|NoteFile|FilterFile)*>\n');
-        f.write(']>\n');
-        f.write('\n');
+        f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        f.write('<!DOCTYPE TransanaData [\n')
+        f.write('  <!ELEMENT TransanaXMLVersion (#PCDATA)>\n')
+        f.write('  <!ELEMENT SeriesFile (Series)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Num (#PCDATA)>\n')
+        f.write('  <!ELEMENT ID (#PCDATA)>\n')
+        f.write('  <!ELEMENT Comment (#PCDATA)>\n')
+        f.write('  <!ELEMENT Owner (#PCDATA)>\n')
+        f.write('  <!ELEMENT DefaultKeywordGroup (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Series (#PCDATA|Num|ID|Comment|Owner|DefaultKeywordGroup)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT EpisodeFile (Episode)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT SeriesNum (#PCDATA)>\n')
+        f.write('  <!ELEMENT Date (#PCDATA)>\n')
+        f.write('  <!ELEMENT MediaFile (#PCDATA)>\n')
+        f.write('  <!ELEMENT Length (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Episode (#PCDATA|Num|ID|SeriesNum|Date|MediaFile|Length|Comment)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT CoreDataFile (CoreData)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Title (#PCDATA)>\n')
+        f.write('  <!ELEMENT Creator (#PCDATA)>\n')
+        f.write('  <!ELEMENT Subject (#PCDATA)>\n')
+        f.write('  <!ELEMENT Description (#PCDATA)>\n')
+        f.write('  <!ELEMENT Publisher (#PCDATA)>\n')
+        f.write('  <!ELEMENT Contributor (#PCDATA)>\n')
+        f.write('  <!ELEMENT Type (#PCDATA)>\n')
+        f.write('  <!ELEMENT Format (#PCDATA)>\n')
+        f.write('  <!ELEMENT Source (#PCDATA)>\n')
+        f.write('  <!ELEMENT Language (#PCDATA)>\n')
+        f.write('  <!ELEMENT Relation (#PCDATA)>\n')
+        f.write('  <!ELEMENT Coverage (#PCDATA)>\n')
+        f.write('  <!ELEMENT Rights (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT CoreData (#PCDATA|Num|ID|Title|Creator|Subject|Description|Publisher|Contributor|Date|Type|Format|Source|Language|Relation|Coverage|Rights)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT TranscriptFile (Transcript)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT EpisodeNum (#PCDATA)>\n')
+        f.write('  <!ELEMENT TranscriptNum (#PCDATA)>\n')
+        f.write('  <!ELEMENT ClipNum (#PCDATA)>\n')
+        f.write('  <!ELEMENT SortOrder (#PCDATA)>\n')
+        f.write('  <!ELEMENT Transcriber (#PCDATA)>\n')
+        f.write('  <!ELEMENT ClipStart (#PCDATA)>\n')
+        f.write('  <!ELEMENT ClipStop (#PCDATA)>\n')
+        f.write('  <!ELEMENT MinTranscriptWidth (#PCDATA)>\n')
+        f.write('  <!ELEMENT RTFText (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Transcript (#PCDATA|Num|ID|EpisodeNum|TranscriptNum|ClipNum|SortOrder|Transcriber|ClipStart|ClipStop|Comment|RTFText)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT CollectionFile (Collection)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT ParentCollectNum (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Collection (#PCDATA|Num|ID|ParentCollectNum|Comment|Owner|DefaultKeywordGroup)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT ClipFile (Clip)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT CollectNum (#PCDATA)>\n')
+        f.write('  <!ELEMENT Offset (#PCDATA)>\n')
+        f.write('  <!ELEMENT Audio (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Clip (#PCDATA|Num|ID|CollectNum|EpisodeNum|MediaFile|ClipStart|ClipStop|Offset|Audio|Comment|SortOrder)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT SnapshotFile (Snapshot)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT ImageScale (#PCDATA)>\n')
+        f.write('  <!ELEMENT ImageCoordsX (#PCDATA)>\n')
+        f.write('  <!ELEMENT ImageCoordsY (#PCDATA)>\n')
+        f.write('  <!ELEMENT ImageSizeW (#PCDATA)>\n')
+        f.write('  <!ELEMENT ImageSizeH (#PCDATA)>\n')
+        f.write('  <!ELEMENT SnapshotTimeCode (#PCDATA)>\n')
+        f.write('  <!ELEMENT SnapshotDuration (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Snapshot (#PCDATA|Num|ID|CollectNum|MediaFile|ImageScale|ImageCoordsX|ImageCoordsY|ImageSizeW|ImageSizeH|EpisodeNum|TranscriptNum|SnapshotTimeCode|SnapshotDuration|Comment|SortOrder)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT AdditionalVids (AdditionalVidRec)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT AddVid (#PCDATA|Num|EpisodeNum|ClipNum|MediaFile|Length|Offset|Audio)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT KeywordFile (KeywordRec)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT KeywordGroup (#PCDATA)>\n')
+        f.write('  <!ELEMENT Keyword (#PCDATA)>\n')
+        f.write('  <!ELEMENT Definition (#PCDATA)>\n')
+        f.write('  <!ELEMENT ColorName (#PCDATA)>\n')
+        f.write('  <!ELEMENT ColorDef (#PCDATA)>\n')
+        f.write('  <!ELEMENT DrawMode (#PCDATA)>\n')
+        f.write('  <!ELEMENT LineWidth (#PCDATA)>\n')
+        f.write('  <!ELEMENT LineStyle (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT KeywordRec (#PCDATA|KeywordGroup|Keyword|Definition|ColorName|ColorDef|DrawMode|LineWidth|LineStyle)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT ClipKeywordFile (ClipKeyword)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Example (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT ClipKeyword (#PCDATA|EpisodeNum|ClipNum|KeywordGroup|Keyword|Example)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT SnapshotKeywordFile (SnapshotKeyword)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT X1 (#PCDATA)>\n')
+        f.write('  <!ELEMENT Y1 (#PCDATA)>\n')
+        f.write('  <!ELEMENT X2 (#PCDATA)>\n')
+        f.write('  <!ELEMENT Y2 (#PCDATA)>\n')
+        f.write('  <!ELEMENT Visible (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT SnapshotKeyword (#PCDATA|SnapshotNum|KeywordGroup|Keyword|X1|Y1|X2|Y2|Visible)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT SnapshotKeywordStyleFile (SnapshotKeywordStyle)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT SnapshotKeywordStyle (#PCDATA|SnapshotNum|KeywordGroup|Keyword|DrawMode|ColorName|ColorDef|LineWidth|LineStyle)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT NoteFile (Note)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT NoteTaker (#PCDATA)>\n')
+        f.write('  <!ELEMENT NoteText (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Note (#PCDATA|Num|ID|SeriesNum|EpisodeNum|CollectNum|ClipNum|TranscriptNum|NoteTaker|NoteText)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT FilterFile (Filter)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT ReportType (#PCDATA)>\n')
+        f.write('  <!ELEMENT ReportScope (#PCDATA)>\n')
+        f.write('  <!ELEMENT ConfigName (#PCDATA)>\n')
+        f.write('  <!ELEMENT FilterDataType (#PCDATA)>\n')
+        f.write('  <!ELEMENT FilterData (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Filter (#PCDATA|ReportType|ReportScope|ConfigName|FilterDataType|FilterData)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Transana (#PCDATA|SeriesFile|EpisodeFile|CoreDataFile|TranscriptFile|CollectionFile|ClipFile|KeywordFile|ClipKeywordFile|NoteFile|FilterFile)*>\n')
+        f.write(']>\n')
+        f.write('\n')
 
     def WriteSeriesRec(self, f, seriesRec):
         (SeriesNum, SeriesID, SeriesComment, SeriesOwner, DefaultKeywordGroup) = seriesRec
@@ -891,10 +965,15 @@ class XMLExport(Dialogs.GenForm):
             # ... add an extra line break here!
             f.write('\n')
             f.write('      </RTFText>\n')
+
+            # On exporting old, huge databases, you can end up with hundreds of "Converting RTF" popups.
+            # This hopefully will allow them to close properly rather than building up.
+            wx.YieldIfNeeded()
+            
         f.write('    </Transcript>\n')
 
     def WriteKeywordRec(self, f, keywordRec):
-        (KeywordGroup, Keyword, Definition) = keywordRec
+        (KeywordGroup, Keyword, Definition, LineColorName, LineColorDef, DrawMode, LineWidth, LineStyle) = keywordRec
         f.write('    <KeywordRec>\n')
         f.write('      <KeywordGroup>\n')
         f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
@@ -922,10 +1001,30 @@ class XMLExport(Dialogs.GenForm):
                 Definition = DBInterface.ProcessDBDataForUTF8Encoding(Definition)
             f.write('        %s\n' % self.Escape(Definition.encode(EXPORT_ENCODING)))
             f.write('      </Definition>\n')
+        if LineColorName != '':
+            f.write('      <ColorName>\n')
+            f.write('        %s\n' % self.Escape(LineColorName.encode(EXPORT_ENCODING)))
+            f.write('      </ColorName>\n')
+        if LineColorDef != '':
+            f.write('      <ColorDef>\n')
+            f.write('        %s\n' % LineColorDef)
+            f.write('      </ColorDef>\n')
+        if DrawMode != '':
+            f.write('      <DrawMode>\n')
+            f.write('        %s\n' % DrawMode)
+            f.write('      </DrawMode>\n')
+        if LineWidth > 0:
+            f.write('      <LineWidth>\n')
+            f.write('        %s\n' % LineWidth)
+            f.write('      </LineWidth>\n')
+        if LineStyle != '':
+            f.write('      <LineStyle>\n')
+            f.write('        %s\n' % LineStyle)
+            f.write('      </LineStyle>\n')
         f.write('    </KeywordRec>\n')
 
     def WriteClipKeywordRec(self, f, clipKeywordRec):
-        (EpisodeNum, ClipNum, KeywordGroup, Keyword, Example) = clipKeywordRec
+        (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example) = clipKeywordRec
         f.write('    <ClipKeyword>\n')
         if (EpisodeNum != '') and (EpisodeNum != 0):
             f.write('      <EpisodeNum>\n')
@@ -935,6 +1034,10 @@ class XMLExport(Dialogs.GenForm):
             f.write('      <ClipNum>\n')
             f.write('        %s\n' % ClipNum)
             f.write('      </ClipNum>\n')
+        if (SnapshotNum != '') and (SnapshotNum != 0):
+            f.write('      <SnapshotNum>\n')
+            f.write('        %s\n' % SnapshotNum)
+            f.write('      </SnapshotNum>\n')
         f.write('      <KeywordGroup>\n')
         f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
         f.write('      </KeywordGroup>\n')
@@ -948,7 +1051,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('    </ClipKeyword>\n')
 
     def WriteNoteRec(self, f, noteRec):
-        (NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, TranscriptNum, NoteTaker, NoteText) = noteRec
+        (NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, SnapshotNum, TranscriptNum, NoteTaker, NoteText) = noteRec
         f.write('    <Note>\n')
         f.write('      <Num>\n')
         f.write('        %s\n' % NoteNum)
@@ -976,6 +1079,11 @@ class XMLExport(Dialogs.GenForm):
             f.write('      <ClipNum>\n')
             f.write('        %s\n' % ClipNum)
             f.write('      </ClipNum>\n')
+        # Note Snapshot Numbers could be None instead of 0.
+        if (SnapshotNum != 0) and (SnapshotNum != None):
+            f.write('      <SnapshotNum>\n')
+            f.write('        %s\n' % SnapshotNum)
+            f.write('      </SnapshotNum>\n')
         # Note Transcript Numbers could be None instead of 0.
         if (TranscriptNum != 0) and (TranscriptNum != None):
             f.write('      <TranscriptNum>\n')
@@ -1190,7 +1298,7 @@ class XMLExport(Dialogs.GenForm):
 
                 if ReportType != 15:
                     # Encode the string using the export encoding
-                    filterDataList = filterDataList.encode(EXPORT_ENCODING)
+                    filterDataList = filterDataList  # .encode(EXPORT_ENCODING)
 
             # If we have data from FilterDataTypes 1, 2, 3, 5, 6, or 7 ...
             if FilterDataType in [1, 2, 3, 5, 6, 7]:
@@ -1205,6 +1313,121 @@ class XMLExport(Dialogs.GenForm):
             f.write('        %s\n' % self.Escape(FilterData))
             f.write('      </FilterData>\n')
             f.write('    </Filter>\n')
+
+    def WriteSnapshotRec(self, f, snapshotRec):
+        (SnapshotNum, SnapshotID, CollectNum, ImageFile, ImageScale, ImageCoordsX, ImageCoordsY, 
+         ImageSizeW, ImageSizeH, EpisodeNum, TranscriptNum, SnapshotTimeCode, SnapshotDuration, 
+         SnapshotComment, SortOrder) = snapshotRec
+        f.write('    <Snapshot>\n')
+        f.write('      <Num>\n')
+        f.write('        %s\n' % SnapshotNum)
+        f.write('      </Num>\n')
+        f.write('      <ID>\n')
+        f.write('        %s\n' % self.Escape(SnapshotID.encode(EXPORT_ENCODING)))
+        f.write('      </ID>\n')
+        if (CollectNum != None) and (CollectNum > 0):
+            f.write('      <CollectNum>\n')
+            f.write('        %s\n' % CollectNum)
+            f.write('      </CollectNum>\n')
+        f.write('      <MediaFile>\n')
+        f.write('        %s\n' % self.Escape(ImageFile.encode(EXPORT_ENCODING)))
+        f.write('      </MediaFile>\n')
+        f.write('      <ImageScale>\n')
+        f.write('        %s\n' % ImageScale)
+        f.write('      </ImageScale>\n')
+        f.write('      <ImageCoordsX>\n')
+        f.write('        %s\n' % ImageCoordsX)
+        f.write('      </ImageCoordsX>\n')
+        f.write('      <ImageCoordsY>\n')
+        f.write('        %s\n' % ImageCoordsY)
+        f.write('      </ImageCoordsY>\n')
+        f.write('      <ImageSizeW>\n')
+        f.write('        %s\n' % ImageSizeW)
+        f.write('      </ImageSizeW>\n')
+        f.write('      <ImageSizeH>\n')
+        f.write('        %s\n' % ImageSizeH)
+        f.write('      </ImageSizeH>\n')
+        if (EpisodeNum != None) and (EpisodeNum > 0):
+            f.write('      <EpisodeNum>\n')
+            f.write('        %s\n' % EpisodeNum)
+            f.write('      </EpisodeNum>\n')
+        if (TranscriptNum != None) and (TranscriptNum > 0):
+            f.write('      <TranscriptNum>\n')
+            f.write('        %s\n' % TranscriptNum)
+            f.write('      </TranscriptNum>\n')
+        f.write('      <SnapshotTimeCode>\n')
+        f.write('        %s\n' % SnapshotTimeCode)
+        f.write('      </SnapshotTimeCode>\n')
+        f.write('      <SnapshotDuration>\n')
+        f.write('        %s\n' % SnapshotDuration)
+        f.write('      </SnapshotDuration>\n')
+        if SnapshotComment != '':
+            f.write('      <Comment>\n')
+            f.write('        %s\n' % self.Escape(SnapshotComment.encode(EXPORT_ENCODING)))
+            f.write('      </Comment>\n')
+        if (SortOrder != '') and (SortOrder != 0):
+            f.write('      <SortOrder>\n')
+            f.write('        %s\n' % SortOrder)
+            f.write('      </SortOrder>\n')
+        f.write('    </Snapshot>\n')
+
+    def WriteSnapshotKeywordRec(self, f, snapshotKeywordRec):
+        (SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible) = snapshotKeywordRec
+        f.write('    <SnapshotKeyword>\n')
+        f.write('      <SnapshotNum>\n')
+        f.write('        %s\n' % SnapshotNum)
+        f.write('      </SnapshotNum>\n')
+        f.write('      <KeywordGroup>\n')
+        f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
+        f.write('      </KeywordGroup>\n')
+        f.write('      <Keyword>\n')
+        f.write('        %s\n' % self.Escape(Keyword.encode(EXPORT_ENCODING)))
+        f.write('      </Keyword>\n')
+        f.write('      <X1>\n')
+        f.write('        %s\n' % x1)
+        f.write('      </X1>\n')
+        f.write('      <Y1>\n')
+        f.write('        %s\n' % y1)
+        f.write('      </Y1>\n')
+        f.write('      <X2>\n')
+        f.write('        %s\n' % x2)
+        f.write('      </X2>\n')
+        f.write('      <Y2>\n')
+        f.write('        %s\n' % y2)
+        f.write('      </Y2>\n')
+        f.write('      <Visible>\n')
+        f.write('        %s\n' % visible)
+        f.write('      </Visible>\n')
+        f.write('    </SnapshotKeyword>\n')
+
+    def WriteSnapshotKeywordStyleRec(self, f, snapshotKeywordStyleRec):
+        (SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle) = snapshotKeywordStyleRec
+        f.write('    <SnapshotKeywordStyle>\n')
+        f.write('      <SnapshotNum>\n')
+        f.write('        %s\n' % SnapshotNum)
+        f.write('      </SnapshotNum>\n')
+        f.write('      <KeywordGroup>\n')
+        f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
+        f.write('      </KeywordGroup>\n')
+        f.write('      <Keyword>\n')
+        f.write('        %s\n' % self.Escape(Keyword.encode(EXPORT_ENCODING)))
+        f.write('      </Keyword>\n')
+        f.write('      <DrawMode>\n')
+        f.write('        %s\n' % DrawMode)
+        f.write('      </DrawMode>\n')
+        f.write('      <ColorName>\n')
+        f.write('        %s\n' % self.Escape(LineColorName.encode(EXPORT_ENCODING)))
+        f.write('      </ColorName>\n')
+        f.write('      <ColorDef>\n')
+        f.write('        %s\n' % LineColorDef)
+        f.write('      </ColorDef>\n')
+        f.write('      <LineWidth>\n')
+        f.write('        %s\n' % LineWidth)
+        f.write('      </LineWidth>\n')
+        f.write('      <LineStyle>\n')
+        f.write('        %s\n' % LineStyle)
+        f.write('      </LineStyle>\n')
+        f.write('    </SnapshotKeywordStyle>\n')
 
     def OnBrowse(self, evt):
         """Invoked when the user activates the Browse button."""

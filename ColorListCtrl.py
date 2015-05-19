@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -37,8 +37,8 @@ class ColorListCtrl(wx.Panel):
         # Add a spacer to allow space above the instructions
         vSizer.Add((1,4))
         # Create instructions and add to the sizer
-        instructions = wx.StaticText(self, -1, _('Click the color box to select/unselect a keyword.  A color is "selected," white is "unselected."'))
-        vSizer.Add(instructions, 0, wx.ALL, 2)
+        instructions = wx.StaticText(self, -1, _('Click the color box to select/unselect a keyword.\nA color is "selected," white is "unselected."'))
+        vSizer.Add(instructions, 0, wx.EXPAND | wx.ALL, 2)
         # If multSelect is requested ...
         if multSelect:
             # ... create a ListCtrl to hold the items that allows multiple selections
@@ -54,11 +54,9 @@ class ColorListCtrl(wx.Panel):
         vSizer.Add((1,4))
         # Add text describing the Color Selection squares
         colorText = wx.StaticText(self, -1, _("Click keyword text above, then choose a color below to change the keyword's display color."))
-        vSizer.Add(colorText, 0, wx.ALL, 2)
+        vSizer.Add(colorText, 0, wx.EXPAND | wx.ALL, 2)
 
         # Create the keyword Color images
-        # Start by initializing the ImageHandlers
-        wx.InitAllImageHandlers()
         # Create an image list for 16 x 16 pixel images
         self.imageList = wx.ImageList(16,16)
         # Create a horizontal sizer to hold the color images
@@ -126,13 +124,13 @@ class ColorListCtrl(wx.Panel):
                 # every time the counter hits the specified value
                 if counter % colorsPerRow == 0:
                     # Add the color selection bar to the Panel's main sizer
-                    vSizer.Add(colorHSizer, 0, wx.ALL, 2)
+                    vSizer.Add(colorHSizer, 0, wx.EXPAND | wx.ALL, 2)
                     # Create a horizontal sizer to hold the color images
                     colorHSizer = wx.BoxSizer(wx.HORIZONTAL)
                 # Add the widget to the sizer
-                colorHSizer.Add(bmpCtrl, 0, wx.RIGHT, 2)
+                colorHSizer.Add(bmpCtrl, 0, wx.EXPAND | wx.RIGHT, 2)
         # Add the color selection bar to the Panel's main sizer
-        vSizer.Add(colorHSizer, 0, wx.ALL, 2)
+        vSizer.Add(colorHSizer, 0, wx.EXPAND | wx.ALL, 2)
         # Add the ImageList to the ListCtrl to make the images accessible
         self.lc.SetImageList(self.imageList, wx.IMAGE_LIST_SMALL)
         # Set the panel's main sizer and handle layout.

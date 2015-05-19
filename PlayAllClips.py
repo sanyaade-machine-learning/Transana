@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -35,8 +35,12 @@ import Dialogs
 import DBInterface
 # Import Menu Constants
 import MenuSetup
+# Import Transana's Constants
+import TransanaConstants
 # import Transana's Exceptions
 import TransanaExceptions
+# Import Transana's Global variables
+import TransanaGlobal
 
 # Increased from 500 to 1000 for multi-transcript clips for Transana 2.30.
 TIMER_INTERVAL = 1000
@@ -50,7 +54,7 @@ ID_BTNCANCEL         = wx.NewId()
 ID_BTNNEXT           = wx.NewId()
 
 
-class PlayAllClips(wx.Dialog):
+class PlayAllClips(wx.Dialog):  # (wx.MDIChildFrame)
     """This object is responsible for controlling media playback when
     the "Play all Clips in a Collection" feature is selected.  It includes
     a user interface dialog and determines what clips are played in what
@@ -179,7 +183,7 @@ class PlayAllClips(wx.Dialog):
             desiredHeight = 122
         else:
             # Determine the size of the Client Window
-            (left, top, width, height) = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+            (left, top, width, height) = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
             desiredHeight = 56
             
         # Determine (and remember) the appropriate X and Y coordinates for the window
@@ -187,12 +191,18 @@ class PlayAllClips(wx.Dialog):
         self.yPos = top + height - desiredHeight
         
         # This Dialog should cover the bottom edge of the Data Window, and should stay on top of it.
-        wx.Dialog.__init__(self, self.ControlObject.DataWindow, -1, _("Play All Clips"),
+        wx.Dialog.__init__(self, self.ControlObject.MenuWindow, -1, _("Play All Clips"),
+#        wx.MDIChildFrame.__init__(self, self.ControlObject.MenuWindow, -1, _("Play All Clips"),
                              pos = (self.xPos, self.yPos), size=(width, desiredHeight), style=wx.CAPTION | wx.STAY_ON_TOP)
 
         # To look right, the Mac needs the Small Window Variant.
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+
+        # Add the Play All Clips window to the Window Menu
+        self.ControlObject.MenuWindow.AddWindowMenuItem(_("Play All Clips"), 0)
+
+        self.SetMinSize((10, 10))
 
         # Layout should be different if we're in "Video Only" or "Video and Transcript Only" presentation Modes
         # vs. Standard Transana Mode
@@ -237,6 +247,7 @@ class PlayAllClips(wx.Dialog):
 
             # Add a button for Previous
             self.btnPrevious = wx.Button(self, ID_BTNPREVIOUS, _("Previous"))
+            self.btnPrevious.SetMinSize((10, self.btnPrevious.GetSize()[1]))
             self.btnPrevious.Bind(wx.EVT_BUTTON, self.OnChangeClip)
         # If we DO have a single object ...
         else:
@@ -245,16 +256,19 @@ class PlayAllClips(wx.Dialog):
 
         # Add a button for Pause/Play functioning
         self.btnPlayPause = wx.Button(self, ID_BTNPLAYPAUSE, _("Pause"))
+        self.btnPlayPause.SetMinSize((10, self.btnPlayPause.GetSize()[1]))
         wx.EVT_BUTTON(self, ID_BTNPLAYPAUSE, self.OnPlayPause)
 
         # Add a button to Cancel the Playing of Clips
         self.btnCancel = wx.Button(self, ID_BTNCANCEL, _("Cancel"))
+        self.btnCancel.SetMinSize((10, self.btnCancel.GetSize()[1]))
         wx.EVT_BUTTON(self, ID_BTNCANCEL, self.OnClose)
 
         # If we do NOT have a single object ...
         if self.singleObject == None:
             # Add a button for Next
             self.btnNext = wx.Button(self, ID_BTNNEXT, _("Next"))
+            self.btnNext.SetMinSize((10, self.btnNext.GetSize()[1]))
             self.btnNext.Bind(wx.EVT_BUTTON, self.OnChangeClip)
 
         # Link to a method that handles window move attempts
@@ -280,11 +294,11 @@ class PlayAllClips(wx.Dialog):
         else:
             box = wx.BoxSizer(wx.HORIZONTAL)
             if self.singleObject == None:
-                box.Add(self.btnPrevious, 0, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
-            box.Add(self.btnPlayPause, 0, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
-            box.Add(self.btnCancel, 0, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
+                box.Add(self.btnPrevious, 1, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
+            box.Add(self.btnPlayPause, 1, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
+            box.Add(self.btnCancel, 1, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
             if self.singleObject == None:
-                box.Add(self.btnNext, 0, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
+                box.Add(self.btnNext, 1, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
             box.Add((10, 1), 0, wx.EXPAND)
             box.Add(lblNowPlaying, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL)
             box.Add((10,1), 1, wx.EXPAND)
@@ -294,7 +308,7 @@ class PlayAllClips(wx.Dialog):
             box.Add((10, 1), 1, wx.EXPAND)
 
         self.SetSizer(box)
-        self.Fit()
+#        self.Fit()
 
         # Tell the Dialog to Lay out the widgets, and to adjust them automatically
         self.Layout()
@@ -302,7 +316,7 @@ class PlayAllClips(wx.Dialog):
 
         # Now that the size is determined, let's reposition the dialog.
         if not self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
-            (left, top, width, height) = self.ControlObject.VideoWindow.GetRect()        
+            (left, top, width, height) = self.ControlObject.VideoWindow.GetRect()
         self.xPos = left
         self.yPos = top + height - self.GetSize()[1]
         self.SetPosition((self.xPos, self.yPos))
@@ -323,7 +337,7 @@ class PlayAllClips(wx.Dialog):
             # If clips are getting skipped, this increment may need to be increased.
             self.playAllClipsTimer.Start(TIMER_INTERVAL + EXTRA_LOAD_TIME)
             # Show the Play All Clips Dialog
-            self.ShowModal()
+            self.Show()
         # If we have a single object ...
         elif singleObject != None:
             # Initialize the flag that says a clip has started playing to FALSE or the first video will not play!
@@ -332,13 +346,17 @@ class PlayAllClips(wx.Dialog):
             # there's no need for additional time.
             self.playAllClipsTimer.Start(TIMER_INTERVAL)
             # Show the Play All Clips Dialog
-            self.ShowModal()
+            self.Show()
         else:
+            # Hide the PlayAllClips Window
+            self.Hide()
             # If there are no clips to play, display an error message.
             dlg = Dialogs.InfoDialog(None, _("This Collection has no Clips to play."))
             dlg.ShowModal()
             dlg.Destroy()
             self.ControlObject.Register(PlayAllClips = self)
+            # We need to close the PlayAllClips Windows, but can't until this method is done processing.
+            wx.CallAfter(self.Close)
 
     def OnTimer(self, event):
         """ This method should be polled periodically when this dialog is displayed.  If the media player is paused or playing,
@@ -406,6 +424,7 @@ class PlayAllClips(wx.Dialog):
                 self.xPos = left
                 self.yPos = top + height - self.GetSize()[1]
                 self.SetPosition((self.xPos, self.yPos))
+                self.Raise()
 
             # First, update the label to tell what clip is up
             if 'unicode' in wx.PlatformInfo:
@@ -478,9 +497,12 @@ class PlayAllClips(wx.Dialog):
         if self.ControlObject.VideoWindow.GetCurrentVideoPosition() < self.ControlObject.currentObj.clip_start:
             # ... then set the video start to the clip start.
             self.ControlObject.SetVideoStartPoint(self.ControlObject.currentObj.clip_start)
-        
-        # Play the next clip
-        self.ControlObject.Play()
+
+        try:
+            # Play the next clip
+            self.ControlObject.Play()
+        except IndexError:
+            self.Close()
 
         # Clip loaded.  Restart the timer to the shorter interval.
         wx.CallAfter(self.playAllClipsTimer.Start, TIMER_INTERVAL)
@@ -500,6 +522,8 @@ class PlayAllClips(wx.Dialog):
             elif self.clipNowPlaying > 0:
                 # ... go back only one (because of the Timer's increment), as there's no previous clip to go back to.
                 self.clipNowPlaying -= 1
+            # Make sure the Windows WON'T re-arrange if moving backwards
+            self.ControlObject.shutdownPlayAllClips = False
         # If the Next button is pressed ...
         elif event.GetId() == ID_BTNNEXT:
             # ... we don't need to do anything here.  The Timer's increment will take care of it for us.
@@ -518,6 +542,8 @@ class PlayAllClips(wx.Dialog):
     def OnPlayPause(self, event):
         """ If playing, then pause.  If paused, then play. """
         if self.btnPlayPause.GetLabel() == unicode(_("Pause"), 'utf8'):
+            # Prevent screen re-organization if the LAST clip is paused
+            self.ControlObject.shutdownPlayAllClips = False
             # Stop the time when we pause.  This is necessary to prevent clips from sometimes being dropped when we re-start.
             self.playAllClipsTimer.Stop()
             # Pause the video
@@ -525,6 +551,10 @@ class PlayAllClips(wx.Dialog):
             # Change the label on the button
             self.btnPlayPause.SetLabel(_("Play"))
         else:
+            # If we're on the LAST Clip ...
+            if (self.clipNowPlaying == len(self.clipList)):
+                # Prevent screen re-organization if the LAST clip is paused
+                self.ControlObject.shutdownPlayAllClips = True
             # Play the video
             self.ControlObject.Play()
             # Change the label on the button
@@ -540,12 +570,21 @@ class PlayAllClips(wx.Dialog):
 
     def OnClose(self, event):
         """ Close the Play All Clips Dialog """
+        # Signal the Control Object that we need to reset the Window Configuration
+        self.ControlObject.shutdownPlayAllClips = True
         # If a video is playing, stop it!
         if self.ControlObject.IsPlaying() or self.ControlObject.IsPaused():
             self.ControlObject.Stop()
+        # Sometimes, if paused, we don't see the windows restore correctly on CANCEL on Mac.
+        # This fixes that.
+        else:
+            # Send a STOP signal, even if not playing!!
+            self.ControlObject.UpdatePlayState(TransanaConstants.MEDIA_PLAYSTATE_STOP)
         # If the timer is still active, stop it!
         if self.playAllClipsTimer.IsRunning():
             self.playAllClipsTimer.Stop()
+        # Delete the Play All Clips window from the Window Menu
+        self.ControlObject.MenuWindow.DeleteWindowMenuItem(_("Play All Clips"), 0)
         # Return the Data Window to the Database Tab
         self.ControlObject.ShowDataTab(0)
         # Un-Register with the ControlObject

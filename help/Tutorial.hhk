@@ -126,6 +126,11 @@
            <param name="Local" value="QuickClips.htm">
        </object>
   <li> <object type="text/sitemap">
+           <param name="Name" value="Add a Snapshot - Tutorial">
+           <param name="ID" value=197>
+           <param name="Local" value="CreateSnapshot.htm">
+       </object>
+  <li> <object type="text/sitemap">
            <param name="Name" value="Working with Collections - Tutorial">
            <param name="ID" value=200>
            <param name="Local" value="WorkWithCollections.htm">

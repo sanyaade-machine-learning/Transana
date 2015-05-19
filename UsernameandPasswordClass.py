@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2012  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2014  The Board of Regents of the University of Wisconsin System
 #
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -65,7 +65,7 @@ class UsernameandPassword(wx.Dialog):
             # Dialog Title
             dlgTitle = _("Username and Password")
             # Dialog Size
-            dlgSize=(350, 250)
+            dlgSize=(350, 310)
             # Instructions Text
             instructions = _("Please enter your MySQL username and password, as well \nas the names of the server and database you wish to use.\nTo create a new database, type in a new database name\n(if you have appropriate permissions.)\n(Database names may contain only letters and numbers in\na single word.)")
             # Macs don't need as much space for instructions as Windows machines do.
@@ -84,16 +84,23 @@ class UsernameandPassword(wx.Dialog):
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
         # Create a BoxSizer for the main elements to go onto the Panel
-        box = wx.BoxSizer(wx.VERTICAL)
+        userPanelSizer = wx.BoxSizer(wx.VERTICAL)
+
+        # If we are in the Multi-user Version ...
+        if not TransanaConstants.singleUserVersion:
+            notebook = wx.Notebook(self, -1, size=self.GetSizeTuple())
+            panelParent = notebook
+        else:
+            panelParent = self
 
         # Place a Panel on the Dialog Box.  All Controls will go on the Panel.
         # (Panels can have DefaultItems, enabling the desired "ENTER" key functionality.
-        panel = wx.Panel(self, -1, name='UserNamePanel')
+        userPanel = wx.Panel(panelParent, -1, name='UserNamePanel')
 
         # Instructions Text
-        lblIntro = wx.StaticText(panel, -1, instructions)
+        lblIntro = wx.StaticText(userPanel, -1, instructions)
         # Add the Instructions to the Main Sizer
-        box.Add(lblIntro, instProportion, wx.EXPAND | wx.ALL, 10)
+        userPanelSizer.Add(lblIntro, instProportion, wx.EXPAND | wx.ALL, 10)
 
         # Get the dictionary of defined database hosts and databases from the Configuration module
         self.Databases = TransanaGlobal.configData.databaseList
@@ -128,31 +135,37 @@ class UsernameandPassword(wx.Dialog):
             box2Proportion = 6
 
             # Username Label        
-            lblUsername = wx.StaticText(panel, -1, _("Username:"))
+            lblUsername = wx.StaticText(userPanel, -1, _("Username:"))
 
             # User Name TextCtrl
-            self.txtUsername = wx.TextCtrl(panel, -1, style=wx.TE_LEFT)
+            self.txtUsername = wx.TextCtrl(userPanel, -1, style=wx.TE_LEFT)
             if DBInterface.get_username() != '':
                 self.txtUsername.SetValue(DBInterface.get_username())
 
             # Password Label
-            lblPassword = wx.StaticText(panel, -1, _("Password:"))
+            lblPassword = wx.StaticText(userPanel, -1, _("Password:"))
 
             # Password TextCtrl (with PASSWORD style)
-            self.txtPassword = wx.TextCtrl(panel, -1, style=wx.TE_LEFT|wx.TE_PASSWORD)
+            self.txtPassword = wx.TextCtrl(userPanel, -1, style=wx.TE_LEFT|wx.TE_PASSWORD)
 
             # Host / Server Label
-            lblDBServer = wx.StaticText(panel, -1, _("Host / Server:"))
+            lblDBServer = wx.StaticText(userPanel, -1, _("Host / Server:"))
 
             # If Databases has entries, use that to create the Choice List for the Database Servers list.
             if self.Databases.keys() != []:
                choicelist = self.Databases.keys()
+               choicelist.sort()
             # If not, create a list with a blank entry
             else:
                choicelist = ['']
-               
+
+            # As of wxPython 2.9.5.0, Mac doesn't support wx.CB_SORT and gives an ugly message about it!
+            if 'wxMac' in wx.PlatformInfo:
+                style = wx.CB_DROPDOWN
+            else:
+                style = wx.CB_DROPDOWN | wx.CB_SORT
             # Host / Server Combo Box, with a list of servers from the Databases Object if appropriate
-            self.chDBServer = wx.ComboBox(panel, -1, choices=choicelist, style = wx.CB_DROPDOWN | wx.CB_SORT)
+            self.chDBServer = wx.ComboBox(userPanel, -1, choices=choicelist, style = style)
 
             # Set the value to the default value provided by the Configuration Data
             self.chDBServer.SetValue(TransanaGlobal.configData.host)
@@ -161,12 +174,11 @@ class UsernameandPassword(wx.Dialog):
             wx.EVT_COMBOBOX(self, self.chDBServer.GetId(), self.OnServerSelect)
 
             # NOTE:  These events don't work on the MAC!  There appears to be a wxPython bug.  See wxPython ticket # 9862
-            wx.EVT_SET_FOCUS(self.chDBServer, self.OnCBSetFocus)
             wx.EVT_KILL_FOCUS(self.chDBServer, self.OnServerKillFocus)
 
             # Define the Port TextCtrl and its KillFocus event
-            lblPort = wx.StaticText(panel, -1, _("Port:"))
-            self.txtPort = wx.TextCtrl(panel, -1, TransanaGlobal.configData.dbport, style=wx.TE_LEFT)
+            lblPort = wx.StaticText(userPanel, -1, _("Port:"))
+            self.txtPort = wx.TextCtrl(userPanel, -1, TransanaGlobal.configData.dbport, style=wx.TE_LEFT)
 
             # This wx.EVT_SET_FOCUS is a poor attempt to compensate for wxPython bug # 9862
             if 'wxMac' in wx.PlatformInfo:
@@ -195,7 +207,7 @@ class UsernameandPassword(wx.Dialog):
 
         # The rest of the controls are needed for both single- and multi-user versions.
         # Databases Label
-        lblDBName = wx.StaticText(panel, -1, _("Database:"))
+        lblDBName = wx.StaticText(userPanel, -1, _("Database:"))
 
         # If a Host is defined, get the list of Databases defined for that host.
         # The single-user version ...
@@ -212,15 +224,22 @@ class UsernameandPassword(wx.Dialog):
         # To get around this, we give it a fake choice list with enough entries, then populate it later.
         choicelist = ['', '', '', '', '']
 
+        # As of wxPython 2.9.5.0, Mac doesn't support wx.CB_SORT and gives an ugly message about it!
+        if 'wxMac' in wx.PlatformInfo:
+            style = wx.CB_DROPDOWN
+        else:
+            style = wx.CB_DROPDOWN | wx.CB_SORT
         # Database Combo Box
-        self.chDBName = wx.ComboBox(panel, -1, choices=choicelist, style = wx.CB_DROPDOWN | wx.CB_SORT)
+        self.chDBName = wx.ComboBox(userPanel, -1, choices=choicelist, style = style)
 
+        # If we're in the Demo version ...
         if TransanaConstants.demoVersion:
+            # ... then "Demonstration" is the only allowable Database Name
             self.chDBName.Clear()
             self.chDBName.Append("Demonstration")
             self.chDBName.SetValue("Demonstration")
             self.chDBName.Enable(False)
-
+        # If we're NOT in the Demo version ...
         else:
             # If some Database have been defined...
             if len(self.Databases) >= 1:
@@ -228,6 +247,8 @@ class UsernameandPassword(wx.Dialog):
                 # identified Server
                 if DBServerName != '':
                     choicelist = self.Databases[DBServerName]['dbList']
+                    # Sort the Database List
+                    choicelist.sort()
                 else:
                     choicelist = ['']
 
@@ -242,31 +263,139 @@ class UsernameandPassword(wx.Dialog):
             # if the configured database isn't in the database list, don't show it!
             # This can happen if you have a Russian database name but change away from Russian encoding
             # by changing languages during the session.
+
+##            print
+##            print "UsernameandPasswordClass.__init__():"
+##            print TransanaGlobal.configData.database.encode('utf8'), type(TransanaGlobal.configData.database)
+##            for x in range(len(choicelist)):
+##                print choicelist[x], type(choicelist[x]), TransanaGlobal.configData.database.encode('utf8') == choicelist[x]
+##            print TransanaGlobal.configData.database.encode('utf8') in choicelist, choicelist.index(TransanaGlobal.configData.database.encode('utf8'))
+##            print
+##
+##            # If we're on the Mac ...
+##            if 'wxMac' in wx.PlatformInfo:
+##                # ... SetStringSelection is broken, so we locate the string's item number and use SetSelection!
+##                if TransanaGlobal.configData.database in choicelist:
+##                    self.chDBName.SetSelection(choicelist.index(TransanaGlobal.configData.database.encode('utf8')))  # (self.chDBName.GetItems().index(TransanaGlobal.configData.database.encode('utf8')))
+##            else:
             if self.chDBName.FindString(TransanaGlobal.configData.database) != wx.NOT_FOUND:
                 # Set the value to the default value provided by the Configuration Data
-                self.chDBName.SetValue(TransanaGlobal.configData.database)
+                self.chDBName.SetStringSelection(TransanaGlobal.configData.database)
 
         # Define the SetFocus and KillFocus events for the Database Combo Box
-        wx.EVT_SET_FOCUS(self.chDBName, self.OnCBSetFocus)
         wx.EVT_KILL_FOCUS(self.chDBName, self.OnNameKillFocus)
+
+        # Weird Mac bug ... Can't select all Database Names from the list sometimes.  So, if Mac ...
+        if 'wxMac' in wx.PlatformInfo:
+            # ... add a Combo Box Event handler for the Database Name selection
+            self.chDBName.Bind(wx.EVT_COMBOBOX, self.OnNameSelect)
 
         # Add the Database name fields to the Data Entry sizer
         box2.AddMany([(lblDBName, 1, wx.RIGHT, 10),
                       (self.chDBName, 2, wx.EXPAND)
                      ])
         # Now add the Data Entry sizer to the Main sizer
-        box.Add(box2, box2Proportion, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        userPanelSizer.Add(box2, box2Proportion, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+        # If we are in the Multi-user Version ...
+        if not TransanaConstants.singleUserVersion:
+
+            # Add an SSL checkbox to the Username panel
+            self.sslCheck = wx.CheckBox(userPanel, -1, _("Use SSL") + "  ", style=wx.CHK_2STATE | wx.ALIGN_RIGHT )
+            # If SSL is True in the configuration file ...
+            if TransanaGlobal.configData.ssl:
+                # ... check the box
+                self.sslCheck.SetValue(True)
+            # Add a Spacer
+            userPanelSizer.Add((0, 5))
+            # Add the checkbox to the Username panel
+            userPanelSizer.Add(self.sslCheck, 0, wx.LEFT | wx.ALIGN_LEFT, 5)
+            # Add a Spacer
+            userPanelSizer.Add((0, 10))
+
+            # Add the User Panel to the first Notebook tab
+            notebook.AddPage(userPanel, _("Database"), True)
+
+            # Import the Transana OptionsSettings module, needed for the Message Server panel
+            import OptionsSettings
+
+            # Create teh Message Server Panel (which parents the MessageServer and MessageServerPort TextCtrls)
+            self.messageServerPanel = OptionsSettings.MessageServerPanel(notebook, name='Username.MessageServerPanel')
+            # Add the Message Server Panel to the second Notebook 
+            notebook.AddPage(self.messageServerPanel, _("Message Server"), False)
+
+            # Create a Panel for the SSL information
+            sslPanel = wx.Panel(notebook, -1, size=notebook.GetSizeTuple(), name='UsernameandPasswordClass.sslPanel')
+            # Create a Sizer for the SSL Panel
+            sslSizer = wx.BoxSizer(wx.VERTICAL)
+
+            # Get wxPython's Standard Paths
+            sp = wx.StandardPaths.Get()
+            # Set the initial SSL Directory to the user's Document Directory
+            self.sslDir = sp.GetDocumentsDir()
+
+            # Add the Client Certificate File to the SSL Tab
+            lblClientCert = wx.StaticText(sslPanel, -1, _("SSL Client Certificate File"), style=wx.ST_NO_AUTORESIZE)
+            # Add the label to the Panel Sizer
+            sslSizer.Add(lblClientCert, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+            
+            # Add a spacer
+            sslSizer.Add((0, 3))
+            
+            # Add the Client Certificate File TextCtrl to the SSL Tab
+            self.sslClientCert = wx.TextCtrl(sslPanel, -1, TransanaGlobal.configData.sslClientCert)
+            # Add the element to the Panel Sizer
+            sslSizer.Add(self.sslClientCert, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            # Add a Browse button for the Client Certificate File
+            self.sslClientCertBrowse = wx.Button(sslPanel, -1, _("Browse"))
+            # Add the button to the Sizer
+            sslSizer.Add(self.sslClientCertBrowse, 0, wx.LEFT | wx.BOTTOM, 10)
+            # Bind the button to the event processor
+            self.sslClientCertBrowse.Bind(wx.EVT_BUTTON, self.OnSSLButton)
+            # Add a spacer
+            sslSizer.Add((0, 5))
+
+            # Add the Client Key File to the SSL Tab
+            lblClientKey = wx.StaticText(sslPanel, -1, _("SSL Client Key File"), style=wx.ST_NO_AUTORESIZE)
+            # Add the label to the Panel Sizer
+            sslSizer.Add(lblClientKey, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+            # Add a spacer
+            sslSizer.Add((0, 3))
+            
+            # Add the Client Key File TextCtrl to the SSL Tab
+            self.sslClientKey = wx.TextCtrl(sslPanel, -1, TransanaGlobal.configData.sslClientKey)
+            # Add the element to the Panel Sizer
+            sslSizer.Add(self.sslClientKey, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            # Add a Browse button for the Client Key File
+            self.sslClientKeyBrowse = wx.Button(sslPanel, -1, _("Browse"))
+            # Add the button to the Sizer
+            sslSizer.Add(self.sslClientKeyBrowse, 0, wx.LEFT | wx.BOTTOM, 10)
+            # Bind the button to the event processor
+            self.sslClientKeyBrowse.Bind(wx.EVT_BUTTON, self.OnSSLButton)
+
+            # Set the SSL Panel's Sizer
+            sslPanel.SetSizer(sslSizer)
+            # Turn on AutoLayout
+            sslPanel.SetAutoLayout(True)
+            # Lay out the panel
+            sslPanel.Layout()
+
+            # Add the SSL Panel as the third Notebook tab
+            notebook.AddPage(sslPanel, _("SSL"), False)
 
         # Create another sizer for the buttons, with a horizontal orientation
-        box4 = wx.BoxSizer(wx.HORIZONTAL)
+        buttonSizer = wx.BoxSizer(wx.HORIZONTAL)
 
+        # If this is NOT the Demo version ...
         if not TransanaConstants.demoVersion:
             # Define the "Delete Database" Button
-            btnDeleteDatabase = wx.Button(panel, -1, _("Delete Database"))
+            btnDeleteDatabase = wx.Button(self, -1, _("Delete Database"))
             self.Bind(wx.EVT_BUTTON, self.OnDeleteDatabase, btnDeleteDatabase)
 
         # Define the "OK" button
-        btnOK = wx.Button(panel, wx.ID_OK, _("OK"))
+        btnOK = wx.Button(self, wx.ID_OK, _("OK"))
         # Make the OK button the default.  (This one works on Linux, while the next line doesn't!)
         btnOK.SetDefault()
         # Define the Default Button for the dialog.  This allows the "ENTER" key
@@ -274,32 +403,41 @@ class UsernameandPassword(wx.Dialog):
         self.SetDefaultItem(btnOK)
         
         # Define the Cancel Button
-        btnCancel = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))
+        btnCancel = wx.Button(self, wx.ID_CANCEL, _("Cancel"))
 
+        # Define the "OK" button
         if not TransanaConstants.demoVersion:
             # Add the Delete Database button to the lower left corner
-            box4.Add(btnDeleteDatabase, 3, wx.ALIGN_LEFT | wx.ALIGN_BOTTOM | wx.LEFT | wx.BOTTOM, 10)
+            buttonSizer.Add(btnDeleteDatabase, 3, wx.ALIGN_LEFT | wx.ALIGN_BOTTOM | wx.LEFT | wx.BOTTOM, 10)
         # Lets have some space between this button and  the others.
-        box4.Add((30, 1), 1, wx.EXPAND)
+        buttonSizer.Add((30, 1), 1, wx.EXPAND)
         # Add the OK button to the lower right corner
-        box4.Add(btnOK, 2, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT | wx.BOTTOM, 10)
+        buttonSizer.Add(btnOK, 2, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT | wx.BOTTOM, 10)
         # Add the Cancel button to the lower right corner, bumping the OK button to the left
-        box4.Add(btnCancel, 2, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT | wx.BOTTOM, 10)
-        # Add the Button sizer to the main sizer
-        box.Add(box4, 2, wx.EXPAND)
+        buttonSizer.Add(btnCancel, 2, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT | wx.BOTTOM, 10)
 
         # Lay out the panel and the form, request AutoLayout for both.
-        panel.Layout()
-        panel.SetAutoLayout(True)
+        userPanel.Layout()
+        userPanel.SetAutoLayout(True)
 
         # Set the main Panel's sizer to the main sizer and "fit" it.
-        panel.SetSizer(box)
-        panel.Fit()
+        userPanel.SetSizer(userPanelSizer)
+        userPanel.Fit()
 
         # Let's stick the panel on a sizer to fit in the Dialog
         panSizer = wx.BoxSizer(wx.VERTICAL)
-        panSizer.Add(panel, 1, wx.EXPAND)
+        if TransanaConstants.singleUserVersion:
+            panSizer.Add(userPanel, 1, wx.EXPAND)
+        else:
+            panSizer.Add(notebook, 1, wx.EXPAND)
+        panSizer.Add((0, 3))
+            
+        # Add the Button sizer to the main sizer
+        panSizer.Add(buttonSizer, 0, wx.EXPAND)
+
         self.SetSizer(panSizer)
+        self.Layout()
+        self.SetAutoLayout(True)
         self.Fit()
 
         # Lay out the dialog box, and tell it to resize automatically
@@ -337,11 +475,21 @@ class UsernameandPassword(wx.Dialog):
               self.Password = ''
               self.DBServer = 'localhost'
               self.Port     = '3306'
+              self.SSL      = False
+              self.MessageServer = ''
+              self.MessageServerPort = ''
+              self.SSLClientCert = ''
+              self.SSLClientKey = ''
           else:
               self.Username = self.txtUsername.GetValue()
               self.Password = self.txtPassword.GetValue()
               self.DBServer = self.chDBServer.GetValue()
               self.Port     = self.txtPort.GetValue()
+              self.SSL      = self.sslCheck.IsChecked()
+              self.MessageServer = self.messageServerPanel.messageServer.GetValue()
+              self.MessageServerPort = self.messageServerPanel.messageServerPort.GetValue()
+              self.SSLClientCert = self.sslClientCert.GetValue()
+              self.SSLClientKey = self.sslClientKey.GetValue()
           self.DBName   = self.chDBName.GetValue()
 
           # the EVT_KILL_FOCUS for the Combo Boxes isn't getting called on the Mac.  Let's call it manually here
@@ -356,17 +504,58 @@ class UsernameandPassword(wx.Dialog):
           self.Password = ''
           self.DBServer = ''
           self.DBName   = ''
-          self.Port = ''
+          self.Port     = ''
+          self.SSL      = False
+          self.MessageServer = ''
+          self.MessageServerPort = ''
+          self.SSLClientCert = ''
+          self.SSLClientKey = ''
         return None
 
+
+    def OnCloseWindow(self, event):
+
+        print "UsernameandPasswordClass.OnOK():  Error Checking!"
+
+        event.Veto()
+
+
+    def OnNameSelect(self, event):
+        """ Process Database Name Selection (only used on Mac due to weird Mac bug!) """
+        # Determine the string of the item number just selected by the user.
+        selectStr = event.GetEventObject().GetItems()[event.GetEventObject().GetSelection()]
+        # Normally, this string should ALWAYS be the same as the return of the GetValue() method, right?
+        # Well, if it's not (this is the Mac bug) ...
+        if event.GetEventObject().GetValue() != selectStr:
+            # ... set the Database Name to the selected string
+            self.DBName = selectStr
+            # ... and set the Combo Box's selection to the correct selection number.
+            event.GetEventObject().SetSelection(event.GetEventObject().GetSelection())
+        
     def OnServerSelect(self, event):
         """ Process the Selection of a Database Host """
+        # If we're on the Mac, there's a weird Combo Box bug on this form.
+        if 'wxMac' in wx.PlatformInfo:
+            # Determine the string of the item number just selected by the user.
+            selectStr = event.GetEventObject().GetItems()[event.GetEventObject().GetSelection()]
+            # Normally, this string should ALWAYS be the same as the return of the GetValue() method, right?
+            # Well, if it's not (this is the Mac bug) ...
+            if event.GetEventObject().GetValue() != selectStr:
+                # ... set the Database Server to the selected string
+                self.DBServer = selectStr
+                # ... and set the Combo Box's selection to the correct selection number.
+                event.GetEventObject().SetSelection(event.GetEventObject().GetSelection())
+
         # Clear the list of Databases
         self.chDBName.Clear()
         # If there is a database list defined for the Host selected ...
         if (event.GetString().strip() != '') and (self.Databases[event.GetString()]['dbList'] != []):
+            # Get the list of databases for this server
+            choiceList = self.Databases[event.GetString()]['dbList']
+            # Sort the database list
+            choiceList.sort()
             # ... iterate through the list of databases for the host ...
-            for db in self.Databases[event.GetString()]['dbList']:
+            for db in choiceList:
                 # ... and put the databases in the Database Combo Box
                 self.chDBName.Append(db)
         # If not, show an empty list
@@ -379,11 +568,6 @@ class UsernameandPassword(wx.Dialog):
             # ... set the value for the server's Port based on the config data
             self.txtPort.SetValue(self.Databases[event.GetString()]['port'])
 
-    def OnCBSetFocus(self, event):
-        """ Combo Box Set Focus Event """
-        # Do nothing
-        event.Skip()
-        
     def OnServerKillFocus(self, event):
         """ KillFocus event for Host/Server Combo Box """
         # See if the Host Name has not yet been used.
@@ -430,6 +614,7 @@ class UsernameandPassword(wx.Dialog):
                 dbName = ''
         else:
             dbName = self.chDBName.GetValue()
+        
         # See if the Database Name has not yet been added to the database list.  If not ...
         if (self.chDBName.GetValue() != '') and \
            (self.Databases.has_key(DBServerName)) and \
@@ -454,11 +639,45 @@ class UsernameandPassword(wx.Dialog):
         else:
             # When leaving the port field, we need to update the configuration data object
             self.Databases[self.chDBServer.GetValue()]['port'] = self.txtPort.GetValue()
-            
+
+    def OnSSLButton(self, event):
+        """ Handle the Browse buttons for the SSL Client Certificate and the SSL CLient Key file fields """
+        # Define the File Type as *.pem files
+        fileType = '*.pem'
+        fileTypesString = _("SSL Certificate Files (*.pem)|*.pem|All files (*.*)|*.*")
+        if event.GetId() == self.sslClientCertBrowse.GetId():
+            prompt = _("Select the SSL Client Certificate file")
+            fileName = self.sslClientCert.GetValue()
+        elif event.GetId() == self.sslClientKeyBrowse.GetId():
+            prompt = _("Select the SSL Client Key file")
+            fileName = self.sslClientKey.GetValue()
+        (path, flnm) = os.path.split(fileName)
+        if path != '':
+            self.sslDir = path
+        # Invoke the File Selector with the proper default directory, filename, file type, and style
+        fs = wx.FileSelector(prompt, self.sslDir, fileName, fileType, fileTypesString, wx.OPEN | wx.FILE_MUST_EXIST)
+        # If user didn't cancel ..
+        if fs != "":
+            # Mac Filenames use a different encoding system.  We need to adjust the string returned by the FileSelector.
+            # Surely there's an easier way, but I can't figure it out.
+            if 'wxMac' in wx.PlatformInfo:
+                import Misc
+                fs = Misc.convertMacFilename(fs)
+            if event.GetId() == self.sslClientCertBrowse.GetId():
+                self.sslClientCert.SetValue(fs)
+            elif event.GetId() == self.sslClientKeyBrowse.GetId():
+                self.sslClientKey.SetValue(fs)
+            (path, flnm) = os.path.split(fs)
+            if path != '':
+                self.sslDir = path
 
     def GetValues(self):
-        """ Get all Data Values the user entered into this Dialog Box """
+        """ Get the Data Values the user entered on the UserName panel """
         return (self.Username, self.Password, self.DBServer, self.DBName, self.Port)
+
+    def GetMultiUserValues(self):
+        """ Get all Data Values needed for Multi-user version """
+        return (self.SSL, self.MessageServer, self.MessageServerPort, self.SSLClientCert, self.SSLClientKey)
 
     def GetUsername(self):
         """ Get the User Name Entry """
@@ -479,6 +698,26 @@ class UsernameandPassword(wx.Dialog):
     def GetPort(self):
         """ Get the Port Selection """
         return self.Port
+
+    def GetSSL(self):
+        """ Is SSL Required? """
+        return self.SSL
+
+    def GetMessageServer(self):
+        """ Get the Message Server Entry """
+        return self.messageServer
+
+    def GetMessageServerPort(self):
+        """ Get the Message Server Port Entry """
+        return self.messageServerPort
+
+    def GetSSLClientCert(self):
+        """ Get the SSL Client Certificate Entry """
+        return self.SSLClientCert
+
+    def GetSSLClientKey(self):
+        """ Get the SSL Client Key Entry """
+        return self.SSLClientKey
 
     def OnDeleteDatabase(self, event):
         """ Delete a database """

@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2011-2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2011-2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -61,7 +61,7 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
         self.fontAttributes = {}
         self.fontAttributes[u'text'] = {u'bgcolor' : '#FFFFFF',
                                     u'fontface' : 'Courier New',
-                                    u'fontsize' : 12,
+                                    u'fontpointsize' : 12,
                                     u'fontstyle' : wx.FONTSTYLE_NORMAL,
                                     u'fontunderlined' : u'0',
                                     u'fontweight' : wx.FONTSTYLE_NORMAL,
@@ -69,7 +69,7 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
 
         self.fontAttributes[u'symbol'] = {u'bgcolor' : '#FFFFFF',
                                     u'fontface' : 'Courier New',
-                                    u'fontsize' : 12,
+                                    u'fontpointsize' : 12,
                                     u'fontstyle' : wx.FONTSTYLE_NORMAL,
                                     u'fontunderlined' : u'0',
                                     u'fontweight' : wx.FONTSTYLE_NORMAL,
@@ -77,7 +77,7 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
 
         self.fontAttributes[u'paragraph'] = {u'bgcolor' : '#FFFFFF',
                                          u'fontface' : 'Courier New',
-                                         u'fontsize' : 12,
+                                         u'fontpointsize' : 12,
                                          u'fontstyle' : wx.FONTSTYLE_NORMAL,
                                          u'fontunderlined' : u'0',
                                          u'fontweight' : wx.FONTSTYLE_NORMAL,
@@ -85,7 +85,7 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
 
         self.fontAttributes[u'paragraphlayout'] = {u'bgcolor' : '#FFFFFF',
                                                u'fontface' : 'Courier New',
-                                               u'fontsize' : 12,
+                                               u'fontpointsize' : 12,
                                                u'fontstyle' : wx.FONTSTYLE_NORMAL,
                                                u'fontunderlined' : u'0',
                                                u'fontweight' : wx.FONTSTYLE_NORMAL,
@@ -208,10 +208,14 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
                         self.paragraphAttributes[name][x] = attributes[x]
             # ... iterate through the element attributes looking for font attributes
             for x in attributes.keys():
+                if x == u'fontsize':
+                    x = u'fontpointsize'
+                    # ... update the current font dictionary
+                    self.fontAttributes[name][x] = attributes[u'fontsize']
                 # If the attribute is a font format attribute ...
-                if x in [u'bgcolor',
+                elif x in [u'bgcolor',
                          u'fontface',
-                         u'fontsize',
+                         u'fontpointsize',
                          u'fontstyle',
                          u'fontunderlined',
                          u'fontweight',
@@ -264,6 +268,7 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
                     if not x in [u'bgcolor',
                                  u'fontface',
                                  u'fontsize',
+                                 u'fontpointsize',
                                  u'fontstyle',
                                  u'fontunderlined',
                                  u'fontweight',
@@ -417,15 +422,18 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
 
             # line spacing u'10' is single line spacing, which is NOT included in the RTF as it is the default.
             if self.paragraphAttributes[u'paragraph'][u'linespacing'] in [u'0', u'10']:
-                self.txtCtrl.SetTxtStyle(parLineSpacing = richtext.TEXT_ATTR_LINE_SPACING_NORMAL)
+                self.txtCtrl.SetTxtStyle(parLineSpacing = wx.TEXT_ATTR_LINE_SPACING_NORMAL)
             # 1.5 line spacing is u'15'
             elif self.paragraphAttributes[u'paragraph'][u'linespacing'] == u'15':
-                self.txtCtrl.SetTxtStyle(parLineSpacing = richtext.TEXT_ATTR_LINE_SPACING_HALF)
+                self.txtCtrl.SetTxtStyle(parLineSpacing = wx.TEXT_ATTR_LINE_SPACING_HALF)
             # double line spacing is u'20'
             elif self.paragraphAttributes[u'paragraph'][u'linespacing'] == u'20':
-                self.txtCtrl.SetTxtStyle(parLineSpacing = richtext.TEXT_ATTR_LINE_SPACING_TWICE)
+                self.txtCtrl.SetTxtStyle(parLineSpacing = wx.TEXT_ATTR_LINE_SPACING_TWICE)
             else:
-                print "Unknown linespacing:", self.paragraphAttributes[u'paragraph'][u'linespacing'], type(self.paragraphAttributes[u'paragraph'][u'linespacing'])
+
+##                print "Unknown linespacing:", self.paragraphAttributes[u'paragraph'][u'linespacing'], type(self.paragraphAttributes[u'paragraph'][u'linespacing'])
+
+                self.txtCtrl.SetTxtStyle(parLineSpacing = int(self.paragraphAttributes[u'paragraph'][u'linespacing']))
 
             # Paragraph Margins and first-line indents
             # First, let's convert the unicode strings we got from the XML to integers and translate from wxRichTextCtrl's
@@ -461,7 +469,7 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
             # Add Font Face information
             self.txtCtrl.SetTxtStyle(fontFace = self.fontAttributes[name][u'fontface'],
             # Add Font Size information
-                                     fontSize = int(self.fontAttributes[name][u'fontsize']))
+            fontSize = int(self.fontAttributes[name][u'fontpointsize']))
             # If bold, add Bold
             if self.fontAttributes[name][u'fontweight'] == str(wx.FONTWEIGHT_BOLD):
                 self.txtCtrl.SetTxtStyle(fontBold = True)
@@ -491,7 +499,7 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
 
             if DEBUG:
                 print "PyXML_RTCImportParser.characters():"
-                print '"%s"' % data
+                print '"%s"' % data.encode('utf8')
 
             # We've had some problems with quotation marks showing up inappropriately.  This attempts to fix that.
             # If we have a single Quotation Mark character in the data specification ...

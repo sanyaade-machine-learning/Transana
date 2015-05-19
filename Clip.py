@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -235,7 +235,7 @@ class Clip(DataObject.DataObject):
         # Close the database cursor
         c.close()
 
-    def db_save(self):
+    def db_save(self, usetransactions=True):
         """Save the record to the database using Insert or Update as appropriate."""
         # Define and implement Demo Version limits
         if TransanaConstants.demoVersion and (self.number == 0):
@@ -345,8 +345,13 @@ class Clip(DataObject.DataObject):
             values = values + (self.number,)
 
         c = DBInterface.get_db().cursor()
+
+        if usetransactions:
+            c.execute('BEGIN')
+        
         c.execute(query, values)
         if self.number == 0:
+            numberChanged = True
             # If we are dealing with a brand new Clip, it does not yet know its
             # record number.  It HAS a record number, but it is not known yet.
             # The following query should produce the correct record number.
@@ -360,13 +365,16 @@ class Clip(DataObject.DataObject):
             if tempDBCursor.rowcount == 1:
                 self.number = tempDBCursor.fetchone()[0]
             else:
+                if usetransactions:
+                    c.execute('ROLLBACK')
                 raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
             tempDBCursor.close()
         else:
+            numberChanged = False
             # If we are dealing with an existing Clip, delete all the Keywords
             # in anticipation of putting them all back in after we deal with the
             # Clip Transcript
-            DBInterface.delete_all_keywords_for_a_group(0, self.number)
+            DBInterface.delete_all_keywords_for_a_group(0, self.number, 0)
             
         # Now let's deal with the Clip's Transcripts
 
@@ -408,11 +416,50 @@ class Clip(DataObject.DataObject):
             # Execute the query
             c.execute(query, data)
 
-        # Add the Clip keywords back
+        # Initialize a blank error prompt
+        prompt = ''
+        # Add the Clip keywords back.  Iterate through the Keyword List
         for kws in self._kwlist:
-            DBInterface.insert_clip_keyword(0, self.number, kws.keywordGroup, kws.keyword, kws.example)
+            # Try to add the Clip Keyword record.  If it is NOT added, the keyword has been changed by another user!
+            if not DBInterface.insert_clip_keyword(0, self.number, 0, kws.keywordGroup, kws.keyword, kws.example):
+                # if the prompt isn't blank ...
+                if prompt != '':
+                    # ... add a couple of line breaks to it
+                    prompt += u'\n\n'
+                # Add the current keyword to the error prompt
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt += unicode(_('Keyword "%s : %s" cannot be added to Clip "%s".\nAnother user must have edited the keyword while you were adding it.'), 'utf8') % (kws.keywordGroup, kws.keyword, self.id)
 
-        c.close()
+        # If there is an error prompt ...
+        if prompt != '':
+            # If the Episode Number was changed ...
+            if numberChanged:
+                # ... change it back to zero!!
+                self.number = 0
+                # If we're NOT skipping the Transcripts ...
+                if not self.skipText:
+                    # For each transcript in the list of clip transcripts ...
+                    for tr in self.transcripts:
+                        # ... change the clip's number back to zero too.
+                        tr.number = 0
+                        tr.clip_num = 0
+            # Undo the database save transaction
+            if usetransactions:
+                c.execute('ROLLBACK')
+            # Close the Database Cursor
+            c.close()
+            # Complete the error prompt
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt += u'\n\n' + unicode(_('Please remove, and possibly replace, this keyword.'), 'utf8')
+            # ... raise a SaveError exception using the error prompt
+            raise SaveError, prompt
+        # If there's no error prompt ...
+        else:
+            # ... Commit the database transaction
+            if usetransactions:
+                c.execute('COMMIT')
+            # Close the Database Cursor
+            c.close()
 
     def db_delete(self, use_transactions=True, examplesPrompt=True):
         """ Delete this object record from the database.  Parameters indicate if we should use DB Transactions
@@ -490,7 +537,7 @@ class Clip(DataObject.DataObject):
 
             # Delete all related references in the ClipKeywords table
             if result:
-                DBInterface.delete_all_keywords_for_a_group(0, self.number)
+                DBInterface.delete_all_keywords_for_a_group(0, self.number, 0)
 
             if result:
                 # Craft a query to remove all existing Additonal Videos

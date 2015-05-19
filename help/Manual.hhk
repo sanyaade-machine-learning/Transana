@@ -115,6 +115,16 @@
            <param name="ID" value=115>
            <param name="Local" value="ClipMerge.htm">
        </object>
+  <li><object type="text/sitemap">
+           <param name="Name" value="Snapshot Properties">
+           <param name="ID" value=117>
+           <param name="Local" value="AddSnapshot.htm">
+       </object>
+  <li><object type="text/sitemap">
+           <param name="Name" value="Snapshot Window">
+           <param name="ID" value=118>
+           <param name="Local" value="SnapshotWindow.htm">
+       </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Keyword Management">
            <param name="ID" value=120>
@@ -351,6 +361,21 @@
            <param name="Local" value="Other.htm">
        </object>
   <li> <object type="text/sitemap">
+           <param name="Name" value="Export Clip Video">
+           <param name="ID" value=380>
+           <param name="Local" value="Other.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Fixed-Increment Time Codes">
+           <param name="ID" value=380>
+           <param name="Local" value="Other.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Load Snapshot Context">
+           <param name="ID" value=380>
+           <param name="Local" value="Other.htm">
+       </object>
+  <li> <object type="text/sitemap">
            <param name="Name" value="Locate Clip in Episode">
            <param name="ID" value=380>
            <param name="Local" value="Other.htm">
@@ -367,6 +392,21 @@
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Print a Transcript">
+           <param name="ID" value=380>
+           <param name="Local" value="Other.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Quick Clip Mode">
+           <param name="ID" value=380>
+           <param name="Local" value="Other.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Show Quick Clip Warning">
+           <param name="ID" value=380>
+           <param name="Local" value="Other.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Text Time Code Conversion">
            <param name="ID" value=380>
            <param name="Local" value="Other.htm">
        </object>

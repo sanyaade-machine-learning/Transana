@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -42,6 +42,7 @@ import KeywordObject as Keyword
 import Misc
 import Note
 import Series
+import Snapshot
 import TransanaGlobal
 import Transcript
 
@@ -240,11 +241,13 @@ class XMLImport(Dialogs.GenForm):
         return inpStr
 
     def Import(self):
+       """ Handle the Import request """
        # use the LONGEST title here to set the width of the dialog box!
-       progress = wx.ProgressDialog(_('Transana XML Import'), _('Importing Transcript records (This may be slow because of the size of Transcript records.)') + '\nTest', style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
-       if progress.GetSize()[0] > 800:
-            progress.SetSize((800, progress.GetSize()[1]))
-            progress.Centre()
+       progress = wx.ProgressDialog(_('Transana XML Import'),
+                                    _('Importing Transcript records (This may be slow because of the size of Transcript records.)') + '\nTest',
+                                    parent=self,
+                                    style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
+
        # Initialize the Transana-XML Version.  This allows differential processing based on the version used to
        # create the Transana-XML data file
        self.XMLVersionNumber = 0.0
@@ -256,6 +259,7 @@ class XMLImport(Dialogs.GenForm):
        recNumbers['Collection'] = {0:0}
        recNumbers['Clip'] = {0:0}
        recNumbers['OldClip'] = {0:0}
+       recNumbers['Snapshot'] = {0:0}
        recNumbers['Note'] = {0:0}
        clipTranscripts = {}
        clipStartStop = {}
@@ -318,319 +322,451 @@ class XMLImport(Dialogs.GenForm):
                if DEBUG:
                    print "Line %d: '%s' %s %s" % (lineCount, line, objectType, dataType)
 
+               # Create an upper case version of line once (as repeated upper() calls were taking a LOT of time on profiling!)
+               lineUpper = line.upper()
+
                # Begin line processing.
                # Generally, we figure out what kind of object we're importing (objectType) and
                # then figure out what object property we're importing (dataType) and then we
                # import the data.  But of course, there's a bit more to it than that.
 
-               # Code for updating the Progress Bar
-               if line.upper() == '<SERIESFILE>':
-                   progress.Update(0, _('Importing Series records'))
-                   # These records should NEVER skip error messages
-                   skipCheck = False
-                   skipValue = False
-               elif line.upper() == '<EPISODEFILE>':
-                   progress.Update(8, _('Importing Episode records'))
-                   # These records should NEVER skip error messages
-                   skipCheck = False
-                   skipValue = False
-               elif line.upper() == '<COREDATAFILE>':
-                   progress.Update(16, _('Importing Core Data records'))
-                   # These records MAY skip error messages
-                   skipCheck = True
-                   skipValue = False
-               elif line.upper() == '<COLLECTIONFILE>':
-                   progress.Update(24, _('Importing Collection records'))
-                   # These records should NEVER skip error messages
-                   skipCheck = False
-                   skipValue = False
-               elif line.upper() == '<CLIPFILE>':
-                   progress.Update(32, _('Importing Clip records'))
-                   # These records should NEVER skip error messages
-                   skipCheck = False
-                   skipValue = False
-               elif line.upper() == '<ADDITIONALVIDSFILE>':
-                   progress.Update(40, _('Importing Additional Video records'))
-                   # These records should NEVER skip error messages
-                   skipCheck = False
-                   skipValue = False
-               elif line.upper() == '<TRANSCRIPTFILE>':
-                   progress.Update(52, _('Importing Transcript records (This may be slow because of the size of Transcript records.)'))
-                   # These records should NEVER skip error messages
-                   skipCheck = False
-                   skipValue = False
-               elif line.upper() == '<KEYWORDFILE>':
-                   progress.Update(60, _('Importing Keyword records'))
-                   # These records MAY skip error messages
-                   skipCheck = True
-                   skipValue = False
-               elif line.upper() == '<CLIPKEYWORDFILE>':
-                   progress.Update(68, _('Importing Clip Keyword records'))
-                   # These records should NEVER skip error messages
-                   skipCheck = False
-                   skipValue = False
-               elif line.upper() == '<NOTEFILE>':
-                   progress.Update(76, _('Importing Note records'))
-                   # These records should NEVER skip error messages
-                   skipCheck = False
-                   skipValue = False
-               elif line.upper() == '<FILTERFILE>':
-                   progress.Update(84, _('Importing Filter records'))
-                   # These records should NEVER skip error messages
-                   skipCheck = False
-                   skipValue = False
+               # For the same of simple optimization, let's see if we're dealing with an XML command to start with
 
-               # When we finish the Collections import section ...
-               elif line.upper() == '</COLLECTIONFILE>':
-                   # ... iterate through the list of Collections that need to be updated because they are parented by collections
-                   #     with a larger collection number ...
-                   for col in collectionsToUpdate:
-                       # ... Load the appropriate collection (after translating the collection number) ...
-                       tmpColl = Collection.Collection(recNumbers['Collection'][col])
-                       # ... lock the collection record ...
-                       tmpColl.lock_record()
-                       # ... Update the Parent Collection Number by translating the parent collection number ...
-                       tmpColl.parent = recNumbers['Collection'][tmpColl.parent]
-                       # ... save the collection ...
-                       tmpColl.db_save()
-                       # ... and unlock the collection record.
-                       tmpColl.unlock_record()
+               if ((line != '') and (dataType != 'RTFText') and (line[0] == '<')) or \
+                  ((dataType == 'NoteText') and (lineUpper.lstrip() == '</NOTETEXT>')):
 
-               # Transana XML Version Checking
-               elif line.upper() == '<TRANSANAXMLVERSION>':
-                   objectType = None
-                   dataType = 'XMLVersionNumber'
-               elif line.upper() == '</TRANSANAXMLVERSION>':
+                   # Code for updating the Progress Bar
+                   if lineUpper == '<SERIESFILE>':
+                       progress.Update(0, _('Importing Series records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<EPISODEFILE>':
+                       progress.Update(7, _('Importing Episode records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<COREDATAFILE>':
+                       progress.Update(14, _('Importing Core Data records'))
+                       # These records MAY skip error messages
+                       skipCheck = True
+                       skipValue = False
+                   elif lineUpper == '<COLLECTIONFILE>':
+                       progress.Update(21, _('Importing Collection records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<CLIPFILE>':
+                       progress.Update(29, _('Importing Clip records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<ADDITIONALVIDSFILE>':
+                       progress.Update(36, _('Importing Additional Video records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<TRANSCRIPTFILE>':
+                       progress.Update(43, _('Importing Transcript records (This may be slow because of the size of Transcript records.)'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<SNAPSHOTFILE>':
+                       progress.Update(50, _('Importing Snapshot records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<SNAPSHOTKEYWORDFILE>':
+                       progress.Update(57, _('Importing Snapshot Keyword records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<SNAPSHOTKEYWORDSTYLEFILE>':
+                       progress.Update(64, _('Importing Snapshot Coding Style records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<KEYWORDFILE>':
+                       progress.Update(71, _('Importing Keyword records'))
+                       # These records MAY skip error messages
+                       skipCheck = True
+                       skipValue = False
+                   elif lineUpper == '<CLIPKEYWORDFILE>':
+                       progress.Update(79, _('Importing Clip Keyword records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<NOTEFILE>':
+                       progress.Update(86, _('Importing Note records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<FILTERFILE>':
+                       progress.Update(93, _('Importing Filter records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
 
-                   # Version 1.0 -- Original Transana XML for Transana 2.0 release
-                   # Version 1.1 -- Unicode encoding added to Transana XML for Transana 2.1 release
-                   # Version 1.2 -- Filter Table added to Transana XML for Transana 2.11 release
-                   # Version 1.3 -- FilterData handling changed to accomodate Unicode data for Transana 2.21 release
-                   # Version 1.4 -- Database structure changed to accomodate Multiple Transcript Clips for Transana 2.30 release.
-                   # Version 1.5 -- Database structure changed to accomodate Multiple Media Files for Transana 2.40
-                   # Version 1.6 -- Added MinTranscriptWidth, XML format for transcripts, and character escapes for Transana 2.50 release
+                   # When we finish the Collections import section ...
+                   elif lineUpper == '</COLLECTIONFILE>':
+                       # ... iterate through the list of Collections that need to be updated because they are parented by collections
+                       #     with a larger collection number ...
+                       for col in collectionsToUpdate:
+                           # ... Load the appropriate collection (after translating the collection number) ...
+                           tmpColl = Collection.Collection(recNumbers['Collection'][col])
+                           # ... lock the collection record ...
+                           tmpColl.lock_record()
+                           # ... Update the Parent Collection Number by translating the parent collection number ...
+                           tmpColl.parent = recNumbers['Collection'][tmpColl.parent]
+                           # ... save the collection ...
+                           tmpColl.db_save()
+                           # ... and unlock the collection record.
+                           tmpColl.unlock_record()
 
-                   # Transana-XML version 1.0 ...
-                   if self.XMLVersionNumber == '1.0':
-                       # ... used Latin1 encoding
-                       self.importEncoding = 'latin1'
-                   # Transana-XML versions 1.1 through 1.4 ...
-                   elif self.XMLVersionNumber in ['1.1', '1.2', '1.3', '1.4', '1.5']:
-                       # ... use the encoding selected by the user
-                       self.importEncoding = self.encodingOptions[self.chImportEncoding.GetSelection()]
-                   # Transana-XML version 1.6 ...
-                   elif self.XMLVersionNumber in ['1.6']:
-                       # ... use UTF8 encoding
-                       self.importEncoding = 'utf8'
-                   # All other Transana XML versions ...
-                   else:
-                       # ... haven't been defined yet.  We'd better prevent importing data from a LATER Transana-XML
-                       # version, as we probably don't know how to process everything in it.
-                       msg = _('The Database you are trying to import was created with a later version\nof Transana.  Please upgrade your copy of Transana and try again.')
-                       dlg = Dialogs.ErrorDialog(None, msg)
-                       dlg.ShowModal()
-                       dlg.Destroy()
-                       # This error means we can't continue processing the file.
-                       contin = False
-                       break
-               # ignore blank lines, except in the Notes Text, where they represent blank lines!
-               elif (line == '') and (dataType != 'NoteText'):
-                   pass
-               # Code for Creating and Saving Objects
-               elif line.upper() == '<SERIES>':
-                   currentObj = Series.Series()
-                   objectType = 'Series'
-                   dataType = None
+                   # Transana XML Version Checking
+                   elif lineUpper == '<TRANSANAXMLVERSION>':
+                       objectType = None
+                       dataType = 'XMLVersionNumber'
+                   elif lineUpper == '</TRANSANAXMLVERSION>':
 
-               elif line.upper() == '<EPISODE>':
-                   currentObj = Episode.Episode()
-                   objectType = 'Episode'
-                   dataType = None
+                       # Version 1.0 -- Original Transana XML for Transana 2.0 release
+                       # Version 1.1 -- Unicode encoding added to Transana XML for Transana 2.1 release
+                       # Version 1.2 -- Filter Table added to Transana XML for Transana 2.11 release
+                       # Version 1.3 -- FilterData handling changed to accomodate Unicode data for Transana 2.21 release
+                       # Version 1.4 -- Database structure changed to accomodate Multiple Transcript Clips for Transana 2.30 release.
+                       # Version 1.5 -- Database structure changed to accomodate Multiple Media Files for Transana 2.40
+                       # Version 1.6 -- Added MinTranscriptWidth, XML format for transcripts, and character escapes for Transana 2.50 release
+                       # Versino 1.7 -- Added Snapshots, Snapshot Keywords, and Snapshot Coding Styles for Transana 2.60
 
-               elif line.upper() == '<COREDATA>':
-                   currentObj = CoreData.CoreData()
-                   objectType = 'CoreData'
-                   dataType = None
+                       # Transana-XML version 1.0 ...
+                       if self.XMLVersionNumber == '1.0':
+                           # ... used Latin1 encoding
+                           self.importEncoding = 'latin1'
+                       # Transana-XML versions 1.1 through 1.4 ...
+                       elif self.XMLVersionNumber in ['1.1', '1.2', '1.3', '1.4', '1.5']:
+                           # ... use the encoding selected by the user
+                           self.importEncoding = self.encodingOptions[self.chImportEncoding.GetSelection()]
+                       # Transana-XML version 1.6 ...
+                       elif self.XMLVersionNumber in ['1.6', '1.7']:
+                           # ... use UTF8 encoding
+                           self.importEncoding = 'utf8'
+                       # All other Transana XML versions ...
+                       else:
+                           # ... haven't been defined yet.  We'd better prevent importing data from a LATER Transana-XML
+                           # version, as we probably don't know how to process everything in it.
+                           msg = _('The Database you are trying to import was created with a later version\nof Transana.  Please upgrade your copy of Transana and try again.')
+                           dlg = Dialogs.ErrorDialog(None, msg)
+                           dlg.ShowModal()
+                           dlg.Destroy()
+                           # This error means we can't continue processing the file.
+                           contin = False
+                           break
+                   # Code for Creating and Saving Objects
+                   elif lineUpper == '<SERIES>':
+                       currentObj = Series.Series()
+                       objectType = 'Series'
+                       dataType = None
 
-               elif line.upper() == '<TRANSCRIPT>':
-                   currentObj = Transcript.Transcript()
-                   objectType = 'Transcript'
-                   dataType = None
+                   elif lineUpper == '<EPISODE>':
+                       currentObj = Episode.Episode()
+                       objectType = 'Episode'
+                       dataType = None
 
-               elif line.upper() == '<COLLECTION>':
-                   currentObj = Collection.Collection()
-                   objectType = 'Collection'
-                   dataType = None
+                   elif lineUpper == '<COREDATA>':
+                       currentObj = CoreData.CoreData()
+                       objectType = 'CoreData'
+                       dataType = None
 
-               elif line.upper() == '<CLIP>':
-                   currentObj = Clip.Clip()
-                   objectType = 'Clip'
-                   dataType = None
+                   elif lineUpper == '<TRANSCRIPT>':
+                       currentObj = Transcript.Transcript()
+                       objectType = 'Transcript'
+                       dataType = None
 
-               elif line.upper() == '<ADDVID>':
-                   # Additional Video Files don't exactly have their own object type.  They're part of Episode and Clip
-                   # records.  So we'll just use a Dictionary object for their data import.
-                   currentObj = {}
-                   objectType = 'AddVid'
-                   dataType = None
+                   elif lineUpper == '<COLLECTION>':
+                       currentObj = Collection.Collection()
+                       objectType = 'Collection'
+                       dataType = None
 
-               elif line.upper() == '<KEYWORDREC>':
-                   currentObj = Keyword.Keyword()
-                   objectType = 'Keyword'
-                   dataType = None
+                   elif lineUpper == '<CLIP>':
+                       currentObj = Clip.Clip()
+                       objectType = 'Clip'
+                       dataType = None
 
-               elif line.upper() == '<CLIPKEYWORD>':
-                   currentObj = ClipKeywordObject.ClipKeyword('', '')
-                   objectType = 'ClipKeyword'
-                   dataType = None
+                   elif lineUpper == '<SNAPSHOT>':
+                       currentObj = Snapshot.Snapshot()
+                       objectType = 'Snapshot'
+                       dataType = None
 
-               elif line.upper() == '<NOTE>':
-                   currentObj = Note.Note()
-                   objectType = 'Note'
-                   dataType = None
+                   elif lineUpper == '<SNAPSHOTKEYWORD>':
+                       # There is not an Object for the Snapshot Keywords table.  We have to create the data record by hand.
+                       currentObj = None
+                       self.snapshotKeyword = { 'SnapshotNum'  :  0,
+                                                'KeywordGroup' :  '',
+                                                'Keyword'      :  '',
+                                                'X1'           :  0,
+                                                'Y1'           :  0,
+                                                'X2'           :  0,
+                                                'Y2'           :  0,
+                                                'Visible'      :  False }
+                       objectType = 'SnapshotKeyword'
+                       dataType = None
 
-               elif line.upper() == '<FILTER>':
-                    # There is not an Object for the Filter table.  We have to create the data record by hand.
-                    currentObj = None
-                    self.FilterReportType = None
-                    self.FilterScope = None
-                    self.FilterConfigName = None
-                    self.FilterFilterDataType = None
-                    self.FilterFilterData = ''
-                    objectType = 'Filter'
-                    dataType = None
+                   elif lineUpper == '<SNAPSHOTKEYWORDSTYLE>':
+                       # There is not an Object for the Snapshot Keyword Styles table.  We have to create the data record by hand.
+                       currentObj = None
+                       self.snapshotKeywordStyle = { 'SnapshotNum'  :  0,
+                                                     'KeywordGroup' :  '',
+                                                     'Keyword'      :  '',
+                                                     'DrawMode'     :  '',
+                                                     'ColorName'    :  '',
+                                                     'ColorDef'     :  '',
+                                                     'LineWidth'    :  0,
+                                                     'LineStyle'    :  '' }
+                       objectType = 'SnapshotKeywordStyle'
+                       dataType = None
 
-               # If we're closing a data record in the XML, we need to SAVE the data object.
-               elif line.upper() == '</SERIES>' or \
-                    line.upper() == '</EPISODE>' or \
-                    line.upper() == '</COREDATA>' or \
-                    line.upper() == '</TRANSCRIPT>' or \
-                    line.upper() == '</COLLECTION>' or \
-                    line.upper() == '</CLIP>' or \
-                    line.upper() == '</ADDVID>' or \
-                    line.upper() == '</KEYWORDREC>' or \
-                    line.upper() == '</CLIPKEYWORD>' or \
-                    line.upper() == '</NOTE>' or \
-                    line.upper() == '</FILTER>':
-                   dataType = None
+                   elif lineUpper == '<ADDVID>':
+                       # Additional Video Files don't exactly have their own object type.  They're part of Episode and Clip
+                       # records.  So we'll just use a Dictionary object for their data import.
+                       currentObj = {}
+                       objectType = 'AddVid'
+                       dataType = None
 
-                   # Saves are one area where problems will arise if the data's not clean.
-                   # We can trap some of these problems here.
-                   try:
-                       # We can't just keep the numbers that were assigned in the exporting database.
-                       # Objects use the presence of a number to update rather than insert, and we need to
-                       # insert here.  Therefore, we'll strip the record number here, but remember it for
-                       # user later.
-                       if objectType == 'Series' or \
-                          objectType == 'Episode' or \
-                          objectType == 'Transcript' or \
-                          objectType == 'Collection' or \
-                          objectType == 'Clip' or \
-                          objectType == 'Note':
-                           oldNumber = currentObj.number
-                           currentObj.number = 0
+                   elif lineUpper == '<KEYWORDREC>':
+                       currentObj = Keyword.Keyword()
+                       objectType = 'Keyword'
+                       dataType = None
 
-                           # Clip Trancript, Start, and Stop times need to be transferred to Clip Transcripts
-                           # if we're from a pre-version 1.4 transcript!  In earlier versions, Clip Transcript Number
-                           # was a Clip property.  Starting in 1.4, a clip can have multiple transcript objects
-                           # attached.  Multiple-Transcript Clips also need to copy Clip Start and Stop times
-                           # as part of the Clip Transcript.
+                   elif lineUpper == '<CLIPKEYWORD>':
+                       currentObj = ClipKeywordObject.ClipKeyword('', '')
+                       objectType = 'ClipKeyword'
+                       dataType = None
 
-                           # NOTE:  Because we have to look up old and new Clip Numbers to manipulate Transcript data,
-                           #        the Clips MUST be processed BEFORE the Transcripts.  That's why they come earlier in
-                           #        the data files.
-                           
-                           # First, check for a Transcript and the XML Version
-                           if (objectType == 'Transcript') and (self.XMLVersionNumber in ['1.1', '1.2', '1.3']):
-                               # see if we have a Clip transcript
-                               if currentObj.clip_num > 0:
-                                   # The source transcript is saved at this point as the OLD transcript number, to be updated
-                                   # later in the last step.  To determine that, look up the Clip's (current number) OLD Clip
-                                   # number in the recNumbers['OldClip'] dictionary, and use that to look up the source
-                                   # Transcript number in the clipTranscripts dictionary.
-                                   if clipTranscripts.has_key(recNumbers['OldClip'][currentObj.clip_num]):
-                                       currentObj.source_transcript = clipTranscripts[recNumbers['OldClip'][currentObj.clip_num]]
-                                   # If there's no record in clipTranscripts, we've got an orphaned clips!
-                                   else:
-                                       currentObj.source_transcript = 0
-                                   # Pre-1.4 clip transcripts were always singles, so didn't have Sort Order.  Default to 0.
-                                   currentObj.sort_order = 0
-                                   # Look up the Clip's start time in the clipStartStop dictionary, which is keyed to the
-                                   # clip's OLD number, which we have to look up using recNumbers['OldClip']
-                                   if clipStartStop.has_key((recNumbers['OldClip'][currentObj.clip_num], 'Start')):
-                                       currentObj.clip_start = clipStartStop[(recNumbers['OldClip'][currentObj.clip_num], 'Start')]
-                                   else:
-                                       currentObj.clip_start = 0
-                                   # Look up the Clip's stop time in the clipStartStop dictionary, which is keyed to the
-                                   # clip's OLD number, which we have to look up using recNumbers['OldClip']
-                                   if clipStartStop.has_key((recNumbers['OldClip'][currentObj.clip_num], 'Stop')):
-                                       currentObj.clip_stop = clipStartStop[(recNumbers['OldClip'][currentObj.clip_num], 'Stop')]
-                                   else:
-                                       currentObj.clip_stop = 0
+                   elif lineUpper == '<NOTE>':
+                       currentObj = Note.Note()
+                       objectType = 'Note'
+                       dataType = None
+
+                   elif lineUpper == '<FILTER>':
+                        # There is not an Object for the Filter table.  We have to create the data record by hand.
+                        currentObj = None
+                        self.FilterReportType = None
+                        self.FilterScope = None
+                        self.FilterConfigName = None
+                        self.FilterFilterDataType = None
+                        self.FilterFilterData = ''
+                        objectType = 'Filter'
+                        dataType = None
+
+                   # If we're closing a data record in the XML, we need to SAVE the data object.
+                   elif lineUpper == '</SERIES>' or \
+                        lineUpper == '</EPISODE>' or \
+                        lineUpper == '</COREDATA>' or \
+                        lineUpper == '</TRANSCRIPT>' or \
+                        lineUpper == '</COLLECTION>' or \
+                        lineUpper == '</CLIP>' or \
+                        lineUpper == '</SNAPSHOT>' or \
+                        lineUpper == '</SNAPSHOTKEYWORD>' or \
+                        lineUpper == '</SNAPSHOTKEYWORDSTYLE>' or \
+                        lineUpper == '</ADDVID>' or \
+                        lineUpper == '</KEYWORDREC>' or \
+                        lineUpper == '</CLIPKEYWORD>' or \
+                        lineUpper == '</NOTE>' or \
+                        lineUpper == '</FILTER>':
+                       dataType = None
+
+                       # Saves are one area where problems will arise if the data's not clean.
+                       # We can trap some of these problems here.
+                       try:
+                           # We can't just keep the numbers that were assigned in the exporting database.
+                           # Objects use the presence of a number to update rather than insert, and we need to
+                           # insert here.  Therefore, we'll strip the record number here, but remember it for
+                           # user later.
+                           if objectType == 'Series' or \
+                              objectType == 'Episode' or \
+                              objectType == 'Transcript' or \
+                              objectType == 'Collection' or \
+                              objectType == 'Clip' or \
+                              objectType == 'Snapshot' or \
+                              objectType == 'Note':
+                               oldNumber = currentObj.number
+                               currentObj.number = 0
+
+                               # Clip Trancript, Start, and Stop times need to be transferred to Clip Transcripts
+                               # if we're from a pre-version 1.4 transcript!  In earlier versions, Clip Transcript Number
+                               # was a Clip property.  Starting in 1.4, a clip can have multiple transcript objects
+                               # attached.  Multiple-Transcript Clips also need to copy Clip Start and Stop times
+                               # as part of the Clip Transcript.
+
+                               # NOTE:  Because we have to look up old and new Clip Numbers to manipulate Transcript data,
+                               #        the Clips MUST be processed BEFORE the Transcripts.  That's why they come earlier in
+                               #        the data files.
                                
-                           # To prevent the ClipObject from trying to save the Clip Transcript,
-                           # (which it doesn't yet have in the import), we must set its transcript(s) number(s) to -1.
-                           if objectType == 'Clip':
-                               for tr in currentObj.transcripts:
-                                   tr.number = -1
+                               # First, check for a Transcript and the XML Version
+                               if (objectType == 'Transcript') and (self.XMLVersionNumber in ['1.1', '1.2', '1.3']):
+                                   # see if we have a Clip transcript
+                                   if currentObj.clip_num > 0:
+                                       # The source transcript is saved at this point as the OLD transcript number, to be updated
+                                       # later in the last step.  To determine that, look up the Clip's (current number) OLD Clip
+                                       # number in the recNumbers['OldClip'] dictionary, and use that to look up the source
+                                       # Transcript number in the clipTranscripts dictionary.
+                                       if clipTranscripts.has_key(recNumbers['OldClip'][currentObj.clip_num]):
+                                           currentObj.source_transcript = clipTranscripts[recNumbers['OldClip'][currentObj.clip_num]]
+                                       # If there's no record in clipTranscripts, we've got an orphaned clips!
+                                       else:
+                                           currentObj.source_transcript = 0
+                                       # Pre-1.4 clip transcripts were always singles, so didn't have Sort Order.  Default to 0.
+                                       currentObj.sort_order = 0
+                                       # Look up the Clip's start time in the clipStartStop dictionary, which is keyed to the
+                                       # clip's OLD number, which we have to look up using recNumbers['OldClip']
+                                       if clipStartStop.has_key((recNumbers['OldClip'][currentObj.clip_num], 'Start')):
+                                           currentObj.clip_start = clipStartStop[(recNumbers['OldClip'][currentObj.clip_num], 'Start')]
+                                       else:
+                                           currentObj.clip_start = 0
+                                       # Look up the Clip's stop time in the clipStartStop dictionary, which is keyed to the
+                                       # clip's OLD number, which we have to look up using recNumbers['OldClip']
+                                       if clipStartStop.has_key((recNumbers['OldClip'][currentObj.clip_num], 'Stop')):
+                                           currentObj.clip_stop = clipStartStop[(recNumbers['OldClip'][currentObj.clip_num], 'Stop')]
+                                       else:
+                                           currentObj.clip_stop = 0
+                                   
+                               # To prevent the ClipObject from trying to save the Clip Transcript,
+                               # (which it doesn't yet have in the import), we must set its transcript(s) number(s) to -1.
+                               if objectType == 'Clip':
+                                   for tr in currentObj.transcripts:
+                                       tr.number = -1
 
-                           if DEBUG and (objectType == 'Transcript') and False:
-                               tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
-                               tmpdlg.ShowModal()
-                               tmpdlg.Destroy()
+                               if DEBUG and (objectType == 'Transcript') and False:
+                                   tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
+                                   tmpdlg.ShowModal()
+                                   tmpdlg.Destroy()
 
-                           # Save the data object
-                           currentObj.db_save()
-                           # Let's keep a record of the old and new object numbers for each object saved.
-                           recNumbers[objectType][oldNumber] = currentObj.number
+                               # Save the data object
+                               currentObj.db_save()
+                               # Let's keep a record of the old and new object numbers for each object saved.
+                               recNumbers[objectType][oldNumber] = currentObj.number
 
-                           # If we've just saved a Clip ...
-                           if objectType == 'Clip':
-                               # ... we need to save the reverse lookup data, so we can find the clip's OLD
-                               # number based on it's new number.  This must be post-save, as that's when
-                               # the new object number gets assigned.
-                               recNumbers['OldClip'][currentObj.number] = oldNumber
+                               # If we've just saved a Clip ...
+                               if objectType == 'Clip':
+                                   # ... we need to save the reverse lookup data, so we can find the clip's OLD
+                                   # number based on it's new number.  This must be post-save, as that's when
+                                   # the new object number gets assigned.
+                                   recNumbers['OldClip'][currentObj.number] = oldNumber
 
-                       elif objectType == 'AddVid':
-                           # Additional Video records don't have a proper object type, so we have to do the saves the hard way.
-                           # Make sure all necessary elements are present
-                           if not currentObj.has_key('EpisodeNum'):
-                               currentObj['EpisodeNum'] = 0
-                           if not currentObj.has_key('ClipNum'):
-                               currentObj['ClipNum'] = 0
-                           if not currentObj.has_key('VidLength'):
-                               currentObj['VidLength'] = 0
-                           if not currentObj.has_key('Offset'):
-                               currentObj['Offset'] = 0
-                           if not currentObj.has_key('Audio'):
-                               currentObj['Audio'] = 0
+                           elif objectType == 'AddVid':
+                               # Additional Video records don't have a proper object type, so we have to do the saves the hard way.
+                               # Make sure all necessary elements are present
+                               if not currentObj.has_key('EpisodeNum'):
+                                   currentObj['EpisodeNum'] = 0
+                               if not currentObj.has_key('ClipNum'):
+                                   currentObj['ClipNum'] = 0
+                               if not currentObj.has_key('VidLength'):
+                                   currentObj['VidLength'] = 0
+                               if not currentObj.has_key('Offset'):
+                                   currentObj['Offset'] = 0
+                               if not currentObj.has_key('Audio'):
+                                   currentObj['Audio'] = 0
 
-                           # Define the query to insert the additional media files into the databse
-                           query = "INSERT INTO AdditionalVids2 (EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio) VALUES (%s, %s, %s, %s, %s, %s)"
-                           # Substitute the generic OS seperator "/" for the Windows "\".
-                           tmpFilename = currentObj['MediaFile'].replace('\\', '/')
-                           # Encode the filename
-                           tmpFilename = tmpFilename.encode(TransanaGlobal.encoding)
-                           # Get the data for each insert query
-                           data = (currentObj['EpisodeNum'], currentObj['ClipNum'], tmpFilename, currentObj['VidLength'], currentObj['Offset'], currentObj['Audio'])
-                           # Execute the query
-                           dbCursor.execute(query, data)
+                               # Define the query to insert the additional media files into the databse
+                               query = "INSERT INTO AdditionalVids2 (EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio) VALUES (%s, %s, %s, %s, %s, %s)"
+                               # Substitute the generic OS seperator "/" for the Windows "\".
+                               tmpFilename = currentObj['MediaFile'].replace('\\', '/')
+                               # Encode the filename
+                               tmpFilename = tmpFilename.encode(TransanaGlobal.encoding)
+                               # Get the data for each insert query
+                               data = (currentObj['EpisodeNum'], currentObj['ClipNum'], tmpFilename, currentObj['VidLength'], currentObj['Offset'], currentObj['Audio'])
+                               # Execute the query
+                               dbCursor.execute(query, data)
 
-                       elif  objectType == 'CoreData':
-                           currentObj.number = 0
-                           currentObj.db_save()
+                           elif  objectType == 'CoreData':
+                               currentObj.number = 0
+                               currentObj.db_save()
 
-                       elif objectType == 'Keyword':
-                           currentObj.db_save()
-                           
-                       elif objectType == 'ClipKeyword':
-                           if (currentObj.episodeNum != 0) or (currentObj.clipNum != 0):
+                           elif objectType == 'Keyword':
                                currentObj.db_save()
                                
-                       elif objectType == 'Filter':
-                           # Starting with XML Version 1.3, we have to deal with encoding issues for the Filter data
-                           if not self.XMLVersionNumber in ['1.0', '1.1', '1.2']:
-                               if self.FilterFilterDataType in ['1', '2', '3', '5', '6', '7']:
+                           elif objectType == 'ClipKeyword':
+                               if (currentObj.episodeNum != 0) or (currentObj.clipNum != 0) or (currentObj.snapshotNum != 0):
+                                   currentObj.db_save()
+
+                           elif objectType == 'SnapshotKeyword':
+                               if self.snapshotKeyword['SnapshotNum'] > 0:
+                                   # Create the query to save the Snapshot Keyword record    
+                                   query = """ INSERT INTO SnapshotKeywords2
+                                                 (SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible)
+                                               VALUES
+                                                 (%s, %s, %s, %s, %s, %s, %s, %s) """
+                                   # Build the values to match the query
+                                   values = (self.snapshotKeyword['SnapshotNum'],
+                                             self.snapshotKeyword['KeywordGroup'].encode('utf8'),
+                                             self.snapshotKeyword['Keyword'].encode('utf8'),
+                                             self.snapshotKeyword['X1'],
+                                             self.snapshotKeyword['Y1'],
+                                             self.snapshotKeyword['X2'],
+                                             self.snapshotKeyword['Y2'],
+                                             self.snapshotKeyword['Visible'])
+                                   # Save the Filter data
+                                   if db != None:
+                                       dbCursor.execute(query, values)
+                                   
+                           elif objectType == 'SnapshotKeywordStyle':
+                               if self.snapshotKeywordStyle['SnapshotNum'] > 0:
+                                   # Create the query to save the Snapshot Keyword Style record    
+                                   query = """ INSERT INTO SnapshotKeywordStyles2
+                                                 (SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle)
+                                               VALUES
+                                                 (%s, %s, %s, %s, %s, %s, %s, %s) """
+                                   # Build the values to match the query
+                                   values = (self.snapshotKeywordStyle['SnapshotNum'],
+                                             self.snapshotKeywordStyle['KeywordGroup'].encode('utf8'),
+                                             self.snapshotKeywordStyle['Keyword'].encode('utf8'),
+                                             self.snapshotKeywordStyle['DrawMode'],
+                                             self.snapshotKeywordStyle['ColorName'].encode('utf8'),
+                                             self.snapshotKeywordStyle['ColorDef'],
+                                             self.snapshotKeywordStyle['LineWidth'],
+                                             self.snapshotKeywordStyle['LineStyle'])
+                                   # Save the Filter data
+                                   if db != None:
+                                       dbCursor.execute(query, values)
+                                   
+                           elif objectType == 'Filter':
+                               # Starting with XML Version 1.3, we have to deal with encoding issues for the Filter data
+                               if not self.XMLVersionNumber in ['1.0', '1.1', '1.2']:
+                                   if self.FilterFilterDataType in ['1', '2', '3', '5', '6', '7']:
+                                       # Unpack the pickled data, which must be done differently depending on its current form
+                                       if type(self.FilterFilterData).__name__ == 'array':
+                                           data = cPickle.loads(self.FilterFilterData.tostring())
+                                       elif type(self.FilterFilterData).__name__ == 'unicode':
+                                           data = cPickle.loads(self.FilterFilterData.encode('utf-8'))
+                                       else:
+                                           data = cPickle.loads(self.FilterFilterData)
+                                       # Re-pickle the data.  It's in a common form now that's somehow friendlier.
+                                       data = cPickle.dumps(data)
+
+                                   elif self.FilterFilterDataType in ['4', '8']:
+                                       pass
+
+                                   # All other data EXCEPT SAVED SEARCHES is encoded and needs to be decoded, but was not pickled.
+                                   elif self.FilterReportType != '15':
+                                       self.FilterFilterData = DBInterface.ProcessDBDataForUTF8Encoding(self.FilterFilterData)
+
+                                   # Saved Searches (Added for 2.50)
+                                   elif self.FilterReportType == '15':
+                                       # If the Filter Data is a string (it always should be!) ...
+                                       if isinstance(self.FilterFilterData, str):
+                                           # ... then decode it using the import encoding.
+                                           self.FilterFilterData = self.FilterFilterData.decode(self.importEncoding)
+                                       # Now encode the filter data using the file encoding
+                                       self.FilterFilterData = self.FilterFilterData.encode(TransanaGlobal.encoding)
+                               # Encode the Filter Configuration Name using the file encoding
+                               self.FilterConfigName = self.FilterConfigName.encode(TransanaGlobal.encoding)
+
+                               # Certain FilterDataTypes need to have their DATA adjusted for the new object numbers!
+                               # This should be done before the save.
+                               # So if we have Clips or Notes Filter Data ...
+                               if self.FilterFilterDataType in ['2', '8']:
+                                   # ... initialize a List for accepting the altered Filter Data
+                                   filterData = []
                                    # Unpack the pickled data, which must be done differently depending on its current form
                                    if type(self.FilterFilterData).__name__ == 'array':
                                        data = cPickle.loads(self.FilterFilterData.tostring())
@@ -638,814 +774,983 @@ class XMLImport(Dialogs.GenForm):
                                        data = cPickle.loads(self.FilterFilterData.encode('utf-8'))
                                    else:
                                        data = cPickle.loads(self.FilterFilterData)
-                                   # Re-pickle the data.  It's in a common form now that's somehow friendlier.
-                                   data = cPickle.dumps(data)
+                                   # Iterate through the data records
+                                   for dataRec in data:
+                                       # If we have a Clip record ...
+                                       if self.FilterFilterDataType == '2':
+                                           # ... and if the Collection Number still exists in the new data set ...
+                                           if recNumbers['Collection'].has_key(dataRec[1]):
+                                               # ... get the new Collection Number ...
+                                               collNum = recNumbers['Collection'][dataRec[1]]
+                                               # ... and substitute it into the data record
+                                               filterData.append((dataRec[0], collNum, dataRec[2]))
+                                       # If we have a Notes record ...
+                                       elif self.FilterFilterDataType == '8':
+                                           # ... and if the Note Number still exists in the new data set ...
+                                           if recNumbers['Note'].has_key(dataRec[0]):
+                                               # ... get the new Note number ...
+                                               noteNum = recNumbers['Note'][dataRec[0]]
+                                               # ... and substitute it into the data record
+                                               filterData.append((noteNum, ) + dataRec[1:])
+                                        # NOTE that data records without new references are automatically dropped from
+                                        #      the filter data!
+                                   # Now re-pickle the filter data
+                                   self.FilterFilterData = cPickle.dumps(filterData)
+                               # Create the query to save the Filter record    
+                               query = """ INSERT INTO Filters2
+                                               (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
+                                             VALUES
+                                               (%s, %s, %s, %s, %s) """
+                               # Build the values to match the query, including the pickled Clip data
+                               values = (self.FilterReportType, self.FilterScope, self.FilterConfigName, self.FilterFilterDataType,
+                                         self.FilterFilterData)
+                               # Save the Filter data
+                               if db != None:
+                                   dbCursor.execute(query, values)
+                       except:
 
-                               elif self.FilterFilterDataType in ['4', '8']:
-                                   pass
+                           if DEBUG:
+                               print
+                               print sys.exc_info()[0], sys.exc_info()[1]
+                               print
+                               if (objectType == 'Transcript'):
+                                   tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
+                                   tmpdlg.ShowModal()
+                                   tmpdlg.Destroy()
+                               import traceback
+                               traceback.print_exc(file=sys.stdout)
+                               print
+                               print
 
-                               # All other data EXCEPT SAVED SEARCHES is encoded and needs to be decoded, but was not pickled.
-                               elif self.FilterReportType != '15':
-                                   self.FilterFilterData = DBInterface.ProcessDBDataForUTF8Encoding(self.FilterFilterData)
-
-                               # Saved Searches (Added for 2.50)
-                               elif self.FilterReportType == '15':
-                                   # If the Filter Data is a string (it always should be!) ...
-                                   if isinstance(self.FilterFilterData, str):
-                                       # ... then decode it using the import encoding.
-                                       self.FilterFilterData = self.FilterFilterData.decode(self.importEncoding)
-                                   # Now encode the filter data using the file encoding
-                                   self.FilterFilterData = self.FilterFilterData.encode(TransanaGlobal.encoding)
-                           # Encode the Filter Configuration Name using the file encoding
-                           self.FilterConfigName = self.FilterConfigName.encode(TransanaGlobal.encoding)
-
-                           # Certain FilterDataTypes need to have their DATA adjusted for the new object numbers!
-                           # This should be done before the save.
-                           # So if we have Clips or Notes Filter Data ...
-                           if self.FilterFilterDataType in ['2', '8']:
-                               # ... initialize a List for accepting the altered Filter Data
-                               filterData = []
-                               # Unpack the pickled data, which must be done differently depending on its current form
-                               if type(self.FilterFilterData).__name__ == 'array':
-                                   data = cPickle.loads(self.FilterFilterData.tostring())
-                               elif type(self.FilterFilterData).__name__ == 'unicode':
-                                   data = cPickle.loads(self.FilterFilterData.encode('utf-8'))
-                               else:
-                                   data = cPickle.loads(self.FilterFilterData)
-                               # Iterate through the data records
-                               for dataRec in data:
-                                   # If we have a Clip record ...
-                                   if self.FilterFilterDataType == '2':
-                                       # ... and if the Collection Number still exists in the new data set ...
-                                       if recNumbers['Collection'].has_key(dataRec[1]):
-                                           # ... get the new Collection Number ...
-                                           collNum = recNumbers['Collection'][dataRec[1]]
-                                           # ... and substitute it into the data record
-                                           filterData.append((dataRec[0], collNum, dataRec[2]))
-                                   # If we have a Notes record ...
-                                   elif self.FilterFilterDataType == '8':
-                                       # ... and if the Note Number still exists in the new data set ...
-                                       if recNumbers['Note'].has_key(dataRec[0]):
-                                           # ... get the new Note number ...
-                                           noteNum = recNumbers['Note'][dataRec[0]]
-                                           # ... and substitute it into the data record
-                                           filterData.append((noteNum, ) + dataRec[1:])
-                                    # NOTE that data records without new references are automatically dropped from
-                                    #      the filter data!
-                               # Now re-pickle the filter data
-                               self.FilterFilterData = cPickle.dumps(filterData)
-                           # Create the query to save the Filter record    
-                           query = """ INSERT INTO Filters2
-                                           (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
-                                         VALUES
-                                           (%s, %s, %s, %s, %s) """
-                           # Build the values to match the query, including the pickled Clip data
-                           values = (self.FilterReportType, self.FilterScope, self.FilterConfigName, self.FilterFilterDataType,
-                                     self.FilterFilterData)
-                           # Save the Filter data
-                           if db != None:
-                               dbCursor.execute(query, values)
-                   except:
-
-                       if DEBUG:
-                           print
-                           print sys.exc_info()[0], sys.exc_info()[1]
-                           print
-                           if (objectType == 'Transcript'):
-                               tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
-                               tmpdlg.ShowModal()
-                               tmpdlg.Destroy()
-                           import traceback
-                           traceback.print_exc(file=sys.stdout)
-                           print
-                           print
-
-                       # If we haven't been told to skip error messages of this type ...
-                       if not skipValue:
-                           # If an error arises, for now, let's interrupt the import process.  It may be possible
-                           # to eliminate this line later, allowing the import to continue even if there is a problem.
-                           contin = False
-                           # let's build a detailed error message, if we can.
-                           if 'unicode' in wx.PlatformInfo:
-                               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                               prompt = unicode(_('A problem has been detected importing a %s record'), 'utf8')
-                           else:
-                               prompt = _('A problem has been detected importing a %s record')
-                           msg = prompt % objectType
-                           if objectType == 'CoreData':
-                               msg = msg + '.'
-                               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                               prompt = unicode(_('The Core Data record is for media file "%s".'), 'utf8')
-                               # Explain about Keyword Definitions
-                               prompt += '\n\n' + unicode(_('The existing record will not be updated, but the Database import will continue.'), 'utf8')
-                               msg = msg + '\n\n' + prompt % (currentObj.id)
-                               # So the keyword already exists.  Let's continue the import anyway!  This is a minor issue.
-                               contin = True
-                               
-                           elif (not objectType in ['AddVid', 'Keyword', 'ClipKeyword', 'Filter']) and (currentObj.id != ''):
+                           # If we haven't been told to skip error messages of this type ...
+                           if not skipValue:
+                               # If an error arises, for now, let's interrupt the import process.  It may be possible
+                               # to eliminate this line later, allowing the import to continue even if there is a problem.
+                               contin = False
+                               # let's build a detailed error message, if we can.
                                if 'unicode' in wx.PlatformInfo:
                                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                   prompt = unicode(_('named "%s".'), 'utf8')
+                                   prompt = unicode(_('A problem has been detected importing a %s record'), 'utf8')
                                else:
-                                   prompt = _('named "%s".')
-                               msg = msg +  ' ' + prompt % currentObj.id
-                           else:
-                               msg = msg + '.'
-                               # One specific error we need to trap is bogus Transcript records that have lost
-                               # their parents.  This happened to at least one user.
-                               if objectType == 'Transcript':
-                                   msg = msg + '\n\n' + _('The Transcript is for')
-                                   if currentObj.episode_num > 0:
+                                   prompt = _('A problem has been detected importing a %s record')
+                               msg = prompt % objectType
+                               if objectType == 'CoreData':
+                                   msg = msg + '.'
+                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                   prompt = unicode(_('The Core Data record is for media file "%s".'), 'utf8')
+                                   # Explain about Keyword Definitions
+                                   prompt += '\n\n' + unicode(_('The existing record will not be updated, but the Database import will continue.'), 'utf8')
+                                   msg = msg + '\n\n' + prompt % (currentObj.id)
+                                   # So the keyword already exists.  Let's continue the import anyway!  This is a minor issue.
+                                   contin = True
+                                   
+                               elif (not objectType in ['AddVid', 'Keyword', 'ClipKeyword', 'Filter']) and (currentObj.id != ''):
+                                   if 'unicode' in wx.PlatformInfo:
+                                       # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                       prompt = unicode(_('named "%s".'), 'utf8')
+                                   else:
+                                       prompt = _('named "%s".')
+                                   msg = msg +  ' ' + prompt % currentObj.id
+                               else:
+                                   msg = msg + '.'
+                                   # One specific error we need to trap is bogus Transcript records that have lost
+                                   # their parents.  This happened to at least one user.
+                                   if objectType == 'Transcript':
+                                       msg = msg + '\n\n' + _('The Transcript is for')
+                                       if currentObj.episode_num > 0:
+                                            if 'unicode' in wx.PlatformInfo:
+                                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                                prompt = unicode(_('Episode %d.'), 'utf8')
+                                            else:
+                                                prompt = _('Episode %d.')
+                                            msg = msg + ' ' + prompt % currentObj.episode_num
+                                       elif currentObj.clip_num > 0: 
+                                           if 'unicode' in wx.PlatformInfo:
+                                               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                               prompt = unicode(_('Clip %d.'), 'utf8')
+                                           else:
+                                               prompt = _('Clip %d.')
+                                           msg = msg + ' ' + prompt % currentObj.clip_num
+                                       else: 
+                                           if 'unicode' in wx.PlatformInfo:
+                                               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                               prompt = unicode(_('Episode 0, Clip 0, Transcript Record %d.'), 'utf8')
+                                           else:
+                                               prompt = _('Episode 0, Clip 0, Transcript Record %d.')
+                                           msg = msg + ' ' + prompt % oldNumber
+                                   elif objectType == 'Keyword':
                                         if 'unicode' in wx.PlatformInfo:
                                             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                            prompt = unicode(_('Episode %d.'), 'utf8')
+                                            prompt = unicode(_('The record is for Keyword "%s:%s".') + '  ', 'utf8')
+                                            # Explain about Keyword Definitions
+                                            prompt += '\n\n' + unicode(_('The Keyword Definition will not be updated, but the Database import will continue.'), 'utf8')
                                         else:
-                                            prompt = _('Episode %d.')
-                                        msg = msg + ' ' + prompt % currentObj.episode_num
-                                   elif currentObj.clip_num > 0: 
-                                       if 'unicode' in wx.PlatformInfo:
-                                           # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                           prompt = unicode(_('Clip %d.'), 'utf8')
-                                       else:
-                                           prompt = _('Clip %d.')
-                                       msg = msg + ' ' + prompt % currentObj.clip_num
-                                   else: 
-                                       if 'unicode' in wx.PlatformInfo:
-                                           # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                           prompt = unicode(_('Episode 0, Clip 0, Transcript Record %d.'), 'utf8')
-                                       else:
-                                           prompt = _('Episode 0, Clip 0, Transcript Record %d.')
-                                       msg = msg + ' ' + prompt % oldNumber
-                               elif objectType == 'Keyword':
-                                    if 'unicode' in wx.PlatformInfo:
-                                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                        prompt = unicode(_('The record is for Keyword "%s:%s".') + '  ', 'utf8')
-                                        # Explain about Keyword Definitions
-                                        prompt += '\n\n' + unicode(_('The Keyword Definition will not be updated, but the Database import will continue.'), 'utf8')
-                                    else:
-                                        prompt = _('The record is for Keyword "%s:%s".') + '  '
-                                        # Explain about Keyword Definitions
-                                        prompt += '\n\n' + unicode(_('The Keyword Definition will not be updated, but the Database import will continue.'), 'utf8')
-                                    msg = msg + '\n\n' + prompt % (currentObj.keywordGroup, currentObj.keyword)
-                                    # So the keyword already exists.  Let's continue the import anyway!  This is a minor issue.
-                                    contin = True
-                           # If we're interrupting and cancelling the import ...
-                           if not contin:
-                               # ... we need to tell the user where to intervene.
-                               if 'unicode' in wx.PlatformInfo:
-                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                   prompt = unicode(_('You need to correct this record in XML file %s.'), 'utf8')
-                                   prompt2 = unicode(_('The %s record ends at line %d.'), 'utf8')
-                               else:
-                                   prompt = _('You need to correct this record in XML file %s.')
-                                   prompt2 = _('The %s record ends at line %d.')
-                               # Add the intervention information to the error message
-                               msg = msg + '\n' +  prompt % self.XMLFile.GetValue() + '\n' + \
-                                                   prompt2 % (objectType, lineCount)
-                           # Display our carefully crafted error message to the user.
-                           errordlg = Dialogs.ErrorDialog(None, msg, includeSkipCheck=skipCheck)
-                           errordlg.ShowModal()
-                           # if skipping error messages is an option ...
-                           if skipCheck:
-                               # ... see if the Skip Error Messages checkbox has been checked
-                               skipValue = errordlg.GetSkipCheck()
-                           errordlg.Destroy()
+                                            prompt = _('The record is for Keyword "%s:%s".') + '  '
+                                            # Explain about Keyword Definitions
+                                            prompt += '\n\n' + unicode(_('The Keyword Definition will not be updated, but the Database import will continue.'), 'utf8')
+                                        msg = msg + '\n\n' + prompt % (currentObj.keywordGroup, currentObj.keyword)
+                                        # So the keyword already exists.  Let's continue the import anyway!  This is a minor issue.
+                                        contin = True
+                               # If we're interrupting and cancelling the import ...
+                               if not contin:
+                                   # ... we need to tell the user where to intervene.
+                                   if 'unicode' in wx.PlatformInfo:
+                                       # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                       prompt = unicode(_('You need to correct this record in XML file %s.'), 'utf8')
+                                       prompt2 = unicode(_('The %s record ends at line %d.'), 'utf8')
+                                   else:
+                                       prompt = _('You need to correct this record in XML file %s.')
+                                       prompt2 = _('The %s record ends at line %d.')
+                                   # Add the intervention information to the error message
+                                   msg = msg + '\n' +  prompt % self.XMLFile.GetValue() + '\n' + \
+                                                       prompt2 % (objectType, lineCount)
+                               # Display our carefully crafted error message to the user.
+                               errordlg = Dialogs.ErrorDialog(None, msg, includeSkipCheck=skipCheck)
+                               errordlg.ShowModal()
+                               # if skipping error messages is an option ...
+                               if skipCheck:
+                                   # ... see if the Skip Error Messages checkbox has been checked
+                                   skipValue = errordlg.GetSkipCheck()
+                               errordlg.Destroy()
 
-                   currentObj = None
-                   objectType = None
+                       currentObj = None
+                       objectType = None
 
-               # Code for determining Property Type for populating Object Properties
-               elif line.upper() == '<NUM>':
-                   dataType = 'Num'
+                   # Code for determining Property Type for populating Object Properties
+                   elif lineUpper == '<NUM>':
+                       dataType = 'Num'
 
-               elif line.upper() == '<ID>':
-                   dataType = 'ID'
+                   elif lineUpper == '<ID>':
+                       dataType = 'ID'
 
-               elif line.upper() == '<COMMENT>':
-                   dataType = 'Comment'
+                   elif lineUpper == '<COMMENT>':
+                       dataType = 'Comment'
 
-               elif line.upper() == '<OWNER>':
-                   dataType = 'Owner'
+                   elif lineUpper == '<OWNER>':
+                       dataType = 'Owner'
 
-               elif line.upper() == '<DEFAULTKEYWORDGROUP>':
-                   dataType = 'DKG'
+                   elif lineUpper == '<DEFAULTKEYWORDGROUP>':
+                       dataType = 'DKG'
 
-               elif line.upper() == '<SERIESNUM>':
-                   dataType = 'SeriesNum'
+                   elif lineUpper == '<SERIESNUM>':
+                       dataType = 'SeriesNum'
 
-               elif line.upper() == '<EPISODENUM>':
-                   dataType = 'EpisodeNum'
+                   elif lineUpper == '<EPISODENUM>':
+                       dataType = 'EpisodeNum'
 
-               elif line.upper() == '<TRANSCRIPTNUM>':
-                   dataType = 'TranscriptNum'
+                   elif lineUpper == '<TRANSCRIPTNUM>':
+                       dataType = 'TranscriptNum'
 
-               elif line.upper() == '<COLLECTNUM>':
-                   dataType = 'CollectNum'
+                   elif lineUpper == '<COLLECTNUM>':
+                       dataType = 'CollectNum'
 
-               elif line.upper() == '<CLIPNUM>':
-                   dataType = 'ClipNum'
+                   elif lineUpper == '<CLIPNUM>':
+                       dataType = 'ClipNum'
 
-               elif line.upper() == '<DATE>':
-                   dataType = 'date'
+                   elif lineUpper == '<SNAPSHOTNUM>':
+                       dataType = 'SnapshotNum'
 
-               elif line.upper() == '<MEDIAFILE>':
-                   dataType = 'MediaFile'
+                   elif lineUpper == '<DATE>':
+                       dataType = 'date'
 
-               elif line.upper() == '<LENGTH>':
-                   dataType = 'Length'
+                   elif lineUpper == '<MEDIAFILE>':
+                       dataType = 'MediaFile'
 
-               elif line.upper() == '<OFFSET>':
-                   dataType = 'Offset'
+                   elif lineUpper == '<LENGTH>':
+                       dataType = 'Length'
 
-               elif line.upper() == '<AUDIO>':
-                   dataType = 'Audio'
+                   elif lineUpper == '<OFFSET>':
+                       dataType = 'Offset'
 
-               elif line.upper() == '<TITLE>':
-                   dataType = 'Title'
+                   elif lineUpper == '<AUDIO>':
+                       dataType = 'Audio'
 
-               elif line.upper() == '<CREATOR>':
-                   dataType = 'Creator'
+                   elif lineUpper == '<TITLE>':
+                       dataType = 'Title'
 
-               elif line.upper() == '<SUBJECT>':
-                   dataType = 'Subject'
+                   elif lineUpper == '<CREATOR>':
+                       dataType = 'Creator'
 
-               elif line.upper() == '<DESCRIPTION>':
-                   dataType = 'Description'
+                   elif lineUpper == '<SUBJECT>':
+                       dataType = 'Subject'
 
-               # Because Description can be many lines long, we need to explicitly close this datatype when
-               # the closing XML tag is found
-               elif line.upper() == '</DESCRIPTION>':
-                   dataType = None
+                   elif lineUpper == '<DESCRIPTION>':
+                       dataType = 'Description'
 
-               elif line.upper() == '<PUBLISHER>':
-                   dataType = 'Publisher'
+                   # Because Description can be many lines long, we need to explicitly close this datatype when
+                   # the closing XML tag is found
+                   elif lineUpper == '</DESCRIPTION>':
+                       dataType = None
 
-               elif line.upper() == '<CONTRIBUTOR>':
-                   dataType = 'Contributor'
+                   elif lineUpper == '<PUBLISHER>':
+                       dataType = 'Publisher'
 
-               elif line.upper() == '<TYPE>':
-                   dataType = 'Type'
+                   elif lineUpper == '<CONTRIBUTOR>':
+                       dataType = 'Contributor'
 
-               elif line.upper() == '<FORMAT>':
-                   dataType = 'Format'
+                   elif lineUpper == '<TYPE>':
+                       dataType = 'Type'
 
-               elif line.upper() == '<SOURCE>':
-                   dataType = 'Source'
+                   elif lineUpper == '<FORMAT>':
+                       dataType = 'Format'
 
-               elif line.upper() == '<LANGUAGE>':
-                   dataType = 'Language'
+                   elif lineUpper == '<SOURCE>':
+                       dataType = 'Source'
 
-               elif line.upper() == '<RELATION>':
-                   dataType = 'Relation'
+                   elif lineUpper == '<LANGUAGE>':
+                       dataType = 'Language'
 
-               elif line.upper() == '<COVERAGE>':
-                   dataType = 'Coverage'
+                   elif lineUpper == '<RELATION>':
+                       dataType = 'Relation'
 
-               elif line.upper() == '<RIGHTS>':
-                   dataType = 'Rights'
+                   elif lineUpper == '<COVERAGE>':
+                       dataType = 'Coverage'
 
-               elif line.upper() == '<TRANSCRIBER>':
-                   dataType = 'Transcriber'
+                   elif lineUpper == '<RIGHTS>':
+                       dataType = 'Rights'
 
-               elif line.upper() == '<RTFTEXT>':
-                   dataType = 'RTFText'
+                   elif lineUpper == '<TRANSCRIBER>':
+                       dataType = 'Transcriber'
 
-               # Because RTF Text can be many lines long, we need to explicitly close this datatype when
-               # the closing XML tag is found.  Since left stripping is skipped during RTFText reads, we need
-               # to add the lstrip() call here.
-               elif line.upper().lstrip() == '</RTFTEXT>':
-                   dataType = None
+                   elif lineUpper == '<RTFTEXT>':
+                       dataType = 'RTFText'
 
-               elif line.upper() == '<PARENTCOLLECTNUM>':
-                   dataType = 'ParentCollectNum'
+                   # Because RTF Text can be many lines long, we need to explicitly close this datatype when
+                   # the closing XML tag is found.  Since left stripping is skipped during RTFText reads, we need
+                   # to add the lstrip() call here.
+                   elif lineUpper.lstrip() == '</RTFTEXT>':
+                       dataType = None
 
-               elif line.upper() == '<CLIPSTART>':
-                   dataType = 'ClipStart'
+                   elif lineUpper == '<PARENTCOLLECTNUM>':
+                       dataType = 'ParentCollectNum'
 
-               elif line.upper() == '<CLIPSTOP>':
-                   dataType = 'ClipStop'
+                   elif lineUpper == '<CLIPSTART>':
+                       dataType = 'ClipStart'
 
-               elif line.upper() == '<MINTRANSCRIPTWIDTH>':
-                   dataType = 'MinTranscriptWidth'
+                   elif lineUpper == '<CLIPSTOP>':
+                       dataType = 'ClipStop'
 
-               elif line.upper() == '<SORTORDER>':
-                   dataType = 'SortOrder'
+                   elif lineUpper == '<MINTRANSCRIPTWIDTH>':
+                       dataType = 'MinTranscriptWidth'
 
-               elif line.upper() == '<KEYWORDGROUP>':
-                   dataType = 'KWG'
+                   elif lineUpper == '<SORTORDER>':
+                       dataType = 'SortOrder'
 
-               elif line.upper() == '<KEYWORD>':
-                   dataType = 'KW'
+                   elif lineUpper == '<IMAGESCALE>':
+                       dataType = 'ImageScale'
 
-               elif line.upper() == '<DEFINITION>':
-                   dataType = 'Definition'
+                   elif lineUpper == '<IMAGECOORDSX>':
+                       dataType = 'ImageCoordsX'
 
-               # Because Definition Text can be many lines long, we need to explicitly close this datatype when
-               # the closing XML tag is found
-               elif line.upper() == '</DEFINITION>':
-                   dataType = None
+                   elif lineUpper == '<IMAGECOORDSY>':
+                       dataType = 'ImageCoordsY'
 
-               elif line.upper() == '<EXAMPLE>':
-                   dataType = 'Example'
+                   elif lineUpper == '<IMAGESIZEW>':
+                       dataType = 'ImageSizeW'
 
-               elif line.upper() == '<NOTETAKER>':
-                   dataType = 'NoteTaker'
+                   elif lineUpper == '<IMAGESIZEH>':
+                       dataType = 'ImageSizeH'
 
-               elif line.upper() == '<NOTETEXT>':
-                   dataType = 'NoteText'
+                   elif lineUpper == '<IMAGESIZEW>':
+                       dataType = 'ImageSizeW'
 
-               # Because Note Text can be many lines long, we need to explicitly close this datatype when
-               # the closing XML tag is found.  Since left stripping is skipped during NoteText reads, we need
-               # to add the lstrip() call here.
-               elif line.upper().lstrip() == '</NOTETEXT>':
-                   dataType = None
+                   elif lineUpper == '<SNAPSHOTTIMECODE>':
+                       dataType = 'SnapshotTimeCode'
 
-               elif line.upper() == '<REPORTTYPE>':
-                   dataType = 'ReportType'
+                   elif lineUpper == '<SNAPSHOTDURATION>':
+                       dataType = 'SnapshotDuration'
 
-               elif line.upper() == '<REPORTSCOPE>':
-                   dataType = 'ReportScope'
+                   elif lineUpper == '<X1>':
+                       dataType = 'X1'
 
-               elif line.upper() == '<CONFIGNAME>':
-                   dataType = 'ConfigName'
+                   elif lineUpper == '<Y1>':
+                       dataType = 'Y1'
 
-               elif line.upper() == '<FILTERDATATYPE>':
-                   dataType = 'FilterDataType'
+                   elif lineUpper == '<X2>':
+                       dataType = 'X2'
 
-               elif line.upper() == '<FILTERDATA>':
-                   dataType = 'FilterData'
+                   elif lineUpper == '<Y2>':
+                       dataType = 'Y2'
 
-               # Because Filter Data can be many lines long, we need to explicitly close this datatype when
-               # the closing XML tag is found
-               elif line.upper() == '</FILTERDATA>':
-                   dataType = None
+                   elif lineUpper == '<VISIBLE>':
+                       dataType = 'Visible'
+                       
+                   elif lineUpper == '<DRAWMODE>':
+                       dataType = 'DrawMode'
 
-               # Code for populating Object Properties.
-               # Unless data can stretch across mulitple lines, we should explicity undefine the dataType
-               # once the data is captured.
-               elif dataType == 'Num':
-                   if objectType != 'AddVid':
-                       currentObj.number = int(line)
-                   else:
-                       currentObj['AddVidNum'] = int(line)
-                   dataType = None
+                   elif lineUpper == '<COLORNAME>':
+                       dataType = 'ColorName'
 
-               elif dataType == 'ID':
-                   currentObj.id = self.ProcessLine(line)
-                   dataType = None
+                   elif lineUpper == '<COLORDEF>':
+                       dataType = 'ColorDef'
 
-                   if objectType == 'Transcript':
-                       st = _('Importing Transcript records (This may be slow because of the size of Transcript records.)')
-                       st += '\n  '
-                       st += _("Transcript")
-                       st += ' '
-                       st += currentObj.id.encode(TransanaGlobal.encoding)
-                       st += '  (%d)' % currentObj.number
-                       progress.Update(52, st)
+                   elif lineUpper == '<LINEWIDTH>':
+                       dataType = 'LineWidth'
 
-               elif dataType == 'Comment':
-                   currentObj.comment = self.ProcessLine(line)
-                   dataType = None
+                   elif lineUpper == '<LINESTYLE>':
+                       dataType = 'LineStyle'
 
-               elif dataType == 'Owner':
-                   currentObj.owner = self.ProcessLine(line)
-                   dataType = None
+                   elif lineUpper == '<KEYWORDGROUP>':
+                       dataType = 'KWG'
 
-               elif dataType == 'DKG':
-                   currentObj.keyword_group = self.ProcessLine(line)
-                   dataType = None
+                   elif lineUpper == '<KEYWORD>':
+                       dataType = 'KW'
 
-               elif dataType == 'SeriesNum':
-                   # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
-                   try:
-                       currentObj.series_num = recNumbers['Series'][int(line)]
-                   except:
+                   elif lineUpper == '<DEFINITION>':
+                       dataType = 'Definition'
+
+                   # Because Definition Text can be many lines long, we need to explicitly close this datatype when
+                   # the closing XML tag is found
+                   elif lineUpper == '</DEFINITION>':
+                       dataType = None
+
+                   elif lineUpper == '<EXAMPLE>':
+                       dataType = 'Example'
+
+                   elif lineUpper == '<NOTETAKER>':
+                       dataType = 'NoteTaker'
+
+                   elif lineUpper == '<NOTETEXT>':
+                       dataType = 'NoteText'
+
+                   # Because Note Text can be many lines long, we need to explicitly close this datatype when
+                   # the closing XML tag is found.  Since left stripping is skipped during NoteText reads, we need
+                   # to add the lstrip() call here.
+                   elif lineUpper.lstrip() == '</NOTETEXT>':
+                       dataType = None
+
+                   elif lineUpper == '<REPORTTYPE>':
+                       dataType = 'ReportType'
+
+                   elif lineUpper == '<REPORTSCOPE>':
+                       dataType = 'ReportScope'
+
+                   elif lineUpper == '<CONFIGNAME>':
+                       dataType = 'ConfigName'
+
+                   elif lineUpper == '<FILTERDATATYPE>':
+                       dataType = 'FilterDataType'
+
+                   elif lineUpper == '<FILTERDATA>':
+                       dataType = 'FilterData'
+
+                   # Because Filter Data can be many lines long, we need to explicitly close this datatype when
+                   # the closing XML tag is found
+                   elif lineUpper == '</FILTERDATA>':
+                       dataType = None
+
+
+               else:
+
+                    # Also for tthe sake of minimalist optimization, let's deal with the RTFText datatype
+                    # first, because we spend a LOT of time here in most imports.  Let's find this with
+                    # fewer preliminary "if" checks!
+
+                   # Because RTF Text can be many lines long, we need to explicitly close this datatype when
+                   # the closing XML tag is found.  Since left stripping is skipped during RTFText reads, we need
+                   # to add the lstrip() call here.
+                   if lineUpper.lstrip() == '</RTFTEXT>':
+                       dataType = None
+
+                   elif dataType == 'RTFText':
+                       # Add Line Breaks to the text to match the incoming lines.
+                       # Otherwise, the transcript might be messed up, with the first word of the next line
+                       # being truncated.
+
+                       # If this is the FIRST LINE ...
+                       if currentObj.text == '':
+                           # If we have an XML richtext specification ...
+                           if line[:10] == '<richtext ':
+                               # ... add the XML Header, which was stripped out during export because it breaks XML
+                               currentObj.text = '<?xml version="1.0" encoding="UTF-8"?>\n'
+                       else:
+                           currentObj.text = currentObj.text + '\n'
+                       currentObj.text = currentObj.text + line
+                       # We DO NOT reset DataType here, as RTFText may be many lines long!
+                       # dataType = None
+
+                   # ignore blank lines, except in the Notes Text, where they represent blank lines!
+                   elif (line == '') and (dataType != 'NoteText'):
                        pass
-                   dataType = None
 
-               elif dataType == 'EpisodeNum':
-                   # We need to substitute the new Episode number for the old one.
-                   # A user had a problem with a Transcript Record existing when the parent Episode
-                   # had been deleted.  Therefore, let's check to see if the old Episode record existed
-                   # by checking to see if the old episode number is a Key value in the Episode recNumbers table.
-                   # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
-                   if (line.strip() != 'None'):
-                       if recNumbers['Episode'].has_key(int(line)):
-                           try:
-                               if objectType == 'ClipKeyword':
-                                   currentObj.episodeNum = recNumbers['Episode'][int(line)]
-                               elif objectType != 'AddVid':
-                                   currentObj.episode_num = recNumbers['Episode'][int(line)]
+                   # Code for populating Object Properties.
+                   # Unless data can stretch across mulitple lines, we should explicity undefine the dataType
+                   # once the data is captured.
+                   elif dataType == 'Num':
+                       if objectType != 'AddVid':
+                           currentObj.number = int(line)
+                       else:
+                           currentObj['AddVidNum'] = int(line)
+                       dataType = None
+
+                   elif dataType == 'ID':
+                       currentObj.id = self.ProcessLine(line)
+                       dataType = None
+
+                       if objectType == 'Transcript':
+                           st = _('Importing Transcript records (This may be slow because of the size of Transcript records.)')
+                           st += '\n  '
+                           st += _("Transcript")
+                           st += ' '
+                           st += currentObj.id.encode(TransanaGlobal.encoding)
+                           st += '  (%d)' % currentObj.number
+                           progress.Update(43, st)
+
+                   elif dataType == 'Comment':
+                       currentObj.comment = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Owner':
+                       currentObj.owner = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'DKG':
+                       currentObj.keyword_group = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'SeriesNum':
+                       # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                       try:
+                           currentObj.series_num = recNumbers['Series'][int(line)]
+                       except:
+                           pass
+                       dataType = None
+
+                   elif dataType == 'EpisodeNum':
+                       # We need to substitute the new Episode number for the old one.
+                       # A user had a problem with a Transcript Record existing when the parent Episode
+                       # had been deleted.  Therefore, let's check to see if the old Episode record existed
+                       # by checking to see if the old episode number is a Key value in the Episode recNumbers table.
+                       # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                       if (line.strip() != 'None'):
+                           if recNumbers['Episode'].has_key(int(line)):
+                               try:
+                                   if objectType == 'ClipKeyword':
+                                       currentObj.episodeNum = recNumbers['Episode'][int(line)]
+                                   elif objectType != 'AddVid':
+                                       currentObj.episode_num = recNumbers['Episode'][int(line)]
+                                   else:
+                                       currentObj['EpisodeNum'] = recNumbers['Episode'][int(line)]
+                               except:
+                                   pass
+                           else:
+                               # If the old record number doesn't exist, substitute 0 and show an error message.
+                               if objectType != 'AddVid':
+                                   currentObj.episode_num = 0
+                               if isinstance(currentObj, ClipKeywordObject.ClipKeyword):
+                                   if 'unicode' in wx.PlatformInfo:
+                                       # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                       prompt = unicode(_('Episode Number %s cannot be found for %s at line number %d.'), 'utf8')
+                                   else:
+                                       prompt = _('Episode Number %s cannot be found for %s at line number %d.')
+                                   vals = (line, objectType, lineCount)
+                               elif objectType == 'AddVid':
+                                   if 'unicode' in wx.PlatformInfo:
+                                       # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                       prompt = unicode(_('Episode Number %s cannot be found for %s record %d at line number %d.'), 'utf8')
+                                   else:
+                                       prompt = _('Episode Number %s cannot be found for %s record %d at line number %d.')
+                                   vals = (line, _("Additional Video"), currentObj['AddVidNum'], lineCount)
                                else:
-                                   currentObj['EpisodeNum'] = recNumbers['Episode'][int(line)]
+                                   if 'unicode' in wx.PlatformInfo:
+                                       # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                       prompt = unicode(_('Episode Number %s cannot be found for %s record %d at line number %d.'), 'utf8')
+                                   else:
+                                       prompt = _('Episode Number %s cannot be found for %s record %d at line number %d.')
+                                   vals = (line, objectType, currentObj.number, lineCount)
+                               # This should be INFORMATION rather than ERROR!
+                               errordlg = Dialogs.InfoDialog(None, prompt % vals)
+                               errordlg.ShowModal()
+                               errordlg.Destroy()
+                       dataType = None
+
+                   elif dataType == 'TranscriptNum':
+                       # if we're dealing with a CLIP's SOURCE TRANSCRIPT ...
+                       if objectType == 'Clip':
+                           if line != '0':
+                               # ... we need to save the Clip's Source Transcript number for later, as it has been moved
+                               # from the Clip object to the Clip Transcript object as of Transana-XML 1.4.
+                               clipTranscripts[currentObj.number] = line
+                       # To be clear, a Transcript's NUMBER goes to currentObj.number, while its TRANSCRIPTNUM
+                       # is actually its SOURCE TRANSCRIPT, not its OBJECT NUMBER.
+                       elif objectType == 'Transcript':
+                           # Not all re-mapped Transcript Numbers are known while processing Transcripts.  Therefore, store the
+                           # OLD TranscriptNum as the SourceTranscript and we'll convert it later!
+                           try:
+                               currentObj.source_transcript = line
                            except:
                                pass
+                       # If we're dealing with anything but a Clip or Transcript ...
                        else:
-                           # If the old record number doesn't exist, substitute 0 and show an error message.
-                           if objectType != 'AddVid':
-                               currentObj.episode_num = 0
-                           if isinstance(currentObj, ClipKeywordObject.ClipKeyword):
-                               if 'unicode' in wx.PlatformInfo:
-                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                   prompt = unicode(_('Episode Number %s cannot be found for %s at line number %d.'), 'utf8')
-                               else:
-                                   prompt = _('Episode Number %s cannot be found for %s at line number %d.')
-                               vals = (line, objectType, lineCount)
-                           elif objectType == 'AddVid':
-                               if 'unicode' in wx.PlatformInfo:
-                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                   prompt = unicode(_('Episode Number %s cannot be found for %s record %d at line number %d.'), 'utf8')
-                               else:
-                                   prompt = _('Episode Number %s cannot be found for %s record %d at line number %d.')
-                               vals = (line, _("Additional Video"), currentObj['AddVidNum'], lineCount)
-                           else:
-                               if 'unicode' in wx.PlatformInfo:
-                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                                   prompt = unicode(_('Episode Number %s cannot be found for %s record %d at line number %d.'), 'utf8')
-                               else:
-                                   prompt = _('Episode Number %s cannot be found for %s record %d at line number %d.')
-                               vals = (line, objectType, currentObj.number, lineCount)
-                           # This should be INFORMATION rather than ERROR!
-                           errordlg = Dialogs.InfoDialog(None, prompt % vals)
-                           errordlg.ShowModal()
-                           errordlg.Destroy()
-                   dataType = None
+                           # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                           try:
+                               currentObj.transcript_num = recNumbers['Transcript'][int(line)]
+                           except:
+                               pass
+                       dataType = None
 
-               elif dataType == 'TranscriptNum':
-                   # if we're dealing with a CLIP's SOURCE TRANSCRIPT ...
-                   if objectType == 'Clip':
-                       if line != '0':
-                           # ... we need to save the Clip's Source Transcript number for later, as it has been moved
-                           # from the Clip object to the Clip Transcript object as of Transana-XML 1.4.
-                           clipTranscripts[currentObj.number] = line
-                   # To be clear, a Transcript's NUMBER goes to currentObj.number, while its TRANSCRIPTNUM
-                   # is actually its SOURCE TRANSCRIPT, not its OBJECT NUMBER.
-                   elif objectType == 'Transcript':
-                       # Not all re-mapped Transcript Numbers are known while processing Transcripts.  Therefore, store the
-                       # OLD TranscriptNum as the SourceTranscript and we'll convert it later!
-                       try:
-                           currentObj.source_transcript = line
-                       except:
-                           pass
-                   # If we're dealing with anything but a Clip or Transcript ...
-                   else:
+                   elif dataType == 'CollectNum':
                        # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
                        try:
-                           currentObj.transcript_num = recNumbers['Transcript'][int(line)]
+                           currentObj.collection_num = recNumbers['Collection'][int(line)]
                        except:
                            pass
-                   dataType = None
+                       dataType = None
 
-               elif dataType == 'CollectNum':
-                   # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
-                   try:
-                       currentObj.collection_num = recNumbers['Collection'][int(line)]
-                   except:
-                       pass
-                   dataType = None
-
-               elif dataType == 'ClipNum':
-                   # Handle object property naming inconsistency here!
-                   if objectType in ['Transcript', 'Note']:
-                       # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
-                       try:
-                           currentObj.clip_num = recNumbers['Clip'][int(line)]
-                       except:
-                           pass
-                   elif objectType == 'ClipKeyword':
-                       try:
+                   elif dataType == 'ClipNum':
+                       # Handle object property naming inconsistency here!
+                       if objectType in ['Transcript', 'Note']:
+                           # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                           try:
+                               currentObj.clip_num = recNumbers['Clip'][int(line)]
+                           except:
+                               pass
+                       elif objectType == 'ClipKeyword':
+                           try:
+                               currentObj.clipNum = recNumbers['Clip'][int(line)]
+                           except:
+                               if 'unicode' in wx.PlatformInfo:
+                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                   prompt = unicode(_('Clip Number %s cannot be found for a %s record at line number %d.\n(This is due to an incomplete Clip deletion and is not a problem.)'), 'utf8')
+                               else:
+                                   prompt = _('Clip Number %s cannot be found for a %s record at line number %d.\n(This is due to an incomplete Clip deletion and is not a problem.)')
+                               # This should be INFORMATION rather than ERROR!
+                               errordlg = Dialogs.InfoDialog(None, prompt  % (line, objectType, lineCount))
+                               errordlg.ShowModal()
+                               errordlg.Destroy()
+                       elif objectType == 'AddVid':
+                           currentObj['ClipNum'] = recNumbers['Clip'][int(line)]
+                       else:
                            currentObj.clipNum = recNumbers['Clip'][int(line)]
+                                
+                       dataType = None
+
+                       if objectType == 'Transcript':
+                           progress.Update(43, _('Importing Transcript records (This may be slow because of the size of Transcript records.)') + \
+                                               '\n  ' + _("Clip Transcript") + ' %d' % currentObj.clip_num)
+
+                   elif dataType == 'SnapshotNum':
+                       if objectType == 'SnapshotKeyword':
+                           self.snapshotKeyword['SnapshotNum'] = recNumbers['Snapshot'][int(line)]
+                       elif objectType == 'SnapshotKeywordStyle':
+                           self.snapshotKeywordStyle['SnapshotNum'] = recNumbers['Snapshot'][int(line)]
+                       elif objectType == 'ClipKeyword':
+                           try:
+                               currentObj.snapshotNum = recNumbers['Snapshot'][int(line)]
+                           except:
+                               if 'unicode' in wx.PlatformInfo:
+                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                   prompt = unicode(_('Snapshot Number %s cannot be found for a %s record at line number %d.\n(This is due to an incomplete Snapshot deletion and is not a problem.)'), 'utf8')
+                               else:
+                                   prompt = _('Snapshot Number %s cannot be found for a %s record at line number %d.\n(This is due to an incomplete Snapshot deletion and is not a problem.)')
+                               # This should be INFORMATION rather than ERROR!
+                               errordlg = Dialogs.InfoDialog(None, prompt  % (line, objectType, lineCount))
+                               errordlg.ShowModal()
+                               errordlg.Destroy()
+                       else:
+                           currentObj.snapshot_num = recNumbers['Snapshot'][int(line)]
+                       dataType = None
+
+                   elif dataType == 'date':
+                       # Importing dates can be a little tricky.  Let's trap conversion errors
+                       try:
+                           # If we're dealing with an Episode record ...
+                           if objectType == 'Episode':
+                               # Make sure it's in a form we recognize
+                               # See if the date is in YYYY-MM-DD format (produced by XMLExport.py).
+                               # If not, substitute slashes for dashes, as this file likely came from Delphi!
+                               reStr = '\d{4}-\d+-\d+'
+                               if re.compile(reStr).match(line) == None:
+                                   line = line.replace('-', '/')
+                                   timeformat = "%m/%d/%Y"
+                               # The date should be stored in the Episode record as a date object
+                               else:
+                                   timeformat = "%Y-%m-%d"
+                               # Check to see if we've got extraneous time data appended.  If so, remove it!
+                               # (This is reliably signalled by the presence of a space.)
+                               if line.find(' ') > -1:
+                                   line = line.split(' ')[0]
+                               # This works fine on Windows, and it works on the Mac under Python.  But on the
+                               # Mac from an executable app, this line causes an ImportError exception.  If that
+                               # arises, we'll have to parse the time format manually!
+                               try:
+                                   timetuple = time.strptime(line, timeformat)
+                               except ImportError:
+                                   # Break the string into it's components based on the divider from the timeformat.
+                                   tempTime = line.split(timeformat[2])
+                                   # create the timetuple value manually.  timeformat tells us if we're in YMD or MDY format.
+                                   if timeformat[1] == 'Y':
+                                       timetuple = (int(tempTime[0]), int(tempTime[1]), int(tempTime[2]), 0, 0, 0, 1, 107, -1)
+                                   else:
+                                       timetuple = (int(tempTime[2]), int(tempTime[0]), int(tempTime[1]), 0, 0, 0, 1, 107, -1)
+                               currentObj.tape_date = datetime.datetime(*timetuple[:7])                           
+                           # If we're dealing with a Core Data record ...
+                           elif objectType == 'CoreData':
+                               # Unfortunately, the Delphi exporter for 1.2x data and the Python exporter for 2.x data
+                               # produce dates in different formats.  (Oops.  Sorry about that.)
+                               # If the form is from Delphi, D-M-Y, we need to rearrange it into MM/DD/Y format
+                               if line.find('-') > -1:
+                                   dateParts = line.split('-')
+                                   date = '%02d/%02d/%d' % (int(dateParts[1]), int(dateParts[0]), int(dateParts[2]))
+                               # Otherwise, the format from Python is already MM/DD/Y form, so we should be okay
+                               else:
+                                   date = line
+                               # These dates are stored internally in the Core Data record as formatted strings.
+                               currentObj.dc_date = date
                        except:
+                           import traceback
+                           traceback.print_exc(file=sys.stdout)
+                           # Display the Exception Message, allow "continue" flag to remain true
                            if 'unicode' in wx.PlatformInfo:
                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                               prompt = unicode(_('Clip Number %s cannot be found for a %s record at line number %d.\n(This is due to an incomplete Clip deletion and is not a problem.)'), 'utf8')
+                               prompt = unicode(_('Date Import Failure: "%s"'), 'utf8')
+                               prompt2 = unicode(_("Exception %s: %s"), 'utf8')
                            else:
-                               prompt = _('Clip Number %s cannot be found for a %s record at line number %d.\n(This is due to an incomplete Clip deletion and is not a problem.)')
-                           # This should be INFORMATION rather than ERROR!
-                           errordlg = Dialogs.InfoDialog(None, prompt  % (line, objectType, lineCount))
+                               prompt = _('Date Import Failure: "%s"')
+                               prompt2 = _("Exception %s: %s")
+                           msg = prompt % line +'\n' + prompt2 % (sys.exc_info()[0], sys.exc_info()[1])
+                           errordlg = Dialogs.ErrorDialog(None, msg)
                            errordlg.ShowModal()
                            errordlg.Destroy()
-                   elif objectType == 'AddVid':
-                       currentObj['ClipNum'] = recNumbers['Clip'][int(line)]
-                   else:
-                       currentObj.clipNum = recNumbers['Clip'][int(line)]
-                            
-                   dataType = None
+                           
+                       dataType = None
 
-                   if objectType == 'Transcript':
-                       progress.Update(52, _('Importing Transcript records (This may be slow because of the size of Transcript records.)') + \
-                                           '\n  ' + _("Clip Transcript") + ' %d' % currentObj.clip_num)
-
-               elif dataType == 'date':
-                   # Importing dates can be a little tricky.  Let's trap conversion errors
-                   try:
-                       # If we're dealing with an Episode record ...
-                       if objectType == 'Episode':
-                           # Make sure it's in a form we recognize
-                           # See if the date is in YYYY-MM-DD format (produced by XMLExport.py).
-                           # If not, substitute slashes for dashes, as this file likely came from Delphi!
-                           reStr = '\d{4}-\d+-\d+'
-                           if re.compile(reStr).match(line) == None:
-                               line = line.replace('-', '/')
-                               timeformat = "%m/%d/%Y"
-                           # The date should be stored in the Episode record as a date object
-                           else:
-                               timeformat = "%Y-%m-%d"
-                           # Check to see if we've got extraneous time data appended.  If so, remove it!
-                           # (This is reliably signalled by the presence of a space.)
-                           if line.find(' ') > -1:
-                               line = line.split(' ')[0]
-                           # This works fine on Windows, and it works on the Mac under Python.  But on the
-                           # Mac from an executable app, this line causes an ImportError exception.  If that
-                           # arises, we'll have to parse the time format manually!
-                           try:
-                               timetuple = time.strptime(line, timeformat)
-                           except ImportError:
-                               # Break the string into it's components based on the divider from the timeformat.
-                               tempTime = line.split(timeformat[2])
-                               # create the timetuple value manually.  timeformat tells us if we're in YMD or MDY format.
-                               if timeformat[1] == 'Y':
-                                   timetuple = (int(tempTime[0]), int(tempTime[1]), int(tempTime[2]), 0, 0, 0, 1, 107, -1)
-                               else:
-                                   timetuple = (int(tempTime[2]), int(tempTime[0]), int(tempTime[1]), 0, 0, 0, 1, 107, -1)
-                           currentObj.tape_date = datetime.datetime(*timetuple[:7])                           
-                       # If we're dealing with a Core Data record ...
-                       elif objectType == 'CoreData':
-                           # Unfortunately, the Delphi exporter for 1.2x data and the Python exporter for 2.x data
-                           # produce dates in different formats.  (Oops.  Sorry about that.)
-                           # If the form is from Delphi, D-M-Y, we need to rearrange it into MM/DD/Y format
-                           if line.find('-') > -1:
-                               dateParts = line.split('-')
-                               date = '%02d/%02d/%d' % (int(dateParts[1]), int(dateParts[0]), int(dateParts[2]))
-                           # Otherwise, the format from Python is already MM/DD/Y form, so we should be okay
-                           else:
-                               date = line
-                           # These dates are stored internally in the Core Data record as formatted strings.
-                           currentObj.dc_date = date
-                   except:
-                       import traceback
-                       traceback.print_exc(file=sys.stdout)
-                       # Display the Exception Message, allow "continue" flag to remain true
-                       if 'unicode' in wx.PlatformInfo:
-                           # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                           prompt = unicode(_('Date Import Failure: "%s"'), 'utf8')
-                           prompt2 = unicode(_("Exception %s: %s"), 'utf8')
+                   elif dataType == 'MediaFile':
+                       if objectType == 'AddVid':
+                           currentObj['MediaFile'] = self.ProcessLine(line)
+                       elif objectType == 'Snapshot':
+                           currentObj.image_filename = self.ProcessLine(line)
                        else:
-                           prompt = _('Date Import Failure: "%s"')
-                           prompt2 = _("Exception %s: %s")
-                       msg = prompt % line +'\n' + prompt2 % (sys.exc_info()[0], sys.exc_info()[1])
-                       errordlg = Dialogs.ErrorDialog(None, msg)
-                       errordlg.ShowModal()
-                       errordlg.Destroy()
-                       
-                   dataType = None
+                           currentObj.media_filename = self.ProcessLine(line)
+                       dataType = None
 
-               elif dataType == 'MediaFile':
-                   if objectType != 'AddVid':
-                       currentObj.media_filename = self.ProcessLine(line)
-                   else:
-                       currentObj['MediaFile'] = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Length':
-                   if objectType != 'AddVid':
-                       currentObj.tape_length = line
-                   else:
-                       currentObj['VidLength'] = line
-                   dataType = None
-
-               elif dataType == 'Offset':
-                   if objectType != 'AddVid':
-                       currentObj.offset = line
-                   else:
-                       currentObj['Offset'] = line
-                   dataType = None
-
-               elif dataType == 'Audio':
-                   if objectType != 'AddVid':
-                       currentObj.audio = line
-                   else:
-                       currentObj['Audio'] = line
-                   dataType = None
-
-               elif dataType == 'Title':
-                   currentObj.title = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Creator':
-                   currentObj.creator = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Subject':
-                   currentObj.subject = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Description':
-                   # If this is not our first line, add a newline character before our new text.  Otherwise, all the
-                   # text is added as a single line.
-                   if currentObj.description != '':
-                       currentObj.description = currentObj.description + '\n'
-                   currentObj.description = currentObj.description + self.ProcessLine(line)
-                   # We DO NOT reset DataType here, as Description may be many lines long!
-                   # dataType = None
-
-               elif dataType == 'Publisher':
-                   currentObj.publisher = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Contributor':
-                   currentObj.contributor = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Type':
-                   currentObj.dc_type = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Format':
-                   currentObj.format = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Source':
-                   currentObj.source = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Language':
-                   currentObj.language = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Relation':
-                   currentObj.relation = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Coverage':
-                   currentObj.coverage = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Rights':
-                   currentObj.rights = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Transcriber':
-                   currentObj.transcriber = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'RTFText':
-                   # Add Line Breaks to the text to match the incoming lines.
-                   # Otherwise, the transcript might be messed up, with the first word of the next line
-                   # being truncated.
-
-                   # If this is the FIRST LINE ...
-                   if currentObj.text == '':
-                       # If we have an XML richtext specification ...
-                       if line[:10] == '<richtext ':
-                           # ... add the XML Header, which was stripped out during export because it breaks XML
-                           currentObj.text = '<?xml version="1.0" encoding="UTF-8"?>\n'
-                   else:
-                       currentObj.text = currentObj.text + '\n'
-                   currentObj.text = currentObj.text + line
-                   # We DO NOT reset DataType here, as RTFText may be many lines long!
-                   # dataType = None
-
-               elif dataType == 'ParentCollectNum':
-                   # If the parent collection has already been defined, and thus has a known record number ...
-                   if int(line) in recNumbers['Collection']:
-                       # ... save the updated parent collection number
-                       currentObj.parent = recNumbers['Collection'][int(line)]
-                   # If the parent collection number is not yet knows, because the parent collection hasn't been processed yet ...
-                   else:
-                       # ... add this collection (by number) to the list of collections that need to be updated later ...
-                       collectionsToUpdate.append(currentObj.number)
-                       # ... and store the UNTRANSLATED parent collection number data to be translated later.
-                       currentObj.parent = int(line)
-                       
-                   dataType = None
-
-               elif dataType == 'ClipStart':
-                   currentObj.clip_start = int(line)
-                   # If we have a Clip object ...
-                   if objectType == 'Clip':
-                       if line != '0':
-                           # ... save the Clip Start time so it can be added to the Clip Transcript record too.
-                           clipStartStop[(currentObj.number, 'Start')] = int(line)
-                   dataType = None
-
-               elif dataType == 'ClipStop':
-                   currentObj.clip_stop = int(line)
-                   # If we have a Clip object ...
-                   if objectType == 'Clip':
-                       if line != '0':
-                           # ... save the Clip Stop time so it can be added to the Clip Transcript record too.
-                           clipStartStop[(currentObj.number, 'Stop')] = int(line)
-                   dataType = None
-
-               elif dataType == 'MinTranscriptWidth':
-                   currentObj.minTranscriptWidth = int(line)
-                   dataType = None
-
-               elif dataType == 'SortOrder':
-                   currentObj.sort_order = line
-                   dataType = None
-
-               elif dataType == 'KWG':
-                   currentObj.keywordGroup = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'KW':
-                   currentObj.keyword = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'Definition':
-                   # If this is not our first line, add a newline character before our new text.  Otherwise, all the
-                   # text is added as a single line.
-                   if currentObj.definition != '':
-                       currentObj.definition = currentObj.definition + '\n'
-                   # We changed the way the definition was stored in the database for Transana 2.30, XML Version 1.4.
-                   if (self.XMLVersionNumber in ['1.1', '1.2', '1.3']):
-                       currentObj.definition = currentObj.definition + self.ProcessLine(line)
-                   else:
-                       # We changed the encoding here from importEncoding to UTF-8 no matter what for version 2.50.
-                       currentObj.definition = currentObj.definition + line.decode('utf8')  # (self.importEncoding)
-                   # We DO NOT reset DataType here, as Definition may be many lines long!
-                   # dataType = None
-
-               elif dataType == 'Example':
-                   currentObj.example = line
-                   dataType = None
-
-               elif dataType == 'NoteTaker':
-                   currentObj.author = self.ProcessLine(line)
-                   dataType = None
-
-               elif dataType == 'NoteText':
-                   # If this is not our first line, add a newline character before our new text.  Otherwise, all the
-                   # text is added as a single line.
-                   if currentObj.text != '':
-                       currentObj.text = currentObj.text + '\n'
-                   # NOTE:  we always use UTF8 here, not self.importEncoding!
-                   currentObj.text = currentObj.text + line.decode('utf8')
-                   # We DO NOT reset DataType here, as NoteText may be many lines long!
-                   # dataType = None
-
-               elif dataType == 'ReportType':
-                    self.FilterReportType = line
-                    dataType = None
-
-               elif dataType == 'ReportScope':
-                    if self.FilterReportType in ['5', '6', '7', '10', '14']:
-                        self.FilterScope = recNumbers['Series'][int(line)]
-                    elif self.FilterReportType in ['1', '2', '3', '8', '11']:
-                        self.FilterScope = recNumbers['Episode'][int(line)]
-                    # Collection Clip Data Export (ReportType 4) only needs translation if ReportScope != 0
-                    elif (self.FilterReportType in ['12', '16']) or ((self.FilterReportType == '4') and (int(line) != 0)):
-                        self.FilterScope = recNumbers['Collection'][int(line)]
-                    elif self.FilterReportType in ['13']:
-                        # FilterScopes for ReportType 13 (Notes Report) are constants, not object numbers!
-                        self.FilterScope = int(line)
-                    # Collection Clip Data Export (ReportType 4) for ReportScope 0, the Collection Root, needs
-                    # a FilterScope of 0
-                    # Saved Search (ReportType 15) needs no modifications, but setting FilterScope to 0 allows the SAVE!
-                    elif ((self.FilterReportType == '4') and (int(line) == 0)) or (self.FilterReportType == '15'):
-                        self.FilterScope = 0
-                    else:
-                       if 'unicode' in wx.PlatformInfo:
-                           # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                           prompt = unicode(_('An error occurred during Database Import.\nThere is an unsupported Filter Report Type (%s) in the Filter table. \nYou may wish to upgrade Tranana and try again.'), 'utf8')
+                   elif dataType == 'Length':
+                       if objectType != 'AddVid':
+                           currentObj.tape_length = line
                        else:
-                           prompt = _('An error occurred during Database Import.\nThere is an unsupported Filter Report Type (%s) in the Filter table. \nYou may wish to upgrade Tranana and try again.')
-                       errordlg = Dialogs.ErrorDialog(self, prompt % (self.FilterReportType))
-                       errordlg.ShowModal()
-                       errordlg.Destroy()
-                    dataType = None
+                           currentObj['VidLength'] = line
+                       dataType = None
 
-               elif dataType == 'ConfigName':
-                    # Struggling to get the encoding correct.  ProcessLine(line) appears to work even in Chinese.
-                    self.FilterConfigName = self.ProcessLine(line)  # line.decode('utf8')  # DBInterface.ProcessDBDataForUTF8Encoding(line)
-                    dataType = None
+                   elif dataType == 'Offset':
+                       if objectType != 'AddVid':
+                           currentObj.offset = line
+                       else:
+                           currentObj['Offset'] = line
+                       dataType = None
 
-               elif dataType == 'FilterDataType': 
-                    self.FilterFilterDataType = line
-                    dataType = None
+                   elif dataType == 'Audio':
+                       if objectType != 'AddVid':
+                           currentObj.audio = line
+                       else:
+                           currentObj['Audio'] = line
+                       dataType = None
 
-               elif dataType == 'FilterData': 
-                   # If this is not our first line, add a newline character before our new text.  Otherwise, all the
-                   # text is added as a single line.
-                   if self.FilterFilterData != '':
-                       self.FilterFilterData += '\n'
-                   # Starting with XML Version 1.3, we have to deal with encoding issues differently
-                   if self.XMLVersionNumber in ['1.0', '1.1', '1.2']:
-                       # We just add the encoded line, without the ProcessLine() call, because Filter Data is stored in the Database
-                       # as a BLOB, and thus is encoded and handled differently.
-                       self.FilterFilterData += unicode(line, self.importEncoding)
-                   # Starting with XML Version 1.3 ...
-                   else:
-                       # we don't encode on a line by line basis for FilterData
-                       self.FilterFilterData += line
+                   elif dataType == 'Title':
+                       currentObj.title = self.ProcessLine(line)
+                       dataType = None
 
-                   # We DO NOT reset DataType here, as Filter Data may be many lines long!
-                   # dataType = None
+                   elif dataType == 'Creator':
+                       currentObj.creator = self.ProcessLine(line)
+                       dataType = None
 
-               elif dataType == 'XMLVersionNumber':
-                   self.XMLVersionNumber = line
+                   elif dataType == 'Subject':
+                       currentObj.subject = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Description':
+                       # If this is not our first line, add a newline character before our new text.  Otherwise, all the
+                       # text is added as a single line.
+                       if currentObj.description != '':
+                           currentObj.description = currentObj.description + '\n'
+                       currentObj.description = currentObj.description + self.ProcessLine(line)
+                       # We DO NOT reset DataType here, as Description may be many lines long!
+                       # dataType = None
+
+                   elif dataType == 'Publisher':
+                       currentObj.publisher = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Contributor':
+                       currentObj.contributor = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Type':
+                       currentObj.dc_type = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Format':
+                       currentObj.format = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Source':
+                       currentObj.source = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Language':
+                       currentObj.language = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Relation':
+                       currentObj.relation = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Coverage':
+                       currentObj.coverage = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Rights':
+                       currentObj.rights = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Transcriber':
+                       currentObj.transcriber = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'ParentCollectNum':
+                       # If the parent collection has already been defined, and thus has a known record number ...
+                       if int(line) in recNumbers['Collection']:
+                           # ... save the updated parent collection number
+                           currentObj.parent = recNumbers['Collection'][int(line)]
+                       # If the parent collection number is not yet knows, because the parent collection hasn't been processed yet ...
+                       else:
+                           # ... add this collection (by number) to the list of collections that need to be updated later ...
+                           collectionsToUpdate.append(currentObj.number)
+                           # ... and store the UNTRANSLATED parent collection number data to be translated later.
+                           currentObj.parent = int(line)
+                           
+                       dataType = None
+
+                   elif dataType == 'ClipStart':
+                       currentObj.clip_start = int(line)
+                       # If we have a Clip object ...
+                       if objectType == 'Clip':
+                           if line != '0':
+                               # ... save the Clip Start time so it can be added to the Clip Transcript record too.
+                               clipStartStop[(currentObj.number, 'Start')] = int(line)
+                       dataType = None
+
+                   elif dataType == 'ClipStop':
+                       currentObj.clip_stop = int(line)
+                       # If we have a Clip object ...
+                       if objectType == 'Clip':
+                           if line != '0':
+                               # ... save the Clip Stop time so it can be added to the Clip Transcript record too.
+                               clipStartStop[(currentObj.number, 'Stop')] = int(line)
+                       dataType = None
+
+                   elif dataType == 'MinTranscriptWidth':
+                       currentObj.minTranscriptWidth = int(line)
+                       dataType = None
+
+                   elif dataType == 'SortOrder':
+                       currentObj.sort_order = line
+                       dataType = None
+
+                   elif dataType == 'ImageScale':
+                       currentObj.image_scale = float(line)
+                       dataType = None
+
+                   elif dataType == 'ImageCoordsX':
+                       if len(currentObj.image_coords) == 2:
+                           currentObj.image_coords = (float(line), currentObj.image_coords[1])
+                       else:
+                           currentObj.image_coords = (float(line), 0.0)
+                       dataType = None
+
+                   elif dataType == 'ImageCoordsY':
+                       if len(currentObj.image_coords) == 2:
+                           currentObj.image_coords = (currentObj.image_coords[0], float(line))
+                       else:
+                           currentObj.image_coords = (0.0, float(line))
+                       dataType = None
+
+                   elif dataType == 'ImageSizeW':
+                       if len(currentObj.image_size) == 2:
+                           currentObj.image_size = (int(line), currentObj.image_size[1])
+                       else:
+                           currentObj.image_size = (int(line), 0)
+                       dataType = None
+
+                   elif dataType == 'ImageSizeH':
+                       if len(currentObj.image_size) == 2:
+                           currentObj.image_size = (currentObj.image_size[0], int(line))
+                       else:
+                           currentObj.image_size = (0, int(line))
+                       dataType = None
+
+                   elif dataType == 'SnapshotTimeCode':
+                       currentObj.episode_start = int(line)
+                       dataType = None
+
+                   elif dataType == 'SnapshotDuration':
+                       currentObj.episode_duration = int(line)
+                       dataType = None
+
+                   elif dataType == 'X1':
+                       self.snapshotKeyword['X1'] = int(line)
+                       dataType = None
+
+                   elif dataType == 'Y1':
+                       self.snapshotKeyword['Y1'] = int(line)
+                       dataType = None
+
+                   elif dataType == 'X2':
+                       self.snapshotKeyword['X2'] = int(line)
+                       dataType = None
+
+                   elif dataType == 'Y2':
+                       self.snapshotKeyword['Y2'] = int(line)
+                       dataType = None
+
+                   elif dataType == 'Visible':
+                       self.snapshotKeyword['Visible'] = int(line)
+                       dataType = None
+
+                   elif dataType == 'DrawMode':
+                       if objectType == 'Keyword':
+                           currentObj.drawMode = self.ProcessLine(line)
+                       elif objectType == 'SnapshotKeywordStyle':
+                           self.snapshotKeywordStyle['DrawMode'] = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'ColorName':
+                       if objectType == 'Keyword':
+                           currentObj.lineColorName = self.ProcessLine(line)
+                       elif objectType == 'SnapshotKeywordStyle':
+                           self.snapshotKeywordStyle['ColorName'] = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'ColorDef':
+                       if objectType == 'Keyword':
+                           currentObj.lineColorDef = self.ProcessLine(line)
+                       elif objectType == 'SnapshotKeywordStyle':
+                           self.snapshotKeywordStyle['ColorDef'] = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'LineWidth':
+                       if objectType == 'Keyword':
+                           currentObj.lineWidth = int(line)
+                       elif objectType == 'SnapshotKeywordStyle':
+                           self.snapshotKeywordStyle['LineWidth'] = int(line)
+                       dataType = None
+
+                   elif dataType == 'LineStyle':
+                       if objectType == 'Keyword':
+                           currentObj.lineStyle = self.ProcessLine(line)
+                       elif objectType == 'SnapshotKeywordStyle':
+                           self.snapshotKeywordStyle['LineStyle'] = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'KWG':
+                       if objectType == 'SnapshotKeyword':
+                           self.snapshotKeyword['KeywordGroup'] = self.ProcessLine(line)
+                       elif objectType == 'SnapshotKeywordStyle':
+                           self.snapshotKeywordStyle['KeywordGroup'] = self.ProcessLine(line)
+                       else:
+                           currentObj.keywordGroup = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'KW':
+                       if objectType == 'SnapshotKeyword':
+                           self.snapshotKeyword['Keyword'] = self.ProcessLine(line)
+                       elif objectType == 'SnapshotKeywordStyle':
+                           self.snapshotKeywordStyle['Keyword'] = self.ProcessLine(line)
+                       else:
+                           currentObj.keyword = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'Definition':
+                       # If this is not our first line, add a newline character before our new text.  Otherwise, all the
+                       # text is added as a single line.
+                       if currentObj.definition != '':
+                           currentObj.definition = currentObj.definition + '\n'
+                       # We changed the way the definition was stored in the database for Transana 2.30, XML Version 1.4.
+                       if (self.XMLVersionNumber in ['1.1', '1.2', '1.3']):
+                           currentObj.definition = currentObj.definition + self.ProcessLine(line)
+                       else:
+                           # We changed the encoding here from importEncoding to UTF-8 no matter what for version 2.50.
+                           currentObj.definition = currentObj.definition + line.decode('utf8')  # (self.importEncoding)
+                       # We DO NOT reset DataType here, as Definition may be many lines long!
+                       # dataType = None
+
+                   elif dataType == 'Example':
+                       currentObj.example = line
+                       dataType = None
+
+                   elif dataType == 'NoteTaker':
+                       currentObj.author = self.ProcessLine(line)
+                       dataType = None
+
+                   elif dataType == 'NoteText':
+                       # If this is not our first line, add a newline character before our new text.  Otherwise, all the
+                       # text is added as a single line.
+                       if currentObj.text != '':
+                           currentObj.text = currentObj.text + '\n'
+                       # NOTE:  we always use UTF8 here, not self.importEncoding!
+                       currentObj.text = currentObj.text + line.decode('utf8')
+                       # We DO NOT reset DataType here, as NoteText may be many lines long!
+                       # dataType = None
+
+                   elif dataType == 'ReportType':
+                        self.FilterReportType = line
+                        dataType = None
+
+                   elif dataType == 'ReportScope':
+                        if self.FilterReportType in ['5', '6', '7', '10', '14']:
+                            self.FilterScope = recNumbers['Series'][int(line)]
+                        elif self.FilterReportType in ['1', '2', '3', '8', '11']:
+                            self.FilterScope = recNumbers['Episode'][int(line)]
+                        # Collection Clip Data Export (ReportType 4) only needs translation if ReportScope != 0
+                        elif (self.FilterReportType in ['12', '16']) or ((self.FilterReportType == '4') and (int(line) != 0)):
+                            self.FilterScope = recNumbers['Collection'][int(line)]
+                        elif self.FilterReportType in ['13']:
+                            # FilterScopes for ReportType 13 (Notes Report) are constants, not object numbers!
+                            self.FilterScope = int(line)
+                        # Collection Clip Data Export (ReportType 4) for ReportScope 0, the Collection Root, needs
+                        # a FilterScope of 0
+                        # Saved Search (ReportType 15) needs no modifications, but setting FilterScope to 0 allows the SAVE!
+                        elif ((self.FilterReportType == '4') and (int(line) == 0)) or (self.FilterReportType == '15'):
+                            self.FilterScope = 0
+                        else:
+                           if 'unicode' in wx.PlatformInfo:
+                               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                               prompt = unicode(_('An error occurred during Database Import.\nThere is an unsupported Filter Report Type (%s) in the Filter table. \nYou may wish to upgrade Transana and try again.'), 'utf8')
+                           else:
+                               prompt = _('An error occurred during Database Import.\nThere is an unsupported Filter Report Type (%s) in the Filter table. \nYou may wish to upgrade Transana and try again.')
+                           errordlg = Dialogs.ErrorDialog(self, prompt % (self.FilterReportType))
+                           errordlg.ShowModal()
+                           errordlg.Destroy()
+                        dataType = None
+
+                   elif dataType == 'ConfigName':
+                        # Struggling to get the encoding correct.  ProcessLine(line) appears to work even in Chinese.
+                        self.FilterConfigName = self.ProcessLine(line)  # line.decode('utf8')  # DBInterface.ProcessDBDataForUTF8Encoding(line)
+                        dataType = None
+
+                   elif dataType == 'FilterDataType': 
+                        self.FilterFilterDataType = line
+                        dataType = None
+
+                   elif dataType == 'FilterData': 
+                       # If this is not our first line, add a newline character before our new text.  Otherwise, all the
+                       # text is added as a single line.
+                       if self.FilterFilterData != '':
+                           self.FilterFilterData += '\n'
+                       # Starting with XML Version 1.3, we have to deal with encoding issues differently
+                       if self.XMLVersionNumber in ['1.0', '1.1', '1.2']:
+                           # We just add the encoded line, without the ProcessLine() call, because Filter Data is stored in the Database
+                           # as a BLOB, and thus is encoded and handled differently.
+                           self.FilterFilterData += unicode(line, self.importEncoding)
+                       # Starting with XML Version 1.3 ...
+                       else:
+                           # we don't encode on a line by line basis for FilterData
+                           self.FilterFilterData += line
+
+                       # We DO NOT reset DataType here, as Filter Data may be many lines long!
+                       # dataType = None
+
+                   elif dataType == 'XMLVersionNumber':
+                       self.XMLVersionNumber = line
 
                # If we're not continuing, stop processing! 
                if not contin:
@@ -1454,7 +1759,7 @@ class XMLImport(Dialogs.GenForm):
            if contin: 
                # Since Clips were imported before Transcripts, the Originating Transcript Numbers in the Clip Records
                # are incorrect.  We must update them now.
-               progress.Update(92, _('Updating Source Transcript Numbers in Clip Transcript records'))
+               progress.Update(93, _('Updating Source Transcript Numbers in Clip Transcript records'))
                if db != None:
                    dbCursor2 = db.cursor()
                    # Get all NEW transcript records.  We DON'T want to process transcript records that were in the database prior
@@ -1548,11 +1853,14 @@ class XMLImport(Dialogs.GenForm):
 
                 # NOTE:  We shouldn't have to do this.  I must've screwed up the encoding at some point in XMLExport.py.
                 #        In essence, we need txt.decode('utf8').decode(self.importEncoding), but that 
-                
-                # For each character in the unicode TXT string ...
-                for x in txt.decode('utf8'):
-                    # ... add the appropriate character to the string S variable
-                    s += chr(ord(x))
+
+                if self.importEncoding != 'latin1':
+                    # For each character in the unicode TXT string ...
+                    for x in txt.decode('utf8'):
+                        # ... add the appropriate character to the string S variable
+                        s += chr(ord(x))
+                else:
+                    s = txt
 
                 # Start Exception Handling.  (Japanese Filter Names weren't encoded right in 2.42, which makes this necessary.)
                 try:

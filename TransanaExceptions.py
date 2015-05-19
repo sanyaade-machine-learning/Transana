@@ -1,4 +1,4 @@
-# Copyright (C) 2002 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2002 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -77,7 +77,9 @@ class SaveError(exceptions.Exception):
             if isinstance(reason, str):
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                 reason = unicode(reason, 'utf8')
-            prompt = unicode(_("Unable to save.  %s"), 'utf8')
+            prompt = _("Unable to save.  %s")
+            if type(prompt) == str:
+                prompt = unicode(prompt, 'utf8')
         else:
             prompt = _("Unable to save.  %s")
         self.explanation = prompt % reason

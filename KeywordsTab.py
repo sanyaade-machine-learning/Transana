@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -267,48 +267,85 @@ class KeywordsTab(wx.Panel):
             obj.lock_record()
             # Create/define the Keyword List Edit Form
             dlg = KeywordListEditForm.KeywordListEditForm(self.parent.parent, -1, _("Edit Keyword List"), obj, self.kwlist)
-            # Show the Keyword List Edit Form and process it if the user selects OK
-            if dlg.ShowModal() == wx.ID_OK:
-                # Clear the local keywords list and repopulate it from the Keyword List Edit Form
-                self.kwlist = []
-                for kw in dlg.keywords:
-                    self.kwlist.append(kw)
+            # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
+            contin = True
+            # While the "continue" flag is True ...
+            while contin:
+                # if the user pressed "OK" ...
+                try:
+                    # Show the Keyword List Edit Form and process it if the user selects OK
+                    if dlg.ShowModal() == wx.ID_OK:
+                        # Clear the local keywords list and repopulate it from the Keyword List Edit Form
+                        self.kwlist = []
+                        for kw in dlg.keywords:
+                            self.kwlist.append(kw)
 
-                # Copy the local keywords list into the appropriate object and save that object
-                obj.keyword_list = self.kwlist
+                        # Copy the local keywords list into the appropriate object and save that object
+                        obj.keyword_list = self.kwlist
 
-                for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
-                    # Load the specified Clip record.  Save time by skipping the Clip Transcript, which we don't need.
-                    tempClip = Clip.Clip(clipNum, skipText=True)
-                    # Prepare the Node List for removing the Keyword Example Node
-                    nodeList = (_('Keywords'), keywordGroup, keyword, tempClip.id)
-                    # Call the DB Tree's delete_Node method.  Include the Clip Record Number so the correct Clip entry will be removed.
-                    self.parent.GetPage(0).tree.delete_Node(nodeList, 'KeywordExampleNode', tempClip.number)
+                        for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
+                            # Load the specified Clip record.  Save time by skipping the Clip Transcript, which we don't need.
+                            tempClip = Clip.Clip(clipNum, skipText=True)
+                            # Prepare the Node List for removing the Keyword Example Node
+                            nodeList = (_('Keywords'), keywordGroup, keyword, tempClip.id)
+                            # Call the DB Tree's delete_Node method.  Include the Clip Record Number so the correct Clip entry will be removed.
+                            self.parent.GetPage(0).tree.delete_Node(nodeList, 'KeywordExampleNode', tempClip.number)
 
-                # If we are dealing with an Episode ...
-                if isinstance(obj, Episode.Episode):
-                    # Check to see if there are keywords to be propagated
-                    self.parent.parent.ControlObject.PropagateEpisodeKeywords(obj.number, obj.keyword_list)
+                        # If we are dealing with an Episode ...
+                        if isinstance(obj, Episode.Episode):
+                            # Check to see if there are keywords to be propagated
+                            self.parent.parent.ControlObject.PropagateEpisodeKeywords(obj.number, obj.keyword_list)
 
-                obj.db_save()
+                        obj.db_save()
 
-                # Now let's communicate with other Transana instances if we're in Multi-user mode
-                if not TransanaConstants.singleUserVersion:
-                    if isinstance(obj, Episode.Episode):
-                        msg = 'Episode %d' % obj.number
-                    elif isinstance(obj, Clip.Clip):
-                        msg = 'Clip %d' % obj.number
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            if isinstance(obj, Episode.Episode):
+                                msg = 'Episode %d' % obj.number
+                            elif isinstance(obj, Clip.Clip):
+                                msg = 'Clip %d' % obj.number
+                            else:
+                                msg = ''
+                            if msg != '':
+                                if DEBUG:
+                                    print 'Message to send = "UKL %s"' % msg
+                                if TransanaGlobal.chatWindow != None:
+                                    # Send the "Update Keyword List" message
+                                    TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+
+                        # Update the display to reflect changes in the Keyword List
+                        self.UpdateKeywords()
+                        # If we do all this, we don't need to continue any more.
+                        contin = False
+                    # If the user pressed Cancel ...
                     else:
-                        msg = ''
-                    if msg != '':
-                        if DEBUG:
-                            print 'Message to send = "UKL %s"' % msg
-                        if TransanaGlobal.chatWindow != None:
-                            # Send the "Update Keyword List" message
-                            TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                        # ... then we don't need to continue any more.
+                        contin = False
+                # Handle "SaveError" exception
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # Refresh the Keyword List, if it's a changed Keyword error
+                    dlg.refresh_keywords()
+                    # Highlight the first non-existent keyword in the Keywords control
+                    dlg.highlight_bad_keyword()
 
-                # Update the display to reflect changes in the Keyword List
-                self.UpdateKeywords()
+                # Handle other exceptions
+                except:
+                    if DEBUG:
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Exception %s: %s"), 'utf8')
+                    else:
+                        prompt = _("Exception %s: %s")
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
 
             # Unlock the appropriate record
             obj.unlock_record()
