@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -209,7 +209,7 @@ class ClipDataExport(Dialogs.GenForm):
 
         # Prepare the Filter Dialog.
         # Set the title for the Filter Dialog
-        title = _("Clip Data Export Filter Dialog")
+        title = unicode(_("Clip Data Export Filter Dialog"), 'utf8')
         # If we have a Series-based report ...
         if self.seriesNum != 0:
             # ... reportType 14 indicates Series Clip Data Export to the Filter Dialog
@@ -254,6 +254,21 @@ class ClipDataExport(Dialogs.GenForm):
         dlgFilter.SetClips(clipList)
         dlgFilter.SetKeywords(keywordList)
 
+        # ... get the list of existing configuration names.
+        profileList = dlgFilter.GetConfigNames()
+        # If (translated) "Default" is in the list ...
+        # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
+        if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+            # ... set the Filter Dialog to use this filter
+            dlgFilter.configName = unicode(_('Default'), TransanaGlobal.encoding)
+            # Temporarily set loadDefault to True for the Filter Dialog.  This disables the Filter Load dialog.
+            # (We don't use the FilterDialog parameter, as that disables loading other Filters!)
+            dlgFilter.loadDefault = True
+            # We need to load the config
+            dlgFilter.OnFileOpen(None)
+            # Now we turn loadDefault back off so we can load other filters if we want.
+            dlgFilter.loadDefault = False
+            
         # restore the cursor, now that the data is set up for the filter dialog
         TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
@@ -375,7 +390,7 @@ class ClipDataExport(Dialogs.GenForm):
     def OnBrowse(self, evt):
         """Invoked when the user activates the Browse button."""
         fs = wx.FileSelector(_("Select a text file for export"),
-                        TransanaGlobal.programDir,
+                        TransanaGlobal.configData.videoPath,
                         "",
                         "", 
                         _("Text Files (*.txt)|*.txt|All files (*.*)|*.*"), 

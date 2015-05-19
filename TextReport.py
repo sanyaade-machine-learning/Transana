@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2007  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2008  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -303,8 +303,12 @@ class TextReport(wx.Frame):
                 dlg.Destroy()
             # ... and call the FilterMethod() if we're supposed to.  If it returns True ...
             if contin and self.filterMethod(event):
+                # Disable GUI updates while populating the report text
+                self.reportText.Freeze()
                 # ... call the DisplayMethod() to update the report contents.
                 self.CallDisplay()
+                # Re-enable GUI Updates
+                self.reportText.Thaw()
                 # Since edits were lost, we can reset the report edit indicator.
                 self.reportEdited = False
 
@@ -396,8 +400,10 @@ class TextReport(wx.Frame):
         pageDialog.Destroy()
         # If no custom edits have been performed (which would be spoiled/lost by a call to CallDisplay()) ...
         if not self.reportEdited:
+            self.reportText.Freeze()
             # ... adjust the present display for a potential new paper size
             self.CallDisplay()
+            self.reportText.Thaw()
 
     def OnPrintPreview(self, event):
         """ Define the method that implements Print Preview """

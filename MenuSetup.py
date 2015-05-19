@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -57,6 +57,7 @@ MENU_TOOLS_NOTESBROWSER         =  wx.NewId()
 MENU_TOOLS_FILEMANAGEMENT       =  wx.NewId()
 MENU_TOOLS_IMPORT_DATABASE      =  wx.NewId()
 MENU_TOOLS_EXPORT_DATABASE      =  wx.NewId()
+MENU_TOOLS_COLORCONFIG          =  wx.NewId()
 MENU_TOOLS_BATCHWAVEFORM        =  wx.NewId()
 MENU_TOOLS_CHAT                 =  wx.NewId()
 MENU_TOOLS_RECORDLOCK           =  wx.NewId()
@@ -88,8 +89,9 @@ MENU_OPTIONS_LANGUAGE_ZH        =  wx.NewId()  # Chinese
 #        in DBInterface.InitializeSingleUserDatabase(), set export encoding in ClipDataExport, set GetNewData()
 #        and ChangeLanguages() in ControlObjectClass, you should be all set.
 
-if 'wxMSW' in wx.PlatformInfo:
+if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
     MENU_OPTIONS_QUICK_CLIPS    =  wx.NewId()
+MENU_OPTIONS_QUICKCLIPWARNING   =  wx.NewId()
 MENU_OPTIONS_WORDTRACK          =  wx.NewId()
 MENU_OPTIONS_AUTOARRANGE        =  wx.NewId()
 # Options Visualization Style menu
@@ -170,6 +172,7 @@ class MenuSetup(wx.MenuBar):
         self.toolsmenu.Append(MENU_TOOLS_FILEMANAGEMENT, _("&File Management"))
         self.toolsmenu.Append(MENU_TOOLS_IMPORT_DATABASE, _("&Import Database"))
         self.toolsmenu.Append(MENU_TOOLS_EXPORT_DATABASE, _("&Export Database"))
+        self.toolsmenu.Append(MENU_TOOLS_COLORCONFIG, _("&Graphics Color Configuration"))
         self.toolsmenu.Append(MENU_TOOLS_BATCHWAVEFORM, _("&Batch Waveform Generator"))
         if not TransanaConstants.singleUserVersion:
             self.toolsmenu.Append(MENU_TOOLS_CHAT, _("&Chat Window"))
@@ -245,8 +248,9 @@ class MenuSetup(wx.MenuBar):
             # self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_KO, _("English prompts, Korean data"), kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_LANGUAGE, _("&Language"), self.optionslanguagemenu)
         self.optionsmenu.AppendSeparator()
-        if 'wxMSW' in wx.PlatformInfo:
+        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
             self.optionsmenu.Append(MENU_OPTIONS_QUICK_CLIPS, _("&Quick Clip Mode"), kind=wx.ITEM_CHECK)
+        self.optionsmenu.Append(MENU_OPTIONS_QUICKCLIPWARNING, _("Show Quick Clip Warning"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_WORDTRACK, _("Auto Word-&tracking"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_WAVEFORMQUICKLOAD, _("&Waveform Quick-load"), kind=wx.ITEM_CHECK)
@@ -314,8 +318,9 @@ class MenuSetup(wx.MenuBar):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_KO, True)
             
         # Set Options Menu items to their initial values based on Configuration Data
-        if 'wxMSW' in wx.PlatformInfo:
+        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
             self.optionsmenu.Check(MENU_OPTIONS_QUICK_CLIPS, TransanaGlobal.configData.quickClipMode)
+        self.optionsmenu.Check(MENU_OPTIONS_QUICKCLIPWARNING, TransanaGlobal.configData.quickClipWarning)
         self.optionsmenu.Check(MENU_OPTIONS_WORDTRACK, TransanaGlobal.configData.wordTracking)
         self.optionsmenu.Check(MENU_OPTIONS_AUTOARRANGE, TransanaGlobal.configData.autoArrange)
         self.optionsmenu.Check(MENU_OPTIONS_WAVEFORMQUICKLOAD, TransanaGlobal.configData.waveformQuickLoad)

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -17,7 +17,7 @@
 """This module contains functions for encapsulating access to the database
 for Transana."""
 
-__author__ = 'Nathaniel Case, David K. Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
+__author__ = 'David K. Woods <dwoods@wcer.wisc.edu>, Nathaniel Case, Rajas Sambhare'
 
 DEBUG = False
 if DEBUG:
@@ -43,6 +43,8 @@ import os
 import sys
 # import Python's string module
 import string
+# import Transana's Clip object
+import Clip
 # Import Transana's Dialog Boxes
 import Dialogs
 # import Transana's Constants
@@ -67,10 +69,9 @@ def InitializeSingleUserDatabase():
     if not os.path.exists(databasePath):
         # If not, create it
         os.makedirs(databasePath)
-    
+
     # Start the embedded MySQL Server, using the "databases" folder off the Transana Program
     # folder for the root Data folder.
-    # TODO:  Internationalize the "--language" parameter based on selected language.
     datadir = "--datadir=" + databasePath
     # Default to English
     lang = '--language=./share/english'
@@ -242,22 +243,115 @@ def establish_db_exists():
         # Transcript Table: Test for existence and create if needed
         query = """
                   CREATE TABLE IF NOT EXISTS Transcripts2
-                    (TranscriptNum   INTEGER auto_increment, 
-                     TranscriptID    VARCHAR(100), 
-                     EpisodeNum      INTEGER, 
-                     ClipNum         INTEGER, 
-                     Transcriber     VARCHAR(100), 
-                     Comment         VARCHAR(255), 
-                     RTFText         LONGBLOB, 
-                     RecordLock      VARCHAR(25), 
-                     LockTime        DATETIME, 
-                     LastSaveTime    DATETIME, 
+                    (TranscriptNum        INTEGER auto_increment, 
+                     TranscriptID         VARCHAR(100), 
+                     EpisodeNum           INTEGER,
+                     SourceTranscriptNum  INTEGER,
+                     ClipNum              INTEGER,
+                     SortOrder            INTEGER,
+                     Transcriber          VARCHAR(100),
+                     ClipStart            INTEGER,
+                     ClipStop             INTEGER,
+                     Comment              VARCHAR(255), 
+                     RTFText              LONGBLOB, 
+                     RecordLock           VARCHAR(25), 
+                     LockTime             DATETIME, 
+                     LastSaveTime         DATETIME, 
                      PRIMARY KEY (TranscriptNum))
                 """
         # Add the appropriate Table Type to the CREATE Query
         query = SetTableType(hasInnoDB, query)
         # Execute the Query
         dbCursor.execute(query)
+
+        # Now we need to check the Transcripts table to see if it has the SourceTranscriptNum and SortOrder
+        # fields, added for Transana 2.30 to allow multi-transcript clips.
+
+        # First, let's look at the Transcripts table structure.
+        # Define the appropriate query
+        query = "SHOW CREATE TABLE Transcripts2"
+        # Execute the Query
+        dbCursor.execute(query)
+        # now let's look at the data returned from the database
+        for data in dbCursor.fetchall():
+            # Check for "array" data and convert if needed
+            if type(data[1]).__name__ == 'array':
+                d1 = data[1].tostring()
+            else:
+                d1 = data[1]
+            # if a "SourceTranscriptNum" field is present, the table has already been altered.
+            if not u"sourcetranscriptnum" in d1.lower():
+                # If not, build a message to the user about upgrading the database
+                msg = _("Transana has detected that this database needs to be upgraded.") + "\n" + \
+                      _("Once you upgrade your database, you should not use it with older versions of Transana.") + "\n\n" + \
+                      _("Do you want to upgrade this database at this time?")
+                # Provide an extra warning for MU users
+                if not TransanaConstants.singleUserVersion:
+                    msg += "\n\n" + _("NOTE:  Upgrading the database before the Message Server has been upgraded\ncan lead to serious problems.  Do not upgrade unless you are SURE your\nMessage Server has already been upgraded.")
+                # Create the dialog box
+                dlg = Dialogs.QuestionDialog(None, msg, noDefault=True)
+                # Display the error message
+                result = dlg.LocalShowModal()
+                # Destroy the dialog
+                dlg.Destroy()
+                # If the user answered "YES" to upgrading ...
+                if result == wx.ID_YES:
+                    # If not, we need to alter the table to add the SourceTranscriptNum field
+                    query = """ ALTER TABLE Transcripts2
+                                  ADD COLUMN
+                                    SourceTranscriptNum  INTEGER AFTER EpisodeNum """
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
+                    # ... then we need to alter the table to add the SortOrder field
+                    query = """ ALTER TABLE Transcripts2
+                                  ADD COLUMN
+                                    SortOrder  INTEGER AFTER ClipNum """
+                    dbCursor2.execute(query)
+                    # ... then we need to alter the table to add the ClipStart field
+                    query = """ ALTER TABLE Transcripts2
+                                  ADD COLUMN
+                                    ClipStart  INTEGER AFTER Transcriber """
+                    dbCursor2.execute(query)
+                    # ... then we need to alter the table to add the ClipStop field
+                    query = """ ALTER TABLE Transcripts2
+                                  ADD COLUMN
+                                    ClipStop  INTEGER AFTER ClipStart """
+                    dbCursor2.execute(query)
+                    # Now find all the Clip Transcripts
+                    query = " SELECT ClipNum, TranscriptNum, ClipStart, ClipStop FROM Clips2 "
+                    dbCursor2.execute(query)
+                    # Get the list of clips from the query
+                    clipList = dbCursor2.fetchall()
+                    # Create a progress dialog (This isn't even seen on small databases, but might be nice for large ones.)
+                    progDlg = wx.ProgressDialog(_("Transana"), _("Database upgrade in progress"), maximum = len(clipList),
+                                                style = wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME | wx.PD_REMAINING_TIME)
+                    # We need another database cursor
+                    dbCursor3 = db.cursor()
+                    # Define a query that will move the Source Transcript data from the Clip data we've already got to
+                    # the Transcript table
+                    query = "UPDATE Transcripts2 SET SourceTranscriptNum = %d, SortOrder = 0, ClipStart = %d, ClipStop = %d WHERE ClipNum = %d"
+                    # Initialize a counter for the Progress Dialog
+                    counter = 0
+                    # Iterate through the list of known clips ...
+                    for (clipNum, transcriptNum, clipStart, clipStop) in clipList:
+                        # ... update the Progress Dialog ...
+                        (cont, skip) = progDlg.Update(counter)
+                        # ... move the Source Transcript data from the Clip table to the Transcript table
+                        dbCursor3.execute(query % (transcriptNum, clipStart, clipStop, clipNum))
+                        # ... and increment the progress counter
+                        counter += 1
+                    # We can now close the Progress Dialog
+                    progDlg.Destroy()
+                    # Finally, drop TranscriptNum from the Clip table, now that the data's beem moved to the Transcript table.
+                    query = """ ALTER TABLE Clips2
+                                  DROP COLUMN TranscriptNum """
+                    dbCursor2.execute(query)
+                # If the user says "NO" to upgrading ...
+                else:
+                    # Close the database before any changes get made!
+                    close_db()
+                    # signal failure to connect to the database
+                    return False
 
         # Collection Table: Test for existence and create if needed
         query = """
@@ -284,7 +378,6 @@ def establish_db_exists():
                      ClipID         VARCHAR(100), 
                      CollectNum     INTEGER, 
                      EpisodeNum     INTEGER, 
-                     TranscriptNum  INTEGER, 
                      MediaFile      VARCHAR(255), 
                      ClipStart      INTEGER, 
                      ClipStop       INTEGER, 
@@ -351,7 +444,7 @@ def establish_db_exists():
                   CREATE TABLE IF NOT EXISTS Keywords2
                     (KeywordGroup  VARCHAR(50) NOT NULL, 
                      Keyword       VARCHAR(85) NOT NULL, 
-                     Definition    VARCHAR(255), 
+                     Definition    LONGBLOB, 
                      RecordLock    VARCHAR(25), 
                      LockTime      DATETIME, 
                      PRIMARY KEY (KeywordGroup, Keyword))
@@ -360,6 +453,26 @@ def establish_db_exists():
         query = SetTableType(hasInnoDB, query)
         # Execute the Query
         dbCursor.execute(query)
+
+        # Now we need to check the Keywords table to see if the Definition field is a VARCHAR(255) or a LONGBLOB,
+        # and we need to increase the size of the field if it's a VARCHAR.
+
+        query = "SHOW CREATE TABLE Keywords2"
+        # Execute the Query
+        dbCursor.execute(query)
+        # now let's look at the data returned from the database
+        for data in dbCursor.fetchall():
+            # Check for "array" data and convert if needed
+            if type(data[1]).__name__ == 'array':
+                d1 = data[1].tostring()
+            else:
+                d1 = data[1]
+            # if a LONGBLOB is present, we can skip this.
+            if not u"longblob" in d1.lower():
+                # ... then we need to alter the table to change the data type to LONGBLOB.
+                query = "ALTER TABLE Keywords2 MODIFY Definition LONGBLOB"
+                dbCursor2 = db.cursor()
+                dbCursor2.execute(query)
 
         # ClipKeywords Table: Test for existence and create if needed
         # MySQL Primary Keys cannot contain NULL values, and either EpisodeNum
@@ -449,6 +562,17 @@ def establish_db_exists():
                 dbCursor2 = db.cursor()
                 dbCursor2.execute(query)
 
+        # See if this (username, server, database) combination has defined paths.
+        if TransanaGlobal.configData.pathsByDB.has_key((TransanaGlobal.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database)):
+            # If so, load the video root and visualization paths.
+            TransanaGlobal.configData.videoPath = TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database)]['videoPath']
+            TransanaGlobal.configData.visualizationPath = TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database)]['visualizationPath']
+        # If not ...
+        else:
+            # ... use the current video root and visualization paths to initialize the configuration values.
+            TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database)] = \
+                    {'videoPath' : TransanaGlobal.configData.videoPath,
+                     'visualizationPath' : TransanaGlobal.configData.visualizationPath}
 
         # If we've gotten this far, return "true" to indicate success.
         return True
@@ -467,14 +591,14 @@ def get_db():
         # Create the Dialog Box
         UsernameForm = UsernameandPassword(TransanaGlobal.menuWindow)
         # Get the Data Entered in the Dialog
-        (userName, password, dbServer, databaseName) = UsernameForm.GetValues()
+        (userName, password, dbServer, databaseName, port) = UsernameForm.GetValues()
         # Destroy the form now that we're done with it.
         UsernameForm.Destroy()
         # Check for the validity of the data.
         # The single-user version of Transana needs only the Database Name.  The multi-user version of
         # Transana requires all four values.
         if (databaseName == '') or \
-           ((not TransanaConstants.singleUserVersion) and ((userName == '') or (password == '') or (dbServer == ''))):
+           ((not TransanaConstants.singleUserVersion) and ((userName == '') or (password == '') or (dbServer == '') or (port == ''))):
             # If the Username and Password form is not filled out completely, the get_db method fails and returns "None"
             return None
         # Otherwise, all data was provided by the user.
@@ -498,13 +622,14 @@ def get_db():
                         _dbref = MySQLdb.connect()
                 else:
                     if 'unicode' in wx.PlatformInfo:
-                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, use_unicode=True)
+                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port), use_unicode=True)
                     else:
                         # The multi-user version requires all information to connect to the database server
-                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password)
+                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port))
                     # Put the Host name in the Configuration Data
                     # so that the same connection can be the default for the next logon
                     TransanaGlobal.configData.host = dbServer
+                    TransanaGlobal.configData.dbport = port
 
             except MySQLdb.OperationalError:
                 if DEBUG:
@@ -571,10 +696,10 @@ def get_db():
                             _dbref = MySQLdb.connect()
                     else:
                         if 'unicode' in wx.PlatformInfo:
-                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, use_unicode=True)
+                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port), use_unicode=True)
                         else:
                             # The multi-user version requires all information to connect to the database server
-                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password)
+                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port))
 
                 # We need to know the MySQL version we're dealing with to know if UTF-8 is supported.
                 # Get a Database Cursor
@@ -935,6 +1060,20 @@ def list_transcripts(SeriesName, EpisodeName):
     DBCursor.close()
     return l
 
+def list_clip_transcripts(clipNum):
+    """ Return a list of all Clip Transcripts for the given Clip """
+    l = []
+    query = """ SELECT TranscriptNum, SourceTranscriptNum, SortOrder
+                  FROM Transcripts2
+                  WHERE ClipNum = %d
+                  ORDER BY SortOrder """
+    DBCursor = get_db().cursor()
+    DBCursor.execute(query % clipNum)
+    for row in fetchall_named(DBCursor):
+        l.append((row['TranscriptNum'], row['SourceTranscriptNum'], row['SortOrder']))
+    DBCursor.close()
+    return l
+
 def list_of_collections(ParentNum=0):
     """Get a list of all collections for under the given parent record.  By
     default, the root parent (0) record is used."""
@@ -1107,7 +1246,7 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
     l = []
     if TimeCode == None:
         query = """
-                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment, a.TranscriptNum
+                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment
                     FROM Clips2 a, Collections2 b
                     WHERE a.CollectNum = b.CollectNum AND
                           a.EpisodeNum = %s
@@ -1116,7 +1255,7 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
         args = (EpisodeNum)
     else:
         query = """
-                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment, a.TranscriptNum
+                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment
                     FROM Clips2 a, Collections2 b
                     WHERE a.CollectNum = b.CollectNum AND
                           a.EpisodeNum = %s AND 
@@ -1136,7 +1275,7 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
             ClipID = ProcessDBDataForUTF8Encoding(ClipID)
             CollectID = ProcessDBDataForUTF8Encoding(CollectID)
         # Add a dictionary object to the results list that spells out the clip data
-        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'], 'Comment' : row['ClipComment'], 'TranscriptNum' : row['TranscriptNum']})
+        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'], 'Comment' : row['ClipComment']})
 
     DBCursor.close()
     return l
@@ -1146,10 +1285,11 @@ def list_of_clips_by_transcriptnum(TranscriptNum):
     # Initialize an empty list.
     l = []
     # Define the query that gets clips based on Transcript Number the clips was created from
-    query = """ SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment, a.TranscriptNum
-                  FROM Clips2 a, Collections2 b
+    query = """ SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment, c.SourceTranscriptNum
+                  FROM Clips2 a, Collections2 b, Transcripts2 c
                   WHERE a.CollectNum = b.CollectNum AND
-                        a.TranscriptNum = %s
+                        a.ClipNum = c.ClipNum AND
+                        c.SourceTranscriptNum = %s
                   ORDER BY a.ClipStart, b.CollectID, a.ClipID """
     # Set up the query parameters
     args = (TranscriptNum, )
@@ -1168,7 +1308,7 @@ def list_of_clips_by_transcriptnum(TranscriptNum):
             ClipID = ProcessDBDataForUTF8Encoding(ClipID)
             CollectID = ProcessDBDataForUTF8Encoding(CollectID)
         # Add a dictionary object to the results list that spells out the clip data
-        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'], 'Comment' : row['ClipComment'], 'TranscriptNum' : row['TranscriptNum']})
+        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'], 'Comment' : row['ClipComment'], 'TranscriptNum' : row['SourceTranscriptNum']})
     # Close the Database Cursor
     DBCursor.close()
     # Return the list of Dictionary Objects
@@ -1179,12 +1319,13 @@ def list_of_clip_copies(clipID, sourceTranscriptNum, clipStart, clipStop):
     # Create an empty list to hold data
     clipList = []
     # Define the SQL query
-    query = """ SELECT ClipNum, CollectNum, ClipID
-                  FROM Clips2
+    query = """ SELECT c.ClipNum, CollectNum, ClipID, TranscriptNum
+                  FROM Clips2 c, Transcripts2 t
                   WHERE ClipID = %s AND
-                        TranscriptNum = %s AND
-                        ClipStart = %s AND
-                        ClipStop = %s"""
+                        SourceTranscriptNum = %s AND
+                        c.ClipNum = t.ClipNum AND
+                        t.ClipStart = %s AND
+                        t.ClipStop = %s"""
     # Define the data to get plugged into the SQL query
     data = (clipID.encode('utf8'), sourceTranscriptNum, clipStart, clipStop)
     # Get a database cursor
@@ -1192,14 +1333,14 @@ def list_of_clip_copies(clipID, sourceTranscriptNum, clipStart, clipStop):
     # Execute the SQL query
     cursor.execute(query, data)
     # Fetch the data and iterate through it.
-    for (clipNum, collectNum, clipID) in cursor.fetchall():
+    for (clipNum, collectNum, clipID, transcriptNum) in cursor.fetchall():
         # Get the Clip ID
         id = clipID
         # Convert it for UTF-8 if needed
         if 'unicode' in wx.PlatformInfo:
             id = ProcessDBDataForUTF8Encoding(id)
         # Add the data to the data list
-        clipList.append((clipNum, collectNum, id))
+        clipList.append((clipNum, collectNum, id, transcriptNum))
     # Close the database cursor
     cursor.close()
     # Return the data list to the calling routine
@@ -1209,31 +1350,155 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
     """ Check to see if there is already a Quick Clip for this video segment. """
     # Get a database cursor
     DBCursor = get_db().cursor()
-    # Design a query to identify Quick Clips which match the data passed in
-    query = """SELECT ClipNum FROM Clips2
-                 WHERE CollectNum = %s AND
-                       EpisodeNum = %s AND
-                       TranscriptNum = %s AND
-                       ClipStart = %s AND
-                       ClipStop = %s"""
-    # Put the data passed in into a compatible data structure
-    data = (collectNum, episodeNum, transcriptNum, clipStart, clipStop)
+    # If we have a single-transcript Quick Clip, transcriptNum will be a longint value.
+    if type(transcriptNum) in [int, long]:
+        # Design a query to identify single-transcript Quick Clips which match the data passed in
+        query = """SELECT a.ClipNum FROM Clips2 a, Transcripts2 b
+                     WHERE CollectNum = %s AND
+                           a.EpisodeNum = %s AND
+                           b.SourceTranscriptNum = %s AND
+                           a.ClipStart = %s AND
+                           a.ClipStop = %s AND
+                           a.ClipNum = b.ClipNum """
+        # Put the data passed in into a compatible data structure
+        data = (collectNum, episodeNum, transcriptNum, clipStart, clipStop)
+        # Execute the query
+        DBCursor.execute(query, data)
+        # If no rows are returned ...
+        if DBCursor.rowcount == 0:
+            # ... close the database cursor ...
+            DBCursor.close()
+            # ... and return -1 to indicate that no duplicate clips were found
+            return -1
+        # If duplicate clip(s) are found ...
+        else:
+            # ... get the Clip Number of the first one ...
+            clipNum = DBCursor.fetchone()[0]
+            # ... close the database cursor ...
+            DBCursor.close()
+            # ... and return the Clip Number of the offending clip.
+            return clipNum
+    # If we have a multi-transcript Quick Clip ...
+    else:
+        # ... then transcriptNum is a LIST of source transcript numbers.  First, let's sort that list to make comparisons easier.
+        transcriptNum.sort()
+        # Design a query to identify multi-transcript Quick Clips which match the data passed in.
+        # This query returns a row for each transcript for all clips in the same collection, from the same episide with the same
+        # starting and stopping points.  If there are different Transcript configurations, these MAY NOT be duplicates!
+        query = """SELECT a.ClipNum, SourceTranscriptNum
+                     FROM Clips2 a, Transcripts2 b
+                     WHERE CollectNum = %s AND
+                           a.EpisodeNum = %s AND
+                           a.ClipStart = %s AND
+                           a.ClipStop = %s AND
+                           a.ClipNum = b.ClipNum
+                     ORDER BY a.ClipNum, SourceTranscriptNum"""
+        # Put the data passed in into a compatible data structure
+        data = (collectNum, episodeNum, clipStart, clipStop)
+
+        if DEBUG:
+            tmpDlg = wx.MessageDialog(None, query % data, "Hello!")
+            tmpDlg.ShowModal()
+            tmpDlg.Destroy()
+        
+        # Execute the query
+        DBCursor.execute(query, data)
+        # If no rows are returned ...
+        if DBCursor.rowcount == 0:
+            # ... close the database cursor ...
+            DBCursor.close()
+            # ... and return -1 to indicate that no duplicate clips were found
+            return -1
+        # If duplicate clip(s) are found, we have to check to see if they have the same transcript constellation.
+        # My methods here are imperfect, but I can't figure out a better way of doing it.
+        else:
+            # let's initialize a dictionary
+            queryTranscripts = {}
+            # Let's initialize a variable for holding the clip number we're looking at
+            currentClipNum = 0
+            # ... get the query results ...
+            queryResults = DBCursor.fetchall()
+            # Iterate through the query results
+            for (cl, tr) in queryResults:
+                # If we're looking at a new Clip number ...
+                if cl != currentClipNum:
+                    # ... update the current clip number ...
+                    currentClipNum = cl
+                    # ... and create a list for the source transcripts associated with THIS clip.
+                    queryTranscripts[cl] = []
+                # Add the source transcripts to the clip's Source Transcripts list.
+                queryTranscripts[cl].append(tr)
+            # Assume we will find no matches, so default the return Clip Number to signal no matches.
+            clipNum = -1
+            # Iterate through the dictionary's keys
+            for key in queryTranscripts.keys():
+                # If the transcript configuration for a particular clip matches what was sent in ...
+                if queryTranscripts[key] == transcriptNum:
+                    # ... then we've found our duplicate clips ...
+                    clipNum = key
+                    # ... and we're done.
+                    break
+            # ... close the database cursor ...
+            DBCursor.close()
+            # ... and return the Clip Number of the offending clip.
+            return clipNum
+
+def FindAdjacentClips(episodeNum, startTime, endTime, trNums):
+    """ Find clips that are adjacent to the time codes sent in.
+        Parameters:  episodeNum of the chosen clip
+                     startTime of the chosen clip
+                     endTime of the chosen clip
+                     trNums - source transcript numbers from the selected clip's one or more transcripts """
+
+    # NOTE:  This is a bit complex.  To be considered adjacent, the clip needs to be from the same Episode as clip X,
+    #        end where X starts or start where X ends,
+    #        and have the same set of transcript sources, ie. same number of transcripts from the same source transcripts.
+    #        I can't figure out how to determine this last part through SQL, so I'm doing it programatically.
+    
+    # Initialize a results set
+    results = []
+    # Get a database cursor
+    DBCursor = get_db().cursor()
+    # Define a query
+    query = """ SELECT c.ClipNum, ClipID, c.CollectNum, CollectID, MIN(t.ClipStart) ClipStart, MIN(t.ClipStop) ClipStop, COUNT(TranscriptNum) cnt
+                  FROM Clips2 c, Transcripts2 t, Collections2 co
+                  WHERE (c.EpisodeNum = %s) AND
+                        ((t.ClipStop = %s) OR (t.ClipStart = %s)) AND
+                        (c.ClipNum = t.ClipNum) AND
+                        (c.CollectNum = co.CollectNum)
+                  GROUP BY ClipNum
+                  ORDER BY ClipStart """
+    # Define the data for the query
+    data = (episodeNum, startTime, endTime)
     # Execute the query
     DBCursor.execute(query, data)
-    # If no rows are returned ...
-    if DBCursor.rowcount == 0:
-        # ... close the database cursor ...
-        DBCursor.close()
-        # ... and return -1 to indicate that no duplicate clips were found
-        return -1
-    # If duplicate clip(s) are found ...
-    else:
-        # ... get the Clip Number of the first one ...
-        clipNum = DBCursor.fetchone()[0]
-        # ... close the database cursor ...
-        DBCursor.close()
-        # ... and return the Clip Number of the offending clip.
-        return clipNum
+    # Iterate through the query results
+    for clipData in DBCursor.fetchall():
+        # First, check to see if the clip from the query has the same number of transcripts.  If not, forget it quick.
+        if True:     # clipData[-1] == len(trNums):
+            # Actually load the clip found by the query.
+            tempClip = Clip.Clip(clipData[0])
+            # Assume it's identical until proven otherwise
+            identical = True
+            # Iterate through the sequence of source transcripts
+            
+            if len(trNums) == len(tempClip.transcripts):
+                for x in range(len(trNums)):
+                    # If the indexed source transcript DON'T match ...
+                    if trNums[x] != tempClip.transcripts[x].source_transcript:
+                        # ... then the clips are not identical ...
+                        identical = False
+                        # ... and we can stop looking
+                        break
+            else:
+                identical = False
+            # If no transcript sources were NOT identical ...
+            if identical:
+                # ... then include the query data in the results set.  Note that we expand the collection name to
+                # include the full collection path.
+                results.append((clipData[:3] + (tempClip.GetNodeString(includeClip=False),) + clipData[4:]))
+    # Return the results set
+    return results
 
 def getMaxSortOrder(collNum):
     """Get the largest Sort Order value for all the Clips in a Collection."""
@@ -1636,40 +1901,38 @@ def VideoFilePaths(filePath, update=False):
     # Initialize the Episode Counter        
     episodeCount = 0
     # Create the Query for the Episode Table
-    query = "SELECT * FROM Episodes2 "
+    query = "SELECT EpisodeNum, MediaFile FROM Episodes2 "
     # Execute the Query
     dbCursor.execute(query)
     # Fetch all the Database Results, and process them row by row
-    for row in dbCursor.fetchall():
-        # The Media Filename is Element 4
-        file = row[4]
+    for (episodeNum, mediafile) in dbCursor.fetchall():
         # If we're using Unicode ...
         if 'unicode' in wx.PlatformInfo:
             # ... then encode the file names appropriately
-            file = ProcessDBDataForUTF8Encoding(file)
+            mediafile = ProcessDBDataForUTF8Encoding(mediafile)
         # Some Filenames have doubled backslashes, though not all do.  Let's eliminate them if they are present.
         # (Python requires a double backslash in a string to represent a single backslash, so this replaces double
         # backslashes ('\\') with single ones ('\') even though it looks like it replaces quadruples with doubles.)
-        file = string.replace(file, '\\\\', '\\')
+        mediafile = string.replace(mediafile, '\\\\', '\\')
         # Now replace the backslash with the more universal slash character in both the file name and the filePath
-        file = string.replace(file, '\\', '/')
+        mediafile = string.replace(mediafile, '\\', '/')
         filePath = string.replace(filePath, '\\', '/')
         # Compare the Video Root filePath passed in with the front portion of the File Name from the Database.
-        if filePath == file[:len(filePath)]:
+        if filePath == mediafile[:len(filePath)]:
             # If they are the same, increment the Episode Counter
             episodeCount += 1
             # If update is True, we should update the records we find.
             if update:
                 # Import Transana's Episode definition
                 import Episode
-                # Load the Episode using the Episode Number (Element 0 in the Row).
-                tempEpisode = Episode.Episode(row[0])
+                # Load the Episode using the Episode Number.
+                tempEpisode = Episode.Episode(episodeNum)
                 # We need a "try .. except" block to catch record lock exceptions
                 try:
                     # Try to lock the Episode
                     tempEpisode.lock_record()
                     # Remove the Video Root from the File Name
-                    tempEpisode.media_filename = file[len(filePath):]
+                    tempEpisode.media_filename = mediafile[len(filePath):]
                     # Save the Episode
                     tempEpisode.db_save()
                     # Unlock the Episode
@@ -1689,40 +1952,38 @@ def VideoFilePaths(filePath, update=False):
         # Initialize the Clip Counter
         clipCount = 0
         # Create the Query for the Episode Table
-        query = "SELECT * FROM Clips2 "
+        query = "SELECT ClipNum, MediaFile FROM Clips2 "
         # Execute the Query
         dbCursor.execute(query)
         # Fetch all the Database Results, and process them row by row
-        for row in dbCursor.fetchall():
-            # The Media Filename is Element 5
-            file = row[5]
+        for (clipNum, mediafile) in dbCursor.fetchall():
             # If we're using Unicode ...
             if 'unicode' in wx.PlatformInfo:
                 # ... then encode the file names appropriately
-                file = ProcessDBDataForUTF8Encoding(file)
+                mediafile = ProcessDBDataForUTF8Encoding(mediafile)
             # Some Filenames have doubled backslashes, though not all do.  Let's eliminate them if they are present.
             # (Python requires a double backslash in a string to represent a single backslash, so this replaces double
             # backslashes ('\\') with single ones ('\') even though it looks like it replaces quadruples with doubles.)
-            file = string.replace(file, '\\\\', '\\')
+            mediafile = string.replace(mediafile, '\\\\', '\\')
             # Now replace the backslash with the more universal slash character in both the file name and the filePath
-            file = string.replace(file, '\\', '/')
+            mediafile = string.replace(mediafile, '\\', '/')
             filePath = string.replace(filePath, '\\', '/')
             # Compare the Video Root filePath passed in with the front portion of the File Name from the Database.
-            if filePath == file[:len(filePath)]:
+            if filePath == mediafile[:len(filePath)]:
                 # If they are the same, increment the Clip Counter
                 clipCount += 1
                 # If update is True, we should update the record we find.
                 if update:
                     # Import Transana's Clip definition
                     import Clip
-                    # Load the Clip using the Clip Number (Element 0 in the Row).
-                    tempClip = Clip.Clip(row[0])
+                    # Load the Clip using the Clip Number.
+                    tempClip = Clip.Clip(clipNum)
                     # We need a "try .. except" block to catch record lock exceptions
                     try:
                         # Try to lock the Episode
                         tempClip.lock_record()
                         # Remove the Video Root from the File Name
-                        tempClip.media_filename = file[len(filePath):]
+                        tempClip.media_filename = mediafile[len(filePath):]
                         # Save the Clip
                         tempClip.db_save()
                         # Unlock the Clip
@@ -1774,8 +2035,6 @@ def IsDatabaseEmpty():
     dbCursor.close()
     return result
         
-
-
 def fetch_named(cursor, row_result=None):
     """Fetch a row result from the cursor object, but return it as a dictionary
     including the database field names.  Optionally specify an already-fetched
@@ -2352,7 +2611,7 @@ def UpdateDBFilenames(parent, filePath, fileList):
     # Let the calling routine know if we were successful or not
     return success
 
-def DeleteDatabase(username, password, server, database):
+def DeleteDatabase(username, password, server, database, port):
     """ Delete an entire database """
     # Assume failure
     res = False
@@ -2364,7 +2623,7 @@ def DeleteDatabase(username, password, server, database):
         else:
             try:
                 # The multi-user version requires all information except the database name
-                dbConn = MySQLdb.connect(host=server, user=username, passwd=password)
+                dbConn = MySQLdb.connect(host=server, user=username, passwd=password, port=port)
                 # If the connection fails here, it's not the database name that was the problem.
             except:
                 dbConn = None

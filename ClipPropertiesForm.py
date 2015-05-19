@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -20,10 +20,12 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 
 import Episode
 import Collection
+import Clip
 import DBInterface
 import Dialogs
 import KWManager
 import Misc
+import TransanaConstants
 import TransanaGlobal
 
 import wx
@@ -35,14 +37,38 @@ import TranscriptEditor
 class ClipPropertiesForm(Dialogs.GenForm):
     """Form containing Clip fields."""
 
-    def __init__(self, parent, id, title, clip_object):
+    def __init__(self, parent, id, title, clip_object, mergeList=None):
+        # If no Merge List is passed in ...
+        if mergeList == None:
+            # ... use the default Clip Properties Dialog size passed in from the config object.  (This does NOT get saved.)
+            size = TransanaGlobal.configData.clipPropertiesSize
+            # ... we can enable Clip Change Propagation
+            propagateEnabled = True
+            HelpContext='Clip Properties'
+        # If we DO have a merge list ...
+        else:
+            # ... increase the size of the dialog to allow for the list of mergeable clips.
+            size = (TransanaGlobal.configData.clipPropertiesSize[0], TransanaGlobal.configData.clipPropertiesSize[1] + 130)
+            # ... and Clip Change Propagation should be disabled
+            propagateEnabled = False
+            HelpContext='Clip Merge'
+
         # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style.  Signal that Propogation is included.
-        Dialogs.GenForm.__init__(self, parent, id, title, size=TransanaGlobal.configData.clipPropertiesSize, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, propagateEnabled=True, HelpContext='Clip Properties')
-        # Define the minimum size for this dialog as the initial size
-        self.SetSizeHints(600, 470)
+        Dialogs.GenForm.__init__(self, parent, id, title, size=size, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, propagateEnabled=propagateEnabled, HelpContext=HelpContext)
+        if mergeList == None:
+            # Define the minimum size for this dialog as the initial size
+            self.SetSizeHints(600, 470)
+        else:
+            # Define the minimum size for this dialog as the initial size
+            self.SetSizeHints(600, 600)
         # Remember the Parent Window
         self.parent = parent
+        # Remember the original Clip Object passed in
         self.obj = clip_object
+        # Remember the merge list, if one is passed in
+        self.mergeList = mergeList
+        # Initialize the merge item as unselected
+        self.mergeItemIndex = -1
         # if Keywords that server as Keyword Examples are removed, we will need to remember them.
         # Then, when OK is pressed, the Keyword Example references in the Database Tree can be removed.
         # We can't remove them immediately in case the whole Clip Properties Edit process is cancelled.
@@ -52,9 +78,49 @@ class ClipPropertiesForm(Dialogs.GenForm):
         # Tedious GUI layout code follows
         ######################################################
 
+        # If we're merging Clips ...
+        if self.mergeList != None:
+            # ... display a label for the Merge Clips ...
+            lay = wx.LayoutConstraints()
+            lay.top.SameAs(self.panel, wx.Top, 10)
+            lay.left.SameAs(self.panel, wx.Left, 10)
+            lay.right.SameAs(self.panel, wx.Right, 10)
+            lay.height.AsIs()
+            lblMergeClip = wx.StaticText(self.panel, -1, _("Clip to Merge"))
+            lblMergeClip.SetConstraints(lay)
+
+            # ... display a ListCtrl for the Merge Clips ...
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblMergeClip, 3)
+            lay.left.SameAs(self.panel, wx.Left, 10)
+            lay.right.SameAs(self.panel, wx.Right, 10)
+            lay.height.AsIs()
+            self.mergeClips = wx.ListCtrl(self.panel, -1, size=(300, 100), style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+            self.mergeClips.SetConstraints(lay)
+            # ... bind the Item Selected event for the List Control ...
+            self.mergeClips.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnItemSelected)
+
+            # ... define the columns for the Merge Clips ...
+            self.mergeClips.InsertColumn(0, _('Clip Name'))
+            self.mergeClips.InsertColumn(1, _('Collection'))
+            self.mergeClips.InsertColumn(2, _('Start Time'))
+            self.mergeClips.InsertColumn(3, _('Stop Time'))
+            self.mergeClips.SetColumnWidth(0, 244)
+            self.mergeClips.SetColumnWidth(1, 244)
+            # ... and populate the Merge Clips list from the mergeList data
+            for (ClipNum, ClipID, CollectNum, CollectID, ClipStart, ClipStop, transcriptCount) in self.mergeList:
+                index = self.mergeClips.InsertStringItem(sys.maxint, ClipID)
+                self.mergeClips.SetStringItem(index, 1, CollectID)
+                self.mergeClips.SetStringItem(index, 2, Misc.time_in_ms_to_str(ClipStart))
+                self.mergeClips.SetStringItem(index, 3, Misc.time_in_ms_to_str(ClipStop))
+
         # Clip ID layout
         lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
+        # Layout differs slightly if we are merging Clips.
+        if self.mergeList == None:
+            lay.top.SameAs(self.panel, wx.Top, 10)     # 10 from top
+        else:
+            lay.top.Below(self.mergeClips, 10)
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.width.PercentOf(self.panel, wx.Width, 18)  # 18% width
         lay.height.AsIs()
@@ -62,7 +128,11 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Collection ID layout
         lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
+        # Layout differs slightly if we are merging Clips.
+        if self.mergeList == None:
+            lay.top.SameAs(self.panel, wx.Top, 10)     # 10 from top
+        else:
+            lay.top.Below(self.mergeClips, 10)
         lay.left.RightOf(self.id_edit, 10)             # 10 right of Episode ID
         lay.width.PercentOf(self.panel, wx.Width, 38)  # 38% width
         lay.height.AsIs()
@@ -71,7 +141,11 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Series ID layout
         lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
+        # Layout differs slightly if we are merging Clips.
+        if self.mergeList == None:
+            lay.top.SameAs(self.panel, wx.Top, 10)     # 10 from top
+        else:
+            lay.top.Below(self.mergeClips, 10)
         lay.left.RightOf(collection_edit, 10)          # 10 right of Collection ID
         lay.width.PercentOf(self.panel, wx.Width, 18)  # 18% width
         lay.height.AsIs()
@@ -80,7 +154,11 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Episode ID layout
         lay = wx.LayoutConstraints()
-        lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
+        # Layout differs slightly if we are merging Clips.
+        if self.mergeList == None:
+            lay.top.SameAs(self.panel, wx.Top, 10)     # 10 from top
+        else:
+            lay.top.Below(self.mergeClips, 10)         # 10 below list of mergeable clips
         lay.left.RightOf(series_edit, 10)              # 10 right of Series ID
         lay.width.PercentOf(self.panel, wx.Width, 18)  # 18% width
         lay.height.AsIs()
@@ -108,23 +186,27 @@ class ClipPropertiesForm(Dialogs.GenForm):
         lay.width.PercentOf(self.panel, wx.Width, 15)  # 15% width
         lay.height.AsIs()
         # Convert to HH:MM:SS.mm
-        clip_start_edit = self.new_edit_box(_("Clip Start"), lay, Misc.time_in_ms_to_str(self.obj.clip_start))
-        clip_start_edit.Enable(False)
+        self.clip_start_edit = self.new_edit_box(_("Clip Start"), lay, Misc.time_in_ms_to_str(self.obj.clip_start))
+        # For merging, we need to remember the merged value of Clip Start
+        self.clip_start = self.obj.clip_start
+        self.clip_start_edit.Enable(False)
 
         # Clip Stop layout
         lay = wx.LayoutConstraints()
         lay.top.Below(self.id_edit, 10)                # 10 under ID
-        lay.left.RightOf(clip_start_edit, 10)          # 10 right of Clip start
+        lay.left.RightOf(self.clip_start_edit, 10)     # 10 right of Clip start
         lay.width.PercentOf(self.panel, wx.Width, 15)  # 15% width
         lay.height.AsIs()
         # Convert to HH:MM:SS.mm
-        clip_stop_edit = self.new_edit_box(_("Clip Stop"), lay, Misc.time_in_ms_to_str(self.obj.clip_stop))
-        clip_stop_edit.Enable(False)
+        self.clip_stop_edit = self.new_edit_box(_("Clip Stop"), lay, Misc.time_in_ms_to_str(self.obj.clip_stop))
+        # For merging, we need to remember the merged value of Clip Stop
+        self.clip_stop = self.obj.clip_stop
+        self.clip_stop_edit.Enable(False)
 
         # Clip Length layout
         lay = wx.LayoutConstraints()
         lay.top.Below(self.id_edit, 10)                # 10 under ID
-        lay.left.RightOf(clip_stop_edit, 10)           # 10 right of Clip start
+        lay.left.RightOf(self.clip_stop_edit, 10)      # 10 right of Clip Stop
         lay.width.PercentOf(self.panel, wx.Width, 14)  # 14% width
         lay.height.AsIs()
         # Convert to HH:MM:SS.mm
@@ -139,48 +221,81 @@ class ClipPropertiesForm(Dialogs.GenForm):
         lay.height.AsIs()
         comment_edit = self.new_edit_box(_("Comment"), lay, self.obj.comment, maxLen=255)
 
-        # Clip Text layout [label]
-        lay = wx.LayoutConstraints()
-        lay.top.Below(comment_edit, 10)                # 10 under comment
-        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
-        lay.height.AsIs()
-        clip_text_lbl = wx.StaticText(self.panel, -1, _("Clip Text"))
-        clip_text_lbl.SetConstraints(lay)
+        self.text_edit = []
 
-        # Clip Text layout
-        lay = wx.LayoutConstraints()
-        lay.top.Below(clip_text_lbl, 3)                 # 3 under label
-        lay.left.SameAs(self.panel, wx.Left, 10)        # 10 from left
-        lay.right.SameAs(self.panel, wx.Right, 10)      # 10 from right
-        lay.height.PercentOf(self.panel, wx.Height, 15) # 15% of frame height
+        # ... we need to display them within a notebook ...
+        self.notebook = wx.Notebook(self.panel, -1)
+        # Initialize a list of notebook pages
+        self.notebookPage = []
+        # Initialize a counter for notebood pages
+        counter = 0
+        # Initialize the TRANSCRIPT start and stop time variables
+        self.transcript_clip_start = []
+        self.transcript_clip_stop = []
+        # Iterate through the clip transcripts
+        for tr in self.obj.transcripts:
+            # Initialize the transcript start and stop time values for the individual transcripts
+            self.transcript_clip_start.append(tr.clip_start)
+            self.transcript_clip_stop.append(tr.clip_stop)
+            # Create a panel for each notebook page
+            self.notebookPage.append(wx.Panel(self.notebook))
 
-        # Load the Transcript into an RTF Control so the RTF Encoding won't show
-        self.text_edit = TranscriptEditor.TranscriptEditor(self.panel)
-        self.text_edit.SetReadOnly(0)
-        self.text_edit.Enable(False)
-        self.text_edit.ProgressDlg = wx.ProgressDialog("Loading Transcript", \
-                                               "Reading document stream", \
-                                                maximum=100, \
-                                                style=wx.PD_AUTO_HIDE)
-        self.text_edit.LoadRTFData(self.obj.text)
-        self.text_edit.ProgressDlg.Destroy()
+            # Add the notebook to the dialog
+            lay = wx.LayoutConstraints()
+            lay.top.SameAs(self.notebook, wx.Top, 5)
+            lay.left.SameAs(self.notebook, wx.Left, 5)
+            lay.height.SameAs(self.notebook, wx.Height, 5)
+            lay.width.SameAs(self.notebook, wx.Width, 5)
 
-        # This doesn't work!  Hidden text remains visible.
-        self.text_edit.StyleSetVisible(self.text_edit.STYLE_HIDDEN, False)
-        self.text_edit.codes_vis = 0
-        # Scan transcript for Time Codes
-        self.text_edit.load_timecodes()
-        # Display the time codes
-        self.text_edit.show_codes()
+            # Add the notebook page to the notebook ...
+            self.notebook.AddPage(self.notebookPage[counter], _('Transcript') + " %d" % (counter + 1))
+            # ... and use this page as the transcript object's parent
+            transcriptParent = self.notebookPage[counter]
+            
+            # Notebook layout
+            lay = wx.LayoutConstraints()
+            lay.top.Below(comment_edit, 10)                 # 10 under comment
+            lay.left.SameAs(self.panel, wx.Left, 10)        # 10 from left
+            lay.right.SameAs(self.panel, wx.Right, 10)      # 10 from right
+            lay.height.PercentOf(self.panel, wx.Height, 20) # 20% of frame height
+            self.notebook.SetConstraints(lay)
 
-        self.text_edit.Enable(True)
+            # Clip Text layout
+            lay = wx.LayoutConstraints()
+            lay.top.SameAs(self.notebook, wx.Top, 3)
+            lay.left.SameAs(self.notebook, wx.Left, 3)
+            lay.right.SameAs(self.notebook, wx.Right, 3)
+            lay.bottom.SameAs(self.notebook, wx.Bottom, 3)
 
-        self.text_edit.SetConstraints(lay)
+            # Load the Transcript into an RTF Control so the RTF Encoding won't show.
+            # We use a list of edit controls to handle multiple transcripts.
+            self.text_edit.append(TranscriptEditor.TranscriptEditor(transcriptParent))
+            self.text_edit[len(self.text_edit) - 1].SetReadOnly(0)
+            self.text_edit[len(self.text_edit) - 1].Enable(False)
+            self.text_edit[len(self.text_edit) - 1].ProgressDlg = wx.ProgressDialog("Loading Transcript", \
+                                                   "Reading document stream", \
+                                                    maximum=100, \
+                                                    style=wx.PD_AUTO_HIDE)
+            self.text_edit[len(self.text_edit) - 1].LoadRTFData(self.obj.transcripts[counter].text)
+            self.text_edit[len(self.text_edit) - 1].ProgressDlg.Destroy()
+
+            # This doesn't work!  Hidden text remains visible.
+            self.text_edit[len(self.text_edit) - 1].StyleSetVisible(self.text_edit[len(self.text_edit) - 1].STYLE_HIDDEN, False)
+            self.text_edit[len(self.text_edit) - 1].codes_vis = 0
+            # Scan transcript for Time Codes
+            self.text_edit[len(self.text_edit) - 1].load_timecodes()
+            # Display the time codes
+            self.text_edit[len(self.text_edit) - 1].show_codes()
+
+            self.text_edit[len(self.text_edit) - 1].Enable(True)
+
+            self.text_edit[len(self.text_edit) - 1].SetConstraints(lay)
+            # Increment the counter
+            counter += 1
 
         # Keyword Group layout [label]
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.text_edit, 10)              # 10 under clip text
+        lay.top.Below(self.notebook, 10)              # 10 under clip text
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
         lay.height.AsIs()
@@ -219,7 +334,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Keyword layout [label]
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.text_edit, 10)              # 10 under clip text
+        lay.top.Below(self.notebook, 10)              # 10 under clip text
         lay.left.RightOf(txt, 10)                      # 10 right of KW Group
         lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
         lay.height.AsIs()
@@ -271,7 +386,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Clip Keywords [label]
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.text_edit, 10)              # 10 under clip text
+        lay.top.Below(self.notebook, 10)              # 10 under clip text
         lay.left.SameAs(add_kw, wx.Right, 10)          # 10 from Add keyword Button
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
@@ -311,16 +426,29 @@ class ClipPropertiesForm(Dialogs.GenForm):
         # We also need to intercept the Cancel button.
         self.Bind(wx.EVT_BUTTON, self.OnCancel, self.FindWindowById(wx.ID_CANCEL))
 
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+
         self.Layout()
         self.SetAutoLayout(True)
         self.CenterOnScreen()
+
+        # If we have a Notebook of text controls ...
+        if self.notebookPage:
+            # ... interate through the text controls ...
+            for textCtrl in self.text_edit:
+                # ... and set them to the size of the notebook page.
+                textCtrl.SetSize(self.notebookPage[0].GetSizeTuple())
 
         self.id_edit.SetFocus()
 
     def OnOK(self, event):
         """ Intercept the OK button click and process it """
-        # Remember the SIZE of the dialog box for next time.
-        TransanaGlobal.configData.clipPropertiesSize = self.GetSize()
+        # Remember the SIZE of the dialog box for next time.  Remember, the size has been altered if
+        # we are merging Clips, and we need to remember the NON-MODIFIED size!
+        if self.mergeList == None:
+            TransanaGlobal.configData.clipPropertiesSize = self.GetSize()
+        else:
+            TransanaGlobal.configData.clipPropertiesSize = (self.GetSize()[0], self.GetSize()[1] - 130)
         # Because of the way Clips are created (with Drag&Drop / Cut&Paste functions), we have to trap the missing
         # ID error here.  Duplicate ID Error is handled elsewhere.
         if self.id_edit.GetValue().strip() == '':
@@ -336,11 +464,24 @@ class ClipPropertiesForm(Dialogs.GenForm):
         
     def OnCancel(self, event):
         """ Intercept the Cancel button click and process it """
-        # Remember the SIZE of the dialog box for next time.
-        TransanaGlobal.configData.clipPropertiesSize = self.GetSize()
+        # Remember the SIZE of the dialog box for next time.  Remember, the size has been altered if
+        # we are merging Clips, and we need to remember the NON-MODIFIED size!
+        if self.mergeList == None:
+            TransanaGlobal.configData.clipPropertiesSize = self.GetSize()
+        else:
+            TransanaGlobal.configData.clipPropertiesSize = (self.GetSize()[0], self.GetSize()[1] - 130)
         # Now process the event normally, as if it hadn't been intercepted
         event.Skip(True)
                 
+    def OnSize(self, event):
+        """ Size Change event for hte Clip Properties Form """
+        # lay out the form
+        self.Layout()
+        # The Text Controls need explicit re-sizing.  Their layout constraints don't work right.
+        if self.notebookPage:
+            for textCtrl in self.text_edit:
+                textCtrl.SetSize(self.notebookPage[0].GetSizeTuple())
+
     def refresh_keyword_groups(self):
         """Refresh the keyword groups listbox."""
         self.kw_groups = DBInterface.list_of_keyword_groups()
@@ -382,15 +523,42 @@ class ClipPropertiesForm(Dialogs.GenForm):
             kwlist = string.split(self.ekw_lb.GetStringSelection(), ':')
             kwg = string.strip(kwlist[0])
             kw = ':'.join(kwlist[1:]).strip()
-            # Remove the Keyword from the Clip Object (this CAN be overridden by the user!)
-            delResult = self.obj.remove_keyword(kwg, kw)
-            # Remove the Keyword from the Keywords list
-            if (delResult != 0) and (sel >= 0):
+            # If the selected keyword is in the current clip object ...
+            if self.obj.has_keyword(kwg, kw):
+                # Remove the Keyword from the Clip Object (this CAN be overridden by the user!)
+                delResult = self.obj.remove_keyword(kwg, kw)
+                # Remove the Keyword from the Keywords list
+                if (delResult != 0) and (sel >= 0):
+                    self.ekw_lb.Delete(sel)
+                    # If what we deleted was a Keyword Example, remember the crucial information
+                    if delResult == 2:
+                        self.keywordExamplesToDelete.append((kwg, kw, self.obj.number))
+            # If the selected keyword is NOT in the current object (and therefore has been merged into it) ...
+            else:
+                # See if it's a keyword example.
+                if (kwg, kw) in self.mergedKeywordExamples:
+                    # If so, prompt before removing it.
+                    prompt = _('Clip "%s" has been defined as a Keyword Example for Keyword "%s : %s".')
+                    data = (self.mergeList[self.mergeItemIndex][1], kwg, kw)
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8') % data
+                        prompt = prompt + unicode(_('\nAre you sure you want to delete it?'), 'utf8')
+                    else:
+                        prompt = prompt % data
+                        prompt = prompt + _('\nAre you sure you want to delete it?')
+                    dlg = Dialogs.QuestionDialog(None, prompt, _('Delete Clip'))
+                    # If the user does NOT want to delete the keyword ...
+                    if (dlg.LocalShowModal() == wx.ID_NO):
+                        dlg.Destroy()
+                        # ... then exit this method now before it gets removed.
+                        return
+                    else:
+                        dlg.Destroy()
+                        
+               # ... merely remove it from the keyword list.  (Merged keywords are not stored in the original Clip object
+                # in case the user changes the merge clip selection.)
                 self.ekw_lb.Delete(sel)
-                # If what we deleted was a Keyword Example, remember the crucial information
-                if delResult == 2:
-                    self.keywordExamplesToDelete.append((kwg, kw, self.obj.number))
-
  
     def OnKWManage(self, evt):
         """Invoked when the user activates the Keyword Management button."""
@@ -423,24 +591,192 @@ class ClipPropertiesForm(Dialogs.GenForm):
         self.refresh_keywords()
         
     def OnKeywordKeyDown(self, event):
+        """ Process the Key Down event for the Keyword field """
+        # Begin exception handling, as some keys will raise an exception here
         try:
+            # Get the key code of the pressed key
             c = event.GetKeyCode()
+            # If it's the DELETE key ...
             if c == wx.WXK_DELETE:
+                # ... see if there is a selection ...
                 if self.ekw_lb.GetSelection() != wx.NOT_FOUND:
+                    # ... and if so, delete this keyword!
                     self.OnRemoveKW(event)
+        # If an exception occurs, ignore it!
         except:
             pass  # ignore non-ASCII keys
+
+    def OnItemSelected(self, event):
+        """ Process the selection of a clip to be merged with the original clip """
+        # Identify the selected item
+        self.mergeItemIndex = event.GetIndex()
+        # Get the Clip Data for the selected item
+        mergeClip = Clip.Clip(self.mergeList[self.mergeItemIndex][0])
+        # re-initialize the TRANSCRIPT start and stop times
+        self.transcript_clip_start = []
+        self.transcript_clip_stop = []
+        
+        # Merge the clips.
+        # First, determine whether the merging clip comes BEFORE or after the original
+        if mergeClip.clip_start < self.obj.clip_start:
+            # The start value comes from the merge clip
+            self.clip_start_edit.SetValue(Misc.time_in_ms_to_str(mergeClip.clip_start))
+            # Update the merged clip Start Time
+            self.clip_start = mergeClip.clip_start
+            # The stop value comes from the original clip
+            self.clip_stop_edit.SetValue(Misc.time_in_ms_to_str(self.obj.clip_stop))
+            # Update the merged clip Stop Time
+            self.clip_stop = self.obj.clip_stop
+            # For each of the original clip's Transcripts ...
+            for x in range(len(self.obj.transcripts)):
+                # We get the TRANSCRIPT start time from the merge clip
+                self.transcript_clip_start.append(mergeClip.transcripts[x].clip_start)
+                # We get the TRANSCRIPT end time from the original clip
+                self.transcript_clip_stop.append(self.obj.transcripts[x].clip_stop)
+                # ... clear the transcript ...
+                self.text_edit[x].ClearDoc()
+                # ... turn off read-only ...
+                self.text_edit[x].SetReadOnly(0)
+                # ... insert the merge clip's text, skipping whitespace at the end ...
+                self.text_edit[x].InsertRTFText(mergeClip.transcripts[x].text.rstrip())
+                # ... add a couple of line breaks ...
+                self.text_edit[x].InsertStyledText('\n\n', len('\n\n'))
+                # ... trap exceptions here ...
+                try:
+                    # ... insert a time code at the position of the clip break ...
+                    self.text_edit[x].insert_timecode(self.obj.clip_start)
+                # If there were exceptions (duplicating time codes, for example), just skip it.
+                except:
+                    pass
+                # ... now add the original clip's text ...
+                self.text_edit[x].InsertRTFText(self.obj.transcripts[x].text)
+                # This doesn't work!  Hidden text remains visible.
+                self.text_edit[x].StyleSetVisible(self.text_edit[x].STYLE_HIDDEN, False)
+                # ... signal that time codes will be visible, which they always are in the Clip Properties ...
+                self.text_edit[x].codes_vis = 0
+                # ... scan transcript for Time Codes ...
+                self.text_edit[x].load_timecodes()
+                # ... display the time codes
+                self.text_edit[x].show_codes()
+        # If the merging clip comes AFTER the original ...
+        else:
+            # The start value comes from the original clip
+            self.clip_start_edit.SetValue(Misc.time_in_ms_to_str(self.obj.clip_start))
+            # Update the merged clip Start Time
+            self.clip_start = self.obj.clip_start
+            # The stop value comes from the merge clip
+            self.clip_stop_edit.SetValue(Misc.time_in_ms_to_str(mergeClip.clip_stop))
+            # Update the merged clip Stop Time
+            self.clip_stop = mergeClip.clip_stop
+            # For each of the original clip's Transcripts ...
+            for x in range(len(self.obj.transcripts)):
+                # We get the TRANSCRIPT start time from the original clip
+                self.transcript_clip_start.append(self.obj.transcripts[x].clip_start)
+                # We get the TRANSCRIPT end time from the merge clip
+                self.transcript_clip_stop.append(mergeClip.transcripts[x].clip_stop)
+                # ... clear the transcript ...
+                self.text_edit[x].ClearDoc()
+                # ... turn off read-only ...
+                self.text_edit[x].SetReadOnly(0)
+                # ... insert the original clip's text, skipping whitespace at the end ...
+                self.text_edit[x].InsertRTFText(self.obj.transcripts[x].text.rstrip())
+                # ... add a couple of line breaks ...
+                self.text_edit[x].InsertStyledText('\n\n', len('\n\n'))
+                # ... trap exceptions here ...
+                try:
+                    # ... insert a time code at the position of the clip break ...
+                    self.text_edit[x].insert_timecode(mergeClip.clip_start)
+                # If there were exceptions (duplicating time codes, for example), just skip it.
+                except:
+                    pass
+                # ... now add the merge clip's text ...
+                self.text_edit[x].InsertRTFText(mergeClip.transcripts[x].text)
+                # This doesn't work!  Hidden text remains visible.
+                self.text_edit[x].StyleSetVisible(self.text_edit[x].STYLE_HIDDEN, False)
+                # ... signal that time codes will be visible, which they always are in the Clip Properties ...
+                self.text_edit[x].codes_vis = 0
+                # ... scan transcript for Time Codes ...
+                self.text_edit[x].load_timecodes()
+                # ... display the time codes
+                self.text_edit[x].show_codes()
+        # Create a list object for merging the keywords
+        kwList = []
+        # Add all the original keywords
+        for kws in self.obj.keyword_list:
+            kwList.append(kws.keywordPair)
+        # Iterate through the merge clip keywords.
+        for kws in mergeClip.keyword_list:
+            # If they're not already in the list, add them.
+            if not kws.keywordPair in kwList:
+                kwList.append(kws.keywordPair)
+        # Sort the keyword list
+        kwList.sort()
+        # Clear the keyword list box.
+        self.ekw_lb.Clear()
+        # Add the merged keywords to the list box.
+        for kws in kwList:
+            self.ekw_lb.Append(kws)
+        # Get the Keyword Examples for the merged clip, if any.
+        kwExamples = DBInterface.list_all_keyword_examples_for_a_clip(mergeClip.number)
+        # Initialize a variable to hold merged keyword examples.  (This clears the variable if the user changes merge clips.)
+        self.mergedKeywordExamples = []
+        # Iterate through the keyword examples and add them to the list.
+        for kw in kwExamples:
+            self.mergedKeywordExamples.append(kw[:2])
 
     def get_input(self):
         """Custom input routine."""
         # Inherit base input routine
         gen_input = Dialogs.GenForm.get_input(self)
+        # If OK ...
         if gen_input:
+            # Get main data values from the form, ID, Comment, and Media Filename
             self.obj.id = gen_input[_('Clip ID')]
             self.obj.comment = gen_input[_('Comment')]
             self.obj.media_filename = gen_input[_('Media Filename')]
-            # We use a different method of getting the Transcript Text!
-            self.obj.text = self.text_edit.GetRTFBuffer()
+            # If we're merging clips, more data may have changed!
+            if self.mergeList != None:
+                # We need the post-merge Clip Start Time
+                self.obj.clip_start = self.clip_start
+                # We need the post-merge Clip Stop Time
+                self.obj.clip_stop = self.clip_stop
+                # When merging, keywords are not merged into the object automatically, so we need to process the Clip Keyword List
+                for clkw in self.ekw_lb.GetStrings():
+                    # Separate out the Keyword Group and the Keyword
+                    kwlist = string.split(clkw, ':')
+                    kwg = string.strip(kwlist[0])
+                    kw = ':'.join(kwlist[1:]).strip()
+                    # If the keyword is a Keyword Example in the Merged Keyword ...
+                    if (kwg, kw) in self.mergedKeywordExamples:
+                        # ... and if the keyword isn't already in the Clip object ...
+                        if not self.obj.has_keyword(kwg, kw):
+                            # ... then add the example keyword to the Clip Object AS AN EXAMPLE.
+                            self.obj.add_keyword(kwg, kw, True)
+
+                        # In this situation, the user has merged a clip with a keyword example into a clip that
+                        # already has that keyword, but it's not an example.  In this case, we need to tell OTHER
+                        # copies of Transana to remove the OLD keyword example.  We don't need to do anything to
+                        # the local copy of the database tree, though.
+                        if not TransanaConstants.singleUserVersion:
+                            msg = "%s >|< %s >|< %s >|< %s >|< %s" % ("KeywordExampleNode", "Keywords", kwg, kw, self.mergeList[self.mergeItemIndex][1])
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage("DN %s" % msg)
+                    # If the keyword isn't a merged example ...
+                    else:
+                        # ... we need to add it to the list.  (Duplicates don't matter.)
+                        self.obj.add_keyword(kwg, kw)
+
+            # Initialize a counter
+            counter = 0
+            # For each defined Transcripts object ...
+            for tr in self.obj.transcripts:
+                # ... update the text from the appropriate text control ...
+                tr.text = self.text_edit[counter].GetRTFBuffer()
+                # Also update the TRANSCRIPT start and stop times
+                tr.clip_start = self.transcript_clip_start[counter]
+                tr.clip_stop = self.transcript_clip_stop[counter]
+                # ... and increment the counter.
+                counter += 1
             # Keyword list is already updated via the OnAddKW() callback
         else:
             self.obj = None

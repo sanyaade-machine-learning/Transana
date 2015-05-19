@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -88,6 +88,7 @@ class FilterDialog(wx.Dialog):
                         13 = Notes Report (reportScope is 1 for all notes, 2 for Series, 3 for Episodes, 4 for Transcripts, 5 for Collections,
                                            6 for Clips)
                         14 = Series Clip Data Export (reportScope is the Series Number)
+                        15 = Search Save (Search Saves have NO reportScope! or FilterDataType!!)
 
             *** ADDING A REPORT TYPE?  Remember to add the delete_filter_records() call to the appropriate
                 object's db_delete() method!
@@ -95,6 +96,7 @@ class FilterDialog(wx.Dialog):
                 ALSO, remember to add the ReportScope conversion to XMLImport for Filter Imports! ***
                          
         Optional parameters are:
+          loadDefault       (boolean) -- silently load a profile named "Default", if one exists
           configName        (current Configuration Name)
           reportScope       (required for Configuration Save/Load)
           episodeFilter     (boolean)
@@ -132,21 +134,31 @@ class FilterDialog(wx.Dialog):
     def __init__(self, parent, id, title, reportType, **kwargs):
         """ Initialize the Transana Filter Dialog Box """
         # Create a Dialog Box
-        wx.Dialog.__init__(self, parent, id, title, size = (500,500),
-                           style=wx.CAPTION | wx.CLOSE_BOX | wx.RESIZE_BORDER | wx.NO_FULL_REPAINT_ON_RESIZE)
-        # Make the background White
-        self.SetBackgroundColour(wx.WHITE)
-
-        # Remember the report type
-        self.reportType = reportType
 
         # Remember the keyword arguments
         self.kwargs = kwargs
+
+        # See if we have a loadDefault argument and save it if we do.
+        if self.kwargs.has_key('loadDefault'):
+            self.loadDefault = self.kwargs['loadDefault']
+        else:
+            self.loadDefault = False
+        
+        # Remember the report type
+        self.reportType = reportType
+
         # Initialize the Report Configuration Name if one is passed in, if not, initialize to an empty string
         if self.kwargs.has_key('configName'):
             self.configName = self.kwargs['configName']
         else:
             self.configName = ''
+
+        # Remember the title
+        self.title = title
+        # If a configName exists ...
+        if self.configName != '':
+            # ... add it to the title for the window (but not what gets saved!)
+            title += ' - ' + self.configName
 
         if self.kwargs.has_key('startTime') and self.kwargs['startTime']:
             self.startTimeVal = Misc.time_in_ms_to_str(self.kwargs['startTime'])
@@ -159,6 +171,14 @@ class FilterDialog(wx.Dialog):
                 self.endTimeVal = Misc.time_in_ms_to_str(parent.MediaLength)
         else:
             self.endTimeVal = self.startTimeVal
+
+        # Initialize the dialog box.
+        # Just to be clear, if we're loading the default, we don't actually SEE the dialog, but we still
+        # create it and populate all of its fields.  That's the easiest way to load the default config!!
+        wx.Dialog.__init__(self, parent, id, title, size = (500,500),
+                           style=wx.CAPTION | wx.CLOSE_BOX | wx.RESIZE_BORDER | wx.NO_FULL_REPAINT_ON_RESIZE)
+        # Make the background White
+        self.SetBackgroundColour(wx.WHITE)
 
         # Create BoxSizers for the Dialog
         vBox = wx.BoxSizer(wx.VERTICAL)
@@ -236,7 +256,11 @@ class FilterDialog(wx.Dialog):
                 self.showClipTranscripts.SetValue(self.kwargs['showClipTranscripts'])
                 pnlVSizer.Add(self.showClipTranscripts, 0, wx.TOP | wx.LEFT, 10)
             if self.kwargs.has_key('showClipKeywords'):
-                self.showClipKeywords = wx.CheckBox(self.reportContentsPanel, -1, _("Show Clip Keywords"))
+                if self.reportType == 10:
+                    prompt = _("Show Keywords")
+                else:
+                    prompt = _("Show Clip Keywords")
+                self.showClipKeywords = wx.CheckBox(self.reportContentsPanel, -1, prompt)
                 self.showClipKeywords.SetValue(self.kwargs['showClipKeywords'])
                 pnlVSizer.Add(self.showClipKeywords, 0, wx.TOP | wx.LEFT, 10)
             if self.kwargs.has_key('showComments'):
@@ -640,11 +664,13 @@ class FilterDialog(wx.Dialog):
         # Create another horizontal sizer for the Dialog's buttons
         btnBox = wx.BoxSizer(wx.HORIZONTAL)
         # Create the OK button
-        btnOK = wx.Button(self, wx.ID_OK, _("OK"))
+        self.btnOK = wx.Button(self, wx.ID_OK, _("OK"))
         # Make this the default button
-        btnOK.SetDefault()
+        self.btnOK.SetDefault()
         # Add the OK button to the dialog's Button sizer
-        btnBox.Add(btnOK, 0, wx.ALIGN_RIGHT | wx.LEFT | wx.RIGHT, 10)
+        btnBox.Add(self.btnOK, 0, wx.ALIGN_RIGHT | wx.LEFT | wx.RIGHT, 10)
+        # Bind an event to OK.  (We need to override the default behavior or just closing.)
+        self.btnOK.Bind(wx.EVT_BUTTON, self.OnOK)
         # Create the Cancel button
         btnCancel = wx.Button(self, wx.ID_CANCEL, _("Cancel"))
         # Add the Cancel button to the dialog's Button sizer
@@ -703,8 +729,11 @@ class FilterDialog(wx.Dialog):
             DBCursor.execute(query, values)
             # Iterate through the report results
             for (configName,) in DBCursor.fetchall():
+                # The default config name has been saved in English.  We need to translate it!
+                if configName == 'Default':
+                    configName = unicode(_('Default'), TransanaGlobal.encoding)
                 # Decode the data
-                configName = DBInterface.ProcessDBDataForUTF8Encoding(configName)
+#                configName = DBInterface.ProcessDBDataForUTF8Encoding(configName)
                 # Add the data to the Results list
                 resList.append(configName)
         # return the Results List
@@ -798,18 +827,39 @@ class FilterDialog(wx.Dialog):
         reportScope = self.GetReportScope()
         # Make sure we have a legal Report
         if reportScope != None:
-            # Get a list of legal Report Names from the Database
-            configNames = self.GetConfigNames()
-            # Create a Choice Dialog so the user can select the Configuration they want
-            dlg = FilterLoadDialog(self, _("Choose a Configuration to load"), _("Filter Configuration"), configNames, self.reportType, reportScope)
-            # Center the Dialog on the screen
-            dlg.CentreOnScreen()
+            # If we're auto-loading the Default Config, we don't want to prompt for a Config Name.
+            if self.loadDefault:
+                # Fake that the user was shown a dialog and pressed OK
+                result = wx.ID_OK
+                # We'll use the Default config
+                configName = 'Default'
+                # Remember the Configuration Name
+                self.configName = unicode(_(configName), TransanaGlobal.encoding)
+            # If we're coming here through normal channels, we DO want to prompt for a config name.
+            else:
+                # Get a list of legal Report Names from the Database
+                configNames = self.GetConfigNames()
+                # Create a Choice Dialog so the user can select the Configuration they want
+                dlg = FilterLoadDialog(self, _("Choose a Configuration to load"), _("Filter Configuration"), configNames, self.reportType, reportScope)
+                # Center the Dialog on the screen
+                dlg.CentreOnScreen()
+                # Show the dialog and get the results.
+                result = dlg.ShowModal()
+                # Get the config name the user chose.
+                configName = dlg.GetStringSelection()
+                # Remember the Configuration Name
+                self.configName = configName
+                # Destroy the Choice Dialog
+                dlg.Destroy()
+            
             # Show the Choice Dialog and see if the user chooses OK
-            if dlg.ShowModal() == wx.ID_OK:
+            if result == wx.ID_OK:
                 # Set the Cursor to the Hourglass while the filter is loaded
                 TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-                # Remember the Configuration Name
-                self.configName = dlg.GetStringSelection()
+                # Update the Window title to reflect the config name
+                title = self.title + ' - ' + self.configName
+                self.SetTitle(title)
+
                 # Get a Database Cursor
                 DBCursor = DBInterface.get_db().cursor()
                 # Build a query to get the selected report's data.  The Order By clause is
@@ -822,7 +872,7 @@ class FilterDialog(wx.Dialog):
                                     ConfigName = %s
                               ORDER BY FilterDataType DESC"""
                 # Build the data values that match the query
-                values = (self.reportType, reportScope, self.configName.encode(TransanaGlobal.encoding))
+                values = (self.reportType, reportScope, configName.encode(TransanaGlobal.encoding))
                 # Execute the query with the appropriate data values
                 DBCursor.execute(query, values)
                 # We may get multiple records, one for each tab on the Filter Dialog.
@@ -1019,15 +1069,19 @@ class FilterDialog(wx.Dialog):
                     elif filterDataType == 9:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
-                        # Set the start time value
-                        self.startTime.SetValue(filterData)
+                        # Only do this if startTime exists!  (Copied configs from ReportType 5 may have this.)
+                        if self.kwargs.has_key('startTime'):
+                            # Set the start time value
+                            self.startTime.SetValue(filterData)
 
                     # If the data is for the End Time (filterDataType 10) ...
                     elif filterDataType == 10:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
-                        # Set the end time value
-                        self.endTime.SetValue(filterData)
+                        # Only do this if endTime exists!  (Copied configs from ReportType 5 may have this.)
+                        if self.kwargs.has_key('endTime'):
+                            # Set the end time value
+                            self.endTime.SetValue(filterData)
 
                     # If the data is for the Bar Height (filterDataType 11) ...
                     elif filterDataType == 11:
@@ -1061,8 +1115,10 @@ class FilterDialog(wx.Dialog):
                     elif filterDataType == 15:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
-                        # Set the Single Line Display value
-                        self.singleLineDisplay.SetValue(filterData == 'True')
+                        # Only do this if singleLineDisplay exists!  (Copied configs from ReportType 5 may have this.)
+                        if self.kwargs.has_key('singleLineDisplay'):
+                            # Set the Single Line Display value
+                            self.singleLineDisplay.SetValue(filterData == 'True')
 
                     # If the data is for the Show Legend value (filterDataType 16) ...
                     elif filterDataType == 16:
@@ -1140,8 +1196,6 @@ class FilterDialog(wx.Dialog):
                 # Set the Cursor to the Arrow now that the filter is loaded
                 TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
-            # Destroy the Choice Dialog
-            dlg.Destroy()
 
     def OnFileSave(self, event):
         """ Save a Configuration to the Filter table """
@@ -1153,12 +1207,28 @@ class FilterDialog(wx.Dialog):
         while errorMsg != '':
             # Clear the error message, assuming the user will succeed in loading a configuration
             errorMsg = ''
-            # Create a Dialog where the Configuration can be named
-            dlg = wx.TextEntryDialog(self, _("Save Configuration As"), _("Filter Configuration"), originalConfigName)
-            # Show the dialog to the user and see how they respond
-            if dlg.ShowModal() == wx.ID_OK:
-                # Remove leading and trailing white space
+            # If Save was called through the OnOK event, we DON'T want to ask for a Config name.
+            if event.GetId() == self.btnOK.GetId():
+                # Fake that the user was given a dialog and pressed OK ...
+                result = wx.ID_OK
+                # ... and just keep the config name the same.
+                configName = self.configName
+            # If Save was called normally ...
+            else:
+                # Create a Dialog where the Configuration can be named
+                dlg = wx.TextEntryDialog(self, _("Save Configuration As"), _("Filter Configuration"), originalConfigName)
+                # Get the results from the user
+                result = dlg.ShowModal()
+                # Get the config name.  Remove leading and trailing white space
                 configName = dlg.GetValue().strip()
+                # If this is the defaut config ...
+                if configName.capitalize() == 'Default':
+                    # ... make sure the case usage is standard.  (I don't dare try this with language other than English.)
+                    configName = configName.capitalize()
+                # Destroy the Dialog that allows the user to name the configuration
+                dlg.Destroy()
+            # Show the dialog to the user and see how they respond
+            if result == wx.ID_OK:
                 # Get a list of existing Configuration Names from the database
                 configNames = self.GetConfigNames()
                 # If the user changed the Configuration Name and the new name already exists ...
@@ -1187,6 +1257,9 @@ class FilterDialog(wx.Dialog):
                     if reportScope != None:
                         # update the Configuration Name
                         self.configName = configName
+                        # Update the Window title to reflect the config name
+                        title = self.title + ' - ' + self.configName
+                        self.SetTitle(title)
                         # Get a database cursor
                         DBCursor = DBInterface.get_db().cursor()
                         # Encode the Report Name if we're using Unicode
@@ -1194,7 +1267,12 @@ class FilterDialog(wx.Dialog):
                             configName = self.configName.encode(TransanaGlobal.encoding)
                         else:
                             configName = self.configName
-
+                        # We need to save the "Default" config name in ENGLISH for mixed-language environments.
+                        # So if we are dealing with the Default config ...
+                        if configName == _('Default'):
+                            # ... convert the config name to English.
+                            configName = 'Default'
+                            
                         # Check to see if the Configuration record already exists
                         if DBInterface.record_match_count('Filters2',
                                                          ('ReportType', 'ReportScope', 'ConfigName'),
@@ -1474,21 +1552,30 @@ class FilterDialog(wx.Dialog):
 
                         # If we have an Episode Report (reportType 11), or
                         # a Collection Report (reportType 12), 
+                        # Show Clip Time (FilterDataType 103),
+                        # Show Clip Transcripts (FilterDataType 104),
+                        # Show Comments (FilterDataType 106), and
+                        # Show Clip Notes (Filter Data Type 108)
+                        if self.reportType in [11, 12]:
+                            self.SaveFilterData(self.reportType, reportScope, configName, 103, self.showTime.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 104, self.showClipTranscripts.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 106, self.showComments.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 108, self.showClipNotes.IsChecked())
+
+                        # If we have a Series Report (reportType 10), or
+                        # an Episode Report (reportType 11), or
+                        # a Collection Report (reportType 12), 
                         # insert Show Media Filename Data (FilterDataType 102),
                         # Show Clip Time (FilterDataType 103),
                         # Show Clip Transcripts (FilterDataType 104),
                         # Show Clip Keywords (FilterDataType 105),
                         # Show Comments (FilterDataType 106), and
                         # Show Clip Notes (Filter Data Type 108)
-                        if self.reportType in [11, 12]:
+                        if self.reportType in [10, 11, 12]:
                             self.SaveFilterData(self.reportType, reportScope, configName, 102, self.showFile.IsChecked())
-                            self.SaveFilterData(self.reportType, reportScope, configName, 103, self.showTime.IsChecked())
-                            self.SaveFilterData(self.reportType, reportScope, configName, 104, self.showClipTranscripts.IsChecked())
                             self.SaveFilterData(self.reportType, reportScope, configName, 105, self.showClipKeywords.IsChecked())
-                            self.SaveFilterData(self.reportType, reportScope, configName, 106, self.showComments.IsChecked())
-                            self.SaveFilterData(self.reportType, reportScope, configName, 108, self.showClipNotes.IsChecked())
 
-                        # If we have a Collection Report (reportType 12), 
+                         # If we have a Collection Report (reportType 12), 
                         # insert Show Collection Notes (Filter Data Type 107)
                         if self.reportType in [12]:
                             self.SaveFilterData(self.reportType, reportScope, configName, 107, self.showCollectionNotes.IsChecked())
@@ -1506,8 +1593,6 @@ class FilterDialog(wx.Dialog):
                         dlg2.ShowModal()
                         # Destroy the error dialog.
                         dlg2.Destroy()
-            # Destroy the Dialog that allows the user to name the configuration
-            dlg.Destroy()
 
     def SaveFilterData(self, reportType, reportScope, configName, filterDataType, filterData):
         """  """
@@ -1560,8 +1645,14 @@ class FilterDialog(wx.Dialog):
                     prompt = _('Are you sure you want to delete Filter Configuration "%s"?')
                 dlg2 = Dialogs.QuestionDialog(self, prompt % localConfigName)
                 if dlg2.LocalShowModal() == wx.ID_YES:
+                    # If we're deleting the Default configuration ...
+                    if localConfigName == unicode(_('Default'), TransanaGlobal.encoding):
+                        # ... we need to convert the configuration name to English!
+                        localConfigName = 'Default'
                     # Clear the global configuration name
                     self.configName = ''
+                    # Update the Window title to reflect the disappearance of the config name
+                    self.SetTitle(self.title)
                     # Get a Database Cursor
                     DBCursor = DBInterface.get_db().cursor()
                     # Build a query to delete the selected report
@@ -2088,6 +2179,15 @@ class FilterDialog(wx.Dialog):
     def GetColorOutput(self):
         """ Return the value of colorOutput on the Options tab """
         return self.colorOutput.GetValue()
+
+    def OnOK(self, event):
+        """ implement the Filter Dialog's OK button """
+        # If we're using a Default configuration ...
+        if self.configName == unicode(_('Default'), TransanaGlobal.encoding):
+            # ... then we automatically save!
+            self.OnFileSave(event)
+        # Process the Dialog's default OK behavior
+        event.Skip()
 
     def OnHelp(self, event):
         """ Implement the Filter Dialog Box's Help function """

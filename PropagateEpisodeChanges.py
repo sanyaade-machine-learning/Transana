@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -105,16 +105,16 @@ class PropagateEpisodeChanges(wx.Dialog):
 
         # Determine the time code preceding the cursor position in the Transcript.  (DON'T USE the video positions, which
         # may not have been updated if you are in Edit mode!)
-        timeCodeFromTranscript = self.parent.TranscriptWindow.dlg.editor.get_selected_time_range()[0]
+        timeCodeFromTranscript = self.parent.TranscriptWindow[self.parent.activeTranscript].dlg.editor.get_selected_time_range()[0]
         # request clips that include the current transcript cursor position
-        clipList = DBInterface.list_of_clips_by_episode(self.parent.TranscriptWindow.dlg.editor.TranscriptObj.episode_num, timeCodeFromTranscript)
+        clipList = DBInterface.list_of_clips_by_episode(self.parent.TranscriptWindow[self.parent.activeTranscript].dlg.editor.TranscriptObj.episode_num, timeCodeFromTranscript)
         # But unfortunately, this does not produce a COMPLETE Clip List in some cases.
         # If a time code that starts a clip is deleted, the previous list may not contain that clip.
         # Therefore we need to look for more clips.
         # Let's get a time just before the END of the clip.
-        timeCodeFromTranscript2 = self.parent.TranscriptWindow.dlg.editor.get_selected_time_range()[1] - 10
+        timeCodeFromTranscript2 = self.parent.TranscriptWindow[self.parent.activeTranscript].dlg.editor.get_selected_time_range()[1] - 10
         # request clips that include the end time code based on cursor position
-        clipList2 = DBInterface.list_of_clips_by_episode(self.parent.TranscriptWindow.dlg.editor.TranscriptObj.episode_num, timeCodeFromTranscript2)
+        clipList2 = DBInterface.list_of_clips_by_episode(self.parent.TranscriptWindow[self.parent.activeTranscript].dlg.editor.TranscriptObj.episode_num, timeCodeFromTranscript2)
         # Iterate through the list ...
         for clip in clipList2:
             # ... looking for clips that were NOT included in the earlier list ...
@@ -130,7 +130,7 @@ class PropagateEpisodeChanges(wx.Dialog):
             if 'unicode' in wx.PlatformInfo:
                 prompt = unicode(prompt, 'utf8')
             # ... by adding a message to the report
-            self.memo.AppendText(prompt % Misc.time_in_ms_to_str(self.parent.TranscriptWindow.dlg.editor.get_selected_time_range()[0]))
+            self.memo.AppendText(prompt % Misc.time_in_ms_to_str(self.parent.TranscriptWindow[self.parent.activeTranscript].dlg.editor.get_selected_time_range()[0]))
 
         # Let's start a database Transaction
         # First, let's get a database cursor
@@ -143,94 +143,106 @@ class PropagateEpisodeChanges(wx.Dialog):
         results = ID_SKIP
         # Iterate through the Clip List ...
         for clip in clipList:
-            # Get the text from the Episode Transcript that matches the Clips's start and stop times.
-            # The return values include the Episode Transcript's time code boundaries, in case they've changed since the
-            # clip was created, as well as the NEW text.
-            (start, end, text) = self.parent.TranscriptWindow.dlg.editor.GetTextBetweenTimeCodes(clip['ClipStart'], clip['ClipStop'])
+            # Let's load the Clip
+            tempClip = Clip.Clip(clip['ClipNum'])
+            # If the clip has only one Transcript ...
+            if len(tempClip.transcripts) == 1:
+                # ... then give the Clip Transcript the Clip's start and stop times.  (They only get assigned for multi-transcript clips!)
+                # (NOTE:  Legacy Clips from Transana before version 2.30 require this.)
+                tempClip.transcripts[0].clip_start = tempClip.clip_start
+                tempClip.transcripts[0].clip_stop = tempClip.clip_stop
+            # For every transcript if each clip ...
+            for clipTranscript in tempClip.transcripts:
+                # Get the text from the Episode Transcript that matches the Clip TRANSCRIPT's start and stop times.  (NOT JUST THE CLIP'S!!)
+                # The return values include the Episode Transcript's time code boundaries, in case they've changed since the
+                # clip was created, as well as the NEW text.
+                (start, end, text) = self.parent.TranscriptWindow[self.parent.activeTranscript].dlg.editor.GetTextBetweenTimeCodes(clipTranscript.clip_start, clipTranscript.clip_stop)
 
-            # Check the start and end times to make sure neither has changed.  THEY MUST MATCH EXACTLY or we won't propagate to that clip.
-            # Also check that the Clip's originating Transcript Number matches the current Episode Transcripts's number, that is,
-            # that this clip was indeed taken from THIS transcript.  The one exception to this rule is if the clip has been orphaned,
-            # which will probably only be known if the data has been through export/import since the clips was orphaned.
-            if (start == clip['ClipStart']) and \
-               (end == clip['ClipStop']) and \
-               ((clip['TranscriptNum'] == self.parent.TranscriptWindow.dlg.editor.TranscriptObj.number) or \
-                (clip['TranscriptNum'] == 0)):
-                
-                # Start Exception handling.
-                try:
-                    # If the user hasn't signal that they want to update all clips ...
-                    if not acceptAll:
-                        # ... create the Accept Clip Transcript Changes form ...
-                        acceptClipChanges = AcceptClipTranscriptChanges(self, clip['ClipNum'], text, helpString="Propagate Transcript Changes")
-                        # ... and display it, capturing the user feedback.
-                        results = acceptClipChanges.GetResults()
-                        # Close (and Destroy) the form
-                        acceptClipChanges.Destroy()
-                        # If the user wants to update all Clips ...
-                        if results == ID_UPDATEALL:
-                            # ... then changing this variable will prevent the need for further user intervention.
-                            acceptAll = True
-                    # If the user presses "Update" (OK) or has pressed "Update All" ...
-                    if acceptAll or (results == wx.ID_OK):
-                        # ... load the current clip
-                        clipTranscript = Transcript.Transcript(clip=clip['ClipNum'])
-                        # Lock the Clip (will raise an exception of you can't)
-                        clipTranscript.lock_record()
-                        # substitute the new text for the old text
-                        clipTranscript.text = text
-                        # Save the Clip
-                        clipTranscript.db_save()
+                # Check the start and end times to make sure neither has changed.  THEY MUST MATCH EXACTLY or we won't propagate to that clip.
+                # Also check that the Clip's originating Transcript Number matches the current Episode Transcripts's number, that is,
+                # that this clip was indeed taken from THIS transcript.  The one exception to this rule is if the clip has been orphaned,
+                # which will probably only be known if the data has been through export/import since the clips was orphaned.
+                if (start == clipTranscript.clip_start) and \
+                   (end == clipTranscript.clip_stop) and \
+                   ((clipTranscript.source_transcript == self.parent.TranscriptWindow[self.parent.activeTranscript].dlg.editor.TranscriptObj.number) or \
+                    (clipTranscript.source_transcript == 0)):
+                    
+                    # Start Exception handling.
+                    try:
+                        # If the user hasn't signal that they want to update all clips ...
+                        if not acceptAll:
+                            # ... create the Accept Clip Transcript Changes form ...
+                            acceptClipChanges = AcceptClipTranscriptChanges(self, tempClip.number, tempClip.transcripts.index(clipTranscript), text, helpString="Propagate Transcript Changes")
+                            # ... and display it, capturing the user feedback.
+                            results = acceptClipChanges.GetResults()
+                            # Close (and Destroy) the form
+                            acceptClipChanges.Destroy()
+                            # If the user wants to update all Clips ...
+                            if results == ID_UPDATEALL:
+                                # ... then changing this variable will prevent the need for further user intervention.
+                                acceptAll = True
+                        # If the user presses "Update" (OK) or has pressed "Update All" ...
+                        if acceptAll or (results == wx.ID_OK):
+                            # Lock the Clip (will raise an exception of you can't)
+                            clipTranscript.lock_record()
+                            # substitute the new text for the old text
+                            clipTranscript.text = text
+                            # Save the Clip
+                            clipTranscript.db_save()
+                            # unlock the clip
+                            clipTranscript.unlock_record()
+                            # Finally, indicate success in the Report
+                            self.memo.AppendText(_("Transcript updated for clip"))
+                        # If the user indicates we should skip ONE clip ...
+                        elif results == ID_SKIP:
+                            # ... indicate that in the report and don't do anything else.
+                            self.memo.AppendText(_("Transcript change skipped for clip"))
+                        # If the user indicates we should CANCEL Transcript propagation ...
+                        elif results == wx.ID_CANCEL:
+                            # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
+                            #     the full Clip information to the report.
+                            self.memo.AppendText(_("Transcript propagation cancelled at clip"))
+                    # If a RecordLocked Exception is raised ...
+                    except TransanaExceptions.RecordLockedError:
+                        # ... indicate that in the report.
+                        self.memo.AppendText(_("ERROR: Record lock error for clip"))
+                    # If a SaveError exception is raised (I don't know how this might happen!)
+                    except TransanaExceptions.SaveError, e:
+                        # build the prompt for the user ...
+                        prompt = _('ERROR: Save error "%s" for clip')
+                        if 'unicode' in wx.PlatformInfo:
+                            prompt = unicode(prompt, 'utf8')
+                        # ... and report the error in the report.
+                        self.memo.AppendText(prompt % e.reason)
                         # unlock the clip
                         clipTranscript.unlock_record()
-                        # Finally, indicate success in the Report
-                        self.memo.AppendText(_("Transcript updated for clip"))
-                    # If the user indicates we should skip ONE clip ...
-                    elif results == ID_SKIP:
-                        # ... indicate that in the report and don't do anything else.
-                        self.memo.AppendText(_("Transcript change skipped for clip"))
-                    # If the user indicates we should CANCEL Transcript propagation ...
-                    elif results == wx.ID_CANCEL:
-                        # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
-                        #     the full Clip information to the report.
-                        self.memo.AppendText(_("Transcript propagation cancelled at clip"))
-                # If a RecordLocked Exception is raised ...
-                except TransanaExceptions.RecordLockedError:
-                    # ... indicate that in the report.
-                    self.memo.AppendText(_("ERROR: Record lock error for clip"))
-                # If a SaveError exception is raised (I don't know how this might happen!)
-                except TransanaExceptions.SaveError, e:
-                    # build the prompt for the user ...
-                    prompt = _('ERROR: Save error "%s" for clip')
-                    if 'unicode' in wx.PlatformInfo:
-                        prompt = unicode(prompt, 'utf8')
-                    # ... and report the error in the report.
-                    self.memo.AppendText(prompt % e.reason)
-                    # unlock the clip
-                    clipTranscript.unlock_record()
-            # If a clip has Time Code boundary or Transcript Source issues ...
-            else:
-                # If the time code boundaries are okay ...
-                if (clip['TranscriptNum'] != self.parent.TranscriptWindow.dlg.editor.TranscriptObj.number) or \
-                (clip['TranscriptNum'] == 0):
-                    # ... then we have a Transcript Source error to add to the report.
-                    self.memo.AppendText(_("SKIP: A different transcript was used to create clip"))
-                # Otherwise ...
+                # If a clip has Time Code boundary or Transcript Source issues ...
                 else:
-                    # ... we have a Time Code Boundary problem to report to the user.
-                    self.memo.AppendText(_("ERROR: Clip boundaries don't match transcript time codes for clip"))
-                # If either of these errors occurs, it's the same as if the user pressed "Skip".
-                results = ID_SKIP
+                    # If the time code boundaries are okay ...
+                    if (clipTranscript.source_transcript != self.parent.TranscriptWindow[self.parent.activeTranscript].dlg.editor.TranscriptObj.number) or \
+                       (clipTranscript.source_transcript == 0):
+                        # ... then we have a Transcript Source error to add to the report.
+                        self.memo.AppendText(_("SKIP: A different transcript was used to create clip"))
+                    # Otherwise ...
+                    else:
+                        # ... we have a Time Code Boundary problem to report to the user.
+                        self.memo.AppendText(_("ERROR: Clip boundaries don't match transcript time codes for clip"))
+                    # If either of these errors occurs, it's the same as if the user pressed "Skip".
+                    results = ID_SKIP
 
-            # We need to build the prompt for the Clip information, which is added to ALL of the above prompts
-            prompt = _('in collection')
-            if 'unicode' in wx.PlatformInfo:
-                prompt = unicode(prompt, 'utf8')
-            # Add the clip data to the report.
-            self.memo.AppendText(' "%s" %s "%s".  (%s - %s)\n\n' % (clip['ClipID'], prompt, clip['CollectID'], Misc.time_in_ms_to_str(clip['ClipStart']), Misc.time_in_ms_to_str(clip['ClipStop'])))
+                # We need to build the prompt for the Clip information, which is added to ALL of the above prompts
+                prompt = _('in collection')
+                if 'unicode' in wx.PlatformInfo:
+                    prompt = unicode(prompt, 'utf8')
+                # Add the clip data to the report.
+                self.memo.AppendText(' "%s" %s "%s".  (%s - %s)\n\n' % (tempClip.id, prompt, tempClip.collection_id, Misc.time_in_ms_to_str(clipTranscript.clip_start), Misc.time_in_ms_to_str(clipTranscript.clip_stop)))
+                # If the user pressed "Cancel" ...
+                if results == wx.ID_CANCEL:
+                    # ... we should STOP processing TRANSCRIPTS!
+                    break
             # If the user pressed "Cancel" ...
             if results == wx.ID_CANCEL:
-                # ... we should STOP processing Clips!
+                # ... we should STOP processing CLIPS too!
                 break
 
         # If the user pressed Cancel ...
@@ -244,6 +256,7 @@ class PropagateEpisodeChanges(wx.Dialog):
         else:
             # ... commit the changes to the database
             dbCursor.execute("COMMIT")
+            
         # Update the contents of the memo
         self.memo.Update()
         # Finally, we can show the dialog so the user can see the report!
@@ -259,7 +272,14 @@ class PropagateEpisodeChanges(wx.Dialog):
 
 class PropagateClipChanges(wx.Dialog):
     """ This window displays the Propagate Clip Changes report form. """
-    def __init__(self, parent, originalClip, newTranscriptText, newClipID=None, newKeywordList=None):
+    def __init__(self, parent, originalClip, sourceTranscriptIndex, newTranscriptText, newClipID=None, newKeywordList=None):
+        # Clear the interface when Clip Propagation is selected if a Clip is loaded.  This prevents problems caused by changes 
+        # being propagated to the Clip currently loaded in the interface.
+        # So if we have a Clip loaded in the main interface ...
+        if isinstance(parent.ControlObject.currentObj, Clip.Clip):
+            # ... clear all windows before proceeding with propagation
+            parent.ControlObject.ClearAllWindows()
+            
         # Define the main Frame for the Propagate Changes report Window
         wx.Dialog.__init__(self, parent, -1, _("Clip Change Propagation"), size = (710,650), style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER|wx.NO_FULL_REPAINT_ON_RESIZE)
         # Set the background to White
@@ -323,12 +343,48 @@ class PropagateClipChanges(wx.Dialog):
         #  Could this code be optimized by leaving the newKeywordList == None and skipping Keyword Processing if there is none to do?
         # ***************************************************
 
-        # Request clips that are copies of the current clip
-        clipList = DBInterface.list_of_clip_copies(originalClip.id, originalClip.transcript_num, originalClip.clip_start, originalClip.clip_stop)
-        # If the original clip is returned in the list of copies ...
-        if (originalClip.number, originalClip.collection_num, originalClip.id) in clipList:
-            # ... then remove it from the list.  It's already been updated!
-            clipList.remove((originalClip.number, originalClip.collection_num, originalClip.id))
+        # If we are passed a Transcript Index ...
+        if sourceTranscriptIndex > -1:
+            # ... we pass that index on to the Clip List ...
+            clipListTranscriptIndex = sourceTranscriptIndex
+            # Request clips that are copies of the current clip
+            clipList = DBInterface.list_of_clip_copies(originalClip.id, originalClip.transcripts[clipListTranscriptIndex].source_transcript, originalClip.transcripts[clipListTranscriptIndex].clip_start, originalClip.transcripts[clipListTranscriptIndex].clip_stop)
+        # ... otherwise we have to handle requests from multiple transcripts ...
+        else:
+            # Initialize the clipList
+            clipList = []
+            # Iterate through all the transcripts from the original clip
+            for clipListTranscriptIndex in range(len(originalClip.transcripts)):
+                # Request clips that are copies of the current clip for the indicated transcript
+                tempClipList = DBInterface.list_of_clip_copies(originalClip.id, originalClip.transcripts[clipListTranscriptIndex].source_transcript, originalClip.transcripts[clipListTranscriptIndex].clip_start, originalClip.transcripts[clipListTranscriptIndex].clip_stop)
+                # Iterate through the clips in this list
+                for clipListData in tempClipList:
+                    needToAdd = True
+                    for clipListData2 in clipList:
+                        if clipListData[:3] == clipListData2[:3]:
+                            needToAdd = False
+                            break
+                    if needToAdd:
+                        clipList.append(clipListData)
+
+        # If we have NO Transcript Index ...
+        if sourceTranscriptIndex == -1:
+            # ... then we need to iterate through the clips in the clip list to find instances of Originating Clip that need to be removed
+            for (num, colnum, clid, trnum) in clipList:
+                # If the original clip is returned in the list of copies ...
+                if (originalClip.number == num) and \
+                   (originalClip.collection_num == colnum) and \
+                   (originalClip.id == clid):
+                    # ... then remove it from the list.  It's already been updated!
+                    clipList.remove((num, colnum, clid, trnum))
+        # If we HAVE a Transcript Index ...
+        else:
+            
+            # If the original clip is returned in the list of copies ...
+            if (originalClip.number, originalClip.collection_num, originalClip.id, originalClip.transcripts[sourceTranscriptIndex].number) in clipList:
+                # ... then remove it from the list.  It's already been updated!
+                clipList.remove((originalClip.number, originalClip.collection_num, originalClip.id, originalClip.transcripts[sourceTranscriptIndex].number))
+
         # If no clips are returned ...
         if len(clipList) == 0:
             # ... inform the user ...
@@ -342,6 +398,8 @@ class PropagateClipChanges(wx.Dialog):
         # First, let's get a database cursor
         dbCursor = DBInterface.get_db().cursor()
         dbCursor.execute('BEGIN')
+        # We need to track MU Messages to be sent.  This way, if the CANCEL button is pressed, we can skip the messages!
+        messageCache = []
         
         # Initially, the user has not indicated that s/he wants to update ALL the clips.
         acceptAll = False
@@ -353,163 +411,211 @@ class PropagateClipChanges(wx.Dialog):
         for clip in clipList:
             # Start Exception handling.
             try:
-                # If the user hasn't signal that they want to update all clips ...
-                if not acceptAll:
-                    # ... create the Accept Clip Transcript Changes form ...
-                    acceptClipChanges = AcceptClipTranscriptChanges(self, clip[0], newTranscriptText, newKeywordList, helpString="Propagate Clip Changes")
-                    # ... and display it, capturing the user feedback.
-                    results = acceptClipChanges.GetResults()
-                    # Close (and Destroy) the form
-                    acceptClipChanges.Destroy()
-                    # If the user wants to update all Clips ...
-                    if results == ID_UPDATEALL:
-                        # ... then changing this variable will prevent the need for further user intervention.
-                        acceptAll = True
                 # ... load the current clip
                 clipObj = Clip.Clip(clip[0])
                 # Let's remember the original Clip ID.
                 oldClipID = clipObj.id
-                # If the user presses "Update" (OK) or has pressed "Update All" ...
-                if acceptAll or (results == wx.ID_OK):
-                    # Get a list of Keyword Examples for the current clip.  We don't want to lose this information in the propagation.
-                    keywordExamples = DBInterface.list_all_keyword_examples_for_a_clip(clip[0])
-                    # Lock the Clip (will raise an exception of you can't)
-                    clipObj.lock_record()
-                    # update the Clip ID
-                    clipObj.id = newClipID
-                    # substitute the new transcript text for the old text
-                    clipObj.text = newTranscriptText
-                    # Clear the old keywords from the clip
-                    clipObj.clear_keywords()
-                    # Iterate through all the clips in the NEW keyword list
-                    for clipKeyword in newKeywordList:
-                        # If the keyword is also in the Keyword Examples list ...
-                        if (clipKeyword.keywordGroup, clipKeyword.keyword, clipObj.number, originalClip.id) in keywordExamples:
-                            # ... add it as an example keyword
-                            clipObj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword, example=1)
-                        # If it's NOT an example ...
+                # If we have a Transcript Index ...
+                if sourceTranscriptIndex > -1:
+                    # We need the appropriate transcript's INDEX.  Initialize to -1
+                    trIndex = -1
+                    # Interate through transcripts ...
+                    for tr in clipObj.transcripts:
+                        # ... if the transcript's number is the one we're looking for (matches the SourceTranscript) ...
+                        if tr.number == clip[3]:
+                            # ... remember the INDEX for the Transcript, so we know which one to update.
+                            trIndex = {clipObj.transcripts.index(tr) : newTranscriptText}
+                            break
+                # If we don't have a Transcript Index, we need to create a dictionary of transcripts!
+                else:
+                    # Initialize a dictionary
+                    trIndex = {}
+                    
+                    # The trick here is to make sure that ALL COMBINATIONS of transcripts of same and different sizes get
+                    # detected and processed.  If we update a clip with just transcripts 2 and 3, we need to be sure that
+                    # clips with transcripts 1 and 3 as well as 2 and 4 get caught and processed.
+                    
+                    # Loop through all clipObj transcripts
+                    for x in range(len(clipObj.transcripts)):
+                        # Loop through all newTranscriptText transcripts
+                        for y in range(len(newTranscriptText)):
+                            # If both transcripts come from the same source transcript, we have a match.
+                            if clipObj.transcripts[x].source_transcript == newTranscriptText[y].source_transcript:
+                                # We need to record the matches for processing.
+                                trIndex[x] = newTranscriptText[y].text
+                                # Once we've found the match, no need to keep looking within newTranscriptText.
+                                break
+
+                # For each key in the transcripts dictionary ...
+                for key in trIndex.keys():
+                    # If the user hasn't signal that they want to update all clips AND we've found an eligible transcript (index != -1) ...
+                    if (not acceptAll) and (trIndex != -1):
+                        # See if we're looking at single transcript situations OR the first transcript in a list ...
+                        if (sourceTranscriptIndex > -1) or (key == 0):
+                            # ... create the Accept Clip Transcript Changes form WITH KEYWORDS ...
+                            acceptClipChanges = AcceptClipTranscriptChanges(self, clip[0], key, trIndex[key], newKeywordList, helpString="Propagate Clip Changes")
+                        # If it's not a single or the first, ...
                         else:
-                            # ... add it as a non-example keyword
-                            clipObj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
-                    # We don't want Keyword Example clips to get lost because of propagation.
-                    # Therefore, iterate through the Keyword Examples list
-                    for kw in keywordExamples:
-                        # Check to see if the keyword is already added to the clip above.  If NOT ...
-                        if not clipObj.has_keyword(kw[0], kw[1]):
-                            # ... add the keyword as an example keyword
-                            clipObj.add_keyword(kw[0], kw[1], example=1)
-                            # This will be unexpected by the user, so let's add a note to the user about this.
-                            prompt = _('Clip "%s" in collection "%s" retained keyword "%s : %s" because it is a keyword example.') + '\n'
-                            if 'unicode' in wx.PlatformInfo:
-                                prompt = unicode(prompt, 'utf8')
-                            # Add the prompt to the memo to communicate this to the user.
-                            self.memo.AppendText(prompt % (oldClipID, clipObj.GetNodeString(False), kw[0], kw[1]))
+                            # ... LEAVE THE KEYWORDS OFF!
+                            acceptClipChanges = AcceptClipTranscriptChanges(self, clip[0], key, trIndex[key], helpString="Propagate Clip Changes")
+                        # ... and display it, capturing the user feedback.
+                        results = acceptClipChanges.GetResults()
+                        # Close (and Destroy) the form
+                        acceptClipChanges.Destroy()
+                        # If the user wants to update all Clips ...
+                        if results == ID_UPDATEALL:
+                            # ... then changing this variable will prevent the need for further user intervention.
+                            acceptAll = True
+                    # If the user presses "Update" (OK) or has pressed "Update All" ...
+                    if acceptAll or (results == wx.ID_OK):
+                        # Get a list of Keyword Examples for the current clip.  We don't want to lose this information in the propagation.
+                        keywordExamples = DBInterface.list_all_keyword_examples_for_a_clip(clip[0])
+                        # Lock the Clip (will raise an exception of you can't)
+                        clipObj.lock_record()
+                        # update the Clip ID
+                        clipObj.id = newClipID
+                        # substitute the new transcript text for the old text
+                        clipObj.transcripts[key].text = trIndex[key]
+                        if (sourceTranscriptIndex > -1) or (key == 0):
+                            # Clear the old keywords from the clip
+                            clipObj.clear_keywords()
+                            # Iterate through all the clips in the NEW keyword list
+                            for clipKeyword in newKeywordList:
+                                # If the keyword is also in the Keyword Examples list ...
+                                if (clipKeyword.keywordGroup, clipKeyword.keyword, clipObj.number, originalClip.id) in keywordExamples:
+                                    # ... add it as an example keyword
+                                    clipObj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword, example=1)
+                                # If it's NOT an example ...
+                                else:
+                                    # ... add it as a non-example keyword
+                                    clipObj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
+                            # We don't want Keyword Example clips to get lost because of propagation.
+                            # Therefore, iterate through the Keyword Examples list
+                            for kw in keywordExamples:
+                                # Check to see if the keyword is already added to the clip above.  If NOT ...
+                                if not clipObj.has_keyword(kw[0], kw[1]):
+                                    # ... add the keyword as an example keyword
+                                    clipObj.add_keyword(kw[0], kw[1], example=1)
+                                    # This will be unexpected by the user, so let's add a note to the user about this.
+                                    prompt = _('Clip "%s" in collection "%s" retained keyword "%s : %s" because it is a keyword example.') + '\n'
+                                    if 'unicode' in wx.PlatformInfo:
+                                        prompt = unicode(prompt, 'utf8')
+                                    # Add the prompt to the memo to communicate this to the user.
+                                    self.memo.AppendText(prompt % (oldClipID, clipObj.GetNodeString(False), kw[0], kw[1]))
 
-                    # Save the Clip
-                    clipObj.db_save()
-                    # unlock the clip
-                    clipObj.unlock_record()
-                    # Initialize the Chat Message
-                    msg = ""
-                    # If the Clip ID has changed, we need to update instances of the Clip ID
-                    if oldClipID != clipObj.id:
-                        # Iterate through all the Keyowrd Examples for this clip ...
-                        for (kwg, kw, clipNumber, clipID) in keywordExamples:
-                            # Build the keyword Example Node List for the OLD Clip ID
-                            nodeList = (_('Keywords'), kwg, kw, originalClip.id)
-                            # Select the Keyword Example Node
-                            exampleNode = parent.tree.select_Node(nodeList, 'KeywordExampleNode')
-                            # Update the Keyword Example Node to the NEW Clip ID
-                            parent.tree.SetItemText(exampleNode, clipObj.id)
-                            # Add a Keyword Example record to the Undo list in case the user Cancels.
-                            undoData.append(('KWE', clipObj.number, clipObj.id, originalClip.id, kwg, kw))
-                            # If we're in the Multi-User mode, we need to send a message about the change
-                            if not TransanaConstants.singleUserVersion:
-                                # Begin constructing the message with the old and new names for the node
-                                msg = " >|< %s >|< %s" % (originalClip.id, clipObj.id)
-                                # Get the full Node Branch by climbing it to two levels above the root
-                                while (parent.tree.GetItemParent(parent.tree.GetItemParent(exampleNode)) != parent.tree.GetRootItem()):
-                                    # Update the selected node indicator
-                                    exampleNode = parent.tree.GetItemParent(exampleNode)
-                                    # Prepend the new Node's name on the Message with the appropriate seperator
-                                    msg = ' >|< ' + parent.tree.GetItemText(exampleNode) + msg
-                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
-                                # This must be untranslated to avoid problems in mixed-language environments.
-                                # Prepend these on the Messsage
-                                msg = "KeywordExampleNode >|< Keywords" + msg
-
-                                if DEBUG:
-                                    print 'Message to send = "RN %s"' % msg
-
-                                # Send the Rename Node message
-                                if TransanaGlobal.chatWindow != None:
-                                    TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
-
-                        # now build the Node List for the Clip itself.  First get the Node data from the Clip ...
-                        clipNodeData = clipObj.GetNodeData(False)
-                        # ... then add the Collections Root and the original Clip ID to make the full Node List.
-                        nodeList = (_("Collections"),) + clipNodeData + (originalClip.id,)
-                        # Rename the Tree node
-                        parent.tree.rename_Node(nodeList, 'ClipNode', clipObj.id)
-                        # Add a Clip record to the Undo list in case the user Cancels.
-                        undoData.append(('Clip', clipObj.number, clipObj.id, originalClip.id, clipNodeData))
+                        # Save the Clip
+                        clipObj.db_save()
+                        # unlock the clip
+                        clipObj.unlock_record()
+                        
+                        # Finally, indicate success in the Report
+                        prompt = _('Transcript %d of clip "%s" in collection "%s" has been updated.\n')
+                        if 'unicode' in wx.PlatformInfo:
+                            prompt = unicode(prompt, 'utf8')
+                        # Add the message to the report
+                        self.memo.AppendText(prompt % (key + 1, oldClipID, clipObj.GetNodeString(False)))
+                    # If the user indicates we should skip ONE clip ...
+                    elif results == ID_SKIP:
+                        # ... indicate that in the report and don't do anything else.
+                        prompt = _('Clip change has been skipped for transcript %d of clip "%s" in collection "%s".')
+                        if 'unicode' in wx.PlatformInfo:
+                            prompt = unicode(prompt, 'utf8')
+                        self.memo.AppendText(prompt % (key + 1, oldClipID, clipObj.GetNodeString(False)) + '\n')
+                    # If the user indicates we should CANCEL Clip propagation ...
+                    elif results == wx.ID_CANCEL:
+                        # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
+                        #     the full Clip information to the report.
+                        self.memo.AppendText(_("Clip change propagation has been cancelled."))
+                        # ... we should STOP processing Clips!  So stop iterating!
+                        break
+                # Initialize the Chat Message
+                msg = ""
+                # If the Clip ID has changed, we need to update instances of the Clip ID
+                if oldClipID != clipObj.id:
+                    # Iterate through all the Keyowrd Examples for this clip ...
+                    for (kwg, kw, clipNumber, clipID) in keywordExamples:
+                        # Build the keyword Example Node List for the OLD Clip ID
+                        nodeList = (_('Keywords'), kwg, kw, originalClip.id)
+                        # Select the Keyword Example Node
+                        exampleNode = parent.tree.select_Node(nodeList, 'KeywordExampleNode')
+                        # Update the Keyword Example Node to the NEW Clip ID
+                        parent.tree.SetItemText(exampleNode, clipObj.id)
+                        # Add a Keyword Example record to the Undo list in case the user Cancels.
+                        undoData.append(('KWE', clipObj.number, clipObj.id, originalClip.id, kwg, kw))
                         # If we're in the Multi-User mode, we need to send a message about the change
                         if not TransanaConstants.singleUserVersion:
+                            # Begin constructing the message with the old and new names for the node
+                            msg = " >|< %s >|< %s" % (originalClip.id, clipObj.id)
+                            # Get the full Node Branch by climbing it to two levels above the root
+                            while (parent.tree.GetItemParent(parent.tree.GetItemParent(exampleNode)) != parent.tree.GetRootItem()):
+                                # Update the selected node indicator
+                                exampleNode = parent.tree.GetItemParent(exampleNode)
+                                # Prepend the new Node's name on the Message with the appropriate seperator
+                                msg = ' >|< ' + parent.tree.GetItemText(exampleNode) + msg
                             # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
                             # This must be untranslated to avoid problems in mixed-language environments.
                             # Prepend these on the Messsage
-                            msg = "ClipNode >|< Collections >|< "
-                            for node in nodeList[1:]:
-                                # Prepend the new Node's name on the Message with the appropriate seperator
-                                msg += node + ' >|< ' 
-                            # Begin constructing the message with the old and new names for the node
-                            msg += clipObj.id
+                            msg = "KeywordExampleNode >|< Keywords" + msg
 
                             if DEBUG:
-                                print 'Message to send = "RN %s"' % msg.encode('latin1')
-                                print
+                                print 'Message to send = "RN %s"' % msg
 
-                            # Send the Rename Node message
+                            # Cache the Rename Node message for later processing
                             if TransanaGlobal.chatWindow != None:
-                                TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+                                messageCache.append("RN %s" % msg)
 
-                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    # now build the Node List for the Clip itself.  First get the Node data from the Clip ...
+                    clipNodeData = clipObj.GetNodeData(False)
+                    # ... then add the Collections Root and the original Clip ID to make the full Node List.
+                    nodeList = (_("Collections"),) + clipNodeData + (originalClip.id,)
+                    # Rename the Tree node
+                    parent.tree.rename_Node(nodeList, 'ClipNode', clipObj.id)
+                    # Add a Clip record to the Undo list in case the user Cancels.
+                    undoData.append(('Clip', clipObj.number, clipObj.id, originalClip.id, clipNodeData))
+                    # If we're in the Multi-User mode, we need to send a message about the change
                     if not TransanaConstants.singleUserVersion:
-                        # Build the message to update Keyword Visualizations.
-                        msg = 'Clip %d' % clipObj.number
+                        # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                        # This must be untranslated to avoid problems in mixed-language environments.
+                        # Prepend these on the Messsage
+                        msg = "ClipNode >|< Collections >|< "
+                        for node in nodeList[1:]:
+                            # Prepend the new Node's name on the Message with the appropriate seperator
+                            msg += node + ' >|< ' 
+                        # Begin constructing the message with the old and new names for the node
+                        msg += clipObj.id
 
                         if DEBUG:
-                            print 'Message to send = "UKL %s"' % msg
+                            print 'Message to send = "RN %s"' % msg.encode('latin1')
+                            print
 
+                        # Cache the Rename Node message for later processing
                         if TransanaGlobal.chatWindow != None:
-                            # Send the "Update Keyword List" message
-                            TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                            messageCache.append("RN %s" % msg)
 
-                    # Finally, indicate success in the Report
-                    prompt = _('Clip "%s" in collection "%s" has been updated.\n')
-                    if 'unicode' in wx.PlatformInfo:
-                        prompt = unicode(prompt, 'utf8')
-                    # Add the message to the report
-                    self.memo.AppendText(prompt % (oldClipID, clipObj.GetNodeString(False)))
-                # If the user indicates we should skip ONE clip ...
-                elif results == ID_SKIP:
-                    # ... indicate that in the report and don't do anything else.
-                    prompt = _('Clip change has been skipped for clip "%s" in collection "%s".')
-                    if 'unicode' in wx.PlatformInfo:
-                        prompt = unicode(prompt, 'utf8')
-                    self.memo.AppendText(prompt % (oldClipID, clipObj.GetNodeString(False)) + '\n')
-                # If the user indicates we should CANCEL Clip propagation ...
-                elif results == wx.ID_CANCEL:
-                    # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
-                    #     the full Clip information to the report.
-                    self.memo.AppendText(_("Clip change propagation has been cancelled."))
+                # See if the Keyword visualization needs to be updated.
+                parent.ControlObject.UpdateKeywordVisualization()
+                            
+                # Now let's communicate with other Transana instances if we're in Multi-user mode
+                if not TransanaConstants.singleUserVersion:
+                    # Build the message to update Keyword Visualizations.
+                    msg = 'Clip %d' % clipObj.number
+
+                    if DEBUG:
+                        print 'Message to send = "UKL %s"' % msg
+
+                    if TransanaGlobal.chatWindow != None:
+                        # Cache the Update Keyword messages for later processing
+                        messageCache.append("UKL %s" % msg)
+                        messageCache.append("UKV %s" % msg)
+
             # If a RecordLocked Exception is raised ...
-            except TransanaExceptions.RecordLockedError:
+            except TransanaExceptions.RecordLockedError, e:
                 # ... indicate that in the report.
                 prompt = _('ERROR: Clip "%s" in collection "%s" is locked and cannot be updated.')
                 if 'unicode' in wx.PlatformInfo:
                     prompt = unicode(prompt, 'utf8')
                 self.memo.AppendText(prompt % (oldClipID, clipObj.GetNodeString(False)) + '\n')
+
             # If a SaveError exception is raised -- Duplicate Clip ID error, for example
             except TransanaExceptions.SaveError, e:
                 # build the prompt for the user ...
@@ -564,9 +670,10 @@ class PropagateClipChanges(wx.Dialog):
                             print 'Message to send = "RN %s"' % msg.encode('latin1')
                             print
 
-                        # Send the Rename Node message
+                        # Cache the Rename Node message for later processing
                         if TransanaGlobal.chatWindow != None:
-                            TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+                            messageCache.append("RN %s" % msg)
+
                 # If the record is a Keyword Example record ...
                 else:
                     # .. Build the Keyword Example Node List for the OLD Clip ID
@@ -593,10 +700,10 @@ class PropagateClipChanges(wx.Dialog):
                         if DEBUG:
                             print 'Message to send = "RN %s"' % msg
 
-                        # Send the Rename Node message
+                        # Cache the Rename Node message for later processing
                         if TransanaGlobal.chatWindow != None:
-                            TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
-                    
+                            messageCache.append("RN %s" % msg)
+
                 # Now let's communicate with other Transana instances if we're in Multi-user mode
                 if not TransanaConstants.singleUserVersion:
                     # Build the message to update Keyword Visualizations.
@@ -606,8 +713,9 @@ class PropagateClipChanges(wx.Dialog):
                         print 'Message to send = "UKL %s"' % msg
 
                     if TransanaGlobal.chatWindow != None:
-                        # Send the "Update Keyword List" message
-                        TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                        # Cache the Update Keywords messages for later processing
+                        messageCache.append("UKL %s" % msg)
+                        messageCache.append("UKV %s" % msg)
                 
             # ... and inform the user that the changes were cancelled.  To avoid confusion, clear the report information already generated.
             self.memo.Clear()
@@ -616,6 +724,14 @@ class PropagateClipChanges(wx.Dialog):
         else:
             # ... commit the changes to the database
             dbCursor.execute("COMMIT")
+
+            # If we're in MU and have a chat window ...
+            if TransanaGlobal.chatWindow != None:
+                # Iterate through the cached messages
+                for message in messageCache:
+                    # Send the messages one at a time
+                    TransanaGlobal.chatWindow.SendMessage(message)
+                    
         # Update the contents of the memo
         self.memo.Update()
         # Finally, we can show the dialog so the user can see the report!
@@ -631,7 +747,7 @@ class PropagateClipChanges(wx.Dialog):
 
 class AcceptClipTranscriptChanges(wx.Dialog):
     """ This dialog shows the user proposed Clip changes due to Transcript Change Propagation and asks for approval. """
-    def __init__(self, parent, clipNum, newText, newKeywordList=None, helpString="Propagate Transcript Changes"):
+    def __init__(self, parent, clipNum, clipTranscriptNum, newText, newKeywordList=None, helpString="Propagate Transcript Changes"):
         """ Initialization Parameters are parent window, the clip Number, the proposed NEW clip transcript text,
             [the new Keyword list], and [the Help ID] """
         # Remember the Help ID for use if the Help button is pressed.
@@ -751,7 +867,7 @@ class AcceptClipTranscriptChanges(wx.Dialog):
                                                 maximum=100, \
                                                 style=wx.PD_AUTO_HIDE)
         # Load the Old Transcript from the temporary clip
-        oldTranscript.LoadRTFData(tempClip.text)
+        oldTranscript.LoadRTFData(tempClip.transcripts[clipTranscriptNum].text)
         # Clean up the Progress Dialog
         oldTranscript.ProgressDlg.Destroy()
         # This doesn't work!  Hidden text remains visible.

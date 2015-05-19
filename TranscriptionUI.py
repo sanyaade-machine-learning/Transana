@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -40,6 +40,7 @@ if __name__ == '__main__':
     wx.SetDefaultPyEncoding('utf_8')
 
 import gettext
+import os
 import pickle
 from TranscriptToolbar import TranscriptToolbar
 from TranscriptEditor import TranscriptEditor
@@ -49,27 +50,30 @@ import TransanaFontDialog
 import TransanaGlobal
 
 
-class TranscriptionUI(object):
+class TranscriptionUI(wx.Dialog):
     """This class manages the graphical user interface for the transcription
     editors component.  It creates the transcript window containing a
     TranscriptToolbar and a TranscriptEditor object."""
 
-    def __init__(self, parent):
+    def __init__(self, parent, includeClose=False):
         """Initialize an TranscriptionUI object."""
-        self.dlg = _TranscriptDialog(parent, -1)
+        self.dlg = _TranscriptDialog(parent, -1, includeClose=includeClose)
         
         self.dlg.toolbar.Enable(0)
+
+        self.transcriptWindowNumber = -1
 
         # We need to adjust the screen position on the Mac.  I don't know why.
         if "__WXMAC__" in wx.PlatformInfo:
             pos = self.dlg.GetPosition()
             self.dlg.SetPosition((pos[0]-20, pos[1]))
         
-        
 # Public methods
     def Register(self, ControlObject=None):
         """ Register a ControlObject """
         self.dlg.ControlObject=ControlObject
+        self.transcriptWindowNumber = len(ControlObject.TranscriptWindow) - 1
+        self.dlg.transcriptWindowNumber = self.transcriptWindowNumber
 
     def Show(self, value=True):
         """Show the window."""
@@ -111,6 +115,7 @@ class TranscriptionUI(object):
                     self.dlg.editor.load_transcript(transcriptObj, 'pickle')
             except UnicodeDecodeError:
                 if DEBUG:
+                    print "TranscriptionUI.LoadTranscript():"
                     import sys, traceback
                     print sys.exc_info()[0], sys.exc_info()[1]
                     traceback.print_exc()
@@ -223,6 +228,10 @@ class TranscriptionUI(object):
         # Now adjust the indexes
         self.dlg.editor.AdjustIndexes(adjustmentAmount)
 
+    def UpdateSelectionText(self, text):
+        """ Update the text indicating the start and end points of the current selection """
+        self.dlg.UpdateSelectionText(text)
+
     def ChangeLanguages(self):
         """ Change all on-screen prompts to the new language. """
         self.dlg.toolbar.ChangeLanguages()
@@ -237,21 +246,24 @@ class TranscriptionUI(object):
 
 class _TranscriptDialog(wx.Dialog):
 
-    def __init__(self, parent, id=-1):
-        #print "TranscriptUI Dialog @ (%d, %d) " % (x, y)
-        wx.Dialog.__init__(self, parent, id, _("Transcript"),
-                            self.__pos(),
-                            self.__size(),
-                            style=wx.CAPTION | \
-                                    wx.RESIZE_BORDER | wx.WANTS_CHARS)
+    def __init__(self, parent, id=-1, includeClose=False):
+        # If we're including an optional Close button ...
+        if includeClose:
+            # ... define a style that includes the Close Box.  (System_Menu is required for Close to show on Windows in wxPython.)
+            style = wx.CAPTION | wx.RESIZE_BORDER | wx.WANTS_CHARS | wx.SYSTEM_MENU | wx.CLOSE_BOX
+        # If we don't need the close box ...
+        else:
+            # ... then we don't need that defined in the style
+            style = wx.CAPTION | wx.RESIZE_BORDER | wx.WANTS_CHARS
+        # Create the Dialog with the appropriate style
+        wx.Dialog.__init__(self, parent, id, _("Transcript"), self.__pos(), self.__size(), style=style)
 
         # Set "Window Variant" to small only for Mac to make fonts match better
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
-        # print "TranscriptWindow:", self.__pos(), self.__size()
-
         self.ControlObject = None            # The ControlObject handles all inter-object communication, initialized to None
+        self.transcriptWindowNumber = -1
 
         # add the widgets to the panel
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -266,14 +278,14 @@ class _TranscriptDialog(wx.Dialog):
         self.searchBack = wx.BitmapButton(self, self.CMD_SEARCH_BACK_ID, bmp, style=wx.NO_BORDER)
         hsizer.Add(self.searchBack, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
         wx.EVT_BUTTON(self, self.CMD_SEARCH_BACK_ID, self.OnSearch)
-        hsizer.Add((10, 1))
+        hsizer.Add((10, 1), 0)
         self.searchBackToolTip = wx.ToolTip(_("Search backwards"))
         self.searchBack.SetToolTip(self.searchBackToolTip)
 
         self.searchText = wx.TextCtrl(self, -1, size=(100, 20), style=wx.TE_PROCESS_ENTER)
         hsizer.Add(self.searchText, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
         self.Bind(wx.EVT_TEXT_ENTER, self.OnSearch, self.searchText)
-        hsizer.Add((10, 1))
+        hsizer.Add((10, 1), 0)
         
         self.CMD_SEARCH_NEXT_ID = wx.NewId()
         bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
@@ -292,12 +304,16 @@ class _TranscriptDialog(wx.Dialog):
             hsizer.Add(self.UnicodeEntry, 0, wx.ALIGN_RIGHT | wx.TOP | wx.RIGHT, 8)
             self.UnicodeEntry.Bind(wx.EVT_TEXT, self.OnUnicodeText)
             self.UnicodeEntry.Bind(wx.EVT_TEXT_ENTER, self.OnUnicodeEnter)
-            
-        sizer.Add(hsizer, 0, wx.ALIGN_TOP, 10)
+
+        # Add a text label that will indicate the start and end points of the current transcript selection
+        self.selectionText = wx.StaticText(self, -1, "")
+        hsizer.Add(self.selectionText, 1, wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 20)
+
+        sizer.Add(hsizer, 0, wx.ALIGN_TOP | wx.EXPAND, 10)
             
         self.toolbar.Realize()
         
-        self.editor = TranscriptEditor(self, id, self.toolbar.OnStyleChange)
+        self.editor = TranscriptEditor(self, id, self.toolbar.OnStyleChange, updateSelectionText=True)
         sizer.Add(self.editor, 1, wx.EXPAND, 10)
         if "__WXMAC__" in wx.PlatformInfo:
             # This adds a space at the bottom of the frame on Mac, so that the scroll bar will get the down-scroll arrow.
@@ -305,16 +321,51 @@ class _TranscriptDialog(wx.Dialog):
         self.SetSizer(sizer)
         self.SetAutoLayout(True)
         self.Layout()
+        # Set the focus in the Editor
+        self.editor.SetFocus()
 
         # Capture Size Changes
         wx.EVT_SIZE(self, self.OnSize)
 
-        # For debugging purposes so we can load a transcript without
-        # database access
-        #self.editor.load_transcript("SampleTranscript.rtf")
+        try:
+            # Defind the Activate event (for setting the active window)
+            self.Bind(wx.EVT_ACTIVATE, self.OnActivate)
+            # Define the Close event (for THIS Transcript Window)
+            self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
 
-    def OnCharHook(self, event):
-        print "OnCharHook()"
+        except:
+            import sys
+            print "TranscriptionUI._TranscriptDialog.__init__():"
+            print sys.exc_info()[0]
+            print sys.exc_info()[1]
+            print
+
+    def OnActivate(self, event):
+        """ Activate Event for a Transcript Window """
+        # If the Control Object is defined ...
+        # There's a weird Mac bug.  If you click on the Visualization Window, then close one of the
+        # multiple transcript windows, then right-click the Visualization, Transana crashes.
+        # That's because, the act of closing the Transcript window calls that window's
+        # TranscriptionUI.OnActivate() method AFTER its OnCloseWindow() method,
+        # reseting self.ControlObject.activeTranscript to the window's transcriptWindowNumber, so the subsequent
+        # Visualization call tried to activate a closed transcript window.  So here we will avoid that
+        # by detecting that the number of Transcript Windows is smaller than this window's transcriptWindowNumber
+        # and NOT resetting activeTranscript in that circumstance.
+        if (self.ControlObject != None) and (self.transcriptWindowNumber < len(self.ControlObject.TranscriptWindow)):
+            # ... make this transcript the Control Object's active trasncript
+            self.ControlObject.activeTranscript = self.transcriptWindowNumber
+        elif (self.ControlObject != None) and (self.ControlObject.activeTranscript >= len(self.ControlObject.TranscriptWindow)):
+            self.ControlObject.activeTranscript = 0
+        # Let the event fall through to parent windows.
+        event.Skip()
+
+    def OnCloseWindow(self, event):
+        """ Event for the Transcript Window Close button, which should only exist on secondary transcript windows """
+        if (self.transcriptWindowNumber > 0) or (len(self.ControlObject.TranscriptWindow) > 1):
+            # Use the Control Object to close THIS transcript window
+            self.ControlObject.CloseAdditionalTranscript(self.transcriptWindowNumber)
+            # Allow the wxDialog's normal Close processing
+            event.Skip()
 
     def OnSize(self, event):
         (left, top) = self.GetPositionTuple()
@@ -378,6 +429,10 @@ class _TranscriptDialog(wx.Dialog):
             self.editor.SetFocus()
         except:
             pass
+
+    def UpdateSelectionText(self, text):
+        """ Update the text indicating the start and end points of the current selection """
+        self.selectionText.SetLabel(text)
 
     def ChangeLanguages(self):
         """ Change Languages """

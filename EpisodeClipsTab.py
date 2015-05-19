@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -131,23 +131,14 @@ class EpisodeClipsTab(wx.Panel):
     def OnCellLeftDClick(self, event):
         if self.ControlObject != None:
             # Load the Clip
-            self.ControlObject.LoadClipByNumber(int(self.gridClips.GetCellValue(event.GetRow(), 4)))
-            # Get a pointer to the Clip
-            tempClip = self.ControlObject.currentObj
-            # Get the Clip's Collection
-            tempCollection = Collection.Collection(tempClip.collection_num)
-            # Initialize the Collection List
-            collectionList = [tempCollection.id]
-            # Seek Collection Parents up to the root collection ...
-            while tempCollection.parent != 0:
-                # Load the parent collection
-                tempCollection = Collection.Collection(tempCollection.parent)
-                # ... and add them to the front of the Collection List
-                collectionList.insert(0, tempCollection.id)
-            # Add the Collections Root and the Clip name to either end of the node list
-            nodeList = [_('Collections')] + collectionList + [tempClip.id]
-            # Now point the DBTree (the notebook's parent window's DBTab's tree) to the loaded Clip
-            self.parent.parent.DBTab.tree.select_Node(nodeList, 'ClipNode')
+            # Switched to CallAfter because of crashes on the Mac.  It *appears* to be working!
+#            self.ControlObject.LoadClipByNumber(int(self.gridClips.GetCellValue(event.GetRow(), 4)))
+            wx.CallAfter(self.ControlObject.LoadClipByNumber, int(self.gridClips.GetCellValue(event.GetRow(), 4)))
+
+            # NOTE:  LoadClipByNumber eliminates the EpisodeClipsTab, so no further processing can occur!!
+            #        There used to be code here to select the Clip in the Database window, but it stopped
+            #        working when I added multiple transcripts, so I moved it to the ControlObject.LoadClipByNumber()
+            #        method.
 
     def Register(self, ControlObject=None):
         """ Register a ControlObject """

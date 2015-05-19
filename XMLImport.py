@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -30,19 +30,20 @@ import wx
 import datetime
 import time
 
-import Dialogs
-import Series
-import Episode
-import CoreData
-import Transcript
-import Collection
+# import necessary Transana modules
 import Clip
-import Keyword
 import ClipKeywordObject
+import Collection
+import CoreData
+import DBInterface
+import Dialogs
+import Episode
+import Keyword
 import Misc
 import Note
-import DBInterface
+import Series
 import TransanaGlobal
+import Transcript
 
 # import Python's os and sys modules
 import os
@@ -111,16 +112,22 @@ class XMLImport(Dialogs.GenForm):
        if progress.GetSize()[0] > 800:
             progress.SetSize((800, progress.GetSize()[1]))
             progress.Centre()
+       # Initialize the Transana-XML Version.  This allows differential processing based on the version used to
+       # create the Transana-XML data file
        self.XMLVersionNumber = 0.0
+       # Initialize dictionary variables used to keep track of data values that may change during import.
        recNumbers = {}
        recNumbers['Series'] = {0:0}
        recNumbers['Episode'] = {0:0}
        recNumbers['Transcript'] = {0:0}
        recNumbers['Collection'] = {0:0}
        recNumbers['Clip'] = {0:0}
+       recNumbers['OldClip'] = {0:0}
        recNumbers['Note'] = {0:0}
        clipTranscripts = {}
+       clipStartStop = {}
 
+       # Get the database connection
        db = DBInterface.get_db()
        if db != None:
            # Begin Database Transaction 
@@ -129,15 +136,22 @@ class XMLImport(Dialogs.GenForm):
            dbCursor.execute(SQLText)
            dbCursor.close()
 
+       # We need to track the number of lines read and processed from the input file.
        lineCount = 0 
-       
+
+       # Start exception handling
        try:
+           # Assume we're good to continue unless informed otherwise
            contin = True
+           # Open the XML file
            f = file(self.XMLFile.GetValue(), 'r')
 
+           # Initialize objectType and dataType, which are used to parse the file
            objectType = None 
            dataType = None
+           # For each line in the file ...
            for line in f:
+               # ... increment the line counter
                lineCount += 1
                # We can't just use strip() here.  Strings ending with the a with a grave (Alt-133) get corrupted!
                line = Misc.unistrip(line)
@@ -145,8 +159,12 @@ class XMLImport(Dialogs.GenForm):
                if DEBUG:
                    print "Line %d: '%s' %s %s" % (lineCount, line, objectType, dataType)
 
-               # Code for updating the Progress Bar
+               # Begin line processing.
+               # Generally, we figure out what kind of object we're importing (objectType) and
+               # then figure out what object property we're importing (dataType) and then we
+               # import the data.  But of course, there's a bit more to it than that.
 
+               # Code for updating the Progress Bar
                if line.upper() == '<SERIESFILE>':
                    progress.Update(0, _('Importing Series records'))
                elif line.upper() == '<EPISODEFILE>':
@@ -172,28 +190,35 @@ class XMLImport(Dialogs.GenForm):
                elif line.upper() == '<TRANSANAXMLVERSION>':
                    objectType = None
                    dataType = 'XMLVersionNumber'
-
                elif line.upper() == '</TRANSANAXMLVERSION>':
-                   # importEncoding reflects the encoding used to create the Transana XML file now being imported.
+
                    # Version 1.0 -- Original Transana XML for Transana 2.0 release
                    # Version 1.1 -- Unicode encoding added to Transana XML for Transana 2.1 release
                    # Version 1.2 -- Filter Table added to Transana XML for Transana 2.11 release
                    # Version 1.3 -- FilterData handling changed to accomodate Unicode data for Transana 2.21 release
+                   # Version 1.4 -- Database structure changed to accomodate Multiple Transcript Clips for Transana 2.30 release.
+
+                   # Transana-XML version 1.0 ...
                    if self.XMLVersionNumber == '1.0':
+                       # ... used Latin1 encoding
                        self.importEncoding = 'latin-1'
-                   elif self.XMLVersionNumber in ['1.1', '1.2', '1.3']:
+                   # Transana-XML versions 1.1 through 1.4 ...
+                   elif self.XMLVersionNumber in ['1.1', '1.2', '1.3', '1.4']:
+                       # ... use UTF8 encoding
                        self.importEncoding = 'utf8'
-                   else: 
+                   # All other Transana XML versions ...
+                   else:
+                       # ... haven't been defined yet.  We'd better prevent importing data from a LATER Transana-XML
+                       # version, as we probably don't know how to process everything in it.
                        msg = _('The Database you are trying to import was created with a later version\nof Transana.  Please upgrade your copy of Transana and try again.')
                        dlg = Dialogs.ErrorDialog(None, msg)
                        dlg.ShowModal()
                        dlg.Destroy()
+                       # This error means we can't continue processing the file.
                        contin = False
                        break
 
-
                # Code for Creating and Saving Objects
-
                elif line.upper() == '<SERIES>':
                    currentObj = Series.Series()
                    objectType = 'Series'
@@ -240,7 +265,7 @@ class XMLImport(Dialogs.GenForm):
                    dataType = None
 
                elif line.upper() == '<FILTER>':
-                    # There is not an Object for the Filter table.
+                    # There is not an Object for the Filter table.  We have to create the data record by hand.
                     currentObj = None
                     self.FilterReportType = None
                     self.FilterScope = None
@@ -250,6 +275,7 @@ class XMLImport(Dialogs.GenForm):
                     objectType = 'Filter'
                     dataType = None
 
+               # If we're closing a data record in the XML, we need to SAVE the data object.
                elif line.upper() == '</SERIES>' or \
                     line.upper() == '</EPISODE>' or \
                     line.upper() == '</COREDATA>' or \
@@ -278,20 +304,66 @@ class XMLImport(Dialogs.GenForm):
                            oldNumber = currentObj.number
                            currentObj.number = 0
 
-                           # TO prevent the ClipObject from trying to save the Clip Transcript,
-                           # (which it doesn't yet have in the import),
-                           # we must set its clip_transcript_num to -1.
+                           # Clip Trancript, Start, and Stop times need to be transferred to Clip Transcripts
+                           # if we're from a pre-version 1.4 transcript!  In earlier versions, Clip Transcript Number
+                           # was a Clip property.  Starting in 1.4, a clip can have multiple transcript objects
+                           # attached.  Multiple-Transcript Clips also need to copy Clip Start and Stop times
+                           # as part of the Clip Transcript.
+
+                           # NOTE:  Because we have to look up old and new Clip Numbers to manipulate Transcript data,
+                           #        the Clips MUST be processed BEFORE the Transcripts.  That's why they come earlier in
+                           #        the data files.
+                           
+                           # First, check for a Transcript and the XML Version
+                           if (objectType == 'Transcript') and (self.XMLVersionNumber in ['1.1', '1.2', '1.3']):
+                               # see if we have a Clip transcript
+                               if currentObj.clip_num > 0:
+                                   # The source transcript is saved at this point as the OLD transcript number, to be updated
+                                   # later in the last step.  To determine that, look up the Clip's (current number) OLD Clip
+                                   # number in the recNumbers['OldClip'] dictionary, and use that to look up the source
+                                   # Transcript number in the clipTranscripts dictionary.
+                                   if clipTranscripts.has_key(recNumbers['OldClip'][currentObj.clip_num]):
+                                       currentObj.source_transcript = clipTranscripts[recNumbers['OldClip'][currentObj.clip_num]]
+                                   # If there's no record in clipTranscripts, we've got an orphaned clips!
+                                   else:
+                                       currentObj.source_transcript = 0
+                                   # Pre-1.4 clip transcripts were always singles, so didn't have Sort Order.  Default to 0.
+                                   currentObj.sort_order = 0
+                                   # Look up the Clip's start time in the clipStartStop dictionary, which is keyed to the
+                                   # clip's OLD number, which we have to look up using recNumbers['OldClip']
+                                   if clipStartStop.has_key((recNumbers['OldClip'][currentObj.clip_num], 'Start')):
+                                       currentObj.clip_start = clipStartStop[(recNumbers['OldClip'][currentObj.clip_num], 'Start')]
+                                   else:
+                                       currentObj.clip_start = 0
+                                   # Look up the Clip's stop time in the clipStartStop dictionary, which is keyed to the
+                                   # clip's OLD number, which we have to look up using recNumbers['OldClip']
+                                   if clipStartStop.has_key((recNumbers['OldClip'][currentObj.clip_num], 'Stop')):
+                                       currentObj.clip_stop = clipStartStop[(recNumbers['OldClip'][currentObj.clip_num], 'Stop')]
+                                   else:
+                                       currentObj.clip_stop = 0
+                               
+                           # To prevent the ClipObject from trying to save the Clip Transcript,
+                           # (which it doesn't yet have in the import), we must set its transcript(s) number(s) to -1.
                            if objectType == 'Clip':
-                               currentObj.clip_transcript_num = -1
+                               for tr in currentObj.transcripts:
+                                   tr.number = -1
 
                            if DEBUG and (objectType == 'Transcript') and False:
                                tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
                                tmpdlg.ShowModal()
                                tmpdlg.Destroy()
 
+                           # Save the data object
                            currentObj.db_save()
                            # Let's keep a record of the old and new object numbers for each object saved.
                            recNumbers[objectType][oldNumber] = currentObj.number
+
+                           # If we've just saved a Clip ...
+                           if objectType == 'Clip':
+                               # ... we need to save the reverse lookup data, so we can find the clip's OLD
+                               # number based on it's new number.  This must be post-save, as that's when
+                               # the new object number gets assigned.
+                               recNumbers['OldClip'][currentObj.number] = oldNumber
 
                        elif  objectType == 'CoreData':
                            currentObj.number = 0
@@ -299,19 +371,13 @@ class XMLImport(Dialogs.GenForm):
 
                        elif objectType == 'Keyword':
                            currentObj.db_save()
+                           
                        elif objectType == 'ClipKeyword':
                            if (currentObj.episodeNum != 0) or (currentObj.clipNum != 0):
                                currentObj.db_save()
+                               
                        elif objectType == 'Filter':
-                           if DEBUG:
-                               print "Save the Filter Data here!"
-                               print self.FilterReportType
-                               print self.FilterScope
-                               print self.FilterConfigName.encode('utf8')
-                               print self.FilterFilterDataType
-                               print type(self.FilterFilterData)
-
-                           # Starting with XML Version 1.3, we have to deal with encoding issues
+                           # Starting with XML Version 1.3, we have to deal with encoding issues for the Filter data
                            if not self.XMLVersionNumber in ['1.0', '1.1', '1.2']:
                                if self.FilterFilterDataType in ['1', '2', '3', '5', '6', '7']:
                                    # Unpack the pickled data, which must be done differently depending on its current form
@@ -330,7 +396,6 @@ class XMLImport(Dialogs.GenForm):
                                # All other data is encoded and needs to be decoded, but was not pickled.
                                else:
                                    self.FilterFilterData = DBInterface.ProcessDBDataForUTF8Encoding(self.FilterFilterData)
-                               
 
                            # Certain FilterDataTypes need to have their DATA adjusted for the new object numbers!
                            # This should be done before the save.
@@ -367,15 +432,15 @@ class XMLImport(Dialogs.GenForm):
                                     #      the filter data!
                                # Now re-pickle the filter data
                                self.FilterFilterData = cPickle.dumps(filterData)
-                               
+                           # Create the query to save the Filter record    
                            query = """ INSERT INTO Filters2
                                            (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
                                          VALUES
                                            (%s, %s, %s, %s, %s) """
                            # Build the values to match the query, including the pickled Clip data
                            values = (self.FilterReportType, self.FilterScope, self.FilterConfigName, self.FilterFilterDataType, self.FilterFilterData)
+                           # Save the Filter data
                            if db != None:
-                               # Begin Database Transaction 
                                dbCursor = db.cursor()
                                dbCursor.execute(query, values)
                                dbCursor.close()
@@ -384,9 +449,8 @@ class XMLImport(Dialogs.GenForm):
 
                        if DEBUG:
                            print
-                           print sys.exc_info()[1]
+                           print sys.exc_info()[0], sys.exc_info()[1]
                            print
-                       
                            if (objectType == 'Transcript'):
                                tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
                                tmpdlg.ShowModal()
@@ -463,8 +527,7 @@ class XMLImport(Dialogs.GenForm):
                    currentObj = None
                    objectType = None
 
-               # Code for determing Property Type for populating Object Properties
-
+               # Code for determining Property Type for populating Object Properties
                elif line.upper() == '<NUM>':
                    dataType = 'Num'
 
@@ -619,8 +682,9 @@ class XMLImport(Dialogs.GenForm):
                elif line.upper() == '</FILTERDATA>':
                    dataType = None
 
-               # Code for populating Object Properties
-
+               # Code for populating Object Properties.
+               # Unless data can stretch across mulitple lines, we should explicity undefine the dataType
+               # once the data is captured.
                elif dataType == 'Num':
                    currentObj.number = int(line)
                    dataType = None
@@ -684,10 +748,22 @@ class XMLImport(Dialogs.GenForm):
                    dataType = None
 
                elif dataType == 'TranscriptNum':
+                   # if we're dealing with a CLIP's SOURCE TRANSCRIPT ...
                    if objectType == 'Clip':
-                       currentObj.transcript_num = line
                        if line != '0':
+                           # ... we need to save the Clip's Source Transcript number for later, as it has been moved
+                           # from the Clip object to the Clip Transcript object as of Transana-XML 1.4.
                            clipTranscripts[currentObj.number] = line
+                   # To be clear, a Transcript's NUMBER goes to currentObj.number, while its TRANSCRIPTNUM
+                   # is actually its SOURCE TRANSCRIPT, not its OBJECT NUMBER.
+                   elif objectType == 'Transcript':
+                       # Not all re-mapped Transcript Numbers are known while processing Transcripts.  Therefore, store the
+                       # OLD TranscriptNum as the SourceTranscript and we'll convert it later!
+                       try:
+                           currentObj.source_transcript = line
+                       except:
+                           pass
+                   # If we're dealing with anything but a Clip or Transcript ...
                    else:
                        # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
                        try:
@@ -705,6 +781,7 @@ class XMLImport(Dialogs.GenForm):
                    dataType = None
 
                elif dataType == 'ClipNum':
+                   # Handle object property naming inconsistency here!
                    if objectType in ['Transcript', 'Note']:
                        # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
                        try:
@@ -733,16 +810,12 @@ class XMLImport(Dialogs.GenForm):
                    try:
                        # If we're dealing with an Episode record ...
                        if objectType == 'Episode':
-#                           # Make sure it's in a form compatible with mx.DateTime.
-#                           # mxDateTime appears to accept YYYY-MM-DD and MM/DD/YYYY as legitimate forms.
                            # Make sure it's in a form we recognize
                            # See if the date is in YYYY-MM-DD format (produced by XMLExport.py).
                            # If not, substitute slashes for dashes, as this file likely came from Delphi!
                            reStr = '\d{4}-\d+-\d+'
                            if re.compile(reStr).match(line) == None:
                                line = line.replace('-', '/')
-#                           # The date should be stored in the Episode record as a mx.DateTime object
-#                           currentObj.tape_date = mx.DateTime.DateTimeFrom(line)
                                timeformat = "%m/%d/%Y"
                            # The date should be stored in the Episode record as a date object
                            else:
@@ -822,7 +895,6 @@ class XMLImport(Dialogs.GenForm):
                    if currentObj.description != '':
                        currentObj.description = currentObj.description + '\n'
                    currentObj.description = currentObj.description + self.ProcessLine(line)
-
                    # We DO NOT reset DataType here, as Description may be many lines long!
                    # dataType = None
 
@@ -872,7 +944,6 @@ class XMLImport(Dialogs.GenForm):
                    # being truncated.
                    if currentObj.text <> '':
                        currentObj.text = currentObj.text + '\n'
-                       
                    currentObj.text = currentObj.text + line
                    # We DO NOT reset DataType here, as RTFText may be many lines long!
                    # dataType = None
@@ -882,11 +953,21 @@ class XMLImport(Dialogs.GenForm):
                    dataType = None
 
                elif dataType == 'ClipStart':
-                   currentObj.clip_start = line
+                   currentObj.clip_start = int(line)
+                   # If we have a Clip object ...
+                   if objectType == 'Clip':
+                       if line != '0':
+                           # ... save the Clip Start time so it can be added to the Clip Transcript record too.
+                           clipStartStop[(currentObj.number, 'Start')] = int(line)
                    dataType = None
 
                elif dataType == 'ClipStop':
-                   currentObj.clip_stop = line
+                   currentObj.clip_stop = int(line)
+                   # If we have a Clip object ...
+                   if objectType == 'Clip':
+                       if line != '0':
+                           # ... save the Clip Stop time so it can be added to the Clip Transcript record too.
+                           clipStartStop[(currentObj.number, 'Stop')] = int(line)
                    dataType = None
 
                elif dataType == 'SortOrder':
@@ -906,8 +987,11 @@ class XMLImport(Dialogs.GenForm):
                    # text is added as a single line.
                    if currentObj.definition != '':
                        currentObj.definition = currentObj.definition + '\n'
-                   currentObj.definition = currentObj.definition + self.ProcessLine(line)
-
+                   # We changed the way the definition was stored in the database for Transana 2.30, XML Version 1.4.
+                   if (self.XMLVersionNumber in ['1.1', '1.2', '1.3']):
+                       currentObj.definition = currentObj.definition + self.ProcessLine(line)
+                   else:
+                       currentObj.definition = currentObj.definition + line.decode(self.importEncoding)
                    # We DO NOT reset DataType here, as Definition may be many lines long!
                    # dataType = None
 
@@ -924,11 +1008,6 @@ class XMLImport(Dialogs.GenForm):
                    # text is added as a single line.
                    if currentObj.text != '':
                        currentObj.text = currentObj.text + '\n'
-                   # We just add the encoded line, without the ProcessLine() call, because NoteText is stored in the Database
-                   # as a BLOB, and thus is encoded and handled differently.
-#                   currentObj.text = currentObj.text + unicode(line, self.importEncoding)
-                   # This now requires ProcessLine since we're not treating NoteText as a BLOB any more. 
-# 9/11/2007                   currentObj.text = currentObj.text + self.ProcessLine(line)
                    currentObj.text = currentObj.text + line.decode(self.importEncoding)
                    # We DO NOT reset DataType here, as NoteText may be many lines long!
                    # dataType = None
@@ -950,7 +1029,8 @@ class XMLImport(Dialogs.GenForm):
                         self.FilterScope = int(line)
                     # Collection Clip Data Export (ReportType 4) for ReportScope 0, the Collection Root, needs
                     # a FilterScope of 0
-                    elif ((self.FilterReportType == '4') and (int(line) == 0)):
+                    # Saved Search (ReportType 15) needs no modifications, but setting FilterScope to 0 allows the SAVE!
+                    elif ((self.FilterReportType == '4') and (int(line) == 0)) or (self.FilterReportType == '15'):
                         self.FilterScope = 0
                     else:
                        if 'unicode' in wx.PlatformInfo:
@@ -998,30 +1078,32 @@ class XMLImport(Dialogs.GenForm):
            if contin: 
                # Since Clips were imported before Transcripts, the Originating Transcript Numbers in the Clip Records
                # are incorrect.  We must update them now.
-               progress.Update(91, _('Updating Transcript Numbers in Clip records'))
+               progress.Update(91, _('Updating Source Transcript Numbers in Clip Transcript records'))
                if db != None:
                    dbCursor = db.cursor()
                    dbCursor2 = db.cursor()
-                   SQLText = 'SELECT ClipNum, TranscriptNum FROM Clips2'
+                   SQLText = 'SELECT TranscriptNum, SourceTranscriptNum, ClipNum FROM Transcripts2 WHERE ClipNum > 0'
                    dbCursor.execute(SQLText)
-                   for (ClipNum, TranscriptNum) in dbCursor.fetchall():
-                       SQLText = """ UPDATE Clips2
-                                     SET TranscriptNum = %s
-                                     WHERE ClipNum = %s """
+                   for (TranscriptNum, SourceTranscriptNum, ClipNum) in dbCursor.fetchall():
+                       SQLText = """ UPDATE Transcripts2
+                                     SET SourceTranscriptNum = %s
+                                     WHERE TranscriptNum = %s """
                        # It is possible that the originating Transcript has been deleted.  If so,
                        # we need to set the TranscriptNum to 0.  We accomplish this by adding the
                        # missing Transcript Number to our recNumbers list with a value of 0
-                       if not(TranscriptNum in recNumbers['Transcript'].keys()):
-                           recNumbers['Transcript'][TranscriptNum] = 0
-                       dbCursor2.execute(SQLText, (recNumbers['Transcript'][TranscriptNum], ClipNum))
+                       if not(SourceTranscriptNum in recNumbers['Transcript'].keys()):
+                           recNumbers['Transcript'][SourceTranscriptNum] = 0
+                       dbCursor2.execute(SQLText, (recNumbers['Transcript'][SourceTranscriptNum], TranscriptNum))
 
                    dbCursor.close()
                    dbCursor2.close()
 
+               # If we made it this far, we can commit the database transaction
                SQLText = 'COMMIT'
            else:
+               # If contin is False, there's been an error and we should roll back the database transaction
                SQLText = 'ROLLBACK'
-               
+           # Execute the COMMIT or ROLLBACK
            dbCursor = db.cursor()
            dbCursor.execute(SQLText)
            dbCursor.close()
@@ -1074,7 +1156,7 @@ class XMLImport(Dialogs.GenForm):
    def OnBrowse(self, evt):
         """Invoked when the user activates the Browse button."""
         fs = wx.FileSelector(_("Select an XML file to import"),
-                        os.path.dirname(sys.argv[0]),
+                        TransanaGlobal.configData.videoPath,
                         "",
                         "", 
                         _("Transana-XML Files (*.tra)|*.tra|XML Files (*.xml)|*.xml|All files (*.*)|*.*"), 
@@ -1085,17 +1167,6 @@ class XMLImport(Dialogs.GenForm):
 
    def CloseWindow(self, event):
        self.Close()
-
-#   def get_input(self):
-#        """Custom input routine."""
-#        # Inherit base input routine
-#        gen_input = Dialogs.GenForm.get_input(self)
-#        if gen_input:
-#            self.XMLFilename = gen_input[_('XML Filename')]
-#        else:
-#            self.XMLFilename = None
-#        return self
-
 
 
 # This simple derrived class let's the user drop files onto an edit box

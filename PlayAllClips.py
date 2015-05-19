@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -36,7 +36,8 @@ import MenuSetup
 # import Transana's Exceptions
 import TransanaExceptions
 
-TIMER_INTERVAL = 500
+# Increased from 500 to 1000 for multi-transcript clips for Transana 2.30.
+TIMER_INTERVAL = 1000
 EXTRA_LOAD_TIME = 1500
 
 # Declare GUI Constants for the Play All Clips Dialog
@@ -369,7 +370,6 @@ class PlayAllClips(wx.Dialog):
             try:
                 # Loading a Clip is slow.  Let's stop the timer, so it doesn't cause problems.  (It was with QuickTime video on Windows.)
                 self.playAllClipsTimer.Stop()
-
                 # Try to Load the next clip into the ControlObject
                 if not self.ControlObject.LoadClipByNumber(self.clipList[self.clipNowPlaying][0]):
                     # If the Media File has been moved, this failed.  Try one more time.

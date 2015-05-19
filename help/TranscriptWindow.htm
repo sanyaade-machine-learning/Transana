@@ -13,11 +13,13 @@ The transcript window is where you can view or edit your transcripts.  You can a
 
 The transcript window includes speed buttons for inserting symbols commonly used in Jeffersonian Transcript Annotation.  These symbols are <IMG SRC="images/risingintonation.gif"  ALT="risingintonation"   BORDER=0>, which indicates rising intonation, <IMG SRC="images/fallingintonation.gif"  ALT="fallingintonation"   BORDER=0>, which indicates falling intonation, <IMG SRC="images/inhale.gif"  ALT="inhale"   BORDER=0>, which signifies an audible intake of breath, and <IMG SRC="images/whisper.gif"  ALT="whisper"   BORDER=0>, which signifies a whisper or quieted speech.  (See <A HREF="transcriptnotation.htm">Transcript Notation</A> in Transana's Help Menu for more information about Jeffersonian Transcription Symbols.)<P>
 
-The next set of buttons are the Show/Hide Time Codes toggle, denoted by the <A HREF="timecodes.htm">time code</A> icon <IMG SRC="images/timecode.gif"  ALT="timecodebutton"   BORDER=0>, the Show/Hide Time Code Values, denoted by the <IMG SRC="images/timecodedata.gif"  ALT="timecodevaluesbutton"   BORDER=0> icon.  The first of these buttons controls whether the time code <I>symbol</I> is displayed in the transcript, while the second one controls whether the time code <I>value</I>, in human-readable form, is displayed.  (Please note that it is not a good idea to edit the time code value text.  This will not affect the underlying time code, but may cause display problems when Transana tries to hide this automatically-generated text.)<P>
+The next set of buttons are the Show/Hide Time Codes toggle, denoted by the <A HREF="timecodes.htm">time code</A> icon <IMG SRC="images/timecode.gif"  ALT="timecodebutton"   BORDER=0>, the Show/Hide Time Code Values, denoted by the <IMG SRC="images/timecodedata.gif"  ALT="timecodevaluesbutton"   BORDER=0> &nbsp;icon.  The first of these buttons controls whether the time code <I>symbol</I> is displayed in the transcript, while the second one controls whether the time code <I>value</I>, in human-readable form, is displayed.  (Please note that it is not a good idea to edit the time code value text.  This will not affect the underlying time code, but may cause display problems when Transana tries to hide this automatically-generated text.)<P>
 
-The Edit Mode/Read-Only toggle, denoted by the <IMG SRC="images/editbutton.gif"  ALT="editbutton"   BORDER=0> icon is next.  Please note that Transana starts up in a "read-only" mode so that it can show the moving highlight in the transcript, and that the edit button<B> must</B> be pressed, placing the document in Edit Mode, before you can transcribe anything or insert <A HREF="timecodes.htm">time codes</A>. <P>
+The Edit Mode/Read-Only toggle, denoted by the <IMG SRC="images/editbutton.gif"  ALT="editbutton"   BORDER=0> &nbsp;icon, is next.  Please note that Transana starts up in a "read-only" mode so that it can show the moving highlight in the transcript, and that the edit button<B> must</B> be pressed, placing the document in Edit Mode, before you can transcribe anything or insert <A HREF="timecodes.htm">time codes</A>. <P>
 
-The final set of buttons in the Transcript Window speedbar are the Keyword button <IMG SRC="images/keywordsnodeicon.gif"  ALT="keywordsnodeicon"   BORDER=0>, which allows you to edit the Keyword List associated with the currently-loaded Episode or Clip, the Save button <IMG SRC="images/saveicon.gif"  ALT="saveicon"   BORDER=0>, which saves the current transcript, and the Select Clip Text button <IMG SRC="images/selectcliptext.gif"  ALT="selectcliptext"   BORDER=0> which indicates that text highlighted in the Transcript should be selected for creating a Clip.<P>
+The next set of buttons in the Transcript Window toolbar are: the Create Quick Clip button <IMG SRC="images/quickclipicon.gif"  ALT="quickclipicon"   BORDER=0>, which allows you to create Quick Clips if you have a Keyword selected in the Database Tree; the Keyword button <IMG SRC="images/keywordsnodeicon.gif"  ALT="keywordsnodeicon"   BORDER=0>, which allows you to edit the Keyword List associated with the currently-loaded Episode or Clip; and the Save button <IMG SRC="images/saveicon.gif"  ALT="saveicon"   BORDER=0>, which saves the current transcript.<P>
+
+The Propagate Changes button is next, as indicated by <IMG SRC="images/propagatebutton.gif">, which allows you to push <A HREF="propagateepisodechanges.htm">changes in an episode transcript</A> out to clips covering that portion of the episode or to push <A HREF="propagateclipchanges.htm">changes in a clip transcript</A> out to copies of the currently-loaded clip.  The Match Selection in Other Transcripts button, shown by the <IMG SRC="images/multiselectbutton.gif"> &nbsp;icon, causes all transcript selections to match the one in the selected transcript window when <A HREF="multitrans.htm">multiple transcripts</A> are open at the same time.  The Play button, shown by the <IMG SRC="images/multiplaybutton.gif"> &nbsp;icon, causes the current selection(s) to be played, which can be particularly useful when creating <A HREF="multitrans.htm">multiple-transcript clips</A>.<P>
 
 If you have <A HREF="timecodes.htm">time codes</A> in your transcript, you can right-click the transcript to play the section between the nearest <A HREF="timecodes.htm">time codes</A> where the cursor is currently placed.  You can also highlight a larger section of the transcript if you want to play a portion that crosses <A HREF="timecodes.htm">time codes</A>.  In addition, if you would like to play from the current position in the transcript to the end of the loaded Episode or Clip, you can hold down the Ctrl key and right-click the Transcript on Windows or the Ctrl and &quot;Command&quot; or &quot;Meta&quot; key and click the Transcript on the Mac.<P>
 
@@ -25,9 +27,10 @@ During transcription, you may find it easiest to use Ctrl-S to start and stop vi
 
 Here is a summary of the keyboard shortcuts available in the Transcription Window:<P>
 <TABLE BORDER=3>
-  <TR><TD VALIGN=TOP>Ctrl-X<TD VALIGN=TOP>Cut highlighted text
-  <TR><TD VALIGN=TOP>Ctrl-C<TD VALIGN=TOP>Copy highlighted text
-  <TR><TD VALIGN=TOP>Ctrl-V<TD VALIGN=TOP>Paste text
+  <TR><TD VALIGN=TOP>Ctrl-Z<TD VALIGN=TOP>Undo edit.
+  <TR><TD VALIGN=TOP>Ctrl-X<TD VALIGN=TOP>Cut highlighted text.
+  <TR><TD VALIGN=TOP>Ctrl-C<TD VALIGN=TOP>Copy highlighted text.
+  <TR><TD VALIGN=TOP>Ctrl-V<TD VALIGN=TOP>Paste text.
   <TR><TD VALIGN=TOP>Ctrl-A<TD VALIGN=TOP>Rewind 10 seconds and play video.
   <TR><TD VALIGN=TOP>Ctrl-S<TD VALIGN=TOP>If video is playing, pause it.  If not, rewind video by the amount of the Transcription Setback setting in Program Settings (2 seconds by default) and play it.
   <TR><TD VALIGN=TOP>Ctrl-D<TD VALIGN=TOP>If video is playing, pause it.  If not, play it with no rewind.
@@ -41,7 +44,9 @@ Here is a summary of the keyboard shortcuts available in the Transcription Windo
   <TR><TD VALIGN=TOP>Ctrl-Cursor Down<TD VALIGN=TOP>Insert Falling Intonation symbol.
   <TR><TD VALIGN=TOP>Ctrl-H<TD VALIGN=TOP>Insert Audible Breath symbol.
   <TR><TD VALIGN=TOP>Ctrl-O<TD VALIGN=TOP>Insert Whispered Speech symbol.
-  <TR><TD VALIGN=TOP>F12<TD VALIGN=TOP>Quick Save (unless intercepted by Dashboard on OS X 10.4.)
+  <TR><TD VALIGN=TOP>Ctrl-T<TD VALIGN=TOP>Insert a Time Code.
+  <TR><TD VALIGN=TOP>Ctrl-K<TD VALIGN=TOP>Create a Quick Clip, if a Keyword is selected in the Database Tree.
+  <TR><TD VALIGN=TOP>F12<TD VALIGN=TOP>Quick Save (unless intercepted by Dashboard on OS X 10.4 or later.)
 </TABLE><P>
 <A HREF="videowindow.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<A HREF="timecodes.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
 

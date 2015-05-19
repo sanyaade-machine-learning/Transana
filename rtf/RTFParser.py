@@ -1,4 +1,4 @@
-# Copyright (C) 2002-2007 The Board of Regents of the University of Wisconsin System
+# Copyright (C) 2002-2008 The Board of Regents of the University of Wisconsin System
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -535,8 +535,8 @@ class RTFParser:
                     if ('unicode' in wx.PlatformInfo):
                         # Try a straight conversion to UTF-8, the DefaultPyEncoding
                         try:
-                            
-                            if value == 201:
+                            # CHANGED for 2.30 because 201 is now the back-accented capital E character!
+                            if value == 133:  # 201
                                 
                                 if DEBUG:
                                     print "Elipsis substitution"

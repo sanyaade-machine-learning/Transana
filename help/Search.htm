@@ -7,10 +7,17 @@
 
 <H1>Search<HR ></H1><P>
 <IMG SRC="images/keywordsearch.gif"  ALT="keywordsearch"   BORDER=0><P>
+
 Right-clicking on the Search Results node on the database tab of the data window gives you the option to search your <A HREF="organization.htm">Episodes</A> and <A HREF="organization.htm">Clips</A> for the presence of assigned keywords.  This dialog box has been carefully designed to only allow valid entries and to produce valid searches.  If something you want to choose is not available, it is because you have missed something required to make your specification complete.  For example, if the &quot;Search&quot; button is not enabled, it is most likely because you have not closed a set of parentheses or because you just selected a logical operator and have not yet specified the next Keyword Group : Keyword pair.<P>
-This screen allows you to specify complex searches, including using boolean logical operator (AND, OR, and NOT,) but you must do so carefully to be sure to get the results you want.  <P>
+
+When you have constructed a valid search query, you can save it for later reuse by pressing the <IMG SRC="images/filesave.gif" ALT="Save Icon"> &nbsp;icon in the lower left corner of the dialog.  You can then load the saved search later using the <IMG SRC="images/fileopen.gif" ALT="Load Icon"> &nbsp;icon or delete it using the <IMG SRC="images/filedelete.gif" ALT="Delete Icon"> &nbsp;icon.<P>
+
+This dialog box allows you to specify complex searches, including using boolean logical operator (AND, OR, and NOT,) but you must do so carefully to be sure to get the results you want.  <P>
+
 For example, the searches &quot;<CODE><B>(A or B) and C</CODE></B>&quot; and &quot;<CODE><B>A or (B and C)</CODE></B>&quot; produce different results.  The first search will find all Episodes and Clips that have Keyword C and also have either Keyword A or Keyword B, producing hits on combinations AC, BC, and ABC.  The second search will find all Episodes and Clips that have Keyword A, as well as those that have both B and C, producing hits on A, AB, AC, BC, and ABC.  These are obviously very different results, with the second search including more results.<P>
-This is particularly an issue with the more ambiguous search &quot;<CODE><B>A or B and C</CODE></B>.&quot;  Many people initially expect this to be equivalent to the first query above.  However, (because AND is higher than OR in the &quot;order of operations,&quot;) this search is actually equivalent to the second search described above, and will find all Episodes and Clips that have Keyword A, as well as those that have both B and C.<P>
+
+This is particularly an issue with the more ambiguous search &quot;<CODE><B>A or B and C</CODE></B>.&quot;  Many people initially expect this to be equivalent to the first query above.  However, (because AND is higher than OR in the Boolean &quot;order of operations,&quot;) this search is actually equivalent to the second search described above, and will find all Episodes and Clips that have Keyword A, as well as those that have both B and C.<P>
+
 <A HREF="FilterDialog.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<A HREF="convert.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
 
 </BODY>

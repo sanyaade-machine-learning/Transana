@@ -48,7 +48,7 @@ class KeywordSummaryReport(wx.Object):
         # Remember the keyword group name passed if, if any
         self.keywordGroupName = keywordGroupName
         # Specify the Report Title
-        self.title = _("Keyword Summary Report")
+        self.title = unicode(_("Keyword Summary Report"), 'utf8')
         # If no Keyword Group Name is specified ...
         if self.keywordGroupName == None:
             # ... then we want to include the filterMethod specification.  This is the Keyword Summary Report that

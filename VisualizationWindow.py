@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -85,6 +85,8 @@ class VisualizationWindow(wx.Dialog):
         self.waveformUpperLimit = 0
         # Initialize waveformFilename to an empty string.  (Without this, Locate Clip that can't find the video fails badly.)
         self.waveformFilename = ''
+        # We need to signal if the Default Visualization should be loaded or not.
+        self.loadDefault = True
 
         # heightIsSet notes whether the height of the Keyword Visualization should be automatically adjusted or not.
         self.heightIsSet = False
@@ -98,10 +100,6 @@ class VisualizationWindow(wx.Dialog):
 
         # zoomInfo holds information about Zooms, to allow zoom-out in steps matching zoom-ins
         self.zoomInfo = [(0, -1)]
-
-        if DEBUG:
-            print "zoomInfo 1", self.zoomInfo
-
         box = wx.BoxSizer(wx.VERTICAL)
 
         # We need to know the height of the Window Header to adjust the size of the Graphic Area
@@ -398,6 +396,8 @@ class VisualizationWindow(wx.Dialog):
                     unfilteredKeywordList = self.kwMap.unfilteredKeywordList[:]
                     # ... remember the keyword color list too.
                     keywordColorList = self.kwMap.keywordColors
+                    # ... and remember the configuration name
+                    configName = self.kwMap.configName
                     # Delete the current keyword visualization object
                     del(self.kwMap)
                     # Set the reference to the keyword visualizatoin object to None so we don't get confused.
@@ -410,6 +410,8 @@ class VisualizationWindow(wx.Dialog):
                     unfilteredKeywordList = []
                     # ... and the keyword color list.
                     keywordColorList = None
+                    # ... and the configuration name
+                    configName = ''
                 # If we're creating a Hybrid Visualization ...
                 if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
                     # ... then the Keyword Visualization portion needs a top margin.
@@ -418,6 +420,7 @@ class VisualizationWindow(wx.Dialog):
                 else:
                     # ... then we don't need a top margin
                     topOffset = 0
+
                 # Create a Keyword Visualization object as an embedded graphic, not a free-standing report.
                 self.kwMap = KeywordMapClass.KeywordMap(self, -1, "", embedded=True, topOffset=topOffset)
                 # We populate the keyword visualization differently for an episode and a clip.
@@ -428,10 +431,6 @@ class VisualizationWindow(wx.Dialog):
                     # has been loaded.
                     if self.zoomInfo[0][1] == -1:
                         self.zoomInfo[0] = (self.ControlObject.GetVideoStartPoint(), self.ControlObject.GetMediaLength(True))
-
-                        if DEBUG:
-                            print "zoomInfo 2", self.zoomInfo
-                            
                     # The starting point of the Keyword Visualization is the start time in the top of the zoomInfo stack!
                     kwMapStartPoint = self.zoomInfo[-1][0]
                     # The ending point of the Keyword Visualization is the end time in the top of the zoomInfo stack,
@@ -445,7 +444,7 @@ class VisualizationWindow(wx.Dialog):
                     self.kwMap.SetupEmbedded(self.ControlObject.currentObj.number, self.ControlObject.currentObj.series_id, \
                                              self.ControlObject.currentObj.id, kwMapStartPoint, kwMapEndPoint, \
                                              filteredKeywordList = filteredKeywordList, unfilteredKeywordList = unfilteredKeywordList, \
-                                             keywordColors = keywordColorList)
+                                             keywordColors = keywordColorList, configName=configName, loadDefault=self.loadDefault)
 
                     # Draw the TimeLine values
                     self.draw_timeline(kwMapStartPoint, kwMapEndPoint - kwMapStartPoint)
@@ -468,7 +467,8 @@ class VisualizationWindow(wx.Dialog):
                     self.kwMap.SetupEmbedded(self.ControlObject.currentObj.episode_num, tmpEpisode.series_id, \
                                              tmpEpisode.id, self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop, \
                                              filteredKeywordList = filteredKeywordList, unfilteredKeywordList = unfilteredKeywordList, \
-                                             keywordColors = keywordColorList, clipNum=self.ControlObject.currentObj.number)
+                                             keywordColors = keywordColorList, clipNum=self.ControlObject.currentObj.number,
+                                             configName=configName, loadDefault=self.loadDefault)
 
                     # Draw the TimeLine values
                     self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
@@ -478,6 +478,9 @@ class VisualizationWindow(wx.Dialog):
 
                 elif self.ControlObject.currentObj != None:
                     self.waveform.AddText('Keyword Visualization - %s not implemented.' % type(self.ControlObject.currentObj), 5, 5)
+
+                # By this point, we've already loaded the default and don't need to do it again.
+                self.loadDefault = False
 
                 # The Keyword / Hybrid visualization height can be self-adjusting.  Let's call that function.
                 self.resizeKeywordVisualization()
@@ -596,6 +599,11 @@ class VisualizationWindow(wx.Dialog):
             # Ctrl-T -- Insert Time Code
             elif (c == ord("T")) and event.ControlDown():
                 self.OnCurrent(event)
+
+            # Ctrl-K -- Create Quick Clip
+            elif (c == ord("K")) and event.ControlDown():
+                # Ask the Control Object to create a Quick Clip
+                self.ControlObject.CreateQuickClip()
                     
             # Cursor Left ...
             elif c in [wx.WXK_LEFT, wx.WXK_NUMPAD_LEFT]:
@@ -713,10 +721,6 @@ class VisualizationWindow(wx.Dialog):
         """Clear the display."""
         # Clear zoom level information
         self.zoomInfo = [self.zoomInfo[0]]
-
-        if DEBUG:
-            print "zoomInfo 3", self.zoomInfo
-            
         self.startPoint = self.zoomInfo[0][0]
         self.endPoint = self.zoomInfo[0][1]
         self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
@@ -732,6 +736,8 @@ class VisualizationWindow(wx.Dialog):
         self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(0))
         self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(0))
         self.lbl_Total_Time.SetLabel(Misc.time_in_ms_to_str(0))
+        # When clearing, we need to reset loading the Default
+        self.loadDefault = True
         # Signal that things should be redrawn
         self.redrawWhenIdle = True
 
@@ -743,10 +749,6 @@ class VisualizationWindow(wx.Dialog):
         """ Causes the proper visualization to be displayed in the Visualization Window when a Video File is loaded. """
         # To start with, initialize the data structure that holds information about Zooms
         self.zoomInfo = [(mediaStart, mediaLength)]
-
-        if DEBUG:
-            print "zoomInfo 4", self.zoomInfo, mediaStart, mediaLength, self.ControlObject.GetVideoStartPoint(), self.ControlObject.GetVideoEndPoint()
-            
         # Let's clear the Visualization Window as we get started.
         self.ClearVisualization()
         # Remember the original File Name that is passed in
@@ -1049,12 +1051,12 @@ class VisualizationWindow(wx.Dialog):
             self.waveformUpperLimit = self.waveformUpperLimit + 1
         pos = ((float(currentPosition - self.waveformLowerLimit)) / (self.waveformUpperLimit - self.waveformLowerLimit))
         self.waveform.DrawCursor(pos)
-        # Force a redraw at least every 0.2 seconds while the video is playing.  (Mostly for slow Macs)
-        if (self.ControlObject.IsPlaying()) and (time.time() - self.lastRedrawTime > 0.2):
+        # Force a redraw at least every half second while the video is playing.  (Mostly for slow Macs and when running multi-transcript video)
+        if (self.ControlObject.IsPlaying()) and (time.time() - self.lastRedrawTime > 0.5):
             self.waveform.reInitBuffer = True
-            # Actually, the video is getting very jumpy when the keyword or hybrid visualization is too complex.
-            # Removing this seems to help that.
-            # self.waveform.OnIdle(None)
+            # The video was getting very jumpy when the keyword or hybrid visualization is too complex with updates every
+            # 0.2 seconds.  Removing the OnIdle line solves that, but then we don't get ANY forced visualization cursor updates.
+            self.waveform.OnIdle(None)
 
             # While we're at it, let's see if we need to Yield().  This makes the app MUCH more responsive on slow systems. 
             # There is an issue with recursive calls to wxYield, so trap the exception ...

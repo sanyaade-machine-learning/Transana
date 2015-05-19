@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -155,11 +155,15 @@ class XMLExport(Dialogs.GenForm):
             f.write('  <!ELEMENT TranscriptFile (Transcript)*>\n');
             f.write('\n');
             f.write('  <!ELEMENT EpisodeNum (#PCDATA)>\n');
+            f.write('  <!ELEMENT TranscriptNum (#PCDATA)>\n');
             f.write('  <!ELEMENT ClipNum (#PCDATA)>\n');
+            f.write('  <!ELEMENT SortOrder (#PCDATA)>\n');
             f.write('  <!ELEMENT Transcriber (#PCDATA)>\n');
+            f.write('  <!ELEMENT ClipStart (#PCDATA)>\n');
+            f.write('  <!ELEMENT ClipStop (#PCDATA)>\n');
             f.write('  <!ELEMENT RTFText (#PCDATA)>\n');
             f.write('\n');
-            f.write('  <!ELEMENT Transcript (#PCDATA|Num|ID|EpisodeNum|ClipNum|Transcriber|Comment|RTFText)*>\n');
+            f.write('  <!ELEMENT Transcript (#PCDATA|Num|ID|EpisodeNum|TranscriptNum|ClipNum|SortOrder|Transcriber|ClipStart|ClipStop|Comment|RTFText)*>\n');
             f.write('\n');
             f.write('  <!ELEMENT CollectionFile (Collection)*>\n');
             f.write('\n');
@@ -170,12 +174,8 @@ class XMLExport(Dialogs.GenForm):
             f.write('  <!ELEMENT ClipFile (Clip)*>\n');
             f.write('\n');
             f.write('  <!ELEMENT CollectNum (#PCDATA)>\n');
-            f.write('  <!ELEMENT TranscriptNum (#PCDATA)>\n');
-            f.write('  <!ELEMENT ClipStart (#PCDATA)>\n');
-            f.write('  <!ELEMENT ClipStop (#PCDATA)>\n');
-            f.write('  <!ELEMENT SortOrder (#PCDATA)>\n');
             f.write('\n');
-            f.write('  <!ELEMENT Clip (#PCDATA|Num|ID|CollectNum|TranscriptNum|ClipStart|ClipStop|Comment|SortOrder)*>\n');
+            f.write('  <!ELEMENT Clip (#PCDATA|Num|ID|CollectNum|ClipStart|ClipStop|Comment|SortOrder)*>\n');
             f.write('\n');
             f.write('  <!ELEMENT KeywordFile (KeywordRec)*>\n');
             f.write('\n');
@@ -217,7 +217,9 @@ class XMLExport(Dialogs.GenForm):
             # Version 1.1 -- Unicode encoding added to Transana XML for Transana 2.1 release
             # Version 1.2 -- Filter Table added to Transana XML for Transana 2.11 release
             # Version 1.3 -- FilterData handling changed to accomodate Unicode data for Transana 2.21 release
-            f.write('    1.3\n');
+            # Version 1.4 -- Database structure changed to accomodate Multiple Transcript Clips, BLOB keyword definitions
+            #                for Transana 2.30 release.
+            f.write('    1.4\n');
             f.write('  </TransanaXMLVersion>\n');
 
             progress.Update(9, _('Writing Series Records'))
@@ -277,7 +279,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('      <MediaFile>\n')
                     f.write('        %s\n' % MediaFile.encode(EXPORT_ENCODING))
                     f.write('      </MediaFile>\n')
-                    if EpLength != '':
+                    if (EpLength != '') and (EpLength != 0):
                         f.write('      <Length>\n')
                         f.write('        %s\n' % EpLength)
                         f.write('      </Length>\n')
@@ -384,7 +386,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('      <ID>\n')
                     f.write('        %s\n' % CollectID.encode(EXPORT_ENCODING))
                     f.write('      </ID>\n')
-                    if ParentCollectNum != '':
+                    if (ParentCollectNum != '') and (ParentCollectNum != 0):
                         f.write('      <ParentCollectNum>\n')
                         f.write('        %s\n' % ParentCollectNum)
                         f.write('      </ParentCollectNum>\n')
@@ -408,11 +410,11 @@ class XMLExport(Dialogs.GenForm):
             progress.Update(45, _('Writing Clip Records'))
             if db != None:
                 dbCursor = db.cursor()
-                SQLText = 'SELECT ClipNum, ClipID, CollectNum, EpisodeNum, TranscriptNum, MediaFile, ClipStart, ClipStop, ClipComment, SortOrder FROM Clips2'
+                SQLText = 'SELECT ClipNum, ClipID, CollectNum, EpisodeNum, MediaFile, ClipStart, ClipStop, ClipComment, SortOrder FROM Clips2'
                 dbCursor.execute(SQLText)
                 if dbCursor.rowcount > 0:
                     f.write('  <ClipFile>\n')
-                for (ClipNum, ClipID, CollectNum, EpisodeNum, TranscriptNum, MediaFile, ClipStart, ClipStop, ClipComment, SortOrder) in dbCursor.fetchall():
+                for (ClipNum, ClipID, CollectNum, EpisodeNum, MediaFile, ClipStart, ClipStop, ClipComment, SortOrder) in dbCursor.fetchall():
                     f.write('    <Clip>\n')
                     f.write('      <Num>\n')
                     f.write('        %s\n' % ClipNum)
@@ -428,10 +430,6 @@ class XMLExport(Dialogs.GenForm):
                         f.write('      <EpisodeNum>\n')
                         f.write('        %s\n' % EpisodeNum)
                         f.write('      </EpisodeNum>\n')
-                    if TranscriptNum != None:
-                        f.write('      <TranscriptNum>\n')
-                        f.write('        %s\n' % TranscriptNum)
-                        f.write('      </TranscriptNum>\n')
                     f.write('      <MediaFile>\n')
                     f.write('        %s\n' % MediaFile.encode(EXPORT_ENCODING))
                     f.write('      </MediaFile>\n')
@@ -445,7 +443,7 @@ class XMLExport(Dialogs.GenForm):
                         f.write('      <Comment>\n')
                         f.write('        %s\n' % ClipComment.encode(EXPORT_ENCODING))
                         f.write('      </Comment>\n')
-                    if SortOrder != '':
+                    if (SortOrder != '') and (SortOrder != 0):
                         f.write('      <SortOrder>\n')
                         f.write('        %s\n' % SortOrder)
                         f.write('      </SortOrder>\n')
@@ -457,7 +455,7 @@ class XMLExport(Dialogs.GenForm):
             progress.Update(54, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
             if db != None:
                 dbCursor = db.cursor()
-                SQLText = 'SELECT TranscriptNum, TranscriptID, EpisodeNum, ClipNum, Transcriber, Comment, RTFText FROM Transcripts2'
+                SQLText = 'SELECT TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum, ClipNum, SortOrder, Transcriber, ClipStart, ClipStop, Comment, RTFText FROM Transcripts2'
 
                 if DEBUG:
                     print "Selecting Transcripts"
@@ -469,7 +467,7 @@ class XMLExport(Dialogs.GenForm):
                     
                 if dbCursor.rowcount > 0:
                     f.write('  <TranscriptFile>\n')
-                for (TranscriptNum, TranscriptID, EpisodeNum, ClipNum, Transcriber, Comment, RTFText) in dbCursor.fetchall():
+                for (TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum, ClipNum, SortOrder, Transcriber, ClipStart, ClipStop, Comment, RTFText) in dbCursor.fetchall():
 
                     if DEBUG:
                         print "TranscriptNum =", TranscriptNum
@@ -489,18 +487,34 @@ class XMLExport(Dialogs.GenForm):
                                 print "Transcript Number ", TranscriptNum
                             
                         f.write('      </ID>\n')
-                    if EpisodeNum != '':
+                    if (EpisodeNum != '') and (EpisodeNum != 0):
                         f.write('      <EpisodeNum>\n')
                         f.write('        %s\n' % EpisodeNum)
                         f.write('      </EpisodeNum>\n')
-                    if ClipNum != '':
+                    if (SourceTranscriptNum != '') and (SourceTranscriptNum != 0):
+                        f.write('      <TranscriptNum>\n')
+                        f.write('        %s\n' % SourceTranscriptNum)
+                        f.write('      </TranscriptNum>\n')
+                    if (ClipNum != '') and (ClipNum != 0):
                         f.write('      <ClipNum>\n')
                         f.write('        %s\n' % ClipNum)
                         f.write('      </ClipNum>\n')
+                    if (SortOrder != None) and (SortOrder != 0):
+                        f.write('      <SortOrder>\n')
+                        f.write('        %s\n' % SortOrder)
+                        f.write('      </SortOrder>\n')
                     if (Transcriber != None) and (Transcriber != ''):
                         f.write('      <Transcriber>\n')
                         f.write('        %s\n' % Transcriber.encode(EXPORT_ENCODING))
                         f.write('      </Transcriber>\n')
+                    if (ClipStart != None):
+                        f.write('      <ClipStart>\n')
+                        f.write('        %s\n' % ClipStart)
+                        f.write('      </ClipStart>\n')
+                    if (ClipStop != None):
+                        f.write('      <ClipStop>\n')
+                        f.write('        %s\n' % ClipStop)
+                        f.write('      </ClipStop>\n')
                     if (Comment != None) and (Comment != ''):
                         f.write('      <Comment>\n')
                         f.write('        %s\n' % Comment.encode(EXPORT_ENCODING))
@@ -566,7 +580,9 @@ class XMLExport(Dialogs.GenForm):
 			# now simply write the RTF data to the file.  (This does NOT need to be encoded, as the RTF already is!)
 			# (but check to make sure there's actually RTF data there!)
 			if rtfData != None:
-                            f.write('%s' % rtfData)
+                            f.write('%s' % rtfData.rstrip())
+                        # ... add an extra line break here!
+                        f.write('\n')
                         f.write('      </RTFText>\n')
                     f.write('    </Transcript>\n')
                 if dbCursor.rowcount > 0:
@@ -590,6 +606,20 @@ class XMLExport(Dialogs.GenForm):
                     f.write('      </Keyword>\n')
                     if Definition != '':
                         f.write('      <Definition>\n')
+                        # Okay, this isn't so straight-forward any more.
+                        # With Transana 2.30, Definition becomes a BLOB of type array.  It could then either be a
+                        # character string (typecode == 'c') or a unicode string (typecode == 'u'), which then
+                        # need to be interpreted differently.
+                        if type(Definition).__name__ == 'array':
+                            if (Definition.typecode == 'u'):
+                                Definition = Definition.tounicode()
+                            else:
+                                Definition = Definition.tostring()
+                                if ('unicode' in wx.PlatformInfo):
+                                    try:
+                                        Definition = unicode(Definition, EXPORT_ENCODING)
+                                    except UnicodeDecodeError, e:
+                                        Definition = unicode(Definition.decode(TransanaGlobal.encoding))
                         f.write('        %s\n' % Definition.encode(EXPORT_ENCODING))
                         f.write('      </Definition>\n')
                     f.write('    </KeywordRec>\n')
@@ -606,11 +636,11 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  <ClipKeywordFile>\n')
                 for (EpisodeNum, ClipNum, KeywordGroup, Keyword, Example) in dbCursor.fetchall():
                     f.write('    <ClipKeyword>\n')
-                    if EpisodeNum != '':
+                    if (EpisodeNum != '') and (EpisodeNum != 0):
                         f.write('      <EpisodeNum>\n')
                         f.write('        %s\n' % EpisodeNum)
                         f.write('      </EpisodeNum>\n')
-                    if ClipNum != '':
+                    if (ClipNum != '') and (ClipNum != 0):
                         f.write('      <ClipNum>\n')
                         f.write('        %s\n' % ClipNum)
                         f.write('      </ClipNum>\n')
@@ -620,7 +650,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('      <Keyword>\n')
                     f.write('        %s\n' % Keyword.encode(EXPORT_ENCODING))
                     f.write('      </Keyword>\n')
-                    if Example != '':
+                    if (Example != '') and (Example != 0):
                         f.write('      <Example>\n')
                         f.write('        %s\n' % Example)
                         f.write('      </Example>\n')
@@ -926,7 +956,7 @@ class XMLExport(Dialogs.GenForm):
     def OnBrowse(self, evt):
         """Invoked when the user activates the Browse button."""
         fs = wx.FileSelector(_("Select an XML file for export"),
-                        TransanaGlobal.programDir,
+                        TransanaGlobal.configData.videoPath,
                         "",
                         "", 
                         _("Transana-XML Files (*.tra)|*.tra|XML Files (*.xml)|*.xml|All files (*.*)|*.*"), 

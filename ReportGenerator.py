@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -154,8 +154,14 @@ class ReportGenerator(wx.Object):
         self.filterList = []
         # Define the Keyword Filter List as well, which does NOT differ based on report type
         self.keywordFilterList = []
+        # To speed report creation, freeze GUI updates based on changes to the report text
+        self.report.reportText.Freeze()
         # Trigger the ReportText method that causes the report to be displayed.
         self.report.CallDisplay()
+        # Apply the Default Filter, if one exists
+        self.report.OnFilter(None)
+        # Now that we're done, remove the freeze
+        self.report.reportText.Thaw()
 
     def OnDisplay(self, reportText):
         """ This method, required by TextReport, populates the TextReport.  The reportText parameter is
@@ -457,6 +463,22 @@ class ReportGenerator(wx.Object):
             centerSpacer = self.report.GetCenterSpacer(style, self.subtitle)
             # ... and insert the spacer and the subtitle.
             reportText.InsertStyledText('\n' + centerSpacer + self.subtitle)
+        if self.configName != '':
+            # ...  add a subtitle
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Filter Configuration: %s"), 'utf8')
+            else:
+                prompt = _("Filter Configuration: %s")
+            self.configLine = prompt % self.configName
+            # ... set the font for the subtitle ...
+            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+            # ... get the style specifier for that font ...
+            style = reportText.GetStyleAccessor("size:10,face:Courier New,fore:#000000,back:#ffffff")
+            # ... get the spaces needed to center the subtitle ...
+            centerSpacer = self.report.GetCenterSpacer(style, self.configLine)
+            # ... and insert the spacer and the subtitle.
+            reportText.InsertStyledText('\n' + centerSpacer + self.configLine)
         # Skip a couple of lines.
         reportText.InsertStyledText('\n\n')
 
@@ -632,56 +654,80 @@ class ReportGenerator(wx.Object):
                         self.clipTotalTime += clipObj.clip_stop - clipObj.clip_start
                         
                         # If we are supposed to show Clip Transcripts, and the clip HAS a transcript ...
-                        if self.showTranscripts and (clipObj.text != ''):
-                            # Default the Episode Transcript to None in case the load fails
-                            episodeTranscriptObj = None
-                            # Begin exception handling
-                            try:
-                                # If the Clip Object has a defined Source Transcript ...
-                                if clipObj.transcript_num > 0:
-                                    # ... try to load that source transcript
-                                    episodeTranscriptObj = Transcript.Transcript(clipObj.transcript_num)
-                            # if the record is not found (orphaned Clip)
-                            except TransanaExceptions.RecordNotFoundError:
-                                # We don't need to do anything.
-                                pass
+                        if self.showTranscripts:
+                            # Skip a line
+                            reportText.InsertStyledText('\n')
+                            # Iterate through the clips transcripts
+                            for tr in clipObj.transcripts:
+                                # Default the Episode Transcript to None in case the load fails
+                                episodeTranscriptObj = None
+                                # Begin exception handling
+                                try:
+                                    # If the Clip Object has a defined Source Transcript ...
+                                    if tr.source_transcript > 0:
+                                        # ... try to load that source transcript
+                                        episodeTranscriptObj = Transcript.Transcript(tr.source_transcript)
+                                # if the record is not found (orphaned Clip)
+                                except TransanaExceptions.RecordNotFoundError:
+                                    # We don't need to do anything.
+                                    pass
 
-                            # If an Episode Transcript was found ...
-                            if episodeTranscriptObj != None:
+                                # Set the font for the clip transcript headers
+                                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                                
+                                # If an Episode Transcript was found ...
+                                if episodeTranscriptObj != None:
+                                    # Turn bold on.
+                                    reportText.SetBold(True)
+                                    # Add the header to the report
+                                    reportText.InsertStyledText(_('Episode Transcript:'))
+                                    # Turn bold off.
+                                    reportText.SetBold(False)
+                                    # Add the data to the report, the Episode Transcript ID in this case
+                                    reportText.InsertStyledText('  %s\n' % (episodeTranscriptObj.id,))
+                                # if no Episode Transcript is found, we have an orphan.
+                                else:
+                                    # Turn bold on.
+                                    reportText.SetBold(True)
+                                    # Add the header to the report
+                                    reportText.InsertStyledText(_('Episode Transcript:'))
+                                    # Turn bold off.
+                                    reportText.SetBold(False)
+                                    # Add the data to the report, the lack of an Episode Transcript in this case
+                                    reportText.InsertStyledText('  %s\n' % _('The Episode Transcript has been deleted.'))
+
                                 # Turn bold on.
                                 reportText.SetBold(True)
                                 # Add the header to the report
-                                reportText.InsertStyledText(_('Episode Transcript:'))
-                                # Turn bold off.
-                                reportText.SetBold(False)
-                                # Add the data to the report, the Episode Transcript ID in this case
-                                reportText.InsertStyledText('  %s\n' % (episodeTranscriptObj.id,))
-                            # if no Episode Transcript is found, we have an orphan.
-                            else:
-                                # Turn bold on.
-                                reportText.SetBold(True)
-                                # Add the header to the report
-                                reportText.InsertStyledText(_('Episode Transcript:'))
-                                # Turn bold off.
-                                reportText.SetBold(False)
-                                # Add the data to the report, the lack of an Episode Transcript in this case
-                                reportText.InsertStyledText('  %s\n' % _('The Episode Transcript has been deleted.'))
+                                reportText.InsertStyledText(_('Clip Transcript:') + '\n')
 
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the Transcript to the report
+                                reportText.InsertRTFText(tr.text)
+                                reportText.InsertStyledText('\n')
+                                
+                    # If we have a Series Report ...
+                    else:
+                        # Get the full Episode data
+                        episodeObj = Episode.Episode(groupNo)
+                        # If we're supposed to show the Media File Name ...
+                        if self.showFile:
                             # Turn bold on.
                             reportText.SetBold(True)
                             # Add the header to the report
-                            reportText.InsertStyledText(_('Clip Transcript:') + '\n')
-
+                            reportText.InsertStyledText(_('File:'))
                             # Turn bold off.
                             reportText.SetBold(False)
-                            # Add the Transcript to the report
-                            reportText.InsertRTFText(clipObj.text)
-                            reportText.InsertStyledText('\n')
-                            
+                            # Add the data to the report, the file name in this case
+                            reportText.InsertStyledText(_('  %s\n') % episodeObj.media_filename)
+                                
                     # if we are supposed to show Keywords ...
                     if self.showKeywords:
                         # Set the font for the Keywords
                         reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                        # Skip a line
+                        reportText.InsertStyledText('\n')
                         # If there are keywords in the list ... (even if they might all get filtered out ...)
                         if len(minorList[groupNo]) > 0:
                             # Turn bold on.
@@ -824,55 +870,64 @@ class ReportGenerator(wx.Object):
                     self.clipTotalTime += clipRecord['ClipStop'] - clipRecord['ClipStart']
                     
                     # If we are supposed to show Clip Transcripts, and the clip HAS a transcript ...
-                    if self.showTranscripts and (clipObj.text != ''):
-                        # Default the Episode Transcript to None in case the load fails
-                        episodeTranscriptObj = None
-                        # Begin exception handling
-                        try:
-                            # If the Clip Object has a defined Source Transcript ...
-                            if clipObj.transcript_num > 0:
-                                # ... try to load that source transcript
-                                episodeTranscriptObj = Transcript.Transcript(clipObj.transcript_num)
-                        # if the record is not found (orphaned Clip)
-                        except TransanaExceptions.RecordNotFoundError:
-                            # We don't need to do anything.
-                            pass
-
-                        # If an Episode Transcript was found ...
-                        if episodeTranscriptObj != None:
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Episode Transcript:'))
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # Add the data to the report, the Episode Transcript ID in this case
-                            reportText.InsertStyledText('  %s\n' % (episodeTranscriptObj.id,))
-                        # if no Episode Transcript is found, we have an orphan.
-                        else:
-                            # Turn bold on.
-                            reportText.SetBold(True)
-                            # Add the header to the report
-                            reportText.InsertStyledText(_('Episode Transcript:'))
-                            # Turn bold off.
-                            reportText.SetBold(False)
-                            # Add the data to the report, the lack of an Episode Transcript in this case
-                            reportText.InsertStyledText('  %s\n' % _('The Episode Transcript has been deleted.'))
-
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the header to the report
-                        reportText.InsertStyledText(_('Clip Transcript:') + '\n')
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the Transcript to the report
-                        reportText.InsertRTFText(clipObj.text)                        
+                    if self.showTranscripts:
+                        # print a blank line
                         reportText.InsertStyledText('\n')
+                        # for each Clip transcript:
+                        for tr in clipObj.transcripts:
+                            # Default the Episode Transcript to None in case the load fails
+                            episodeTranscriptObj = None
+                            # Begin exception handling
+                            try:
+                                # If the Clip Object has a defined Source Transcript ...
+                                if tr.source_transcript > 0:
+                                    # ... try to load that source transcript
+                                    episodeTranscriptObj = Transcript.Transcript(tr.source_transcript)
+                            # if the record is not found (orphaned Clip)
+                            except TransanaExceptions.RecordNotFoundError:
+                                # We don't need to do anything.
+                                pass
+
+                            # Set the font for the Clip Transcript Header
+                            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                            
+                            # If an Episode Transcript was found ...
+                            if episodeTranscriptObj != None:
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Episode Transcript:'))
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the data to the report, the Episode Transcript ID in this case
+                                reportText.InsertStyledText('  %s\n' % (episodeTranscriptObj.id,))
+                            # if no Episode Transcript is found, we have an orphan.
+                            else:
+                                # Turn bold on.
+                                reportText.SetBold(True)
+                                # Add the header to the report
+                                reportText.InsertStyledText(_('Episode Transcript:'))
+                                # Turn bold off.
+                                reportText.SetBold(False)
+                                # Add the data to the report, the lack of an Episode Transcript in this case
+                                reportText.InsertStyledText('  %s\n' % _('The Episode Transcript has been deleted.'))
+
+                            # Turn bold on.
+                            reportText.SetBold(True)
+                            # Add the header to the report
+                            reportText.InsertStyledText(_('Clip Transcript:') + '\n')
+                            # Turn bold off.
+                            reportText.SetBold(False)
+                            # Add the Transcript to the report
+                            reportText.InsertRTFText(tr.text)                        
+                            reportText.InsertStyledText('\n')
                         
                     # if we are supposed to show Keywords ...
                     if self.showKeywords:
                         # Set the font for the Keywords
                         reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+                        # print a blank line
+                        reportText.InsertStyledText('\n')
                         # If there are keywords in the list ... (even if they might all get filtered out ...)
                         if len(minorList[(clipRecord['ClipID'], clipRecord['CollectID'], clipRecord['ParentCollectNum'])]) > 0:
                             # Turn bold on.
@@ -988,6 +1043,11 @@ class ReportGenerator(wx.Object):
     def OnFilter(self, event):
         """ This method, required by TextReport, implements the call to the Filter Dialog.  It needs to be
             in the report parent because the TextReport doesn't know the appropriate filter parameters. """
+        # See if we're loading the Default profile.  This is signalled by an event of None!
+        if event == None:
+            loadDefault = True
+        else:
+            loadDefault = False
         # Sort the Keyword Filter List
         self.keywordFilterList.sort()
         # If a Collection Name is passed in ...
@@ -1005,7 +1065,7 @@ class ReportGenerator(wx.Object):
             # clip time data, Clip Transcripts, Clip Keywords, Comments, Collection Note, Clip Note, and
             # Nested Data options.
             dlgFilter = FilterDialog.FilterDialog(self.report, -1, self.title, reportType=12,
-                                                  reportScope=reportScope, configName=self.configName,
+                                                  reportScope=reportScope, loadDefault=loadDefault, configName=self.configName,
                                                   clipFilter=True, keywordFilter=True, reportContents=True,
                                                   showFile=self.showFile, showTime=self.showTime,
                                                   showClipTranscripts=self.showTranscripts, showClipKeywords=self.showKeywords,
@@ -1014,8 +1074,28 @@ class ReportGenerator(wx.Object):
             # Populate the Filter Dialog with the Clips and Keyword Filter lists
             dlgFilter.SetClips(self.filterList)
             dlgFilter.SetKeywords(self.keywordFilterList)
-            # If the filter is defined and accepted by the user ...
-            if dlgFilter.ShowModal() == wx.ID_OK:
+            # If we're loading the Default configuration ...
+            if loadDefault:
+                # ... get the list of existing configuration names.
+                profileList = dlgFilter.GetConfigNames()
+                # If (translated) "Default" is in the list ...
+                # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
+                if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                    # ... then signal that we need to load the config.
+                    dlgFilter.OnFileOpen(None)
+                    # Fake that we asked the user for a filter name and got an OK
+                    result = wx.ID_OK
+                # If we're loading a Default profile, but there's none in the list, we can skip
+                # the rest of the Filter method by pretending we got a Cancel from the user.
+                else:
+                    result = wx.ID_CANCEL
+            # If we're not loading a Default profile ...
+            else:
+                # ... we need to show the Filter Dialog here.
+                result = dlgFilter.ShowModal()
+                
+            # If the user clicks OK (or we have a Default config)
+            if result == wx.ID_OK:
                 # ... get the filter data ...
                 self.filterList = dlgFilter.GetClips()
                 self.keywordFilterList = dlgFilter.GetKeywords()
@@ -1044,7 +1124,7 @@ class ReportGenerator(wx.Object):
             # need only the Clip Filter and Keyword Filter for this report.  We want to show the file name,
             # clip time data, Clip Transcripts, Clip Keywords, Comments and clip notes options.
             dlgFilter = FilterDialog.FilterDialog(self.report, -1, self.title, reportType=11,
-                                                  reportScope=tempEpisode.number, configName=self.configName,
+                                                  reportScope=tempEpisode.number, loadDefault=loadDefault, configName=self.configName,
                                                   clipFilter=True, keywordFilter=True, reportContents=True,
                                                   showFile=self.showFile, showTime=self.showTime,
                                                   showClipTranscripts=self.showTranscripts, showClipKeywords=self.showKeywords,
@@ -1052,8 +1132,28 @@ class ReportGenerator(wx.Object):
             # Populate the Filter Dialog with the Clip and Keyword Filter lists
             dlgFilter.SetClips(self.filterList)
             dlgFilter.SetKeywords(self.keywordFilterList)
-            # If the filter is defined and accepted by the user ...
-            if dlgFilter.ShowModal() == wx.ID_OK:
+            # If we're loading the Default configuration ...
+            if loadDefault:
+                # ... get the list of existing configuration names.
+                profileList = dlgFilter.GetConfigNames()
+                # If (translated) "Default" is in the list ...
+                # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
+                if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                    # ... then signal that we need to load the config.
+                    dlgFilter.OnFileOpen(None)
+                    # Fake that we asked the user for a filter name and got an OK
+                    result = wx.ID_OK
+                # If we're loading a Default profile, but there's none in the list, we can skip
+                # the rest of the Filter method by pretending we got a Cancel from the user.
+                else:
+                    result = wx.ID_CANCEL
+            # If we're not loading a Default profile ...
+            else:
+                # ... we need to show the Filter Dialog here.
+                result = dlgFilter.ShowModal()
+                
+            # If the user clicks OK (or we have a Default config)
+            if result == wx.ID_OK:
                 # ... get the filter data ...
                 self.filterList = dlgFilter.GetClips()
                 self.keywordFilterList = dlgFilter.GetKeywords()
@@ -1079,16 +1179,39 @@ class ReportGenerator(wx.Object):
             # Define the Filter Dialog.  We need reportType 10 to identify the Series Report and we
             # need only the Episode Filter and the Keyord Filter for this report.
             dlgFilter = FilterDialog.FilterDialog(self.report, -1, self.title, reportType=10,
-                                                  reportScope=tempSeries.number, configName=self.configName,
-                                                  episodeFilter=True, keywordFilter=True)
+                                                  reportScope=tempSeries.number, loadDefault=loadDefault, configName=self.configName,
+                                                  episodeFilter=True, keywordFilter=True, reportContents=True, showFile=self.showFile,
+                                                  showClipKeywords=self.showKeywords)
             # Populate the Filter Dialog with the Episode and Keyword Filter lists
             dlgFilter.SetEpisodes(self.filterList)
             dlgFilter.SetKeywords(self.keywordFilterList)
-            # If the filter is defined and accepted by the user ...
-            if dlgFilter.ShowModal() == wx.ID_OK:
+            # If we're loading the Default configuration ...
+            if loadDefault:
+                # ... get the list of existing configuration names.
+                profileList = dlgFilter.GetConfigNames()
+                # If (translated) "Default" is in the list ...
+                # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
+                if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                    # ... then signal that we need to load the config.
+                    dlgFilter.OnFileOpen(None)
+                    # Fake that we asked the user for a filter name and got an OK
+                    result = wx.ID_OK
+                # If we're loading a Default profile, but there's none in the list, we can skip
+                # the rest of the Filter method by pretending we got a Cancel from the user.
+                else:
+                    result = wx.ID_CANCEL
+            # If we're not loading a Default profile ...
+            else:
+                # ... we need to show the Filter Dialog here.
+                result = dlgFilter.ShowModal()
+                
+            # If the user clicks OK (or we have a Default config)
+            if result == wx.ID_OK:
                 # ... get the filter data ...
                 self.filterList = dlgFilter.GetEpisodes()
                 self.keywordFilterList = dlgFilter.GetKeywords()
+                self.showFile = dlgFilter.GetShowFile()
+                self.showKeywords = dlgFilter.GetShowClipKeywords()
                 # Remember the configuration name for later reuse
                 self.configName = dlgFilter.configName
                 # ... and signal the TextReport that the filter is to be applied.

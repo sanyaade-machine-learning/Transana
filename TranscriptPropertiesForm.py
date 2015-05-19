@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -26,6 +26,8 @@ import DBInterface
 import Dialogs
 # Import the Transcript Object
 import Transcript
+# import Python's os module
+import os
 
 class TranscriptPropertiesForm(Dialogs.GenForm):
     """Form containing Transcript fields."""
@@ -46,12 +48,12 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.width.PercentOf(self.panel, wx.Width, 40)  # 40% width
         lay.height.AsIs()
-        id_edit = self.new_edit_box(_("Transcript ID"), lay, self.obj.id, maxLen=100)
+        self.id_edit = self.new_edit_box(_("Transcript ID"), lay, self.obj.id, maxLen=100)
 
         # Series ID layout
         lay = wx.LayoutConstraints()
         lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.SameAs(id_edit, wx.Right, 10)   # 10 from id_edit
+        lay.left.SameAs(self.id_edit, wx.Right, 10)   # 10 from id_edit
         lay.width.PercentOf(self.panel, wx.Width, 25)  # 25% width
         lay.height.AsIs()
         series_id_edit = self.new_edit_box(_("Series ID"), lay, self.obj.series_id)
@@ -68,8 +70,8 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
 
         # Transcriber layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(id_edit, 10)              # 10 below id_edit
-        lay.left.SameAs(id_edit, wx.Left, 0)     # Same as id_edit (10 from left)
+        lay.top.Below(self.id_edit, 10)              # 10 below id_edit
+        lay.left.SameAs(self.id_edit, wx.Left, 0)     # Same as id_edit (10 from left)
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
         transcriber_edit = self.new_edit_box(_("Transcriber"), lay, self.obj.transcriber, maxLen=100)
@@ -77,7 +79,7 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
         # Comment layout
         lay = wx.LayoutConstraints()
         lay.top.Below(transcriber_edit, 10)     # 10 under transcriber
-        lay.left.SameAs(id_edit, wx.Left, 0)     # Same as id_edit (10 from left)
+        lay.left.SameAs(self.id_edit, wx.Left, 0)     # Same as id_edit (10 from left)
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
         comment_edit = self.new_edit_box(_("Comment"), lay, self.obj.comment, maxLen=255)
@@ -85,7 +87,7 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
         # File to Import layout
         lay = wx.LayoutConstraints()
         lay.top.Below(comment_edit, 10)         # 10 under comment
-        lay.left.SameAs(id_edit, wx.Left, 0)     # Same as id_edit (10 from left)
+        lay.left.SameAs(self.id_edit, wx.Left, 0)     # Same as id_edit (10 from left)
         lay.right.SameAs(self.panel, wx.Right, 100)  # Leave room for the Browse button
         lay.height.AsIs()
         self.rtfname_edit = self.new_edit_box(_("RTF File to import  (optional)"), lay, '')
@@ -104,7 +106,7 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
         self.SetAutoLayout(True)
         self.CenterOnScreen()
 
-        id_edit.SetFocus()
+        self.id_edit.SetFocus()
 
     def OnBrowseClick(self, event):
         """ Method for when Browse button is clicked """
@@ -114,6 +116,14 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
         if dlg.ShowModal() == wx.ID_OK:
             # If the user clicks OK, set the file to import to the selected path.
             self.rtfname_edit.SetValue(dlg.GetPath())
+            # If the ID field is blank ...
+            if self.id_edit.GetValue() == '':
+                # Get the base file name just selected
+                tempFilename = os.path.basename(dlg.GetPath())
+                # Split off the file extension
+                (tempobjid, tempExt) = os.path.splitext(tempFilename)
+                # Name the Transcript object after the imported Transcript
+                self.id_edit.SetValue(tempobjid)
         # Destroy the File Dialog
         dlg.Destroy()
 

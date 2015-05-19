@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -21,8 +21,8 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 import wx
 # import the GenStaticBitmap widget, at Robin Dunn's suggestion
 import wx.lib.statbmp
-# Import Transana's Constants (for color definitions)
-import TransanaConstants
+
+import TransanaGlobal
 
 class ColorListCtrl(wx.Panel):
     """ This class is like a CheckListCtrl, but displays a COLOR box for the check box. """
@@ -60,11 +60,11 @@ class ColorListCtrl(wx.Panel):
         # Create a dictionary that will allow the lookup of what actual color is associated with what color graphic
         self.colorIDs = {}
         # We need to add White to the list of Keyword Map colors for the blank item!
-        tempColorList = TransanaConstants.keywordMapColourSet + ['White']
+        tempColorList = TransanaGlobal.keywordMapColourSet + ['White']
         # Iterate through the defined colors for use with the Keyword Map.
         for colName in tempColorList:
             # Determine the color value that goes along with the color name
-            colRGB = TransanaConstants.transana_colorLookup[colName]
+            colRGB = TransanaGlobal.transana_colorLookup[colName]
             # Create an empty bitmap
             bmp = wx.EmptyBitmap(16, 16)
             # Create a Device Context for manipulating the bitmap
@@ -94,10 +94,15 @@ class ColorListCtrl(wx.Panel):
                 # ... add that bitmap to the image list
                 self.imageList.Add(bmp)
 
+        # If there are fewer than 375 colors, we can do 25 colors per row.  Otherwise, there needs to be a maximum of
+        # 15 rows so the form looks okay.  
+        colorsPerRow = max((len(TransanaGlobal.transana_graphicsColorList) + 14) / 15, 25)
+        # Initial a counter to -1, since our first element is  0
+        counter = -1
         # Now iterate through the color list in a different order.  We want the colors to appear on
         # the form in RGB COLOR order, which groups similar colors, not the Keyword Map Color List
         # order, which separates similar colors.
-        for (colName, colRGB) in TransanaConstants.transana_colorList:
+        for (colName, colRGB) in TransanaGlobal.transana_graphicsColorList:
             # Not quite all the defined colors are in the Keyword List Colors.  We need the subset.
             if colName in tempColorList:
                 # Get the correct bitmap from the imageList.
@@ -109,20 +114,21 @@ class ColorListCtrl(wx.Panel):
                 self.colorIDs[bmpCtrl.GetId()] = colName
                 # Bind the Mouse Left Up event.  This will allow us to catch mouse clicks for color selection.
                 bmpCtrl.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-                # Let's split the color blocks into two rows by completing and re-starting the sizer
-                if colName == 'Dark Purple':
+                # Increment the counter
+                counter += 1
+                # Let's split the color blocks into multiple rows by completing and re-starting the sizer
+                # every time the counter hits the specified value
+                if counter % colorsPerRow == 0:
                     # Add the color selection bar to the Panel's main sizer
                     vSizer.Add(colorHSizer, 0, wx.ALL, 2)
                     # Create a horizontal sizer to hold the color images
                     colorHSizer = wx.BoxSizer(wx.HORIZONTAL)
                 # Add the widget to the sizer
                 colorHSizer.Add(bmpCtrl, 0, wx.RIGHT, 2)
-
         # Add the color selection bar to the Panel's main sizer
         vSizer.Add(colorHSizer, 0, wx.ALL, 2)
         # Add the ImageList to the ListCtrl to make the images accessible
         self.lc.SetImageList(self.imageList, wx.IMAGE_LIST_SMALL)
-
         # Set the panel's main sizer and handle layout.
         self.SetSizer(vSizer)
         self.SetAutoLayout(True)
@@ -199,7 +205,7 @@ class ColorListCtrl(wx.Panel):
     def OnLeftUp(self, event):
         """ Triggered upon release of the left mouse button in one of the Color Selection boxes """
         # The options include the defined Keyword Map colors plus white (for unselected)
-        colorList = TransanaConstants.keywordMapColourSet + ['White']
+        colorList = TransanaGlobal.keywordMapColourSet + ['White']
         # Determine what item (if any) is currently selected
         itemNum = self.lc.GetNextItem(-1, wx.LIST_NEXT_ALL, wx.LIST_STATE_SELECTED)
         # If an item is selected and a color is defined ...

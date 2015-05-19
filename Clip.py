@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -37,6 +37,7 @@ import TransanaConstants
 import TransanaGlobal
 # import Transana's Dialogs
 import Dialogs
+import Misc
 import types
 
 TIMECODE_CHAR = "\\'a4"   # Note that this differs from the TIMECODE_CHAR in TranscriptEditor.py
@@ -63,9 +64,8 @@ class Clip(DataObject):
             self.collection_num = 0
             self.collection_id = ''
             self.episode_num = 0
-            # TranscriptNum is the Transcript Number the Clip was created FROM, not the number of the Clip Transcript!
-            self.transcript_num = 0
-            self.clip_transcript_num = 0
+            # Keep a list of transcript objects associated with this clip
+            self.transcripts = []
             self.media_filename = 0
             self.clip_start = 0
             self.clip_stop = 0
@@ -87,15 +87,16 @@ class Clip(DataObject):
         str = str + "collection_num = %s\n" % self.collection_num 
         str = str + "collection_id = %s\n" % self.collection_id
         str = str + "episode_num = %s\n" % self.episode_num
-        # TranscriptNum is the Transcript Number the Clip was created FROM, not the number of the Clip Transcript!
-        str = str + "Originating transcript_num = %s\n" % self.transcript_num
-        str = str + "clip_transcript_num = %s\n" % self.clip_transcript_num
         str = str + "media_filename = %s\n" % self.media_filename 
-        str = str + "clip_start = %s\n" % self.clip_start
-        str = str + "clip_stop = %s\n" % self.clip_stop
+        str = str + "clip_start = %s (%s)\n" % (self.clip_start, Misc.time_in_ms_to_str(self.clip_start))
+        str = str + "clip_stop = %s (%s)\n" % (self.clip_stop, Misc.time_in_ms_to_str(self.clip_stop))
         str = str + "sort_order = %s\n" % self.sort_order
+        # Iterate through transcript objects
+        for tr in self.transcripts:
+            str = str + '\nClip Transcript: %s from %s\n' % (tr.number, tr.source_transcript)
+            str = str + '%s\n' % tr
         for kws in self.keyword_list:
-            str = str + "Keyword:  %s\n" % kws
+            str = str + "\nKeyword:  %s" % kws
         str = str + '\n'
         return str.encode('utf8')
         
@@ -126,16 +127,12 @@ class Clip(DataObject):
             clip_name = clip_name.encode(TransanaGlobal.encoding)
             collection_name = collection_name.encode(TransanaGlobal.encoding)
         db = DBInterface.get_db()
-        query = """
-        SELECT a.*, b.*, c.TranscriptNum ClipTranscriptNum, c.RTFText
-          FROM Clips2 a, Collections2 b, Transcripts2 c
+        query = """ SELECT a.*, b.*
+          FROM Clips2 a, Collections2 b
           WHERE ClipID = %s AND
                 a.CollectNum = b.CollectNum AND
                 b.CollectID = %s AND
-                b.ParentCollectNum = %s AND
-                c.TranscriptID = "" AND
-                a.ClipNum = c.ClipNum
-        """
+                b.ParentCollectNum = %s """
         c = db.cursor()
         c.execute(query, (clip_name, collection_name, collection_parent))
         n = c.rowcount
@@ -154,12 +151,10 @@ class Clip(DataObject):
         """Load a record by record number."""
         db = DBInterface.get_db()
         query = """
-        SELECT a.*, b.*, c.TranscriptNum ClipTranscriptNum, c.RTFText
-          FROM Clips2 a, Collections2 b, Transcripts2 c
+        SELECT a.*, b.*
+          FROM Clips2 a, Collections2 b
           WHERE a.ClipNum = %s AND
-                a.CollectNum = b.CollectNum AND
-                c.TranscriptID = "" AND
-                a.ClipNum = c.ClipNum
+                a.CollectNum = b.CollectNum
         """
         c = db.cursor()
         c.execute(query, (num,))
@@ -196,16 +191,12 @@ class Clip(DataObject):
                 if 'unicode' in wx.PlatformInfo:
                     prompt = unicode(prompt, 'utf8')
                 raise SaveError, prompt % maxClips
-            
+
         # Sanity checks
         if self.id == "":
             raise SaveError, _("Clip ID is required.")
         if (self.collection_num == 0):
             raise SaveError, _("Parent Collection number is required.")
-        # If the transcript that a Clip was created from is deleted, you can have a Clip without a Transcript Number.
-        # Legacy Data may also have no Transcript Number.
-        # elif (self.transcript_num == 0):
-            # raise SaveError, "No Transcript number"
         elif self.media_filename == "":
             raise SaveError, _("Media Filename is required.")
         # If a user Adjusts Indexes, it's possible to have a clip that starts BEFORE the media file.
@@ -222,24 +213,20 @@ class Clip(DataObject):
 
             # Substitute the generic OS seperator "/" for the Windows "\".
             self.media_filename = self.media_filename.replace('\\', '/')
-            # If we are using the ANSI version of wxPython OR
-            # (if we're on the Mac AND are in the Single-User version of Transana)
+            # If we are using the ANSI version of wxPython 
             # then we need to block Unicode characters from media filenames.
             # Unicode characters still cause problems on the Mac for the Multi-User version of Transana,
             # but can be made to work if shared waveforming is done on a Windows computer.
-#            if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
+            if ('ansi' in wx.PlatformInfo):
                 # Create a string of legal characters for the file names
-#                allowedChars = TransanaConstants.legalFilenameCharacters
+                allowedChars = TransanaConstants.legalFilenameCharacters
                 # check each character in the file name string
-#                for char in self.media_filename:
+                for char in self.media_filename:
                     # If the character is illegal ...
-#                    if allowedChars.find(char) == -1:
-#                        if 'unicode' in wx.PlatformInfo:
-                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-#                            msg = unicode(_('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.'), 'utf8') % (self.media_filename, char)
-#                        else:
-#                            msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.') % (self.media_filename, char)
-#                        raise SaveError, msg
+                    if allowedChars.find(char) == -1:
+                        # No need to Unicode the message, as this onlyappears in the ANSI version of wxPython!
+                        msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.') % (self.media_filename, char)
+                        raise SaveError, msg
             # If we're not in Unicode mode ...
             if 'ansi' in wx.PlatformInfo:
                 # ... we don't need to encode the string values, but we still need to copy them to our local variables.
@@ -258,7 +245,7 @@ class Clip(DataObject):
         self._sync_collection()
 
         values = (id, self.collection_num, self.episode_num, \
-                      self.transcript_num, tempMediaFilename, \
+                      tempMediaFilename, \
                       self.clip_start, self.clip_stop, comment, \
                       self.sort_order)
         if (self._db_start_save() == 0):
@@ -274,11 +261,11 @@ class Clip(DataObject):
             # insert the new record
             query = """
             INSERT INTO Clips2
-                (ClipID, CollectNum, EpisodeNum, TranscriptNum,
+                (ClipID, CollectNum, EpisodeNum, 
                  MediaFile, ClipStart, ClipStop, ClipComment,
                  SortOrder)
                 VALUES
-                (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                (%s,%s,%s,%s,%s,%s,%s,%s)
             """
         else:
             if DBInterface.record_match_count("Clips2", \
@@ -297,7 +284,6 @@ class Clip(DataObject):
                 SET ClipID = %s,
                     CollectNum = %s,
                     EpisodeNum = %s,
-                    TranscriptNum = %s,
                     MediaFile = %s,
                     ClipStart = %s,
                     ClipStop = %s,
@@ -330,37 +316,29 @@ class Clip(DataObject):
             # in anticipation of putting them all back in after we deal with the
             # Clip Transcript
             DBInterface.delete_all_keywords_for_a_group(0, self.number)
-        # Now let's deal with the Clip's Transcript
-        if self.clip_transcript_num == 0:
-            # Create a Transcript Object for the Transcript data
-            tempTranscript = Transcript.Transcript()
-            # Assign the data that needs to be saved
-            tempTranscript.episode_num = self.episode_num
-            tempTranscript.clip_num = self.number
-            tempTranscript.text = self.text
-            # Save the new Transcript record
-            tempTranscript.db_save()
-            # Now we need to assign the Transcript Object's new Record Number to the
-            # Clip Object.  First, let's reload the Transcript Object so it knows it's
-            # record number
-            tempTranscript = Transcript.Transcript(clip = self.number)
-            # Now that the Transcript Object knows its record number, assign it to the Clip Object
-            self.clip_transcript_num = tempTranscript.number
             
-        elif self.clip_transcript_num > 0:
-            # Load the existing Transcript Record
-            tempTranscript = Transcript.Transcript(clip=self.number)
-            # Update the Transcript Data
-            tempTranscript.text = self.text
-            # Save the new Transcript record
-            tempTranscript.db_save()
+        # Now let's deal with the Clip's Transcripts
+
+        # For each transcript in the list of clip transcripts ...
+        for tr in self.transcripts:
+            # Assign the clip's number as the transcript's clip number
+            tr.clip_num = self.number
+            # There is a spot (in XML Import) where we signal that we DON'T want the Clip
+            # Transcript saved by setting its number to -1.
+            if tr.number != -1:
+                # save the transcript
+                tr.db_save()
+            
         # Add the Episode keywords back
         for kws in self._kwlist:
             DBInterface.insert_clip_keyword(0, self.number, kws.keywordGroup, kws.keyword, kws.example)
+
         c.close()
 
-    def db_delete(self, use_transactions=1):
-        """Delete this object record from the database."""
+    def db_delete(self, use_transactions=True, examplesPrompt=True):
+        """ Delete this object record from the database.  Parameters indicate if we should use DB Transactions
+            and if we should prompt about the deletion of Keyword Examples.  (in Clip Merging, for example, we
+            don't want to prompt.) """
         result = 1
         try:
             # Initialize delete operation, begin transaction if necessary
@@ -383,7 +361,9 @@ class Clip(DataObject):
                     prompt = prompt % data
                     prompt = prompt + _('\nAre you sure you want to delete it?')
                 dlg = Dialogs.QuestionDialog(None, prompt, _('Delete Clip'))
-                if dlg.LocalShowModal() == wx.ID_NO:
+                # if we should prompt about examples, then show the dialog.  If the user responds "No" ...
+                if examplesPrompt and (dlg.LocalShowModal() == wx.ID_NO):
+                    # ... destroy the dialog box.
                     dlg.Destroy()
                     # A Transcaction was started and the record was locked in _db_start_delete().  Unlock it here if the
                     # user cancels the delete (after rolling back the Transaction)!
@@ -393,10 +373,15 @@ class Clip(DataObject):
                         if use_transactions:
                             # We must roll back the transaction before we unlock the record.
                             c.execute("ROLLBACK")
+                        # Close the database cursor
                         c.close()
+                        # unlock the Clip record
                         self.unlock_record()
+                    # Exit the Delete method, indicating the delete did not succeed.
                     return 0
+                # If we don't show the dialog at all, or if the users doesn't say "No" ...
                 else:
+                    # ... then just destroy the dialog box.
                     dlg.Destroy()
 
             # Detect, Load, and Delete all Clip Notes.
@@ -407,13 +392,18 @@ class Clip(DataObject):
                 del note
             del notes
 
-            # Okay, theoretically we have a lock on this clip's Transcript, self.trans.  However, that lock
+            # Okay, theoretically we have a lock on this clip's Transcripts, in self.transcripts.  However, that lock
             # prevents us from deleting it!!  Oops.  Therefore, IF we have a legit lock on it, unlock it for
             # the delete.
-            if self.isLocked and self.trans.isLocked:
-                self.trans.unlock_record()
-            # if transcript delete fails, rollback clip delete
-            result = result and self.trans.db_delete(0)
+
+            # For each transcript in the list of clip transcripts ...
+            for tr in self.transcripts:
+                # ... if the transcript is locked ...
+                if tr.isLocked:
+                    # ... then we need to unlock it before we can delete it.
+                    tr.unlock_record()
+                # Now try to delete the transcript
+                result = result and tr.db_delete(0)
 
             # NOTE:  It is important for the calling routine to delete references to the Keyword Examples
             #        from the screen.  However, that code does not belong in the Clip Object, but in the
@@ -423,7 +413,7 @@ class Clip(DataObject):
             if result:
                 DBInterface.delete_all_keywords_for_a_group(0, self.number)
 
-            # Delete the actual record.
+            # Delete the actual Clip record.
             self._db_do_delete(use_transactions, c, result)
 
             # Cleanup
@@ -444,9 +434,24 @@ class Clip(DataObject):
 
     def lock_record(self):
         """ Override the DataObject Lock Method """
-        # Also lock the Clip Transcript record
-        self.trans = Transcript.Transcript(clip=self.number)
-        self.trans.lock_record()
+        # Also lock the Clip Transcript records
+
+        # We can run into trouble if one of a multiple transcript records is locked.  Specifically, if a later
+        # transcript is already locked, trying to lock it below will raise an exception, but the earlier
+        # transcripts will have gotten locked now and will remain so improperly.
+        # Therefore, let's check to see if the transcripts are already locked before trying to lock them.
+
+        # Iterate through the transcripts ...
+        for tr in self.transcripts:
+            # If a transcript is locked ...
+            if tr.isLocked or ((tr.record_lock != '') and (tr.record_lock != None)):
+                # Raise an exception before locking any transcripts!
+                raise RecordLockedError(user=tr.record_lock)
+
+        # For each transcript in the clip transcripts list ...
+        for tr in self.transcripts:
+            # ... lock the transcript
+            tr.lock_record()
         
         # Lock the Clip Record.  Call this second so the Clip is not identified as locked if the
         # Clip Transcript record lock fails.
@@ -457,9 +462,12 @@ class Clip(DataObject):
         """ Override the DataObject Unlock Method """
         # Unlock the Clip Record
         DataObject.unlock_record(self)
-        # Also unlock the Clip Transcript record
-        self.trans.unlock_record()
-        self.trans = None
+        # Also unlock the Clip Transcript records
+
+        # For each transcript in the clip transcript list ...
+        for tr in self.transcripts:
+            # ... unlock the transcript
+            tr.unlock_record()
 
     def duplicate(self):
         # Inherit duplicate method
@@ -477,14 +485,16 @@ class Clip(DataObject):
             newClip = DataObject.duplicate(self)
         # Eliminate the new clip's object number so it will get a new on when saved.
         newClip.number = 0
-        # A new Clip should get a new Clip Transcript!
-        newClip.clip_transcript_num = 0
+        # A new Clip should get a new Clip Transcripts!
+        for tr in newClip.transcripts:
+            tr.number = 0
         # Sort Order should not be duplicated!
         newClip.sort_order = 0
         # Copying a Clip should not cause additional Keyword Examples to be created.
         # We need to strip the "example" status for all keywords in the new clip.
         for clipKeyword in newClip.keyword_list:
             clipKeyword.example = 0
+
         return newClip
         
     def clear_keywords(self):
@@ -615,31 +625,20 @@ class Clip(DataObject):
         self.collection_id = r['CollectID']
         self.episode_num = r['EpisodeNum']
         # TranscriptNum is the Transcript Number the Clip was created FROM, not the number of the Clip Transcript!
-        self.transcript_num = r['TranscriptNum']
-        self.clip_transcript_num = r['ClipTranscriptNum']
         self.media_filename = r['MediaFile']
         self.clip_start = r['ClipStart']
         self.clip_stop = r['ClipStop']
         self.sort_order = r['SortOrder']
 
-        # Okay, this isn't so straight-forward any more.
-        # With MySQL for Python 0.9.x, r['RTFText'] is of type str.
-        # With MySQL for Python 1.2.0, r['RTFText'] is of type array.  It could then either be a
-        # character string (typecode == 'c') or a unicode string (typecode == 'u'), which then
-        # need to be interpreted differently.
-
-        if type(r['RTFText']).__name__ == 'array':
-            if r['RTFText'].typecode == 'u':
-                self.text = r['RTFText'].tounicode()
-            else:
-                self.text = r['RTFText'].tostring()
-        else:
-            self.text = r['RTFText']
-
-        # We need to make sure the text is in the appropriate encoding
-        if 'unicode' in wx.PlatformInfo:
-            if type(self.text).__name__ == 'str':
-                self.text = unicode(self.text, TransanaGlobal.encoding)
+        # Initialize a list of Transcript objects
+        self.transcripts = []
+        # Load the Clip Transcripts.  Get the list of clip transcripts from the database and interate ...
+        for tr in DBInterface.list_clip_transcripts(self.number):
+            # Create a Transcript Object, passing each Transcript's Transcript Number (parameter 0)
+            tempTranscript = Transcript.Transcript(tr[0])
+            # Append the transcript object to the Clip's Transcript List
+            self.transcripts.append(tempTranscript)
+            
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
         # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
         if 'unicode' in wx.PlatformInfo:
@@ -660,14 +659,9 @@ class Clip(DataObject):
         if self.useVideoRoot:
             self.media_filename = TransanaGlobal.configData.videoPath + self.media_filename
 
-
     def _sync_collection(self):
         """Synchronize the Collection ID property to reflect the current state
         of the Collection Number property."""
-        # For some reason the Delphi Transana didn't have anything like this
-        # going on, which is especially puzzling since I can't figure out how
-        # the save worked.
-        # Comment by DKW -- Talk to me.  I can explain how it worked pretty easily.
         tempCollection = Collection.Collection(self.collection_num)
         self.collection_id = tempCollection.id
         
@@ -692,12 +686,15 @@ class Clip(DataObject):
     def _del_t_num(self):
         self._t_num = 0
 
-    def _get_clip_transcript_num(self):
-        return self._clip_transcript_num
-    def _set_clip_transcript_num(self, num):
-        self._clip_transcript_num = num
-    def _del_clip_transcript_num(self):
-        self._clip_transcript_num = 0
+    def _get_clip_transcript_nums(self):
+        # Initialize a list object
+        tempList = []
+        # Iterate through the transcripts ...
+        for tr in self.transcripts:
+            # ... and append their numbers to the list.
+            tempList.append(tr.number)
+        # Return the list
+        return tempList
 
     def _get_fname(self):
         return self._fname.replace('\\', '/')
@@ -770,7 +767,8 @@ class Clip(DataObject):
     # TranscriptNum is the Transcript Number the Clip was created FROM, not the number of the Clip Transcript!
     transcript_num = property(_get_t_num, _set_t_num, _del_t_num,
                         """Number of the transcript from which this Clip was taken.""")
-    clip_transcript_num = property(_get_clip_transcript_num, _set_clip_transcript_num, _del_clip_transcript_num,
+    # This read-only property provides a LIST of the numbers of Transcripts.
+    clip_transcript_nums = property(_get_clip_transcript_nums, None, None,
                         """Number of the Clip's transcript record in the Transcript Table.""")
     media_filename = property(_get_fname, _set_fname, _del_fname,
                         """The name (including path) of the media file.""")

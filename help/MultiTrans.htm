@@ -1,0 +1,51 @@
+<HTML>
+<HEAD>
+<TITLE>Working with Multiple Transcripts</TITLE>
+</HEAD>
+
+<BODY    >
+
+<H1>Working with Multiple Transcripts<HR ></H1><P>
+
+Sometimes it is useful for an episode to have more that one transcript, and to be able to work with these different transcripts at the same time.  Transana provides two different ways to accomplish this.<P>
+
+First, create the different transcripts you would like to work with.  (See <A HREF="createtranscript.htm">Adding a Transcript</A>, <A HREF="transcribing.htm">Transcribing a Video</A>, and <A HREF="addingtimecodes.htm">Adding Time Codes</A> in the <A HREF="tutorial.htm">Tutorial</A> for a description of how to do this.)  Open the first transcript in the usual way, either by double-clicking on a transcript record or by right-clicking a transcript record and selecting "Open" from the pop-up menu.  Once the first transcript is open, right-click (ctrl-click on the Mac with a single-button mouse) a different transcript object for the same episode and select "Open Additional Transcript" from the menu.   You can open up to five different transcripts for the same episode at once.<P>
+
+The second option for opening multiple transcripts in Transana is to right-click (ctrl-click on the Mac with a single-button mouse) an episode record and select "Open Multiple Transcripts" from the pop-up menu.  This will open up to five transcripts in the order they are listed under the episode.  <P>
+
+When working with multiple transcripts, the transcript you have most recently selected is the "active transcript," the transcript that all single-transcript actions are taken on.  Tasks such as sending a transcript to the printer or saving a transcript as a Rich Text Format document all occur to the active transcript. The "Selected Clips" tab in the data window is also tied to the active transcript. Asterisks in the title bar of the transcript window signal which transcript is active.  To make a different transcript active, simply click on it.<P>
+
+Generally, multiple transcripts are time-coded independently.  However, if you want to insert the same time code into multiple transcripts, put all desired transcripts in edit mode, position the cursor at the appropriate position in each transcript, and press the "Current" button in the visualization window.  Transcripts that are not in edit mode will not be affected.<P>
+
+<H3>Creating Clips when working with multiple transcripts</H3><P>
+
+When you are working with multiple transcripts, you have two choices for creating clips.  <P>
+
+You can create a clip with a single transcript exactly as you would create that clip if only one transcript was open.  (See <A HREF="createclips.htm">Creating Clips</A> and <A HREF="quickclips.htm">Quick Clips</A> in the Transana Tutorial for more information on creating clips.)<p>
+
+Alternately, you can create a multi-transcript clip.  To do this:<P>
+
+<UL>
+  <LI>You will probably want to put each transcript into edit mode before making a text selection.  If a transcript window is not in edit mode when you make your selection, the selections in your other transcript windows will change.</LI><BR>
+
+  <LI>Make the appropriate selection in each open transcript window.</LI><BR>
+
+  <LI>If you don't make a selection in an open transcript, that transcript will not be included in the resulting clip.</LI><BR>
+
+  <LI>Check the "Selection" indicator in each transcript window.  Your clip will extend from the earliest time listed in any transcript window to the latest time listed in any transcript window.</LI><BR>
+
+  <LI>If you make a selection in one transcript and press the "Match Selection in Other Transcripts" button (<IMG SRC="images/multiselectbutton.gif">) in that transcript window's toolbar, Transana will automatically make the best equivalent selection it can based on time codes in all other transcript windows.  Automatic selections are likely to be larger than the original selection unless your transcripts are time-coded in parallel.</LI><BR>
+
+  <LI>If you'd like to preview your clip to make sure it starts and stops where you want, press the "Play Multiple Transcript Selection" button (<IMG SRC="images/multiplaybutton.gif">) in any transcript window.</LI><BR>
+
+  <LI>Once all transcript selections have been made, you can right-click a collection or a clip and select "Add Multi-transcript Clip" to create a multi-transcript clip</LI><BR>
+
+  <LI>You can right-click a keyword and choose "Create Multi-transcript Quick Clip" to create a multi-transcript quick clip.</LI><BR>
+</UL>
+
+Multi-transcript clips will tend to use broad clip boundaries.  It may take some trial and error to be able to get exactly the clip you want in this situation.<P>
+
+<A HREF="batchepisodecreation.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<A HREF="propagateepisodechanges.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

@@ -342,7 +342,7 @@ class NotesBrowser(wx.Dialog):
         # Return the root node.
         return root
 
-    def UpdateTreeCtrl(self, action, note, oldName=''):
+    def UpdateTreeCtrl(self, action, note=None, oldName=''):
         """ Update the Tree Control based on an external event, such as multi-user communication """
         # If we're on the Notes tab, not the Note Search tab ...
         if self.treeNotebook.GetCurrentPage() == self.treeNotebookNotesTab:
@@ -446,6 +446,41 @@ class NotesBrowser(wx.Dialog):
                         # ... then look at the next child node.
                         (childNode, cookie) = self.treeNotebookNotesTabTreeCtrl.GetNextChild(rootNode, cookie)
 
+            # If we need to CHECK the Note Tree (as when higher-level nodes get deleted) ...
+            elif action == 'C':
+                # Start at the Root Node of the Notes Tab
+                rootNode = self.treeNotebookNotesTabTreeCtrl.GetRootItem()
+                # Get the first child from the Root
+                (childNode, cookie) = self.treeNotebookNotesTabTreeCtrl.GetFirstChild(rootNode)
+                # Initialize a list of nodes to delete
+                nodesToDelete = []
+                # While we have valid child nodes and have not yet found what we're looking for ...
+                while childNode.IsOk():
+                    # Get the first grandchild (note) node
+                    (noteNode, cookie2) = self.treeNotebookNotesTabTreeCtrl.GetFirstChild(childNode)
+                    # While we have valid grandchild nodes and have not yet found what we're looking for ...
+                    while noteNode.IsOk():
+                        # Start exception handling
+                        try:
+                            # Try to load the note associated with the current node
+                            tempNote = Note.Note(self.treeNotebookNotesTabTreeCtrl.GetPyData(noteNode).recNum)
+                        # If the Note record is not found in the database ...
+                        except TransanaExceptions.RecordNotFoundError:
+                            # ... then the note node needs to be deleted.  We can't delete it yet, though, or the GetNext fails,
+                            # so we'll just remember to delete it later.
+                            nodesToDelete.append(noteNode)
+                        # If any exception other than RecordNotFoundError is raised ...
+                        except:
+                            # ... we don't need to do anything, I guess.
+                            pass
+                        # Get the next grandchild node
+                        (noteNode, cookie2) = self.treeNotebookNotesTabTreeCtrl.GetNextChild(childNode, cookie2)
+                    # ... then look at the next child node.
+                    (childNode, cookie) = self.treeNotebookNotesTabTreeCtrl.GetNextChild(rootNode, cookie)
+                # If we have any nodes to delete ...  (We need to defer the delete on the Mac or the tree doesn't process correctly!)
+                for nodeToDelete in nodesToDelete:
+                    # ... then delete them.
+                    self.treeNotebookNotesTabTreeCtrl.Delete(nodeToDelete)
             # This should NEVER get triggered!
             else:
                 print 'NotesBrowser.UpdateTreeCtrl():  Unknown action "%s"' % action
@@ -868,7 +903,7 @@ class NotesBrowser(wx.Dialog):
             # ... set the search text to None
             searchText = None
         # Call the Notes Report, passing the node type and the search text
-        ReportGeneratorForNotes.ReportGenerator(title=_("Transana Notes Report"),
+        ReportGeneratorForNotes.ReportGenerator(title=unicode(_("Transana Notes Report"), 'utf8'),
                                                 reportType=self.activeTree.GetPyData(self.activeTree.GetSelection()).nodetype,
                                                 searchText=searchText)
         

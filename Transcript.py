@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -30,6 +30,7 @@ import TransanaConstants
 import TransanaGlobal
 from DataObject import DataObject
 import DBInterface
+import Misc
 import Note
 from TransanaExceptions import *
 import types
@@ -62,15 +63,19 @@ class Transcript(DataObject):
         str = str + "Number = %s\n" % self.number
         str = str + "ID = %s\n" % self.id
         str = str + "Episode Number = %s\n" % self.episode_num
+        str = str + "Source Transcript = %s\n" % self.source_transcript
         str = str + "Clip Number = %s\n" % self.clip_num
+        str = str + "Sort Order = %s\n" % self.sort_order
         str = str + "Transcriber = %s\n" % self.transcriber
+        str = str + "Clip Start = %s\n" % Misc.time_in_ms_to_str(self.clip_start)
+        str = str + "Clip Stop = %s\n" % Misc.time_in_ms_to_str(self.clip_stop)
         str = str + "Comment = %s\n" % self.comment
         str = str + "LastSaveTime = %s\n" % self.lastsavetime
         if len(self.text) > 250:
             str = str + "text not displayed due to length.\n\n"
         else:
             str = str + "text = %s\n\n" % self.text
-        return str
+        return str.encode('utf8')
 
     def GetTranscriptWithoutTimeCodes(self):
         """ Returns a copy of the Transcript Text with the Time Code information removed. """
@@ -215,16 +220,16 @@ class Transcript(DataObject):
         if (len(self.text) > 8388000):
             raise SaveError, _("This transcript is too large for the database.  Please shorten it, split it into two parts\nor if you are importing an RTF document, remove some unnecessary RTF encoding.")
 
-        fields = ("TranscriptID", "EpisodeNum", "ClipNum", "Transcriber", \
-                        "RTFText", "Comment", "LastSaveTime")
-        values = (id, self.episode_num, self.clip_num, transcriber, \
-                    self.text, comment)
+        fields = ("TranscriptID", "EpisodeNum", "SourceTranscriptNum", "ClipNum", "SortOrder", "Transcriber", \
+                        "ClipStart", "ClipStop", "RTFText", "Comment", "LastSaveTime")
+        values = (id, self.episode_num, self.source_transcript, self.clip_num, self.sort_order, transcriber, \
+                    self.clip_start, self.clip_stop, self.text, comment)
 
         if (self._db_start_save() == 0):
             # Duplicate Transcript IDs within an Episode are not allowed.
             if DBInterface.record_match_count("Transcripts2", \
-                    ("TranscriptID", "EpisodeNum", "ClipNum"),
-                    (id, self.episode_num, self.clip_num)) > 0:
+                    ("TranscriptID", "EpisodeNum", "ClipNum", "SortOrder"),
+                    (id, self.episode_num, self.clip_num, self.sort_order)) > 0:
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_('A Transcript named "%s" already exists in this Episode.\nPlease enter a different Transcript ID.'), 'utf8')
@@ -246,8 +251,8 @@ class Transcript(DataObject):
         else:
             # Duplicate Transcript IDs within an Episode are not allowed.
             if DBInterface.record_match_count("Transcripts2", \
-                    ("TranscriptID", "!TranscriptNum", "EpisodeNum", "ClipNum"),
-                    (id, self.number, self.episode_num, self.clip_num)) > 0:
+                    ("TranscriptID", "!TranscriptNum", "EpisodeNum", "ClipNum", "SortOrder"),
+                    (id, self.number, self.episode_num, self.clip_num, self.sort_order)) > 0:
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_('A Transcript named "%s" already exists in this Episode.\nPlease enter a different Transcript ID.'), 'utf8')
@@ -259,8 +264,12 @@ class Transcript(DataObject):
             query = """UPDATE Transcripts2
                 SET TranscriptID = %s,
                     EpisodeNum = %s,
+                    SourceTranscriptNum = %s, 
                     ClipNum = %s,
+                    SortOrder = %s,
                     Transcriber = %s,
+                    ClipStart = %s,
+                    ClipStop = %s,
                     RTFText = %s,
                     Comment = %s,
                     LastSaveTime = CURRENT_TIMESTAMP
@@ -285,8 +294,12 @@ class Transcript(DataObject):
                         EpisodeNum = %s AND
                         ClipNum = %s
                 """
+        args = (id, self.episode_num, self.clip_num)
+        if self.sort_order != None:
+            query += " AND SortOrder = %s"
+            args += (self.sort_order,)
         tempDBCursor = DBInterface.get_db().cursor()
-        tempDBCursor.execute(query, (id, self.episode_num, self.clip_num))
+        tempDBCursor.execute(query, args)
         if tempDBCursor.rowcount == 1:
             recs = tempDBCursor.fetchone()
             if (self.number == 0):
@@ -404,6 +417,14 @@ class Transcript(DataObject):
     def _del_ep_num(self):
         self._ep_num = 0
 
+    # Implementation of the Source Transcript Property
+    def _get_source_transcript(self):
+        return self._source_transcript
+    def _set_source_transcript(self, num):
+        self._source_transcript = num
+    def _del_source_transcript(self):
+        self._source_transcript = 0
+
     # Implementation for Clip Number Property
     def _get_cl_num(self):
         return self._cl_num
@@ -412,6 +433,14 @@ class Transcript(DataObject):
     def _del_cl_num(self):
         self._cl_num = 0
 
+    # Implementation of the Sort Order Property
+    def _get_sort_order(self):
+        return self._sort_order
+    def _set_sort_order(self, num):
+        self._sort_order = num
+    def _del_sort_order(self):
+        self._sort_order = 0
+
     # Implementation for Transcriber Property
     def _get_transcriber(self):
         return self._transcriber
@@ -419,6 +448,22 @@ class Transcript(DataObject):
         self._transcriber = name
     def _del_transcriber(self):
         self._transcriber = ''
+
+    # Implementation for Clip Start Property
+    def _get_clip_start(self):
+        return self._clip_start
+    def _set_clip_start(self, clipStart):
+        self._clip_start = clipStart
+    def _del_clip_start(self):
+        self._clip_start = 0
+
+    # Implementation for Clip Stop Property
+    def _get_clip_stop(self):
+        return self._clip_stop
+    def _set_clip_stop(self, clipStop):
+        self._clip_stop = clipStop
+    def _del_clip_stop(self):
+        self._clip_stop = 0
 
     # Implementation for Text Property
     def _get_text(self):
@@ -447,10 +492,18 @@ class Transcript(DataObject):
 # Public properties
     episode_num = property(_get_ep_num, _set_ep_num, _del_ep_num,
                         """The Episode number, if associated with one.""")
+    source_transcript = property(_get_source_transcript, _set_source_transcript, _del_source_transcript,
+                                 """The Episode Transcript number a Clip Transcript was taken from""")
     clip_num = property(_get_cl_num, _set_cl_num, _del_cl_num,
                         """The clip number, if associated with one.""")
+    sort_order = property(_get_sort_order, _set_sort_order, _del_sort_order,
+                                 """The Sort Order for Transcript""")
     transcriber = property(_get_transcriber, _set_transcriber, _del_transcriber,
                         """The person who created the Transcript.""")
+    clip_start = property(_get_clip_start, _set_clip_start, _del_clip_start,
+                          """Clip Start Time, only used for multi-transcript clips for propagating Transcript changes""")
+    clip_stop = property(_get_clip_stop, _set_clip_stop, _del_clip_stop,
+                          """Clip Stop Time, only used for multi-transcript clips for propagating Transcript changes""")
     text = property(_get_text, _set_text, _del_text,
                         """Text of the transcript, stored in the database as a BLOB.""")
     locked_by_me = property(None, None, None,
@@ -464,8 +517,12 @@ class Transcript(DataObject):
     	self.number = row['TranscriptNum']
         self.id = row['TranscriptID']
         self.episode_num = row['EpisodeNum']
+        self.source_transcript = row['SourceTranscriptNum']
         self.clip_num = row['ClipNum']
+        self.sort_order = row['SortOrder']
         self.transcriber = row['Transcriber']
+        self.clip_start = row['ClipStart']
+        self.clip_stop = row['ClipStop']
 
         # Can I get away with assuming Unicode?
         # Here's the plan:

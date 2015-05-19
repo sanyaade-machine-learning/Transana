@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -134,7 +134,7 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         # Remove Drag-and-Drop reference on the Mac due to the Quicktime Drag-Drop bug.
         # (On the Mac, any use of Drag and Drop causes the Video Component to jump to the wrong
         #  Window!  Therefore, we must disable Drag and Drop wherever we can on the Mac.)
-        if "__WXMAC__" in wx.PlatformInfo:
+        if (not TransanaConstants.macDragDrop) and ("__WXMAC__" in wx.PlatformInfo):
             stc.EVT_STC_START_DRAG(self, id, self.OnKillDrag)
 
         # Initialzations:
@@ -944,7 +944,7 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
     def SetAttributeSkipTimeCodes(self, attribute, state):
         """ Set the supplied attribute for the current text selection, ignoring Time Codes and their hidden data """
         # Let's try to remember the cursor position
-        self.cursorPosition = (self.GetCurrentPos(), self.GetSelection())
+        self.SaveCursor()
         # If we have a selection ...
         if self.GetSelection()[0] != self.GetSelection()[1]:
             # Set the Wait cursor
@@ -1466,7 +1466,7 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
             self.stylechange = 1
 
     # Remove Drag-and-Drop reference on the Mac due to the Quicktime Drag-Drop bug
-    if "__WXMAC__" in wx.PlatformInfo:
+    if not TransanaConstants.macDragDrop and ("__WXMAC__" in wx.PlatformInfo):
         def OnKillDrag(self, event):
             """ This method KILLS Drag-and-Drop functionality on the Mac. """
             # According to Robin Dunn, the way to kill Drag-and-Drop in the wxSTC is to blank out the Drag Text

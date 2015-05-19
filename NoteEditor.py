@@ -169,9 +169,6 @@ class _NotePanel(wx.Panel):
         bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
         # Create the Bitmap Button for Search Back
         self.searchNext = wx.BitmapButton(self, CMD_SEARCH_NEXT_ID, bmp, style=wx.NO_BORDER)
-        # Create a ToolTip for the Search Backwards button and attach it
-#        self.searchNextToolTip = wx.ToolTip(_("Search forwards"))
-#        self.searchNext.SetToolTip(self.searchNextToolTip)
         # Add this button to the Toolbar Sizer
         hsizer.Add(self.searchNext, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
         # Connect the button to the OnSearch Method
@@ -179,11 +176,42 @@ class _NotePanel(wx.Panel):
         # Add the Toolbar Sizer to the Panel Sizer
         pnlSizer.Add(hsizer)
 
-        # add the note editing widget to the panel.  User a multi-line TextCtrl.
-        self.txt = wx.TextCtrl(self, -1, default_text, style=wx.TE_MULTILINE)
+        # add the note editing widget to the panel.  User a multi-line TextCtrl, and TE_RICH style to enable
+        # font size change on Windows.
+        self.txt = wx.TextCtrl(self, -1, style=wx.TE_MULTILINE | wx.TE_RICH)
+        # Get the Default Style
+        txtStyle = self.txt.GetDefaultStyle()
+        # Get the Default Font from the Default Style
+        self.txtFont = txtStyle.GetFont()
+        # On Windows ...
+        if 'wxMSW' in wx.PlatformInfo:
+            # ... 10 point looks about right.  12 is too big.  (default is 8)
+            fontSize = 10
+        # On Mac ...
+        else:
+            # ... 12 point looks about right.  (default is 11)
+            fontSize = 12
+        # If that doesn't work, as it doesn't on Windows ...
+        if not self.txtFont.IsOk():
+            # ... just create a Default Font with point size 10 on Windows, 12 on Mac to look right.
+            self.txtFont = wx.Font(pointSize=fontSize, family = wx.DEFAULT, style = wx.NORMAL, weight = wx.NORMAL)
+        # If we did get the default font ...
+        else:
+            # ... change it to the desired size
+            self.txtFont.SetPointSize(fontSize)
+        # Apply the Font to the Style
+        txtStyle.SetFont(self.txtFont)
+        # Set the Style in the Text Control
+        self.txt.SetDefaultStyle(txtStyle)
+        # If there is default text ...    (Windows requires this conditional.  Otherwise, the font size is
+        #                                  wrong on new Notes!)
+        if default_text != "":
+            # ... add the existing text to the note's text control
+            self.txt.WriteText(default_text)
+
         # We want to trap a couple of key combinations
         self.txt.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
-        # Add teh Text Ctrl to the Panel Sizer
+        # Add the Text Ctrl to the Panel Sizer
         pnlSizer.Add(self.txt, 1, wx.EXPAND | wx.ALL, 2)
         # Define the Panel Sizer as the main Sizer
         self.SetSizer(pnlSizer)
@@ -248,10 +276,10 @@ class _NotePanel(wx.Panel):
         """ Search the Note Text for a string """
         # Get the string to search in
         text = self.txt.GetValue().upper()
-        # On Windows ...
-        if 'wxMSW' in wx.PlatformInfo:
+        # On Windows ...  THIS IS NO LONGER NEEDED AS OF 2.30 RELEASE
+#        if 'wxMSW' in wx.PlatformInfo:
             # ... we need to adjust for the 2-character newline character.
-            text = text.replace('\n', '  ')
+#            text = text.replace('\n', '  ')
         # Get the string to search for
         searchText = self.searchText.GetValue().upper()
         # Set the program focus to the Note Text

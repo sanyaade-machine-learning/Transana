@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -82,8 +82,6 @@ class KeywordPropertiesForm(Dialogs.GenForm):
         lay.bottom.SameAs(self.panel, wx.Bottom, 40)   # 40 from bottom
         self.definition_edit = wx.TextCtrl(self.panel, -1, self.obj.definition, style=wx.TE_MULTILINE)
         self.definition_edit.SetConstraints(lay)
-        # Definitions have a maximum length of 255 characters
-        self.definition_edit.SetMaxLength(255)
 
         self.Layout()
         self.SetAutoLayout(True)

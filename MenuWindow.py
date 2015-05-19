@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -44,8 +44,10 @@ import NotesBrowser
 import XMLImport
 # import Database Import
 import XMLExport
-# import Batch Waveform Generator
-import BatchWaveformGenerator
+# import the Color Configuration utility
+import ColorConfig
+# import Batch Waveform Generator, now called the Batch File Processor
+import BatchFileProcessor
 # Import Transana Options Settings 
 import OptionsSettings
 # Import Transana's Constants
@@ -283,6 +285,10 @@ class MenuWindow(wx.Frame):
         if os.path.exists(dir):
             self.presLan_sv = gettext.translation('Transana', 'locale', languages=['sv']) # Swedish
 
+        # We're starting to face the situation where not all the translations may be up-to-date.  Let's build some checks.
+        # Initialize an empty variable
+        outofdateLanguage = ''
+
         # Install English as the initial language if no language has been specified
         # NOTE:  Eastern European Encoding, Greek, Japanese, Korean, and Chinese will use English prompts
         if (TransanaGlobal.configData.language in ['', 'en', 'easteurope', 'el', 'ja', 'ko', 'zh']) :
@@ -293,41 +299,49 @@ class MenuWindow(wx.Frame):
         elif (TransanaGlobal.configData.language == 'da'):
             lang = wx.LANGUAGE_DANISH
             self.presLan_da.install()
+            outofdateLanguage = 'Danish'
 
         # German
         elif (TransanaGlobal.configData.language == 'de'):
             lang = wx.LANGUAGE_GERMAN
             self.presLan_de.install()
+            outofdateLanguage = 'German'
 
         # Greek
 #        elif (TransanaGlobal.configData.language == 'el'):
 #            lang = wx.LANGUAGE_GREEK     # Greek spec causes an error message on my computer
 #            self.presLan_el.install()
+#            outofdateLanguage = 'Greek'
 
         # Spanish
         elif (TransanaGlobal.configData.language == 'es'):
             lang = wx.LANGUAGE_SPANISH
             self.presLan_es.install()
+            outofdateLanguage = 'Spanish'
 
         # Finnish
         elif (TransanaGlobal.configData.language == 'fi'):
             lang = wx.LANGUAGE_FINNISH
             self.presLan_fi.install()
+            outofdateLanguage = 'Finnish'
 
         # French
         elif (TransanaGlobal.configData.language == 'fr'):
             lang = wx.LANGUAGE_FRENCH
             self.presLan_fr.install()
+            outofdateLanguage = 'French'
 
         # Italian
         elif (TransanaGlobal.configData.language == 'it'):
             lang = wx.LANGUAGE_ITALIAN
             self.presLan_it.install()
+            outofdateLanguage = 'Italian'
 
         # Dutch
         elif (TransanaGlobal.configData.language == 'nl'):
             lang = wx.LANGUAGE_DUTCH
             self.presLan_nl.install()
+            outofdateLanguage = 'Dutch'
 
         # Norwegian Bokmal
         elif (TransanaGlobal.configData.language == 'nb'):
@@ -338,6 +352,7 @@ class MenuWindow(wx.Frame):
             else:
                 lang = wx.LANGUAGE_NORWEGIAN_BOKMAL
             self.presLan_nb.install()
+            outofdateLanguage = 'Norwegian Bokmal'
             
         # Norwegian Ny-norsk
         elif (TransanaGlobal.configData.language == 'nn'):
@@ -348,21 +363,25 @@ class MenuWindow(wx.Frame):
             else:
                 lang = wx.LANGUAGE_NORWEGIAN_NYNORSK
             self.presLan_nn.install()
+            outofdateLanguage = 'Norwegian Nynorsk'
 
         # Polish
         elif (TransanaGlobal.configData.language == 'pl'):
             lang = wx.LANGUAGE_POLISH    # Polish spec causes an error message on my computer
             self.presLan_pl.install()
+            outofdateLanguage = 'Polish'
 
         # Russian
         elif (TransanaGlobal.configData.language == 'ru'):
             lang = wx.LANGUAGE_RUSSIAN   # Russian spec causes an error message on my computer
             self.presLan_ru.install()
+            outofdateLanguage = 'Russian'
 
         # Swedish
         elif (TransanaGlobal.configData.language == 'sv'):
             lang = wx.LANGUAGE_SWEDISH
             self.presLan_sv.install()
+            outofdateLanguage = 'Swedish'
 
         # Due to a problem with wx.Locale on the Mac (It won't load anything but English), I'm disabling 
         # i18n functionality of the wxPython layer on the Mac.  This code accomplishes that.
@@ -378,6 +397,18 @@ class MenuWindow(wx.Frame):
         # NOTE:  I've commented out the next line as Transana's i18n will be implemented using Python's
         #        "gettext" rather than wxPython's "wx.Locale".
         self.locale.AddCatalog("Transana")
+
+        # Check to see if we have a translation, and if it is up-to-date.
+        
+        # NOTE:  "Graphics Color Configuration" works for version 2.30.  If you update this, also update the phrase
+        # below in the OnOptionsLanguage method.)
+        
+        if (outofdateLanguage != '') and ("&Graphics Color Configuration" == _("&Graphics Color Configuration")):
+            # If not, display an information message.
+            prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
+            dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
+            dlg.ShowModal()
+            dlg.Destroy()
 
         transanaIcon = wx.Icon("images/Transana.ico", wx.BITMAP_TYPE_ICO)
         self.SetIcon(transanaIcon)
@@ -436,6 +467,8 @@ class MenuWindow(wx.Frame):
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_IMPORT_DATABASE, self.OnImportDatabase)
         # Define handler for Tools > Export Database
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_EXPORT_DATABASE, self.OnExportDatabase)
+        # Define handler for Tools > Graphics Color Configuration
+        wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_COLORCONFIG, self.OnColorConfig)
         # Define handler for Tools > Batch Waveform Generator
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_BATCHWAVEFORM, self.OnBatchWaveformGenerator)
         # Define handler for Tools > Chat Window
@@ -448,13 +481,15 @@ class MenuWindow(wx.Frame):
         # Define handler for Options > Language changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_LANGUAGE_EN, MenuSetup.MENU_OPTIONS_LANGUAGE_ZH, self.OnOptionsLanguage)
         # Define handler for Options > Quick Clip Mode
-        if 'wxMSW' in wx.PlatformInfo:
+        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
             wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_QUICK_CLIPS, self.OnOptionsQuickClipMode)
+        # Define handler for Options > Show Quick Clip Warning
+        wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_QUICKCLIPWARNING, self.OnOptionsQuickClipWarning)
         # Define handler for Options > Auto Word-tracking
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_WORDTRACK, self.OnOptionsWordTrack)
         # Define handler for Options > Auto-Arrange
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_AUTOARRANGE, self.OnOptionsAutoArrange)
-        # Define handler for Sound > Waveform Quick-load
+        # Define handler for Options > Waveform Quick-load
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_WAVEFORMQUICKLOAD, self.OnOptionsWaveformQuickload)
         # Define handler for Options > Visualization Style changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_VISUALIZATION_WAVEFORM, MenuSetup.MENU_OPTIONS_VISUALIZATION_HYBRID, self.OnOptionsVisualizationStyle)
@@ -507,10 +542,8 @@ class MenuWindow(wx.Frame):
         if self.ControlObject.DataWindowHasSearchNodes():
             # If so, prompt the user about if they really want to exit.
             # Define the Message Dialog
-#            dlg = wx.MessageDialog(self, _('You have unsaved Search Results.  Are you sure you want to exit Transana without converting them to Collections?'), _('Transana Confirmation'), wx.YES_NO | wx.ICON_QUESTION)
-            # Display the Message Dialog and capture the response
-#            result = dlg.ShowModal()
             dlg = Dialogs.QuestionDialog(self, _('You have unsaved Search Results.  Are you sure you want to exit Transana without converting them to Collections?'))
+            # Display the Message Dialog and capture the response
             result = dlg.LocalShowModal()
             # Destroy the Message Dialog
             dlg.Destroy()
@@ -519,11 +552,16 @@ class MenuWindow(wx.Frame):
             result = wx.ID_YES
         # If the user wants to exit (or if there are no Search Results) ...
         if result == wx.ID_YES:
-            # unlock the Transcript Record, if it is locked
-            if (self.ControlObject.TranscriptWindow != None) and \
-               (self.ControlObject.TranscriptWindow.dlg.editor.TranscriptObj != None) and \
-               (self.ControlObject.TranscriptWindow.dlg.editor.TranscriptObj.isLocked):
-                self.ControlObject.TranscriptWindow.dlg.editor.TranscriptObj.unlock_record()
+            # Signal that we're closing Transana.  This allows us to avoid a problem or two on shutdown.
+            self.ControlObject.shuttingDown = True
+            # unlock the Transcript Records, if any are locked
+            for x in range(len(self.ControlObject.TranscriptWindow)):
+                if self.ControlObject.TranscriptWindow[x].TranscriptModified():
+                    self.ControlObject.SaveTranscript(1, transcriptToSave=x)
+                    
+                if (self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj != None) and \
+                   (self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj.isLocked):
+                    self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj.unlock_record()
             # Close the connection to the Database, if one is open
             if DBInterface.is_db_open():
                 DBInterface.close_db()
@@ -604,6 +642,8 @@ class MenuWindow(wx.Frame):
         """ Implements File New menu command """
         # If a Control Object has been defined ...
         if self.ControlObject != None:
+            # set the active transcript to 0 so multiple transcript will be cleared
+            self.ControlObject.activeTranscript = 0
             # ... it should know how to clear all the Windows!
             self.ControlObject.ClearAllWindows()
 
@@ -813,6 +853,19 @@ class MenuWindow(wx.Frame):
             temp.Export()
         temp.Close()
 
+    def OnColorConfig(self, event):
+        """ Graphics Color Configuration """
+        temp = ColorConfig.ColorConfig(self)
+        temp.ShowModal()
+        temp.Destroy()
+
+    def OnBatchWaveformGenerator(self, event):
+        """ Batch Waveform Generator """
+        temp = BatchFileProcessor.BatchFileProcessor(self, mode="waveform")
+        temp.get_input()
+        temp.Close()
+        temp.Destroy()
+
     def OnChat(self, event):
         """ Chat Window """
         # If a Chat Window has been defined ...
@@ -834,13 +887,6 @@ class MenuWindow(wx.Frame):
         recordLockWindow = RecordLock.RecordLock(self, -1, _("Transana Record Lock Utility"))
         recordLockWindow.ShowModal()
         recordLockWindow.Destroy()
-
-    def OnBatchWaveformGenerator(self, event):
-        """ Batch Waveform Generator """
-        temp = BatchWaveformGenerator.BatchWaveformGenerator(self)
-        temp.get_input()
-        temp.Close()
-        temp.Destroy()
 
     def OnOptionsSettings(self, event):
         """ Handler for Options > Settings """
@@ -869,6 +915,10 @@ class MenuWindow(wx.Frame):
 
     def OnOptionsLanguage(self, event):
         """ Handler for Options > Language menu selections """
+        # We're starting to face the situation where not all the translations may be up-to-date.  Let's build some checks.
+        # Initialize an empty variable
+        outofdateLanguage = ''
+
         # English
         if event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EN:
             TransanaGlobal.configData.language = 'en'
@@ -878,66 +928,79 @@ class MenuWindow(wx.Frame):
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DA:
             TransanaGlobal.configData.language = 'da'
             self.presLan_da.install()
+            outofdateLanguage = 'Danish'
             
         # German
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DE:
             TransanaGlobal.configData.language = 'de'
             self.presLan_de.install()
+            outofdateLanguage = 'German'
 
         # Greek
 #        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
 #            TransanaGlobal.configData.language = 'el'
 #            self.presLan_el.install()
+#            outofdateLanguage = 'Greek'
 
         # Spanish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ES:
             TransanaGlobal.configData.language = 'es'
             self.presLan_es.install()
+            outofdateLanguage = 'Spanish'
 
         # Finnish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_FI:
             TransanaGlobal.configData.language = 'fi'
             self.presLan_fi.install()
+            outofdateLanguage = 'Finnish'
 
         # French
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_FR:
             TransanaGlobal.configData.language = 'fr'
             self.presLan_fr.install()
+            outofdateLanguage = 'French'
 
         # Italian
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_IT:
             TransanaGlobal.configData.language = 'it'
             self.presLan_it.install()
+            outofdateLanguage = 'Italian'
 
         # Dutch
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NL:
             TransanaGlobal.configData.language = 'nl'
             self.presLan_nl.install()
+            outofdateLanguage = 'Dutch'
 
         # Norwegian Bokmal
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NB:
             TransanaGlobal.configData.language = 'nb'
             self.presLan_nb.install()
+            outofdateLanguage = 'Norwegian Bokmal'
 
         # Norwegian Ny-norsk
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NN:
             TransanaGlobal.configData.language = 'nn'
             self.presLan_nn.install()
+            outofdateLanguage = 'Norwegian Nynorsk'
 
         # Polish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_PL:
             TransanaGlobal.configData.language = 'pl'
             self.presLan_pl.install()
+            outofdateLanguage = 'Polish'
 
         # Russian
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_RU:
             TransanaGlobal.configData.language = 'ru'
             self.presLan_ru.install()
+            outofdateLanguage = 'Russian'
 
         # Swedish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_SV:
             TransanaGlobal.configData.language = 'sv'
             self.presLan_sv.install()
+            outofdateLanguage = 'Swedish'
 
         # Chinese (English prompts)
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ZH:
@@ -970,6 +1033,17 @@ class MenuWindow(wx.Frame):
             TransanaGlobal.configData.language = 'en'
             self.presLan_en.install()
 
+        # Check to see if we have a translation, and if it is up-to-date.
+        
+        # NOTE:  "Graphics Color Configuration" works for version 2.30.  If you update this, also update the phrase
+        # above in the __init__ method.)
+        
+        if (outofdateLanguage != '') and ("&Graphics Color Configuration" == _("&Graphics Color Configuration")):
+            # If not, display an information message.
+            prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
+            dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
+            dlg.ShowModal()
+            dlg.Destroy()
 
         infodlg = Dialogs.InfoDialog(None, _("Please note that some prompts cannot be set to the new language until you restart Transana, and\nthat the language of some prompts is determined by your operating system instead of Transana."))
         infodlg.ShowModal()
@@ -981,6 +1055,10 @@ class MenuWindow(wx.Frame):
         """ Handler for Options > Quick Clip Mode """
         # All we need to do is toggle the global value when teh menu option is changed
         TransanaGlobal.configData.quickClipMode = event.IsChecked()
+
+    def OnOptionsQuickClipWarning(self, event):
+        """ Handler for Options > Show Quick Clip Warning """
+        TransanaGlobal.configData.quickClipWarning = event.IsChecked()
 
     def OnOptionsAutoArrange(self, event):
         """ Handler for Options > Auto-Arrange """
@@ -1086,6 +1164,7 @@ class MenuWindow(wx.Frame):
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_FILEMANAGEMENT, _("&File Management"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_IMPORT_DATABASE, _("&Import Database"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_EXPORT_DATABASE, _("&Export Database"))
+        self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_COLORCONFIG, _("&Graphics Color Configuration"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_BATCHWAVEFORM, _("&Batch Waveform Generator"))
         if not TransanaConstants.singleUserVersion:
             self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_CHAT, _("&Chat Window"))
@@ -1122,8 +1201,9 @@ class MenuWindow(wx.Frame):
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_RU, _("&Russian"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_SV) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_SV, _("S&wedish"))
-        if 'wxMSW' in wx.PlatformInfo:
+        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
             self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_QUICK_CLIPS, _("&Quick Clip Mode"))
+        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_QUICKCLIPWARNING, _("Show Quick Clip Warning"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_WORDTRACK, _("Auto &Word-tracking"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_WAVEFORMQUICKLOAD, _("&Waveform Quick-load"))

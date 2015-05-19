@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -38,6 +38,7 @@ import Note
 import NotePropertiesForm
 import Keyword                      
 import KeywordPropertiesForm
+import BatchFileProcessor
 import ProcessSearch
 from TransanaExceptions import *
 import KWManager
@@ -48,6 +49,7 @@ import NoteEditor
 import os
 import sys
 import string
+import time
 import SeriesMap
 import KeywordMapClass
 import ReportGenerator
@@ -487,7 +489,7 @@ class DatabaseTreeTab(wx.Panel):
         # use "try", as exceptions could occur
         try:
             # If the user tries to edit the currently-loaded Transcript ...
-            if (transcript.number == self.ControlObject.TranscriptNum):
+            if (transcript.number in self.ControlObject.TranscriptNum):
                 # ... first clear all the windows ...
                 self.ControlObject.ClearAllWindows()
                 # ... then reload the transcript in case it got changed (saved) during the ClearAllWindows call.
@@ -509,7 +511,7 @@ class DatabaseTreeTab(wx.Panel):
                         # See if this affects the currently loaded
                         # Transcript, in which case we have to re-load the
                         # transcript if a new one was imported.
-                        if transcript.number == self.ControlObject.TranscriptNum:
+                        if transcript.number == self.ControlObject.TranscriptNum[self.ControlObject.activeTranscript]:
                             self.ControlObject.LoadTranscript(transcript.series_id, transcript.episode_id, transcript.number)
 
                         # Note the original Tree Selection
@@ -802,7 +804,7 @@ class DatabaseTreeTab(wx.Panel):
 
         # If there's not a Clip Creation object in the Clipboard, display an error message
         if not success:
-            if "__WXMAC__" in wx.PlatformInfo:
+            if not TransanaConstants.macDragDrop and ("__WXMAC__" in wx.PlatformInfo):
                 prompt = _('To add a Clip, select the desired portion of a transcript and choose "Add Clip" for the target Collection.')
             else:
                 prompt = _("To add a Clip, select the desired portion of a transcript and drag the selection onto a Collection.")
@@ -816,13 +818,29 @@ class DatabaseTreeTab(wx.Panel):
         if ((type(self.ControlObject.currentObj) == type(Clip.Clip())) and \
             (self.ControlObject.currentObj.number == clip.number)):
             # ... we should clear the clip from the interface before editing it.
+            # Set the active transcript to signal the need to clear ALL windows ...
+            self.ControlObject.activeTranscript = 0
+            # ... and clear the Windows
             self.ControlObject.ClearAllWindows()
             # ... then reload the clip in case it got changed (saved) during the ClearAllWindows call.
             clip.db_load_by_num(clip.number)
-        # use "try", as exceptions could occur
+
+        # Begin exception handling
         try:
-            # Try to get a Record Lock
-            clip.lock_record()
+            # If we have an existing clip ...
+            if clip.number != 0:
+                # Try to get a Record Lock
+                clip.lock_record()
+                # flag that it was an existing clip
+                existingClip = True
+            # If we don't have an existing clip ...
+            else:
+                # ... flag that the clips did not exist
+                existingClip = False
+                # If it has no Sort Order ...
+                if clip.sort_order == 0:
+                    # ... give it the highest Sort Order for the collection
+                    clip.sort_order = DBInterface.getMaxSortOrder(clip.collection_num) + 1
         # Handle the exception if the record is locked
         except RecordLockedError, e:
             self.handle_locked_record(e, _("Clip"), clip.id)
@@ -861,76 +879,111 @@ class DatabaseTreeTab(wx.Panel):
                         sel = self.tree.GetSelection()
                         # Note the original name of the tree node
                         originalName = self.tree.GetItemText(sel)
-                        # See if the Clip ID has been changed.  If it has, update the tree.
-                        if clip.id != originalName:
-                            for (kwg, kw, clipNumber, clipID) in DBInterface.list_all_keyword_examples_for_a_clip(clip.number):
-                                nodeList = (_('Keywords'), kwg, kw, self.tree.GetItemText(sel))
-                                exampleNode = self.tree.select_Node(nodeList, 'KeywordExampleNode')
-                                self.tree.SetItemText(exampleNode, clip.id)
+                        # if the clip previously existed ...
+                        if existingClip:
+                            # See if the Clip ID has been changed.  If it has, update the tree.
+                            if clip.id != originalName:
+                                for (kwg, kw, clipNumber, clipID) in DBInterface.list_all_keyword_examples_for_a_clip(clip.number):
+                                    nodeList = (_('Keywords'), kwg, kw, self.tree.GetItemText(sel))
+                                    exampleNode = self.tree.select_Node(nodeList, 'KeywordExampleNode')
+                                    self.tree.SetItemText(exampleNode, clip.id)
+                                    # If we're in the Multi-User mode, we need to send a message about the change
+                                    if not TransanaConstants.singleUserVersion:
+                                        # Begin constructing the message with the old and new names for the node
+                                        msg = " >|< %s >|< %s" % (originalName, clip.id)
+                                        # Get the full Node Branch by climbing it to two levels above the root
+                                        while (self.tree.GetItemParent(self.tree.GetItemParent(exampleNode)) != self.tree.GetRootItem()):
+                                            # Update the selected node indicator
+                                            exampleNode = self.tree.GetItemParent(exampleNode)
+                                            # Prepend the new Node's name on the Message with the appropriate seperator
+                                            msg = ' >|< ' + self.tree.GetItemText(exampleNode) + msg
+                                        # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                        # This must be untranslated to avoid problems in mixed-language environments.
+                                        # Prepend these on the Messsage
+                                        msg = "KeywordExampleNode >|< Keywords" + msg
+                                        if DEBUG:
+                                            print 'Message to send = "RN %s"' % msg
+                                        # Send the Rename Node message
+                                        if TransanaGlobal.chatWindow != None:
+                                            TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+                                            
+                                # Rename the Tree node
+                                self.tree.SetItemText(sel, clip.id)
                                 # If we're in the Multi-User mode, we need to send a message about the change
                                 if not TransanaConstants.singleUserVersion:
                                     # Begin constructing the message with the old and new names for the node
                                     msg = " >|< %s >|< %s" % (originalName, clip.id)
                                     # Get the full Node Branch by climbing it to two levels above the root
-                                    while (self.tree.GetItemParent(self.tree.GetItemParent(exampleNode)) != self.tree.GetRootItem()):
+                                    while (self.tree.GetItemParent(self.tree.GetItemParent(sel)) != self.tree.GetRootItem()):
                                         # Update the selected node indicator
-                                        exampleNode = self.tree.GetItemParent(exampleNode)
+                                        sel = self.tree.GetItemParent(sel)
                                         # Prepend the new Node's name on the Message with the appropriate seperator
-                                        msg = ' >|< ' + self.tree.GetItemText(exampleNode) + msg
+                                        msg = ' >|< ' + self.tree.GetItemText(sel) + msg
                                     # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
                                     # This must be untranslated to avoid problems in mixed-language environments.
                                     # Prepend these on the Messsage
-                                    msg = "KeywordExampleNode >|< Keywords" + msg
+                                    msg = "ClipNode >|< Collections" + msg
                                     if DEBUG:
                                         print 'Message to send = "RN %s"' % msg
                                     # Send the Rename Node message
                                     if TransanaGlobal.chatWindow != None:
                                         TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
-                                        
-                            # Rename the Tree node
-                            self.tree.SetItemText(sel, clip.id)
-                            # If we're in the Multi-User mode, we need to send a message about the change
+
+                            # Now let's communicate with other Transana instances if we're in Multi-user mode
                             if not TransanaConstants.singleUserVersion:
-                                # Begin constructing the message with the old and new names for the node
-                                msg = " >|< %s >|< %s" % (originalName, clip.id)
-                                # Get the full Node Branch by climbing it to two levels above the root
-                                while (self.tree.GetItemParent(self.tree.GetItemParent(sel)) != self.tree.GetRootItem()):
-                                    # Update the selected node indicator
-                                    sel = self.tree.GetItemParent(sel)
-                                    # Prepend the new Node's name on the Message with the appropriate seperator
-                                    msg = ' >|< ' + self.tree.GetItemText(sel) + msg
-                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
-                                # This must be untranslated to avoid problems in mixed-language environments.
-                                # Prepend these on the Messsage
-                                msg = "ClipNode >|< Collections" + msg
+                                msg = 'Clip %d' % clip.number
                                 if DEBUG:
-                                    print 'Message to send = "RN %s"' % msg
-                                # Send the Rename Node message
+                                    print 'Message to send = "UKL %s"' % msg
                                 if TransanaGlobal.chatWindow != None:
-                                    TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+                                    # Send the "Update Keyword List" message
+                                    TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                            # If the Clip Properties Dialog was closed by pressing the Propagate Clip Changes button,
+                            # we can detect that by looking at the propagatePressed property of the form.  Now that the
+                            # clip changes have been successfully saved, we need to deal with propagation if requested.
+                            if dlg.propagatePressed:
+                                # Start up the Propagate Changes tool, passing in the original clip copy and the proper data
+                                # from the edited clip.
+                                propagateDlg = PropagateEpisodeChanges.PropagateClipChanges(self,
+                                                                                            originalClip,
+                                                                                            -1,
+                                                                                            clip.transcripts,
+                                                                                            clip.id,
+                                                                                            clip.keyword_list)
 
-                        # Now let's communicate with other Transana instances if we're in Multi-user mode
-                        if not TransanaConstants.singleUserVersion:
-                            msg = 'Clip %d' % clip.number
-                            if DEBUG:
-                                print 'Message to send = "UKL %s"' % msg
-                            if TransanaGlobal.chatWindow != None:
-                                # Send the "Update Keyword List" message
-                                TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
-                        # If the Clip Properties Dialog was closed by pressing the Propagate Clip Changes button,
-                        # we can detect that by looking at the propagatePressed property of the form.  Now that the
-                        # clip changes have been successfully saved, we need to deal with propagation if requested.
-                        if dlg.propagatePressed:
-                            # Start up the Propagate Changes tool, passing in the original clip copy and the proper data
-                            # from the edited clip.
-                            propagateDlg = PropagateEpisodeChanges.PropagateClipChanges(self,
-                                                                                        originalClip,
-                                                                                        clip.text,
-                                                                                        clip.id,
-                                                                                        clip.keyword_list)
+                            # If we do all this, we don't need to continue any more.
+                            contin = False
+                        # If the clip did not previously exist ...
+                        else:
+                            # Get the node data
+                            nodeData = (_('Collections'),) + clip.GetNodeData()
+                            # Add the new Collection to the data tree
+                            self.tree.add_Node('ClipNode', nodeData, clip.number, clip.collection_num)
 
-                        # If we do all this, we don't need to continue any more.
-                        contin = False
+                            # Now let's communicate with other Transana instances if we're in Multi-user mode
+                            if not TransanaConstants.singleUserVersion:
+                                msg = "ACl %s"
+                                data = (nodeData[1],)
+                                for nd in nodeData[2:]:
+                                    msg += " >|< %s"
+                                    data += (nd, )
+                                if DEBUG:
+                                    print 'Message to send =', msg % data
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+                            # See if the Keyword visualization needs to be updated.
+                            self.ControlObject.UpdateKeywordVisualization()
+                            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                            if not TransanaConstants.singleUserVersion:
+                                # We need to update the Episode Keyword Visualization
+                                if DEBUG:
+                                    print 'Message to send = "UKV %s %s %s"' % ('Episode', clip.episode_num, 0)
+                                    
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', clip.episode_num, 0))
+
+                            # If we do all this, we don't need to continue any more.
+                            contin = False
                     # If the user pressed Cancel ...
                     else:
                         # ... then we don't need to continue any more.
@@ -955,8 +1008,10 @@ class DatabaseTreeTab(wx.Panel):
                     errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
                     errordlg.ShowModal()
                     errordlg.Destroy()
-            # Unlock the record regardless of what happens
-            clip.unlock_record()
+            # If we had an existing clip ...
+            if existingClip:
+                # Unlock the record regardless of what happens
+                clip.unlock_record()
 
     def save_clip(self, clip):
         """Save/Update the Clip object."""
@@ -1351,7 +1406,11 @@ class DatabaseTreeTab(wx.Panel):
         if kw != None:
             # We need to pass the keyword's DB_SAVE function result back to the calling routine.
             return kw.db_save()
- 
+
+    def GetSelectedNodeInfo(self):
+        """ Get the Name, Record Number, Parent Number, and Type of the currently-selected Node """
+        # Query the tree for the requested data and return it
+        return self.tree.GetSelectedNodeInfo()
 
     def handle_locked_record(self, e, rtype, id):
         """Handle the RecordLockedError exception."""
@@ -1421,7 +1480,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         self.SetImageList(self.image_list)
 
         # Remove Drag-and-Drop reference on the mac due to the Quicktime Drag-Drop bug
-        if not '__WXMAC__' in wx.PlatformInfo:
+        if TransanaConstants.macDragDrop or (not '__WXMAC__' in wx.PlatformInfo):
             # Define the Drop Target for the tree.  The custom drop target object
             # accepts the tree as a parameter so it can query it about where the
             # drop is supposed to be occurring to see if it will allow the drop.
@@ -1453,6 +1512,9 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         # Process Database Tree Label Edits
         wx.EVT_TREE_END_LABEL_EDIT(self, id, self.OnEndLabelEdit)
+
+        # Process Key Presses
+        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
 
 
     def set_image(self, item, icon_name):
@@ -1486,7 +1548,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         #        of our Drag-and-drop code that is causing this problem.
         
         # Remove Drag-and-Drop reference on the mac due to the Quicktime Drag-Drop bug
-        if not '__WXMAC__' in wx.PlatformInfo:
+        if TransanaConstants.macDragDrop or (not '__WXMAC__' in wx.PlatformInfo):
             if event.Dragging():
                 # Get the Mouse position
                 (x,y) = event.GetPosition()
@@ -1524,7 +1586,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Detect if this event has been fired by a "Cut" or "Copy" request.  (Collections, Clips, Keywords,
         # SearchCollections, and SearchClips have
         # "Cut" options as their first menu items and "Copy" as their second menu items.)
-        if event.GetId() in [self.cmd_id_start["collection"],           self.cmd_id_start["clip"],           self.cmd_id_start["kw"],
+        if event.GetId() in [self.cmd_id_start["episode"],
+                             self.cmd_id_start["collection"],           self.cmd_id_start["clip"],           self.cmd_id_start["kw"],
                              self.cmd_id_start["searchcollection"],     self.cmd_id_start["searchclip"],
                              self.cmd_id_start["collection"] + 1,       self.cmd_id_start["clip"] + 1,        self.cmd_id_start["kw"] + 1,
                              self.cmd_id_start["searchcollection"] + 1, self.cmd_id_start["searchclip"] + 1]:
@@ -1589,7 +1652,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # If we have a "Drag", we put the pickled CustomDataObject in the DropSource Object.
 
             # If the event was triggered by a "Cut" or "Copy" request ...
-            if event.GetId() in [self.cmd_id_start["collection"],           self.cmd_id_start["clip"],           self.cmd_id_start["kw"],
+            if event.GetId() in [self.cmd_id_start["episode"],
+                                 self.cmd_id_start["collection"],           self.cmd_id_start["clip"],           self.cmd_id_start["kw"],
                                  self.cmd_id_start["searchcollection"],     self.cmd_id_start["searchclip"],
                                  self.cmd_id_start["collection"] + 1,       self.cmd_id_start["clip"] + 1,        self.cmd_id_start["kw"] + 1,
                                  self.cmd_id_start["searchcollection"] + 1, self.cmd_id_start["searchclip"] + 1]:
@@ -1601,7 +1665,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # wx.TheClipboard.Close()
                 
             # If the event was triggered by a "Drag" request ...
-            elif not '__WXMAC__' in wx.PlatformInfo:
+            elif TransanaConstants.macDragDrop or (not '__WXMAC__' in wx.PlatformInfo):
                 # Create a Custom DropSource Object.  The custom drop source object
                 # accepts the tree as a parameter so it can query it about where the
                 # drop is supposed to be occurring to see if it will allow the drop.
@@ -1973,12 +2037,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         # We continue moving down the list of nodes if...
         #   ... we are not yet at the end of the list AND ...
-        # ((we're not past our alpha place and (nodetypes are the same or (both are at least Notes)) or
+        # ((we're not past our alpha place (UPPER() calls fix case issues!) and (nodetypes are the same or (both are at least Notes)) or
         #  (we're dealing with a Note and we're not to the notes yet)) AND ...
         # (we don't have a Collection or we haven't started looking at Clips ) or
         # we've got a SearchCollection to position after the SearchSeries nodes
         result = child.IsOk() and \
-                 (((node > self.GetItemText(child)) and \
+                 (((node.upper() > self.GetItemText(child).upper()) and \
                    (((nodeType == childData.nodetype)) or \
                     ((nodeType in allNoteNodeTypes) and (childData.nodetype in allNoteNodeTypes)))) or \
                   ((nodeType in allNoteNodeTypes) and not(childData.nodetype in allNoteNodeTypes))) or \
@@ -2118,13 +2182,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # go MUCH more quickly.  We look for the absence of an insertPos (so we're not needing to position a
                 # clip in the middle of a list), reaching the end (n-1) of the nodeData, and where we're inserting a Clip.
                 if (insertPos == None) and (nodeListPos == len(nodeData) - 1) and (expectedNodeType == 'ClipNode'):
-                    if DEBUG:
-                        print
-                        print "***************************************************************************************"
-                        print "              THIS IS IT"
-                        print "***************************************************************************************"
-                        print
-                
                     # Add the new Node to the Tree at the end
                     newNode = self.AppendItem(currentNode, node)
                     # Add the tree node's graphic.  This section only applied to Clips.
@@ -2214,6 +2271,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             currentRecNum = 0
 
                         # if the expected node is a Keyword Example...
+                        elif expectedNodeType == 'KeywordExampleNode':
 
                             print "ExpectedNodeType == 'KeywordExampleNode'.  This has not been coded!"
 
@@ -2546,7 +2604,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             notDone = True
             (childNode, cookieItem) = self.GetFirstChild(currentNode)
 
-            while notDone and (currentNode != None):
+            while (childNode.IsOk()) and notDone and (currentNode != None):
                 itemText = Misc.unistrip(self.GetItemText(childNode))
                 childNodeData = self.GetPyData(childNode)
 
@@ -2617,7 +2675,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Series Menu
         self.create_menu("series",
                         (_("Paste"),
-                         _("Add Episode"), _("Add Series Note"), _("Delete Series"), _("Series Report"),
+                         _("Add Episode"), _("Batch Episode Creation"), _("Add Series Note"), _("Delete Series"), _("Series Report"),
                          _("Series Keyword Sequence Map"), _("Series Keyword Bar Graph"), _("Series Keyword Percentage Graph"),
                          _("Clip Data Export"),
                          _("Series Properties")),
@@ -2625,15 +2683,15 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         # Episode Menu
         self.create_menu("episode",
-                        (_("Paste"),
-                         _("Add Transcript"), _("Add Episode Note"), _("Delete Episode"),
+                        (_("Cut"), _("Paste"),
+                         _("Add Transcript"), _("Open Multiple Transcripts"), _("Add Episode Note"), _("Delete Episode"),
                          _("Episode Report"), _("Keyword Map"), _("Clip Data Export"),
                          _("Episode Properties")),
                         self.OnEpisodeCommand)
 
         # Transcript Menu
         self.create_menu("transcript",
-                         (_("Open"), _("Add Transcript Note"), _("Delete Transcript"), _("Transcript Properties")),
+                         (_("Open"), _("Open Additional Transcript"), _("Add Transcript Note"), _("Delete Transcript"), _("Transcript Properties")),
                          self.OnTranscriptCommand)
 
         # Collection Root Menu
@@ -2644,8 +2702,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Collection Menu
         self.create_menu("collection",
                         (_("Cut"), _("Copy"), _("Paste"),
-                         _("Add Clip"), _("Add Nested Collection"), _("Add Collection Note"),
-                         _("Delete Collection"),
+                         _("Add Clip"), _("Add Multi-transcript Clip"), _("Add Nested Collection"),
+                         _("Add Collection Note"), _("Delete Collection"),
                          _("Collection Report"), _("Clip Data Export"), _("Play All Clips"),
                          _("Collection Properties")),
                         self.OnCollectionCommand)
@@ -2653,8 +2711,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Clip Menu
         self.create_menu("clip",
                         (_("Cut"), _("Copy"), _("Paste"),
-                         _("Open"), _("Add Clip"), _("Add Clip Note"), _("Delete Clip"),
-                         _("Locate Clip in Episode"), _("Clip Properties")),
+                         _("Open"), _("Add Clip"), _("Add Multi-transcript Clip"), _("Add Clip Note"), _("Merge Clips"),
+                         _("Delete Clip"), _("Locate Clip in Episode"), _("Clip Properties")),
                         self.OnClipCommand)
 
         # Keywords Root Menu
@@ -2672,7 +2730,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Keyword Menu
         self.create_menu("kw",
                         (_("Cut"), _("Copy"), _("Paste"),
-                         _("Delete Keyword"), _("Create Quick Clip"), _("Keyword Properties")),
+                         _("Delete Keyword"), _("Create Quick Clip"), _("Create Multi-transcript Quick Clip"), _("Keyword Properties")),
                         self.OnKwCommand)
 
         # Keyword Example Menu
@@ -2748,8 +2806,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             self.parent.add_series()
         else:
             raise MenuIDError
- 
- 
+  
     def OnSeriesCommand(self, evt):
         """Handle menu selections for Series objects."""
         n = evt.GetId() - self.cmd_id_start["series"]
@@ -2772,6 +2829,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # ... unPickle the data so it's in a usable format
                 data = cPickle.loads(cdo.GetData())
                 DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
+                # Clear the Clipboard.  We can't paste again, since the data has been moved!
+                DragAndDropObjects.ClearClipboard()
 
         elif n == 1:    # Add Episode
             # Add an Episode
@@ -2786,13 +2845,152 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 if transcript_name != None:
                     # Select the Transcript in the Data Tree
                     sel = self.select_Node((_('Series'), series_name, episode_name, transcript_name), 'TranscriptNode')
+                    # Set the active transcript to 0 so the whole interface will be reset
+                    self.parent.ControlObject.activeTranscript = 0
                     # Load the newly created Transcript
                     self.parent.ControlObject.LoadTranscript(series_name, episode_name, transcript_name)  # Load everything via the ControlObject
-            
-        elif n == 2:    # Add Note
+
+        elif n == 2:    # Batch Episode Creation
+            # Load the Series
+            series = Series.Series(selData.recNum)
+            try:
+                # Lock the Series, to prevent it from being deleted out from under the Batch Episode Creation
+                series.lock_record()
+                seriesLocked = True
+            # Handle the exception if the record is already locked by someone else
+            except RecordLockedError, s:
+                # If we can't get a lock on the Series, it's really not that big a deal.  We only try to get it
+                # to prevent someone from deleting it out from under us, which is pretty unlikely.  But we should 
+                # still be able to add Episodes even if someone else is editing the Series properties.
+                seriesLocked = False
+            # Create a dialog to get a list of media files to be processed
+            fileListDlg = BatchFileProcessor.BatchFileProcessor(self, mode="episode")
+            # Show the dialog and get the list of files the user selects
+            fileList = fileListDlg.get_input()
+            # Close the dialog
+            fileListDlg.Close()
+            # Destroy the dialog
+            fileListDlg.Destroy()
+            # If the user pressed OK after selecting some files ...
+            if fileList != None:
+                # ... iterate through the file list
+                for filename in fileList:
+                    # Get the file's path
+                    (path, filenameandext) = os.path.split(filename)
+                    # Get the file's root name and extension
+                    (filenameroot, extension) = os.path.splitext(filenameandext)
+                    # Create a blank Episode
+                    tmpEpisode = Episode.Episode()
+                    # Name the Episode after the root file name
+                    tmpEpisode.id = filenameroot
+                    # Assign the media file
+                    tmpEpisode.media_filename = filename
+                    # Assign the Series number
+                    tmpEpisode.series_num = selData.recNum
+                    # Start exception handling
+                    try:
+                        # Save the new Episode.  An exception will be generated if an Episode with this name already exists.
+                        tmpEpisode.db_save()
+                        # If no exception was generated and the save was successful, we need another level of exception
+                        # handling to lock the new Episode
+                        try:
+                            # Lock the Episode, to prevent it from being deleted out from under the add.
+                            tmpEpisode.lock_record()
+                            episodeLocked = True
+                        # Handle the exception if the record is already locked by someone else
+                        except RecordLockedError, e:
+                            # If we can't get a lock on the Episode, it's really not that big a deal.  We only try to get it
+                            # to prevent someone from deleting it out from under us, which is pretty unlikely.  But we should 
+                            # still be able to add Transcripts even if someone else is editing the Episode properties.
+                            # NOTE:  This shouldn't be possible.  How could someone else lock an Episode the hasn't appeared yet?
+                            episodeLocked = False
+                        # Build the Node List for the new Episode
+                        nodeData = (_('Series'), series.id, tmpEpisode.id)
+                        # Add the new Episode to the database tree
+                        self.add_Node('EpisodeNode', nodeData, tmpEpisode.number, series.number)
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            if DEBUG:
+                                print 'Message to send = "AE %s >|< %s"' % (nodeData[-2], nodeData[-1])
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage("AE %s >|< %s" % (nodeData[-2], nodeData[-1]))
+
+                        # Now lets create an empty Transcript record
+                        tmpTranscript = Transcript.Transcript()
+                        # Name the Transcript after the media file root name
+                        tmpTranscript.id = filenameroot
+                        # Assign the new Episode's number 
+                        tmpTranscript.episode_num = tmpEpisode.number
+                        # Let's see if there is a Transcript file.  See if an RTF file exists in the media file's
+                        # directory with the same root file name
+                        if os.path.exists(os.path.join(path, filenameroot + '.rtf')):
+                            # If so, let's remember that.
+                            fname = os.path.join(path, filenameroot + '.rtf')
+                        # If there's not RTF file, see if a TXT file exists in the media file's
+                        # directory with the same root file name
+                        elif os.path.exists(os.path.join(path, filenameroot + '.txt')):
+                            # If so, let's remember that.
+                            fname = os.path.join(path, filenameroot + '.txt')
+                        # If neither an RTF nor a TXT file exists ...
+                        else:
+                            # ... then signal that no file was found by setting fname to None
+                            fname = False
+                        # If an RTF file or a TXT file was found ...
+                        if fname:
+                            # ... start exception handling ...
+                            try:
+                                # Open the file
+                                f = open(fname, "r")
+                                # Read the file straight into the Transcript Text
+                                tmpTranscript.text = f.read()
+                                # if the text does NOT have an RTF header ...
+                                if (tmpTranscript.text[:5].lower() != '{\\rtf'):
+                                    # ... add "txt" to the start of the file to signal that it's probably a text file
+                                    tmpTranscript.text = 'txt\n' + tmpTranscript.text
+                                # Close the file
+                                f.close()
+                            # If exceptions are raised ...
+                            except:
+                                # ... we don't need to do anything here.
+                                # The consequence is probably that the Transcript Text will be blank.
+                                pass
+                        # Now save the new Transcript record.  Since we just created the Episode, we don't have to worry
+                        # about a conflicting Transcript already existing.
+                        tmpTranscript.db_save()
+                        # Build the node data for the new Transcript record
+                        nodeData = (_('Series'), series.id, tmpEpisode.id, tmpTranscript.id)
+                        # Add the Transcript record to the Database tree
+                        self.add_Node('TranscriptNode', nodeData, tmpTranscript.number, tmpEpisode.number)
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            if DEBUG:
+                                print 'Message to send = "AT %s >|< %s >|< %s"' % (nodeData[-3], nodeData[-2], nodeData[-1])
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage("AT %s >|< %s >|< %s" % (nodeData[-3], nodeData[-2], nodeData[-1]))
+                    
+                        # Unlock the Episode record
+                        if episodeLocked:
+                            tmpEpisode.unlock_record()
+                    # If a Save Error was generated by the Episode ...
+                    except SaveError, e:
+                        # Build an error message
+                        msg = _('Transana was unable to import file "%s"\nduring Batch Episode Creation.\nAn Episode named "%s" already exists.')
+                        # Make it Unicode
+                        if 'unicode' in wx.PlatformInfo:
+                            msg = unicode(msg, 'utf8')
+                        # Show the error message, then clean up.
+                        dlg = Dialogs.ErrorDialog(self, msg % (filename, tmpEpisode.id))
+                        dlg.ShowModal()
+                        dlg.Destroy()
+                
+            # Unlock the Series, if we locked it.
+            if seriesLocked:
+                series.unlock_record()
+
+        elif n == 3:    # Add Note
             self.parent.add_note(seriesNum=selData.recNum)
             
-        elif n == 3:    # Delete
+        elif n == 4:    # Delete
             # Load the Selected Series
             series = Series.Series(selData.recNum)
             # Get user confirmation of the Series Delete request
@@ -2855,24 +3053,24 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
                 
-        elif n == 4:    # Series Report
+        elif n == 5:    # Series Report
             # Call the Report Generator.  We pass the Series Name and want to show Keywords.
-            ReportGenerator.ReportGenerator(title=_("Transana Series Report"), seriesName=series_name,
-                                                  showKeywords=True)
+            ReportGenerator.ReportGenerator(title=unicode(_("Transana Series Report"), 'utf8'), seriesName=series_name,
+                                                  showFile=True, showKeywords=True)
 
-        elif n == 5:    # Series Map -- Sequence Mode
-            SeriesMap.SeriesMap(self, _("Series Keyword Sequence Map"), selData.recNum, series_name, 1)
+        elif n == 6:    # Series Map -- Sequence Mode
+            SeriesMap.SeriesMap(self, unicode(_("Series Keyword Sequence Map"), 'utf8'), selData.recNum, series_name, 1)
             
-        elif n == 6:    # Series Map -- Bar Graph Mode
-            SeriesMap.SeriesMap(self, _("Series Keyword Bar Graph"), selData.recNum, series_name, 2)
+        elif n == 7:    # Series Map -- Bar Graph Mode
+            SeriesMap.SeriesMap(self, unicode(_("Series Keyword Bar Graph"), 'utf8'), selData.recNum, series_name, 2)
             
-        elif n == 7:    # Series Map -- Percentage Mode
-            SeriesMap.SeriesMap(self, _("Series Keyword Percentage Graph"), selData.recNum, series_name, 3)
+        elif n == 8:    # Series Map -- Percentage Mode
+            SeriesMap.SeriesMap(self, unicode(_("Series Keyword Percentage Graph"), 'utf8'), selData.recNum, series_name, 3)
 
-        elif n == 8:    # Clip Data Export
+        elif n == 9:    # Clip Data Export
             self.ClipDataExport(seriesNum = selData.recNum)
             
-        elif n == 9:    # Properties
+        elif n == 10:    # Properties
             series = Series.Series()
             # FIXME: Gracefully handle when we can't load the series.
             # (yes, this can happen.  for example if another user changes
@@ -2884,7 +3082,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
         else:
             raise MenuIDError
  
- 
     def OnEpisodeCommand(self, evt):
         """Handle menu selections for Episode objects."""
         n = evt.GetId() - self.cmd_id_start["episode"]
@@ -2894,7 +3091,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
         episode_name = self.GetItemText(sel)
         series_name = self.GetItemText(self.GetItemParent(sel))
         
-        if n == 0:      # Paste
+        if n == 0:      # Cut
+            self.cutCopyInfo['action'] = 'Move'    # Functionally, "Cut" is the same as Drag/Drop Move
+            self.cutCopyInfo['sourceItem'] = sel
+            self.OnCutCopyBeginDrag(evt)
+
+        elif n == 1:      # Paste
             # Open the Clipboard
             # wx.TheClipboard.Open()
             # specify the data formats to accept
@@ -2909,20 +3111,50 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 data = cPickle.loads(cdo.GetData())
                 DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
             
-        elif n == 1:    # Add Transcript
+        elif n == 2:    # Add Transcript
             # Add the Transcript
             transcript_name = self.parent.add_transcript(series_name, episode_name)
             # If the Transcript is created ( != None) ...
             if transcript_name != None:
                 # Select the Transcript in the Data Tree
                 sel = self.select_Node((_('Series'), series_name, episode_name, transcript_name), 'TranscriptNode')
+                # Signal total interface refresh by setting the active trancript to 0
+                self.parent.ControlObject.activeTranscript = 0
                 # Load the newly created Transcript
                 self.parent.ControlObject.LoadTranscript(series_name, episode_name, transcript_name)  # Load everything via the ControlObject
 
-        elif n == 2:    # Add Note
+        elif n == 3:    # Open Multiple Transcripts
+            # Initialize a Transcript window Counter
+            trCount = 0
+            # Get the first child of the Episode
+            (trItem, cookie) = self.GetFirstChild(sel)
+            # If we have at least one legit Transcript ...
+            if trItem.IsOk():
+                # Signal total interface refresh by setting the active trancript to 0
+                self.parent.ControlObject.activeTranscript = 0
+                # Load the first Transcript via the ControlObject
+                self.parent.ControlObject.LoadTranscript(series_name, episode_name, self.GetItemText(trItem))
+                # Increment the Transcript window Counter
+                trCount += 1
+            # while there are additional transcripts and we haven't exceeded the Max Transcript Count  and we have a Transcript node
+            # and the LoadTranscript call didn't fails (signalled by the lack of a VideoFilename in the Control Object) ...
+            while trItem.IsOk() and (trCount < TransanaConstants.maxTranscriptWindows) and \
+                  (self.GetPyData(trItem).nodetype == 'TranscriptNode') and (self.parent.ControlObject.VideoFilename != ''):
+                # ... get the next child of the Episode, the sibling of the Transcript.
+                trItem = self.GetNextSibling(trItem)
+                # If we have a legit item and it is a transcript ...
+                if trItem.IsOk() and self.GetPyData(trItem).nodetype == 'TranscriptNode':
+                    # ... open it as an additional transcript ...
+                    self.parent.ControlObject.OpenAdditionalTranscript(self.GetPyData(trItem).recNum, series_name, episode_name)
+                    # ... and increment the transcript window counter.
+                    trCount += 1
+            # When all the dust settles, let's set the focus to the first Transcript window.  1/2 second should do.
+            wx.CallLater(500, self.parent.ControlObject.TranscriptWindow[0].dlg.SetFocus())
+
+        elif n == 4:    # Add Note
             self.parent.add_note(episodeNum=selData.recNum)
 
-        elif n == 3:    # Delete
+        elif n == 5:    # Delete
             # Load the Selected Episode
             episode = Episode.Episode(selData.recNum)
             # Get user confirmation of the Episode Delete request
@@ -2981,22 +3213,22 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
                 
-        elif n == 4:    # Episode Report Generator
+        elif n == 6:    # Episode Report Generator
             # Call the Report Generator.  We pass the Series and Episode names, and we want to show
             # File Names, Time data, and Keywords but not Transcripts, Comments, or Clip Notes by default.
             # (The point of including parameters set to false is that it triggers their availability as options.)
-            ReportGenerator.ReportGenerator(title=_("Transana Episode Report"), seriesName=series_name,
+            ReportGenerator.ReportGenerator(title=unicode(_("Transana Episode Report"), 'utf8'), seriesName=series_name,
                                             episodeName=episode_name, showFile=True, showTime=True,
                                             showTranscripts=False, showKeywords=True,
                                             showComments=False, showClipNotes=False)
 
-        elif n == 5:    # Keyword Map Report
+        elif n == 7:    # Keyword Map Report
             self.KeywordMapReport(selData.recNum, series_name, episode_name)
 
-        elif n == 6:    # Clip Data Export
+        elif n == 8:    # Clip Data Export
             self.ClipDataExport(episodeNum = selData.recNum)
 
-        elif n == 7:    # Properties
+        elif n == 9:    # Properties
             series_name = self.GetItemText(self.GetItemParent(sel))
             episode = Episode.Episode()
             # FIXME: Gracefully handle when we can't load the Episode.
@@ -3017,10 +3249,18 @@ class _DBTreeCtrl(wx.TreeCtrl):
         if n == 0:      # Open
             self.OnItemActivated(evt)                            # Use the code for double-clicking the Transcript
 
-        elif n == 1:    # Add Note
+        elif n == 1:    # Open additional Transcript
+            # Get the Episode Name, which is the tree selection's parent's text
+            episode_name = self.GetItemText(self.GetItemParent(sel))
+            # Get the Series Name, which is the tree selection's grand-parent's text
+            series_name = self.GetItemText(self.GetItemParent(self.GetItemParent(sel)))
+            # Open the transcript as an additional Transcript
+            self.parent.ControlObject.OpenAdditionalTranscript(selData.recNum, series_name, episode_name)
+            
+        elif n == 2:    # Add Note
             self.parent.add_note(transcriptNum=selData.recNum)
 
-        elif n == 2:    # Delete
+        elif n == 3:    # Delete
             # Load the Selected Transcript
             transcript = Transcript.Transcript(selData.recNum)
             # Get user confirmation of the Transcript Delete request
@@ -3034,15 +3274,16 @@ class _DBTreeCtrl(wx.TreeCtrl):
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
-                # if current object is a Transcript in the current Episode ...
-                if (isinstance(self.parent.ControlObject.currentObj, Episode.Episode)) and (self.parent.ControlObject.currentObj.number == transcript.episode_num):
-                    # Start by clearing all current objects
-                    self.parent.ControlObject.ClearAllWindows()
                 try:
                     # Try to delete the Transcript, initiating a Transaction
                     delResult = transcript.db_delete(1)
                     # If successful, remove the Transcript Node from the Database Tree
                     if delResult:
+                        # if current object is a Transcript in the current Episode ...
+                        if (isinstance(self.parent.ControlObject.currentObj, Episode.Episode)) and \
+                           (selData.recNum in self.parent.ControlObject.TranscriptNum):
+                            # Start by clearing all current objects
+                            self.parent.ControlObject.ClearAllWindows(resetMultipleTranscripts = True)
                         # Get the full Node Branch by climbing it to one level above the root
                         nodeList = (self.GetItemText(sel),)
                         while (self.GetItemParent(sel) != self.GetRootItem()):
@@ -3079,7 +3320,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
 
-        elif n == 3:    # Properties
+        elif n == 4:    # Properties
             series_name = self.GetItemText(self.GetItemParent(self.GetItemParent(sel)))
             episode_name = self.GetItemText(self.GetItemParent(sel))
             episode = Episode.Episode()
@@ -3103,7 +3344,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # notes, or clip notes by default.  We also want to include 
             # nested collection data by default.  (The Global version is always empty without nested collections.)
             # (The point of including parameters set to false is that it triggers their availability as options.)
-            ReportGenerator.ReportGenerator(title=_("Transana Collection Report"), collection=Collection.Collection(),
+            ReportGenerator.ReportGenerator(title=unicode(_("Transana Collection Report"), 'utf8'), collection=Collection.Collection(),
                                             showFile=True, showTime=True, showTranscripts=False, showKeywords=True,
                                             showComments=False, showCollectionNotes=False, showClipNotes=False,
                                             showNested=True)
@@ -3195,7 +3436,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # If there's a selection in the text ...
                 if text != '':
                     # ... copy it to the clipboard by faking a Drag event!
-                    self.parent.ControlObject.TranscriptWindow.dlg.editor.OnStartDrag(evt, copyToClipboard=True)
+                    self.parent.ControlObject.TranscriptWindow[self.parent.ControlObject.activeTranscript].dlg.editor.OnStartDrag(evt, copyToClipboard=True)
                 # Add the Clip.
                 self.parent.add_clip(coll_name)
             except:
@@ -3204,14 +3445,20 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 errordlg.ShowModal()
                 errordlg.Destroy()
 
-        elif n == 4:    # Add Nested Collection
+        elif n == 4:    # Add Multi-transcript Clip
+            # Create the appropriate Clip object
+            tempClip = self.CreateMultiTranscriptClip(selData.recNum, coll_name)
+            # Add the Clip, using EditClip because we don't want the overhead of the Drag-and-Drop architecture
+            self.parent.edit_clip(tempClip)
+
+        elif n == 5:    # Add Nested Collection
             coll = Collection.Collection(coll_name, parent_num)
             self.parent.add_collection(coll.number)
 
-        elif n == 5:    # Add Note
+        elif n == 6:    # Add Note
             self.parent.add_note(collectionNum=selData.recNum)
 
-        elif n == 6:    # Delete
+        elif n == 7:    # Delete
             # Load the Selected Collection
             collection = Collection.Collection(selData.recNum)
             # Get user confirmation of the Collection Delete request
@@ -3289,22 +3536,22 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
 
-        elif n == 7:    # Collection Report
+        elif n == 8:    # Collection Report
             # Get the appropriate collection
             coll = Collection.Collection(coll_name, parent_num)
             # Call the Report Generator.  We pass the Collection Object, and we want to show
             # file names, clip time data, and keywords but not transcripts, Comments, collection notes, or
             # clip notes by default.  We also want to include nested collection data by default.
             # (The point of including parameters set to false is that it triggers their availability as options.)
-            ReportGenerator.ReportGenerator(title=_("Transana Collection Report"), collection=coll,
+            ReportGenerator.ReportGenerator(title=unicode(_("Transana Collection Report"), 'utf8'), collection=coll,
                                             showFile=True, showTime=True,
                                             showTranscripts=False, showKeywords=True, showComments=False,
                                             showCollectionNotes=False, showClipNotes=False, showNested=True)
 
-        elif n == 8:    # Clip Data Export
+        elif n == 9:    # Clip Data Export
             self.ClipDataExport(collectionNum = selData.recNum)
 
-        elif n == 9:    # Play All Clips
+        elif n == 10:    # Play All Clips
             coll = Collection.Collection(coll_name, parent_num)
             # Play All Clips takes the current Collection and the ControlObject as parameters.
             # (The ControlObject is owned not by the _DBTreeCtrl but by its parent)
@@ -3316,7 +3563,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Let's clear all the Windows, since we don't want to stay in the last Clip played.
             self.parent.ControlObject.ClearAllWindows()
 
-        elif n == 10:    # Properties
+        elif n == 11:    # Properties
             # FIXME: Gracefully handle when we can't load the Collection.
             coll = Collection.Collection(coll_name, parent_num)
             self.parent.edit_collection(coll)
@@ -3408,7 +3655,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # If a selection has been made ...
                 if text != '':
                     # ... copy that to the Clipboard by faking a Drag event!
-                    self.parent.ControlObject.TranscriptWindow.dlg.editor.OnStartDrag(evt, copyToClipboard=True)
+                    self.parent.ControlObject.TranscriptWindow[self.parent.ControlObject.activeTranscript].dlg.editor.OnStartDrag(evt, copyToClipboard=True)
                 # Add the Clip
                 self.parent.add_clip(coll_name)
             except:
@@ -3417,10 +3664,298 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 errordlg.ShowModal()
                 errordlg.Destroy()
 
-        elif n == 5:    # Add Note
+        elif n == 5:    # Add Multi-transcript Clip
+            # Create the appropriate Clip object
+            tempClip = self.CreateMultiTranscriptClip(selData.parent, coll_name)
+            # Add the Clip, using EditClip because we don't want the overhead of the Drag-and-Drop architecture
+            self.parent.edit_clip(tempClip)
+            # Get the Collection info
+            tempCollection = Collection.Collection(tempClip.collection_num)
+            # Now change the Sort Order
+            DragAndDropObjects.ChangeClipOrder(self, sel, tempClip, tempCollection)
+
+        elif n == 6:    # Add Note
             self.parent.add_note(clipNum=selData.recNum)
 
-        elif n == 6:    # Delete
+        elif n == 7:    # Merge Clips
+            # Load the Selected Clip
+            clip = Clip.Clip(selData.recNum)
+            # We need a list of the Clip Source Transcript numbers.  Initialize that here.
+            trNums = []
+            # now iterate through the clip transcripts and add their source numbers to the list.
+            for tr in clip.transcripts:
+                trNums.append(tr.source_transcript)
+            # Find out if there are adjacent clips
+            adjacentClips = DBInterface.FindAdjacentClips(clip.episode_num, clip.clip_start, clip.clip_stop, trNums)
+            # If there are NO adjacent (mergeable) clips ...
+            if len(adjacentClips) == 0:
+                # ... build and display an appropriate message.
+                msg = _('There are no clips that can be merged with clip "%s".')
+                if 'unicode' in wx.PlatformInfo:
+                    msg = unicode(msg, 'utf8')
+                dlg = Dialogs.InfoDialog(TransanaGlobal.menuWindow, msg % clip.id)
+                dlg.ShowModal()
+                dlg.Destroy()
+            # If there ARE adjacent (mergeable) clips ...
+            else:
+                # Initialize the clip number for the merged clip to 0
+                mergedClipNum = 0
+                # We need to lock all the mergeable clips.  We will need to track them in a dictionary so they can later be unlocked.
+                lockedClips = {}
+                # Begin exception handling
+                try:
+                    # Try to get a Record Lock
+                    clip.lock_record()
+                    # We will need to remember the original ID of clip so we can tell if it changed.
+                    originalClipID = clip.id
+                # Handle the exception if the record is locked
+                except RecordLockedError, e:
+                    self.parent.handle_locked_record(e, _("Clip"), clip.id)
+                # If the record is not locked, keep going.
+                else:
+                    # Let's lock all the adjacent clips.  We can't MERGE a clip we can't lock (and therefore delete)
+                    try:
+                        # For all adjacent clips ...
+                        for tmpClipData in adjacentClips:
+                            # ... create a clip object ...
+                            tmpClip = Clip.Clip(tmpClipData[0])
+                            # ... lock that clip object ...
+                            tmpClip.lock_record()
+                            # ... and store that clip object in the lockedClips dictionary so it can be unlocked later
+                            lockedClips[tmpClip.number] = tmpClip
+                    # If one of the adjacent clips cannot be locked ...
+                    except RecordLockedError, e:
+                        # ... Report the problem to the user ...
+                        self.parent.handle_locked_record(e, _("Clip"), tmpClip.GetNodeString(True))
+                        # ... unlock the original clip ...
+                        clip.unlock_record()
+                        # ... and iterate through all the locked clips ...
+                        for clipID in lockedClips.keys():
+                            # ... unlocking them
+                            lockedClips[clipID].unlock_record()
+                        # Now exit this method, as the merge has failed.
+                        return
+                        
+                    # Now create the Cliip Properties form, passing the mergeable clips list to signal that a Merge is requested.
+                    dlg = ClipPropertiesForm.ClipPropertiesForm(self, -1, _("Merge Clips"), clip, mergeList=adjacentClips)
+                    # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
+                    contin = True
+                    # While the "continue" flag is True ...
+                    while contin:
+                        # Start exception handling
+                        try:
+                            # Display the Clip Properties Dialog Box and get the data from the user
+                            if dlg.get_input() != None:
+                                # Try to save the Clip Data
+                                clip.db_save()
+
+                                # If any keywords that served as Keyword Examples that got removed from the Clip,
+                                # we need to remove them from the Database Tree.  
+                                for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
+                                    # Prepare the Node List for removing the Keyword Example Node, using the clip's original name
+                                    nodeList = (_('Keywords'), keywordGroup, keyword, originalClipID)
+                                    # Call the DB Tree's delete_Node method.  Include the Clip Record Number so the correct Clip entry will be removed.
+                                    self.delete_Node(nodeList, 'KeywordExampleNode', clip.number)
+
+                                # See if the Clip ID has been changed.  If it has, update the tree.
+                                if clip.id != originalClipID:
+
+                                    # Look for Keyword Examples in this clip.
+                                    for (kwg, kw, clipNumber, clipID) in DBInterface.list_all_keyword_examples_for_a_clip(clip.number):
+                                        # Get the current Node path for the KWE
+                                        nodeList = (_('Keywords'), kwg, kw, originalClipID)
+                                        # Get the Keyword Example node
+                                        exampleNode = self.select_Node(nodeList, 'KeywordExampleNode')
+                                        # Rename the node
+                                        self.SetItemText(exampleNode, clip.id)
+                                        # If we're in the Multi-User mode, we need to send a message about the change
+                                        if not TransanaConstants.singleUserVersion:
+                                            # Begin constructing the message with the old and new names for the node
+                                            msg = " >|< %s >|< %s" % (originalClipID, clip.id)
+                                            # Get the full Node Branch by climbing it to two levels above the root
+                                            while (self.GetItemParent(self.GetItemParent(exampleNode)) != self.GetRootItem()):
+                                                # Update the selected node indicator
+                                                exampleNode = self.GetItemParent(exampleNode)
+                                                # Prepend the new Node's name on the Message with the appropriate seperator
+                                                msg = ' >|< ' + self.GetItemText(exampleNode) + msg
+                                            # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                            # This must be untranslated to avoid problems in mixed-language environments.
+                                            # Prepend these on the Messsage
+                                            msg = "KeywordExampleNode >|< Keywords" + msg
+                                            if DEBUG:
+                                                print 'Message to send = "RN %s"' % msg
+                                            # Send the Rename Node message
+                                            if TransanaGlobal.chatWindow != None:
+                                                TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
+                                    # Rename the Clip's Tree node
+                                    self.SetItemText(sel, clip.id)
+                                    # If we're in the Multi-User mode, we need to send a message about the change
+                                    if not TransanaConstants.singleUserVersion:
+                                        # Begin constructing the message with the old and new names for the node
+                                        msg = " >|< %s >|< %s" % (originalClipID, clip.id)
+                                        # Get the full Node Branch by climbing it to two levels above the root
+                                        while (self.GetItemParent(self.GetItemParent(sel)) != self.GetRootItem()):
+                                            # Update the selected node indicator
+                                            sel = self.GetItemParent(sel)
+                                            # Prepend the new Node's name on the Message with the appropriate seperator
+                                            msg = ' >|< ' + self.GetItemText(sel) + msg
+                                        # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                        # This must be untranslated to avoid problems in mixed-language environments.
+                                        # Prepend these on the Messsage
+                                        msg = "ClipNode >|< Collections" + msg
+                                        if DEBUG:
+                                            print 'Message to send = "RN %s"' % msg
+                                        # Send the Rename Node message
+                                        if TransanaGlobal.chatWindow != None:
+                                            TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
+                                # Now let's communicate with other Transana instances if we're in Multi-user mode
+                                if not TransanaConstants.singleUserVersion:
+                                    msg = 'Clip %d' % clip.number
+                                    if DEBUG:
+                                        print 'Message to send = "UKL %s"' % msg
+                                    if TransanaGlobal.chatWindow != None:
+                                        # Send the "Update Keyword List" message
+                                        TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+
+                                # If a Merge Clip has been selected in the Merge Dialog ...
+                                if dlg.mergeItemIndex > -1:
+                                    # ... get the merged Clip, so we can delete it
+                                    mergedClip = Clip.Clip(dlg.mergeList[dlg.mergeItemIndex][0])
+                                    # If the merged clip contains KW Examples, we need to rename the example nodes.
+                                    # Iterate through the list of keywords
+                                    for kw in mergedClip.keyword_list:
+                                        # If the keyword is an example ...
+                                        if kw.example:
+                                            # It's possible that the example keyword was removed from the form.  We need to know.
+                                            kwFound = False
+                                            # Iterate through the original clip's Keyword List ...
+                                            for kw2 in clip.keyword_list:
+                                                # ... Look for matching keyword values ...
+                                                if (kw.keywordGroup == kw2.keywordGroup) and \
+                                                   (kw.keyword == kw2.keyword):
+                                                    # ... If found, mark the clip's keyword as an example.
+                                                    kw2.example = 1
+                                                    # Save the original clip (again) so make this permanent.
+                                                    clip.db_save()
+                                                    # We need to update the Keyword Example node in the database tree.
+                                                    # Renaming the node isn't sufficient here, as the node's data wouldn't get updated.
+                                                    # Therefore, we delete the OLD node and add the NEW node.
+                                                    self.delete_Node((_('Keywords'), kw2.keywordGroup, kw2.keyword, mergedClip.id), 'KeywordExampleNode', exampleClipNum=mergedClip.number, sendMessage=True)
+                                                    self.add_Node('KeywordExampleNode', (_('Keywords'), kw2.keywordGroup, kw2.keyword, clip.id), clip.number, clip.collection_num, expandNode=False)
+                                                    # If Multi-User ...
+                                                    if TransanaGlobal.chatWindow != None:
+                                                        # ... we need to signal that a keyword example has been added.
+                                                        # (The multi-user KWE delete messaging is handles elsewhere, but I don't know where.)
+                                                        TransanaGlobal.chatWindow.SendMessage("AKE %d >|< %s >|< %s >|< %s" % (clip.number, kw2.keywordGroup, kw2.keyword, clip.id))
+                                                    # Finally, note that the keyword was found and updated
+                                                    kwFound = True
+                                            # If the appropriate keyword was never found, this means that the merged clip keyword
+                                            # example was removed during clip merge.  If this is the case ...
+                                            if not kwFound:
+                                                # ... we need to delete the KWE record from the database tree.
+                                                # (The multi-user KWE delete messaging is handles elsewhere, but I don't know where.)
+                                                self.delete_Node((_('Keywords'), kw.keywordGroup, kw.keyword, mergedClip.id), 'KeywordExampleNode', exampleClipNum=mergedClip.number, sendMessage=True)
+
+                                    # Delete the Merged Clip.  If the Merge Clip is loaded ...
+                                    if isinstance(self.parent.ControlObject.currentObj, Clip.Clip) and (self.parent.ControlObject.currentObj.number == mergedClip.number):
+                                        # ... Start by clearing all current objects
+                                        self.parent.ControlObject.ClearAllWindows()
+                                    # Start exception handling
+                                    try:
+                                        # Remember the clip number of the merged clip to use after it is deleted
+                                        mergedClipNum = mergedClip.number
+                                        # Get the full Node List for the Merge Clip
+                                        nodeList = mergedClip.GetNodeData(True)
+                                        # Unlock the clip selected for merging so it can be deleted!
+                                        lockedClips[mergedClip.number].unlock_record()
+                                        # Try to delete the Merge Clip, NOT initiating a Transaction
+                                        delResult = mergedClip.db_delete(use_transactions=False, examplesPrompt=False)
+                                        # If successful, remove the Clip Node from the Database Tree
+                                        if delResult:
+                                            # Call the DB Tree's delete_Node method.
+                                            self.delete_Node((_('Collections'),) + nodeList, 'ClipNode')
+                                    # Handle the RecordLocked exception, which arises when records are locked!
+                                    except RecordLockedError, e:
+                                        # Display the Exception Message, allow "continue" flag to remain true
+                                        if 'unicode' in wx.PlatformInfo:
+                                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                            prompt = unicode(_('You cannot delete Clip "%s".\n%s'), 'utf8')
+                                        else:
+                                            prompt = _('You cannot delete Clip "%s".\n%s')
+                                        errordlg = Dialogs.ErrorDialog(None, prompt % (clip.id, e.args))
+                                        errordlg.ShowModal()
+                                        errordlg.Destroy()
+                                    # Handle other exceptions
+                                    except:
+                                        if DEBUG:
+                                            import traceback
+                                            traceback.print_exc(file=sys.stdout)
+
+                                        # Display the Exception Message, allow "continue" flag to remain true
+                                        prompt = "%s : %s"
+                                        if 'unicode' in wx.PlatformInfo:
+                                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                            prompt = unicode(prompt, 'utf8')
+                                        errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
+                                        errordlg.ShowModal()
+                                        errordlg.Destroy()
+
+                                # See if the Keyword visualization needs to be updated.
+                                self.parent.ControlObject.UpdateKeywordVisualization()
+                                # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                                if not TransanaConstants.singleUserVersion:
+                                    # We need to update the Episode Keyword Visualization
+                                    if DEBUG:
+                                        print 'Message to send = "UKV %s %s %s"' % ('Episode', clip.episode_num, 0)
+                                        
+                                    if TransanaGlobal.chatWindow != None:
+                                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', clip.episode_num, 0))
+
+                                # If we do all this, we don't need to continue any more.
+                                contin = False
+                            # If the user pressed Cancel ...
+                            else:
+                                # ... then we don't need to continue any more.
+                                contin = False
+
+
+                        # Handle "SaveError" exception
+                        except SaveError:
+                            # Display the Error Message, allow "continue" flag to remain true
+                            errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                        # Handle other exceptions
+                        except:
+                            if DEBUG:
+                                import traceback
+                                traceback.print_exc(file=sys.stdout)
+                            # Display the Exception Message, allow "continue" flag to remain true
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_("Exception %s: %s"), 'utf8')
+                            else:
+                                prompt = _("Exception %s: %s")
+                            errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+
+                    # When the merge is done, destroy the Clip Properties dialog
+                    dlg.Destroy()
+
+                    # Unlock the record regardless of what happens
+                    clip.unlock_record()
+
+                # Finally, iterate through the dictionary of locked clips ...
+                for clipID in lockedClips.keys():
+                    # ... and if we don't have the clip that got merged (which has already been unlocked and deleted) ...
+                    if clipID != mergedClipNum:
+                        # ... unlock the clip
+                        lockedClips[clipID].unlock_record()
+
+        elif n == 8:    # Delete
             # Load the Selected Clip
             clip = Clip.Clip(selData.recNum)
             # Remember the Clip Number, to use after the clip has been deleted
@@ -3513,58 +4048,87 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
 
-        elif n == 7:    # Locate Clip in Episode
+        elif n == 9:    # Locate Clip in Episode
             # Load the Clip
             clip = Clip.Clip(clip_name, coll_name, coll_parent_num)
-
+            # Start exception handling to catch failures due to orphaned clips
             try:
+                # Load the Episode
                 episode = Episode.Episode(clip.episode_num)
 
-                if clip.transcript_num != 0:
-                    transcript = Transcript.Transcript(clip.transcript_num)
+                # If the first transcript has a known source (isn't a known orphan) ...
+                if clip.transcripts[0].source_transcript != 0:
+                    # ... load the SOURCE transcript for the first Clip Transcript
+                    transcript = Transcript.Transcript(clip.transcripts[0].source_transcript)
+                # If the first transcript is a KNOWN orphan ...
                 else:
+                    # Get the list of possible replacement source transcripts
                     transcriptList = DBInterface.list_transcripts(episode.series_id, episode.id)
+                    # If only 1 transcript is in the list ...
                     if len(transcriptList) == 1:
+                        # ... use that.
                         transcript = Transcript.Transcript(transcriptList[0][0])
+                    # If there are NO transcripts (perhaps because the Episode is gone, perhaps because it has no Transcripts) ...
+                    elif len(transcriptList) == 0:
+                        # ... raise an exception.  We can't locate a transcript if the Episode is gone or if it has no Transcripts.
+                        raise RecordNotFoundError ('Transcript', 0)
+                    # If there are multiple transcripts to choose from ...
                     else:
+                        # Initialize a list
                         strList = []
+                        # Iterate through the list of transcripts ...
                         for (transcriptNum, transcriptID, episodeNum) in transcriptList:
+                            # ... and extract the Transcript IDs
                             strList.append(transcriptID)
-                        dlg = wx.SingleChoiceDialog(self, _('Transana cannot identify the Transcript where this clip originated.\nPlease select the Transcript that was used to create this Clip.'), 'Transana Information', strList, wx.OK | wx.CANCEL)
+                        # Create a dialog where the user can choose one Transcript
+                        dlg = wx.SingleChoiceDialog(self, _('Transana cannot identify the Transcript where this clip originated.\nPlease select the Transcript that was used to create this Clip.'),
+                                                    _('Transana Information'), strList, wx.OK | wx.CANCEL)
+                        # Show the dialog.  If the user presses OK ...
                         if dlg.ShowModal() == wx.ID_OK:
+                            # ... use the selected transcript
                             transcript = Transcript.Transcript(dlg.GetStringSelection(), episode.number)
+                        # If the user presses Cancel (Esc, etc.) ...
                         else:
+                            # ... raise an exception
                             raise RecordNotFoundError ('Transcript', 0)
-
+                # As long as a Control Object is defines (which it always will be)
                 if self.parent.ControlObject != None:
+                    # Set the active transcript to 0 so the whole interface will be reset
+                    self.parent.ControlObject.activeTranscript = 0
                     # Load the source Transcript
                     self.parent.ControlObject.LoadTranscript(episode.series_id, episode.id, transcript.id)
                     # We need to signal that the Visualization needs to be re-drawn.
                     self.parent.ControlObject.ChangeVisualization()
-                    # Mark the Clip as the current selection
+                    # For each Clip transcript except the first one (which has already been loaded) ...
+                    for tr in clip.transcripts[1:]:
+                        # ... load the source Transcript as an Additional Transcript
+                        self.parent.ControlObject.OpenAdditionalTranscript(tr.source_transcript)
+                    # Mark the Clip as the current selection.  (This needs to be done AFTER all transcripts have been opened.)
                     self.parent.ControlObject.SetVideoSelection(clip.clip_start, clip.clip_stop)
-                    # On the Mac, we don't get the correct highlight in the Transcript.  That's because there's a call
-                    # that restores the Transcript Cursor on the Mac only.  Well, the Transcript Cursor data record 
-                    # isn't correct at this point, so let's capture what it should be!
-                    # (This isn't good form, object-wise, but I can't find another logical place to do this.)
-                    self.parent.ControlObject.TranscriptWindow.dlg.editor.cursorPosition = (self.parent.ControlObject.TranscriptWindow.dlg.editor.GetCurrentPos(), self.parent.ControlObject.TranscriptWindow.dlg.editor.GetSelection())
+
+                    # We need the screen to update here, before the next step.
+                    wx.Yield()
+                    # Now let's go through each Transcript Window ...
+                    for trWin in self.parent.ControlObject.TranscriptWindow:
+                        # ... move the cursor to the TRANSCRIPT's Start Time (not the Clip's)
+                        trWin.dlg.editor.scroll_to_time(clip.transcripts[trWin.transcriptWindowNumber].clip_start + 10)
+                        # .. and select to the TRANSCRIPT's End Time (not the Clip's)
+                        trWin.dlg.editor.select_find(str(clip.transcripts[trWin.transcriptWindowNumber].clip_stop))
+                        # update the selection text
+                        self.parent.ControlObject.UpdateSelectionTextLater(trWin.transcriptWindowNumber)
+                        #wx.CallLater(200, self.UpdateSelectionTextLater, winNum)
             except:
-                
-                if DEBUG:
-                    import traceback
-                    traceback.print_exc(file=sys.stdout)
-
-                    (extype, value, traceback) = sys.exc_info()
-
-                    print "DatabaseTreeTab.OnClipCommand() Exception:", extype, value
-                
-                dlg = Dialogs.ErrorDialog(self, _('The Transcript this Clip was created from cannot be loaded.\nMost likely, the transcript has been deleted.'))
+                (exctype, excvalue, traceback) = sys.exc_info()
+                if len(clip.transcripts) == 1:
+                    msg = _('The Transcript this Clip was created from cannot be loaded.\nMost likely, the transcript has been deleted.')
+                else:
+                    msg = _('One of the Transcripts this Clip was created from cannot be loaded.\nMost likely, the transcript has been deleted.')
+                    self.parent.ControlObject.ClearAllWindows(resetMultipleTranscripts = True)
+                dlg = Dialogs.ErrorDialog(self, msg)
                 result = dlg.ShowModal()
                 dlg.Destroy()
-                
-            
 
-        elif n == 8:    # Properties
+        elif n == 10:    # Properties
             clip = Clip.Clip(clip_name, coll_name, coll_parent_num)
             self.parent.edit_clip(clip)
             # If the current main object is an Episode and it's the episode that contains the
@@ -3943,7 +4507,22 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # because drag and drop is an alternate way to create a Quick Clip.
             DragAndDropObjects.CreateQuickClip(clipData, kw_group, kw_name, self)
             
-        elif n == 5:    # Keyword Properties
+        elif n == 5:    # Create Multi-transcript Quick Clip
+            # Get the Quick Clip Collection information
+            (coll_num, coll_name, coll_created) = DBInterface.locate_quick_clips_collection()
+            # Create the appropriate Clip object
+            tempClip = self.CreateMultiTranscriptClip(coll_num, coll_name)
+            # Initialize the Episode Number to 0
+            episodeNum = tempClip.episode_num
+            # Initialize Transcript Number to 0, which signals multi-transcript Quick Clip
+            transcriptNum = 0
+            # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
+            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, tempClip.clip_start, tempClip.clip_stop, tempClip)
+            # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
+            # because drag and drop is an alternate way to create a Quick Clip.
+            DragAndDropObjects.CreateQuickClip(clipData, kw_group, kw_name, self)
+
+        elif n == 6:    # Keyword Properties
             kw = Keyword.Keyword(kw_group, kw_name)
             self.parent.edit_keyword(kw)
             # We just need to update the Keyword Visualization.  There's no way to tell if the changed
@@ -4046,7 +4625,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # and Keywords but not Transcripts, Comments, collectoin notes, or clip notes by default
             # and include nested collection data by default.
             # (The point of including parameters set to false is that it triggers their availability as options.)
-            ReportGenerator.ReportGenerator(title=_("Transana Collection Report"), searchColl=sel, treeCtrl=self,
+            ReportGenerator.ReportGenerator(title=unicode(_("Transana Collection Report"), 'utf8'), searchColl=sel, treeCtrl=self,
                                             showFile=True, showTime=True,
                                             showTranscripts=False, showKeywords=True, showComments=False,
                                             showCollectionNotes=False, showClipNotes=False, showNested=True)
@@ -4068,12 +4647,11 @@ class _DBTreeCtrl(wx.TreeCtrl):
         elif n == 1:      # Search Series Report
             # Show the Report Generator.  We pass the tree node as the searchSeries, as well as
             # passing a reference to the TreeCtrl.  We want to show Keywords.
-            ReportGenerator.ReportGenerator(title=_("Transana Series Report"), searchSeries=sel,
+            ReportGenerator.ReportGenerator(title=unicode(_("Transana Series Report"), 'utf8'), searchSeries=sel,
                                             treeCtrl=self, showKeywords=True)
 
         else:
             raise MenuIDError
- 
  
     def OnSearchEpisodeCommand(self, evt):
         """Handle menu selections for Search Episode objects."""
@@ -4094,7 +4672,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # because we have no way to get the appropriate Search Node Clips only.  We want to show file names,
             # clip time data, and Keywords but not Transcripts, Comments, or Clip Notes by default.
             # (The point of including parameters set to false is that it triggers their availability as options.)
-            ReportGenerator.ReportGenerator(title=_("Transana Episode Report"), seriesName = series_name,
+            ReportGenerator.ReportGenerator(title=unicode(_("Transana Episode Report"), 'utf8'), seriesName = series_name,
                                             episodeName = episode_name, showFile=True, showTime=True,
                                             showTranscripts=False, showKeywords=True,
                                             showComments=False, showClipNotes=False)
@@ -4156,10 +4734,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
         elif n == 4:    # Search Collection Report
             # Use the Report Generator, passing the selected item as the Search Collection
             # and passing in a pointer to the Tree Control.  We want to show file names, clip time data,
-            # and Keywords but not Transcripts, Comments, collectoin notes, or clip notes by default
+            # and Keywords but not Transcripts, Comments, collection notes, or clip notes by default
             # and include nested collection data by default.
             # (The point of including parameters set to false is that it triggers their availability as options.)
-            ReportGenerator.ReportGenerator(title=_("Transana Collection Report"), searchColl=sel, treeCtrl=self,
+            ReportGenerator.ReportGenerator(title=unicode(_("Transana Collection Report"), 'utf8'), searchColl=sel, treeCtrl=self,
                                             showFile=True, showTime=True,
                                             showTranscripts=False, showKeywords=True, showComments=False,
                                             showCollectionNotes=False, showClipNotes=False, showNested=True)
@@ -4219,41 +4797,78 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Load the Clip
             clip = Clip.Clip(selData.recNum)
 
+            # Start exception handling to catch failures due to orphaned clips
             try:
+                # Load the Episode
                 episode = Episode.Episode(clip.episode_num)
 
-                if clip.transcript_num != 0:
-                    transcript = Transcript.Transcript(clip.transcript_num)
+                # If the first transcript has a known source (isn't a known orphan) ...
+                if clip.transcripts[0].source_transcript != 0:
+                    # ... load the SOURCE transcript for the first Clip Transcript
+                    transcript = Transcript.Transcript(clip.transcripts[0].source_transcript)
+                # If the first transcript is a KNOWN orphan ...
                 else:
+                    # Get the list of possible replacement source transcripts
                     transcriptList = DBInterface.list_transcripts(episode.series_id, episode.id)
+                    # If only 1 transcript is in the list ...
                     if len(transcriptList) == 1:
+                        # ... use that.
                         transcript = Transcript.Transcript(transcriptList[0][0])
+                    # If there are NO transcripts (perhaps because the Episode is gone, perhaps because it has no Transcripts) ...
+                    elif len(transcriptList) == 0:
+                        # ... raise an exception.  We can't locate a transcript if the Episode is gone or if it has no Transcripts.
+                        raise RecordNotFoundError ('Transcript', 0)
+                    # If there are multiple transcripts to choose from ...
                     else:
+                        # Initialize a list
                         strList = []
+                        # Iterate through the list of transcripts ...
                         for (transcriptNum, transcriptID, episodeNum) in transcriptList:
+                            # ... and extract the Transcript IDs
                             strList.append(transcriptID)
-                        dlg = wx.SingleChoiceDialog(self, _('Transana cannot identify the Transcript where this clip originated.\nPlease select the Transcript that was used to create this Clip.'), _('Transana Information'), strList, wx.OK | wx.CANCEL)
+                        # Create a dialog where the user can choose one Transcript
+                        dlg = wx.SingleChoiceDialog(self, _('Transana cannot identify the Transcript where this clip originated.\nPlease select the Transcript that was used to create this Clip.'),
+                                                    _('Transana Information'), strList, wx.OK | wx.CANCEL)
+                        # Show the dialog.  If the user presses OK ...
                         if dlg.ShowModal() == wx.ID_OK:
+                            # ... use the selected transcript
                             transcript = Transcript.Transcript(dlg.GetStringSelection(), episode.number)
+                        # If the user presses Cancel (Esc, etc.) ...
                         else:
-                            raise RecordNotFoundError (_('Transcript'), 0)
-
+                            # ... raise an exception
+                            raise RecordNotFoundError ('Transcript', 0)
+                # As long as a Control Object is defines (which it always will be)
                 if self.parent.ControlObject != None:
-                    # Load the appropriate Episode Transcript
+                    # Set the active transcript to 0 so the whole interface will be reset
+                    self.parent.ControlObject.activeTranscript = 0
+                    # Load the source Transcript
                     self.parent.ControlObject.LoadTranscript(episode.series_id, episode.id, transcript.id)
                     # We need to signal that the Visualization needs to be re-drawn.
                     self.parent.ControlObject.ChangeVisualization()
-                    # Mark the Clip as the current selection
+                    # For each Clip transcript except the first one (which has already been loaded) ...
+                    for tr in clip.transcripts[1:]:
+                        # ... load the source Transcript as an Additional Transcript
+                        self.parent.ControlObject.OpenAdditionalTranscript(tr.source_transcript)
+                    # Mark the Clip as the current selection.  (This needs to be done AFTER all transcripts have been opened.)
                     self.parent.ControlObject.SetVideoSelection(clip.clip_start, clip.clip_stop)
-                    # On the Mac, we don't get the correct highlight in the Transcript.  That's because there's a call
-                    # that restores the Transcript Cursor on the Mac only.  Well, the Transcript Cursor data record 
-                    # isn't correct at this point, so let's capture what it should be!
-                    # (This isn't good form, object-wise, but I can't find another logical place to do this.)
-                    self.parent.ControlObject.TranscriptWindow.dlg.editor.cursorPosition = (self.parent.ControlObject.TranscriptWindow.dlg.editor.GetCurrentPos(), self.parent.ControlObject.TranscriptWindow.dlg.editor.GetSelection())
+
+                    # We need the screen to update here, before the next step.
+                    wx.Yield()
+                    # Now let's go through each Transcript Window ...
+                    for trWin in self.parent.ControlObject.TranscriptWindow:
+                        # ... move the cursor to the TRANSCRIPT's Start Time (not the Clip's)
+                        trWin.dlg.editor.scroll_to_time(clip.transcripts[trWin.transcriptWindowNumber].clip_start + 10)
+                        # .. and select to the TRANSCRIPT's End Time (not the Clip's)
+                        trWin.dlg.editor.select_find(str(clip.transcripts[trWin.transcriptWindowNumber].clip_stop))
 
             except:
-                (type, value, traceback) = sys.exc_info()
-                dlg = Dialogs.ErrorDialog(self, _('The Transcript this Clip was created from cannot be loaded.\nMost likely, the transcript has been deleted.'))
+                (exctype, excvalue, traceback) = sys.exc_info()
+                if len(clip.transcripts) == 1:
+                    msg = _('The Transcript this Clip was created from cannot be loaded.\nMost likely, the transcript has been deleted.')
+                else:
+                    msg = _('One of the Transcripts this Clip was created from cannot be loaded.\nMost likely, the transcript has been deleted.')
+                    self.parent.ControlObject.ClearAllWindows(resetMultipleTranscripts = True)
+                dlg = Dialogs.ErrorDialog(self, msg)
                 result = dlg.ShowModal()
                 dlg.Destroy()
 
@@ -4262,6 +4877,89 @@ class _DBTreeCtrl(wx.TreeCtrl):
             
         else:
             raise MenuIDError
+
+    def CreateMultiTranscriptClip(self, coll_num, coll_name):
+        # Begin exception handling
+        try:
+            # Get the Transcript Selection information from the ControlObject.
+            transcriptSelectionInfo = self.parent.ControlObject.GetMultipleTranscriptSelectionInfo()
+            # Create a Clip Object
+            tempClip = Clip.Clip()
+            # If this clip is being created from an Episode record ...
+            if type(self.parent.ControlObject.currentObj) == type(Episode.Episode()):
+                # ... then the Clip's Episde Number is the Episode's number ... (from the Control Object's current object, the Episode)
+                tempClip.episode_num = self.parent.ControlObject.currentObj.number
+            # If this clip ISN'T from an Episode, it's from another Clip ...
+            else:
+                # ... so we get the new clip's Episode number from the original clip's Episode Number
+                tempClip.episode_num = self.parent.ControlObject.currentObj.episode_num
+            # Initialize the clip start time to the end of the media file
+            earliestStartTime = self.parent.ControlObject.GetMediaLength(True)
+            # Initialise the clip end time to the beginning of the media file
+            latestEndTime = 0
+            # Initialize the sort order to 0
+            sortOrder = 0
+            # iterate through the Transcript Selection Info gathered above
+            for (transcriptNum, startTime, endTime, text) in transcriptSelectionInfo:
+                # If the transcript HAS a selection ...
+                if text != "":
+                    # ... Create a Transcript object for each Transcript Selection
+                    tempTranscript = Transcript.Transcript()
+                    # Assign the Transcript's Episode Number
+                    tempTranscript.episode_num = tempClip.episode_num
+                    # The transcriptNum value is the source transcript information
+                    tempTranscript.source_transcript = transcriptNum
+                    # The order we iterate through these values matches the sort order
+                    tempTranscript.sort_order = sortOrder
+                    # Increment the sort order value
+                    sortOrder += 1
+                    # For Transcript Change Propagation, each CLIP TRANSCRIPT needs to know it's own start and stop times!
+                    tempTranscript.clip_start = startTime
+                    tempTranscript.clip_stop = endTime
+                    # Assign the transcript text to the new transcript
+                    tempTranscript.text = text
+                    # Add this new transcript to the clip's list of transcripts
+                    tempClip.transcripts.append(tempTranscript)
+                    # Check to see if this transcript starts before our current earliest start time, but only if
+                    # if actually contains text.
+                    if (startTime < earliestStartTime) and (text != ''):
+                        # If so, this is our new earliest start time.
+                        earliestStartTime = startTime
+                    # Check to see if this transcript ends after our current latest end time, but only if
+                    # if actually contains text.
+                    if (endTime > latestEndTime) and (text != ''):
+                        # If so, this is our new latest end time.
+                        latestEndTime = endTime
+            # The new clip's Collection number is the selected record number from the Database Tree
+            tempClip.collection_num = coll_num
+            # The new clip's Collection ID is the Collection Name, already extracted from the Database Tree
+            tempClip.collection_id = coll_name
+            # The new clip's media filename can come from the source Episode or Clip
+            tempClip.media_filename = self.parent.ControlObject.currentObj.media_filename
+            # The new clip's start time is the earliest start time from the Transcript Selections.
+            tempClip.clip_start = earliestStartTime
+            # The new clip's end time is the latest end time from the Trasncript Selections.
+            tempClip.clip_stop = latestEndTime
+            # The new clip's Sort Order is the max sort order Value.  (We change it later!)
+            tempClip.sort_order = DBInterface.getMaxSortOrder(tempClip.collection_num) + 1
+            return tempClip
+        # Catch exceptions
+        except:
+
+            if DEBUG:
+                import traceback
+                traceback.print_exc(file=sys.stdout)
+
+            # Display the Exception Message, allow "continue" flag to remain true
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Exception %s : %s"), 'utf8')
+            else:
+                prompt = _("Exception %s : %s")
+            errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+            errordlg.ShowModal()
+            errordlg.Destroy()
+            return None
 
     def DropSearchResult(self, selection):
         """ Remove a Search Result node from the database tree """
@@ -4373,6 +5071,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # type of item is selected
             if sel_item_data.nodetype == 'SeriesRootNode':
                 menu = self.menu["series_root"]
+
             elif sel_item_data.nodetype == 'SeriesNode':
                 menu = self.menu["series"]
                 # Determine if the Paste menu item should be enabled 
@@ -4380,6 +5079,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     menu.Enable(menu.FindItem(_('Paste')), True)
                 else:
                     menu.Enable(menu.FindItem(_('Paste')), False)
+
             elif  sel_item_data.nodetype == 'EpisodeNode':
                 menu = self.menu["episode"]
                 # Determine if the Paste menu item should be enabled 
@@ -4387,10 +5087,46 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     menu.Enable(menu.FindItem(_('Paste')), True)
                 else:
                     menu.Enable(menu.FindItem(_('Paste')), False)
+                trList = DBInterface.list_transcripts(self.GetItemText(self.GetItemParent(sel_item)), self.GetItemText(sel_item))
+                if len(trList) > 1:
+                    menu.Enable(menu.FindItem(_("Open Multiple Transcripts")), True)
+                else:
+                    menu.Enable(menu.FindItem(_("Open Multiple Transcripts")), False)
+                
             elif sel_item_data.nodetype == 'TranscriptNode':
                 menu = self.menu["transcript"]
+
+                if DEBUG:
+                    print "DatabaseTreeTab.OnRightDown(): Transcript Menu"
+                    print self.parent.ControlObject.currentObj
+                    print
+                    print sel_item_data
+                    print
+                    print 'is Episode:', type(self.parent.ControlObject.currentObj) == type(Episode.Episode())
+                    if self.parent.ControlObject.currentObj != None:
+                        print 'Same parent:', self.parent.ControlObject.currentObj.number == sel_item_data.parent
+                    print "NOT already loaded?:", not(sel_item_data.recNum in self.parent.ControlObject.TranscriptNum)
+                    print "Number of Transcript Windows:", len(self.parent.ControlObject.TranscriptWindow)
+                    print
+
+                # If the currently loaded object is an Episode AND
+                # the currently loaded Episode is the same as the selected transcript's parent episode AND
+                # the selected transcript isn't already loaded in a Transcript Window AND
+                # there are fewer that TransanaConstants.maxTranscriptWindows Transcript Windows already open ...
+                if (type(self.parent.ControlObject.currentObj) == type(Episode.Episode())) and \
+                   (self.parent.ControlObject.currentObj.number == sel_item_data.parent) and \
+                   (not(sel_item_data.recNum in self.parent.ControlObject.TranscriptNum)) and \
+                   (len(self.parent.ControlObject.TranscriptWindow) < TransanaConstants.maxTranscriptWindows):
+                    # ... enable the Additional Transcript menu
+                    menu.Enable(menu.FindItem(_("Open Additional Transcript")), True)
+                # if ANY of those conditions fails ...
+                else:
+                    # ... disable the Additional Transcript menu
+                    menu.Enable(menu.FindItem(_("Open Additional Transcript")), False)
+
             elif sel_item_data.nodetype == 'CollectionsRootNode':
                 menu = self.menu["coll_root"]
+
             elif sel_item_data.nodetype == 'CollectionNode':
                 menu = self.menu["collection"]
                 # Determine if the Paste menu item should be enabled 
@@ -4398,6 +5134,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     menu.Enable(menu.FindItem(_('Paste')), True)
                 else:
                     menu.Enable(menu.FindItem(_('Paste')), False)
+                # Determine if the Add Clip menu item should be enabled
+                if (self.parent.ControlObject.currentObj != None):
+                    menu.Enable(menu.FindItem(_('Add Clip')), True)
+                else:
+                    menu.Enable(menu.FindItem(_('Add Clip')), False)
+                # Determine if the Add Multi-transcript Clip menu item should be enabled
+                if (len(self.parent.ControlObject.TranscriptWindow) > 1):
+                    menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), True)
+                else:
+                    menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), False)
+
             elif sel_item_data.nodetype == 'ClipNode':
                 menu = self.menu["clip"]
                 # Determine if the Paste menu item should be enabled 
@@ -4405,8 +5152,20 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     menu.Enable(menu.FindItem(_('Paste')), True)
                 else:
                     menu.Enable(menu.FindItem(_('Paste')), False)
+                # Determine if the Add Clip menu item should be enabled
+                if (self.parent.ControlObject.currentObj != None):
+                    menu.Enable(menu.FindItem(_('Add Clip')), True)
+                else:
+                    menu.Enable(menu.FindItem(_('Add Clip')), False)
+                # Determine if the Add Multi-transcript Clip menu item should be enabled
+                if (len(self.parent.ControlObject.TranscriptWindow) > 1):
+                    menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), True)
+                else:
+                    menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), False)
+
             elif sel_item_data.nodetype == 'KeywordRootNode':
                 menu = self.menu["kw_root"]
+
             elif sel_item_data.nodetype == 'KeywordGroupNode':
                 menu = self.menu["kw_group"]
                 # Determine if the Paste menu item should be enabled
@@ -4414,6 +5173,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     menu.Enable(menu.FindItem(_('Paste')), True)
                 else:
                     menu.Enable(menu.FindItem(_('Paste')), False)
+
             elif sel_item_data.nodetype == 'KeywordNode':
                 menu = self.menu["kw"]
                 # Determine if the Paste menu item should be enabled 
@@ -4424,12 +5184,21 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # Determine if the Create Quick Clip item should be enabled
                 if (self.parent.ControlObject.currentObj != None):
                     menu.Enable(menu.FindItem(_('Create Quick Clip')), True)
+                    # Determine if the Add Multi-transcript Clip menu item should be enabled
+                    if (len(self.parent.ControlObject.TranscriptWindow) > 1):
+                        menu.Enable(menu.FindItem(_('Create Multi-transcript Quick Clip')), True)
+                    else:
+                        menu.Enable(menu.FindItem(_('Create Multi-transcript Quick Clip')), False)
                 else:
                     menu.Enable(menu.FindItem(_('Create Quick Clip')), False)
+                    menu.Enable(menu.FindItem(_('Create Multi-transcript Quick Clip')), False)
+
             elif sel_item_data.nodetype == 'KeywordExampleNode':
                 menu = self.menu["kw_example"]
+
             elif sel_item_data.nodetype == 'NoteNode':
                 menu = self.menu["note"]
+
             elif sel_item_data.nodetype == 'SearchRootNode':
                 menu = self.menu["search"]
                 # If Search Results exist ...
@@ -4440,14 +5209,19 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 else:
                     # ... disable the "Clear All" menu item.  (I could not figure out how to hide it.)
                     menu.Enable(menu.FindItem(_('Clear All')), False)
+
             elif sel_item_data.nodetype == 'SearchResultsNode':
                 menu = self.menu["searchresults"]
+
             elif sel_item_data.nodetype == 'SearchSeriesNode':
                 menu = self.menu["searchseries"]
+
             elif sel_item_data.nodetype == 'SearchEpisodeNode':
                 menu = self.menu["searchepisode"]
+
             elif sel_item_data.nodetype == 'SearchTranscriptNode':
                 menu = self.menu["searchtranscript"]
+
             elif sel_item_data.nodetype == 'SearchCollectionNode':
                 menu = self.menu["searchcollection"]
                 # Determine if the Paste menu item should be enabled 
@@ -4455,6 +5229,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     menu.Enable(menu.FindItem(_('Paste')), True)
                 else:
                     menu.Enable(menu.FindItem(_('Paste')), False)
+
             elif sel_item_data.nodetype == 'SearchClipNode':
                 menu = self.menu["searchclip"]
                 # Determine if the Paste menu item should be enabled 
@@ -4462,11 +5237,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     menu.Enable(menu.FindItem(_('Paste')), True)
                 else:
                     menu.Enable(menu.FindItem(_('Paste')), False)
+
             else:
                 menu = self.gen_menu
 
             self.PopupMenu(menu, event.GetPosition())
         except:
+
+            if DEBUG:
+                print "DatabaseTreeTab.OnRightDown():"
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
             pass
 
     def OnItemActivated(self, event):
@@ -4495,12 +5276,14 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # If the item is an Episode, Add a Transcript
             elif sel_item_data.nodetype == 'EpisodeNode':
                 # Change the eventID to match "Add Transcript"
-                event.SetId(self.cmd_id_start["episode"] + 1)
+                event.SetId(self.cmd_id_start["episode"] + 2)
                 # Call the Episode Event Processor
                 self.OnEpisodeCommand(event)
                 
             # If the item is a Transcript, load the appropriate objects
             elif (sel_item_data.nodetype == 'TranscriptNode') or (sel_item_data.nodetype == 'SearchTranscriptNode'):
+                # Set the Control Object's Active Transcript to 0 to signal the opening of a NEW trascript.
+                self.parent.ControlObject.activeTranscript = 0
                 seriesname=self.GetItemText(self.GetItemParent(self.GetItemParent(sel_item)))      # Capture the Series Name
                 episodename=self.GetItemText(self.GetItemParent(sel_item))                         # Capture the Episode Name
                 transcriptname=self.GetItemText(sel_item)                                          # Capture the Transcript Name
@@ -4665,7 +5448,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     # renamed would wipe out the change, and causing problems with data integrity.  Let's test for that
                     # condition and block the rename.
                     if (sel_item_data.nodetype == 'TranscriptNode') and \
-                       (self.parent.ControlObject.TranscriptNum == tempObject.number):
+                       (tempObject.number in self.parent.ControlObject.TranscriptNum):
                         dlg = Dialogs.ErrorDialog(self.parent, _('You cannot rename the Transcript that is currently loaded.\nSelect "File" > "New" and try again.'))
                         dlg.ShowModal()
                         dlg.Destroy()
@@ -4806,7 +5589,35 @@ class _DBTreeCtrl(wx.TreeCtrl):
             dlg = Dialogs.ErrorDialog(self.parent, _("Object Rename failed.  The Object is probably locked by another user."))
             dlg.ShowModal()
             dlg.Destroy()
-            
+
+    def OnKeyDown(self, event):
+        """ Handle Key Presses """
+        # We probably want to call event.Skip()
+        callSkip = True
+        # If Ctrl is pressed ...
+        if event.ControlDown():
+            # start exception handling
+            try:
+                # Get the code of the key pressed
+                c = event.GetKeyCode()
+                # If we detect the Ctrl key itself ...
+                if c == 308:
+                    # ... we can skip event.Skip()
+                    callSkip = False
+                # Ctrl-K is Create Quick Clip
+                elif chr(c) == "K":
+                    # Create the Quick Clip via the Control Object
+                    self.parent.ControlObject.CreateQuickClip()
+                    # We can skip event.Skip()
+                    callSkip = False
+            # If an exception is raised ...
+            except:
+                # ... we can ignore it as other than a key we need to process
+                pass
+        # If we should call event.Skip, do so.  This prevents a "beep"
+        if callSkip:
+            event.Skip()
+        
 
     def KeywordMapReport(self, episodeNum, seriesName, episodeName):
         """ Produce a Keyword Map Report for the specified Series & Episode """
@@ -5062,3 +5873,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
             return destData
         except:
             return 'None'
+
+    def GetSelectedNodeInfo(self):
+        """ Get the Name and Type of the currently Selected Node """
+        # Get the current selection
+        sel = self.GetSelection()
+        # Get the Node Data associated with the current selection
+        selData = self.GetPyData(sel)
+        # Return the text, record number, parent number, and node type of the current selection
+        return (self.GetItemText(sel), selData.recNum, selData.parent, selData.nodetype)

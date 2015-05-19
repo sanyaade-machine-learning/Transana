@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2007  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2008  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -38,8 +38,6 @@ import DBInterface
 import Dialogs
 # Import Transana's Filter Dialog
 import FilterDialog
-# Import Transana's Constants
-import TransanaConstants
 # import Transana's Globals
 import TransanaGlobal
 # import Transana Miscellaneous functions
@@ -256,16 +254,19 @@ class KeywordMap(wx.Frame):
             self.unfilteredKeywordList = []
             # Populate the drawing
             self.ProcessEpisode()
-            self.DrawGraph()
+            # Trigger the load of the Default filter, if one exists.  An event of None signals we're loading the
+            # Default config, and the OnFilter method will handle drawing the graph!
+            self.OnFilter(None)
 
     def SetupEmbedded(self, episodeNum, seriesName, episodeName, startTime, endTime, filteredKeywordList=[],
-                      unfilteredKeywordList = [], keywordColors = None, clipNum=None):
+                      unfilteredKeywordList = [], keywordColors = None, clipNum=None, configName='', loadDefault=False):
         """ Complete setup for the embedded version of the Keyword Map. """
         # Remember the appropriate Episode information
         self.episodeNum = episodeNum
         self.seriesName = seriesName
         self.episodeName = episodeName
         self.clipNum = clipNum
+        self.configName = configName
         # Set the start and end time boundaries (especially important for Clips!)
         self.startTime = startTime
         self.endTime = endTime
@@ -289,17 +290,29 @@ class KeywordMap(wx.Frame):
                 self.keywordColors = keywordColors
             # Populate the drawing
             self.ProcessEpisode()
-            # Actually draw the graph
+            # Unlike the standard Setup, the embedded Setup requires that we draw the graph before we set the Default filter
             self.DrawGraph()
+            # If we need to load the Default Configuration ...
+            if loadDefault:
+                # We actually need to wipe out the original graphic prior to loading the Default filter!
+                self.graphic.Clear()
+                # Trigger the load of the Default filter, if one exists.  An event of None signals we're loading the
+                # Default config, and the OnFilter method will handle drawing the graph!
+                self.OnFilter(None)
 
     # Define the Method that implements Filter
     def OnFilter(self, event):
         """ Implement the Filter Dialog call for Keyword Maps and Keyword Visualizations """
+        # See if we're loading the Default profile.  This is signalled by an event of None!
+        if event == None:
+            loadDefault = True
+        else:
+            loadDefault = False
         # Set up parameters for creating the Filter Dialog.  Keyword Map/Keyword Visualization Filter requires episodeNum for the Config Save.
         if not self.embedded:
             # For the keyword map, the form created here is the parent
             parent = self
-            title = _("Keyword Map Filter Dialog")
+            title = unicode(_("Keyword Map Filter Dialog"), 'utf8')
             # Keyword Map wants the Clip Filter
             clipFilter = True
             # Keyword map does not support Keyword Color customization.  (Colors represent Clips!)
@@ -309,7 +322,7 @@ class KeywordMap(wx.Frame):
             # reportType=1 indicates it is for a Keyword Map.  
             reportType = 1
             # Create a Filter Dialog, passing all the necessary parameters.
-            dlgFilter = FilterDialog.FilterDialog(parent, -1, title, reportType=reportType, configName=self.configName,
+            dlgFilter = FilterDialog.FilterDialog(parent, -1, title, reportType=reportType, loadDefault=loadDefault, configName=self.configName,
                                                   reportScope=self.episodeNum, clipFilter=clipFilter, keywordFilter=True, keywordSort=True,
                                                   keywordColor=keywordColors, options=options, startTime=self.startTime, endTime=self.endTime,
                                                   barHeight=self.barHeight, whitespace=self.whitespaceHeight, hGridLines=self.hGridLines,
@@ -317,7 +330,7 @@ class KeywordMap(wx.Frame):
         else:
             # For the keyword visualization, the parent that was passed in on initialization is the parent
             parent = self.parent
-            title = _("Keyword Visualization Filter Dialog")
+            title = unicode(_("Keyword Visualization Filter Dialog"), 'utf8')
             # Keyword visualization does NOT want the Clip Filter
             clipFilter = False
             # Keyword visualization wants Keyword Color customization
@@ -327,7 +340,7 @@ class KeywordMap(wx.Frame):
             # reportType=2 indicates it is for a Keyword Visualization.  
             reportType = 2
             # Create a Filter Dialog, passing all the necessary parameters.
-            dlgFilter = FilterDialog.FilterDialog(parent, -1, title, reportType=reportType, configName=self.configName,
+            dlgFilter = FilterDialog.FilterDialog(parent, -1, title, reportType=reportType, loadDefault=loadDefault, configName=self.configName,
                                                   reportScope=self.episodeNum, clipFilter=clipFilter, keywordFilter=True, keywordSort=True,
                                                   keywordColor=keywordColors, options=options, startTime=self.startTime, endTime=self.endTime,
                                                   barHeight=self.barHeight, whitespace=self.whitespaceHeight, hGridLines=self.hGridLines,
@@ -351,8 +364,28 @@ class KeywordMap(wx.Frame):
         while errorMsg != '':
             # Clear the last (or dummy) error message.
             errorMsg = ''
-            # Show the Filter Dialog and see if the user clicks OK
-            if dlgFilter.ShowModal() == wx.ID_OK:
+            # If we're loading the Default configuration ...
+            if loadDefault:
+                # ... get the list of existing configuration names.
+                profileList = dlgFilter.GetConfigNames()
+                # If (translated) "Default" is in the list ...
+                # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
+                if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                    # ... then signal that we need to load the config.
+                    dlgFilter.OnFileOpen(None)
+                    # Fake that we asked the user for a filter name and got an OK
+                    result = wx.ID_OK
+                # If we're loading a Default profile, but there's none in the list, we can skip
+                # the rest of the Filter method by pretending we got a Cancel from the user.
+                else:
+                    result = wx.ID_CANCEL
+            # If we're not loading a Default profile ...
+            else:
+                # ... we need to show the Filter Dialog here.
+                result = dlgFilter.ShowModal()
+                
+            # If the user clicks OK (or we have a Default config)
+            if result == wx.ID_OK:
                 # If we requested Clip Filtering ...
                 if clipFilter:
                     # ... then get the filtered clip data
@@ -707,8 +740,8 @@ class KeywordMap(wx.Frame):
             # Capture Media File Name and Length for use in the Graph
             self.MediaFile = os.path.split(MediaFile)[1]
             self.MediaLength = EpisodeLength
-            # If the end time is 0 or greater than the media length, set it to the media length.
-            if (self.endTime == 0) or (self.endTime > self.MediaLength):
+            # If the end time is 0 or greater than the (non-zero) media length, set it to the media length.
+            if (self.endTime == 0) or ((self.endTime > self.MediaLength) and (self.MediaLength > 0)):
                 self.endTime = self.MediaLength
         # If we don't have a single record from the database, we probably have an orphaned Clip.
         else:
@@ -959,11 +992,11 @@ class KeywordMap(wx.Frame):
 
         # implement colors or gray scale as appropriate
         if self.colorOutput:
-            colorSet = TransanaConstants.keywordMapColourSet
-            colorLookup = TransanaConstants.transana_colorLookup
+            colorSet = TransanaGlobal.keywordMapColourSet
+            colorLookup = TransanaGlobal.transana_colorLookup
         else:
-            colorSet = TransanaConstants.keywordMapGraySet
-            colorLookup = TransanaConstants.transana_grayLookup
+            colorSet = TransanaGlobal.keywordMapGraySet
+            colorLookup = TransanaGlobal.transana_grayLookup
         if self.embedded:
             if 'wxMac' in wx.PlatformInfo:
                 self.graphic.SetFontSize(10)

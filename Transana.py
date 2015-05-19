@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -116,8 +116,55 @@ class Transana(wx.App):
             raise ImageLoadError, \
                     _("Unable to load Transana's splash screen image.  Installation error?")
 
-        wx.Yield()                                   # Wait for Splash Screen to complete display (wxPython)
+        wx.Yield()
 
+        import DataWindow                      # import Data Window Object
+        import VideoWindow                     # import Video Window Object
+        import TranscriptionUI                 # import Transcript Window Object
+        import VisualizationWindow             # import Visualization Window Object
+        import exceptions                      # import exception handler (Python)
+        # if we're running the multi-user version of Transana ...
+        if not TransanaConstants.singleUserVersion:
+            # ... import the Transana ChatWindow module
+            import ChatWindow
+        
+        # Initialize all main application Window Objects
+
+        # First, determine the program name that should be displayed, single or multi-user
+        if TransanaConstants.singleUserVersion:
+            programTitle = "Transana"
+        else:
+            programTitle = "Transana-MU"
+        # Ammend the program title for the Demo version if appropriate
+        if TransanaConstants.demoVersion:
+            programTitle += " - Demonstration Version"
+
+        # Create the Menu Window
+        TransanaGlobal.menuWindow = MenuWindow.MenuWindow(None, -1, programTitle)
+
+        # If we're running the Lab version OR we're on the Mac ...
+        if TransanaConstants.labVersion or ('wxMac' in wx.PlatformInfo):
+            # ... then pausing for 4 seconds delays the appearance of the Lab initial configuration dialog
+            # or the Mac version login / database dialog until the Splash screen closes.
+            time.sleep(4)
+        # If we are running the Lab version ...
+        if TransanaConstants.labVersion:
+            # ... we want an initial configuration screen.  Start by importing Transana's Option Settings dialog
+            import OptionsSettings
+            # Initialize all paths to BLANK for the lab version
+            TransanaGlobal.configData.videoPath = ''
+            TransanaGlobal.configData.visualizationPath = ''
+            TransanaGlobal.configData.databaseDir = ''
+            # Create the config dialog for the Lab initial configuration
+            options = OptionsSettings.OptionsSettings(TransanaGlobal.menuWindow, lab=True)
+            options.Destroy()
+            wx.Yield()
+            # If the databaseDir is blank, user pressed CANCEL ...
+            if (TransanaGlobal.configData.databaseDir == ''):
+                # ... and we should quit immediately, signalling failure
+                return False
+
+        # initialze a variable indicating database connection to False (assume the worst.)
         connectionEstablished = False
 
         # Let's trap the situation where the database folder is not available.
@@ -125,41 +172,26 @@ class Transana(wx.App):
             # Start MySQL if using the embedded version
             if TransanaConstants.singleUserVersion:
                 DBInterface.InitializeSingleUserDatabase()
-
+            # If we get here, we've been successful!  (NOTE that MU merely changes our default from False to True!)
             connectionEstablished = True
         except:
             if DEBUG:
                 import traceback
-                print sys.exc_info()[:2]
+                print sys.exc_info()[0], sys.exc_info()[1]
                 traceback.print_exc(file=sys.stdout)
                 
-            msg = _('Transana is unable to access any Database at "%s".\nPlease check to see if this path is available.\nWould you like to restore the default Database path?')
+            msg = _('Transana is unable to access any Database at "%s".\nPlease check to see if this path is available.')
+            if not TransanaConstants.labVersion:
+                msg += '\n' + _('Would you like to restore the default Database path?')
             msg = msg % TransanaGlobal.configData.databaseDir
+            if TransanaConstants.labVersion:
+                dlg = Dialogs.ErrorDialog(None, msg)
+                dlg.ShowModal()
+                dlg.Destroy()
+                return False
 
+        # We can only continue if we initialized the database OR are running MU.
         if connectionEstablished:
-            import DataWindow                      # import Data Window Object
-            import VideoWindow                     # import Video Window Object
-            import TranscriptionUI                 # import Transcript Window Object
-            import VisualizationWindow             # import Visualization Window Object
-            import exceptions                      # import exception handler (Python)
-            # if we're running the multi-user version of Transana ...
-            if not TransanaConstants.singleUserVersion:
-                # ... import the Transana ChatWindow module
-                import ChatWindow
-            
-            # Initialize all main application Window Objects
-
-            # First, determine the program name that should be displayed, single or multi-user
-            if TransanaConstants.singleUserVersion:
-                programTitle = "Transana"
-            else:
-                programTitle = "Transana-MU"
-            if TransanaConstants.demoVersion:
-                programTitle += " - Demonstration Version"
-
-            # Create the Menu Window
-            TransanaGlobal.menuWindow = MenuWindow.MenuWindow(None, -1, programTitle)
-
             # If a new database login fails three times, we need to close the program.
             # Initialize a counter to track that.
             logonCount = 1
@@ -180,8 +212,8 @@ class Transana(wx.App):
                     self.dataWindow = DataWindow.DataWindow(TransanaGlobal.menuWindow)   
                     # Create the Video Window
                     self.videoWindow = VideoWindow.VideoWindow(TransanaGlobal.menuWindow)
-                    # Create the Transcript Window
-                    self.transcriptWindow = TranscriptionUI.TranscriptionUI(TransanaGlobal.menuWindow)
+                    # Create the Transcript Window.  If on the Mac, include the Close button.
+                    self.transcriptWindow = TranscriptionUI.TranscriptionUI(TransanaGlobal.menuWindow, includeClose = ('wxMac' in wx.PlatformInfo))
                     # Create the Visualization Window
                     self.visualizationWindow = VisualizationWindow.VisualizationWindow(TransanaGlobal.menuWindow)
 
@@ -192,6 +224,8 @@ class Transana(wx.App):
                                                 Transcript=self.transcriptWindow,
                                                 Data=self.dataWindow,
                                                 Visualization=self.visualizationWindow)
+                    # Set the active transcript
+                    self.controlObject.activeTranscript = 0
 
                     # Register the ControlObject with all other objects to be controlled
                     TransanaGlobal.menuWindow.Register(ControlObject=self.controlObject)

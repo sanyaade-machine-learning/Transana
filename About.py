@@ -32,7 +32,7 @@ class AboutBox(wx.Dialog):
             width = 400
         else:
             width = 370
-        height = 350
+        height = 365
         # Create a Dialog Box, fixed size
         dlg = wx.Dialog(None, -1, _("About Transana"), size=(width, height), style=wx.CAPTION | wx.WANTS_CHARS)
         if "__WXMAC__" in wx.PlatformInfo:
@@ -84,7 +84,7 @@ class AboutBox(wx.Dialog):
         copyright.SetConstraints(lay)
 
         # Create a label for the Program Description, including GNU License information
-        self.description_str = _("Transana is free software written at the \nWisconsin Center for Education Research, \nUniversity of Wisconsin, Madison, and is released with \nno warranty under the GNU General Public License (GPL).  \nFor more information, see http://www.gnu.org.")
+        self.description_str = _("Transana is written at the \nWisconsin Center for Education Research, \nUniversity of Wisconsin, Madison, and is released with \nno warranty under the GNU General Public License (GPL).  \nFor more information, see http://www.gnu.org.")
         lay = wx.LayoutConstraints()
         lay.top.Below(copyright, 10)
         lay.centreX.SameAs(dlg, wx.CentreX)
@@ -95,6 +95,7 @@ class AboutBox(wx.Dialog):
 
         # Create a label for the Program Authoring Credits
         self.credits_str = _("Transana was originally conceived and written by Chris Fassnacht.\nCurrent development is being directed by David K. Woods, Ph.D.\nOther contributors include:  Jonathan Beavers, Nate Case, Mark Kim, \nRajas Sambhare and David Mandelin")
+        self.credits_str += ".\n" + _("Methodology consultants: Paul Dempster, Chris Thorn,\nand Nicolas Sheon.")
         lay = wx.LayoutConstraints()
         lay.top.Below(self.description, 10)
         lay.centreX.SameAs(dlg, wx.CentreX)

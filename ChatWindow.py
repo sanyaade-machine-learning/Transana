@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -388,7 +388,7 @@ class ChatWindow(wx.Frame):
             db = TransanaGlobal.configData.database.encode('utf8')
             
             if DEBUG:
-                print 'C %s %s %s 220 ||| ' % (userName, host, db)
+                print 'C %s %s %s 230 ||| ' % (userName, host, db)
 
             # If we are running the Transana Client on the same computer as the MySQL server, we MUST refer to it as localhost.
             # In this circumstance, this copy of the Transana Client will not be recognized by the Transana Message Server
@@ -407,9 +407,9 @@ class ChatWindow(wx.Frame):
                 # Destroy the Text Entry Dialog.
                 dlg.Destroy()
             
-            self.socketObj.send('C %s %s %s 220 ||| ' % (userName, host, db))
+            self.socketObj.send('C %s %s %s 230 ||| ' % (userName, host, db))
         else:
-            self.socketObj.send('C %s %s %s 220 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
+            self.socketObj.send('C %s %s %s 230 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
 
         # Create a Timer to check for Message Server validation.
         # Initialize to unvalidated state
@@ -430,17 +430,8 @@ class ChatWindow(wx.Frame):
                 self.socketObj.send(msg.encode('utf8'))
             else:
                 self.socketObj.send(msg)
-            # I added this to try to prevent messages from bumping into one another and stacking up.
-            # It *should* allow messages to be sent totally independently.
-            try:
-                wx.Yield()
-                if DEBUG:
-                    print "ChatWindow.SendMessage():  Yield called."
-            except:
-                if DEBUG:
-                    print "ChatWindow.SendMessage():  Yield FAILED.", sys.exc_info()[0],sys.exc_info()[1]
-                pass
-
+            # This *should* allow messages to be sent totally independently.
+            time.sleep(0.05)
             
         except socket.error:
             if DEBUG:
@@ -946,6 +937,12 @@ class ChatWindow(wx.Frame):
                                     # object type.
                                     if nodeType != None:
                                         self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('D', (nodeType, nodelist[-1]))
+                            # Otherwise, if a Series, Episode, Transcript, Collection, or Clip node is deleted ...
+                            elif nodelist[0] in ['SeriesNode', 'EpisodeNode', 'TranscriptNode', 'CollectionNode', 'ClipNode']:
+                                # ... and if the Notes Browser is open, ...
+                                if self.ControlObject.NotesBrowserWindow != None:
+                                    # ... we need to CHECK to see if any notes were deleted.
+                                    self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('C')
 
                         # Update Keyword List
                         elif messageHeader == 'UKL':
@@ -1052,6 +1049,7 @@ class ChatWindow(wx.Frame):
             self.memo.AppendText(_('Transana-MU:  you may be using an improper version of the Transana Message Server,\n'));
             self.memo.AppendText(_('Transana-MU:  one that is different than this version of Transana-MU requires.\n'));
             self.memo.AppendText(_('Transana-MU:  Please report this problem to your system administrator.\n\n'));
+            self.memo.AppendText(_('Transana-MU:  Please do not proceed.  Data corruption could result.\n\n'));
 
     def OnClose(self, event):
         """ Intercept when the Close Button is selected """

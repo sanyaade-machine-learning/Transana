@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -76,425 +76,425 @@ import TransanaExceptions           # Import Transana's Exceptions
 
 
 def DragDropEvaluation(source, destination):
-   """ This boolean function indicates whether the source tree node can legally be dropped (or pasted) on the destination
-       tree node.  This function is encapsulated because it needs to be called from several different locations
-       during the Drag-and-Drop process, including the DropSource's GiveFeedback() Method and the DropTarget's
-       OnData() Method, as well as the DBTree's OnRightClick() to enable or disable the "Paste" option. """
-   # Return True if the drop is legal, false if it is not.
-   # To be legal, we must have a legitimate source and be on a legitimate drop target.
-   # If the source is the Database Tree Tab (nodetype = DataTreeDragDropData), then we compare
-   # the nodetypes for the source and destination nodes to see if the pairing is compatible.
-   # Next, either the record numbers or the nodetype must be different, so you can't drop a node on itself.
-   if (source != None) and \
-      (destination != None) and \
-      (type(source) != type(ClipDragDropData())) and \
-      ((source.nodetype == 'CollectionNode'       and destination.nodetype == 'CollectionNode') or \
-       (source.nodetype == 'ClipNode'             and destination.nodetype == 'CollectionNode') or \
-       (source.nodetype == 'ClipNode'             and destination.nodetype == 'ClipNode') or \
-       (source.nodetype == 'ClipNode'             and destination.nodetype == 'KeywordNode') or \
-       (source.nodetype == 'KeywordNode'          and destination.nodetype == 'SeriesNode') or \
-       (source.nodetype == 'KeywordNode'          and destination.nodetype == 'EpisodeNode') or \
-       (source.nodetype == 'KeywordNode'          and destination.nodetype == 'CollectionNode') or \
-       (source.nodetype == 'KeywordNode'          and destination.nodetype == 'ClipNode') or \
-       (source.nodetype == 'KeywordNode'          and destination.nodetype == 'KeywordGroupNode') or \
-       (source.nodetype == 'SearchCollectionNode' and destination.nodetype == 'SearchCollectionNode') or \
-       (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode') or \
-       (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchClipNode')) and \
-      ((source.recNum != destination.recNum) or (source.nodetype != destination.nodetype)):
-       return True
-   # If we have a Clip (type == ClipDragDropData), then we can drop it on a Collection or a Clip or a Keyword only.
-   elif (source != None) and \
-        (destination != None) and \
-        (type(source) == type(ClipDragDropData())) and \
-	((destination.nodetype == 'CollectionNode') or \
-	 (destination.nodetype == 'ClipNode') or \
-         (destination.nodetype == 'KeywordNode')):
-       return True
-   else:
-       return False
+    """ This boolean function indicates whether the source tree node can legally be dropped (or pasted) on the destination
+        tree node.  This function is encapsulated because it needs to be called from several different locations
+        during the Drag-and-Drop process, including the DropSource's GiveFeedback() Method and the DropTarget's
+        OnData() Method, as well as the DBTree's OnRightClick() to enable or disable the "Paste" option. """
 
+    # Return True if the drop is legal, false if it is not.
+    # To be legal, we must have a legitimate source and be on a legitimate drop target.
+    # If the source is the Database Tree Tab (nodetype = DataTreeDragDropData), then we compare
+    # the nodetypes for the source and destination nodes to see if the pairing is compatible.
+    # Next, either the record numbers or the nodetype must be different, so you can't drop a node on itself.
+    if (source != None) and \
+       (destination != None) and \
+       (type(source) != type(ClipDragDropData())) and \
+       ((source.nodetype == 'EpisodeNode'          and destination.nodetype == 'SeriesNode') or \
+        (source.nodetype == 'CollectionNode'       and destination.nodetype == 'CollectionNode') or \
+        (source.nodetype == 'ClipNode'             and destination.nodetype == 'CollectionNode') or \
+        (source.nodetype == 'ClipNode'             and destination.nodetype == 'ClipNode') or \
+        (source.nodetype == 'ClipNode'             and destination.nodetype == 'KeywordNode') or \
+        (source.nodetype == 'KeywordNode'          and destination.nodetype == 'SeriesNode') or \
+        (source.nodetype == 'KeywordNode'          and destination.nodetype == 'EpisodeNode') or \
+        (source.nodetype == 'KeywordNode'          and destination.nodetype == 'CollectionNode') or \
+        (source.nodetype == 'KeywordNode'          and destination.nodetype == 'ClipNode') or \
+        (source.nodetype == 'KeywordNode'          and destination.nodetype == 'KeywordGroupNode') or \
+        (source.nodetype == 'SearchCollectionNode' and destination.nodetype == 'SearchCollectionNode') or \
+        (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchCollectionNode') or \
+        (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchClipNode')) and \
+       ((source.recNum != destination.recNum) or (source.nodetype != destination.nodetype)):
+        return True
+    # If we have a Clip (type == ClipDragDropData), then we can drop it on a Collection or a Clip or a Keyword only.
+    elif (source != None) and \
+         (destination != None) and \
+         (type(source) == type(ClipDragDropData())) and \
+         ((destination.nodetype == 'CollectionNode') or \
+	  (destination.nodetype == 'ClipNode') or \
+          (destination.nodetype == 'KeywordNode')):
+        return True
+    else:
+        return False
 
 
 class DataTreeDragDropData(object):
-   """ This is a custom DragDropData object.  It allows the drag to "carry" the information from a node
-       from the Database Tree Control. """
+    """ This is a custom DragDropData object.  It allows the drag to "carry" the information from a node
+        from the Database Tree Control. """
 
-   # NOTE:  _NodeType and DataTreeDragDropData have very similar structures so that they can be
-   #        used interchangably.  If you alter one, please also alter the other.
+    # NOTE:  _NodeType and DataTreeDragDropData have very similar structures so that they can be
+    #        used interchangably.  If you alter one, please also alter the other.
    
-   def __init__(self, text='', nodetype='Unknown', nodeList=None, recNum=0, parent=0):
-      self.text = text           # The source node's text/label
-      self.nodetype = nodetype   # The source node's nodetype
-      self.nodeList = nodeList   # The Source Node's nodeList (for SearchCollectionNode and SearchClipNode Cut and Paste)
-      self.recNum = recNum       # the source node's record number
-      self.parent = parent       # The source node's parent's record number (or Keyword Group name, if the node is a Keyword)
+    def __init__(self, text='', nodetype='Unknown', nodeList=None, recNum=0, parent=0):
+        self.text = text           # The source node's text/label
+        self.nodetype = nodetype   # The source node's nodetype
+        self.nodeList = nodeList   # The Source Node's nodeList (for SearchCollectionNode and SearchClipNode Cut and Paste)
+        self.recNum = recNum       # the source node's record number
+        self.parent = parent       # The source node's parent's record number (or Keyword Group name, if the node is a Keyword)
 
-   def __repr__(self):
-      """ Return a String Representation of the contents of the DataTreeDragDrop Object """
-      str = 'Node %s of type %s, recNum %s, parent %s' % (self.text, self.nodetype, self.recNum, self.parent)
-      if self.nodeList != None:
-         str = str + '\nnodeList = %s' % (self.nodeList,)
-      return str
+    def __repr__(self):
+        """ Return a String Representation of the contents of the DataTreeDragDrop Object """
+        str = 'Node %s of type %s, recNum %s, parent %s' % (self.text, self.nodetype, self.recNum, self.parent)
+        if self.nodeList != None:
+            str = str + '\nnodeList = %s' % (self.nodeList,)
+        return str
 
 
 class DataTreeDropSource(wx.DropSource):
-   """ This is a custom DropSource object designed to drag objects from the Data Tree tab and to
-       provide feedback to the user during the drag. """
-   def __init__(self, tree):
-      # Create a Standard wxDropSource Object
-      wx.DropSource.__init__(self, tree)
-      # Remember the control that initiate the Drag for later use
-      self.tree = tree
+    """ This is a custom DropSource object designed to drag objects from the Data Tree tab and to
+        provide feedback to the user during the drag. """
+    def __init__(self, tree):
+        # Create a Standard wxDropSource Object
+        wx.DropSource.__init__(self, tree)
+        # Remember the control that initiate the Drag for later use
+        self.tree = tree
 
-   # SetData accepts an object (obj) that has been prepared for the DropSource SetData() method
-   # by being put into a wxCustomDataObject
-   def SetData(self, obj):
-      # Set the prepared object as the wxDropSource Data
-      wx.DropSource.SetData(self, obj)
-      # hold onto the original data, in a usable form, for later use
-      self.data = cPickle.loads(obj.GetData())
+    # SetData accepts an object (obj) that has been prepared for the DropSource SetData() method
+    # by being put into a wxCustomDataObject
+    def SetData(self, obj):
+        # Set the prepared object as the wxDropSource Data
+        wx.DropSource.SetData(self, obj)
+        # hold onto the original data, in a usable form, for later use
+        self.data = cPickle.loads(obj.GetData())
 
-   def InTranscript(self, windowx, windowy):
-      """Determine if the given X/Y position is within the Transcript editor."""
-      (transLeft, transTop, transWidth, transHeight) = self.tree.parent.ControlObject.GetTranscriptDims()
-      transRight = transLeft + transWidth
-      transBot = transTop + transHeight
-      return (windowx >= transLeft and windowx <= transRight and windowy >= transTop and windowy <= transBot)
+    def InTranscript(self, windowx, windowy):
+        """Determine if the given X/Y position is within the Transcript editor."""
+        (transLeft, transTop, transWidth, transHeight) = self.tree.parent.ControlObject.GetTranscriptDims()
+        transRight = transLeft + transWidth
+        transBot = transTop + transHeight
+        return (windowx >= transLeft and windowx <= transRight and windowy >= transTop and windowy <= transBot)
 
-   # I want to provide the user with feedback about whether their drop will work or not.
-   def GiveFeedback(self, effect):
-       # NOTE:  This method was generating an exception when moving off the data tree.  Thus, exception handling
-       #        was added.
-       try:
-          # This method does not provide the x, y coordinates of the mouse within the control, so we
-          # have to figure that out the hard way. (Contrast with DropTarget's OnDrop and OnDragOver methods)
-          # Get the Mouse Position on the Screen
-          (windowx, windowy) = wx.GetMousePosition()
+    # I want to provide the user with feedback about whether their drop will work or not.
+    def GiveFeedback(self, effect):
+        # NOTE:  This method was generating an exception when moving off the data tree.  Thus, exception handling
+        #        was added.
+        try:
+            # This method does not provide the x, y coordinates of the mouse within the control, so we
+            # have to figure that out the hard way. (Contrast with DropTarget's OnDrop and OnDragOver methods)
+            # Get the Mouse Position on the Screen
+            (windowx, windowy) = wx.GetMousePosition()
 
-          if self.InTranscript(windowx, windowy):
-             if self.data.nodetype == 'KeywordNode':
+            if self.InTranscript(windowx, windowy):
+                if self.data.nodetype == 'KeywordNode':
+                    # Make sure the cursor reflects an acceptable drop.  (This resets it if it was previously changed
+                    # to indicate a bad drop.)
+                    self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+                    # FALSE indicates that feedback is NOT being overridden, and thus that the drop is GOOD!
+                    return False
+                else:
+                    # Set the cursor to give visual feedback that the drop will fail.
+                    self.tree.SetCursor(wx.StockCursor(wx.CURSOR_NO_ENTRY))
+                    # Setting the Effect to wxDragNone has absolutely no effect on the drop, if I understand this correctly.
+                    effect = wx.DragNone
+                    # returning TRUE indicates that the default feedback IS being overridden, thus that the drop is BAD!
+                    return True
+
+            # Translate the Mouse's Screen Position to the Mouse's Control Position
+            (x, y) = self.tree.ScreenToClientXY(windowx, windowy)
+            # Now use the tree's HitTest method to find out about the potential drop target for the current mouse position
+            (id, flag) = self.tree.HitTest((x, y))
+            # I'm using GetItemText() here, but could just as easily use GetPyData()
+            destData = self.tree.GetPyData(id)
+
+            # See if we need to scroll the database tree up or down here.  (DatabaseTreeTab.OnMotion used to handle this, but
+            # that method no longer gets called during a Drag.)
+            (w, h) = self.tree.GetClientSizeTuple()
+
+            # If we are dragging at the top of the window, scroll down
+            if y < 8:
+              
+                # The wxWindow.ScrollLines() method is only implemented on Windows.  We must use something different on the Mac.
+                if "wxMSW" in wx.PlatformInfo:
+                    self.tree.ScrollLines(-2)
+                else:
+                    # Suggested by Robin Dunn
+                    first = self.tree.GetFirstVisibleItem()
+                    prev = self.tree.GetPrevSibling(first)
+                    if prev:
+                        # drill down to find last expanded child
+                        while self.tree.IsExpanded(prev):
+                            prev = self.tree.GetLastChild(prev)
+                    else:
+                        # if no previous sub then try the parent
+                        prev = self.tree.GetItemParent(first)
+
+                    if prev:
+                        self.tree.ScrollTo(prev)
+                    else:
+                        self.tree.EnsureVisible(first)
+              
+            # If we are dragging at the bottom of the window, scroll up
+            elif y > h - 8:
+                 # The wxWindow.ScrollLines() method is only implemented on Windows.  We must use something different on the Mac.
+                 if "wxMSW" in wx.PlatformInfo:
+                     self.tree.ScrollLines(2)
+                 else:
+                     # Suggested by Robin Dunn
+                     # first find last visible item by starting with the first
+                     next = None
+                     last = None
+                     item = self.tree.GetFirstVisibleItem()
+                     while item:
+                         if not self.tree.IsVisible(item): break
+                         last = item
+                         item = self.tree.GetNextVisible(item)
+
+                     # figure out what the next visible item should be,
+                     # either the first child, the next sibling, or the
+                     # parent's sibling
+                     if last:
+                         if self.tree.IsExpanded(last):
+                             next = self.tree.GetFirstChild(last)[0]
+                         else:
+                             next = self.tree.GetNextSibling(last)
+                             if not next:
+                                 prnt = self.tree.GetItemParent(last)
+                                 if prnt:
+                                     next = self.tree.GetNextSibling(prnt)
+
+                     if next:
+                         self.tree.ScrollTo(next)
+                     elif last:
+                         self.tree.EnsureVisible(last)
+
+            # This line compares the data being dragged (self.data) to the potential drop site given by the current
+            # mouse position (destData).  If the drop is legal,
+            # we return FALSE to indicate that we should use the default drag-and-drop feedback, which will indicate
+            # that the drop is legal.  If not, we return TRUE to indicate we are using our own feedback, which is
+            # implemented by changing the cursor to a "No_Entry" cursor to indicate the drop is not allowed.
+            # Note that this code here does not prevent the drop.  That has to be implemented in the Drop Target
+            # object.  It just provides visual feedback to the user.  The same evaluatoin function is called elsewhere 
+            # (in OnData) when the drop is actually processed.
+
+            if DragDropEvaluation(self.data, destData):
                 # Make sure the cursor reflects an acceptable drop.  (This resets it if it was previously changed
                 # to indicate a bad drop.)
                 self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
                 # FALSE indicates that feedback is NOT being overridden, and thus that the drop is GOOD!
                 return False
-             else:
+            else:
                 # Set the cursor to give visual feedback that the drop will fail.
                 self.tree.SetCursor(wx.StockCursor(wx.CURSOR_NO_ENTRY))
                 # Setting the Effect to wxDragNone has absolutely no effect on the drop, if I understand this correctly.
                 effect = wx.DragNone
                 # returning TRUE indicates that the default feedback IS being overridden, thus that the drop is BAD!
                 return True
-
-          # Translate the Mouse's Screen Position to the Mouse's Control Position
-          (x, y) = self.tree.ScreenToClientXY(windowx, windowy)
-          # Now use the tree's HitTest method to find out about the potential drop target for the current mouse position
-          (id, flag) = self.tree.HitTest((x, y))
-          # I'm using GetItemText() here, but could just as easily use GetPyData()
-          destData = self.tree.GetPyData(id)
-
-          # See if we need to scroll the database tree up or down here.  (DatabaseTreeTab.OnMotion used to handle this, but
-          # that method no longer gets called during a Drag.)
-          (w, h) = self.tree.GetClientSizeTuple()
-
-          # If we are dragging at the top of the window, scroll down
-          if y < 8:
-              
-              # The wxWindow.ScrollLines() method is only implemented on Windows.  We must use something different on the Mac.
-              if "wxMSW" in wx.PlatformInfo:
-                 self.tree.ScrollLines(-2)
-              else:
-                 # Suggested by Robin Dunn
-                 first = self.tree.GetFirstVisibleItem()
-                 prev = self.tree.GetPrevSibling(first)
-                 if prev:
-                    # drill down to find last expanded child
-                    while self.tree.IsExpanded(prev):
-                       prev = self.tree.GetLastChild(prev)
-                 else:
-                    # if no previous sub then try the parent
-                    prev = self.tree.GetItemParent(first)
-
-                 if prev:
-                    self.tree.ScrollTo(prev)
-                 else:
-                    self.tree.EnsureVisible(first)
-              
-          # If we are dragging at the bottom of the window, scroll up
-          elif y > h - 8:
-              # The wxWindow.ScrollLines() method is only implemented on Windows.  We must use something different on the Mac.
-              if "wxMSW" in wx.PlatformInfo:
-                 self.tree.ScrollLines(2)
-              else:
-                 # Suggested by Robin Dunn
-                 # first find last visible item by starting with the first
-                 next = None
-                 last = None
-                 item = self.tree.GetFirstVisibleItem()
-                 while item:
-                    if not self.tree.IsVisible(item): break
-                    last = item
-                    item = self.tree.GetNextVisible(item)
-
-                 # figure out what the next visible item should be,
-                 # either the first child, the next sibling, or the
-                 # parent's sibling
-                 if last:
-                     if self.tree.IsExpanded(last):
-                        next = self.tree.GetFirstChild(last)[0]
-                     else:
-                        next = self.tree.GetNextSibling(last)
-                        if not next:
-                           prnt = self.tree.GetItemParent(last)
-                           if prnt:
-                              next = self.tree.GetNextSibling(prnt)
-
-                 if next:
-                    self.tree.ScrollTo(next)
-                 elif last:
-                    self.tree.EnsureVisible(last)
-
-          # This line compares the data being dragged (self.data) to the potential drop site given by the current
-          # mouse position (destData).  If the drop is legal,
-          # we return FALSE to indicate that we should use the default drag-and-drop feedback, which will indicate
-          # that the drop is legal.  If not, we return TRUE to indicate we are using our own feedback, which is
-          # implemented by changing the cursor to a "No_Entry" cursor to indicate the drop is not allowed.
-          # Note that this code here does not prevent the drop.  That has to be implemented in the Drop Target
-          # object.  It just provides visual feedback to the user.  The same evaluatoin function is called elsewhere 
-          # (in OnData) when the drop is actually processed.
-
-          if DragDropEvaluation(self.data, destData):
-             # Make sure the cursor reflects an acceptable drop.  (This resets it if it was previously changed
-             # to indicate a bad drop.)
-             self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-             # FALSE indicates that feedback is NOT being overridden, and thus that the drop is GOOD!
-             return False
-          else:
-             # Set the cursor to give visual feedback that the drop will fail.
-             self.tree.SetCursor(wx.StockCursor(wx.CURSOR_NO_ENTRY))
-             # Setting the Effect to wxDragNone has absolutely no effect on the drop, if I understand this correctly.
-             effect = wx.DragNone
-             # returning TRUE indicates that the default feedback IS being overridden, thus that the drop is BAD!
-             return True
-       except:
-           # We don't need anything fancy here.  If there's a problem, it's not a valid drop, that's all.
-           # Set the cursor to give visual feedback that the drop will fail.
-           self.tree.SetCursor(wx.StockCursor(wx.CURSOR_NO_ENTRY))
-           # Setting the Effect to wxDragNone has absolutely no effect on the drop, if I understand this correctly.
-           effect = wx.DragNone
-           # returning TRUE indicates that the default feedback IS being overridden, thus that the drop is BAD!
-           return True
-
+        except:
+            # We don't need anything fancy here.  If there's a problem, it's not a valid drop, that's all.
+            # Set the cursor to give visual feedback that the drop will fail.
+            self.tree.SetCursor(wx.StockCursor(wx.CURSOR_NO_ENTRY))
+            # Setting the Effect to wxDragNone has absolutely no effect on the drop, if I understand this correctly.
+            effect = wx.DragNone
+            # returning TRUE indicates that the default feedback IS being overridden, thus that the drop is BAD!
+            return True
 
 
 class DataTreeDropTarget(wx.PyDropTarget):
-   """ This is a custom DropTarget object designed to match drop behavior to the feedback given by the custom
-       Drag Object's GiveFeedback() method. """
-   def __init__(self, tree):
-      # use a normal wxPyDropTarget
-      wx.PyDropTarget.__init__(self)
-      # Remember the source Tree Control for later use
-      self.tree = tree
+    """ This is a custom DropTarget object designed to match drop behavior to the feedback given by the custom
+        Drag Object's GiveFeedback() method. """
+    def __init__(self, tree):
+        # use a normal wxPyDropTarget
+        wx.PyDropTarget.__init__(self)
+        # Remember the source Tree Control for later use
+        self.tree = tree
 
-      # specify the data format to accept Data from Tree Nodes
-      self.dfNode = wx.CustomDataFormat('DataTreeDragData')
-      # Specify the data object to accept data for this format
-      self.sourceNodeData = wx.CustomDataObject(self.dfNode)
+        # specify the data format to accept Data from Tree Nodes
+        self.dfNode = wx.CustomDataFormat('DataTreeDragData')
+        # Specify the data object to accept data for this format
+        self.sourceNodeData = wx.CustomDataObject(self.dfNode)
 
-      # specify the data format to accept Data from Transcripts to create Clips
-      self.dfClip = wx.CustomDataFormat('ClipDragDropData')
-      # Specify the data object to accept data for this format
-      self.clipData = wx.CustomDataObject(self.dfClip)
+        # specify the data format to accept Data from Transcripts to create Clips
+        self.dfClip = wx.CustomDataFormat('ClipDragDropData')
+        # Specify the data object to accept data for this format
+        self.clipData = wx.CustomDataObject(self.dfClip)
 
-      # Create a Composite Data Object
-      self.doc = wx.DataObjectComposite()
-      # Add the Tree Node Data Object
-      self.doc.Add(self.sourceNodeData)
-      # Add the Clip Data Object
-      self.doc.Add(self.clipData)
-      
-      # Set the Composite Data object defined above as the DataObject for the PyDropTarget
-      self.SetDataObject(self.doc)
+        # Create a Composite Data Object
+        self.doc = wx.DataObjectComposite()
+        # Add the Tree Node Data Object
+        self.doc.Add(self.sourceNodeData)
+        # Add the Clip Data Object
+        self.doc.Add(self.clipData)
 
-      # Now let's put empty objects in both parts of the wx.DataObjectComposite, so that
-      # the OnData logic doesn't blow up when it tries to sort out what's been dropped.
-      # (Everything worked OK on Win2K without this, but not on WinXP.)
-      self.ClearSourceNodeData()
-      self.ClearClipData()
+        # Set the Composite Data object defined above as the DataObject for the PyDropTarget
+        self.SetDataObject(self.doc)
 
-   def ClearSourceNodeData(self):
-       """ Clears Data from the Tree Node Data Object """
-       # Create a blank Tree Node Data object
-       tempData = DataTreeDragDropData()
-       # Pickle it
-       pickledTempData = cPickle.dumps(tempData, 1)
-       # Replace the old Tree Node Data Object with the new empty one
-       self.sourceNodeData.SetData(pickledTempData)
+        # Now let's put empty objects in both parts of the wx.DataObjectComposite, so that
+        # the OnData logic doesn't blow up when it tries to sort out what's been dropped.
+        # (Everything worked OK on Win2K without this, but not on WinXP.)
+        self.ClearSourceNodeData()
+        self.ClearClipData()
 
-   def ClearClipData(self):
-       """ Clears Data from the Clip Creation Data Object """
-       # Create a blank Clip Creation Data object
-       tempData = ClipDragDropData()
-       # Pickle it
-       pickledTempData = cPickle.dumps(tempData, 1)
-       # Replace teh old Clip Creation Data Object with the new empty one
-       self.clipData.SetData(pickledTempData)
+    def ClearSourceNodeData(self):
+        """ Clears Data from the Tree Node Data Object """
+        # Create a blank Tree Node Data object
+        tempData = DataTreeDragDropData()
+        # Pickle it
+        pickledTempData = cPickle.dumps(tempData, 1)
+        # Replace the old Tree Node Data Object with the new empty one
+        self.sourceNodeData.SetData(pickledTempData)
 
-   def OnEnter(self, x, y, dragResult):
-      # Just allow the normal wxDragResult to pass through here
-      return dragResult
+    def ClearClipData(self):
+        """ Clears Data from the Clip Creation Data Object """
+        # Create a blank Clip Creation Data object
+        tempData = ClipDragDropData()
+        # Pickle it
+        pickledTempData = cPickle.dumps(tempData, 1)
+        # Replace teh old Clip Creation Data Object with the new empty one
+        self.clipData.SetData(pickledTempData)
 
-   def OnLeave(self):
-      pass
+    def OnEnter(self, x, y, dragResult):
+        # Just allow the normal wxDragResult to pass through here
+        return dragResult
 
-   def OnDrop(self, x, y):
-      # Process the "Drop" event
+    def OnLeave(self):
+        pass
 
-      # If you drop off the Database Tree, you get an exception here
-      try:
-          # Use the tree's HitTest method to find out about the potential drop target for the current mouse position
-          (self.dropNode, flag) = self.tree.HitTest((x, y))
-          # Remember the Drop Location for later Processing (in OnData())
-          self.dropData = self.tree.GetPyData(self.dropNode)
-          # We don't yet have enough information to veto the drop, so return TRUE to indicate
-          # that we should proceed to the OnData method
-          return True
-      except:
-          # If an exception is raised, Veto the drop as there is no Drop Target.
-          return False
+    def OnDrop(self, x, y):
+        # Process the "Drop" event
 
-   def OnData(self, x, y, dragResult):
-      # once OnDrop returns TRUE, this method is automatically called.
+        # If you drop off the Database Tree, you get an exception here
+        try:
+            # Use the tree's HitTest method to find out about the potential drop target for the current mouse position
+            (self.dropNode, flag) = self.tree.HitTest((x, y))
+            # Remember the Drop Location for later Processing (in OnData())
+            self.dropData = self.tree.GetPyData(self.dropNode)
+            # We don't yet have enough information to veto the drop, so return TRUE to indicate
+            # that we should proceed to the OnData method
+            return True
+        except:
+            # If an exception is raised, Veto the drop as there is no Drop Target.
+            return False
 
-      # Let's get the data being dropped so we can do some processing logic
-      if self.GetData():
-         # First, extract the actual data passed in by the DataTreeDropSource, which used cPickle to pack it.
+    def OnData(self, x, y, dragResult):
+        # once OnDrop returns TRUE, this method is automatically called.
 
-         try:
-             # Try to unPickle the Tree Node Data Object.  If the first Drag is for Clip Creation, this
-             # will raise an exception.  If there is a good Tree Node Data Object being dragged, or if
-             # one from a previous drag has been Cleared, this will be successful.
-             sourceData = cPickle.loads(self.sourceNodeData.GetData())
+        # Let's get the data being dropped so we can do some processing logic
+        if self.GetData():
+            # First, extract the actual data passed in by the DataTreeDropSource, which used cPickle to pack it.
 
-             # If a previous drag of a Tree Node Data Object has been cleared, the sourceData.nodetype
-             # will be "Unknown", which indicated that the current Drag is NOT a node from the Database
-             # Tree Tab, and therefore should be processed elsewhere.  If it is NOT "Unknown", we should
-             # process it here.  The Type comparison was added to get this working on the Mac.
-             if (type(sourceData) == type(DataTreeDragDropData())) and \
-                (sourceData.nodetype != 'Unknown'):
-                 # This line compares the data being dragged (sourceData) to the drop site determined in OnDrop and
-                 # passed here as self.dropData.  
-                 if DragDropEvaluation(sourceData, self.dropData):
-                    # If we meet the criteria, we process the drop.  We do that here because we have full
-                    # knowledge of the Dragged Data and the Drop Target's data here and nowhere else.
-                    # Determine if we're copying or moving data.  (In some instances, the 'action' is ignored.)
-                    if dragResult == wx.DragCopy:
-                       ProcessPasteDrop(self.tree, sourceData, self.dropNode, 'Copy')
-                    elif dragResult == wx.DragMove:
-                       ProcessPasteDrop(self.tree, sourceData, self.dropNode, 'Move')
-                 else:
-                    # If the DragDropEvaluation() test fails, we prevent the drop process by altering the wxDropResult (dragResult)
-                    dragResult = wx.DragNone
+            try:
+                # Try to unPickle the Tree Node Data Object.  If the first Drag is for Clip Creation, this
+                # will raise an exception.  If there is a good Tree Node Data Object being dragged, or if
+                # one from a previous drag has been Cleared, this will be successful.
+                sourceData = cPickle.loads(self.sourceNodeData.GetData())
+
+                # If a previous drag of a Tree Node Data Object has been cleared, the sourceData.nodetype
+                # will be "Unknown", which indicated that the current Drag is NOT a node from the Database
+                # Tree Tab, and therefore should be processed elsewhere.  If it is NOT "Unknown", we should
+                # process it here.  The Type comparison was added to get this working on the Mac.
+                if (type(sourceData) == type(DataTreeDragDropData())) and \
+                   (sourceData.nodetype != 'Unknown'):
+                    # This line compares the data being dragged (sourceData) to the drop site determined in OnDrop and
+                    # passed here as self.dropData.  
+                    if DragDropEvaluation(sourceData, self.dropData):
+                        # If we meet the criteria, we process the drop.  We do that here because we have full
+                        # knowledge of the Dragged Data and the Drop Target's data here and nowhere else.
+                        # Determine if we're copying or moving data.  (In some instances, the 'action' is ignored.)
+                        if dragResult == wx.DragCopy:
+                            ProcessPasteDrop(self.tree, sourceData, self.dropNode, 'Copy')
+                        elif dragResult == wx.DragMove:
+                            ProcessPasteDrop(self.tree, sourceData, self.dropNode, 'Move')
+                    else:
+                        # If the DragDropEvaluation() test fails, we prevent the drop process by altering the wxDropResult (dragResult)
+                        dragResult = wx.DragNone
                     
-                 # Once the drop is done or rejected, we must clear the Tree Node data out of the DropTarget.
-                 # If we don't, this data will still be there if a Clip drag occurs, and there is no way in that
-                 # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
-                 self.ClearSourceNodeData()
-             # Reset the cursor, regardless of whether the drop succeeded or failed.
-             self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+                    # Once the drop is done or rejected, we must clear the Tree Node data out of the DropTarget.
+                    # If we don't, this data will still be there if a Clip drag occurs, and there is no way in that
+                    # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
+                    self.ClearSourceNodeData()
+                # Reset the cursor, regardless of whether the drop succeeded or failed.
+                self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
-         except:
-             # If an expection occurs here, it's no big deal.  Forget about it.
+            except:
+                # If an expection occurs here, it's no big deal.  Forget about it.
 
-             # Reset the cursor, regardless of whether the drop succeeded or failed.
-             self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-             pass
+                # Reset the cursor, regardless of whether the drop succeeded or failed.
+                self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+                pass
 
-         try:
-             # Try to unPickle the Clip Creation Data Object.  If the first Drag is from the Database Tree, this
-             # will raise an exception.  If there is a good Clip Creation Data Object being dragged, or if
-             # one from a previous drag has been Cleared, this will be successful.
-             if '__WXMAC__' in wx.PlatformInfo:
-                 clipData = sourceData
-             else:
-                 clipData = cPickle.loads(self.clipData.GetData())
+            try:
+                # Try to unPickle the Clip Creation Data Object.  If the first Drag is from the Database Tree, this
+                # will raise an exception.  If there is a good Clip Creation Data Object being dragged, or if
+                # one from a previous drag has been Cleared, this will be successful.
+                if not TransanaConstants.macDragDrop and ('__WXMAC__' in wx.PlatformInfo):
+                    clipData = sourceData
+                else:
+                    clipData = cPickle.loads(self.clipData.GetData())
 
-             # Dropping Transcript Text onto a Collection or Clip creates a Regular Clip.
-             # See if the Drop Target is the correct Node Type.  The type comparison was added to get this working on the Mac.
-             if (type(clipData) == type(ClipDragDropData())) and \
-                ((self.dropData.nodetype == 'CollectionNode') or \
-                 (self.dropData.nodetype == 'ClipNode')):
+                # Dropping Transcript Text onto a Collection or Clip creates a Regular Clip.
+                # See if the Drop Target is the correct Node Type.  The type comparison was added to get this working on the Mac.
+                if (type(clipData) == type(ClipDragDropData())) and \
+                   ((self.dropData.nodetype == 'CollectionNode') or \
+                    (self.dropData.nodetype == 'ClipNode')):
 
-                 # If a previous drag of a Clip Creation Data Object has been cleared, the clipData.transcriptNum
-                 # will be "0", which indicated that the current Drag is NOT a Clip Creation Data Object, 
-                 # and therefore should be processed elsewhere.  If it is NOT "0", we should process it here.
-                 if clipData.transcriptNum != 0:
-                     CreateClip(clipData, self.dropData, self.tree, self.dropNode)
-                     # Once the drop is done or rejected, we must clear the Clip Creation data out of the DropTarget.
-                     # If we don't, this data will still be there if a Tree Node drag occurs, and there is no way in that
-                     # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
-                     self.ClearClipData()
+                    # If a previous drag of a Clip Creation Data Object has been cleared, the clipData.transcriptNum
+                    # will be "0", which indicated that the current Drag is NOT a Clip Creation Data Object, 
+                    # and therefore should be processed elsewhere.  If it is NOT "0", we should process it here.
+                    if clipData.transcriptNum != 0:
+                        CreateClip(clipData, self.dropData, self.tree, self.dropNode)
+                        # Once the drop is done or rejected, we must clear the Clip Creation data out of the DropTarget.
+                        # If we don't, this data will still be there if a Tree Node drag occurs, and there is no way in that
+                        # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
+                        self.ClearClipData()
 
-             # Dropping Transcript Text onto a Keyword creates a Quick Clip.
-             elif (type(clipData) == type(ClipDragDropData())) and \
-                  (self.dropData.nodetype == 'KeywordNode'):
-                 # If a previous drag of a Clip Creation Data Object has been cleared, the clipData.transcriptNum
-                 # will be "0", which indicated that the current Drag is NOT a Clip Creation Data Object, 
-                 # and therefore should be processed elsewhere.  If it is NOT "0", we should process it here.
-                 if clipData.transcriptNum != 0:
-                     # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
-                     # because drag and drop is an alternate way to create a Quick Clip.
-                     CreateQuickClip(clipData, self.dropData.parent, self.tree.GetItemText(self.dropNode), self.tree)
-                     # Once the drop is done, we must clear the Clip Creation data out of the DropTarget.
-                     # If we don't, this data will still be there if a Tree Node drag occurs, and there is no way in that
-                     # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
-                     self.ClearClipData()
+                # Dropping Transcript Text onto a Keyword creates a Quick Clip.
+                elif (type(clipData) == type(ClipDragDropData())) and \
+                     (self.dropData.nodetype == 'KeywordNode'):
+                    # If a previous drag of a Clip Creation Data Object has been cleared, the clipData.transcriptNum
+                    # will be "0", which indicated that the current Drag is NOT a Clip Creation Data Object, 
+                    # and therefore should be processed elsewhere.  If it is NOT "0", we should process it here.
+                    if clipData.transcriptNum != 0:
+                        # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
+                        # because drag and drop is an alternate way to create a Quick Clip.
+                        CreateQuickClip(clipData, self.dropData.parent, self.tree.GetItemText(self.dropNode), self.tree)
+                        # Once the drop is done, we must clear the Clip Creation data out of the DropTarget.
+                        # If we don't, this data will still be there if a Tree Node drag occurs, and there is no way in that
+                        # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
+                        self.ClearClipData()
 
-             else:
-                # If the Drop target is not valid, we prevent the drop process by altering the wxDropResult (dragResult)
-                dragResult = wx.DragNone
-             # Reset the cursor, regardless of whether the drop succeeded or failed.
-             self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+                else:
+                    # If the Drop target is not valid, we prevent the drop process by altering the wxDropResult (dragResult)
+                    dragResult = wx.DragNone
+                # Reset the cursor, regardless of whether the drop succeeded or failed.
+                self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
                  
-         except:
-             # Reset the cursor, regardless of whether the drop succeeded or failed.
-             self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+            except:
+                # Reset the cursor, regardless of whether the drop succeeded or failed.
+                self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
-             import sys
-             (exType, exValue) =  sys.exc_info()[:2]
+                import sys
+                (exType, exValue) =  sys.exc_info()[:2]
          
-             # If an expection occurs here, it's no big deal.  Forget about it.
-             pass
+                # If an expection occurs here, it's no big deal.  Forget about it.
+                pass
             
-      # Returning this value allows us to confirm or veto the drop request
-      return dragResult
+        # Returning this value allows us to confirm or veto the drop request
+        return dragResult
 
 
 class ClipDragDropData(object):
-   """ This object contains all the data that needs to be transferred in order to create a Clip
-       from a selection in a Transcript. """
+    """ This object contains all the data that needs to be transferred in order to create a Clip
+        from a selection in a Transcript. """
 
-   def __init__(self, transcriptNum=0, episodeNum=0, clipStart=0, clipStop=0, text=''):
-      """ ClipDragDropData Objects require the following parameters:
-          transcriptNum    The Transcript Number of the originating Transcript
-          episodeNum       The Episode the originating Transcript is attached to
-          clipStart        The starting Time Code for the Clip
-          clipStop         the ending Time Code for the Clip
-          text             the Text for the Clip, in RTF format. """
-      self.transcriptNum = transcriptNum
-      self.episodeNum = episodeNum
-      self.clipStart = clipStart
-      self.clipStop = clipStop
-      self.text = text
+    def __init__(self, transcriptNum=0, episodeNum=0, clipStart=0, clipStop=0, text=''):
+        """ ClipDragDropData Objects require the following parameters:
+            transcriptNum    The Transcript Number of the originating Transcript
+            episodeNum       The Episode the originating Transcript is attached to
+            clipStart        The starting Time Code for the Clip
+            clipStop         the ending Time Code for the Clip
+            text             the Text for the Clip, in RTF format. """
+        self.transcriptNum = transcriptNum
+        self.episodeNum = episodeNum
+        self.clipStart = clipStart
+        self.clipStop = clipStop
+        self.text = text
 
-   def __repr__(self):
-      str = 'ClipDragDropData Object:\n'
-      str = str + 'transcriptNum = %s\n' % self.transcriptNum
-      str = str + 'episodeNum = %s\n' % self.episodeNum
-      str = str + 'clipStart = %s\n' % Misc.time_in_ms_to_str(self.clipStart)
-      str = str + 'clipStop = %s\n' % Misc.time_in_ms_to_str(self.clipStop)
-      str = str + 'text = %s\n\n' % self.text
-      return str
+    def __repr__(self):
+        str = 'ClipDragDropData Object:\n'
+        str = str + 'transcriptNum = %s\n' % self.transcriptNum
+        str = str + 'episodeNum = %s\n' % self.episodeNum
+        str = str + 'clipStart = %s\n' % Misc.time_in_ms_to_str(self.clipStart)
+        str = str + 'clipStop = %s\n' % Misc.time_in_ms_to_str(self.clipStop)
+        str = str + 'text = %s\n\n' % self.text
+        return str
 
 
 def CreateClip(clipData, dropData, tree, dropNode):
@@ -547,8 +547,6 @@ def CreateClip(clipData, dropData, tree, dropNode):
     if (tempClip.clip_stop == TransanaGlobal.menuWindow.ControlObject.VideoWindow.GetMediaLength()) and \
        (tempClip.clip_stop - tempClip.clip_start > 30000):
         prompt = _('The ending point for this Clip is the end of the media file.  Do you want to create this clip?')
-#        errordlg = wx.MessageDialog(None, prompt, _("Transana Error"), style=wx.YES_NO | wx.ICON_QUESTION)
-#        result = errordlg.ShowModal()
         errordlg = Dialogs.QuestionDialog(None, prompt, _("Transana Error"))
         result = errordlg.LocalShowModal()
         errordlg.Destroy()
@@ -566,8 +564,20 @@ def CreateClip(clipData, dropData, tree, dropNode):
         # We don't cancel clip creation, but we do adjust the end of the clip.
         tempClip.clip_stop = TransanaGlobal.menuWindow.ControlObject.VideoWindow.GetMediaLength()
 
-    # Get the Clip Transcript from the clipData Object
-    tempClip.text = clipData.text
+    # Create a Transcript object
+    tempClipTranscript = Transcript.Transcript()
+    # Get the Episode Number
+    tempClipTranscript.episode_num = tempClip.episode_num
+    # Get the Source Transcript number
+    tempClipTranscript.source_transcript = clipData.transcriptNum
+    # Get the Start Time
+    tempClipTranscript.clip_start = clipData.clipStart
+    # Get the Clip Stop Time
+    tempClipTranscript.clip_stop = clipData.clipStop
+    # Assign the Transcript Text
+    tempClipTranscript.text = clipData.text
+    # Add the Temporary Transcript to the Quick Clip
+    tempClip.transcripts.append(tempClipTranscript)
 
     # If the Clip Creation Object is dropped on a Collection ...
     if dropData.nodetype == 'CollectionNode':
@@ -714,12 +724,9 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
     """Drop a Keyword onto an Object.  sourceData is from the Keyword.  The
     targetType is one of 'Series', 'Episode', 'Collection', or 'Clip'.
     targetParent is only used for collections."""
-    
     # Trying to deal with a Mac issue temporarily.  Dragging within the Transcript sometimes triggers this method when it shouldn't.  Can't find the cause.
-    if "__WXMAC__" in wx.PlatformInfo and \
-       (type(sourceData) == type(ClipDragDropData())):
-           return
-    
+    if not TransanaConstants.macDragDrop and ("__WXMAC__" in wx.PlatformInfo) and (type(sourceData) == type(ClipDragDropData())):
+       return
     if targetType == 'Series':
         # Get user confirmation of the Keyword Add request
         if 'unicode' in wx.PlatformInfo:
@@ -984,8 +991,139 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
        elif action == 'Move':
           copyMovePrompt = _('MOVE')
 
+   # Drop an Episode on a Series (Move an Episode)
+   if (sourceData.nodetype == 'EpisodeNode' and destNodeData.nodetype == 'SeriesNode'):
+       # Get the Episode data
+       tmpEpisode = Episode.Episode(sourceData.recNum)
+       # Get the data for the SOURCE Series
+       oldSeries = Series.Series(sourceData.parent)
+       # Get the data for the Destination Series
+       tmpSeries = Series.Series(destNodeData.recNum)
+       # Begin Exception Handling for the Lock
+       try:
+           # Try to lock the Episode
+           tmpEpisode.lock_record()
+           # If successful, assign the DESTINATION Series Number and ID to the Episode.
+           tmpEpisode.series_num = tmpSeries.number
+           tmpEpisode.series_id = tmpSeries.id
+           # Start nested Exception Handling for the Save
+           try:
+                # Try to Save the Episode
+                tmpEpisode.db_save()
+
+                # Now we need to move the entry in the Data Tree
+                # Start by building the Episode's new Node List
+                nodeData = (_('Series'), tmpSeries.id, tmpEpisode.id)
+                # Add the Episode node to the data tree
+                treeCtrl.add_Node('EpisodeNode', nodeData, tmpEpisode.number, tmpSeries.number)
+                # Now let's communicate with other Transana instances if we're in Multi-user mode
+                if not TransanaConstants.singleUserVersion:
+                    if DEBUG:
+                        print 'Message to send = "AE %s >|< %s"' % (nodeData[-2], nodeData[-1])
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("AE %s >|< %s" % (nodeData[-2], nodeData[-1]))
+
+                # Now request that the Episode's OLD node be deleted.
+                # First build the Node List for the OLD Episode ...
+                nodeData = (_('Series'), oldSeries.id, tmpEpisode.id)
+                # ... and delete it from the tree
+                treeCtrl.delete_Node(nodeData, 'EpisodeNode')
+
+                # If we are moving an Episode, the episode's Notes need to travel with the Episode.  The first step is to
+                # get a list of those Notes.
+                noteList = DBInterface.list_of_notes(Episode=tmpEpisode.number)
+                # If there are Episode Notes, we need to make sure they travel with the Episode
+                if noteList != []:
+                    # Build the Node List for the new Episode
+                    nodeData = (_('Series'), tmpSeries.id, tmpEpisode.id)
+                    # Select the new Episode Node
+                    newNode = treeCtrl.select_Node(nodeData, 'EpisodeNode')
+                    # Use the TreeCtrl's "add_note_nodes" method to move the notes locally
+                    treeCtrl.add_note_nodes(noteList, newNode, Episode=tmpEpisode.number)
+                    treeCtrl.Refresh()
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        # Iterate through the Notes List
+                        for noteid in noteList:
+                            # Construct the message and data to be passed
+                            msg = "AEN %s"
+                            # To avoid problems in mixed-language environments, we need the UNTRANSLATED string here!
+                            data = (u'Series',) + nodeData[1:]  + (noteid,)
+                            # Build the message to be sent
+                            for nd in data[1:]:
+                                msg += " >|< %s"
+                            if DEBUG:
+                                print 'Message to send =', msg % data
+                            # Send the message
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+                # If we are moving an Episode, the episode's Transcripts need to travel with the Episode.  The first step is to
+                # get a list of those Transcripts.
+                transcriptList = DBInterface.list_transcripts(tmpSeries.id, tmpEpisode.id)
+                # If there are Episode Transcripts, we need to make sure they travel with the Episode
+                if transcriptList != []:
+                    # Iterate through the Transcript List
+                    for (transcriptNum, transcriptID, transcriptEpisodeNum) in transcriptList:
+                        # Build the Node List for the new Transcript
+                        nodeData = (_('Series'), tmpSeries.id, tmpEpisode.id, transcriptID)
+                        # Add the Transcript node to the data tree
+                        treeCtrl.add_Node('TranscriptNode', nodeData, transcriptNum, transcriptEpisodeNum)
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            if DEBUG:
+                                print 'Message to send = "AT %s >|< %s >|< %s"' % (nodeData[-3], nodeData[-2], nodeData[-1])
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage("AT %s >|< %s >|< %s" % (nodeData[-3], nodeData[-2], nodeData[-1]))
+                                
+                        # If we are moving a Transcript, the Transcript's Notes need to travel with the Transcript.  The first step is to
+                        # get a list of those Notes.
+                        noteList = DBInterface.list_of_notes(Transcript=transcriptNum)
+                        
+                        # If there are Episode Notes, we need to make sure they travel with the Episode
+                        if noteList != []:
+                            # Select the new Transcript Node
+                            newNode = treeCtrl.select_Node(nodeData, 'TranscriptNode')
+                            # Use the TreeCtrl's "add_note_nodes" method to move the notes locally
+                            treeCtrl.add_note_nodes(noteList, newNode, Transcript=transcriptNum)
+                            treeCtrl.Refresh()
+                            # Now let's communicate with other Transana instances if we're in Multi-user mode
+                            if not TransanaConstants.singleUserVersion:
+                                # Iterate through the Notes List
+                                for noteid in noteList:
+                                    # Construct the message and data to be passed
+                                    msg = "ATN %s"
+                                    # To avoid problems in mixed-language environments, we need the UNTRANSLATED string here!
+                                    data = (u'Series',) + nodeData[1:]  + (noteid,)
+                                    # Build the message to be sent
+                                    for nd in data[1:]:
+                                        msg += " >|< %s"
+                                    if DEBUG:
+                                        print 'Message to send =', msg % data
+                                    # Send the message
+                                    if TransanaGlobal.chatWindow != None:
+                                        TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+
+           # If the Save fails ...
+           except TransanaExceptions.SaveError, e:
+                # Display the Error Message
+                msg = _('An Episode named "%s" already exists in Series "%s".')
+                if 'unicode' in wx.PlatformInfo:
+                    msg = unicode(msg, 'utf8')
+                errordlg = Dialogs.ErrorDialog(None, msg % (tmpEpisode.id, Series.Series(destNodeData.recNum).id))
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                
+           # If we get this far, unlock the Episode
+           tmpEpisode.unlock_record()
+       # If we are unable to lock the Episode ...
+       except TransanaExceptions.RecordLockedError, e:
+           # Report the Record Lock failure
+           TransanaExceptions.ReportRecordLockedException(_('Episode'), tmpEpisode.id, e)
+       
    # Drop a Collection on a Collection (Copy or Move all Clips in a Collection)
-   if (sourceData.nodetype == 'CollectionNode' and destNodeData.nodetype == 'CollectionNode'):
+   elif (sourceData.nodetype == 'CollectionNode' and destNodeData.nodetype == 'CollectionNode'):
       # Load the Source Collection
       sourceCollection = Collection.Collection(sourceData.recNum, sourceData.parent)
       # We need a list of all the clips in the Source Collection
@@ -2020,20 +2158,35 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
                 if TransanaGlobal.chatWindow != None:
                     TransanaGlobal.chatWindow.SendMessage(msg % collectName)
 
+        # If we have a single-transcript QuickClip, then clipData.transcriptNum is > 0 and clipData.text is RTF text.
+        # If we have a multi-transcript QuickClip, then clipData.transcriptNum == 0 and clipData.text is actually a
+        # Clip object.  In this case, we need to pass ALL source transcript numbers to the CheckForDuplicateQuickClip()
+        # function.
+        if clipData.transcriptNum == 0:
+            # Initialize a list.
+            clipData.transcriptNum = []
+            # for each transcript ...
+            for tr in clipData.text.transcripts:
+                # ... append its source transcript to the list.
+                clipData.transcriptNum.append(tr.source_transcript)
+
         # Check to see if a Quick Clip for this selection in this Transcript in this Episode has already been created.
         dupClipNum = DBInterface.CheckForDuplicateQuickClip(collectNum, clipData.episodeNum, clipData.transcriptNum, clipData.clipStart, clipData.clipStop)
+
         # -1 indicates no duplicate Quick Clip.  If there IS a duplicate ...
         if dupClipNum > -1:
             # ... load the existing Quick Clip
             quickClip = Clip.Clip(dupClipNum)
-            # Inform the user of the duplication.
-            msg = _('A Quick Clip matching this selection already exists.\nKeyword "%s : %s" will be added to\nQuick Clip "%s".')
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                msg = unicode(msg, 'utf8')
-            tempDlg = Dialogs.InfoDialog(None, msg % (kwg, kw, quickClip.id))
-            tempDlg.ShowModal()
-            tempDlg.Destroy()
+            # If we're supposed to warn users ...
+            if TransanaGlobal.configData.quickClipWarning:
+                # Inform the user of the duplication.
+                msg = _('A Quick Clip matching this selection already exists.\nKeyword "%s : %s" will be added to\nQuick Clip "%s".')
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    msg = unicode(msg, 'utf8')
+                tempDlg = Dialogs.InfoDialog(None, msg % (kwg, kw, quickClip.id))
+                tempDlg.ShowModal()
+                tempDlg.Destroy()
             # Attempt to add the selected keyword to the existing Quick Clip
             try:
                 # Attempt to get a record lock
@@ -2118,12 +2271,29 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
             quickClip.id = baseName + str(baseNum)
             quickClip.collection_num = collectNum
             quickClip.episode_num = clipData.episodeNum
-            quickClip.transcript_num = clipData.transcriptNum
             quickClip.media_filename = sourceEpisode.media_filename
             quickClip.clip_start = clipData.clipStart
             quickClip.clip_stop = clipData.clipStop
             quickClip.sort_order = DBInterface.getMaxSortOrder(collectNum) + 1
-            quickClip.text = clipData.text
+            # If we're creating a multi-transcript Quick Clip, the clipData.text field will actually be a Clip object!
+            if isinstance(clipData.text, Clip.Clip):
+                # If this is the case, just point the quick clip to the transcripts that are passed in.
+                quickClip.transcripts = clipData.text.transcripts
+            # If we're dealing with a single-transcript Quick Clip, we'll just have text here.
+            else:
+                # Create a Transcript object
+                tempTranscript = Transcript.Transcript()
+                # Get the Episode Number
+                tempTranscript.episode_num = quickClip.episode_num
+                # Get the Source Transcript number
+                tempTranscript.source_transcript = clipData.transcriptNum
+                # Grab the Clip Start and Stop times from the Clip object
+                tempTranscript.clip_start = quickClip.clip_start
+                tempTranscript.clip_stop = quickClip.clip_stop
+                # Assign the Transcript Text
+                tempTranscript.text = clipData.text
+                # Add the Temporary Transcript to the Quick Clip
+                quickClip.transcripts.append(tempTranscript)
 
             # Add the Episode Keywords as default Clip Keywords
             quickClip.keyword_list = sourceEpisode.keyword_list

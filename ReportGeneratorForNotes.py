@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -80,8 +80,14 @@ class ReportGenerator(wx.Object):
 
         # Define the Filter List
         self.filterList = []
+        # To speed report creation, freeze GUI updates based on changes to the report text
+        self.report.reportText.Freeze()
         # Trigger the ReportText method that causes the report to be displayed.
         self.report.CallDisplay()
+        # Apply the Default Filter, if one exists
+        self.report.OnFilter(None)
+        # Now that we're done, remove the freeze
+        self.report.reportText.Thaw()
 
     def OnDisplay(self, reportText):
         """ This method, required by TextReport, populates the TextReport.  The reportText parameter is
@@ -129,6 +135,23 @@ class ReportGenerator(wx.Object):
             centerSpacer = self.report.GetCenterSpacer(style, self.subtitle)
             # ... and insert the spacer and the subtitle.
             reportText.InsertStyledText('\n' + centerSpacer + self.subtitle)
+
+        if self.configName != '':
+            # ...  add a subtitle
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Filter Configuration: %s"), 'utf8')
+            else:
+                prompt = _("Filter Configuration: %s")
+            self.configLine = prompt % self.configName
+            # ... set the font for the subtitle ...
+            reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
+            # ... get the style specifier for that font ...
+            style = reportText.GetStyleAccessor("size:10,face:Courier New,fore:#000000,back:#ffffff")
+            # ... get the spaces needed to center the subtitle ...
+            centerSpacer = self.report.GetCenterSpacer(style, self.configLine)
+            # ... and insert the spacer and the subtitle.
+            reportText.InsertStyledText('\n' + centerSpacer + self.configLine)
         # Skip a couple of lines.
         reportText.InsertStyledText('\n\n')
 
@@ -292,6 +315,11 @@ class ReportGenerator(wx.Object):
     def OnFilter(self, event):
         """ This method, required by TextReport, implements the call to the Filter Dialog.  It needs to be
             in the report parent because the TextReport doesn't know the appropriate filter parameters. """
+        # See if we're loading the Default profile.  This is signalled by an event of None!
+        if event == None:
+            loadDefault = True
+        else:
+            loadDefault = False
         # Determine the Report Scope
         if self.reportType == 'RootNode':
             reportScope = 1
@@ -308,12 +336,32 @@ class ReportGenerator(wx.Object):
         # Define the Filter Dialog.  We need reportType 13 to identify the Notes Report, the appropriate reportScope,
         # and the capacity to filter Notes.
         dlgFilter = FilterDialog.FilterDialog(self.report, -1, self.title, reportType=13,
-                                              reportScope=reportScope, configName=self.configName,
+                                              reportScope=reportScope, loadDefault=loadDefault, configName=self.configName,
                                               notesFilter=True)
         # Populate the Filter Dialog with the Notes Filter list
         dlgFilter.SetNotes(self.filterList)
-        # If the filter is defined and accepted by the user ...
-        if dlgFilter.ShowModal() == wx.ID_OK:
+        # If we're loading the Default configuration ...
+        if loadDefault:
+            # ... get the list of existing configuration names.
+            profileList = dlgFilter.GetConfigNames()
+            # If (translated) "Default" is in the list ...
+            # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
+            if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                # ... then signal that we need to load the config.
+                dlgFilter.OnFileOpen(None)
+                # Fake that we asked the user for a filter name and got an OK
+                result = wx.ID_OK
+            # If we're loading a Default profile, but there's none in the list, we can skip
+            # the rest of the Filter method by pretending we got a Cancel from the user.
+            else:
+                result = wx.ID_CANCEL
+        # If we're not loading a Default profile ...
+        else:
+            # ... we need to show the Filter Dialog here.
+            result = dlgFilter.ShowModal()
+            
+        # If the user clicks OK (or we have a Default config)
+        if result == wx.ID_OK:
             # ... get the filter data ...
             self.filterList = dlgFilter.GetNotes()
             # Remember the configuration name for later reuse

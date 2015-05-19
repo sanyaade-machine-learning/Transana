@@ -13,7 +13,7 @@ import gettext
 gettext.install('RegenDocs')
 
 # These classes follow the form of Class and FileName being the same
-classes = [ "BatchWaveformGenerator",
+classes = [ "BatchFileProcessor",
             "ChatWindow",
             "Clip",
             "ClipDataExport",

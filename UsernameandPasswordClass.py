@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2007  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2008  The Board of Regents of the University of Wisconsin System
 #
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -13,9 +13,7 @@
 #You should have received a copy of the GNU General Public License
 #along with this program; if not, write to the Free Software
 #Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
-#
-# This code is taken from the wxPython Demo file "PrintFramework.py" and
-# has been modified by David Woods
+
 
 """ For single-user Transana, this module requests the Database Name from the user.
     For multi-user Transana, this module requests UserName, Password, Database Server,
@@ -70,8 +68,13 @@ class UsernameandPassword(wx.Dialog):
             dlgSize=(350, 250)
             # Instructions Text
             instructions = _("Please enter your MySQL username and password, as well \nas the names of the server and database you wish to use.\nTo create a new database, type in a new database name\n(if you have appropriate permissions.)\n(Database names may contain only letters and numbers in\na single word.)")
-            # Sizer Proportion for the instructions
-            instProportion = 5
+            # Macs don't need as much space for instructions as Windows machines do.
+            if 'wxMac' in wx.PlatformInfo:
+                # Sizer Proportion for the instructions
+                instProportion = 4
+            else:
+                # Sizer Proportion for the instructions
+                instProportion = 5
 
         # Define the main Dialog Box
         wx.Dialog.__init__(self, parent, -1, dlgTitle, size=dlgSize, style=wx.CAPTION | wx.RESIZE_BORDER)
@@ -95,13 +98,28 @@ class UsernameandPassword(wx.Dialog):
         # Get the dictionary of defined database hosts and databases from the Configuration module
         self.Databases = TransanaGlobal.configData.databaseList
 
+        # With release 2.30, we add the Port parameter for MU.  This requires a change to the format of the
+        # configuration data.  Therefore, we need to examine the structure of the configuration data.
+        # If it exists and the data type is a list, we need to update the structure of the existing data.
+        if (len(self.Databases) >0) and (type(self.Databases[self.Databases.keys()[0]]) == type([])):
+            # Create a new Dictionary object
+            newDatabases = {}
+            # Iterate through the old dictionary object.  For each database server ...
+            for dbServer in self.Databases.keys():
+                # ... we need the database list AND the port.  Port 3306 was the only option until this change
+                #, so makes an adequate default.
+                newDatabases[dbServer] = {'dbList' : self.Databases[dbServer],
+                                          'port' : '3306'}
+            # Replace the old config data with this modified version.
+            self.Databases = newDatabases
+
         # The multi-user version has more fields than the single-user version.
         # If not the single-user version, put these fields on the form.
         if not TransanaConstants.singleUserVersion:
 
             # Let's use a FlexGridSizer for the data entry fields.
-            # for MU, we want 4 rows with 2 columns
-            box2 = wx.FlexGridSizer(4, 2, 6, 0)
+            # for MU, we want 5 rows with 2 columns
+            box2 = wx.FlexGridSizer(5, 2, 6, 0)
             # We want to be flexible horizontally
             box2.SetFlexibleDirection(wx.HORIZONTAL)
             # We want the data entry fields to expand
@@ -141,16 +159,29 @@ class UsernameandPassword(wx.Dialog):
 
             # Define the Selection, SetFocus and KillFocus events for the Host / Server Combo Box
             wx.EVT_COMBOBOX(self, self.chDBServer.GetId(), self.OnServerSelect)
+
+            # NOTE:  These events don't work on the MAC!  There appears to be a wxPython bug.  See wxPython ticket # 9862
             wx.EVT_SET_FOCUS(self.chDBServer, self.OnCBSetFocus)
             wx.EVT_KILL_FOCUS(self.chDBServer, self.OnServerKillFocus)
-            
+
+            # Define the Port TextCtrl and its KillFocus event
+            lblPort = wx.StaticText(panel, -1, _("Port:"))
+            self.txtPort = wx.TextCtrl(panel, -1, TransanaGlobal.configData.dbport, style=wx.TE_LEFT)
+
+            # This wx.EVT_SET_FOCUS is a poor attempt to compensate for wxPython bug # 9862
+            if 'wxMac' in wx.PlatformInfo:
+                self.txtPort.Bind(wx.EVT_SET_FOCUS, self.OnServerKillFocus)
+            self.txtPort.Bind(wx.EVT_KILL_FOCUS, self.OnPortKillFocus)
+
             # Let's add the MU controls we've created to the Data Entry Sizer
             box2.AddMany([(lblUsername, 1, wx.RIGHT, 10),
                           (self.txtUsername, 2, wx.EXPAND),
                           (lblPassword, 1, wx.RIGHT, 10),
                           (self.txtPassword, 2, wx.EXPAND),
                           (lblDBServer, 1, wx.RIGHT, 10),
-                          (self.chDBServer, 2, wx.EXPAND)
+                          (self.chDBServer, 2, wx.EXPAND),
+                          (lblPort, 1, wx.RIGHT, 10),
+                          (self.txtPort, 2, wx.EXPAND)
                          ])
         else:
             # For single-user Transana, we only need one row with two columns
@@ -196,7 +227,7 @@ class UsernameandPassword(wx.Dialog):
                 # ... Use the Databases object to get the list of Databases for the
                 # identified Server
                 if DBServerName != '':
-                    choicelist = self.Databases[DBServerName]
+                    choicelist = self.Databases[DBServerName]['dbList']
                 else:
                     choicelist = ['']
 
@@ -227,7 +258,7 @@ class UsernameandPassword(wx.Dialog):
         box.Add(box2, box2Proportion, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
         # Create another sizer for the buttons, with a horizontal orientation
-        box3 = wx.BoxSizer(wx.HORIZONTAL)
+        box4 = wx.BoxSizer(wx.HORIZONTAL)
 
         if not TransanaConstants.demoVersion:
             # Define the "Delete Database" Button
@@ -246,15 +277,15 @@ class UsernameandPassword(wx.Dialog):
 
         if not TransanaConstants.demoVersion:
             # Add the Delete Database button to the lower left corner
-            box3.Add(btnDeleteDatabase, 3, wx.ALIGN_LEFT | wx.ALIGN_BOTTOM | wx.LEFT | wx.BOTTOM, 10)
+            box4.Add(btnDeleteDatabase, 3, wx.ALIGN_LEFT | wx.ALIGN_BOTTOM | wx.LEFT | wx.BOTTOM, 10)
         # Lets have some space between this button and  the others.
-        box3.Add((30, 1), 1, wx.EXPAND)
+        box4.Add((30, 1), 1, wx.EXPAND)
         # Add the OK button to the lower right corner
-        box3.Add(btnOK, 2, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT | wx.BOTTOM, 10)
+        box4.Add(btnOK, 2, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT | wx.BOTTOM, 10)
         # Add the Cancel button to the lower right corner, bumping the OK button to the left
-        box3.Add(btnCancel, 2, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT | wx.BOTTOM, 10)
+        box4.Add(btnCancel, 2, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT | wx.BOTTOM, 10)
         # Add the Button sizer to the main sizer
-        box.Add(box3, 2, wx.EXPAND)
+        box.Add(box4, 2, wx.EXPAND)
 
         # Lay out the panel and the form, request AutoLayout for both.
         panel.Layout()
@@ -304,10 +335,12 @@ class UsernameandPassword(wx.Dialog):
               self.Username = ''
               self.Password = ''
               self.DBServer = 'localhost'
+              self.Port     = '3306'
           else:
               self.Username = self.txtUsername.GetValue()
               self.Password = self.txtPassword.GetValue()
               self.DBServer = self.chDBServer.GetValue()
+              self.Port     = self.txtPort.GetValue()
           self.DBName   = self.chDBName.GetValue()
 
           # the EVT_KILL_FOCUS for the Combo Boxes isn't getting called on the Mac.  Let's call it manually here
@@ -322,16 +355,17 @@ class UsernameandPassword(wx.Dialog):
           self.Password = ''
           self.DBServer = ''
           self.DBName   = ''
+          self.Port = ''
         return None
 
     def OnServerSelect(self, event):
         """ Process the Selection of a Database Host """
         # Clear the list of Databases
         self.chDBName.Clear()
-        # If there are databases defined for the Host selected ...
-        if self.Databases[event.GetString()] != []:
+        # If there is a database list defined for the Host selected ...
+        if self.Databases[event.GetString()]['dbList'] != []:
             # ... iterate through the list of databases for the host ...
-            for db in self.Databases[event.GetString()]:
+            for db in self.Databases[event.GetString()]['dbList']:
                 # ... and put the databases in the Database Combo Box
                 self.chDBName.Append(db)
         # If not, show an empty list
@@ -339,6 +373,10 @@ class UsernameandPassword(wx.Dialog):
             self.chDBName.Append('')
         # Select the first entry in the list
         self.chDBName.SetSelection(0)
+        # If we're in the multi-user version ...
+        if not TransanaConstants.singleUserVersion:
+            # ... set the value for the server's Port based on the config data
+            self.txtPort.SetValue(self.Databases[event.GetString()]['port'])
 
     def OnCBSetFocus(self, event):
         """ Combo Box Set Focus Event """
@@ -349,8 +387,15 @@ class UsernameandPassword(wx.Dialog):
         """ KillFocus event for Host/Server Combo Box """
         # See if the Host Name has not yet been used.
         if (self.chDBServer.GetValue() != '') and (not self.Databases.has_key(self.chDBServer.GetValue())):
+            # If single-user, use port 3306
+            if TransanaConstants.singleUserVersion:
+                portVal = '3306'
+            # if multi-user, get the Port value on screen
+            else:
+                portVal = self.txtPort.GetValue()
             # Add the new Server to the Databases Dictionary
-            self.Databases[self.chDBServer.GetValue()] = []
+            self.Databases[self.chDBServer.GetValue()] = {'dbList' : [],
+                                                          'port' : portVal}
             # Add the new value to the control's dropdown
             self.chDBServer.Append(self.chDBServer.GetValue())
             # Update the DBName Control based on the new Server
@@ -362,12 +407,18 @@ class UsernameandPassword(wx.Dialog):
 
     def OnNameKillFocus(self, event):
         """ KillFocus event for Database Combo Box """
+        # Determine the Database Server name and port
         if TransanaConstants.singleUserVersion:
             DBServerName = 'localhost'
+            portVal = '3306'
         else:
             DBServerName = self.chDBServer.GetValue()
+            portVal = self.txtPort.GetValue()
+        # If we have a NEW Database server ...
         if not self.Databases.has_key(DBServerName):
-            self.Databases[DBServerName] = []
+            # ... create a new entry with a blank database list and the correct port
+            self.Databases[DBServerName] = {'dbList' : [],
+                                            'port' : portVal}
         if 'unicode' in wx.PlatformInfo:
             try:
                 dbName = self.chDBName.GetValue().encode('utf8')  #(TransanaGlobal.encoding)
@@ -378,10 +429,12 @@ class UsernameandPassword(wx.Dialog):
                 dbName = ''
         else:
             dbName = self.chDBName.GetValue()
-        # See if the Database Name has not yet been used
-        if (self.chDBName.GetValue() != '') and (not dbName in self.Databases[DBServerName]):
-            # Add the new Database Name to the Databases Dictionary
-            self.Databases[DBServerName].append(dbName)
+        # See if the Database Name has not yet been added to the database list.  If not ...
+        if (self.chDBName.GetValue() != '') and \
+           (self.Databases.has_key(DBServerName)) and \
+           (not dbName in self.Databases[DBServerName]['dbList']):
+            # Add the new Database Name to the Database List
+            self.Databases[DBServerName]['dbList'].append(dbName)
             # Add the new value to the control's dropdown
             self.chDBName.Append(self.chDBName.GetValue())
         self.chDBName.SetInsertionPointEnd()
@@ -390,9 +443,21 @@ class UsernameandPassword(wx.Dialog):
         if event != None:
             event.Skip()
 
+    def OnPortKillFocus(self, event):
+        """ Lose Focus event for Port Entry """
+        # If this server has not yet been used, it won't have the correct config information.  Check.
+        if not self.Databases.has_key(self.chDBServer.GetValue()):
+            # If it doesn't exist, create a dictionary for saving config values for this server.
+            self.Databases[self.chDBServer.GetValue()] = {'dbList' : [],
+                                                          'port' : self.txtPort.GetValue()}
+        else:
+            # When leaving the port field, we need to update the configuration data object
+            self.Databases[self.chDBServer.GetValue()]['port'] = self.txtPort.GetValue()
+            
+
     def GetValues(self):
         """ Get all Data Values the user entered into this Dialog Box """
-        return (self.Username, self.Password, self.DBServer, self.DBName)
+        return (self.Username, self.Password, self.DBServer, self.DBName, self.Port)
 
     def GetUsername(self):
         """ Get the User Name Entry """
@@ -409,6 +474,10 @@ class UsernameandPassword(wx.Dialog):
     def GetDBName(self):
         """ Get the Database Selection """
         return self.DBName
+
+    def GetPort(self):
+        """ Get the Port Selection """
+        return self.Port
 
     def OnDeleteDatabase(self, event):
         """ Delete a database """
@@ -439,17 +508,23 @@ class UsernameandPassword(wx.Dialog):
             if self.chDBName.GetValue() == '':
                 errormsg += _('You must specify a Database.\n')
 
+            if not TransanaConstants.singleUserVersion:
+                if self.txtPort.GetValue() == '':
+                    errormsg += _("You must specify a Port.\n")
+
             if errormsg == '':
                 if TransanaConstants.singleUserVersion:
                     username = ''
                     password = ''
                     server = 'localhost'
                     database = self.chDBName.GetValue()
+                    port = '3306'
                 else:
                     username = self.txtUsername.GetValue()
                     password = self.txtPassword.GetValue()
                     server = self.chDBServer.GetValue()
                     database = self.chDBName.GetValue()
+                    port = self.txtPort.GetValue()
 
                 # Get the name of the database to delete
                 if 'unicode' in wx.PlatformInfo:
@@ -457,19 +532,19 @@ class UsernameandPassword(wx.Dialog):
                 else:
                     dbName = self.chDBName.GetValue()
                 # If we've deleted the database, remove that database name from the list of existing databases
-                self.Databases[server].remove(dbName)
+                self.Databases[server]['dbList'].remove(dbName)
                 # Clear the database name from the screen control
                 self.chDBName.SetValue('')
                 # Clear out the Database name control's Choices ...
                 self.chDBName.Clear()
-                # ... and populate them with the appropriate values
-                for choice in self.Databases[server]:
+                # ... and populate them with the appropriate values from the database list
+                for choice in self.Databases[server]['dbList']:
                     self.chDBName.Append(choice)
                 # Remove the Database Name from the Configuration record of existing databases
                 TransanaGlobal.configData.databaseList = self.Databases
                 # Remove the Database Name from the Configuration Record for the current database
                 TransanaGlobal.configData.database = ''
-                if not DBInterface.DeleteDatabase(username, password, server, database):
+                if not DBInterface.DeleteDatabase(username, password, server, database, port):
                     msg = _('Transana could not delete database "%s".\nHowever, it has been removed from the list of databases you have used.')
                     if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -493,13 +568,13 @@ class UsernameandPassword(wx.Dialog):
                 else:
                     dbName = database
                 # If we've deleted the database, remove that database name from the list of existing databases
-                self.Databases[server].remove(dbName)
+                self.Databases[server]['dbList'].remove(dbName)
                 # Clear the database name from the screen control
                 self.chDBName.SetValue('')
                 # Clear out the Database name control's Choices ...
                 self.chDBName.Clear()
-                # ... and populate them with the appropriate values
-                for choice in self.Databases[server]:
+                # ... and populate them with the appropriate values from the database list
+                for choice in self.Databases[server]['dbList']:
                     self.chDBName.Append(choice)
                 # Remove the Database Name from the Configuration record of existing databases
                 TransanaGlobal.configData.databaseList = self.Databases

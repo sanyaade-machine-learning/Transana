@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -36,15 +36,26 @@ import TransanaGlobal
 class OptionsSettings(wx.Dialog):
     """ Options > Settings Dialog Box """
 
-    def __init__(self, parent, tabToShow=0):
+    def __init__(self, parent, tabToShow=0, lab=False):
         """ Initialize the Program Options Dialog Box """
         self.parent = parent
+        self.lab = lab
+        dlgWidth = 550
+        # The Configuration Options dialog needs to be a different on different platforms, and
+        # if we're showing the LAB version's initial configuration, we need a bit more room.
         if 'wxMSW' in wx.PlatformInfo:
-            dlgHeight = 360
+            if self.lab:
+                dlgHeight = 370
+            else:
+                dlgHeight = 360
         else:
-            dlgHeight = 300
+            if self.lab:
+                dlgWidth = 580
+                dlgHeight = 350
+            else:
+                dlgHeight = 300
         # Define the Dialog Box
-        wx.Dialog.__init__(self, parent, -1, _("Transana Settings"), wx.DefaultPosition, wx.Size(550, dlgHeight), style=wx.CAPTION | wx.SYSTEM_MENU | wx.THICK_FRAME)
+        wx.Dialog.__init__(self, parent, -1, _("Transana Settings"), wx.DefaultPosition, wx.Size(dlgWidth, dlgHeight), style=wx.CAPTION | wx.SYSTEM_MENU | wx.THICK_FRAME)
 
         # To look right, the Mac needs the Small Window Variant.
         if "__WXMAC__" in wx.PlatformInfo:
@@ -62,43 +73,30 @@ class OptionsSettings(wx.Dialog):
         # Define the Directories Tab that goes in the wxNotebook
         panelDirectories = wx.Panel(notebook, -1, size=notebook.GetSizeTuple(), name='OptionsSettings.DirectoriesPanel')
 
-        # Add the Waveform Directory Label to the Directories Tab
-        lblWaveformDirectory = wx.StaticText(panelDirectories, -1, _("Waveform Directory"), style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(panelDirectories, wx.Top, 20)
-        lay.left.SameAs(panelDirectories, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblWaveformDirectory.SetConstraints(lay)
-        
-        # Add the Waveform Directory TextCtrl to the Directories Tab
-        # If the visualization path is not empty, we should normalize the path specification
-        if TransanaGlobal.configData.visualizationPath == '':
-            visualizationPath = TransanaGlobal.configData.visualizationPath
-        else:
-            visualizationPath = os.path.normpath(TransanaGlobal.configData.visualizationPath)
-        self.waveformDirectory = wx.TextCtrl(panelDirectories, -1, visualizationPath)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblWaveformDirectory, 3)
-        lay.left.SameAs(panelDirectories, wx.Left, 10)
-        lay.right.SameAs(panelDirectories, wx.Right, 100)
-        lay.height.AsIs()
-        self.waveformDirectory.SetConstraints(lay)
+        # The LAB version initial configuration dialog gets some introductory text that can be skipped otherwise.
+        if lab:
+            # Add the LAB Version configuration instructions Label to the Directories Tab
+            instText = _("Transana needs to know where you store your data.  Please identify the location where you store your \nsource media files, where you want Transana to save your waveform data, and where you want your \ndatabase files stored.  ") + '\n\n'
+            instText += _("None of this should be on the lab computer, where others may be able to access your confidential data, \nor where data may be deleted over night.")
+            lblLabInst = wx.StaticText(panelDirectories, -1, instText, style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.SameAs(panelDirectories, wx.Top, 10)
+            lay.left.SameAs(panelDirectories, wx.Left, 10)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblLabInst.SetConstraints(lay)
 
-        # Add the Waveform Directory Browse Button to the Directories Tab
-        self.btnWaveformBrowse = wx.Button(panelDirectories, -1, _("Browse"))
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblWaveformDirectory, 3)
-        lay.left.RightOf(self.waveformDirectory, 10)
-        lay.right.SameAs(panelDirectories, wx.Right, 10)
-        lay.height.AsIs()
-        self.btnWaveformBrowse.SetConstraints(lay)
-        wx.EVT_BUTTON(self, self.btnWaveformBrowse.GetId(), self.OnBrowse)
-        
+            # The next dialog item goes under these instructions.
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblLabInst, 20)
+        # If NOT in the lab version ...
+        else:
+            # ... the next dialog item goes at the top of the Directories panel.
+            lay = wx.LayoutConstraints()
+            lay.top.SameAs(panelDirectories, wx.Top, 15)
+
         # Add the Video Root Directory Label to the Directories Tab
         lblVideoDirectory = wx.StaticText(panelDirectories, -1, _("Video Root Directory"), style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.waveformDirectory, 20)
         lay.left.SameAs(panelDirectories, wx.Left, 10)
         lay.width.AsIs()
         lay.height.AsIs()
@@ -128,10 +126,43 @@ class OptionsSettings(wx.Dialog):
         self.btnVideoBrowse.SetConstraints(lay)
         wx.EVT_BUTTON(self, self.btnVideoBrowse.GetId(), self.OnBrowse)
 
+        # Add the Waveform Directory Label to the Directories Tab
+        lblWaveformDirectory = wx.StaticText(panelDirectories, -1, _("Waveform Directory"), style=wx.ST_NO_AUTORESIZE)
+        lay = wx.LayoutConstraints()
+        lay.top.Below(self.videoDirectory, 20)
+        lay.left.SameAs(panelDirectories, wx.Left, 10)
+        lay.width.AsIs()
+        lay.height.AsIs()
+        lblWaveformDirectory.SetConstraints(lay)
+        
+        # Add the Waveform Directory TextCtrl to the Directories Tab
+        # If the visualization path is not empty, we should normalize the path specification
+        if TransanaGlobal.configData.visualizationPath == '':
+            visualizationPath = TransanaGlobal.configData.visualizationPath
+        else:
+            visualizationPath = os.path.normpath(TransanaGlobal.configData.visualizationPath)
+        self.waveformDirectory = wx.TextCtrl(panelDirectories, -1, visualizationPath)
+        lay = wx.LayoutConstraints()
+        lay.top.Below(lblWaveformDirectory, 3)
+        lay.left.SameAs(panelDirectories, wx.Left, 10)
+        lay.right.SameAs(panelDirectories, wx.Right, 100)
+        lay.height.AsIs()
+        self.waveformDirectory.SetConstraints(lay)
+
+        # Add the Waveform Directory Browse Button to the Directories Tab
+        self.btnWaveformBrowse = wx.Button(panelDirectories, -1, _("Browse"))
+        lay = wx.LayoutConstraints()
+        lay.top.Below(lblWaveformDirectory, 3)
+        lay.left.RightOf(self.waveformDirectory, 10)
+        lay.right.SameAs(panelDirectories, wx.Right, 10)
+        lay.height.AsIs()
+        self.btnWaveformBrowse.SetConstraints(lay)
+        wx.EVT_BUTTON(self, self.btnWaveformBrowse.GetId(), self.OnBrowse)
+        
         # Add the Database Directory Label to the Directories Tab
         lblDatabaseDirectory = wx.StaticText(panelDirectories, -1, _("Database Directory"), style=wx.ST_NO_AUTORESIZE)
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.videoDirectory, 20)
+        lay.top.Below(self.waveformDirectory, 20)
         lay.left.SameAs(panelDirectories, wx.Left, 10)
         lay.width.AsIs()
         lay.height.AsIs()
@@ -173,251 +204,245 @@ class OptionsSettings(wx.Dialog):
         panelDirectories.SetAutoLayout(True)
         panelDirectories.Layout()
 
-        # Add the Transcriber Panel to the Notebook
-        panelTranscriber = wx.Panel(notebook, -1, size=notebook.GetSizeTuple(), name='OptionsSettings.TranscriberPanel')
+        # If we're not doing the LAB version's initial configuration screen, we allow for a lot more configuration data
+        if not self.lab:
+            # Add the Transcriber Panel to the Notebook
+            panelTranscriber = wx.Panel(notebook, -1, size=notebook.GetSizeTuple(), name='OptionsSettings.TranscriberPanel')
 
-        # Add the Video Setback Label to the Transcriber Settings Tab
-        lblTranscriptionSetback = wx.StaticText(panelTranscriber, -1, _("Transcription Setback:  (Auto-rewind interval for Ctrl-S)"), style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.SameAs(panelTranscriber, wx.Top, 20)
-        lay.left.SameAs(panelTranscriber, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblTranscriptionSetback.SetConstraints(lay)
-
-        # Add the Video Setback Slider to the Transcriber Settings Tab
-        self.transcriptionSetback = wx.Slider(panelTranscriber, -1, TransanaGlobal.configData.transcriptionSetback, 0, 5, style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblTranscriptionSetback, 3)
-        lay.left.SameAs(panelTranscriber, wx.Left, 10)
-        lay.right.SameAs(panelTranscriber, wx.Right, 10)
-        lay.height.AsIs()
-        self.transcriptionSetback.SetConstraints(lay)
-
-        # Add the Video Setback "0" Value Label to the Transcriber Settings Tab
-        lblTranscriptionSetbackMin = wx.StaticText(panelTranscriber, -1, "0", style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.transcriptionSetback, 2)
-        lay.left.SameAs(self.transcriptionSetback, wx.Left, 7)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblTranscriptionSetbackMin.SetConstraints(lay)
-
-        # Add the Video Setback "1" Value Label to the Transcriber Settings Tab
-        lblTranscriptionSetback1 = wx.StaticText(panelTranscriber, -1, "1", style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.transcriptionSetback, 2)
-        # The "1" position is 20% of the way between 0 and 5.  However, 23% looks better on Windows.
-        lay.left.PercentOf(self.transcriptionSetback, wx.Width, 23)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblTranscriptionSetback1.SetConstraints(lay)
-
-        # Add the Video Setback "2" Value Label to the Transcriber Settings Tab
-        lblTranscriptionSetback2 = wx.StaticText(panelTranscriber, -1, "2", style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.transcriptionSetback, 2)
-        # The "2" position is 40% of the way between 0 and 5.  However, 42% looks better on Windows.
-        lay.left.PercentOf(self.transcriptionSetback, wx.Width, 42)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblTranscriptionSetback2.SetConstraints(lay)
-
-        # Add the Video Setback "3" Value Label to the Transcriber Settings Tab
-        lblTranscriptionSetback3 = wx.StaticText(panelTranscriber, -1, "3", style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.transcriptionSetback, 2)
-        # The "3" position is 60% of the way between 0 and 5.  However, 61% looks better on Windows.
-        lay.left.PercentOf(self.transcriptionSetback, wx.Width, 61)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblTranscriptionSetback3.SetConstraints(lay)
-
-        # Add the Video Setback "4" Value Label to the Transcriber Settings Tab
-        lblTranscriptionSetback4 = wx.StaticText(panelTranscriber, -1, "4", style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.transcriptionSetback, 2)
-        # The "4" position is 80% of the way between 0 and 5.
-        lay.left.PercentOf(self.transcriptionSetback, wx.Width, 80)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblTranscriptionSetback4.SetConstraints(lay)
-
-        # Add the Video Setback "5" Value Label to the Transcriber Settings Tab
-        lblTranscriptionSetbackMax = wx.StaticText(panelTranscriber, -1, "5", style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.transcriptionSetback, 2)
-        lay.right.SameAs(self.transcriptionSetback, wx.Right, 7)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblTranscriptionSetbackMax.SetConstraints(lay)
-
-        # On Windows, we can use a number of different media players.  There are trade-offs.
-        #   wx.media.MEDIABACKEND_DIRECTSHOW allows speed adjustment, but not WMV or WMA formats.
-        #   wx.media.MEDIABACKEND_WMP10 allows WMV and WMA formats, but speed adjustment is broken.
-        # Let's allow the user to select which back end to use!
-        # This option is Windows only!
-        if 'wxMSW' in wx.PlatformInfo:
-            # Add the Media Player Option Label to the Transcriber Settings Tab
-            lblMediaPlayer = wx.StaticText(panelTranscriber, -1, _("Media Player Selection"), style=wx.ST_NO_AUTORESIZE)
+            # Add the Video Setback Label to the Transcriber Settings Tab
+            lblTranscriptionSetback = wx.StaticText(panelTranscriber, -1, _("Transcription Setback:  (Auto-rewind interval for Ctrl-S)"), style=wx.ST_NO_AUTORESIZE)
             lay = wx.LayoutConstraints()
-            lay.top.Below(lblTranscriptionSetbackMin, 15)
+            lay.top.SameAs(panelTranscriber, wx.Top, 20)
             lay.left.SameAs(panelTranscriber, wx.Left, 10)
             lay.width.AsIs()
             lay.height.AsIs()
-            lblMediaPlayer.SetConstraints(lay)
+            lblTranscriptionSetback.SetConstraints(lay)
 
-            # Add the Media Player Option to the Transcriber Settings Tab
-            self.chMediaPlayer = wx.Choice(panelTranscriber, -1, choices = [_('Enable WMV and WMA formats, disable speed control'), _('Disable WMV and WMA formats, enable speed control')])
-            self.chMediaPlayer.SetSelection(TransanaGlobal.configData.mediaPlayer)
+            # Add the Video Setback Slider to the Transcriber Settings Tab
+            self.transcriptionSetback = wx.Slider(panelTranscriber, -1, TransanaGlobal.configData.transcriptionSetback, 0, 5, style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
             lay = wx.LayoutConstraints()
-            lay.top.Below(lblMediaPlayer, 3)
+            lay.top.Below(lblTranscriptionSetback, 3)
             lay.left.SameAs(panelTranscriber, wx.Left, 10)
+            lay.right.SameAs(panelTranscriber, wx.Right, 10)
+            lay.height.AsIs()
+            self.transcriptionSetback.SetConstraints(lay)
+
+            # Add the Video Setback "0" Value Label to the Transcriber Settings Tab
+            lblTranscriptionSetbackMin = wx.StaticText(panelTranscriber, -1, "0", style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(self.transcriptionSetback, 2)
+            lay.left.SameAs(self.transcriptionSetback, wx.Left, 7)
             lay.width.AsIs()
             lay.height.AsIs()
-            self.chMediaPlayer.SetConstraints(lay)
-# REMOVED!  When Speed Control is OFF for WMP, it still works for QuickTime!
-#            self.chMediaPlayer.Bind(wx.EVT_CHOICE, self.OnMediaPlayerSelect)
+            lblTranscriptionSetbackMin.SetConstraints(lay)
 
-            nextLabelPositioner = self.chMediaPlayer
-        else:
-            nextLabelPositioner = lblTranscriptionSetbackMin
-            
+            # Add the Video Setback "1" Value Label to the Transcriber Settings Tab
+            lblTranscriptionSetback1 = wx.StaticText(panelTranscriber, -1, "1", style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(self.transcriptionSetback, 2)
+            # The "1" position is 20% of the way between 0 and 5.  However, 23% looks better on Windows.
+            lay.left.PercentOf(self.transcriptionSetback, wx.Width, 23)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblTranscriptionSetback1.SetConstraints(lay)
 
-        # Add the Video Speed Slider Label to the Transcriber Settings Tab
-        lblVideoSpeed = wx.StaticText(panelTranscriber, -1, _("Video Playback Speed"), style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(nextLabelPositioner, 15)
-        lay.left.SameAs(panelTranscriber, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblVideoSpeed.SetConstraints(lay)
+            # Add the Video Setback "2" Value Label to the Transcriber Settings Tab
+            lblTranscriptionSetback2 = wx.StaticText(panelTranscriber, -1, "2", style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(self.transcriptionSetback, 2)
+            # The "2" position is 40% of the way between 0 and 5.  However, 42% looks better on Windows.
+            lay.left.PercentOf(self.transcriptionSetback, wx.Width, 42)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblTranscriptionSetback2.SetConstraints(lay)
 
-        # Add the Video Speed Slider to the Transcriber Settings Tab
-        self.videoSpeed = wx.Slider(panelTranscriber, -1, TransanaGlobal.configData.videoSpeed, 1, 20, style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblVideoSpeed, 3)
-        lay.left.SameAs(panelTranscriber, wx.Left, 10)
-        lay.right.SameAs(panelTranscriber, wx.Right, 10)
-        lay.height.AsIs()
-        self.videoSpeed.SetConstraints(lay)
+            # Add the Video Setback "3" Value Label to the Transcriber Settings Tab
+            lblTranscriptionSetback3 = wx.StaticText(panelTranscriber, -1, "3", style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(self.transcriptionSetback, 2)
+            # The "3" position is 60% of the way between 0 and 5.  However, 61% looks better on Windows.
+            lay.left.PercentOf(self.transcriptionSetback, wx.Width, 61)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblTranscriptionSetback3.SetConstraints(lay)
 
-        # Add the Video Speed Slider Current Setting Label to the Transcriber Settings Tab
-        self.lblVideoSpeedSetting = wx.StaticText(panelTranscriber, -1, "%1.1f" % (float(self.videoSpeed.GetValue()) / 10))
-        lay = wx.LayoutConstraints()
-        lay.top.Below(nextLabelPositioner, 15)
-        lay.right.SameAs(panelTranscriber, wx.Right, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        self.lblVideoSpeedSetting.SetConstraints(lay)
+            # Add the Video Setback "4" Value Label to the Transcriber Settings Tab
+            lblTranscriptionSetback4 = wx.StaticText(panelTranscriber, -1, "4", style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(self.transcriptionSetback, 2)
+            # The "4" position is 80% of the way between 0 and 5.
+            lay.left.PercentOf(self.transcriptionSetback, wx.Width, 80)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblTranscriptionSetback4.SetConstraints(lay)
 
-        # Define the Scroll Event for the Slider to keep the Current Setting Label updated
-        wx.EVT_SCROLL(self, self.OnScroll)
+            # Add the Video Setback "5" Value Label to the Transcriber Settings Tab
+            lblTranscriptionSetbackMax = wx.StaticText(panelTranscriber, -1, "5", style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(self.transcriptionSetback, 2)
+            lay.right.SameAs(self.transcriptionSetback, wx.Right, 7)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblTranscriptionSetbackMax.SetConstraints(lay)
 
-# REMOVED!  When Speed Control is OFF for WMP, it still works for QuickTime!
-        # Disable the slider if it should be disabled
-#        if TransanaGlobal.configData.mediaPlayer == 0:
-#            self.videoSpeed.Enable(False)
-#            self.lblVideoSpeedSetting.SetLabel("%1.1f" % (1.0))
+            # On Windows, we can use a number of different media players.  There are trade-offs.
+            #   wx.media.MEDIABACKEND_DIRECTSHOW allows speed adjustment, but not WMV or WMA formats.
+            #   wx.media.MEDIABACKEND_WMP10 allows WMV and WMA formats, but speed adjustment is broken.
+            # Let's allow the user to select which back end to use!
+            # This option is Windows only!
+            if 'wxMSW' in wx.PlatformInfo:
+                # Add the Media Player Option Label to the Transcriber Settings Tab
+                lblMediaPlayer = wx.StaticText(panelTranscriber, -1, _("Media Player Selection"), style=wx.ST_NO_AUTORESIZE)
+                lay = wx.LayoutConstraints()
+                lay.top.Below(lblTranscriptionSetbackMin, 15)
+                lay.left.SameAs(panelTranscriber, wx.Left, 10)
+                lay.width.AsIs()
+                lay.height.AsIs()
+                lblMediaPlayer.SetConstraints(lay)
 
-        # Add the Video Speed Slider Minimum Speed Label to the Transcriber Settings Tab
-        lblVideoSpeedMin = wx.StaticText(panelTranscriber, -1, "0.1", style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.videoSpeed, 2)
-        lay.left.SameAs(self.videoSpeed, wx.Left, 0)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblVideoSpeedMin.SetConstraints(lay)
+                # Add the Media Player Option to the Transcriber Settings Tab
+                self.chMediaPlayer = wx.Choice(panelTranscriber, -1, choices = [_('Enable WMV and WMA formats, disable speed control'), _('Disable WMV and WMA formats, enable speed control')])
+                self.chMediaPlayer.SetSelection(TransanaGlobal.configData.mediaPlayer)
+                lay = wx.LayoutConstraints()
+                lay.top.Below(lblMediaPlayer, 3)
+                lay.left.SameAs(panelTranscriber, wx.Left, 10)
+                lay.width.AsIs()
+                lay.height.AsIs()
+                self.chMediaPlayer.SetConstraints(lay)
 
-        # Add the Video Speed Slider Normal Speed Label to the Transcriber Settings Tab
-        lblVideoSpeed1 = wx.StaticText(panelTranscriber, -1, "1.0", style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.videoSpeed, 2)
-        # The "center" (1.0) position is 47% (9 / 19) of the way between 0.1 and 2.0.  However, 48% looks better on Windows.
-        lay.left.PercentOf(self.videoSpeed, wx.Width, 48)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblVideoSpeed1.SetConstraints(lay)
-
-        # Add the Video Speed Slider Maximum Speed Label to the Transcriber Settings Tab
-        lblVideoSpeedMax = wx.StaticText(panelTranscriber, -1, "2.0", style=wx.ST_NO_AUTORESIZE)
-        lay = wx.LayoutConstraints()
-        lay.top.Below(self.videoSpeed, 2)
-        lay.right.SameAs(self.videoSpeed, wx.Right, 0)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblVideoSpeedMax.SetConstraints(lay)
-
-        # Add Default Transcript Font
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblVideoSpeedMin, 15)
-        lay.left.SameAs(panelTranscriber, wx.Left, 10)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblDefaultFont = wx.StaticText(panelTranscriber, -1, _("Default Font"))
-        lblDefaultFont.SetConstraints(lay)
-
-        # We need to figure out what options we have for the default font.
-        # First, let's get a list of all available fonts.
-        fontEnum = wx.FontEnumerator()
-        fontEnum.EnumerateFacenames()
-        fontList = fontEnum.GetFacenames()
-
-        # Now let's set up a list of the fonts we'd like.
-        defaultFontList = ['Arial', 'Comic Sans MS', 'Courier', 'Courier New', 'Futura', 'Geneva', 'Helvetica', 'Times', 'Times New Roman', 'Verdana']
-        # Initialize the actual font list to nothing.
-        choicelist = []
-        # Now iterate through the list of fonts we'd like...
-        for font in defaultFontList:
-            # ... and see if each font is available ...
-            if font in fontList:
-                # ... and if so, add it to the list.
-                choicelist.append(font)
+                nextLabelPositioner = self.chMediaPlayer
+            else:
+                nextLabelPositioner = lblTranscriptionSetbackMin
                 
-        # If the list is empty, let's at least put one real value in it.
-        if len(choicelist) == 0:
-            font = wx.Font(TransanaGlobal.configData.defaultFontSize, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
-            choicelist.append(font.GetFaceName())
-               
-        # Default Font Combo Box
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblDefaultFont, 3)
-        lay.left.SameAs(panelTranscriber, wx.Left, 10)
-        lay.right.PercentOf(panelTranscriber, wx.Width, 45)
-        lay.height.AsIs()
-        self.defaultFont = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN | wx.CB_SORT)
-        self.defaultFont.SetConstraints(lay)
 
-        # Set the value to the default value provided by the Configuration Data
-        self.defaultFont.SetValue(TransanaGlobal.configData.defaultFontFace)
+            # Add the Video Speed Slider Label to the Transcriber Settings Tab
+            lblVideoSpeed = wx.StaticText(panelTranscriber, -1, _("Video Playback Speed"), style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(nextLabelPositioner, 15)
+            lay.left.SameAs(panelTranscriber, wx.Left, 10)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblVideoSpeed.SetConstraints(lay)
 
-        # Add Default Transcript Font Size
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblVideoSpeedMin, 15)
-        lay.left.PercentOf(panelTranscriber, wx.Width, 55)
-        lay.width.AsIs()
-        lay.height.AsIs()
-        lblDefaultFontSize = wx.StaticText(panelTranscriber, -1, _("Default Font Size"))
-        lblDefaultFontSize.SetConstraints(lay)
+            # Add the Video Speed Slider to the Transcriber Settings Tab
+            self.videoSpeed = wx.Slider(panelTranscriber, -1, TransanaGlobal.configData.videoSpeed, 1, 20, style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblVideoSpeed, 3)
+            lay.left.SameAs(panelTranscriber, wx.Left, 10)
+            lay.right.SameAs(panelTranscriber, wx.Right, 10)
+            lay.height.AsIs()
+            self.videoSpeed.SetConstraints(lay)
 
-        # Set up the list of choices
-        choicelist = ['8', '10', '11', '12', '14', '16', '20']
-               
-        # Default Font Combo Box
-        lay = wx.LayoutConstraints()
-        lay.top.Below(lblDefaultFont, 3)
-        lay.left.SameAs(lblDefaultFontSize, wx.Left, 0)
-        lay.right.SameAs(panelTranscriber, wx.Right, 10)
-        lay.height.AsIs()
-        self.defaultFontSize = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN)
-        self.defaultFontSize.SetConstraints(lay)
+            # Add the Video Speed Slider Current Setting Label to the Transcriber Settings Tab
+            self.lblVideoSpeedSetting = wx.StaticText(panelTranscriber, -1, "%1.1f" % (float(self.videoSpeed.GetValue()) / 10))
+            lay = wx.LayoutConstraints()
+            lay.top.Below(nextLabelPositioner, 15)
+            lay.right.SameAs(panelTranscriber, wx.Right, 10)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            self.lblVideoSpeedSetting.SetConstraints(lay)
 
-        # Set the value to the default value provided by the Configuration Data
-        self.defaultFontSize.SetValue(str(TransanaGlobal.configData.defaultFontSize))
+            # Define the Scroll Event for the Slider to keep the Current Setting Label updated
+            wx.EVT_SCROLL(self, self.OnScroll)
 
-        # Tell the Transcriber Panel to lay out now and do AutoLayout
-        panelTranscriber.SetAutoLayout(True)
-        panelTranscriber.Layout()
+            # Add the Video Speed Slider Minimum Speed Label to the Transcriber Settings Tab
+            lblVideoSpeedMin = wx.StaticText(panelTranscriber, -1, "0.1", style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(self.videoSpeed, 2)
+            lay.left.SameAs(self.videoSpeed, wx.Left, 0)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblVideoSpeedMin.SetConstraints(lay)
+
+            # Add the Video Speed Slider Normal Speed Label to the Transcriber Settings Tab
+            lblVideoSpeed1 = wx.StaticText(panelTranscriber, -1, "1.0", style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(self.videoSpeed, 2)
+            # The "center" (1.0) position is 47% (9 / 19) of the way between 0.1 and 2.0.  However, 48% looks better on Windows.
+            lay.left.PercentOf(self.videoSpeed, wx.Width, 48)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblVideoSpeed1.SetConstraints(lay)
+
+            # Add the Video Speed Slider Maximum Speed Label to the Transcriber Settings Tab
+            lblVideoSpeedMax = wx.StaticText(panelTranscriber, -1, "2.0", style=wx.ST_NO_AUTORESIZE)
+            lay = wx.LayoutConstraints()
+            lay.top.Below(self.videoSpeed, 2)
+            lay.right.SameAs(self.videoSpeed, wx.Right, 0)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblVideoSpeedMax.SetConstraints(lay)
+
+            # Add Default Transcript Font
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblVideoSpeedMin, 15)
+            lay.left.SameAs(panelTranscriber, wx.Left, 10)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblDefaultFont = wx.StaticText(panelTranscriber, -1, _("Default Font"))
+            lblDefaultFont.SetConstraints(lay)
+
+            # We need to figure out what options we have for the default font.
+            # First, let's get a list of all available fonts.
+            fontEnum = wx.FontEnumerator()
+            fontEnum.EnumerateFacenames()
+            fontList = fontEnum.GetFacenames()
+
+            # Now let's set up a list of the fonts we'd like.
+            defaultFontList = ['Arial', 'Comic Sans MS', 'Courier', 'Courier New', 'Futura', 'Geneva', 'Helvetica', 'Times', 'Times New Roman', 'Verdana']
+            # Initialize the actual font list to nothing.
+            choicelist = []
+            # Now iterate through the list of fonts we'd like...
+            for font in defaultFontList:
+                # ... and see if each font is available ...
+                if font in fontList:
+                    # ... and if so, add it to the list.
+                    choicelist.append(font)
+                    
+            # If the list is empty, let's at least put one real value in it.
+            if len(choicelist) == 0:
+                font = wx.Font(TransanaGlobal.configData.defaultFontSize, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
+                choicelist.append(font.GetFaceName())
+                   
+            # Default Font Combo Box
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblDefaultFont, 3)
+            lay.left.SameAs(panelTranscriber, wx.Left, 10)
+            lay.right.PercentOf(panelTranscriber, wx.Width, 45)
+            lay.height.AsIs()
+            self.defaultFont = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN | wx.CB_SORT)
+            self.defaultFont.SetConstraints(lay)
+
+            # Set the value to the default value provided by the Configuration Data
+            self.defaultFont.SetValue(TransanaGlobal.configData.defaultFontFace)
+
+            # Add Default Transcript Font Size
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblVideoSpeedMin, 15)
+            lay.left.PercentOf(panelTranscriber, wx.Width, 55)
+            lay.width.AsIs()
+            lay.height.AsIs()
+            lblDefaultFontSize = wx.StaticText(panelTranscriber, -1, _("Default Font Size"))
+            lblDefaultFontSize.SetConstraints(lay)
+
+            # Set up the list of choices
+            choicelist = ['8', '10', '11', '12', '14', '16', '20']
+                   
+            # Default Font Combo Box
+            lay = wx.LayoutConstraints()
+            lay.top.Below(lblDefaultFont, 3)
+            lay.left.SameAs(lblDefaultFontSize, wx.Left, 0)
+            lay.right.SameAs(panelTranscriber, wx.Right, 10)
+            lay.height.AsIs()
+            self.defaultFontSize = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN)
+            self.defaultFontSize.SetConstraints(lay)
+
+            # Set the value to the default value provided by the Configuration Data
+            self.defaultFontSize.SetValue(str(TransanaGlobal.configData.defaultFontSize))
+
+            # Tell the Transcriber Panel to lay out now and do AutoLayout
+            panelTranscriber.SetAutoLayout(True)
+            panelTranscriber.Layout()
 
         # The Message Server Tab should only appear for the Multi-user version of the program.
         if not TransanaConstants.singleUserVersion:
@@ -466,8 +491,13 @@ class OptionsSettings(wx.Dialog):
       
         # Add the three Panels as Tabs in the Notebook
         notebook.AddPage(panelDirectories, _("Directories"), True)
-        notebook.AddPage(panelTranscriber, _("Transcriber Settings"), False)
+        # If we're not in the Lab version initial configuration screen ...
+        if not self.lab:
+            # ... add the Transcriber Settings tab.
+            notebook.AddPage(panelTranscriber, _("Transcriber Settings"), False)
+        # If we're in the Multi-user version ...
         if not TransanaConstants.singleUserVersion:
+            # ... then add the Message Server tab.
             notebook.AddPage(panelMessageServer, _("MU Message Server"), False)
 
         # the tabToShow parameter is the NUMBER of the tab which should be shown initially.
@@ -523,12 +553,13 @@ class OptionsSettings(wx.Dialog):
         
         # If the Waveform Directory does not end with the separator character, add one.
         # Then update the Global Waveform Directory
-        if self.waveformDirectory.GetValue()[-1] != os.sep:
+        if (len(self.waveformDirectory.GetValue()) > 0) and \
+           self.waveformDirectory.GetValue()[-1] != os.sep:
             TransanaGlobal.configData.visualizationPath = self.waveformDirectory.GetValue() + os.sep
         else:
             TransanaGlobal.configData.visualizationPath = self.waveformDirectory.GetValue()
-        # If the Video Directory does not end with the separator character, add one.
-        # Then update the Global Video Directory
+        # If the Video Directory does not end with the separator character, add one,
+        # then update the Global Video Directory.  (But the lab version doesn't HAVE this value at start-up time.)
         if (len(self.videoDirectory.GetValue()) > 0) and \
            (self.videoDirectory.GetValue()[-1] != os.sep):
             tempVideoPath = self.videoDirectory.GetValue() + os.sep
@@ -541,8 +572,8 @@ class OptionsSettings(wx.Dialog):
             TransanaGlobal.configData.databaseDir = self.databaseDirectory.GetValue() + os.sep
         else:
             TransanaGlobal.configData.databaseDir = self.databaseDirectory.GetValue()        
-        # If the Video Root Path has changed ...
-        if tempVideoPath != TransanaGlobal.configData.videoPath:
+        # If we're not in the LAB version and the Video Root Path has changed ...
+        if (not self.lab) and (tempVideoPath != TransanaGlobal.configData.videoPath):
             # First, find out if there are Episodes or Clips that need to be changed in the Database
             (episodeCount, clipCount) = DBInterface.VideoFilePaths(tempVideoPath)
             # If there are records to update ...
@@ -572,18 +603,33 @@ class OptionsSettings(wx.Dialog):
             else:
                 # Add the new Path to the Configuration Data
                 TransanaGlobal.configData.videoPath = tempVideoPath
-        # Update the Global Transcription Setback
-        TransanaGlobal.configData.transcriptionSetback = self.transcriptionSetback.GetValue()
-        # If on Windows ...
-        if 'wxMSW' in wx.PlatformInfo:
-            # Update the Media Player selection
-            TransanaGlobal.configData.mediaPlayer = self.chMediaPlayer.GetSelection()
-        # Update the Global Video Speed
-        TransanaGlobal.configData.videoSpeed = self.videoSpeed.GetValue()
-        # Update the Global Default Font
-        TransanaGlobal.configData.defaultFontFace = self.defaultFont.GetValue()
-        # Update the Global Default Font Size
-        TransanaGlobal.configData.defaultFontSize = int(self.defaultFontSize.GetValue())
+
+        # If we ARE in the LAB version ...
+        else:
+            # Add the new Path to the Configuration Data
+            TransanaGlobal.configData.videoPath = tempVideoPath
+            # Set the cursor to the arrow again.
+            self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+        # If we're not in the LAB initial configuration ...  (The lab version doesn't HAVE these values at start-up time.)
+        if not self.lab:
+            # Update the Global Transcription Setback
+            TransanaGlobal.configData.transcriptionSetback = self.transcriptionSetback.GetValue()
+            # If on Windows ...
+            if 'wxMSW' in wx.PlatformInfo:
+                # Update the Media Player selection
+                TransanaGlobal.configData.mediaPlayer = self.chMediaPlayer.GetSelection()
+            # Update the Global Video Speed
+            TransanaGlobal.configData.videoSpeed = self.videoSpeed.GetValue()
+            # Update the Global Default Font
+            TransanaGlobal.configData.defaultFontFace = self.defaultFont.GetValue()
+            # Update the Global Default Font Size
+            TransanaGlobal.configData.defaultFontSize = int(self.defaultFontSize.GetValue())
+
+        # Make sure the current video root and visualization path settings are saved in the configuration under the (username, server, database) key.
+        TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database)] = \
+            {'videoPath' : TransanaGlobal.configData.videoPath,
+             'visualizationPath' : TransanaGlobal.configData.visualizationPath}
+
         if not TransanaConstants.singleUserVersion:
             # TODO:  If Message Server is changed, disconnect and connect to new Message Server!
             # Update the Global Message Server Variable
@@ -591,14 +637,17 @@ class OptionsSettings(wx.Dialog):
             # Update the Global Message Server Port
             TransanaGlobal.configData.messageServerPort = int(self.messageServerPort.GetValue())
         
-        # Make sure the oldDatabaseDir ends with the proper seperator character
-        if self.oldDatabaseDir[-1] != os.sep:
+        # Make sure the oldDatabaseDir ends with the proper seperator character.
+        # (But the LAB version won't HAVE an oldDatabaseDir.)
+        if (self.oldDatabaseDir <> '') and (self.oldDatabaseDir[-1] != os.sep):
             self.oldDatabaseDir = self.oldDatabaseDir + os.sep
-        # If database directory was changed inform user
-        if self.oldDatabaseDir != TransanaGlobal.configData.databaseDir:
+        # If database directory was changed inform user.  (But the LAB version won't HAVE an oldDatabaseDir.)
+        if (self.oldDatabaseDir <> '') and (self.oldDatabaseDir != TransanaGlobal.configData.databaseDir):
             infoDlg = Dialogs.InfoDialog(self, _("Database directory change will take effect after you restart Transana."))
             infoDlg.ShowModal()
             infoDlg.Destroy()
+        # Let's save the configuration data so it doesn't disappear if Transana crashes, not, of course, that Transana ever crashes.
+        TransanaGlobal.configData.SaveConfiguration()
         self.Close()
 
     def OnCancel(self, event):
@@ -608,8 +657,18 @@ class OptionsSettings(wx.Dialog):
 
     def OnHelp(self, event):
         """Invoked when dialog Help button is activated."""
-        if TransanaGlobal.menuWindow != None:
+        # Normally, the Control Object is already defined.  Check, though, because it's not for the LAB version's
+        # initial configuration dialog.
+        if (TransanaGlobal.menuWindow != None) and (TransanaGlobal.menuWindow.ControlObject != None):
             TransanaGlobal.menuWindow.ControlObject.Help('Program Settings')
+        # If we're using the Lab version and the user calls for help from the initial configuration dialog ...
+        else:
+            # ... import the ControlObject Class ...
+            import ControlObjectClass
+            # ... create a temporary Control Object ...
+            tmpCO = ControlObjectClass.ControlObject()
+            # ... and THEN call Help!
+            tmpCO.Help('Program Settings')
 
     def OnBrowse(self, event):
         """ Implements the "Browse" button for the Waveform or Video Root Directories on the Directories Tab """
@@ -632,6 +691,10 @@ class OptionsSettings(wx.Dialog):
                 self.waveformDirectory.SetValue(dlg.GetPath())
             elif event.GetId() == self.btnVideoBrowse.GetId():
                 self.videoDirectory.SetValue(dlg.GetPath())
+                # If no Waveform directory is assigned when the Video Root is selected (as will be true for the LAB version) ...
+                if self.waveformDirectory.GetValue() == '':
+                    # ... then auto-assign a waveforms subdirectory!
+                    self.waveformDirectory.SetValue(os.path.join(dlg.GetPath(), 'waveforms'))
             elif event.GetId() == self.btnDatabaseBrowse.GetId():
                 self.databaseDirectory.SetValue(dlg.GetPath())
         # Destroy the Dialog

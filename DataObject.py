@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -123,6 +123,7 @@ class DataObject(object):
         db = DBInterface.get_db()
         c = db.cursor()
         lq = self._get_db_fields(('RecordLock', 'LockTime'), c)
+
         if (lq[1] == None) or (lq[0] == "") or ((DBInterface.ServerDateTime() - lq[1]).days > 1):
             # Lock the record
             self._set_db_fields(    ('RecordLock', 'LockTime'),
@@ -130,10 +131,10 @@ class DataObject(object):
                                     str(DBInterface.ServerDateTime())[:-3]), c)
             c.close()
             # Indicate that the object was successfully locked
-            self.isLocked = True
+            self._isLocked = True
 
             if DEBUG:
-                print "DataObject.lock_record(): Record '%s' locked by '%s'" % (self.id, lq[0])
+                print "DataObject.lock_record(): Record '%s' locked by '%s'" % (self.number, DBInterface.get_username())
         else:
             # We just raise an exception here since GUI code isn't appropriate.
             c.close()
@@ -150,7 +151,10 @@ class DataObject(object):
         self._set_db_fields(    ('RecordLock', 'LockTime'),
                                 ('', None), None)
         # Indicate that the object was successfully unlocked
-        self.isLocked = False
+        self._isLocked = False
+
+        if DEBUG:
+            print "DataObject.unlock_record(): Record '%s' has been unlocked" % (self.id,)
 
 
     def get_note_nums(self):

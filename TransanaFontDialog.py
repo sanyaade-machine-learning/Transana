@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -36,8 +36,6 @@ if __name__ == '__main__':
     # This module expects i18n.  Enable it here.
     __builtins__._ = wx.GetTranslation
 
-# import the Transana Constants, which includes the Color system
-import TransanaConstants
 # import the TransanaGlobal variables
 import TransanaGlobal
 
@@ -165,10 +163,10 @@ class TransanaFontDef(object):
     def _getFontColorName(self):
         return self._fontColorName
     def _setFontColorName(self, fontColorName):
-        if fontColorName in TransanaConstants.transana_colorNameList:
+        if fontColorName in TransanaGlobal.transana_colorNameList:
             self._fontColorName = fontColorName
             # Set fontColorDef to match fontColorName
-            for (colorName, colorDef) in TransanaConstants.transana_colorList:
+            for (colorName, colorDef) in TransanaGlobal.transana_textColorList:
                 if colorName == fontColorName:
                     self._fontColorDef = wx.Colour(colorDef[0], colorDef[1], colorDef[2])
                     break
@@ -185,7 +183,7 @@ class TransanaFontDef(object):
 
         self._fontColorDef = fontColorDef
         # Set fontColorName to match fontColorDef
-        for (colorName, colorDef) in TransanaConstants.transana_colorList:
+        for (colorName, colorDef) in TransanaGlobal.transana_textColorList:
             if colorDef == fontColorDef:
                 self._fontColorName = colorName
                 break
@@ -445,7 +443,7 @@ class TransanaFontDialog(wx.Dialog):
         # We want enough colors, but not too many.  This list seems about right to me.  I doubt my color names are standard.
         # But then, I'm often perplexed by the colors that are included and excluded by most programs.  (Excel for example.)
         # Each entry is made up of a color name and a tuple of the RGB values for the color.
-        self.colorList = TransanaConstants.transana_colorList
+        self.colorList = TransanaGlobal.transana_textColorList
 
         # We need to create a list of the colors to be included in the control.
         choiceList = []

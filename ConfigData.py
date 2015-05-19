@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -43,26 +43,30 @@ class ConfigData(object):
         # Set default values for parameters that are not saved
         # Video Speed of 10 is equal to normal playback speed
         self.videoSpeed = 10
-        # Auto Arrange is enabled by default
-        self.autoArrange = True
+        # Auto Arrange is enabled by default, except on Linux
+        if 'wxGTK' in wx.PlatformInfo:
+            self.autoArrange = False
+        else:
+            self.autoArrange = True
         # Waveform Quickload is enabled by default
         self.waveformQuickLoad = True
 
         # Set default values for Dialog Size values which are not saved as part of the configuration file
-        self.clipPropertiesSize = (680, 470)
+        self.clipPropertiesSize = (680, 500)
         self.keywordListEditSize = (600, 385)
     
     def __repr__(self):
         """ String Representation of the data in this object. """
         str = 'ConfigData Object:\n'
         str = str + 'host = %s\n' % self.host
+        str = str + 'dbport = %s\n' % self.dbport
         str = str + 'database = %s\n' % self.database
         str = str + 'visualizationPath = %s\n' % self.visualizationPath
         str = str + 'videoPath = %s\n' % self.videoPath
         str = str + 'transcriptionSetback = %s\n' % self.transcriptionSetback
         str = str + 'videoSpeed = %s\n' % self.videoSpeed
         str = str + 'videoSize = %s\n' % self.videoSize
-        if 'wxMSW' in wx.PlatformInfo:
+        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
             str = str + 'quickClipMode = %s\n' % self.quickClipMode
         str = str + 'wordTracking = %s\n' % self.wordTracking
         str = str + 'autoArrange = %s\n' % self.autoArrange
@@ -72,23 +76,26 @@ class ConfigData(object):
         str = str + 'messageServerPort = %s\n' % self.messageServerPort
         str = str + 'language = %s\n\n' % self.language
         str = str + 'databaseList = %s\n\n' % self.databaseList
-        str = str + 'defaultFontFace = %s\n\n' % self.defaultFontFace
-        str = str + 'defaultFontSize = %s\n\n' % self.defaultFontSize
-        str = str + 'keywordMapBarHeight = %s\n\n' % self.keywordMapBarHeight
-        str = str + 'keywordMapWhitespace = %s\n\n' % self.keywordMapWhitespace
-        str = str + 'keywordVisualizationBarHeight = %s\n\n' % self.keywordVisualizationBarHeight
-        str = str + 'keywordVisualizationWhitespace = %s\n\n' % self.keywordVisualizationWhitespace
-        str = str + 'seriesMapBarHeight = %s\n\n' % self.seriesMapBarHeight
-        str = str + 'seriesMapWhitespace = %s\n\n' % self.seriesMapWhitespace
-        str = str + 'keywordMapHorizontalGridLines = %s\n\n' % self.keywordMapHorizontalGridLines
-        str = str + 'keywordMapVerticalGridLines = %s\n\n' % self.keywordMapVerticalGridLines
-        str = str + 'keywordVisualizationHorizontalGridLines = %s\n\n' % self.keywordVisualizationHorizontalGridLines
-        str = str + 'keywordVisualizationVerticalGridLines = %s\n\n' % self.keywordVisualizationVerticalGridLines
-        str = str + 'seriesMapHorizontalGridLines = %s\n\n' % self.seriesMapHorizontalGridLines
-        str = str + 'seriesMapVerticalGridLines = %s\n\n' % self.seriesMapVerticalGridLines
-        str = str + 'singleLineDisplay = %s\n\n' % self.singleLineDisplay
-        str = str + 'showLegend = %s\n\n' % self.showLegend
-        str = str + 'colorOutput = %s\n\n' % self.colorOutput
+        str += 'pathsByDB = %s\n' % self.pathsByDB
+        str = str + 'defaultFontFace = %s\n' % self.defaultFontFace
+        str = str + 'defaultFontSize = %s\n' % self.defaultFontSize
+        str = str + 'keywordMapBarHeight = %s\n' % self.keywordMapBarHeight
+        str = str + 'keywordMapWhitespace = %s\n' % self.keywordMapWhitespace
+        str = str + 'keywordVisualizationBarHeight = %s\n' % self.keywordVisualizationBarHeight
+        str = str + 'keywordVisualizationWhitespace = %s\n' % self.keywordVisualizationWhitespace
+        str = str + 'seriesMapBarHeight = %s\n' % self.seriesMapBarHeight
+        str = str + 'seriesMapWhitespace = %s\n' % self.seriesMapWhitespace
+        str = str + 'keywordMapHorizontalGridLines = %s\n' % self.keywordMapHorizontalGridLines
+        str = str + 'keywordMapVerticalGridLines = %s\n' % self.keywordMapVerticalGridLines
+        str = str + 'keywordVisualizationHorizontalGridLines = %s\n' % self.keywordVisualizationHorizontalGridLines
+        str = str + 'keywordVisualizationVerticalGridLines = %s\n' % self.keywordVisualizationVerticalGridLines
+        str = str + 'seriesMapHorizontalGridLines = %s\n' % self.seriesMapHorizontalGridLines
+        str = str + 'seriesMapVerticalGridLines = %s\n' % self.seriesMapVerticalGridLines
+        str = str + 'singleLineDisplay = %s\n' % self.singleLineDisplay
+        str = str + 'showLegend = %s\n' % self.showLegend
+        str = str + 'colorOutput = %s\n' % self.colorOutput
+        str = str + 'colorConfigFilename = %s\n' % self.colorConfigFilename
+        str = str + 'quickClipsWarning = %s\n' % self.quickClipWarning
         if 'wxMSW' in wx.PlatformInfo:
             str = str + 'mediaPlayer = %s\n\n' % self.mediaPlayer
         return str
@@ -159,7 +166,7 @@ class ConfigData(object):
             # Load the Visualization Style
             self.visualizationStyle = config.Read('/2.0/visualizationStyle', 'Waveform')
             # Load Quick Clip Mode setting
-            if 'wxMSW' in wx.PlatformInfo:
+            if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
                 self.quickClipMode = config.ReadInt('/2.0/QuickClipMode', True)
             # Load Auto Word-Tracking setting
             self.wordTracking = config.ReadInt('/2.0/WordTracking', True)
@@ -242,7 +249,7 @@ class ConfigData(object):
             # Default Visualization Style is Waveform
             self.visualizationStyle = 'Waveform'
             # Quick Clip Mode should be disabled by default
-            if 'wxMSW' in wx.PlatformInfo:
+            if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
                 self.quickClipMode = True
             # Auto Word Tracking is enabled by default
             self.wordTracking = True
@@ -279,10 +286,18 @@ class ConfigData(object):
                 # ... load the Media Player selection
                 self.mediaPlayer = 0
 
+        # Load Port
+        if not TransanaConstants.singleUserVersion:
+            self.dbport = config.Read('/2.0/dbport', '3306')
+        else:
+            self.dbport = '3306'
         # Initialize the Show Legend setting
         self.showLegend = True
         # Initialize Color Output Setting
         self.colorOutput = True
+        self.colorConfigFilename = config.Read('/2.0/ColorConfigFilename', '')
+        # Load the Quick Clips Warning setting
+        self.quickClipWarning = config.ReadInt('/2.0/QuickClipWarning', True)
 
         # Load the databaseList, if it exists
         # NOTE:  if using Unicode, this MUST be a String object!
@@ -332,6 +347,17 @@ class ConfigData(object):
                 for d in self.databaseList[h]:
                     print h, d
 
+        # Read the dictionary object that stores Path information for different databases
+        pathsByDB = str(config.Read('/2.0/pathsByDB', ''))
+        # If we get the default value of '' ...
+        if pathsByDB == '':
+            # ... then we want this variable to be an empty dictionary object
+            self.pathsByDB = {}
+        # If there is already data in the config file ...
+        else:
+            # ... we need to unpack it to make it usable.
+            self.pathsByDB = pickle.loads(pathsByDB)
+
         # Embedded MySQL can only work with Latin-1 compatible paths.  The following
         # code checks to make sure the path will work.  This final check handles the situation where
         # an improper path is saved in the configuration file, which is entirely possible, as the selection
@@ -347,6 +373,10 @@ class ConfigData(object):
 
     def SaveConfiguration(self):
         """ Save Configuration Data to the Registry or a Config File. """
+        # The Lab version should not save configuration data ...
+        if TransanaConstants.labVersion:
+            # ... so just skip this method entirely!
+            return
         # Save the Config Data.  wxConfig automatically uses the Registry on Windows and the appropriate file on Mac.
         # Program Name is Transana, Vendor Name is Verception to remain compatible with Transana 1.0.
         config = wx.Config('Transana', 'Verception')
@@ -355,6 +385,9 @@ class ConfigData(object):
             config.Write('/2.0/host', self.host)
         else:
             config.Write('/2.0/hostMU', self.host)
+        # Load Port
+        if not TransanaConstants.singleUserVersion:
+            config.Write('/2.0/dbport', self.dbport)
         # Save the Database
         if TransanaConstants.singleUserVersion:
             config.Write('/2.0/database', self.database)
@@ -373,7 +406,7 @@ class ConfigData(object):
         # Save the Visualization Style
         config.Write('/2.0/visualizationStyle', self.visualizationStyle)
         # Save the Quick Clip Mode setting
-        if 'wxMSW' in wx.PlatformInfo:
+        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
             config.WriteInt('/2.0/QuickClipMode', self.quickClipMode)
         # Save the Auto Word Tracking setting
         config.WriteInt('/2.0/WordTracking', self.wordTracking)
@@ -389,8 +422,8 @@ class ConfigData(object):
         if DEBUG:
             print "ConfigData.SaveConfiguration():  self.databaseList ="
             for h in self.databaseList.keys():
-                for d in self.databaseList[h]:
-                    print h, d, type(h), type(d)
+                for d in self.databaseList[h]['dbList']:
+                    print h, d
 
         # Save the list of Databases this user has used as a string by pickling it
         tmpDbList = pickle.dumps(self.databaseList)
@@ -402,6 +435,12 @@ class ConfigData(object):
             config.Write('/2.0/DatabaseListSU', tmpDbList)
         else:
             config.Write('/2.0/DatabaseListMU', tmpDbList)
+
+        # To save the dictionary of paths for different databases, we must first pickle it
+        tmpPathsByDB = pickle.dumps(self.pathsByDB)
+        # Now we can save it to the config file/registry
+        config.Write('/2.0/pathsByDB', tmpPathsByDB)
+
         # Save Default Font Face Setting
         config.Write('/2.0/FontFace', self.defaultFontFace)
         # Save Default Font Size Setting
@@ -432,6 +471,10 @@ class ConfigData(object):
         config.WriteInt('/2.0/SeriesMapVerticalGridLines', self.seriesMapVerticalGridLines)
         # Save the Series Map Sequence Map Single Line Setting
         config.WriteInt('/2.0/SeriesMapSequenceMapSingleLine', self.singleLineDisplay)
+        # Save Color Configuration Filename
+        config.Write('/2.0/ColorConfigFilename', self.colorConfigFilename)
+        # Save the Quick Clips Warning setting
+        config.WriteInt('/2.0/QuickClipWarning', self.quickClipWarning)
         # For Windows only ...
         if 'wxMSW' in wx.PlatformInfo:
             # ... save the Media Player selection

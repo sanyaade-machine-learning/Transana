@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -42,10 +42,12 @@ class TranscriptToolbar(wx.ToolBar):
 
     def __init__(self, parent, id=-1):
         """Initialize an TranscriptToolbar object."""
+        if 'wxGTK' in wx.PlatformInfo:
+            size = wx.Size(560, 30)
+        else:
+            size = wx.Size(470, 30)
         # Create a ToolBar as self
-        wx.ToolBar.__init__(self, parent, id, wx.DefaultPosition,
-                            wx.Size(385, 30), wx.TB_HORIZONTAL \
-                                    | wx.NO_BORDER | wx.TB_FLAT | wx.TB_TEXT)
+        wx.ToolBar.__init__(self, parent, id, wx.DefaultPosition, size, wx.TB_HORIZONTAL | wx.NO_BORDER | wx.TB_FLAT | wx.TB_TEXT)
         # remember the parent
         self.parent = parent
         # Keep a list of the tools placed on the toolbar so they're more easily manipulated
@@ -122,6 +124,12 @@ class TranscriptToolbar(wx.ToolBar):
         
         self.AddSeparator()
 
+        # Add QuickClip button
+        self.CMD_QUICKCLIP_ID = self.GetNextId()
+        self.tools.append(self.AddTool(self.CMD_QUICKCLIP_ID, wx.Bitmap("images/QuickClip16.xpm", wx.BITMAP_TYPE_XPM),
+                        shortHelpString=_("Create Quick Clip")))
+        wx.EVT_MENU(self, self.CMD_QUICKCLIP_ID, self.OnQuickClip)
+
         # Add Edit keywords button
         self.CMD_KEYWORD_ID = self.GetNextId()
         self.tools.append(self.AddTool(self.CMD_KEYWORD_ID, wx.Bitmap("images/KeywordRoot16.xpm", wx.BITMAP_TYPE_XPM),
@@ -147,6 +155,26 @@ class TranscriptToolbar(wx.ToolBar):
 
         self.AddSeparator()
         
+        # Add Multi-Select Button
+        # First, define the ID for this button
+        self.CMD_MULTISELECT_ID = self.GetNextId()
+        # Now create the button and add it to the Tools list
+        self.tools.append(self.AddTool(self.CMD_MULTISELECT_ID, wx.Bitmap("images/MultiSelect.xpm", wx.BITMAP_TYPE_XPM),
+                        shortHelpString=_("Match Selection in Other Transcripts")))
+        # Link the button to the appropriate event handler
+        wx.EVT_MENU(self, self.CMD_MULTISELECT_ID, self.OnMultiSelect)
+
+        # Add Multiple Transcript Play Button
+        # First, define the ID for this button
+        self.CMD_PLAY_ID = self.GetNextId()
+        # Now create the button and add it to the Tools list
+        self.tools.append(self.AddTool(self.CMD_PLAY_ID, wx.Bitmap("images/Play.xpm", wx.BITMAP_TYPE_XPM),
+                        shortHelpString=_("Play Multiple Transcript Selection")))
+        # Link the button to the appropriate event handler
+        wx.EVT_MENU(self, self.CMD_PLAY_ID, self.OnMultiPlay)
+
+        self.AddSeparator()
+
         # SEARCH moved to TranscriptionUI because you can't put a TextCtrl on a Toolbar on the Mac!
 
         # Set the Initial State of the Editing Buttons to "False"
@@ -154,7 +182,7 @@ class TranscriptToolbar(wx.ToolBar):
                     self.CMD_RISING_INT_ID, self.CMD_FALLING_INT_ID, \
                     self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID):
             self.EnableTool(x, False)
-        
+
     def GetNextId(self):
         """Get a new event ID to use for the toolbar objects."""
         idVal = wx.NewId()
@@ -361,26 +389,34 @@ class TranscriptToolbar(wx.ToolBar):
         # Enable/Disable Transcript menu Items
         self.parent.ControlObject.SetTranscriptEditOptions(can_edit)
 
+    def OnQuickClip(self, event):
+        """ Create a Quick Clip """
+        # Call upon the Control Object to create the Quick Clip
+        self.parent.ControlObject.CreateQuickClip()
+
     def OnEditKeywords(self, evt):
         """ Implement the Edit Keywords button """
         # Determine if a Transcript is loaded, and if so, what kind
         if self.parent.editor.TranscriptObj != None:
-            # Default that the transcript was NOT locked, which means we weren't in Edit mode.
-            clipTranscriptLocked = False
+            # Initialize a list where we can keep track of clip transcripts that are locked because they are in Edit mode.
+            clipTranscriptLocked = []
             try:
-                # If the Transcript has a clip number, load the Clip
+                # If the underlying Transcript object has a clip number, we're working with a CLIP.
                 if self.parent.editor.TranscriptObj.clip_num > 0:
-                    # If the Clip Transcript is locked, we need to save it first and unlock it.
-                    if self.parent.editor.TranscriptObj.isLocked:
-                        # Note that the transcript was locked, which means we HAD to be in Edit Mode
-                        clipTranscriptLocked = True
-                        # Leave Edit Mode, which will prompt about saving the Transcript.
-                        # a) toggle the button
-                        self.ToggleTool(self.CMD_READONLY_ID, not self.GetToolState(self.CMD_READONLY_ID))
-                        # b) call the event that responds to the button state change
-                        self.OnReadOnlySelect(evt)
-                        # Get the "Last Save Time" value
-                        lastSaveTime = self.parent.editor.TranscriptObj.lastsavetime
+                    # If a clip has multiple transcripts, we could run into lock problems.  Let's try to detect that.
+                    # (This is probably poor form from an object-oriented standpoint, but I don't know a better way.)
+                    # For each currently-open Transcript window ...
+                    for trWin in self.parent.ControlObject.TranscriptWindow:
+                        # ... note if the clip transcript is currently locked.
+                        clipTranscriptLocked.append(trWin.dlg.editor.TranscriptObj.isLocked)
+                        # If it is locked ...
+                        if trWin.dlg.editor.TranscriptObj.isLocked:
+                            # Leave Edit Mode, which will prompt about saving the Transcript.
+                            # a) toggle the button
+                            trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_READONLY_ID, not trWin.dlg.toolbar.GetToolState(trWin.dlg.toolbar.CMD_READONLY_ID))
+                            # b) call the event that responds to the button state change
+                            trWin.dlg.toolbar.OnReadOnlySelect(evt)
+
                     # Finally, we can load the Clip object
                     obj = Clip.Clip(self.parent.editor.TranscriptObj.clip_num)
                 # Otherwise ...
@@ -471,20 +507,26 @@ class TranscriptToolbar(wx.ToolBar):
                         if TransanaGlobal.chatWindow != None:
                             TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % (msgObjType, obj.number, msgObjClipEpNum))
 
-                    
                 # Unlock the Data Object
                 obj.unlock_record()
 
                 # Load the revised Transcript.  (This prevents a Last Save Time error in MU.)
                 self.parent.editor.TranscriptObj.db_load_by_num(self.parent.editor.TranscriptObj.number)
-                # If we used to be in Edit Mode (flagged earlier) ...
-                if clipTranscriptLocked:
-                    # ... toggle the Edit Mode button ...
-                    self.ToggleTool(self.CMD_READONLY_ID, not self.GetToolState(self.CMD_READONLY_ID))
-                    # ... and call the event associated with toggling the button.  This puts us back in Edit
-                    # mode and locks the Clip Transcript.
-                    self.OnReadOnlySelect(evt)
-                    
+
+                # For each existing Transcript Window ...
+                for cnt in range(len(self.parent.ControlObject.TranscriptWindow)):
+                    # If we used to be in Edit Mode (flagged earlier) ...
+                    if clipTranscriptLocked[cnt]:
+                        # ... get a simplified reference to the transcript window ...
+                        trWin = self.parent.ControlObject.TranscriptWindow[cnt]
+                        # ... update the transcript window's Last Save Time, so we don't get error messages about loading new transcripts ...
+                        trWin.dlg.editor.TranscriptObj.lastsavetime = self.parent.editor.TranscriptObj.lastsavetime
+                        # ... toggle the Edit Mode button ...
+                        trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_READONLY_ID, not trWin.dlg.toolbar.GetToolState(trWin.dlg.toolbar.CMD_READONLY_ID))
+                        # ... and call the event associated with toggling the button.  This puts us back in Edit
+                        # mode and re-locks the Clip Transcript.
+                        trWin.dlg.toolbar.OnReadOnlySelect(evt)
+
             except TransanaExceptions.RecordLockedError, e:
                 """Handle the RecordLockedError exception."""
                 if isinstance(obj, Episode.Episode):
@@ -527,13 +569,22 @@ class TranscriptToolbar(wx.ToolBar):
             timeCodeDataShowing = False
         
         # Call the Propagate Changes method in the Control Object
-        self.parent.ControlObject.PropagateChanges()
+        self.parent.ControlObject.PropagateChanges(self.parent.transcriptWindowNumber)
 
         # If Time Code Data was being displayed ...
         if timeCodeDataShowing:
             # ... RE-DISPLAY it by toggling the button and calling the event!
             self.ToggleTool(self.CMD_SHOWHIDETIME_ID, True)
             self.OnShowHideValues(event)
+
+    def OnMultiSelect(self, event):
+        """ Implements the "Match Selection in Multiple Transcripts" button """
+        self.parent.ControlObject.MultiSelect(self.parent.transcriptWindowNumber)
+
+    def OnMultiPlay(self, event):
+        """ Implements the "Play" button in the multi-transcript environment """
+        self.parent.ControlObject.MultiPlay()
+
             	
     def OnStyleChange(self, editor):
         """This event handler is setup in the higher level Transcript Window,
@@ -560,3 +611,5 @@ class TranscriptToolbar(wx.ToolBar):
         self.SetToolShortHelp(self.CMD_KEYWORD_ID, _("Edit Keywords"))
         self.SetToolShortHelp(self.CMD_SAVE_ID, _("Save Transcript"))
         self.SetToolShortHelp(self.CMD_PROPAGATE_ID, _("Propagate Changes"))
+        self.SetToolShortHelp(self.CMD_MULTISELECT_ID, _("Match Selection in Other Transcripts"))
+        self.SetToolShortHelp(self.CMD_PLAY_ID, _("Play Multiple Transcript Selection"))

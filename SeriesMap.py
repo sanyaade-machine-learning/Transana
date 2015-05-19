@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2007  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2008  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -37,8 +37,6 @@ import DBInterface
 import Dialogs
 # Import Transana's Filter Dialog
 import FilterDialog
-# Import Transana's Constants
-import TransanaConstants
 # import Transana's Globals
 import TransanaGlobal
 # import Transana Miscellaneous functions
@@ -237,6 +235,9 @@ class SeriesMap(wx.Frame):
         # Populate the drawing
         self.ProcessSeries()
         self.DrawGraph()
+        # Trigger the load of the Default Filter, if one exists.  An event of None signals we're loading the
+        # Default config, an dhte OnFilter method will handle drawing the graph!
+        self.OnFilter(None)
 
         # Restore Cursor to Arrow
         TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
@@ -244,6 +245,10 @@ class SeriesMap(wx.Frame):
     # Define the Method that implements Filter
     def OnFilter(self, event):
         """ Implement the Filter Dialog call for Series Maps """
+        if event == None:
+            loadDefault = True
+        else:
+            loadDefault = False
         # Set the Cursor to the Hourglass while the report is assembled
         TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
         # Set up parameters for creating the Filter Dialog.  Series Map Filter requires Series Number (as episodeNum) for the Config Save.
@@ -262,7 +267,7 @@ class SeriesMap(wx.Frame):
         # The Series Keyword Sequence Map has all the usual parameters plus Time Range data and the Single Line Display option
         if self.reportType in [1]:
             # Create a Filter Dialog, passing all the necessary parameters.
-            dlgFilter = FilterDialog.FilterDialog(self, -1, title, reportType=reportType, configName=self.configName,
+            dlgFilter = FilterDialog.FilterDialog(self, -1, title, reportType=reportType, loadDefault=loadDefault, configName=self.configName,
                                                   reportScope=self.seriesNum, episodeFilter=True, episodeSort=True,
                                                   clipFilter=clipFilter, keywordFilter=True, keywordSort=True,
                                                   keywordColor=keywordColors, options=options, startTime=self.startTime, endTime=self.endTime,
@@ -271,7 +276,7 @@ class SeriesMap(wx.Frame):
                                                   colorOutput=self.colorOutput)
         elif self.reportType in [2, 3]:
             # Create a Filter Dialog, passing all the necessary parameters.
-            dlgFilter = FilterDialog.FilterDialog(self, -1, title, reportType=reportType, configName=self.configName,
+            dlgFilter = FilterDialog.FilterDialog(self, -1, title, reportType=reportType, loadDefault=loadDefault, configName=self.configName,
                                                   reportScope=self.seriesNum, episodeFilter=True, episodeSort=True,
                                                   clipFilter=clipFilter, keywordFilter=True, keywordSort=True,
                                                   keywordColor=keywordColors, options=options, 
@@ -307,8 +312,27 @@ class SeriesMap(wx.Frame):
         while errorMsg != '':
             # Clear the last (or dummy) error message.
             errorMsg = ''
+            if loadDefault:
+                # ... get the list of existing configuration names.
+                profileList = dlgFilter.GetConfigNames()
+                # If (translated) "Default" is in the list ...
+                # (NOTE that the default config name is stored in English, but gets translated by GetConfigNames!)
+                if unicode(_('Default'), TransanaGlobal.encoding) in profileList:
+                    # ... then signal that we need to load the config.
+                    dlgFilter.OnFileOpen(None)
+                    # Fake that we asked the user for a filter name and got an OK
+                    result = wx.ID_OK
+                # If we're loading a Default profile, but there's none in the list, we can skip
+                # the rest of the Filter method by pretending we got a Cancel from the user.
+                else:
+                    result = wx.ID_CANCEL
+            # If we're not loading a Default profile ...
+            else:
+                # ... we need to show the Filter Dialog here.
+                result = dlgFilter.ShowModal()
+                
             # Show the Filter Dialog and see if the user clicks OK
-            if dlgFilter.ShowModal() == wx.ID_OK:
+            if result == wx.ID_OK:
                 # Get the Episode Data from the Filter Dialog
                 self.episodeList = dlgFilter.GetEpisodes()
                 # If we requested Clip Filtering ...
@@ -1081,11 +1105,11 @@ class SeriesMap(wx.Frame):
 
         # Select the color palate for colors or gray scale as appropriate
         if self.colorOutput:
-            colorSet = TransanaConstants.keywordMapColourSet
-            colorLookup = TransanaConstants.transana_colorLookup
+            colorSet = TransanaGlobal.keywordMapColourSet
+            colorLookup = TransanaGlobal.transana_colorLookup
         else:
-            colorSet = TransanaConstants.keywordMapGraySet
-            colorLookup = TransanaConstants.transana_grayLookup
+            colorSet = TransanaGlobal.keywordMapGraySet
+            colorLookup = TransanaGlobal.transana_grayLookup
 
         # Set the colourIndex tracker to the last color used.
         colourindex = self.keywordColors['lastColor']

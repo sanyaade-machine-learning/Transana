@@ -14,7 +14,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-"""This module contains Transana's global constants."""
+"""This module contains Transana's global variables and constants."""
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
 
@@ -24,17 +24,20 @@ import wx
 # import the Python string module
 import string
 
-# Define all global program Constants here
+
+# Define all global program Variables and Constants here
 
 # Define a Boolean to indicate Single- or Multi- user
 # NOTE:  When you change this value, you MUST change the MySQL for Python installation you are using
 #        to match.
-singleUserVersion = True
+singleUserVersion = False
+# Indicate if this is the Lab version
+labVersion = False
 # Set this flag to "True" to create the Demonstration version.  (But don't mix this with MU!)
 demoVersion = False
 
 # Program Version Number
-versionNumber = '2.22b'
+versionNumber = '2.30'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
@@ -48,6 +51,11 @@ elif 'wxGTK' in wx.PlatformInfo:
     versionNumber += '-Linux Alpha 1.0'
 else:
     versionNumber += '-Unknown Platform Alpha 1.0'
+
+if labVersion:
+    versionNumber += ' Lab'
+    
+# Define limits for the Demonstration Version
 if demoVersion:
     versionNumber += ' Demonstration'
     maxEpisodes = 5
@@ -55,12 +63,13 @@ if demoVersion:
     maxClips = 30
     maxKeywords = 15
 
+# Allow Drag and Drop on the Mac?  (There's a bug, but it could be fixed!)
+macDragDrop = True
+# Define the maximum number of Trasncript Windows that can be opened
+maxTranscriptWindows = 5
+
 # Define the Timecode Character
 if 'unicode' in wx.PlatformInfo:
-# It appears that with wxPython 2.8, the Mac finally can display the proper Timecode character!!
-#    if 'wxMac' in wx.PlatformInfo:
-#        TIMECODE_CHAR = unicode('\xc2\xa7', 'utf-8')
-#    else:
     TIMECODE_CHAR = unicode('\xc2\xa4', 'utf-8')
 else:
     TIMECODE_CHAR = '\xa4'
@@ -76,7 +85,6 @@ VISUAL_BUTTON_SELECTED          =  wx.NewId()
 # For the moment, we will leave 800 - 999 open for them
 DATA_MENU_CMD_OFSET             =  800
 
-
 # Define the IDs of wxPython GUI objects that need them
 
 # Define the IDs for the Video Unit
@@ -91,19 +99,9 @@ MEDIA_PLAYSTATE_NONE               =  None
 MEDIA_PLAYSTATE_STOP               =  wx.media.MEDIASTATE_STOPPED
 MEDIA_PLAYSTATE_PAUSE              =  wx.media.MEDIASTATE_PAUSED
 MEDIA_PLAYSTATE_PLAY               =  wx.media.MEDIASTATE_PLAYING
-#elif "__WXMSW__" in wx.PlatformInfo:
-#    MEDIA_PLAYSTATE_NONE               = -1
-#    MEDIA_PLAYSTATE_STOP               =  0
-#    MEDIA_PLAYSTATE_PAUSE              =  1
-#    MEDIA_PLAYSTATE_PLAY               =  2
-#elif "__WXMAC__" in wx.PlatformInfo:
-#    MEDIA_PLAYSTATE_NONE               = -1
-#    MEDIA_PLAYSTATE_STOP               =  1
-#    MEDIA_PLAYSTATE_PAUSE              =  2
-#    MEDIA_PLAYSTATE_PLAY               =  0
 
+# Define the Media File type strings to be used throughout Transana
 fileTypesString = _("""All files (*.*)|*.*|All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.wmv, *.mp3, *.wav, *.wma)|*.mpg;*.avi;*.mov;*.mp4;*.wmv;*.mp3;*.wav;*.wma|All video files (*.mpg, *.avi, *.mov, *.mp4, *.wmv)|*.mpg;*.mpeg;*.avi;*.mov;*.mp4;*.wmv|All audio files (*.mp3, *.wav, *.wma, *.au, *.snd)|*.mp3;*.wav;*.wma;*.au;*.snd|MPEG files (*.mpg)|*.mpg;*.mpeg|AVI files (*.avi)|*.avi|QuickTime files (*.mov, *.mp4)|*.mov;*.mp4|Windows Media Video (*.wmv)|*wmv|MP3 files (*.mp3)|*.mp3|WAV files (*.wav)|*.wav|Windows Media Audio (*.wma)|*.wma""")
-
 fileTypesList = [_("All files (*.*)"),
                  _("All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.wmv, *.mp3, *.wav, *.wma)"),
                  _("All video files (*.mpg, *.avi, *.mov, *.mp4, *.wmv)"),
@@ -117,114 +115,12 @@ fileTypesList = [_("All files (*.*)"),
                  _("Windows Media Audio files (*.wma)"),
                  _("Rich Text Format files (*.rtf)"),
                  _("BMP, PNG, and WAV files (*.bmp, *.png, *.wav)")]
-
 mediaFileTypes = ['mpg', 'mpeg', 'avi', 'mov', 'mp4', 'wmv', 'mp3', 'wav', 'wma']
-                 
+
+# We need to know what characters are legal in a file name!
 legalFilenameCharacters = string.ascii_letters + string.digits + ":. -_$&@!%(){}[]~'#^+=/" 
 if "__WXMSW__" in wx.PlatformInfo:
     legalFilenameCharacters += '\\'
 
+# There are several different encodings that could be used with Chinese.  "gbk" seems to work bests
 chineseEncoding = 'gbk'
-
-# We want enough colors, but not too many.  This list seems about right to me.  I doubt my color names are standard.
-# But then, I'm often perplexed by the colors that are included and excluded by most programs.  (Excel for example.)
-# Each entry is made up of a color name and a tuple of the RGB values for the color.
-transana_colorList = [('Black',             (  0,   0,   0)),
-                      ('Dark Blue',         (  0,   0, 128)),
-                      ('Blue',              (  0,   0, 255)),
-                      ('Light Blue',        (  0, 128, 255)),
-                      ('Lavender',          (128, 128, 255)),
-                      ('Cyan',              (  0, 255, 255)),
-                      ('Light Aqua',        (128, 255, 255)),
-                      ('Blue Green',        (  0, 128, 128)),
-                      ('Dark Slate Gray',   ( 47,  79,  79)),
-                      ('Dark Green',        (  0, 128,   0)),
-                      ('Green Blue',        (  0, 255, 128)),
-                      ('Green',             (  0, 255,   0)),
-                      ('Chartreuse',        (128, 255,   0)),
-                      ('Light Green',       (128, 255, 128)),
-                      ('Olive',             (128, 128,   0)),
-                      ('Sienna',            (142, 107,  35)),
-                      ('Gray',               (128, 128, 128)),
-                      ('Purple',            (128,   0, 255)),
-                      ('Light Purple',     (176,  0, 255)),
-                      ('Dark Purple',       (128,   0, 128)),
-                      ('Maroon',            (128,   0,   0)),
-                      ('Indian Red',        ( 79,  47,  47)),
-                      ('Violet Red',        (204,  50, 153)),
-                      ('Magenta',           (255,   0, 255)),
-                      ('Light Fuscia',      (255, 128, 255)),
-                      ('Rose',              (255,   0, 128)),
-                      ('Red',               (255,   0,   0)),
-                      ('Red Orange',        (204,  50,  50)),
-                      ('Salmon',            (255, 128, 128)),
-                      ('Orange',            (255, 128,   0)),
-                      ('Yellow',            (255, 255,   0)),  
-                      ('Light Yellow',      (255, 255, 128)),  
-                      ('Goldenrod',         (219, 219, 112)),
-                      ('White',             (255, 255, 255))]
-# The following exists only to ensure that the color names are available for translation.
-# (I had to take the translation code out of the above data structure, as color names were only showing up in
-#  the initial language.)
-tmpColorList = (_('Black'), _('Dark Blue'), _('Blue'), _('Light Blue'), _('Cyan'), _('Light Aqua'), _('Green Blue'),
-                 _('Dark Green'), _('Blue Green'),_('Green'), _('Chartreuse'), _('Light Green'), _('Olive'), _('Gray'),
-                _('Lavender'), _('Purple'), _('Dark Purple'), _('Maroon'), _('Magenta'), _('Light Fuscia'), _('Rose'),
-                _('Red'), _('Salmon'), _('Orange'), _('Yellow'), _('Light Yellow'), _('White'),
-                _('Violet Red'), _('Sienna'), _('Indian Red'), _('Goldenrod'), _('Dark Slate Gray'), _('Red Orange'),
-                _('Light Purple'))
-transana_colorNameList = []
-transana_colorLookup = {}
-for (colorName, colorDef) in transana_colorList:
-    transana_colorNameList.append(colorName)
-    transana_colorLookup[colorName] = colorDef
-
-# Get the legal colors for bars in the Keyword Map.  These colors are taken from the TransanaConstants.transana_colorList
-# but are put in a different order for the Keyword Map.
-# ('Green' in line 3 wasn't distinct enough from 'Green Blue' and 'Chartreuse', so I removed it and moved 'Olive' up from line 6.
-#  Other colors have been rearranged as well.)
-# Added "new" colors, removed Light Green and Light Aqua
-keywordMapColourSet = ['Dark Blue',
-                       'Green Blue',
-                       'Gray',
-                       'Lavender',
-                       'Light Fuscia',
-                       'Cyan',
-                       'Indian Red',
-                       'Rose',
-                       'Olive',
-                       'Purple',
-                       'Chartreuse',
-                       'Salmon',
-                       'Blue', 
-                       'Maroon', 
-                       'Magenta',
-                       'Yellow',
-                       'Light Blue', 
-                       'Violet Red',
-                       'Dark Green',
-                       'Red',
-                       'Dark Purple',
-                       'Sienna',
-                       'Blue Green',
-                       'Orange',
-                       'Light Purple',
-                       'Goldenrod',
-                       'Dark Slate Gray',
-                       'Red Orange']
-
-# We want enough shades of gray for black and white printing, but not too many.  This list seems about right to me.
-# Each entry is made up of a color name and a tuple of the RGB values for the color.
-transana_grayList = [('Black',             (  0,   0,   0)),
-                     ('Dark Gray',         ( 79,  79,  79)),
-                     ('Gray',              (158, 158, 158)),
-                     ('Light Gray',        (237, 237, 237)),
-                     ('White',             (255, 255, 255))]
-
-# Get the legal shades of gray for bars in the Keyword Map.  These shades are taken from the TransanaConstants.transana_grayList
-keywordMapGraySet = ['Black',
-                     'Gray',
-                     'Dark Gray',
-                     'Light Gray']
-transana_grayLookup = {}
-for (colorName, colorDef) in transana_grayList:
-    transana_grayLookup[colorName] = colorDef
