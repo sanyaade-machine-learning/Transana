@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -176,7 +176,7 @@ class FilterDialog(wx.Dialog):
         # Just to be clear, if we're loading the default, we don't actually SEE the dialog, but we still
         # create it and populate all of its fields.  That's the easiest way to load the default config!!
         wx.Dialog.__init__(self, parent, id, title, size = (500,500),
-                           style=wx.CAPTION | wx.CLOSE_BOX | wx.RESIZE_BORDER | wx.NO_FULL_REPAINT_ON_RESIZE)
+                           style= wx.DEFAULT_DIALOG_STYLE | wx.MAXIMIZE_BOX | wx.RESIZE_BORDER | wx.NO_FULL_REPAINT_ON_RESIZE)
         # Make the background White
         self.SetBackgroundColour(wx.WHITE)
 
@@ -732,8 +732,9 @@ class FilterDialog(wx.Dialog):
                 # The default config name has been saved in English.  We need to translate it!
                 if configName == 'Default':
                     configName = unicode(_('Default'), TransanaGlobal.encoding)
-                # Decode the data
-#                configName = DBInterface.ProcessDBDataForUTF8Encoding(configName)
+                else:
+                    # Decode the data
+                    configName = DBInterface.ProcessDBDataForUTF8Encoding(configName)
                 # Add the data to the Results list
                 resList.append(configName)
         # return the Results List
@@ -1102,14 +1103,14 @@ class FilterDialog(wx.Dialog):
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Horizontal Grid Lines value
-                        self.hGridLines.SetValue(filterData == 'True')
+                        self.hGridLines.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Vertical Grid Lines (filterDataType 14) ...
                     elif filterDataType == 14:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Vertical Grid Lines value
-                        self.vGridLines.SetValue(filterData == 'True')
+                        self.vGridLines.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Single Line Display (filterDataType 15) ...
                     elif filterDataType == 15:
@@ -1118,77 +1119,77 @@ class FilterDialog(wx.Dialog):
                         # Only do this if singleLineDisplay exists!  (Copied configs from ReportType 5 may have this.)
                         if self.kwargs.has_key('singleLineDisplay'):
                             # Set the Single Line Display value
-                            self.singleLineDisplay.SetValue(filterData == 'True')
+                            self.singleLineDisplay.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Legend value (filterDataType 16) ...
                     elif filterDataType == 16:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Show Legend value
-                        self.showLegend.SetValue(filterData == 'True')
+                        self.showLegend.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Color Output value (filterDataType 17) ...
                     elif filterDataType == 17:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Color Output value
-                        self.colorOutput.SetValue(filterData == 'True')
+                        self.colorOutput.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Include Nested Collection Data value (filterDataType 101) ...
                     elif filterDataType == 101:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Show Nested Collection Data value
-                        self.showNestedData.SetValue(filterData == 'True')
+                        self.showNestedData.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Media Filename Data value (filterDataType 102) ...
                     elif filterDataType == 102:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Show Media Filename Data value
-                        self.showFile.SetValue(filterData == 'True')
+                        self.showFile.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Clip Time Data value (filterDataType 103) ...
                     elif filterDataType == 103:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Show Clip Time Data value
-                        self.showTime.SetValue(filterData == 'True')
+                        self.showTime.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Clip Transcripts value (filterDataType 104) ...
                     elif filterDataType == 104:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Show Clip Transcripts value
-                        self.showClipTranscripts.SetValue(filterData == 'True')
+                        self.showClipTranscripts.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Clip Keywords value (filterDataType 105) ...
                     elif filterDataType == 105:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Show Clip Keywords value
-                        self.showClipKeywords.SetValue(filterData == 'True')
+                        self.showClipKeywords.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Comments value (filterDataType 106) ...
                     elif filterDataType == 106:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Show Comments value
-                        self.showComments.SetValue(filterData == 'True')
+                        self.showComments.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Collection Notes value (filterDataType 107) ...
                     elif filterDataType == 107:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Show Collection Notes value
-                        self.showCollectionNotes.SetValue(filterData == 'True')
+                        self.showCollectionNotes.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Clip Notes value (filterDataType 108) ...
                     elif filterDataType == 108:
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Show Clip Notes value
-                        self.showClipNotes.SetValue(filterData == 'True')
+                        self.showClipNotes.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If we have an unknown filterDataType ...
                     else:

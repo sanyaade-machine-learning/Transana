@@ -71,6 +71,11 @@
            <param name="Local" value="AddKeyword.htm">
        </object>
   <li> <object type="text/sitemap">
+           <param name="Name" value="Merge Keywords">
+           <param name="ID" value=135>
+           <param name="Local" value="MergeKeywords.htm">
+       </object>
+  <li> <object type="text/sitemap">
            <param name="Name" value="Edit Keywords">
            <param name="ID" value=140>
            <param name="Local" value="EditKeywords.htm">
@@ -99,6 +104,16 @@
            <param name="Name" value="Working with Multiple Transcripts">
            <param name="ID" value=190>
            <param name="Local" value="MultiTrans.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Working with Multiple Media Files">
+           <param name="ID" value=193>
+           <param name="Local" value="MultiMedia.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Synchronize Media Files">
+           <param name="ID" value=197>
+           <param name="Local" value="Synchronize.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Propagate Transcript Changes">
@@ -131,7 +146,7 @@
            <param name="Local" value="KeywordSummaryReport.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Series, Episode, and Collection Reports">
+           <param name="Name" value="Series, Episode, Collection, and Notes Reports">
            <param name="ID" value=260>
            <param name="Local" value="SECReports.htm">
        </object>
@@ -209,11 +224,6 @@
            <param name="Name" value="License Agreement">
            <param name="ID" value=400>
            <param name="Local" value="License.htm">
-       </object>
-  <li> <object type="text/sitemap">
-           <param name="Name" value="Quick Reference">
-           <param name="ID" value=410>
-           <param name="Local" value="QuickReference.htm">
        </object>
 
 </ul>

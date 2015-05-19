@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -56,6 +56,8 @@ import Dialogs
 import DragAndDropObjects
 # import Transana File Management System
 import FileManagement
+# import Play All Clips
+import PlayAllClips
 # import the Episode Transcript Change Propagation tool
 import PropagateEpisodeChanges
 # import Transana's Exceptions
@@ -141,8 +143,7 @@ class ControlObject(object):
         # Windows in the current setup of Transana, as these windows are all defined as child dialogs
         # of the MenuWindow.
         self.MenuWindow.Close()
-        # VideoWindow is a wxFrame, rather than a wxDialog like the other windows.  Therefore,
-        # it needs to be closed explicitly.
+        # VideoWindow needs to be closed explicitly.
         self.VideoWindow.close()
 
     def LoadTranscript(self, series, episode, transcript):
@@ -177,7 +178,7 @@ class ControlObject(object):
         # Remove any tabs in the Data Window beyond the Database Tab
         self.DataWindow.DeleteTabs()
 
-        if self.LoadVideo(episodeObj.media_filename, 0, episodeObj.tape_length):    # Load the video identified in the Episode
+        if self.LoadVideo(self.currentObj):    # Load the video identified in the Episode
             # Delineate the appropriate start and end points for Video Control.  (Required to prevent Waveform Visualization problems)
             self.SetVideoSelection(0, 0)
 
@@ -194,13 +195,20 @@ class ControlObject(object):
                 prompt = unicode(prompt, 'utf8')
             # Set the window's prompt
             self.TranscriptWindow[self.activeTranscript].dlg.SetTitle(prompt % (transcriptObj.id, seriesObj.id, episodeObj.id))
-            # Identify the loaded media file
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('Video Media File: "%s"'), 'utf8')
+            # If we have only one video file ...
+            if len(self.currentObj.additional_media_files) == 0:
+                # Identify the loaded media file
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Video Media File: "%s"'), 'utf8')
+                else:
+                    prompt = _('Video Media File: "%s"')
+                # Place the file name in the video window's Title bar
+                self.VideoWindow.SetTitle(prompt % episodeObj.media_filename)
+            # If there are multiple videos ...
             else:
-                prompt = _('Video Media File: "%s"')
-            self.VideoWindow.frame.SetTitle(prompt % episodeObj.media_filename)
+                # Just label the video window generically.  There's not room for file names.
+                self.VideoWindow.SetTitle(_("Video"))
             # Open Transcript in Transcript Window
             self.TranscriptWindow[self.activeTranscript].LoadTranscript(transcriptObj) #flies off to transcriptionui.py
             # Add the Transcript Number to the list that tracks the numbers of the open transcripts
@@ -218,21 +226,7 @@ class ControlObject(object):
             # Enable the transcript menu item options
             self.MenuWindow.SetTranscriptOptions(True)
 
-            # When an Episode is first loaded, we don't know how long it is.  
-            # Deal with missing episode length.
-            if episodeObj.tape_length <= 0:
-                # The video has been loaded in the Media Player now, so this should work.
-                episodeObj.tape_length = self.GetMediaLength()
-                # If we now know the Media Length...
-                if episodeObj.tape_length > 0:
-                    # Let's try to save the Episode Object, since we've added information
-                    try:
-                        episodeObj.lock_record()
-                        episodeObj.db_save()
-                        episodeObj.unlock_record()
-                    except:
-                        pass
-
+        # If the video won't load ...
         else:
             # We only want to load the File Manager in the Single User version.  It's not the appropriate action
             # for the multi-user version!
@@ -265,14 +259,21 @@ class ControlObject(object):
         self.VideoEndPoint = clipObj.clip_stop                        # Set the Video End Point to the Clip end
         
         # Load the video identified in the Clip
-        if self.LoadVideo(clipObj.media_filename, clipObj.clip_start, clipObj.clip_stop - clipObj.clip_start):
-            # Identify the loaded media file
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                str = unicode(_('Video Media File: "%s"'), 'utf8')
+        if self.LoadVideo(self.currentObj):
+            # If we have only one video file ...
+            if len(self.currentObj.additional_media_files) == 0:
+                # Identify the loaded media file
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Video Media File: "%s"'), 'utf8')
+                else:
+                    prompt = _('Video Media File: "%s"')
+                # Place the file name in the video window's Title bar
+                self.VideoWindow.SetTitle(prompt % clipObj.media_filename)
+            # If there are multiple videos ...
             else:
-                str = _('Video Media File: "%s"')
-            self.VideoWindow.frame.SetTitle(str % clipObj.media_filename)
+                # Just label the video window generically.  There's not room for file names.
+                self.VideoWindow.SetTitle(_("Video"))
             # Delineate the appropriate start and end points for Video Control
             self.SetVideoSelection(self.VideoStartPoint, self.VideoEndPoint)
             # Identify the loaded Object
@@ -452,30 +453,37 @@ class ControlObject(object):
         self.TranscriptWindow[0].dlg.SetWindowStyleFlag(style)
         # Some style changes require a refresh
         self.TranscriptWindow[0].dlg.Refresh()
-        # Determine the position and size of the first Transcript
-        (left, top) = self.TranscriptWindow[0].dlg.GetPositionTuple()
-        (width, height) = self.TranscriptWindow[0].dlg.GetSizeTuple()
-        # Get the size of the full screen
-        (x, y, w, h) = wx.ClientDisplayRect()
-        # We don't want the height of the first Transcript window, but the size of the space for all Transcript windows.
-        # We assume that it extends from the top of the first Transcript window to the bottom of the whole screen.
-        height = h - top
-        # We need an adjustment for the Mac.  I don't know why exactly.  It might have to do with the height of the menu bar.
-        if 'wxMac' in wx.PlatformInfo:
-            height += 20
-        # And actually, the width may very well be incorrect.  Let's grab the width from the Visualization Window
-        (width, vh) = self.VisualizationWindow.GetSizeTuple()
-        # Initialize a Window Counter
-        cnt = 0
-        # Iterate through all the Transcript Windows
-        for win in self.TranscriptWindow:
-            # Increment the counter
-            cnt += 1
-            # Set the position of each window so they evenly fill up the Transcript space
-            win.dlg.SetDimensions(left, top + int((cnt-1) * (height / len(self.TranscriptWindow))), width, int(height / len(self.TranscriptWindow)))
+        # We need to arrange the transcripts if we're leaving Play All Clips mode or if we're in All Windows presentation mode
+        if (self.PlayAllClipsWindow == None) or \
+           (self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL)):
+            # Determine the position and size of the first Transcript
+            (left, top) = self.TranscriptWindow[0].dlg.GetPositionTuple()
+            (width, height) = self.TranscriptWindow[0].dlg.GetSizeTuple()
+            # Get the size of the full screen
+            (x, y, w, h) = wx.ClientDisplayRect()
+            # We don't want the height of the first Transcript window, but the size of the space for all Transcript windows.
+            # We assume that it extends from the top of the first Transcript window to the bottom of the whole screen.
+            height = h - top
+            # We need an adjustment for the Mac.  I don't know why exactly.  It might have to do with the height of the menu bar.
+            if 'wxMac' in wx.PlatformInfo:
+                height += 20
+            # If there's only ONE Media Player ...
+            if len(self.VideoWindow.mediaPlayers) == 1:
+                # ... the width from the Transcript may very well be incorrect.  Let's grab the width from the Visualization Window
+                (width, vh) = self.VisualizationWindow.GetSizeTuple()
+            # Initialize a Window Counter
+            cnt = 0
+            # Iterate through all the Transcript Windows
+            for win in self.TranscriptWindow:
+                # Increment the counter
+                cnt += 1
+                # Set the position of each window so they evenly fill up the Transcript space
+                win.dlg.SetDimensions(left, top + int((cnt-1) * (height / len(self.TranscriptWindow))), width, int(height / len(self.TranscriptWindow)))
 
     def ClearAllWindows(self, resetMultipleTranscripts = True):
         """ Clears all windows and resets all objects """
+        # Let's stop the media from playing
+        self.VideoWindow.Stop()
         # Prompt for save if transcript modifications exist
         self.SaveTranscript(1)
         if resetMultipleTranscripts:
@@ -488,21 +496,20 @@ class ControlObject(object):
         str = _('Transcript')
         self.TranscriptWindow[self.activeTranscript].dlg.SetTitle(str)
 
-        # If the Active Transcript is set to 0, that signals the load of a NEW video
-        if resetMultipleTranscripts:
-
-            # Clear the Menu Window (Reset menus to initial state)
-            self.MenuWindow.ClearMenus()
-            # Clear Visualization Window
-            self.VisualizationWindow.ClearVisualization()
-            # Clear the Video Window
-            self.VideoWindow.ClearVideo()
-            # Clear the Video Filename as well!
-            self.VideoFilename = ''
-            # Identify the loaded media file
-            str = _('Video')
-            self.VideoWindow.frame.SetTitle(str)
+        # Clear the Menu Window (Reset menus to initial state)
+        self.MenuWindow.ClearMenus()
+        # Clear Visualization Window
+        self.VisualizationWindow.ClearVisualization()
+        # Clear the Video Window
+        self.VideoWindow.ClearVideo()
+        # Clear the Video Filename as well!
+        self.VideoFilename = ''
+        # Identify the loaded media file
+        str = _('Video')
+        self.VideoWindow.SetTitle(str)
             
+        # If we are resetting multiple transcripts ...
+        if resetMultipleTranscripts:
             # While there are additional Transcript windows open ...
             while len(self.TranscriptWindow) > 1:
                 # Save the transcript
@@ -511,15 +518,14 @@ class ControlObject(object):
                 # Clear Transcript Window
                 self.TranscriptWindow[len(self.TranscriptWindow) - 1].ClearDoc()
                 self.TranscriptWindow[len(self.TranscriptWindow) - 1].dlg.Close()
-#            self.activeTranscript = 0
             # When all the Transcritp Windows are closed, rearrrange the screen
             self.AutoArrangeTranscriptWindows()
                 
-            # Clear the Data Window
-            self.DataWindow.ClearData()
-            # Clear the currently loaded object, as there is none
-            self.currentObj = None
-            # Force the screen updates
+        # Clear the Data Window
+        self.DataWindow.ClearData()
+        # Clear the currently loaded object, as there is none
+        self.currentObj = None
+        # Force the screen updates
             
         # there can be an issue with recursive calls to wxYield, so trap the exception ...
         try:
@@ -714,13 +720,45 @@ class ControlObject(object):
 
     # Private Methods
         
-    def LoadVideo(self, Filename, mediaStart, mediaLength):
+    def LoadVideo(self, currentObj):  # (self, Filename, mediaStart, mediaLength):
         """ This method handles loading a video in the video window and loading the
             corresponding Visualization in the Visualization window. """
-        # Assume this will succeed
-        success = True
-        # Check for the existence of the Media File
-        if not os.path.exists(Filename):
+        # Get the primary file name
+        Filename = currentObj.media_filename
+        # Get the additional files, if any.
+        additionalFiles = currentObj.additional_media_files
+        # If we have a Episode ...
+        if isinstance(currentObj, Episode.Episode):
+            # Initialize the offset value for an Episode to 0, since the 
+            offset = 0
+            # ... the mediaStart is 0 and the mediaLength is the media file length
+            mediaStart = 0
+            mediaLength = currentObj.tape_length
+            # Signal that we have an Episode
+            imgType = 'Episode'
+        # If we have a Clip ...
+        elif isinstance(currentObj, Clip.Clip):
+            # Initialize the offset value for a Clip to the Clip's offset value
+            offset = currentObj.offset
+            # ... the mediaStart is the clip start and the mediaLength is the clip stop - clip start
+            mediaStart = currentObj.clip_start
+            mediaLength = currentObj.clip_stop - currentObj.clip_start
+            # Signal that we have a Clip
+            imgType = 'Clip'
+        # See if the primary media file exists
+        success = os.path.exists(Filename)
+        # If the primary file exists ...
+        if success:
+            # ... we can iterate through the rest of the media files ...
+            for vid in currentObj.additional_media_files:
+                # ... to see if they exist as well.
+                success = os.path.exists(vid['filename'])
+                # As soon as one doesn't exist, we can quit looking.
+                if not success:
+                    Filename = vid['filename']
+                    break
+        # If one or more of the Media Files doesn't exist, display an error message.
+        if not success:
             # We need a different message for single-user and multi-user Transana if the video file cannot be found.
             if TransanaConstants.singleUserVersion:
                 # If it does not exist, display an error message Dialog
@@ -737,19 +775,19 @@ class ControlObject(object):
             dlg = Dialogs.ErrorDialog(self.MenuWindow, prompt % Filename)
             dlg.ShowModal()
             dlg.Destroy()
-            # Indicate that LoadVideo failed.
-            success = False
         else:
             # If the Visualization Window is visible, open the Visualization in the Visualization Window.
             # Loading Visualization first prevents problems with video being locked by Media Player
             # and thus unavailable for wceraudio DLL/Shared Library for audio extraction (in theory).
-            self.VisualizationWindow.load_image(Filename, mediaStart, mediaLength)
+
+            # Load the waveform for the appropriate media files with its current start and length.
+            self.VisualizationWindow.load_image(imgType, Filename, additionalFiles, offset, mediaStart, mediaLength)
 
             # Now that the Visualization is done, load the video in the Video Window
             self.VideoFilename = Filename                # Remember the Video File Name
 
-            # Open the video in the Video Window if the file is found
-            self.VideoWindow.open_media_file(Filename)
+            # Open the video(s) in the Video Window if the file is found
+            self.VideoWindow.open_media_file()
         # Let the calling routine know if we were successful
         return success
 
@@ -798,12 +836,11 @@ class ControlObject(object):
             else:
                 # ... jump to the beginning of the video marker
                 self.VideoWindow.SetCurrentVideoPosition(videoStart)
-
-        # We need to explicitly set the Clip Endpoint, if it's not known.
+        # We need to explicitly set the Clip Endpoint, if it's not known.  (It might be unknown in the ControlObject OR the VideoWindow!)
         # If nothing is loaded, currentObj will be None.  Check to avoid an error.
-        if (self.VideoEndPoint == -1) and (self.currentObj != None):
+        if ((self.VideoEndPoint <= 0) or (self.VideoWindow.GetVideoEndPoint() <= 0)) and (self.currentObj != None):
             if type(self.currentObj).__name__ == 'Episode':
-                videoEnd = self.currentObj.tape_length
+                videoEnd = self.VideoWindow.GetMediaLength()
             elif type(self.currentObj).__name__ == 'Clip':
                 videoEnd = self.currentObj.clip_stop
             self.SetVideoEndPoint(videoEnd)
@@ -906,7 +943,6 @@ class ControlObject(object):
                 EndTimeCode = self.VideoWindow.GetMediaLength()
             elif type(self.currentObj).__name__ == 'Clip':
                 EndTimeCode = self.currentObj.clip_stop
-            
         self.SetVideoStartPoint(StartTimeCode)
         self.SetVideoEndPoint(EndTimeCode)
         # The SelectedEpisodeClips window was not updating on the Mac.  Therefore, this was added,
@@ -933,12 +969,21 @@ class ControlObject(object):
                 self.VideoWindow.SetDims(self.WindowPositions[2][0], self.WindowPositions[2][1], self.WindowPositions[2][2], self.WindowPositions[2][3])
                 # Unpack the Transcript Window Positions
                 for winNum in range(len(self.WindowPositions[3])):
+                    # The Mac has a different base zoom factor than Windows
+                    if 'wxMac' in wx.PlatformInfo:
+                        zoomFactor = 3
+                    else:
+                        zoomFactor = 0
+                    # Zoom the Transcript window back to normal size
+                    self.TranscriptWindow[winNum].dlg.editor.SetZoom(zoomFactor)
                     # Reposition each Transcript Window to its original Position (self.WindowsPositions[3])
                     self.TranscriptWindow[winNum].SetDims(self.WindowPositions[3][winNum][0], self.WindowPositions[3][winNum][1], self.WindowPositions[3][winNum][2], self.WindowPositions[3][winNum][3])
                 # Show the Menu Bar
                 self.MenuWindow.Show(True)
                 # Show the Visualization Window
                 self.VisualizationWindow.Show(True)
+                # Show the Video Window
+                self.VideoWindow.Show(True)
                 # Show all Transcript Windows
                 for trWindow in self.TranscriptWindow:
                     trWindow.Show(True)
@@ -990,41 +1035,99 @@ class ControlObject(object):
                     # Hide the Transcript Windows
                     for trWindow in self.TranscriptWindow:
                         trWindow.Show(False)
-                    # Set the Video Window to take up almost the whole Client Display area
-                    self.VideoWindow.SetDims(left + 2, top + 2, width - 4, height - 4)
                     # If there is a PlayAllClipsWindow, reset it's size and layout
                     if self.PlayAllClipsWindow != None:
+                        # Set the Video Window to take up almost the whole Client Display area
+                        self.VideoWindow.SetDims(left + 1, top + 1, width - 2, height - 61)
                         # Set the Window Position in the PlayAllClips Dialog
-                        self.PlayAllClipsWindow.xPos = left + 2
+                        self.PlayAllClipsWindow.xPos = left + 1
                         self.PlayAllClipsWindow.yPos = height - 58
                         # We need a bit more adjustment on the Mac
                         if 'wxMac' in wx.PlatformInfo:
                             self.PlayAllClipsWindow.yPos += 24
-                        self.PlayAllClipsWindow.SetRect(wx.Rect(self.PlayAllClipsWindow.xPos, self.PlayAllClipsWindow.yPos, width - 4, 56))
+                        self.PlayAllClipsWindow.SetRect(wx.Rect(self.PlayAllClipsWindow.xPos, self.PlayAllClipsWindow.yPos, width - 2, 56))
                         # Make the PlayAllClipsWindow the focus
                         self.PlayAllClipsWindow.SetFocus()
+                    # If there's NO play all clips window within Video Only presentation mode ...
+                    else:
+                        # Set the Video Window to take up almost the whole Client Display area
+                        self.VideoWindow.SetDims(left + 1, top + 1, width - 2, height - 2)
+                        # ... let's create a controller for the video by creating a PlayAllClips window with the current object only
+#                        PlayAllClips.PlayAllClips(controlObject=self, singleObject=self.currentObj)
+                        # ... When we're done play all the clips, we need to call UpdatePlayState recursively to reset the display!
+#                        self.UpdatePlayState(TransanaConstants.MEDIA_PLAYSTATE_STOP)
 
                 # See if Presentation Mode is set to "Video and Transcript"
-                if self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_TRANS):
+                elif self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_TRANS):
+                    # Set the screen proportions, currently 70% video, 30% transcript
+                    dividePt = 70 / 100.0
                     # We need to make a slight adjustment for the Mac for the menu height
                     if 'wxMac' in wx.PlatformInfo:
                         height += TransanaGlobal.menuHeight
-                    # Set the Video Window to take up the top 70% of the Client Display Area
-                    self.VideoWindow.SetDims(left + 2, top + 2, width - 4, int(0.7 * height) - 3)
-                    # Set the Transcript Window to take up the bottom 30% of the Client Display Area
-                    self.TranscriptWindow[0].SetDims(left + 2, int(0.7 * height) + 1, width - 4, int(0.3 * height) - 4)
-                    # Hide the other Transcript Windows
-                    for trWindow in self.TranscriptWindow[1:]:
-                        trWindow.Show(False)
+                    # Set the Video Window to take up the top portion of the Client Display Area
+                    self.VideoWindow.SetDims(left + 1, top + 2, width - 2, int(dividePt * height) - 3)
                     # If there is a PlayAllClipsWindow, reset it's size and layout
                     if self.PlayAllClipsWindow != None:
                         # Set the Window Position in the PlayAllClips Dialog
-                        self.PlayAllClipsWindow.xPos = left + 2
-                        self.PlayAllClipsWindow.yPos = int(0.7 * height) - 58
-                        self.PlayAllClipsWindow.SetRect(wx.Rect(self.PlayAllClipsWindow.xPos, self.PlayAllClipsWindow.yPos, width - 4, 56))
+                        self.PlayAllClipsWindow.xPos = left + 1
+                        self.PlayAllClipsWindow.yPos = int(dividePt * height) + 1
+                        if 'wxMac' in wx.PlatformInfo:
+                            self.PlayAllClipsWindow.yPos -= 20
+                        self.PlayAllClipsWindow.SetRect(wx.Rect(self.PlayAllClipsWindow.xPos, self.PlayAllClipsWindow.yPos, width - 2, 56))
                         # Make the PlayAllClipsWindow the focus
                         self.PlayAllClipsWindow.SetFocus()
-        
+                    # Set the Transcript Window to take up the bottom portion of the Client Display Area
+                    self.TranscriptWindow[0].SetDims(left + 1, int(dividePt * height) + 1, width - 2, int((1.0 - dividePt) * height) - 2)
+                    # Hide the other Transcript Windows
+                    for trWindow in self.TranscriptWindow[1:]:
+                        trWindow.Show(False)
+                    # Set the Transcript Zoom Factor
+                    if 'wxMac' in wx.PlatformInfo:
+                        zoomFactor = 20
+                    else:
+                        zoomFactor = 14
+                    # Zoom in the Transcript window to make the text larger
+                    self.TranscriptWindow[0].dlg.editor.SetZoom(zoomFactor)
+
+                # See if Presentation Mode is set to "Audio and Transcript"
+                elif self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_AUDIO):
+                    # Hide the Video Window to get Audio with no Video
+                    self.VideoWindow.Show(False)
+                    # We need to make a slight adjustment for the Mac for the menu height
+                    if 'wxMac' in wx.PlatformInfo:
+                        height += TransanaGlobal.menuHeight
+                    # Calculate the height each Transcript should be
+                    winHeight = int((float(height) - top - 2.0) / float(len(self.TranscriptWindow)))
+                    # For each Transcript Window:
+                    for trWinNum in range(len(self.TranscriptWindow)):
+                        # Set the Transcript Zoom Factor
+                        if 'wxMac' in wx.PlatformInfo:
+                            zoomFactor = 20
+                        else:
+                            zoomFactor = 14
+                        # Zoom in the Transcript window to make the text larger
+                        self.TranscriptWindow[trWinNum].dlg.editor.SetZoom(zoomFactor)
+                        # Set the Transcript Window to take up the entire Client Display Area
+                        self.TranscriptWindow[trWinNum].SetDims(left + 1, trWinNum * winHeight + top, width - 2, winHeight)
+                        
+
+                    # If there is a PlayAllClipsWindow, reset it's size and layout
+                    if self.PlayAllClipsWindow != None:
+                        # Set the Window Position in the PlayAllClips Dialog
+                        self.PlayAllClipsWindow.xPos = left + 1
+                        self.PlayAllClipsWindow.yPos = top
+                        if 'wxMac' in wx.PlatformInfo:
+                            winHeight = self.TranscriptWindow[0].dlg.GetSizeTuple()[1] - self.TranscriptWindow[0].dlg.GetClientSizeTuple()[1] + 20
+                        else:
+                            winHeight = self.TranscriptWindow[0].dlg.GetSizeTuple()[1] - self.TranscriptWindow[0].dlg.GetClientSizeTuple()[1] + 30
+                        self.PlayAllClipsWindow.SetRect(wx.Rect(self.PlayAllClipsWindow.xPos, self.PlayAllClipsWindow.yPos, width - 2, winHeight))
+                        # Make the PlayAllClipsWindow the focus
+                        self.PlayAllClipsWindow.SetFocus()
+
+    def ChangePlaybackSpeed(self, direction):
+        """ Change the media playback speed on the fly """
+        # Pass the request through to the Video Window
+        self.VideoWindow.ChangePlaybackSpeed(direction)
 
     def GetDatabaseDims(self):
         """ Return the dimensions of the Database control. Note that this only returns the Database Tree Tab location.  """
@@ -1064,7 +1167,7 @@ class ControlObject(object):
         else:
             # If we have a Clip Transcript, we need the original Transcript Number, not the Clip Transcript Number.
             # We can get that from the ControlObject's "currentObj", which in this case will be the Clip!
-            originalTranscriptNum = self.currentObj.transcript_num
+            originalTranscriptNum = self.currentObj.transcripts[self.activeTranscript].source_transcript
         return (originalTranscriptNum, startTime, endTime, text)
 
     def GetMultipleTranscriptSelectionInfo(self):
@@ -1123,6 +1226,16 @@ class ControlObject(object):
     def GetVideoPosition(self):
         """ Returns the current Time Code from the Video Window """
         return self.VideoWindow.GetCurrentVideoPosition()
+
+    def GetVideoCheckboxDataForClips(self, videoPos):
+        """ Return the data about the media players checkboxes needed for Clip Creation """
+        return self.VideoWindow.GetVideoCheckboxDataForClips(videoPos)
+
+    def VideoCheckboxChange(self):
+        """ Detect and adjust to changes in the status of the media player checkboxes """
+        # If the check boxes change, the visualization should reflect that.  To accomplish that, we just need to
+        # have the Visualization redraw itself when there is idle time.
+        self.VisualizationWindow.redrawWhenIdle = True
         
     def UpdateVideoPosition(self, currentPosition):
         """ This method accepts the currentPosition from the video window and propagates that position to other objects """
@@ -1199,35 +1312,54 @@ class ControlObject(object):
         """ This method returns the length of the entire video/media segment """
         try:
             if not(entire): # Return segment length
+                # if the end point is not defined (possibly due to media length not yet being available) 
                 if self.VideoEndPoint <= 0:
+                    # Get the length of the longest adjusted media file
                     videoLength = self.VideoWindow.GetMediaLength()
+                    # Subtract the video start point, to get segment length
                     mediaLength = videoLength - self.VideoStartPoint
-
                     # Sometimes video files don't know their own length because it hasn't been available before.
-                    # This may be a good place to detect and correct that problem before it starts to cause problems,
+                    # This seems to be a good place to detect and correct that problem before it starts to cause problems,
                     # such as in the Keyword Map.
 
-                    # First, let's see if we have a chance to detect and correct the problem by seeing if an episode is
-                    # currently loaded that doesn't have a proper length.
+                    # First, let's see if an episode is currently loaded that doesn't have a proper length.
                     if (type(self.currentObj).__name__ == 'Episode') and \
                        (self.currentObj.media_filename == self.VideoFilename) and \
                        (self.currentObj.tape_length <= 0) and \
                        (videoLength > 0):
-                            try:
-                                self.currentObj.lock_record()
-                                self.currentObj.tape_length = videoLength
-                                self.currentObj.db_save()
-                                self.currentObj.unlock_record()
-                            except:
-                                pass
-
+                        # Start exception handling, so record lock errors can be ignored
+                        try:
+                            # Try to lock the record
+                            self.currentObj.lock_record()
+                            # Get the media length from the first Video Window, not the VideoWindow object, which reports longest adjusted media file length.
+                            self.currentObj.tape_length = self.VideoWindow.mediaPlayers[0].GetMediaLength()
+                            # for each additional media window ...
+                            for x in range(1, len(self.VideoWindow.mediaPlayers)):
+                                # ... get the length for each additional media file.  (We need them all.)
+                                self.currentObj.additional_media_files[x - 1]['length'] = self.VideoWindow.mediaPlayers[x].GetMediaLength()
+                            # Save the object
+                            self.currentObj.db_save()
+                            # Unlock the record
+                            self.currentObj.unlock_record()
+                        # If an exception occurs (most likely a Record Lock exception)
+                        except:
+                            # it can be ignored.
+                            pass
+                # If the video end point is defined ...
                 else:
+                    # ... as long as the length is positive ...
                     if self.VideoEndPoint - self.VideoStartPoint > 0:
+                        # ... get the current segment length
                         mediaLength = self.VideoEndPoint - self.VideoStartPoint
+                    # If the length is negative ...
                     else:
+                        # ... use the total media length as the end point
                         mediaLength = self.VideoWindow.GetMediaLength() - self.VideoStartPoint
+                # Return the calculated value
                 return mediaLength
-            else: # Return length of entire video 
+            # If the entire length was requested ...
+            else:
+                # Return length of longest adjusted media file
                 return self.VideoWindow.GetMediaLength()
         except:
             # If an exception is raised, most likely we're shutting down and have lost the VideoWindow.  Just return 0.
@@ -1236,21 +1368,38 @@ class ControlObject(object):
     def UpdateVideoWindowPosition(self, left, top, width, height):
         """ This method receives screen position and size information from the Video Window and adjusts all other windows accordingly """
         if TransanaGlobal.configData.autoArrange:
-            # Visualization Window adjusts WIDTH only to match shift in video window
-            (wleft, wtop, wwidth, wheight) = self.VisualizationWindow.GetDimensions()
-            self.VisualizationWindow.SetDims(wleft, wtop, left - wleft - 4, wheight)
+            # This method behaves differently when there are multiple Video Players open
+            if (self.currentObj != None) and (len(self.currentObj.additional_media_files) > 0):
+                # Get the current dimensionf of the Video Window
+                (wleft, wtop, wwidth, wheight) = self.VideoWindow.GetDimensions()
+                # Update other windows based on this information
+                self.UpdateWindowPositions('Video', wleft, wtop + wheight)
+            else:
 
-            # NOTE:  We only need to trigger Visualization and Data windows' SetDims method to resize everything!
+                # NOTE:  Transana panics and crashes if we try to replace this block with the more rational
+                # self.UpdateWindowPositions('Video', ... ) code.  Let's not do that.
 
-            # Data Window matches Video Window's width and shifts top and height to accommodate shift in video window
-            (wleft, wtop, wwidth, wheight) = self.DataWindow.GetDimensions()
-            self.DataWindow.SetDims(left, top + height + 4, width, wheight - (top + height + 4 - wtop))
+                if False:                
+                    # Get the current dimensionf of the Video Window
+                    (wleft, wtop, wwidth, wheight) = self.VideoWindow.GetDimensions()
+                    # Update other windows based on this information
+                    self.UpdateWindowPositions('Video', wleft, YLower=wtop + wheight)
+
+                else:
+                    # NOTE:  We only need to trigger Visualization and Data windows' SetDims method to resize everything!
+
+                    # Visualization Window adjusts WIDTH only to match shift in video window
+                    (wleft, wtop, wwidth, wheight) = self.VisualizationWindow.GetDimensions()
+                    self.VisualizationWindow.SetDims(wleft, wtop, left - wleft - 4, wheight)
+                    # Data Window matches Video Window's width and shifts top and height to accommodate shift in video window
+                    (wleft, wtop, wwidth, wheight) = self.DataWindow.GetDimensions()
+                    self.DataWindow.SetDims(left, top + height + 4, width, wheight - (top + height + 4 - wtop))
 
             # Play All Clips Window matches the Data Window's WIDTH
             if self.PlayAllClipsWindow != None:
                 (parentLeft, parentTop, parentWidth, parentHeight) = self.DataWindow.GetRect()
                 (left, top, width, height) = self.PlayAllClipsWindow.GetRect()
-                if (parentWidth != width):
+                if (parentWidth != width) or (parentLeft != left):
                     self.PlayAllClipsWindow.SetDimensions(parentLeft, top, parentWidth, height)
 
     def UpdateWindowPositions(self, sender, X, YUpper=-1, YLower=-1):
@@ -1259,6 +1408,11 @@ class ControlObject(object):
             video and data windows begin.
             YUpper is the vertical point where the visualization window ends and the transcript window begins.
             YLower is the vertical point where the video window ends and the data window begins. """
+
+        # NOTE:  This routine was originally written when only one media file could be displayed.  That's why it's
+        #        a little more awkward in the multiple-video case.  The data passed in assumes a single video, and
+        #        we have to adjust for that.
+        
         # We need to adjust the Window Positions to accomodate multiple transcripts!
         # Basically, if we are not in the "first" transcript, we need to substitute the first transcript's
         # "Top position" value for the one sent by the active window.
@@ -1266,41 +1420,102 @@ class ControlObject(object):
             YUpper = self.TranscriptWindow[0].dlg.GetPositionTuple()[1] - 4
         # If Auto-Arrange is enabled, resizing one window may alter the positioning of others.
         if TransanaGlobal.configData.autoArrange:
-
+            # If YUpper is NOT passed in ...
             if YUpper == -1:
+                # Set it to the BOTTOM of the Visualization Window
                 (wleft, wtop, wwidth, wheight) = self.VisualizationWindow.GetDimensions()
-                YUpper = wheight + wtop      
+                YUpper = wheight + wtop
+            # if YLower is NOT passed in ...
             if YLower == -1:
+                # Set it to the BOTTOM of the Video Window
                 (wleft, wtop, wwidth, wheight) = self.VideoWindow.GetDimensions()
                 YLower = wheight + wtop
                 
-            if sender != 'Visualization':
+            # This method behaves differently when there are multiple Video Players open
+            if (self.currentObj != None) and (len(self.currentObj.additional_media_files) > 0):
+                # Get the current dimensions of all windows
+                visualDims = self.VisualizationWindow.GetDimensions()
+                transcriptDims = self.TranscriptWindow[0].GetDimensions()
+                videoDims = self.VideoWindow.GetDimensions()
+                dataDims = self.DataWindow.GetDimensions()
+                # If the Visualization window has been changed ...
+                if sender == 'Visualization':
+                    # Visual changes Video X, width, height
+                    videoDims = (X + 4, videoDims[1], videoDims[2] + (videoDims[0] - X - 4), YUpper - videoDims[1])
+                    # Visual changes Transcript Y, height
+                    transcriptDims = (transcriptDims[0], YUpper + 4, transcriptDims[2], transcriptDims[3] + (transcriptDims[1] - YUpper - 4))
+                    # Visual changes Data Y, height
+                    dataDims = (dataDims[0], YUpper + 4, dataDims[2], dataDims[3] + (dataDims[1] - YUpper - 4))
+                # If the Video window has been changed ...
+                elif sender == 'Video':
+                    # Video changes Visual width and height
+                    visualDims = (visualDims[0], visualDims[1], X - visualDims[0] - 4, YUpper - visualDims[1])
+                    # Video changes Transcript Y and height
+                    transcriptDims = (transcriptDims[0], YUpper + 4, transcriptDims[2], transcriptDims[3] + (transcriptDims[1] - YUpper - 4))
+                    # Video changes Data Y, height
+                    dataDims = (dataDims[0], YUpper + 4, dataDims[2], dataDims[3] + (dataDims[1] - YUpper - 4))
+                # If the Transcript window has been changed ...
+                elif sender == 'Transcript':
+                    # Transcript changes Visual height
+                    visualDims = (visualDims[0], visualDims[1], visualDims[2], YUpper - visualDims[1])
+                    # Transcript changes Video height
+                    videoDims = (videoDims[0], videoDims[1], videoDims[2], YUpper - videoDims[1])
+                    # Transcript changes Data X, Y, width, height
+                    dataDims = (X + 4, YUpper + 4, dataDims[2] + (dataDims[0] - X - 4), dataDims[3] + (dataDims[1] - YUpper - 4))
+                # If the Data window has been changed ...
+                elif sender == 'Data':
+                    # Data changes Visual height
+                    visualDims = (visualDims[0], visualDims[1], visualDims[2], YLower - visualDims[1])
+                    # Data changes Transcript Y, width, height
+                    transcriptDims = (transcriptDims[0], YLower + 4, X - transcriptDims[0], transcriptDims[3] + (transcriptDims[1] - YLower - 4))
+                    # Data changes Video height
+                    videoDims = (videoDims[0], videoDims[1], videoDims[2], YLower - videoDims[1])
+                # We need to signal that we are resizing everything to reduce redundant OnSize calls
+                TransanaGlobal.resizingAll = True
+                # Vertical Adjustments
                 # Adjust Visualization Window
-                (wleft, wtop, wwidth, wheight) = self.VisualizationWindow.GetDimensions()
-                self.VisualizationWindow.SetDims(wleft, wtop, X - wleft, YUpper - wtop)
-
-            if sender != 'Transcript':
+                if sender != 'Visualization':
+                    self.VisualizationWindow.SetDims(visualDims[0], visualDims[1], visualDims[2], visualDims[3])
                 # Adjust Transcript Window
-                (wleft, wtop, wwidth, wheight) = self.TranscriptWindow[0].GetDimensions()
-                self.TranscriptWindow[0].SetDims(wleft, YUpper + 4, X - wleft, wheight + (wtop - YUpper - 4))
-
-            if len(self.TranscriptWindow) > 1:
-                self.AutoArrangeTranscriptWindows()
-
-            if sender != 'Video':
+                if sender != 'Transcript':
+                    self.TranscriptWindow[0].SetDims(transcriptDims[0], transcriptDims[1], transcriptDims[2], transcriptDims[3])
+                # If there are multiple transcripts, we need to adjust them all
+                if len(self.TranscriptWindow) > 1:
+                    self.AutoArrangeTranscriptWindows()
                 # Adjust Video Window
-                (wleft, wtop, wwidth, wheight) = self.VideoWindow.GetDimensions()
-                self.VideoWindow.SetDims(X + 4, wtop, wwidth + (wleft - X - 4), YLower - wtop)
-
-            if sender != 'Data':
+                if sender != 'Video':
+                    self.VideoWindow.SetDims(videoDims[0], videoDims[1], videoDims[2], videoDims[3])
                 # Adjust Data Window
-                (wleft, wtop, wwidth, wheight) = self.DataWindow.GetDimensions()
-                self.DataWindow.SetDims(X + 4, YLower + 4, wwidth + (wleft - X - 4), wheight + (wtop - YLower - 4))
+                if sender != 'Data':
+                    self.DataWindow.SetDims(dataDims[0], dataDims[1], dataDims[2], dataDims[3])
+                # We're done resizing all windows and need to re-enable OnSize calls that would otherwise be redundant
+                TransanaGlobal.resizingAll = False
+            # If we have only a single video window ...
+            else:
+                # Adjust Visualization Window
+                if sender != 'Visualization':
+                    (wleft, wtop, wwidth, wheight) = self.VisualizationWindow.GetDimensions()
+                    self.VisualizationWindow.SetDims(wleft, wtop, X - wleft, YUpper - wtop)
+                # Adjust Transcript Window
+                if sender != 'Transcript':
+                    (wleft, wtop, wwidth, wheight) = self.TranscriptWindow[0].GetDimensions()
+                    self.TranscriptWindow[0].SetDims(wleft, YUpper + 4, X - wleft, wheight + (wtop - YUpper - 4))
+                # If there are multiple transcripts, we need to adjust them all
+                if len(self.TranscriptWindow) > 1:
+                    self.AutoArrangeTranscriptWindows()
+                # Adjust Video Window
+                if sender != 'Video':
+                    (wleft, wtop, wwidth, wheight) = self.VideoWindow.GetDimensions()
+                    self.VideoWindow.SetDims(X + 4, wtop, wwidth + (wleft - X - 4), YLower - wtop)
+                # Adjust Data Window
+                if sender != 'Data':
+                    (wleft, wtop, wwidth, wheight) = self.DataWindow.GetDimensions()
+                    self.DataWindow.SetDims(X + 4, YLower + 4, wwidth + (wleft - X - 4), wheight + (wtop - YLower - 4))
 
     def VideoSizeChange(self):
         """ Signal that the Video Size has been changed via the Options > Video menu """
         # Resize the video window.  This will trigger changes in all the other windows as appropriate.
-        self.VideoWindow.frame.OnSizeChange()
+        self.VideoWindow.OnSizeChange()
 
     def SaveTranscript(self, prompt=0, cleardoc=0, transcriptToSave=-1):
         """Save the Transcript to the database if modified.  If prompt=1,
@@ -1500,7 +1715,7 @@ class ControlObject(object):
                 # If we are at the end of a transcript and there are no later time codes, Stop Time will be -1.
                 # This is, of course, incorrect, and we must replace it with the Episode Length.
                 if endTime <= 0:
-                    endTime = self.currentObj.tape_length
+                    endTime = self.VideoWindow.GetMediaLength()
             # If our source is a Clip ...
             elif isinstance(self.currentObj, Clip.Clip):
                 # ... we need the ControlObject's currentObj's originating episode number
@@ -1514,7 +1729,7 @@ class ControlObject(object):
                 if endTime <= 0:
                     endTime = self.currentObj.clip_stop
             # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
-            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text)
+            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, self.GetVideoCheckboxDataForClips(startTime))
             # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
             # because drag and drop is an alternate way to create a Quick Clip.
             DragAndDropObjects.CreateQuickClip(clipData, nodeParent, nodeName, self.DataWindow.DBTab.tree)
@@ -1530,8 +1745,6 @@ class ControlObject(object):
                 dlg = Dialogs.ErrorDialog(None, msg)
                 dlg.ShowModal()
                 dlg.Destroy()
-
-        
 
     def ChangeLanguages(self):
         """ Update all screen components to reflect change in the selected program language """

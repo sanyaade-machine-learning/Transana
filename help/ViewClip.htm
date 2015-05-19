@@ -3,15 +3,33 @@
 <TITLE>Viewing a Clip</TITLE>
 </HEAD>
 
-<BODY    >
+<BODY>
 
-<H2><I>Viewing a Clip<HR ></I></H2><P>
-Transana provides several different methods for playing a clip.<P>
-<FONT COLOR="Red">Activity: </FONT>To view a Clip, double-click it in the database tree (in the data window), then click Play in the video window.  (If you do not see your clip, you may need to open your collection by clicking on the &quot;+&quot; symbol to the left of the collection name.)  Go ahead and play the clip you just created. When you have finished, you can return to the entire transcript, by double clicking the name of the transcript (Sample Transcript) in the database tree.<P>
-<FONT COLOR="Red">Activity: </FONT>Now try this method. With an Episode loaded, click on the <B>Episode Clips</B> tab in the Data window.  (If this tab is not displayed, double-click Sample Transcript in the database tree to load this episode.)  The Episode Clips tab shows all clips created from the current episode in order of start time.  To view the clip you created (called Introduction) double-click it in this list.  <P>
+<H2><I>Viewing a Clip</I><HR></H2>
+
+So now we have a clip.  What does that really mean?<P>
+
+<FONT COLOR="Red">Activity: </FONT>To view a Clip, double-click it in the database tree (in the data window.)  (If you do not see your clip, you may need to open your collection by clicking on the &quot;+&quot; symbol (on Windows) or the triangle symbol (on Mac) to the left of the collection name.)  Note that just the transcript you had selected when creating the clip now apears in the transcript window.  <P>
+
+Right-click the visualization window to tell the clip to play.  Note that just the video from between the time codes nearest your selection in the episode transcript plays.  If you did your time codes correctly, the portion of the media file that plays for the clip should match the transcript that was selected.  (If the video and transcript do not match, go back to your episode transcript, locate this piece of text, and right-click it.  You will find that the video that corresponds to this part of the text, as bounded by the time codes before and after the position of the cursor in your transcript, will match the contents of the clip.  If you are having problems, it may be a good idea to review <A HREF="addingtimecodes.htm">Adding Time Codes</A>.)<P>
+
+When you have finished playing the clip, you can return to the episode transcript by double clicking the name of the transcript (<B>Transcript</B>) in the correct episode (<B>Demo</B>) in the correct series (<B>Geometry by Design</B>) in the database tree.<P>
+
+<FONT COLOR="Red">Activity: </FONT>Now try this method. With an episode transcript loaded, click on the <B>Episode Clips</B> tab in the Data window.  (If this tab is not displayed, double-click <B>Transcript</B> under <B>Demo</B> under <B>Geometry by Design</B> in the database tree to load the episode transcript.)  The Episode Clips tab shows all clips created from the current episode in order of start time.  To view the clip you created (called <B>Introduction</B>) double-click it in this list.  <P>
+
 <IMG SRC="images/episodeclips.gif"  ALT="episodeclips"   BORDER=0><P>
-<FONT COLOR="Red">Activity: </FONT>Sometimes you might want to see the context of the clip. For example, you may want to see what happened right before or right after your clip.  To move from a clip back to the episode from which it was created, right-click the clip in the Data window's Database tab and select <B>Locate Clip in Episode</B> from the popup menu.  Try that now for the Introduction Clip in the Symmetry Collection.  Notice that the episode video is automatically positioned at the start of the clip, and that the first part of the transcript related to the clip is highlighted.<P>
-<A HREF="createclips.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<A HREF="addkeywordtoclip.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+You will see that your clip has loaded, and that the clip you selected in the Episode Clips tab is now highlighted in the database tree.<P>
+
+There are times when you will want to see the context of the clip. For example, you may want to see what happened right before or right after your clip.  How did the students respond when the teacher asked them to write what they knew about the term "symmetrical"?  Did any students balk?  How long did they work on this?  (Unfortunately, our sample video is highly edited, so we can't answer these questions.)<P>
+
+<FONT COLOR="Red">Activity: </FONT>  To move from a clip back to the episode from which it was created, right-click the clip in the Data window's Database tab and select <B>Locate Clip in Episode</B> from the popup menu.  Try that now for the <B>Introduction</B> clip in the <B>Symmety</B> collection.  Notice that the episode video is automatically positioned at the start of the clip, and that the transcript related to the clip is highlighted.  You can now see what happened before or after the clip by scrolling up or down in the episode transcript.<P>
+
+<FONT COLOR="Red">Advanced Topic:</FONT>  People sometimes ask, "So, where <B>is</B> my clip?"  The answer is that your clip does not really exist, at least in the sense that there is no new video file that corresponds to the clip you created in Transana.  Transana just stores the name of your original media file and the start and stop points for your clip in its database, and uses that information to display the proper section of the proper media file when asked to play a clip.  The primary reason for this is that video files take up a lot of disk space, and it is inefficient to make a copy of even a small part of your original media file.  You'd quickly run out of disk space if Transana created files to represent every clip created.  It would also be disruptively time consuming for Transana to do actual video editing and rendering every time you create a clip.  In contrast, saving the pointer data takes a few bytes of space and can occur essentially instantaneously.<P>
+
+<A HREF="createclips.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="createanotherclip.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
 
 </BODY>
 </HTML>

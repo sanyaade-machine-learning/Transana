@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -461,29 +461,31 @@ class SearchDialog(wx.Dialog):
             # Get the keyword group and keyword values
             keywordGroup = self.kw_group_lb.GetStringSelection()
             keyword = self.kw_lb.GetStringSelection()
-            # Add the appropriate text to the Search Query
-            self.searchQuery.AppendText(keywordGroup + ':' + keyword)
-            # Disable the "Add" button
-            self.btnAdd.Enable(False)
-            # Enable the "And" button
-            self.btnAnd.Enable(True)
-            # Enable the "Or" button
-            self.btnOr.Enable(True)
-            # Disable the "Not" button
-            self.btnNot.Enable(False)
-            # See if there are still parens that need to be closed
-            if self.parensOpen > 0:
-                # If there are parens that need to be closed, enable the ")" (Right Paren) button
-                self.btnRightParen.Enable(True)
-            else:
-                # If there are no parens that need to be closed, enable the "Search" button
-                self.btnSearch.Enable(True)
-                # and the save button
-                self.btnFileSave.Enable(True)
-            # Disable the "(" (Left Paren) button
-            self.btnLeftParen.Enable(False)
-            # Add to the Search Stack
-            self.SaveSearchStack()
+            # A Keyword MUST be selected!
+            if keyword <> '':
+                # Add the appropriate text to the Search Query
+                self.searchQuery.AppendText(keywordGroup + ':' + keyword)
+                # Disable the "Add" button
+                self.btnAdd.Enable(False)
+                # Enable the "And" button
+                self.btnAnd.Enable(True)
+                # Enable the "Or" button
+                self.btnOr.Enable(True)
+                # Disable the "Not" button
+                self.btnNot.Enable(False)
+                # See if there are still parens that need to be closed
+                if self.parensOpen > 0:
+                    # If there are parens that need to be closed, enable the ")" (Right Paren) button
+                    self.btnRightParen.Enable(True)
+                else:
+                    # If there are no parens that need to be closed, enable the "Search" button
+                    self.btnSearch.Enable(True)
+                    # and the save button
+                    self.btnFileSave.Enable(True)
+                # Disable the "(" (Left Paren) button
+                self.btnLeftParen.Enable(False)
+                # Add to the Search Stack
+                self.SaveSearchStack()
 
         # "Undo" Button
         elif event.GetId() == self.btnUndo.GetId():
@@ -699,25 +701,29 @@ class SearchDialog(wx.Dialog):
                         errorMsg = 'Duplicate Search'
                     # Clean up after prompting the user for feedback
                     dlg2.Destroy()
+
+                # Encode the data for saving
+                configNameEnc = configName.encode(TransanaGlobal.encoding)
+                filterDataEnc = filterData.encode(TransanaGlobal.encoding)
                 # To proceed, we need a report name and we need the error message to still be blank
                 if (configName != '') and (errorMsg == ''):
 
                     # Check to see if the Configuration record already exists
                     if DBInterface.record_match_count('Filters2',
                                                      ('ReportType', 'ConfigName'),
-                                                     (self.reportType, configName)) > 0:
+                                                     (self.reportType, configNameEnc)) > 0:
                         # Build the Update Query for Data
                         query = """ UPDATE Filters2
                                       SET FilterData = %s
                                       WHERE ReportType = %s AND
                                             ConfigName = %s """
-                        values = (filterData, self.reportType, configName)
+                        values = (filterDataEnc, self.reportType, configNameEnc)
                     else:
                         query = """ INSERT INTO Filters2
                                         (ReportType, ConfigName, FilterData)
                                       VALUES
                                         (%s, %s, %s) """
-                        values = (self.reportType, configName, filterData)
+                        values = (self.reportType, configNameEnc, filterDataEnc)
                     # Get a database cursor
                     DBCursor = DBInterface.get_db().cursor()
                     # Execute the query with the appropriate data

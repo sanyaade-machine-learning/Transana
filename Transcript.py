@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,29 +16,37 @@
 
 """This module implements the Transcript class as part of the Data Objects."""
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>, Jonathan Beavers <jonathan.beavers@gmail.com>'
-
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case, Jonathan Beavers <jonathan.beavers@gmail.com>'
 
 DEBUG = False
 if DEBUG:
     print "Transcript DEBUG is ON!"
 
+# import wxPython
 import wx
-# import Transana's Dialogs, required for an error message
-import Dialogs
-import TransanaConstants
-import TransanaGlobal
-from DataObject import DataObject
-import DBInterface
-import Misc
-import Note
-from TransanaExceptions import *
+# import Python's types module
 import types
+# import Transana's Dialogs, required for an error message
+import DataObject
+# import Transana's Database Interface
+import DBInterface
+# import Transana's Dialogs
+import Dialogs
+# import Transana's Miscellaneous Functions
+import Misc
+# import Transana's Note Object
+import Note
+# import Transana's Constants
+import TransanaConstants
+# import Transana's Exceptions
+from TransanaExceptions import *
+# import Transana's Globals
+import TransanaGlobal
 
 TIMECODE_CHAR = "\\'a4"   # Note that this differs from the TIMECODE_CHAR in TranscriptEditor.py
                           # because this is for RTF text and that is for parsed text.
 
-class Transcript(DataObject):
+class Transcript(DataObject.DataObject):
     """This class defines the structure for a transcript object.  A transcript
     object describes a transcript document for Episodes or Clips."""
 
@@ -48,7 +56,7 @@ class Transcript(DataObject):
         #   Transcript Number can be provided                   (Loading any Transcript)
         #   Transcript Name and Episode Number can be provided  (Loading an Episode Transcript)
         #   Clip Number can be provided                         (Loading a Clip transcript)
-        DataObject.__init__(self)
+        DataObject.DataObject.__init__(self)
         if (id_or_num == None) and (clip != None):
             self.db_load_by_clipnum(clip)
         elif type(id_or_num) in (int, long):
@@ -216,9 +224,12 @@ class Transcript(DataObject):
             transcriber = self.transcriber
             comment = self.comment
 
-
         if (len(self.text) > 8388000):
             raise SaveError, _("This transcript is too large for the database.  Please shorten it, split it into two parts\nor if you are importing an RTF document, remove some unnecessary RTF encoding.")
+
+        # Make a minor adjustment to the data, if needed.  (This prevents an error in Database Import.)
+        if self.source_transcript == 'None':
+            self.source_transcript = 0
 
         fields = ("TranscriptID", "EpisodeNum", "SourceTranscriptNum", "ClipNum", "SortOrder", "Transcriber", \
                         "ClipStart", "ClipStop", "RTFText", "Comment", "LastSaveTime")
@@ -346,6 +357,11 @@ class Transcript(DataObject):
                 del note
             del notes
 
+            # Episode Transcripts with this transcript's number need to be cleared from Clip Transcripts
+            # SourceTranscriptNumber records.  This must be done LAST, after everything else.
+            if result and (self.clip_num == 0):
+                DBInterface.ClearSourceTranscriptRecords(self.number)
+
             # Delete the actual record.
             self._db_do_delete(use_transactions, c, result)
 
@@ -400,12 +416,12 @@ class Transcript(DataObject):
                 self.db_load_by_num(self.number)
         
         # ... lock the Transcript Record
-        DataObject.lock_record(self)
+        DataObject.DataObject.lock_record(self)
             
     def unlock_record(self):
         """ Override the DataObject Unlock Method """
         # Unlock the Transcript Record
-        DataObject.unlock_record(self)
+        DataObject.DataObject.unlock_record(self)
 
 
 # Private methods

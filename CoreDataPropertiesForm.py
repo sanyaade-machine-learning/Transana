@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -12,9 +12,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-#
-
-# Code Review and Documentation completed by DKW on 11/5/2003
 
 """This module implements the Core Data Properties Form."""
 
@@ -36,17 +33,13 @@ import wx
 import wx.lib.masked
 
 # Define the Format Options for different File Types
-imageOptions = ['', 'avi', 'mpeg', 'mpeg2']
-soundOptions = ['', 'mp3', 'wav']
-allOptions   = ['', 'avi', 'mp3', 'mpeg', 'mpeg2', 'wav']
+imageOptions = ['', 'avi', 'mov', 'mp4', 'mpeg', 'mpeg2', 'wmv']
+soundOptions = ['', 'mp3', 'wav', 'wma']
+allOptions   = ['', 'avi', 'mov', 'mp3', 'mp4', 'mpeg', 'mpeg2', 'wav', 'wma', 'wmv']
 
 
 class CoreDataPropertiesForm(Dialogs.GenForm):
     """ Form containing Core Data fields. """
-
-
-    # TODO:  Fix Tab Order
-    
     def __init__(self, parent, id, title, coredata_object):
         """ Initialize the Core Data Properties form """
         # Set the Size of the Form

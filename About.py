@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -32,7 +32,7 @@ class AboutBox(wx.Dialog):
             width = 400
         else:
             width = 370
-        height = 365
+        height = 390
         # Create a Dialog Box, fixed size
         dlg = wx.Dialog(None, -1, _("About Transana"), size=(width, height), style=wx.CAPTION | wx.WANTS_CHARS)
         if "__WXMAC__" in wx.PlatformInfo:
@@ -71,7 +71,7 @@ class AboutBox(wx.Dialog):
         version.SetConstraints(lay)
 
         # Create a label for the Program Copyright
-        str = _("Copyright 2002-2008\nThe Board of Regents of the University of Wisconsin System")
+        str = _("Copyright 2002-2009\nThe Board of Regents of the University of Wisconsin System")
         lay = wx.LayoutConstraints()
         lay.top.Below(version, 10)
         lay.centreX.SameAs(dlg, wx.CentreX)
@@ -131,6 +131,8 @@ class AboutBox(wx.Dialog):
             str = _("Russian translation provided by\nViktor Ignatjev.")
         elif TransanaGlobal.configData.language == 'sv':
             str = _("Swedish translation provided by\nJohan Gille, Stockholm University, Sweden")
+        elif TransanaGlobal.configData.language == 'zh':
+            str = _("Chinese translation provided by\nZhong Hongquan, Beijin Poweron Technology Co.Ltd.,\nmaintained by Bei Zhang, University of Wisconsin.")
         lay = wx.LayoutConstraints()
         lay.top.Below(self.credits, 10)
         lay.centreX.SameAs(dlg, wx.CentreX)

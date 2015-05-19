@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2007  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2009  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -24,6 +24,8 @@ import wx  # import wxPython
 import os
 import sys
 import ctypes
+# import Python exceptions
+import exceptions
 import time
 import FileManagement
 import TransanaGlobal
@@ -38,7 +40,6 @@ class SRBFileTransfer(wx.Dialog):
     """ This object transfers files between the SRB and the local file system and displays transfer progress. """
     def __init__(self, parent, title, fileName, fileSize, localDir, connectionID, collectionName, direction, bufferSize):
         """ Set up the Dialog Box and all GUI Widgets. """
-
         # Set up local variables
         self.parent = parent
         self.fileSize = fileSize
@@ -154,9 +155,6 @@ class SRBFileTransfer(wx.Dialog):
         self.CenterOnScreen()
 
         self.Show()
-        
-#        print fileName, fileSize, localDir, connectionID, collectionName, direction
-
         # make sure the loca directory ends with the proper path seperator character
         if localDir[-1] != os.sep:
             localDir = localDir + os.sep
@@ -172,9 +170,6 @@ class SRBFileTransfer(wx.Dialog):
             srb = ctypes.cdll.srbClient
         else:
             srb = ctypes.cdll.LoadLibrary("srbClient.dylib")
-
-        # Change the cursor to the Hourglass
-#        self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
 
         # If we are sending files from the SRB to the local File System...
         if direction == srb_DOWNLOAD:
@@ -222,9 +217,18 @@ class SRBFileTransfer(wx.Dialog):
                         if fileWrite < self.bufferSize:
                             Buf = Buf[:fileWrite]
 
-                        # TODO:  Handle file exceptions (disk full, file exists, read-only etc.)
-                        # Let's write the data in the buffer to the local file
-                        outputFile.write(Buf)
+                        try:
+                            # Let's write the data in the buffer to the local file
+                            outputFile.write(Buf)
+                        except exceptions.IOError, (errNum, errStr):
+                            # The transfer must be interrupted
+                            self.cancelled = True
+                            # To display an error message, we need to import the error dialog
+                            import Dialogs
+                            # Create and display the error message
+                            errDlg = Dialogs.ErrorDialog(self, errStr)
+                            errDlg.ShowModal()
+                            errDlg.Destroy()
 
                         # Let's provide the user with feedback as we read the file
                         self.UpdateDisplay(BytesRead)

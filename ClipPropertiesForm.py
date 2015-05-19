@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -23,6 +23,7 @@ import Collection
 import Clip
 import DBInterface
 import Dialogs
+import EpisodePropertiesForm
 import KWManager
 import Misc
 import TransanaConstants
@@ -33,6 +34,9 @@ import os
 import string
 import sys
 import TranscriptEditor
+
+# Define the maximum number of video files allowed.  (This could change!)
+MEDIAFILEMAX = EpisodePropertiesForm.MEDIAFILEMAX
 
 class ClipPropertiesForm(Dialogs.GenForm):
     """Form containing Clip fields."""
@@ -57,10 +61,10 @@ class ClipPropertiesForm(Dialogs.GenForm):
         Dialogs.GenForm.__init__(self, parent, id, title, size=size, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, propagateEnabled=propagateEnabled, HelpContext=HelpContext)
         if mergeList == None:
             # Define the minimum size for this dialog as the initial size
-            self.SetSizeHints(600, 470)
+            self.SetSizeHints(600, 570)
         else:
             # Define the minimum size for this dialog as the initial size
-            self.SetSizeHints(600, 600)
+            self.SetSizeHints(600, 650)
         # Remember the Parent Window
         self.parent = parent
         # Remember the original Clip Object passed in
@@ -165,25 +169,42 @@ class ClipPropertiesForm(Dialogs.GenForm):
         episode_edit = self.new_edit_box(_("Episode ID"), lay, self.obj.episode_id)
         episode_edit.Enable(False)
 
-        # Media Filename Layout
+        # Media Filename(s) layout [label]
         lay = wx.LayoutConstraints()
         lay.top.Below(self.id_edit, 10)                # 10 under ID
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
-        lay.width.PercentOf(self.panel, wx.Width, 48)  # 48% width
+        lay.width.PercentOf(self.panel, wx.Width, 22)  # 22% width
+        lay.height.AsIs()
+        txt = wx.StaticText(self.panel, -1, _("Media Filename(s)"))
+        txt.SetConstraints(lay)
+
+        # Media Filename(s) Layout
+        lay = wx.LayoutConstraints()
+        lay.top.Below(txt, 3)                # 10 under ID
+        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
+        lay.right.SameAs(self.panel, wx.Right, 10)  # 48% width
         lay.height.AsIs()
         # If the media filename path is not empty, we should normalize the path specification
         if self.obj.media_filename == '':
             filePath = self.obj.media_filename
         else:
             filePath = os.path.normpath(self.obj.media_filename)
-        self.fname_edit = self.new_edit_box(_("Media Filename"), lay, filePath, maxLen=255)
-        self.fname_edit.SetDropTarget(EditBoxFileDropTarget(self.fname_edit))
+        # Initialize the list of media filenames with the first one.
+        self.filenames = [filePath]
+        # For each additional Media file ...
+        for vid in self.obj.additional_media_files:
+            # ... add it to the filename list
+            self.filenames.append(vid['filename'])
+        self.fname_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.Size(200, 60), self.filenames)
+        self.fname_lb.SetConstraints(lay)
+        self.fname_lb.SetDropTarget(ListBoxFileDropTarget(self.fname_lb))
+
         
         # Clip Start layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.id_edit, 10)                # 10 under ID
-        lay.left.RightOf(self.fname_edit, 10)          # 10 right of Media FileName
-        lay.width.PercentOf(self.panel, wx.Width, 15)  # 15% width
+        lay.top.Below(self.fname_lb, 10)                # 10 under File Name
+        lay.left.SameAs(self.panel, wx.Left, 10)          # 10 from left 
+        lay.width.PercentOf(self.panel, wx.Width, 32)     # 32% width
         lay.height.AsIs()
         # Convert to HH:MM:SS.mm
         self.clip_start_edit = self.new_edit_box(_("Clip Start"), lay, Misc.time_in_ms_to_str(self.obj.clip_start))
@@ -193,9 +214,9 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Clip Stop layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.id_edit, 10)                # 10 under ID
-        lay.left.RightOf(self.clip_start_edit, 10)     # 10 right of Clip start
-        lay.width.PercentOf(self.panel, wx.Width, 15)  # 15% width
+        lay.top.Below(self.fname_lb, 10)                # 10 under File Name
+        lay.left.RightOf(self.clip_start_edit, 10)        # 10 right of Clip start
+        lay.width.PercentOf(self.panel, wx.Width, 32)     # 32% width
         lay.height.AsIs()
         # Convert to HH:MM:SS.mm
         self.clip_stop_edit = self.new_edit_box(_("Clip Stop"), lay, Misc.time_in_ms_to_str(self.obj.clip_stop))
@@ -205,9 +226,9 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Clip Length layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.id_edit, 10)                # 10 under ID
-        lay.left.RightOf(self.clip_stop_edit, 10)      # 10 right of Clip Stop
-        lay.width.PercentOf(self.panel, wx.Width, 14)  # 14% width
+        lay.top.Below(self.fname_lb, 10)                # 10 under File Name
+        lay.left.RightOf(self.clip_stop_edit, 10)         # 10 right of Clip Stop
+        lay.right.SameAs(self.panel, wx.Right, 10)        # 10 from right side
         lay.height.AsIs()
         # Convert to HH:MM:SS.mm
         clip_length_edit = self.new_edit_box(_("Clip Length"), lay, Misc.time_in_ms_to_str(self.obj.clip_stop - self.obj.clip_start))
@@ -215,7 +236,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Comment layout
         lay = wx.LayoutConstraints()
-        lay.top.Below(self.fname_edit, 10)             # 10 under media filename
+        lay.top.Below(self.clip_start_edit, 10)             # 10 under media filename
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
@@ -733,7 +754,6 @@ class ClipPropertiesForm(Dialogs.GenForm):
             # Get main data values from the form, ID, Comment, and Media Filename
             self.obj.id = gen_input[_('Clip ID')]
             self.obj.comment = gen_input[_('Comment')]
-            self.obj.media_filename = gen_input[_('Media Filename')]
             # If we're merging clips, more data may have changed!
             if self.mergeList != None:
                 # We need the post-merge Clip Start Time
@@ -780,18 +800,35 @@ class ClipPropertiesForm(Dialogs.GenForm):
             # Keyword list is already updated via the OnAddKW() callback
         else:
             self.obj = None
-        
+
         return self.obj
     
 
-# This simple derived class let's the user drop files onto an edit box
-class EditBoxFileDropTarget(wx.FileDropTarget):
-    def __init__(self, editbox):
+# This simple derrived class let's the user drop files onto a list box
+class ListBoxFileDropTarget(wx.FileDropTarget):
+    def __init__(self, listbox):
         wx.FileDropTarget.__init__(self)
-        self.editbox = editbox
+        self.listbox = listbox
     def OnDropFiles(self, x, y, files):
         """Called when a file is dragged onto the edit box."""
-        self.editbox.SetValue(files[0])
+        # If there are no files in the ListBox ...
+        if (self.listbox.GetCount() == 0) or (self.listbox.GetString(0).strip() == ''):
+            # ... clear it to prevent there being a blank line at the top of the list.
+            self.listbox.Clear()
+        # If we have not exceeded the maximum number of files allowed ...
+        if self.listbox.GetCount() < MEDIAFILEMAX:
+            # ... add the file name to the list box
+            self.listbox.Append(files[0])
+        # If we have the maximum number of media files already selected ...
+        else:
+            # ... Display an error message to the user.
+             msg = _('A maximum of %d media files is allowed.')
+             if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                 msg = unicode(msg, 'utf8')
+             dlg = Dialogs.ErrorDialog(None, msg % MEDIAFILEMAX)
+             dlg.ShowModal()
+             dlg.Destroy()
 
 
 class AddClipDialog(ClipPropertiesForm):

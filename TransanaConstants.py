@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -27,17 +27,18 @@ import string
 
 # Define all global program Variables and Constants here
 
+import TransanaConfigConstants
 # Define a Boolean to indicate Single- or Multi- user
 # NOTE:  When you change this value, you MUST change the MySQL for Python installation you are using
 #        to match.
-singleUserVersion = False
+singleUserVersion = TransanaConfigConstants.singleUserVersion
 # Indicate if this is the Lab version
-labVersion = False
+labVersion = TransanaConfigConstants.labVersion
 # Set this flag to "True" to create the Demonstration version.  (But don't mix this with MU!)
-demoVersion = False
+demoVersion = TransanaConfigConstants.demoVersion
 
 # Program Version Number
-versionNumber = '2.31 Development 1'
+versionNumber = '2.40'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'

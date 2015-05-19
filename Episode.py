@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,7 +16,7 @@
 
 """This module implements the Episode class as part of the Data Objects."""
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 
 DEBUG = False
 if DEBUG:
@@ -26,28 +26,37 @@ if DEBUG:
 import wx
 # import MySQLdb (for Date Formatting)
 import MySQLdb
+# Import Python's os module
+import os
 # import Python's sys module
 import sys
+# import Python's types module
 import types
-from DataObject import DataObject
-import DBInterface
+# import Transana's Clip Keyword Object
 import ClipKeywordObject
+# import Transana's base Data Object
+import DataObject
+# import Transana's Database Interface
+import DBInterface
+# import Transana's Note Object
 import Note
-import Transcript
+# import Transana's Exceptions
 from TransanaExceptions import *
 # import the Transana Constants
 import TransanaConstants
 # import Transana's Globals
 import TransanaGlobal
+# import Transana's Transcript Object
+import Transcript
 
 
-class Episode(DataObject):
+class Episode(DataObject.DataObject):
     """This class defines the structure for a episode object.  A episode object
     describes a video (or other media) file."""
 
     def __init__(self, num=None, series=None, episode=None):
         """Initialize an Episode object."""
-        DataObject.__init__(self)
+        DataObject.DataObject.__init__(self)
         # By default, use the Video Root folder if one has been defined
         self.useVideoRoot = (TransanaGlobal.configData.videoPath != '')
         
@@ -64,11 +73,15 @@ class Episode(DataObject):
         str = str + "id = %s\n" % self.id
         str = str + "comment = %s\n" % self.comment
         str = str + "media file = %s\n" % self.media_filename
+        str = str + "Additional media file:\n"
+        for addFile in self.additional_media_files:
+            str += '  %s  %s %s %s\n' % (addFile['filename'], addFile['offset'], addFile['length'], addFile['audio'])
+        str += "Offset = %s\n" % self.offset
         str = str + "Length = %s\n" % self.tape_length
         str = str + "Date = %s\n" % self.tape_date
         str = str + "Series ID = %s\n" % self.series_id
         str = str + "Series Num = %s\n\n" % self.series_num
-        return str
+        return str.encode('utf8')
 
 
     def db_load_by_name(self, series, episode):
@@ -77,48 +90,77 @@ class Episode(DataObject):
         if 'unicode' in wx.PlatformInfo:
             series = series.encode(TransanaGlobal.encoding)
             episode = episode.encode(TransanaGlobal.encoding)
+        # Get a database connection
         db = DBInterface.get_db()
+        # Craft a query to get Episode data
         query = """SELECT * FROM Episodes2 a, Series2 b
             WHERE   EpisodeID = %s AND
                     a.SeriesNum = b.SeriesNum AND
                     b.SeriesID = %s
         """
+        # Get a database cursor
         c = db.cursor()
+        # Execute the query
         c.execute(query, (episode, series))
+        # Get the number of rows returned
         n = c.rowcount
+        # If we don't get exactly one result ...
         if (n != 1):
+            # Close the cursor
             c.close()
+            # Clear the current Episode object
             self.clear()
+            # Raise an exception saying the data is not found
             raise RecordNotFoundError, (episode, n)
+        # If we get exactly one result ...
         else:
+            # Get the data from the cursor
             r = DBInterface.fetch_named(c)
+            # Load the data into the Episode object
             self._load_row(r)
+            # Load Additional Media Files, which aren't handled in the "old" code
+            self.load_additional_vids()
+            # Refresh the Keywords
             self.refresh_keywords()
-        
+        # Close the Database cursor
         c.close()
-    
-            
+
     def db_load_by_num(self, num):
         """Load a record by record number."""
+        # Get a database connection
         db = DBInterface.get_db()
+        # Craft a query to get Episode data
         query = """SELECT * FROM Episodes2 a, Series2 b
             WHERE   EpisodeNum = %s AND
                     a.SeriesNum = b.SeriesNum
         """
+        # Get a database cursor
         c = db.cursor()
+        # Execute the query
         c.execute(query, num)
+        # Get the number of rows returned
         n = c.rowcount
+        # If we don't get exactly one result ...
         if (n != 1):
+            # Close the cursor
             c.close()
+            # Clear the current Episode object
             self.clear()
+            # Raise an exception saying the data is not found
             raise RecordNotFoundError, (num, n)
+        # If we get exactly one result ...
         else:
+            # Get the data from the cursor
             r = DBInterface.fetch_named(c)
+            # Load the data into the Episode object
             self._load_row(r)
+            # Load Additional Media Files, which aren't handled in the "old" code
+            self.load_additional_vids()
+            # Refresh the Keywords
             self.refresh_keywords()
-        
+        # Close the Database cursor
         c.close()
-        
+
     def db_save(self):
         """Save the record to the database using Insert or Update as
         appropriate."""
@@ -149,34 +191,21 @@ class Episode(DataObject):
         elif self.media_filename == "":
             raise SaveError, _("Media Filename is required.")
         else:
-
-
             # videoPath probably has the OS.sep character, but we need the generic "/" character here.
-            videoPath = TransanaGlobal.configData.videoPath.replace('\\', '/')
+            videoPath = TransanaGlobal.configData.videoPath
+
+            # Determine if we are supposed to extract the Video Root Path from the Media Filename and extract it if appropriate
+            if self.useVideoRoot and (videoPath == self.media_filename[:len(videoPath)]):
+                tempMediaFilename = self.media_filename[len(videoPath):]
+            else:
+                tempMediaFilename = self.media_filename
+
             # Substitute the generic OS seperator "/" for the Windows "\".
-            self.media_filename = self.media_filename.replace('\\', '/')
-            # If we are using the ANSI version of wxPython OR
-            # (if we're on the Mac AND are in the Single-User version of Transana)
-            # then we need to block Unicode characters from media filenames.
-            # Unicode characters still cause problems on the Mac for the Multi-User version of Transana,
-            # but can be made to work if shared waveforming is done on a Windows computer.
-#            if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
-                # Create a string of legal characters for the file names
-#                allowedChars = TransanaConstants.legalFilenameCharacters
-                # check each character in the file name string
-#                for char in self.media_filename:
-                    # If the character is illegal ...
-#                    if allowedChars.find(char) == -1:
-#                        msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.')
-#                        if 'unicode' in wx.PlatformInfo:
-                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-#                            msg = unicode(msg, 'utf8')
-#                        raise SaveError, msg % (self.media_filename, char)
+            tempMediaFilename = tempMediaFilename.replace('\\', '/')
             # if we're not in Unicode mode ...
             if 'ansi' in wx.PlatformInfo:
                 # ... we don't need to encode the string values, but we still need to copy them to our local variables.
                 id = self.id
-                media_filename = self.media_filename
                 comment = self.comment
                 series_id = self.series_id
             # If we're in Unicode mode ...
@@ -185,7 +214,7 @@ class Episode(DataObject):
                 # variables for the data.  We don't want to change the underlying object values.  Also, this way,
                 # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
                 id = self.id.encode(TransanaGlobal.encoding)
-                media_filename = self.media_filename.encode(TransanaGlobal.encoding)
+                tempMediaFilename = tempMediaFilename.encode(TransanaGlobal.encoding)
                 videoPath = videoPath.encode(TransanaGlobal.encoding)
                 comment = self.comment.encode(TransanaGlobal.encoding)
                 series_id = self.series_id.encode(TransanaGlobal.encoding)
@@ -195,12 +224,6 @@ class Episode(DataObject):
         fields = ("EpisodeID", "SeriesNum", "MediaFile", "EpLength", \
                         "TapingDate", "EpComment")
         
-        # Determine if we are supposed to extract the Video Root Path from the Media Filename and extract it if appropriate
-        if self.useVideoRoot and (videoPath == media_filename[:len(videoPath)]):
-            tempMediaFilename = media_filename[len(videoPath):]
-        else:
-            tempMediaFilename = media_filename
-
         values = (id, self.series_num, tempMediaFilename, \
                     self.tape_length, self.tape_date_db, comment)
 
@@ -214,7 +237,7 @@ class Episode(DataObject):
                     prompt = unicode(_('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.'), 'utf8')
                 else:
                     prompt = _('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.')
-                raise SaveError, prompt % (self.id, self.series_id)
+                raise SaveError, prompt % (self.id, self .series_id)
 
             # insert the new record
             # Could be some issues with how TapingDate is stored (YYYY/MM/DD ?)
@@ -253,27 +276,51 @@ class Episode(DataObject):
         c = DBInterface.get_db().cursor()
         c.execute(query, values)
 
-        # Delete all episode keywords
-        if self.number > 0:
+        if self.number == 0:
+            # If we are dealing with a brand new Episode, it does not yet know its
+            # record number.  It HAS a record number, but it is not known yet.
+            # The following query should produce the correct record number.
+            query = """
+                      SELECT EpisodeNum FROM Episodes2
+                      WHERE EpisodeID = %s AND
+                            SeriesNum = %s
+                    """
+            tempDBCursor = DBInterface.get_db().cursor()
+            tempDBCursor.execute(query, (id, self.series_num))
+            if tempDBCursor.rowcount == 1:
+                self.number = tempDBCursor.fetchone()[0]
+            else:
+                raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
+            tempDBCursor.close()
+        else:
+            # If we are dealing with an existing Episode, delete all the Keywords
+            # in anticipation of putting them all back later
             DBInterface.delete_all_keywords_for_a_group(self.number, 0)
+
+        # To save the additional video file names, we must first delete them from the database!
+        # Craft a query to remove all existing Additonal Videos
+        query = "DELETE FROM AdditionalVids2 WHERE EpisodeNum = %d" % self.number
+        # Execute the query
+        c.execute(query)
+        # Define the query to insert the additional media files into the databse
+        query = "INSERT INTO AdditionalVids2 (EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio) VALUES (%s, %s, %s, %s, %s, %s)"
+        # For each additional media file ...
+        for vid in self.additional_media_files:
+            # Encode the filename
+            tmpFilename = vid['filename'].encode(TransanaGlobal.encoding)
+            # Determine if we are supposed to extract the Video Root Path from the Media Filename and extract it if appropriate
+            if self.useVideoRoot and (videoPath == tmpFilename[:len(videoPath)]):
+                tmpFilename = tmpFilename[len(videoPath):]
+            # Substitute the generic OS seperator "/" for the Windows "\".
+            tmpFilename = tmpFilename.replace('\\', '/')
+            # Get the data for each insert query
+            data = (self.number, 0, tmpFilename, vid['length'], vid['offset'], vid['audio'])
+            # Execute the query
+            c.execute(query, data)
 
         # Add the Episode keywords back
         for kws in self._kwlist:
             DBInterface.insert_clip_keyword(self.number, 0, kws.keywordGroup, kws.keyword, kws.example)
-
-        if (self.number == 0):
-            # Load the auto-assigned new number record.  This record won't have the correct Episode Keywords.
-            self.db_load_by_name(self.series_id, self.id)
-            # Update the ClipKeyword records for this Episode, giving them the correct Episode Number
-            query = """
-            UPDATE ClipKeywords2
-                SET EpisodeNum = %s
-                WHERE EpisodeNum = 0 AND
-                        ClipNum = 0
-            """
-            c.execute(query, self.number)
-            # now we have to reload the Episode so it will have the correct Episode Keywords
-            self.db_load_by_name(self.series_id, self.id)
 
         c.close()
             
@@ -314,6 +361,12 @@ class Episode(DataObject):
             # Delete all related references in the ClipKeywords table
             if result:
                 DBInterface.delete_all_keywords_for_a_group(self.number, 0)
+
+            if result:
+                # Craft a query to remove all existing Additonal Videos
+                query = "DELETE FROM AdditionalVids2 WHERE EpisodeNum = %d" % self.number
+                # Execute the query
+                c.execute(query)
 
             # Delete the actual record.
             self._db_do_delete(use_transactions, c, result)
@@ -404,6 +457,46 @@ class Episode(DataObject):
         # Return the results
         return res
 
+    def load_additional_vids(self):
+        """Load additional media file names from the database."""
+        # Get a database connection
+        db = DBInterface.get_db()
+        # Create a database cursor
+        c = db.cursor()
+        # Define the DB Query
+        query = "SELECT MediaFile, VidLength, Offset, Audio FROM AdditionalVids2 WHERE EpisodeNum = %s ORDER BY AddVidNum"
+        # Execute the query
+        c.execute(query, self.number)
+        # For each video in the query results ...
+        for (vidFilename, vidLength, vidOffset, audio) in c.fetchall():
+            # Detection of the use of the Video Root Path is platform-dependent and must be done for EACH filename!
+            if wx.Platform == "__WXMSW__":
+                # On Windows, check for a colon in the position, which signals the presence or absence of a drive letter
+                useVideoRoot = (vidFilename[1] != ':')
+            else:
+                # On Mac OS-X and *nix, check for a slash in the first position for the root folder designation
+                useVideoRoot = (vidFilename[0] != '/')
+            # If we are using the Video Root Path, add it to the Filename
+            if useVideoRoot:
+                video = TransanaGlobal.configData.videoPath.replace('\\', '/') + DBInterface.ProcessDBDataForUTF8Encoding(vidFilename)
+            else:
+                video = DBInterface.ProcessDBDataForUTF8Encoding(vidFilename)
+            # Add the video to the additional media files list
+            self.additional_media_files = {'filename' : video,
+                                           'length'   : vidLength,
+                                           'offset'   : vidOffset,
+                                           'audio'    : audio}
+            # If the video offset is less than 0 and is smaller than the current smallest (most negative) offset ...
+            if (vidOffset < 0) and (vidOffset < -self.offset):
+                # ... then use this video offset as the global offset
+                self.offset = abs(vidOffset)
+        # Close the database cursor
+        c.close()
+
+    def remove_an_additional_vid(self, indx):
+        """ remove ONE additional media file from the list of additional media files """
+        del(self._additional_media[indx])
+
     def tape_length_str(self):
         """Return a string representation (HH:MM:SS) of tape length."""
         secs = int(round(self._tl / 1000.0))    # total # seconds
@@ -452,7 +545,7 @@ class Episode(DataObject):
             self.useVideoRoot = (self.media_filename[0] != '/')
         # If we are using the Video Root Path, add it to the Filename
         if self.useVideoRoot:
-            self.media_filename = TransanaGlobal.configData.videoPath + self.media_filename
+            self.media_filename = TransanaGlobal.configData.videoPath.replace('\\', '/') + self.media_filename
             
 
     def _get_ser_num(self):
@@ -530,6 +623,13 @@ class Episode(DataObject):
         else:
             return "%04d/%02d/%02d" % (self._td.year, self._td.month, self._td.day)
 
+    def _get_offset(self):
+        return self._offset
+    def _set_offset(self, offset):
+        self._offset = offset
+    def _del_offset(self):
+        self._offset = 0
+
     def _get_tl(self):
         return self._tl
     def _set_tl(self, tl):
@@ -538,12 +638,36 @@ class Episode(DataObject):
         self._tl = 0
 
     def _get_fname(self):
-        return self._fname.replace('\\', '/')
+        return self._fname.replace('/', os.sep)
     def _set_fname(self, fname):
         self._fname = fname.replace('\\', '/')
     def _del_fname(self):
         self._fname = ""
 
+    def _get_additional_media(self):
+        temp_additional_media = []
+        for vid in self._additional_media:
+            vid['filename'] = vid['filename'].replace('/', os.sep)
+            temp_additional_media.append(vid)
+        return temp_additional_media
+    def _set_additional_media(self, vidDict):
+        # If we receive a Dictionary Object ...
+        if isinstance(vidDict, dict):
+            # ... replace the backslashes in the filename item
+            vidDict['filename'] = vidDict['filename'].replace('\\', '/')
+            # Add the dictionary object to the media files list
+            self._additional_media.append(vidDict)
+        # If we receive something else (a list or a tuple, most likely) ...
+        else:
+            # ... for each element (which should be a dictionary object) ...
+            for vid in vidDict:
+                # ... replace the backslashes in the filename item
+                vid['filename'] = vid['filename'].replace('\\', '/')
+                # Add the dictionary object to the media files list
+                self._additional_media.append(vid)
+
+    def _del_additional_media(self):
+        self._additional_media = []
 
     def _get_kwlist(self):
         return self._kwlist
@@ -561,6 +685,10 @@ class Episode(DataObject):
                         """The name of the series to which the episode belongs.""")
     media_filename = property(_get_fname, _set_fname, _del_fname,
                         """The name (including path) of the media file.""")
+    additional_media_files = property(_get_additional_media, _set_additional_media, _del_additional_media,
+                        """A list of additional media files (including path).""")
+    offset = property(_get_offset, _set_offset, _del_offset,
+                      """The offset indicates how much later than the earliest multiple video the FIRST video starts.""")
     tape_length = property(_get_tl, _set_tl, _del_tl,
                         """The length of the file in milliseconds.""")
     tape_date = property(_get_td, _set_td, _del_td,

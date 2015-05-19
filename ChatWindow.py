@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -216,7 +216,10 @@ class ListenerThread(threading.Thread):
                     
                 # NOTE:  No GUI from inside the thread.  We use a MessageServerLost Event instead.
                 if self.window.reportSocketLoss:
-                    wx.PostEvent(self.window, MessageServerLostEvent())
+                    try:
+                        wx.PostEvent(self.window, MessageServerLostEvent())
+                    except wx._core.PyDeadObjectError:
+                        pass
 
                 return
                 
@@ -375,12 +378,6 @@ class ChatWindow(wx.Frame):
         else:
             self.ControlObject = None
 
-            if DEBUG:
-                print "ChatWindow has NO CONTROLOBJECT *********************************************"
-
-        if DEBUG:
-            print "Sending Connection Message"
-            
         # Inform the message server of user's identity and database connection
         if 'unicode' in wx.PlatformInfo:
             userName = self.userName.encode('utf8')
@@ -388,7 +385,7 @@ class ChatWindow(wx.Frame):
             db = TransanaGlobal.configData.database.encode('utf8')
             
             if DEBUG:
-                print 'C %s %s %s 230 ||| ' % (userName, host, db)
+                print 'C %s %s %s 240 ||| ' % (userName, host, db)
 
             # If we are running the Transana Client on the same computer as the MySQL server, we MUST refer to it as localhost.
             # In this circumstance, this copy of the Transana Client will not be recognized by the Transana Message Server
@@ -407,9 +404,9 @@ class ChatWindow(wx.Frame):
                 # Destroy the Text Entry Dialog.
                 dlg.Destroy()
             
-            self.socketObj.send('C %s %s %s 230 ||| ' % (userName, host, db))
+            self.socketObj.send('C %s %s %s 240 ||| ' % (userName, host, db))
         else:
-            self.socketObj.send('C %s %s %s 230 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
+            self.socketObj.send('C %s %s %s 240 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
 
         # Create a Timer to check for Message Server validation.
         # Initialize to unvalidated state
@@ -602,7 +599,7 @@ class ChatWindow(wx.Frame):
                             noteList = DBInterface.list_of_notes(Clip=tempClip.number)
                             # If there are Clip Notes, we need to make sure they travel with the Clip
                             if noteList != []:
-                                insertNode = self.ControlObject.DataWindow.DBTab.tree.select_Node((_('Collections'),) + nodelist, 'ClipNode')
+                                insertNode = self.ControlObject.DataWindow.DBTab.tree.select_Node((_('Collections'),) + nodelist, 'ClipNode', ensureVisible=False)
                                 # We accomplish this using the TreeCtrl's "add_note_nodes" method
                                 self.ControlObject.DataWindow.DBTab.tree.add_note_nodes(noteList, insertNode, Clip=tempClip.number)
                                 self.ControlObject.DataWindow.DBTab.tree.Refresh()
@@ -615,7 +612,7 @@ class ChatWindow(wx.Frame):
                                 tempCollection = Collection.Collection(coll, parentNum)
                                 parentNum = tempCollection.number
                             # We need the NODE for the Clip we should place the new clip in front of.  Let's get that here.
-                            insertNode = self.ControlObject.DataWindow.DBTab.tree.select_Node((_('Collections'),) + nodelist[:-1], 'ClipNode')
+                            insertNode = self.ControlObject.DataWindow.DBTab.tree.select_Node((_('Collections'),) + nodelist[:-1], 'ClipNode', ensureVisible=False)
                             tempClip = Clip.Clip(nodelist[-1], tempCollection.id, tempCollection.parent)
                             # Add new node, leaving the insertNode out of the nodeList.
                             # avoidRecursiveYields added to try to prevent a problem on the Mac when converting Searches
@@ -625,7 +622,7 @@ class ChatWindow(wx.Frame):
                             noteList = DBInterface.list_of_notes(Clip=tempClip.number)
                             # If there are Clip Notes, we need to make sure they travel with the Clip
                             if noteList != []:
-                                insertNode = self.ControlObject.DataWindow.DBTab.tree.select_Node((_('Collections'),) + nodelist[:-2] + (nodelist[-1],), 'ClipNode')
+                                insertNode = self.ControlObject.DataWindow.DBTab.tree.select_Node((_('Collections'),) + nodelist[:-2] + (nodelist[-1],), 'ClipNode', ensureVisible=False)
                                 # We accomplish this using the TreeCtrl's "add_note_nodes" method
                                 self.ControlObject.DataWindow.DBTab.tree.add_note_nodes(noteList, insertNode, Clip=tempClip.number)
                                 self.ControlObject.DataWindow.DBTab.tree.Refresh()
@@ -998,9 +995,6 @@ class ChatWindow(wx.Frame):
                                 self.Show(True)
                             # Inform the user of the unknown message.  This should never occur.
                             self.memo.AppendText('Unprocessed Message: "%s"\n' % event.data)
-                    else:
-                        if DEBUG:
-                            print "ChatWindow has NO CONTROLOBJECT *********************************************"
 
                     # Unless we've just deleted it ...
                     if messageHeader != 'DN':
@@ -1014,17 +1008,20 @@ class ChatWindow(wx.Frame):
         dlg = Dialogs.ErrorDialog(None, _("Your connection to the Message Server has been lost.\nYou may have lost your connection to the network, or there may be a problem with the Server.\nPlease quit Transana immediately and resolve the problem."))
         dlg.ShowModal()
         dlg.Destroy()
-        self.Close()
+        # If Transana MU is left on overnight and loses connection to the Message Server, an exception can occur here.
+        try:
+            self.Close()
+        except wx._core.PyDeadObjectError:
+            pass
         TransanaGlobal.chatWindow = None
-        wx.CallAfter(self.Destroy)
+        try:
+            wx.CallAfter(self.Destroy)
+        except:
+            pass
 
     def OnCloseMessage(self, event):
         """ Process the custom Close Message """
         # Close the Chat Window
-
-        if DEBUG:
-            print "ChatWindow.OnCloseMessage()"
-
         self.Close()
         
     def OnValidationTimer(self, event):
@@ -1054,19 +1051,11 @@ class ChatWindow(wx.Frame):
     def OnClose(self, event):
         """ Intercept when the Close Button is selected """
         # When the Close Button is selected, we should HIDE the form, but not Close it entirely
-
-        if DEBUG:
-            print 'ChatWindow.OnClose()'
-            
         self.Show(False)
     
     def OnFormClose(self, event):
         """ Form Close handler for when the form should be destroyed, not just hidden """
         try:
-
-            if DEBUG:
-                print "ChatWindow.FormClose()"
-                
             # Inform the message server that you're disconnecting (Needed on Mac)
             self.socketObj.send('D %s ||| ' % self.userName)
             # Wait a second for this message to get through.
@@ -1112,10 +1101,6 @@ def ConnectToMessageServer():
         or None if it is not.  """
     # If there is already a Chat Window open ...
     if TransanaGlobal.chatWindow != None:
-
-        if DEBUG:
-            print "Closing ChatWindow in ConnectToMessageServer"
-
         # Closing the form will cause an expected Socket Loss, which should not be reported.
         TransanaGlobal.chatWindow.reportSocketLoss = False
         # ... close the Chat Form, which will in turn break the socket connection.

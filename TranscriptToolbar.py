@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -510,15 +510,67 @@ class TranscriptToolbar(wx.ToolBar):
                 # Unlock the Data Object
                 obj.unlock_record()
 
-                # Load the revised Transcript.  (This prevents a Last Save Time error in MU.)
-                self.parent.editor.TranscriptObj.db_load_by_num(self.parent.editor.TranscriptObj.number)
+                # In MU, if another user updates the transcript you have loaded, then you edit keywords, then you edit
+                # the transcript, the other user's transcript changes get lost.  (Discovered under Clip Merge scenario.)
+                # Code has to be added here to prevent that!
 
+                # Remember the original Last Save time
+                oldLastSaveTime = []
                 # For each existing Transcript Window ...
                 for cnt in range(len(self.parent.ControlObject.TranscriptWindow)):
-                    # If we used to be in Edit Mode (flagged earlier) ...
-                    if clipTranscriptLocked[cnt]:
-                        # ... get a simplified reference to the transcript window ...
-                        trWin = self.parent.ControlObject.TranscriptWindow[cnt]
+                    # ... append the LastSaveTime value
+                    oldLastSaveTime.append(self.parent.ControlObject.TranscriptWindow[cnt].dlg.editor.TranscriptObj.lastsavetime)
+                # Create a flag that knows if the message has been displayed, so we can show it only once.
+                msgShown = False
+                # For each existing Transcript Window ...
+                for cnt in range(len(self.parent.ControlObject.TranscriptWindow)):
+                    # ... get a simplified reference to the transcript window ...
+                    trWin = self.parent.ControlObject.TranscriptWindow[cnt]
+
+                    # Load the revised Transcript.  (This prevents a Last Save Time error in MU.)
+                    trWin.dlg.editor.TranscriptObj.db_load_by_num(trWin.dlg.editor.TranscriptObj.number)
+
+                    # If the Transcript Object was updated during this reload (due to having been
+                    # edited in the interim by another user) we need to refresh the editor!
+                    # Check the new LastSaveTime with the original one.
+                    if not msgShown and (oldLastSaveTime[cnt] != trWin.dlg.editor.TranscriptObj.lastsavetime):
+                        msg = _('This Transcript has been updated since you originally loaded it!\nYour copy of the record will be refreshed to reflect the changes.')
+                        dlg = Dialogs.InfoDialog(trWin.dlg, msg)
+                        dlg.ShowModal()
+                        dlg.Destroy()
+                        msgShown = True
+
+                    # If the Transcript Object was updated during this reload (due to having been
+                    # edited in the interim by another user) we need to refresh the editor!
+                    # Check the new LastSaveTime with the original one.
+                    if oldLastSaveTime != trWin.dlg.editor.TranscriptObj.lastsavetime:
+                        # If Time Code Data is displayed ...
+                        if trWin.dlg.toolbar.GetToolState(trWin.dlg.toolbar.CMD_SHOWHIDETIME_ID):
+                            # ... signal that it was being shown ...
+                            timeCodeDataShowing = True
+                            # ... and HIDE it by toggling the button and calling the event!  We don't want it to be propagated.
+                            trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_SHOWHIDETIME_ID, False)
+                            trWin.dlg.toolbar.OnShowHideValues(evt)
+                        # If Time Code Data is NOT displayed ...
+                        else:
+                            # ... then note that it isn't so we know not to re-display it later.
+                            timeCodeDataShowing = False
+                        # Determine whether we have a Clip Transcript (not pickled) or an Episode Transcript (pickled)
+                        # and load it.
+                        if trWin.dlg.editor.TranscriptObj.clip_num > 0:
+                            # The Clip Transcript is never pickled.
+                            trWin.dlg.editor.load_transcript(trWin.dlg.editor.TranscriptObj)
+                        else:
+                            # The Episode Transcript will always have been pickled in this circumstance.
+                            trWin.dlg.editor.load_transcript(trWin.dlg.editor.TranscriptObj, dataType='pickle')
+                        # If Time Code Data was being displayed ...
+                        if timeCodeDataShowing:
+                            # ... RE-DISPLAY it by toggling the button and calling the event!
+                            trWin.dlg.toolbar.ToggleTool(trWin.dlg.toolbar.CMD_SHOWHIDETIME_ID, True)
+                            trWin.dlg.toolbar.OnShowHideValues(evt)
+
+                    # If we are in a clip that used to be in Edit Mode (flagged earlier) ...
+                    if (self.parent.editor.TranscriptObj.clip_num > 0) and clipTranscriptLocked[cnt]:
                         # ... update the transcript window's Last Save Time, so we don't get error messages about loading new transcripts ...
                         trWin.dlg.editor.TranscriptObj.lastsavetime = self.parent.editor.TranscriptObj.lastsavetime
                         # ... toggle the Edit Mode button ...

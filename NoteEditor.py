@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -21,6 +21,8 @@ __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 import wx
 # import Python's os module
 import os
+# import Python's platform module
+import platform
 # import Python's time module
 import time
 # import Transana's Dialogs
@@ -123,8 +125,8 @@ class _NotePanel(wx.Panel):
         # Add a Print Preview button to the Toolbar
         self.toolbar.AddTool(T_PRINTPREVIEW, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintPreview.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print Preview'))
 
-        # Disable Print Preview on the Mac
-        if 'wxMac' in wx.PlatformInfo:
+        # Disable Print Preview on the PPC Mac
+        if platform.processor() == 'powerpc':
             self.toolbar.EnableTool(T_PRINTPREVIEW, False)
             
         # Add a Print button to the Toolbar
@@ -253,8 +255,8 @@ class _NotePanel(wx.Panel):
         self.toolbar.EnableTool(T_SAVEAS, enable)
         self.toolbar.EnableTool(T_PAGESETUP, enable)
 
-        # Disable Print Preview on the Mac.
-        if not 'wxMac' in wx.PlatformInfo:
+        # Disable Print Preview on the PPC Mac.
+        if not (platform.processor() == 'powerpc'):
             self.toolbar.EnableTool(T_PRINTPREVIEW, enable)
             
         self.toolbar.EnableTool(T_PRINT, enable)

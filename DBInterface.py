@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -29,7 +29,7 @@ import wx
 import MySQLdb
 
 if DEBUG:
-    print "MySQLdb version =", MySQLdb.version_info
+    print "MySQLdb version =", MySQLdb.version_info, MySQLdb.__version__
     
 # import Python's exceptions module
 from exceptions import *
@@ -47,6 +47,8 @@ import string
 import Clip
 # Import Transana's Dialog Boxes
 import Dialogs
+# import Transana's Episode Object
+import Episode
 # import Transana's Constants
 import TransanaConstants
 # import Transana's Global Variables
@@ -178,6 +180,10 @@ def establish_db_exists():
     # dbCursor.execute(query)
     db.autocommit(1)
     
+    # MySQLdb 1.2.2 displays Warnings if the tables already exist as they are created.  We don't want this!
+    if not MySQLdb.version_info in [(1, 2, 0, 'final', 1)]:
+        dbCursor._defer_warnings = True
+
     # Initialize BDB and InnoDB Table Flags to false
     hasBDB = False
     hasInnoDB = False
@@ -391,7 +397,9 @@ def establish_db_exists():
                      EpisodeNum     INTEGER, 
                      MediaFile      VARCHAR(255), 
                      ClipStart      INTEGER, 
-                     ClipStop       INTEGER, 
+                     ClipStop       INTEGER,
+                     ClipOffset     INTEGER,
+                     Audio          INTEGER,
                      ClipComment    VARCHAR(255), 
                      SortOrder      INTEGER, 
                      RecordLock     VARCHAR(25), 
@@ -403,6 +411,42 @@ def establish_db_exists():
         # Execute the Query
         dbCursor.execute(query)
 
+        # Now, let's look at the Clips table structure.
+        # Define the appropriate query
+        query = "SHOW CREATE TABLE Clips2"
+        # Execute the Query
+        dbCursor.execute(query)
+        # now let's look at the data returned from the database
+        for data in dbCursor.fetchall():
+            # Check for "array" data and convert if needed
+            if type(data[1]).__name__ == 'array':
+                d1 = data[1].tostring()
+            else:
+                d1 = data[1]
+            # if a "ClipOffset" field is present, the table has already been altered.
+            if not u"clipoffset" in d1.lower():
+                # If not, we need to alter the table to add the ClipOffset field
+                query = """ ALTER TABLE Clips2
+                              ADD COLUMN
+                                ClipOffset  INTEGER
+                              AFTER ClipStop """
+                dbCursor2 = db.cursor()
+                dbCursor2.execute(query)
+                # Define a query that will set ClipOffset to the default value of 0
+                query = "UPDATE Clips2 SET ClipOffset = 0"
+                dbCursor2.execute(query)
+            # Check to see if an "Audio" field is present.
+            if not u"audio" in d1.lower():
+                # If not, we need to alter the table to add the Audio field
+                query = """ ALTER TABLE Clips2
+                              ADD COLUMN
+                                Audio  INTEGER
+                              AFTER ClipOffset """
+                dbCursor2 = db.cursor()
+                dbCursor2.execute(query)
+                # Define a query that will set Audio to the default value of 1
+                query = "UPDATE Clips2 SET Audio = 1"
+                dbCursor2.execute(query)
 
         # Notes Table: Test for existence and create if needed
         query = """
@@ -573,6 +617,29 @@ def establish_db_exists():
                 dbCursor2 = db.cursor()
                 dbCursor2.execute(query)
 
+        # We need to detect the upgrade to version 2.40.  This should do that.
+        query = "SHOW TABLES LIKE 'AdditionalVids2'"
+        dbCursor.execute(query)
+        if dbCursor.rowcount == 0:
+            UpdateTranscriptRecsfor240(None)
+
+        # AdditionalVids (Additional Videos) Table: Test for existence and create if needed
+        query = """
+                  CREATE TABLE IF NOT EXISTS AdditionalVids2
+                    (AddVidNum      INTEGER auto_increment,
+                     EpisodeNum     INTEGER,
+                     ClipNum        INTEGER,
+                     MediaFile      VARCHAR(255), 
+                     VidLength      INTEGER,
+                     Offset         INTEGER,
+                     Audio          INTEGER,
+                     PRIMARY KEY (AddVidNum))
+                """
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(hasInnoDB, query)
+        # Execute the Query
+        dbCursor.execute(query)
+
         # See if this (username, server, database) combination has defined paths.
         if TransanaGlobal.configData.pathsByDB.has_key((TransanaGlobal.userName.encode('utf8'), TransanaGlobal.configData.host.encode('utf8'), TransanaGlobal.configData.database.encode('utf8'))):
             # If so, load the video root and visualization paths.
@@ -592,6 +659,74 @@ def establish_db_exists():
         # If we've gotten this far, return "true" to indicate success.
         return True
 
+
+def UpdateTranscriptRecsfor240(self):
+    """ For release 2.40, I changed the way clips created from other clips track their source transcript.
+        Instead of remembering the Clip Transcript they were taken from, which often may get deleted,
+        they need to point to the original Episode Transcript, which rarely gets deleted.
+        This routine looks for example and corrects them if possible. """
+    # Obtain a Database
+    db = get_db()
+    # Obtain Database Cursors
+    dbCursor = db.cursor()
+    dbCursor2 = db.cursor()
+
+    # We need to create a Clip List of all Clip Transcripts drawn from other Clip Transcripts.
+    # The version of MySQL used for the single-user Windows version of Transana doesn't support subqueries.
+    
+    # Determine if that's the version we've got.
+    if ('wxMSW' in wx.PlatformInfo) and TransanaConstants.singleUserVersion:
+        # If so, initialize the Clip List
+        clipList = []
+        # Start with the subquery term, Creating a query to gather a list of all clip transcript numbers
+        query = "SELECT TranscriptNum FROM Transcripts2 WHERE ClipNum > 0"
+        # Execute the query
+        dbCursor.execute(query)
+        # Store the results as ClipList1.  The format is [(ClipNum,), (ClipNum,) ... ]
+        clipList1 = dbCursor.fetchall()
+        # Now create a query for the outer query, a list of all transcripts
+        query = "SELECT TranscriptNum, SourceTranscriptNum, ClipNum FROM Transcripts2 T "
+        # Execute the query.
+        dbCursor2.execute(query)
+        # Iterate through the outer query's results
+        for (trNum, sTrNum, cNum) in dbCursor2.fetchall():
+            # If the Source Transcript number is a CLIP Transcript ...
+            if (sTrNum,) in clipList1:
+                # ... then append this record to the Clip List
+                clipList.append((trNum, sTrNum, cNum))
+    # If we're not on single-user Windows Transana, we can use nested queries.            
+    else:
+        # Create a query to get the clips that need updating
+        query = "SELECT TranscriptNum, SourceTranscriptNum, ClipNum FROM Transcripts2 T where SourceTranscriptNum in (SELECT TranscriptNum FROM Transcripts2 WHERE ClipNum > 0)"
+        # Execute the query
+        dbCursor.execute(query)
+        # The Clip List is the query results.
+        clipList = dbCursor.fetchall()
+
+    # Iterate through the Clip List
+    for (TranscriptNum, SourceTranscriptNum, ClipNum) in clipList:
+        # Set the initial values from the larger query
+        TNum2 = TranscriptNum
+        STNum2 = SourceTranscriptNum
+        CN2 = ClipNum
+        # While the current transcript is a Clip transcript ...
+        while CN2 > 0:
+            # Create a secondary query to get the current transcript's Source Transcript
+            query = "SELECT TranscriptNum, SourceTranscriptNum, ClipNum FROM Transcripts2 WHERE TranscriptNum = %d"
+            # Execute the secondary query
+            dbCursor2.execute(query % STNum2)
+            # If data is returned ...
+            if dbCursor2.rowcount >= 1:
+                # ... get the data
+                (TNum2, STNum2, CN2) = dbCursor2.fetchone()
+            # If no data is returned ...
+            else:
+                # ... then indicate that with all 0 values
+                (TNum2, STNum2, CN2) = (0, 0, 0)
+        # Build a query to update the data in the database
+        query = 'UPDATE Transcripts2 SET SourceTranscriptNum = %d WHERE TranscriptNum = %d'
+        # Execute the query
+        dbCursor2.execute(query % (TNum2, TranscriptNum))
 
 def get_db():
     """Get a connection object reference to the database.  If a connection
@@ -1458,7 +1593,7 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
             # ... and return the Clip Number of the offending clip.
             return clipNum
 
-def FindAdjacentClips(episodeNum, startTime, endTime, trNums):
+def FindAdjacentClips(episodeNum, startTime, endTime, trNums, trFiles):
     """ Find clips that are adjacent to the time codes sent in.
         Parameters:  episodeNum of the chosen clip
                      startTime of the chosen clip
@@ -1469,49 +1604,78 @@ def FindAdjacentClips(episodeNum, startTime, endTime, trNums):
     #        end where X starts or start where X ends,
     #        and have the same set of transcript sources, ie. same number of transcripts from the same source transcripts.
     #        I can't figure out how to determine this last part through SQL, so I'm doing it programatically.
+    #        and have the same set of media files, ie. the same media file and audio inclusion info.
+    #        I can't figure out how to determine this through SQL either, so am doing it programmatically.
     
     # Initialize a results set
     results = []
     # Get a database cursor
     DBCursor = get_db().cursor()
     # Define a query
-    query = """ SELECT c.ClipNum, ClipID, c.CollectNum, CollectID, MIN(t.ClipStart) ClipStart, MIN(t.ClipStop) ClipStop, COUNT(TranscriptNum) cnt
+    query = """ SELECT c.ClipNum, ClipID, c.CollectNum, CollectID, MIN(t.ClipStart) ClipStart, MIN(t.ClipStop) ClipStop,
+                       COUNT(TranscriptNum) cnt
                   FROM Clips2 c, Transcripts2 t, Collections2 co
                   WHERE (c.EpisodeNum = %s) AND
                         ((t.ClipStop = %s) OR (t.ClipStart = %s)) AND
                         (c.ClipNum = t.ClipNum) AND
                         (c.CollectNum = co.CollectNum)
                   GROUP BY ClipNum
-                  ORDER BY ClipStart """
+                  ORDER BY ClipStart, ClipID """
     # Define the data for the query
     data = (episodeNum, startTime, endTime)
     # Execute the query
     DBCursor.execute(query, data)
     # Iterate through the query results
     for clipData in DBCursor.fetchall():
-        # First, check to see if the clip from the query has the same number of transcripts.  If not, forget it quick.
-        if True:     # clipData[-1] == len(trNums):
-            # Actually load the clip found by the query.
-            tempClip = Clip.Clip(clipData[0])
-            # Assume it's identical until proven otherwise
-            identical = True
+        # Actually load the clip found by the query.
+        tempClip = Clip.Clip(clipData[0])
+        # Assume it's identical until proven otherwise
+        identical = True
+        # See if the number of transcripts is the same.
+        if len(trNums) == len(tempClip.transcripts):
             # Iterate through the sequence of source transcripts
-            
-            if len(trNums) == len(tempClip.transcripts):
-                for x in range(len(trNums)):
-                    # If the indexed source transcript DON'T match ...
-                    if trNums[x] != tempClip.transcripts[x].source_transcript:
-                        # ... then the clips are not identical ...
+            for x in range(len(trNums)):
+                # If the indexed source transcript DON'T match ...
+                if trNums[x] != tempClip.transcripts[x].source_transcript:
+                    # ... then the clips are not identical ...
+                    identical = False
+                    # ... and we can stop looking
+                    break
+        # If not ...
+        else:
+            # ... FAIL.
+            identical = False
+
+        # If we pass the Transcripts test, we need to do the Media Files test
+        if identical:
+            # See if the number of media files is identical, and
+            # the first media files names are identical, and
+            # the first audio inclusion flags are identical ...
+            if (len(trFiles) == len(tempClip.additional_media_files) + 1) and \
+               (trFiles[0][0] == tempClip.media_filename) and \
+               (trFiles[0][1] == tempClip.audio):
+                # Initialize the counter to 1, as we've already checked element 0!
+                cnt = 1
+                # Iterate through the additional media files ...
+                for addFile in tempClip.additional_media_files:
+                    # ... and compare them to the data passed in from the original clip
+                    if (trFiles[cnt][0] != addFile['filename']) or (trFiles[cnt][1] != addFile['audio']):
+                        # If they differ, the comparison FAILS ...
                         identical = False
-                        # ... and we can stop looking
+                        # ... and we can stop looking at additional media files
                         break
+                    # Increment the comparison counter
+                    cnt += 1
+            # If not ...
             else:
+                # ... FAIL
                 identical = False
-            # If no transcript sources were NOT identical ...
-            if identical:
-                # ... then include the query data in the results set.  Note that we expand the collection name to
-                # include the full collection path.
-                results.append((clipData[:3] + (tempClip.GetNodeString(includeClip=False),) + clipData[4:]))
+
+        # If no transcript sources or media file sources were NOT identical ...
+        if identical:
+            # ... then include the query data in the results set.  Note that we expand the collection name to
+            # include the full collection path.
+            results.append((clipData[0],) + (ProcessDBDataForUTF8Encoding(clipData[1]),) + (clipData[2:3] + (tempClip.GetNodeString(includeClip=False),) + clipData[4:]))
     # Return the results set
     return results
 
@@ -1896,7 +2060,6 @@ def VideoFilePaths(filePath, update=False):
     #
     # David Woods
     # 1/27/2004
-
     # If the filePath is empty, just return.  This happens when the user deletes the Video Path.
     if filePath == '':
         return (0, 0)
@@ -1938,8 +2101,6 @@ def VideoFilePaths(filePath, update=False):
             episodeCount += 1
             # If update is True, we should update the records we find.
             if update:
-                # Import Transana's Episode definition
-                import Episode
                 # Load the Episode using the Episode Number.
                 tempEpisode = Episode.Episode(episodeNum)
                 # We need a "try .. except" block to catch record lock exceptions
@@ -1989,8 +2150,6 @@ def VideoFilePaths(filePath, update=False):
                 clipCount += 1
                 # If update is True, we should update the record we find.
                 if update:
-                    # Import Transana's Clip definition
-                    import Clip
                     # Load the Clip using the Clip Number.
                     tempClip = Clip.Clip(clipNum)
                     # We need a "try .. except" block to catch record lock exceptions
@@ -2014,6 +2173,98 @@ def VideoFilePaths(filePath, update=False):
                         transactionStatus = False
                         # and stop processing records.
                         break
+
+    if transactionStatus:
+        # Create the Query for the Episode Table
+        query = "SELECT EpisodeNum, ClipNum, MediaFile FROM AdditionalVids2 "
+        # Execute the Query
+        dbCursor.execute(query)
+        # Fetch all the Database Results, and process them row by row
+        for (episodeNum, clipNum, mediafile) in dbCursor.fetchall():
+            # If we're using Unicode ...
+            if 'unicode' in wx.PlatformInfo:
+                # ... then encode the file names appropriately
+                mediafile = ProcessDBDataForUTF8Encoding(mediafile)
+            # Some Filenames have doubled backslashes, though not all do.  Let's eliminate them if they are present.
+            # (Python requires a double backslash in a string to represent a single backslash, so this replaces double
+            # backslashes ('\\') with single ones ('\') even though it looks like it replaces quadruples with doubles.)
+            mediafile = string.replace(mediafile, '\\\\', '\\')
+            # Now replace the backslash with the more universal slash character in both the file name and the filePath
+            mediafile = string.replace(mediafile, '\\', '/')
+            filePath = string.replace(filePath, '\\', '/')
+            # Compare the Video Root filePath passed in with the front portion of the File Name from the Database.
+            if filePath == mediafile[:len(filePath)]:
+                # If they are the same, increment the appropriate Counter
+                if clipNum > 0:
+                    clipCount += 1
+                else:
+                    episodeCount += 1
+                # If update is True, we should update the record we find.
+                if update:
+                    if clipNum > 0:
+                        # Load the Clip using the Clip Number.
+                        tempClip = Clip.Clip(clipNum)
+                        # We need a "try .. except" block to catch record lock exceptions
+                        try:
+                            # Try to lock the Episode
+                            tempClip.lock_record()
+                            # Remove the Video Root from the File Name
+                            # Start by initializing a file counter to 0
+                            filCount = 0
+                            # Iterate through the Additional Media Files ...
+                            for fil in tempClip.additional_media_files:
+                                # ... if the data from the database matches the data passed in by parameter ...
+                                if (mediafile.upper().replace('/', os.sep) == fil['filename'].upper()):
+                                    # ... then rename the Clip's Additional Media File
+                                    tempClip.additional_media_files[filCount]['filename'] = mediafile[len(filePath):]
+                                    # Iterate the file counter
+                                    filCount += 1
+                            # Save the Clip
+                            tempClip.db_save()
+                            # Unlock the Clip
+                            tempClip.unlock_record()
+                        # Catch failed record locks or Saves
+                        except:
+                            # TODO:  Detect exception type and customize the error message below.
+                            print sys.exc_info()[0], sys.exc_info()[1]
+                            import traceback
+                            traceback.print_exc(file=sys.stdout)
+
+                            # If it fails, set the transactionStatus Flag to False
+                            transactionStatus = False
+                            # and stop processing records.
+                            break
+                    else:
+                       # Load the Episode using the Episode Number.
+                        tempEpisode = Episode.Episode(episodeNum)
+                        # We need a "try .. except" block to catch record lock exceptions
+                        try:
+                            # Try to lock the Episode
+                            tempEpisode.lock_record()
+                            # Remove the Video Root from the File Name
+                            # Start by initializing a file counter to 0
+                            filCount = 0
+                            # Iterate through the Additional Media Files ...
+                            for fil in tempEpisode.additional_media_files:
+                                # ... if the data from the database matches the data passed in by parameter ...
+                                if (mediafile.upper().replace('/', os.sep) == fil['filename'].upper()):
+                                    # ... then rename the Clip's Additional Media File
+                                    tempEpisode.additional_media_files[filCount]['filename'] = mediafile[len(filePath):]
+                                    # Iterate the file counter
+                                    filCount += 1
+                            # Save the Episode
+                            tempEpisode.db_save()
+                            # Unlock the Episode
+                            tempEpisode.unlock_record()
+                        # Catch failed record locks or Saves
+                        except:
+                            # TODO:  Detect exception type and customize the error message below.
+                            print sys.exc_info()[0], sys.exc_info()[1]
+
+                            # If it fails, set the transactionStatus Flag to False
+                            transactionStatus = False
+                            # and stop processing records.
+                            break
 
     # If we are updating data...
     if update:
@@ -2379,6 +2630,23 @@ def delete_keyword(group, kw_name):
         raise TransanaExceptions.GeneralError, msg
     DBCursor.close()
 
+def ClearSourceTranscriptRecords(transcriptNum):
+    """ When an Episode Transcript is deleted, it must be removed as a SourceTranscript from Clip Transcript records. """
+
+    # NOTE:  This routine is not perfect.  If a Clip Transcript record is locked by another user, the record WILL be changed
+    #        here but that change will be wiped out when the user with the record lock saves (thus restoring the
+    #        SourceTranscriptNum value).  However, Transana still knows how to handle it when this value exists but
+    #        cannot be found, so I'm not too worried about this rare case.  Blocking the delete seems too extreme here.
+    
+    # Get a Database cursor
+    DBCursor = get_db().cursor()
+    # Define a query to delete the appropriate records
+    query = "UPDATE Transcripts2 SET SourceTranscriptNum = 0 where SourceTranscriptNum = %s"
+    # Execute the query
+    DBCursor.execute(query, transcriptNum)
+    # Close the Database Cursor
+    DBCursor.close()
+
 def delete_filter_records(reportType, reportScope):
     """ Delete Filter Configuration records of a given reportType with a given reportScope """
     # Get a Database cursor
@@ -2500,10 +2768,6 @@ def ProcessDBDataForUTF8Encoding(text):
 
 
 def UpdateDBFilenames(parent, filePath, fileList):
-    # import Transana's Episode Object
-    import Episode
-    # import Transana's Clip Object
-    import Clip
     # To start with, let's make sure the filePath ends with the appropriate Seperator
     if filePath[-1] != os.sep:
         filePath = filePath + os.sep
@@ -2529,6 +2793,7 @@ def UpdateDBFilenames(parent, filePath, fileList):
     # Instead, we have to load each record, lock it, change it, save it, and unlock it.
     episodeQuery = "SELECT EpisodeNum FROM Episodes2 WHERE MediaFile LIKE %s"
     clipQuery = "SELECT ClipNum FROM Clips2 WHERE MediaFile LIKE %s"
+    additionalQuery = "SELECT AddVidNum, EpisodeNum, ClipNum FROM AdditionalVids2 WHERE MediaFile LIKE %s"
 
     # Let's count the number of records changed
     episodeCounter = 0
@@ -2546,7 +2811,6 @@ def UpdateDBFilenames(parent, filePath, fileList):
         # Add a "%" character to the beginning of the File Name so that the "LIKE" operator will work
         # Execute the Episode Query
         DBCursor.execute(episodeQuery, '%' + queryFileName)
-
         # Iterate through the records returned from the Database
         for (episodeNum, ) in DBCursor.fetchall():
             # Load the Episode
@@ -2555,8 +2819,11 @@ def UpdateDBFilenames(parent, filePath, fileList):
             try:
                 # Lock the Record
                 tempEpisode.lock_record()
-                # Update the Media Filename
-                tempEpisode.media_filename = filePath + fileName
+                # Make sure the file names match, that we don't have a subset name.
+                # ('mens group.mov' was substituted for 'womens group.mov', for instance.)
+                if os.path.split(tempEpisode.media_filename)[1].upper() == fileName.upper():
+                    # Update the Media Filename
+                    tempEpisode.media_filename = filePath + fileName
                 # Save the Record
                 tempEpisode.db_save()
                 # Unlock the Record
@@ -2587,8 +2854,11 @@ def UpdateDBFilenames(parent, filePath, fileList):
             try:
                 # Lock the Record
                 tempClip.lock_record()
-                # Update the Media Filename
-                tempClip.media_filename = filePath + fileName
+                # Make sure the file names match, that we don't have a subset name.
+                # ('mens group.mov' was substituted for 'womens group.mov', for instance.)
+                if os.path.split(tempClip.media_filename)[1].upper() == fileName.upper():
+                    # Update the Media Filename
+                    tempClip.media_filename = filePath + fileName
                 # Save the Record
                 tempClip.db_save()
                 # Unlock the Record
@@ -2604,6 +2874,101 @@ def UpdateDBFilenames(parent, filePath, fileList):
                 success = False
                 # Don't bother to contine processing DB Records
                 break
+
+        # If we failed during Clips, there's no reason to look at Additional Media Files
+        if not success:
+            break
+
+        # Execute the Additional Query
+        DBCursor.execute(additionalQuery, '%' + queryFileName)
+
+        # Iterate through the records returned from the Database
+        for (addVidNum, episodeNum, clipNum) in DBCursor.fetchall():
+            # If we're dealing with an Episode ...
+            if episodeNum > 0:
+                # Load the Episode
+                tempEpisode = Episode.Episode(episodeNum)
+                # Be ready to catch exceptions
+                try:
+                    # Lock the Record
+                    tempEpisode.lock_record()
+                    # Remember the Additional Media Files
+                    additionalMediaFiles = tempEpisode.additional_media_files
+                    # Clear the Additional Media Files from the Episode
+                    del(tempEpisode.additional_media_files)
+                    # Update the Additional Media Files.  Iterate through the list of files
+                    for vid in additionalMediaFiles:
+                        # Extract the video filename
+                        fn = vid['filename']
+                        # If the file matches the name being updated ...
+                        if os.path.split(fn)[1].upper() == fileName.upper():
+                            # ... then update the additional filename entry
+                            tempEpisode.additional_media_files = {'filename' : filePath + fileName,
+                                                                  'length'   : vid['length'],
+                                                                  'offset'   : vid['offset'],
+                                                                  'audio'    : vid['audio']}
+                        # If there's NOT a match ...
+                        else:
+                            # ... then continue to use the existing file name
+                            tempEpisode.additional_media_files = vid
+                    # Save the Record
+                    tempEpisode.db_save()
+                    # Unlock the Record
+                    tempEpisode.unlock_record()
+                    # Increment the Counter
+                    episodeCounter += 1
+                # If an exception is raised, catch it
+                except:
+                    if DEBUG:
+                        (exctype, excvalue) = sys.exc_info()[:2]
+                        print "DBInterface.UpdateDBFilenames() Exception: \n%s\n%s" % (exctype, excvalue)
+                    # Indicate that we have failed.
+                    success = False
+                    # Don't bother to contine processing DB Records
+                    break
+
+            elif clipNum > 0:
+                # Load the Clip
+                tempClip = Clip.Clip(clipNum)
+                # Be ready to catch exceptions
+                try:
+                    # Lock the Record
+                    tempClip.lock_record()
+                    # Remember the Additional Media Files
+                    additionalMediaFiles = tempClip.additional_media_files
+                    # Clear the Additional Media Files from the Clip
+                    del(tempClip.additional_media_files)
+                    # Update the Additional Media Files.  Iterate through the list of files
+                    for fn in additionalMediaFiles:
+                        # Extract the video filename
+                        fn = vid['filename']
+                        # If the file matches the name being updated ...
+                        if os.path.split(fn)[1].upper() == fileName.upper():
+                            # ... then update the additional filename entry
+                            tempClip.additional_media_files = {'filename' : filePath + fileName,
+                                                               'length'   : vid['length'],
+                                                               'offset'   : vid['offset'],
+                                                               'audio'    : vid['audio']}
+                        # If there's NOT a match ...
+                        else:
+                            # ... then continue to use the existing file name
+                            tempClip.additional_media_files = vid
+                    # Save the Record
+                    tempClip.db_save()
+                    # Unlock the Record
+                    tempClip.unlock_record()
+                    # Increment the Counter
+                    clipCounter += 1
+                # If an exception is raised, catch it
+                except:
+                    if DEBUG:
+                        (exctype, excvalue) = sys.exc_info()[:2]
+                        print "DBInterface.UpdateDBFilenames() Exception: \n%s\n%s" % (exctype, excvalue)
+                    # Indicate that we have failed.
+                    success = False
+                    # Don't bother to contine processing DB Records
+                    break
+
     # If there have been no problems, Commit the Transaction to the Database
     if success:
         DBCursor.execute("COMMIT")

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -474,18 +474,20 @@ class ClipDragDropData(object):
     """ This object contains all the data that needs to be transferred in order to create a Clip
         from a selection in a Transcript. """
 
-    def __init__(self, transcriptNum=0, episodeNum=0, clipStart=0, clipStop=0, text=''):
+    def __init__(self, transcriptNum=0, episodeNum=0, clipStart=0, clipStop=0, text='', videoCheckboxData=[]):
         """ ClipDragDropData Objects require the following parameters:
-            transcriptNum    The Transcript Number of the originating Transcript
-            episodeNum       The Episode the originating Transcript is attached to
-            clipStart        The starting Time Code for the Clip
-            clipStop         the ending Time Code for the Clip
-            text             the Text for the Clip, in RTF format. """
+            transcriptNum      The Transcript Number of the originating Transcript
+            episodeNum         The Episode the originating Transcript is attached to
+            clipStart          The starting Time Code for the Clip
+            clipStop           the ending Time Code for the Clip
+            text               the Text for the Clip, in RTF format
+            videoCheckboxData  the Video Checkbox information from the Video Window. """
         self.transcriptNum = transcriptNum
         self.episodeNum = episodeNum
         self.clipStart = clipStart
         self.clipStop = clipStop
         self.text = text
+        self.videoCheckboxData = videoCheckboxData
 
     def __repr__(self):
         str = 'ClipDragDropData Object:\n'
@@ -494,6 +496,7 @@ class ClipDragDropData(object):
         str = str + 'clipStart = %s\n' % Misc.time_in_ms_to_str(self.clipStart)
         str = str + 'clipStop = %s\n' % Misc.time_in_ms_to_str(self.clipStop)
         str = str + 'text = %s\n\n' % self.text
+        str += 'videoCheckboxData = %s\n\n' % self.videoCheckboxData
         return str
 
 
@@ -510,14 +513,17 @@ def CreateClip(clipData, dropData, tree, dropNode):
     if tempTranscript.clip_num == 0:
         # Get the Episode Number from the clipData Object
         tempClip.episode_num = clipData.episodeNum
+
         # Get the Transcript Number from the clipData Object
-        tempClip.transcript_num = clipData.transcriptNum
+        trNum = clipData.transcriptNum
     # If we are working from a Clip Transcript ...
     else:
         sourceClip = Clip.Clip(tempTranscript.clip_num)
+
         # Get the Episode Number from the sourceClip Object
         tempClip.episode_num = sourceClip.episode_num
-        tempClip.transcript_num = sourceClip.transcript_num
+        # Get the source transcript number from the clip transcript
+        trNum = sourceClip.transcripts[0].source_transcript
     # Get the Clip Start Time from the clipData Object
     tempClip.clip_start = clipData.clipStart
 
@@ -569,7 +575,7 @@ def CreateClip(clipData, dropData, tree, dropNode):
     # Get the Episode Number
     tempClipTranscript.episode_num = tempClip.episode_num
     # Get the Source Transcript number
-    tempClipTranscript.source_transcript = clipData.transcriptNum
+    tempClipTranscript.source_transcript = trNum
     # Get the Start Time
     tempClipTranscript.clip_start = clipData.clipStart
     # Get the Clip Stop Time
@@ -597,8 +603,56 @@ def CreateClip(clipData, dropData, tree, dropNode):
         collectionNode = tree.GetItemParent(dropNode)
     # Load the Episode that is connected to the Clip's Originating Transcript
     tempEpisode = Episode.Episode(tempClip.episode_num)
-    # The Clip's Media Filename comes from the Episode Record
-    tempClip.media_filename = tempEpisode.media_filename
+    # Start the clip off with the Episode's offset, though this could change if the first video wasn't used!
+    tempClip.offset = tempEpisode.offset
+    # Initially, assume that we don't need to shift the Clip offset, i.e. that the offset shift is ZERO
+    offsetShift = 0
+    # If there is no videoCheckbox Data (ie there are no video checkboxes) or the FIRST media files should be included ...
+    if (clipData.videoCheckboxData == []) or (clipData.videoCheckboxData[0][0]):
+        # The Clip's Media Filename comes from the Episode Record
+        tempClip.media_filename = tempEpisode.media_filename
+    # audio defaults to 1 (on).  If there are checkboxes and the first audio indicator is unchecked ...
+    if (clipData.videoCheckboxData != []) and (not clipData.videoCheckboxData[0][1]):
+        # ... then indicate that the first audio track should not be included.
+        tempClip.audio = 0
+    # For each set of media player checkboxes after the first (which has already been processed) ...
+    for x in range(1, len(clipData.videoCheckboxData)):
+        # ... get the checkbox data
+        (videoCheck, audioCheck) = clipData.videoCheckboxData[x]
+        # if the media should be included ...
+        if videoCheck:
+            # if this is the FIRST included media file, store the data in the Clip object.
+            if tempClip.media_filename == '':
+                # Grab the file name
+                tempClip.media_filename = tempEpisode.additional_media_files[x - 1]['filename']
+                # If we wind up here, we need to shift the offset values.  Remember the amount to shift them.
+                offsetShift = tempEpisode.additional_media_files[x - 1]['offset']
+                # Add the offset shift value to the Clip's gobal offset
+                tempClip.offset += offsetShift
+                # Note whether the audio should be played by default
+                tempClip.audio = audioCheck
+            # If this is NOT the first included media file, store the data in the additional_media_files structure,
+            # adjusting the offset by the offsetShift value if needed.  (YES, minus here, plus above.)
+            else:
+                tempClip.additional_media_files = {'filename' : tempEpisode.additional_media_files[x - 1]['filename'],
+                                                   'length'   : tempClip.clip_stop - tempClip.clip_start,
+                                                   'offset'   : tempEpisode.additional_media_files[x - 1]['offset'] - offsetShift,
+                                                   'audio'    : audioCheck }
+
+    # If NO media files were included, create an error message to that effect.
+    if tempClip.media_filename == '':
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Clip Creation cancelled.  No media files have been selected for inclusion.'), 'utf8')
+        else:
+            prompt = _('Clip Creation cancelled.  No media files have been selected for inclusion.')
+        errordlg = Dialogs.ErrorDialog(None, prompt)
+        errordlg.ShowModal()
+        errordlg.Destroy()
+        # If Clip Creation fails, we don't need to continue any more.
+        contin = False
+        # Let's get out of here!
+        return
     # Load the parent Collection
     tempCollection = Collection.Collection(tempClip.collection_num)
     try:
@@ -670,7 +724,21 @@ def CreateClip(clipData, dropData, tree, dropNode):
                     # See if we're dropping on a Clip Node ...
                     if dropData.nodetype == 'ClipNode':
                         # ... and if so, change the Sort Order of the clips
-                        ChangeClipOrder(tree, dropNode, tempClip, tempCollection)
+                        if not ChangeClipOrder(tree, dropNode, tempClip, tempCollection):
+                            # If the SortOrder change FAILS (due to a locked Clip record) ...
+                            # ... lock the Temporary Clip
+                            tempClip.lock_record()
+                            # Change the Sort Order of the new clip to the highest value (end of list)
+                            tempClip.sort_order = DBInterface.getMaxSortOrder(tempCollection.number) + 1
+                            # ... save the clip
+                            tempClip.db_save()
+                            # ... unlock the clip
+                            tempClip.unlock_record()
+                            # Delete the node that was inserted above in the WRONG PLACE!
+                            tree.delete_Node(nodeData, 'ClipNode', sendMessage=False)
+                            # Add the new Clip to the data tree AT THE END OF THE LIST
+                            tree.add_Node('ClipNode', nodeData, tempClip.number, tempClip.collection_num, avoidRecursiveYields=True)
+
                         # When we dropped Transcript text on a Clip, the screen wouldn't update until we touched the Mouse!
                         # This fixes that.
                         try:
@@ -999,128 +1067,131 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
        oldSeries = Series.Series(sourceData.parent)
        # Get the data for the Destination Series
        tmpSeries = Series.Series(destNodeData.recNum)
-       # Begin Exception Handling for the Lock
-       try:
-           # Try to lock the Episode
-           tmpEpisode.lock_record()
-           # If successful, assign the DESTINATION Series Number and ID to the Episode.
-           tmpEpisode.series_num = tmpSeries.number
-           tmpEpisode.series_id = tmpSeries.id
-           # Start nested Exception Handling for the Save
+       # Let's make sure the drop is on a DIFFERENT Series.  Otherwise, the Episode record disappears from the tree until the
+       # database is refreshed.
+       if oldSeries.number != tmpSeries.number:
+           # Begin Exception Handling for the Lock
            try:
-                # Try to Save the Episode
-                tmpEpisode.db_save()
+               # Try to lock the Episode
+               tmpEpisode.lock_record()
+               # If successful, assign the DESTINATION Series Number and ID to the Episode.
+               tmpEpisode.series_num = tmpSeries.number
+               tmpEpisode.series_id = tmpSeries.id
+               # Start nested Exception Handling for the Save
+               try:
+                    # Try to Save the Episode
+                    tmpEpisode.db_save()
 
-                # Now we need to move the entry in the Data Tree
-                # Start by building the Episode's new Node List
-                nodeData = (_('Series'), tmpSeries.id, tmpEpisode.id)
-                # Add the Episode node to the data tree
-                treeCtrl.add_Node('EpisodeNode', nodeData, tmpEpisode.number, tmpSeries.number)
-                # Now let's communicate with other Transana instances if we're in Multi-user mode
-                if not TransanaConstants.singleUserVersion:
-                    if DEBUG:
-                        print 'Message to send = "AE %s >|< %s"' % (nodeData[-2], nodeData[-1])
-                    if TransanaGlobal.chatWindow != None:
-                        TransanaGlobal.chatWindow.SendMessage("AE %s >|< %s" % (nodeData[-2], nodeData[-1]))
-
-                # Now request that the Episode's OLD node be deleted.
-                # First build the Node List for the OLD Episode ...
-                nodeData = (_('Series'), oldSeries.id, tmpEpisode.id)
-                # ... and delete it from the tree
-                treeCtrl.delete_Node(nodeData, 'EpisodeNode')
-
-                # If we are moving an Episode, the episode's Notes need to travel with the Episode.  The first step is to
-                # get a list of those Notes.
-                noteList = DBInterface.list_of_notes(Episode=tmpEpisode.number)
-                # If there are Episode Notes, we need to make sure they travel with the Episode
-                if noteList != []:
-                    # Build the Node List for the new Episode
+                    # Now we need to move the entry in the Data Tree
+                    # Start by building the Episode's new Node List
                     nodeData = (_('Series'), tmpSeries.id, tmpEpisode.id)
-                    # Select the new Episode Node
-                    newNode = treeCtrl.select_Node(nodeData, 'EpisodeNode')
-                    # Use the TreeCtrl's "add_note_nodes" method to move the notes locally
-                    treeCtrl.add_note_nodes(noteList, newNode, Episode=tmpEpisode.number)
-                    treeCtrl.Refresh()
+                    # Add the Episode node to the data tree
+                    treeCtrl.add_Node('EpisodeNode', nodeData, tmpEpisode.number, tmpSeries.number)
                     # Now let's communicate with other Transana instances if we're in Multi-user mode
                     if not TransanaConstants.singleUserVersion:
-                        # Iterate through the Notes List
-                        for noteid in noteList:
-                            # Construct the message and data to be passed
-                            msg = "AEN %s"
-                            # To avoid problems in mixed-language environments, we need the UNTRANSLATED string here!
-                            data = (u'Series',) + nodeData[1:]  + (noteid,)
-                            # Build the message to be sent
-                            for nd in data[1:]:
-                                msg += " >|< %s"
-                            if DEBUG:
-                                print 'Message to send =', msg % data
-                            # Send the message
-                            if TransanaGlobal.chatWindow != None:
-                                TransanaGlobal.chatWindow.SendMessage(msg % data)
+                        if DEBUG:
+                            print 'Message to send = "AE %s >|< %s"' % (nodeData[-2], nodeData[-1])
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage("AE %s >|< %s" % (nodeData[-2], nodeData[-1]))
 
-                # If we are moving an Episode, the episode's Transcripts need to travel with the Episode.  The first step is to
-                # get a list of those Transcripts.
-                transcriptList = DBInterface.list_transcripts(tmpSeries.id, tmpEpisode.id)
-                # If there are Episode Transcripts, we need to make sure they travel with the Episode
-                if transcriptList != []:
-                    # Iterate through the Transcript List
-                    for (transcriptNum, transcriptID, transcriptEpisodeNum) in transcriptList:
-                        # Build the Node List for the new Transcript
-                        nodeData = (_('Series'), tmpSeries.id, tmpEpisode.id, transcriptID)
-                        # Add the Transcript node to the data tree
-                        treeCtrl.add_Node('TranscriptNode', nodeData, transcriptNum, transcriptEpisodeNum)
+                    # Now request that the Episode's OLD node be deleted.
+                    # First build the Node List for the OLD Episode ...
+                    nodeData = (_('Series'), oldSeries.id, tmpEpisode.id)
+                    # ... and delete it from the tree
+                    treeCtrl.delete_Node(nodeData, 'EpisodeNode')
+
+                    # If we are moving an Episode, the episode's Notes need to travel with the Episode.  The first step is to
+                    # get a list of those Notes.
+                    noteList = DBInterface.list_of_notes(Episode=tmpEpisode.number)
+                    # If there are Episode Notes, we need to make sure they travel with the Episode
+                    if noteList != []:
+                        # Build the Node List for the new Episode
+                        nodeData = (_('Series'), tmpSeries.id, tmpEpisode.id)
+                        # Select the new Episode Node
+                        newNode = treeCtrl.select_Node(nodeData, 'EpisodeNode')
+                        # Use the TreeCtrl's "add_note_nodes" method to move the notes locally
+                        treeCtrl.add_note_nodes(noteList, newNode, Episode=tmpEpisode.number)
+                        treeCtrl.Refresh()
                         # Now let's communicate with other Transana instances if we're in Multi-user mode
                         if not TransanaConstants.singleUserVersion:
-                            if DEBUG:
-                                print 'Message to send = "AT %s >|< %s >|< %s"' % (nodeData[-3], nodeData[-2], nodeData[-1])
-                            if TransanaGlobal.chatWindow != None:
-                                TransanaGlobal.chatWindow.SendMessage("AT %s >|< %s >|< %s" % (nodeData[-3], nodeData[-2], nodeData[-1]))
-                                
-                        # If we are moving a Transcript, the Transcript's Notes need to travel with the Transcript.  The first step is to
-                        # get a list of those Notes.
-                        noteList = DBInterface.list_of_notes(Transcript=transcriptNum)
-                        
-                        # If there are Episode Notes, we need to make sure they travel with the Episode
-                        if noteList != []:
-                            # Select the new Transcript Node
-                            newNode = treeCtrl.select_Node(nodeData, 'TranscriptNode')
-                            # Use the TreeCtrl's "add_note_nodes" method to move the notes locally
-                            treeCtrl.add_note_nodes(noteList, newNode, Transcript=transcriptNum)
-                            treeCtrl.Refresh()
+                            # Iterate through the Notes List
+                            for noteid in noteList:
+                                # Construct the message and data to be passed
+                                msg = "AEN %s"
+                                # To avoid problems in mixed-language environments, we need the UNTRANSLATED string here!
+                                data = (u'Series',) + nodeData[1:]  + (noteid,)
+                                # Build the message to be sent
+                                for nd in data[1:]:
+                                    msg += " >|< %s"
+                                if DEBUG:
+                                    print 'Message to send =', msg % data
+                                # Send the message
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+                    # If we are moving an Episode, the episode's Transcripts need to travel with the Episode.  The first step is to
+                    # get a list of those Transcripts.
+                    transcriptList = DBInterface.list_transcripts(tmpSeries.id, tmpEpisode.id)
+                    # If there are Episode Transcripts, we need to make sure they travel with the Episode
+                    if transcriptList != []:
+                        # Iterate through the Transcript List
+                        for (transcriptNum, transcriptID, transcriptEpisodeNum) in transcriptList:
+                            # Build the Node List for the new Transcript
+                            nodeData = (_('Series'), tmpSeries.id, tmpEpisode.id, transcriptID)
+                            # Add the Transcript node to the data tree
+                            treeCtrl.add_Node('TranscriptNode', nodeData, transcriptNum, transcriptEpisodeNum)
                             # Now let's communicate with other Transana instances if we're in Multi-user mode
                             if not TransanaConstants.singleUserVersion:
-                                # Iterate through the Notes List
-                                for noteid in noteList:
-                                    # Construct the message and data to be passed
-                                    msg = "ATN %s"
-                                    # To avoid problems in mixed-language environments, we need the UNTRANSLATED string here!
-                                    data = (u'Series',) + nodeData[1:]  + (noteid,)
-                                    # Build the message to be sent
-                                    for nd in data[1:]:
-                                        msg += " >|< %s"
-                                    if DEBUG:
-                                        print 'Message to send =', msg % data
-                                    # Send the message
-                                    if TransanaGlobal.chatWindow != None:
-                                        TransanaGlobal.chatWindow.SendMessage(msg % data)
+                                if DEBUG:
+                                    print 'Message to send = "AT %s >|< %s >|< %s"' % (nodeData[-3], nodeData[-2], nodeData[-1])
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("AT %s >|< %s >|< %s" % (nodeData[-3], nodeData[-2], nodeData[-1]))
+                                    
+                            # If we are moving a Transcript, the Transcript's Notes need to travel with the Transcript.  The first step is to
+                            # get a list of those Notes.
+                            noteList = DBInterface.list_of_notes(Transcript=transcriptNum)
+                            
+                            # If there are Episode Notes, we need to make sure they travel with the Episode
+                            if noteList != []:
+                                # Select the new Transcript Node
+                                newNode = treeCtrl.select_Node(nodeData, 'TranscriptNode')
+                                # Use the TreeCtrl's "add_note_nodes" method to move the notes locally
+                                treeCtrl.add_note_nodes(noteList, newNode, Transcript=transcriptNum)
+                                treeCtrl.Refresh()
+                                # Now let's communicate with other Transana instances if we're in Multi-user mode
+                                if not TransanaConstants.singleUserVersion:
+                                    # Iterate through the Notes List
+                                    for noteid in noteList:
+                                        # Construct the message and data to be passed
+                                        msg = "ATN %s"
+                                        # To avoid problems in mixed-language environments, we need the UNTRANSLATED string here!
+                                        data = (u'Series',) + nodeData[1:]  + (noteid,)
+                                        # Build the message to be sent
+                                        for nd in data[1:]:
+                                            msg += " >|< %s"
+                                        if DEBUG:
+                                            print 'Message to send =', msg % data
+                                        # Send the message
+                                        if TransanaGlobal.chatWindow != None:
+                                            TransanaGlobal.chatWindow.SendMessage(msg % data)
 
 
-           # If the Save fails ...
-           except TransanaExceptions.SaveError, e:
-                # Display the Error Message
-                msg = _('An Episode named "%s" already exists in Series "%s".')
-                if 'unicode' in wx.PlatformInfo:
-                    msg = unicode(msg, 'utf8')
-                errordlg = Dialogs.ErrorDialog(None, msg % (tmpEpisode.id, Series.Series(destNodeData.recNum).id))
-                errordlg.ShowModal()
-                errordlg.Destroy()
-                
-           # If we get this far, unlock the Episode
-           tmpEpisode.unlock_record()
-       # If we are unable to lock the Episode ...
-       except TransanaExceptions.RecordLockedError, e:
-           # Report the Record Lock failure
-           TransanaExceptions.ReportRecordLockedException(_('Episode'), tmpEpisode.id, e)
+               # If the Save fails ...
+               except TransanaExceptions.SaveError, e:
+                    # Display the Error Message
+                    msg = _('An Episode named "%s" already exists in Series "%s".')
+                    if 'unicode' in wx.PlatformInfo:
+                        msg = unicode(msg, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, msg % (tmpEpisode.id, Series.Series(destNodeData.recNum).id))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    
+               # If we get this far, unlock the Episode
+               tmpEpisode.unlock_record()
+           # If we are unable to lock the Episode ...
+           except TransanaExceptions.RecordLockedError, e:
+               # Report the Record Lock failure
+               TransanaExceptions.ReportRecordLockedException(_('Episode'), tmpEpisode.id, e)
        
    # Drop a Collection on a Collection (Copy or Move all Clips in a Collection)
    elif (sourceData.nodetype == 'CollectionNode' and destNodeData.nodetype == 'CollectionNode'):
@@ -1181,19 +1252,21 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
       result = dlg.LocalShowModal()
       dlg.Destroy()
       if result == wx.ID_YES:
-         # Copy or Move the Clip to the Destination Collection
-         CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action)
-         # See if the Keyword visualization needs to be updated.
-         treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
-         # Even if this computer doesn't need to update the keyword visualization others, might need to.
-         if not TransanaConstants.singleUserVersion:
-             # We need to update the Episode Keyword Visualization
-             if DEBUG:
-                 print 'Message to send = "UKV %s %s %s"' % ('Clip', sourceClip.number, sourceClip.episode_num)
-                
-             if TransanaGlobal.chatWindow != None:
-                 TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', sourceClip.number, sourceClip.episode_num))
-               
+          try:
+              # Copy or Move the Clip to the Destination Collection
+              CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action)
+              # See if the Keyword visualization needs to be updated.
+              treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+              # Even if this computer doesn't need to update the keyword visualization others, might need to.
+              if not TransanaConstants.singleUserVersion:
+                  # We need to update the Episode Keyword Visualization
+                  if DEBUG:
+                      print 'Message to send = "UKV %s %s %s"' % ('Clip', sourceClip.number, sourceClip.episode_num)
+                    
+                  if TransanaGlobal.chatWindow != None:
+                      TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', sourceClip.number, sourceClip.episode_num))
+          except TransanaExceptions.RecordLockedError, e:
+              TransanaExceptions.ReportRecordLockedException(_("Clip"), sourceClip.id, e)
    # Drop a Clip on a Clip (Alter SortOrder, Copy or Move a Clip to a particular place in the SortOrder)
    elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'ClipNode'):
       # Load the Source Clip
@@ -1207,10 +1280,13 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
 
       # See if we are in the SAME Collection, and therefore just changing Sort Order
       if sourceCollection.number == destCollection.number:
-         # If so, change the Sort Order as requested
-         ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection)
-         # NOTE:  We can't just use the insertPos parameter of add_Node, as we need to have the Sort Order set in the
-         #        Clip Object as well.
+          # If so, change the Sort Order as requested
+          if not ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
+              # This is OKAY.  Nothing needs to be fixed, either locally or remotely if this fails.
+              pass
+              
+          # NOTE:  We can't just use the insertPos parameter of add_Node, as we need to have the Sort Order set in the
+          #        Clip Object as well.
 
       # If not, we are copying/moving a Clip to a place in the SortOrder
       else:
@@ -1220,32 +1296,36 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
              prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
          else:
              prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
-#         dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-#         result = dlg.ShowModal()
          dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
          result = dlg.LocalShowModal()
          dlg.Destroy()
          if result == wx.ID_YES:
-            # Copy or Move the Clip to the Destination Collection
-            # If confirmed, copy the Source Clip to the Destination Collection.  CopyClip will place the clip at
-            # end of the list of clips.
-            # We need to work with the COPY of the clip instead of the original from here on, so we get that
-            # value from CopyClip.
-            tempClip = CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action)
-            # If the Copy/Move is cancelled, tempClip will be None
-            if tempClip != None:
-                # Now change the order of the clips
-                ChangeClipOrder(treeCtrl, destNode, tempClip, destCollection)
-            # See if the Keyword visualization needs to be updated.
-            treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
-            # Even if this computer doesn't need to update the keyword visualization others, might need to.
-            if not TransanaConstants.singleUserVersion:
-                # We need to update the Episode Keyword Visualization
-                if DEBUG:
-                    print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
-                    
-                if TransanaGlobal.chatWindow != None:
-                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
+             try:
+                # Copy or Move the Clip to the Destination Collection
+                # If confirmed, copy the Source Clip to the Destination Collection.  CopyClip will place the clip at
+                # end of the list of clips.
+                # We need to work with the COPY of the clip instead of the original from here on, so we get that
+                # value from CopyClip.
+                tempClip = CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action)
+                # If the Copy/Move is cancelled, tempClip will be None
+                if tempClip != None:
+                    # Now change the order of the clips
+                    if not ChangeClipOrder(treeCtrl, destNode, tempClip, destCollection):
+                        # This is OKAY.  Nothing needs to be fixed, either locally or remotely if this fails.
+                        pass
+                        
+                # See if the Keyword visualization needs to be updated.
+                treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+                # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                if not TransanaConstants.singleUserVersion:
+                    # We need to update the Episode Keyword Visualization
+                    if DEBUG:
+                        print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
+                        
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
+             except TransanaExceptions.RecordLockedError, e:
+                 TransanaExceptions.ReportRecordLockedException(_("Clip"), sourceClip.id, e)
 
    # Drop a Clip on a Keyword (Create Keyword Example)
    elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'KeywordNode'):
@@ -1780,315 +1860,370 @@ def CheckForDuplicateClipName(sourceClipName, treeCtrl, destCollectionNode):
    return (result, sourceClipName)
 
 def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action):
-   """ This function copies or moves sourceClip to destCollection, depending on the value of 'action' """
-   if action == 'Copy':
-      # Make a duplicate of the clip to be copied
-      newClip = sourceClip.duplicate()
-      # To place the copy in the destination collection, alter its Collection Number, Collection ID, and Sort Order value
-      newClip.collection_num = destCollection.number
-      newClip.collection_id = destCollection.id
-   elif action == 'Move':
-      # Lock the Clip Record to prevent other users from altering it simultaneously
-      sourceClip.lock_record()
-      # To move a clip, alter its Collection Number, Collection ID, and Sort Order value
-      sourceClip.collection_num = destCollection.number
-      sourceClip.collection_id = destCollection.id
+    """ This function copies or moves sourceClip to destCollection, depending on the value of 'action' """
+    contin = True
+    if action == 'Copy':
+       # Make a duplicate of the clip to be copied
+       newClip = sourceClip.duplicate()
+       # To place the copy in the destination collection, alter its Collection Number, Collection ID, and Sort Order value
+       newClip.collection_num = destCollection.number
+       newClip.collection_id = destCollection.id
+    elif action == 'Move':
+        try:
+           # Lock the Clip Record to prevent other users from altering it simultaneously
+           sourceClip.lock_record()
+           # To move a clip, alter its Collection Number, Collection ID, and Sort Order value
+           sourceClip.collection_num = destCollection.number
+           sourceClip.collection_id = destCollection.id
+        except TransanaExceptions.RecordLockedError, e:
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('You cannot move Clip "%s".') + \
+                                 _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
+            else:
+                prompt = _('You cannot move Clip "%s".') + \
+                         _('.\nThe record is currently locked by %s.\nPlease try again later.')
+            errordlg = Dialogs.ErrorDialog(None, prompt % (sourceClip.id, e.user))
+            errordlg.ShowModal()
+            errordlg.Destroy()
+            contin = False
+    if contin:
+       # NOTE:  CopyMoveClip places the copy at the end of the Collection's Clip List.  If that's not
+       #        what we want, we can call ChangeClipOrder later.
 
-   # NOTE:  CopyMoveClip places the copy at the end of the Collection's Clip List.  If that's not
-   #        what we want, we can call ChangeClipOrder later.
+       # Get the highest SortOrder value and add one to it 
+       clipCount = DBInterface.getMaxSortOrder(destCollection.number) + 1
 
-   # Get the highest SortOrder value and add one to it 
-   clipCount = DBInterface.getMaxSortOrder(destCollection.number) + 1
+       # Check for Duplicate Clip Names, an error condition
+       # First, get the name of the appropriate Clip Object
+       if action == 'Copy':
+          clipName = newClip.id
+       elif action == 'Move':
+          clipName = sourceClip.id
+       # See if the Clip Name already exists in the Destination Collection
+       (dupResult, newClipName) = CheckForDuplicateClipName(clipName, treeCtrl, destNode)
+       
+       # If a Duplicate Clip Name is found and the error situation not resolved, show an Error Message
+       if dupResult:
+          # Unlock the source clip (before presenting the dialog to keep if from being locked by a slow user response.)
+          if action == 'Move':
+              sourceClip.unlock_record()
+          # Report the failure to the user, although it's already known to have failed because they pressed "cancel".
+          if 'unicode' in wx.PlatformInfo:
+              # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+              prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Clip Name Error.'), 'utf8') % (action, sourceClip.id)
+          else:
+              prompt = _('%s cancelled for Clip "%s".  Duplicate Clip Name Error.') % (action, sourceClip.id)
+          dlg = Dialogs.ErrorDialog(treeCtrl, prompt)
+          dlg.ShowModal()
+          dlg.Destroy()
+          return None
+       else:
+          # The user may have given the clip a new Clip Name in CheckForDuplicateClipName.  
+          if newClipName != clipName:
+             # If so, use this new name!
+             if action == 'Copy':
+                newClip.id = newClipName
+             elif action == 'Move':
+                 sourceClip.id = newClipName 
 
-   # Check for Duplicate Clip Names, an error condition
-   # First, get the name of the appropriate Clip Object
-   if action == 'Copy':
-      clipName = newClip.id
-   elif action == 'Move':
-      clipName = sourceClip.id
-   # See if the Clip Name already exists in the Destination Collection
-   (dupResult, newClipName) = CheckForDuplicateClipName(clipName, treeCtrl, destNode)
-   
-   # If a Duplicate Clip Name is found and the error situation not resolved, show an Error Message
-   if dupResult:
-      # Unlock the source clip (before presenting the dialog to keep if from being locked by a slow user response.)
-      if action == 'Move':
-          sourceClip.unlock_record()
-      # Report the failure to the user, although it's already known to have failed because they pressed "cancel".
-      if 'unicode' in wx.PlatformInfo:
-          # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-          prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Clip Name Error.'), 'utf8') % (action, sourceClip.id)
-      else:
-          prompt = _('%s cancelled for Clip "%s".  Duplicate Clip Name Error.') % (action, sourceClip.id)
-      dlg = Dialogs.ErrorDialog(treeCtrl, prompt)
-      dlg.ShowModal()
-      dlg.Destroy()
-      return None
-   else:
-      # The user may have given the clip a new Clip Name in CheckForDuplicateClipName.  
-      if newClipName != clipName:
-         # If so, use this new name!
-         if action == 'Copy':
-            newClip.id = newClipName
-         elif action == 'Move':
-             sourceClip.id = newClipName 
+          if action == 'Copy':
+             # Now that we know the number of clips in the collection, assign that as sortOrder
+             newClip.sort_order = clipCount
+             # Save the new Clip to the database.
+             newClip.db_save()
+          elif action == 'Move':
+             # Now that we know the number of clips in the collection, assign that as sortOrder
+             sourceClip.sort_order = clipCount
+             # Save the new Clip to the database.
+             sourceClip.db_save()
+             # Unlock the Clip Record
+             sourceClip.unlock_record()
+                  
+             # Remove the old Clip from the Tree.
+             # delete_Node needs to be able to climb the tree, so we need to build the Node List that
+             # tells it what to delete.  Start with the sourceCollection.
+             nodeList = (sourceCollection.id,)
+             # Load the Current Collection so we can find out about its parent, and work backwards from here.
+             tempCollection = Collection.Collection(sourceCollection.number)
+             # While the Current Collection has a defined parent...
+             while tempCollection.parent > 0:
+                # Make the Parent the Current Collection
+                tempCollection = Collection.Collection(tempCollection.parent)
+                # Add the Parent (now the Current Collection) to the FRONT of the Node List
+                nodeList = (tempCollection.id,) + nodeList
+             # Now add the Collections Root to the front of the Node List and the Clip's original name to the end of the Node List
+             nodeList = (_('Collections'), ) + nodeList + (clipName, )
+             # Now request that the defined node be deleted
+             treeCtrl.delete_Node(nodeList, 'ClipNode')
+             
+             # Check for Keyword Examples that need to also be renamed!
+             for (kwg, kw, clipNumber, clipID) in DBInterface.list_all_keyword_examples_for_a_clip(sourceClip.number):
+                 nodeList = (_('Keywords'), kwg, kw, clipName)
+                 exampleNode = treeCtrl.select_Node(nodeList, 'KeywordExampleNode')
+                 treeCtrl.SetItemText(exampleNode, newClipName)
+                 # If we're in the Multi-User mode, we need to send a message about the change
+                 if not TransanaConstants.singleUserVersion:
+                     # Begin constructing the message with the old and new names for the node
+                     msg = " >|< %s >|< %s" % (clipName, newClipName)
+                     # Get the full Node Branch by climbing it to two levels above the root
+                     while (treeCtrl.GetItemParent(treeCtrl.GetItemParent(exampleNode)) != treeCtrl.GetRootItem()):
+                         # Update the selected node indicator
+                         exampleNode = treeCtrl.GetItemParent(exampleNode)
+                         # Prepend the new Node's name on the Message with the appropriate seperator
+                         msg = ' >|< ' + treeCtrl.GetItemText(exampleNode) + msg
+                     # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                     # This must be untranslated to avoid problems in mixed-language environments.
+                     # Prepend these on the Messsage
+                     msg = "KeywordExampleNode >|< Keywords" + msg
+                     if DEBUG:
+                         print 'Message to send = "RN %s"' % msg
+                     # Send the Rename Node message
+                     if TransanaGlobal.chatWindow != None:
+                         TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+                
+             # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
+             ClearClipboard()
 
-      if action == 'Copy':
-         # Now that we know the number of clips in the collection, assign that as sortOrder
-         newClip.sort_order = clipCount
-         # Save the new Clip to the database.
-         newClip.db_save()
-      elif action == 'Move':
-         # Now that we know the number of clips in the collection, assign that as sortOrder
-         sourceClip.sort_order = clipCount
-         # Save the new Clip to the database.
-         sourceClip.db_save()
-         # Unlock the Clip Record
-         sourceClip.unlock_record()
-              
-         # Remove the old Clip from the Tree.
-         # delete_Node needs to be able to climb the tree, so we need to build the Node List that
-         # tells it what to delete.  Start with the sourceCollection.
-         nodeList = (sourceCollection.id,)
-         # Load the Current Collection so we can find out about its parent, and work backwards from here.
-         tempCollection = Collection.Collection(sourceCollection.number)
-         # While the Current Collection has a defined parent...
-         while tempCollection.parent > 0:
-            # Make the Parent the Current Collection
-            tempCollection = Collection.Collection(tempCollection.parent)
-            # Add the Parent (now the Current Collection) to the FRONT of the Node List
-            nodeList = (tempCollection.id,) + nodeList
-         # Now add the Collections Root to the front of the Node List and the Clip's original name to the end of the Node List
-         nodeList = (_('Collections'), ) + nodeList + (clipName, )
-         # Now request that the defined node be deleted
-         treeCtrl.delete_Node(nodeList, 'ClipNode')
-         
-         # Check for Keyword Examples that need to also be renamed!
-         for (kwg, kw, clipNumber, clipID) in DBInterface.list_all_keyword_examples_for_a_clip(sourceClip.number):
-             nodeList = (_('Keywords'), kwg, kw, clipName)
-             exampleNode = treeCtrl.select_Node(nodeList, 'KeywordExampleNode')
-             treeCtrl.SetItemText(exampleNode, newClipName)
-             # If we're in the Multi-User mode, we need to send a message about the change
+          # Add the new Clip to the Database Tree Tab
+          # To add a Clip, we need to build the node list for the tree's add_Node method to climb.
+          # We need to add all of the Collection Parents to our Node List, so we'll start by loading
+          # the current Collection
+          tempCollection = Collection.Collection(destCollection.number)
+          # Add the current Collection Name, and work backwards from here.
+          nodeList = (tempCollection.id,)
+          # Repeat this process as long as the Collection we're looking at has a defined Parent...
+          while tempCollection.parent > 0:
+             # Load the Parent Collection
+             tempCollection = Collection.Collection(tempCollection.parent)
+             # Add this Collection's name to the FRONT of the Node List
+             nodeList = (tempCollection.id,) + nodeList
+          # Now add the Collections Root node to the front of the Node List and the
+          # Clip Name to the back of the Node List
+          if action == 'Copy':
+             nodeList = (_('Collections'), ) + nodeList + (newClip.id, )
+             # Add the Node to the Tree
+             treeCtrl.add_Node('ClipNode', nodeList, newClip.number, newClip.collection_num)
+
+             # Now let's communicate with other Transana instances if we're in Multi-user mode
              if not TransanaConstants.singleUserVersion:
-                 # Begin constructing the message with the old and new names for the node
-                 msg = " >|< %s >|< %s" % (clipName, newClipName)
-                 # Get the full Node Branch by climbing it to two levels above the root
-                 while (treeCtrl.GetItemParent(treeCtrl.GetItemParent(exampleNode)) != treeCtrl.GetRootItem()):
-                     # Update the selected node indicator
-                     exampleNode = treeCtrl.GetItemParent(exampleNode)
-                     # Prepend the new Node's name on the Message with the appropriate seperator
-                     msg = ' >|< ' + treeCtrl.GetItemText(exampleNode) + msg
-                 # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
-                 # This must be untranslated to avoid problems in mixed-language environments.
-                 # Prepend these on the Messsage
-                 msg = "KeywordExampleNode >|< Keywords" + msg
-                 if DEBUG:
-                     print 'Message to send = "RN %s"' % msg
-                 # Send the Rename Node message
-                 if TransanaGlobal.chatWindow != None:
-                     TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
-            
-         # Clear the Clipboard to prevent further Paste attempts, which are no longer valid as the SourceNode no longer exists!
-         ClearClipboard()
+                msg = "ACl %s"
+                data = (nodeList[1],)
 
-      # Add the new Clip to the Database Tree Tab
-      # To add a Clip, we need to build the node list for the tree's add_Node method to climb.
-      # We need to add all of the Collection Parents to our Node List, so we'll start by loading
-      # the current Collection
-      tempCollection = Collection.Collection(destCollection.number)
-      # Add the current Collection Name, and work backwards from here.
-      nodeList = (tempCollection.id,)
-      # Repeat this process as long as the Collection we're looking at has a defined Parent...
-      while tempCollection.parent > 0:
-         # Load the Parent Collection
-         tempCollection = Collection.Collection(tempCollection.parent)
-         # Add this Collection's name to the FRONT of the Node List
-         nodeList = (tempCollection.id,) + nodeList
-      # Now add the Collections Root node to the front of the Node List and the
-      # Clip Name to the back of the Node List
-      if action == 'Copy':
-         nodeList = (_('Collections'), ) + nodeList + (newClip.id, )
-         # Add the Node to the Tree
-         treeCtrl.add_Node('ClipNode', nodeList, newClip.number, newClip.collection_num)
+                for nd in nodeList[2:]:
+                   msg += " >|< %s"
+                   data += (nd, )
 
-         # Now let's communicate with other Transana instances if we're in Multi-user mode
-         if not TransanaConstants.singleUserVersion:
-            msg = "ACl %s"
-            data = (nodeList[1],)
+                if DEBUG:
+                   print 'DragAndDropObjects.CopyMoveClip(Copy): Message to send =', msg % data
+                    
+                if TransanaGlobal.chatWindow != None:
+                   TransanaGlobal.chatWindow.SendMessage(msg % data)
 
-            for nd in nodeList[2:]:
-               msg += " >|< %s"
-               data += (nd, )
+             # When copying a Clip and setting its sort order, we need to keep working with the new clip
+             # rather than the old one.  Having CopyClip return the new clip makes this easy.
+             return newClip
+          elif action == 'Move':
+             nodeList = (_('Collections'), ) + nodeList + (sourceClip.id, )
+             # Add the Node to the Tree
+             treeCtrl.add_Node('ClipNode', nodeList, sourceClip.number, sourceClip.collection_num)
+             # If we are moving a Clip, the clip's Notes need to travel with the Clip.  The first step is to
+             # get a list of those Notes.
+             noteList = DBInterface.list_of_notes(Clip=sourceClip.number)
+             # If there are Clip Notes, we need to make sure they travel with the Clip
+             if noteList != []:
+                 newNode = treeCtrl.select_Node(nodeList, 'ClipNode')
+                 # We accomplish this using the TreeCtrl's "add_note_nodes" method
+                 treeCtrl.add_note_nodes(noteList, newNode, Clip=sourceClip.number)
+                 treeCtrl.Refresh()
 
-            if DEBUG:
-               print 'DragAndDropObjects.CopyMoveClip(Copy): Message to send =', msg % data
-                
-            if TransanaGlobal.chatWindow != None:
-               TransanaGlobal.chatWindow.SendMessage(msg % data)
+             # Now let's communicate with other Transana instances if we're in Multi-user mode
+             if not TransanaConstants.singleUserVersion:
+                msg = "ACl %s"
+                data = (nodeList[1],)
 
-         # When copying a Clip and setting its sort order, we need to keep working with the new clip
-         # rather than the old one.  Having CopyClip return the new clip makes this easy.
-         return newClip
-      elif action == 'Move':
-         nodeList = (_('Collections'), ) + nodeList + (sourceClip.id, )
-         # Add the Node to the Tree
-         treeCtrl.add_Node('ClipNode', nodeList, sourceClip.number, sourceClip.collection_num)
-         # If we are moving a Clip, the clip's Notes need to travel with the Clip.  The first step is to
-         # get a list of those Notes.
-         noteList = DBInterface.list_of_notes(Clip=sourceClip.number)
-         # If there are Clip Notes, we need to make sure they travel with the Clip
-         if noteList != []:
-             newNode = treeCtrl.select_Node(nodeList, 'ClipNode')
-             # We accomplish this using the TreeCtrl's "add_note_nodes" method
-             treeCtrl.add_note_nodes(noteList, newNode, Clip=sourceClip.number)
-             treeCtrl.Refresh()
+                for nd in nodeList[2:]:
+                   msg += " >|< %s"
+                   data += (nd, )
 
-         # Now let's communicate with other Transana instances if we're in Multi-user mode
-         if not TransanaConstants.singleUserVersion:
-            msg = "ACl %s"
-            data = (nodeList[1],)
+                if DEBUG:
+                   print 'DragAndDropObjects.CopyMoveClip(Move): Message to send =', msg % data
+                    
+                if TransanaGlobal.chatWindow != None:
+                   TransanaGlobal.chatWindow.SendMessage(msg % data)
 
-            for nd in nodeList[2:]:
-               msg += " >|< %s"
-               data += (nd, )
-
-            if DEBUG:
-               print 'DragAndDropObjects.CopyMoveClip(Move): Message to send =', msg % data
-                
-            if TransanaGlobal.chatWindow != None:
-               TransanaGlobal.chatWindow.SendMessage(msg % data)
-
-         # When copying a Clip and setting its sort order, we need to keep working with the new clip
-         # rather than the old one.  Having CopyClip return the new clip makes this easy.
-         return sourceClip
+             # When copying a Clip and setting its sort order, we need to keep working with the new clip
+             # rather than the old one.  Having CopyClip return the new clip makes this easy.
+             return sourceClip
 
 def ChangeClipOrder(treeCtrl, destNode, sourceClip, sourceCollection):
-   """ This function changes the order of the clips in a Collection """
+    """ This function changes the order of the clips in a Collection """
 
-   # TODO:  Obtain Record Locks on all Clips here instead of below, and stop if they are not obtained.
+    # If we can't lock all the clips in the collection, sort orders get all screwed up.
+    # ... Set up a variable that signals failure
+    allClipsLocked = True
+    # Create a Dictionary to hold all the Clip data, so we only need to have one copy of the clip
+    Clips = {}
+    clipLockList = DBInterface.list_of_clips_by_collectionnum(sourceCollection.number)
+    try:
+        for (tmpClipNum, tmpClipID, tmpCollectNum) in clipLockList:
 
-   # If we are changing Clip Sort Order, the clip's Notes need to travel with the Clip.  The first step is to
-   # get a list of those Notes.
-   noteList = DBInterface.list_of_notes(Clip=sourceClip.number)
+            tmpClip = Clip.Clip(tmpClipNum)
 
-   # Remove the old Clip from the Tree   
-   # delete_Node needs to be able to climb the tree, so we need to build the Node List that   
-   # tells it what to delete.  Start with the sourceCollection.   
-   nodeList = (sourceCollection.id,)   
-   # Load the Current Collection so we can find out about its parent, and work backwards from here.   
-   tempCollection = Collection.Collection(sourceCollection.number)   
-   # While the Current Collection has a defined parent...   
-   while tempCollection.parent > 0:   
-      # Make the Parent the Current Collection   
-      tempCollection = Collection.Collection(tempCollection.parent)   
-      # Add the Parent (now the Current Collection) to the FRONT of the Node List   
-      nodeList = (tempCollection.id,) + nodeList   
-   # Now add the Collections Root to the front of the Node List and the Clip to the end of the Node List   
-   nodeList = (_('Collections'), ) + nodeList + (sourceClip.id, )   
-   # Now request that the defined node be deleted   
-   treeCtrl.delete_Node(nodeList, 'ClipNode')
+            tmpClip.lock_record()
 
-   # Insert the new node in the proper position.  This is done by manipulating the tree directly, as "add_Node"
-   # doesn't know about Sort Order
-   # First, let's identify the Parent Node we're working with
-   parentNode = treeCtrl.GetItemParent(destNode)
+            Clips[tmpClipNum] = tmpClip
 
-   # We need to figure out the position amongst the parentNode's children where we should drop the new node.
-   # Initialize a variable to track this.
-   nodeCounter = 0
+    except TransanaExceptions.RecordLockedError, e:
+        allClipsLocked = False
 
-   # What we need to do here is to iterate through all the Clips in a Collection, reassigning SortOrders
-   # as we go, and insert the new record (both into the tree and into the SortOrder) as we go.  Since we
-   # know the tree structure has the correct order and can tell us where to insert the new value, we will
-   # use the Tree Structure for our iteration rather than going out to the DBInterface.
-      
-   # wxTreeCtrl requires the "cookie" value to list children.  Initialize it.
-   cookie = 0
-   # Get the first child of the dropNode 
-   (tempNode, cookie) = treeCtrl.GetFirstChild(parentNode)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            msg = unicode(_('Clips in Collection "%s" are not in the desired order.') + '\n\n' + \
+                          _('Transana could not change the sort order because you cannot obtain a lock on Clip "%s"') + \
+                          _('.\nThe record is currently locked by %s.'), 'utf8')
+        else:
+            msg = _('Clips in Collection "%s" are not in the desired order.') + '\n\n' + \
+                  _('Transana could not change the sort order because you cannot obtain a lock on Clip "%s"') + \
+                  _('.\nThe record is currently locked by %s.')
 
-   # The node is getting inserted twice on the Mac.  Let's make sure that doesn't happen by tracking it explicitly.
-   nodeInserted = False
-      
-   # Iterate through all the dropNode's children
-   while tempNode.IsOk():
-      # Get the current child's Node Data
-      tempNodeData = treeCtrl.GetPyData(tempNode)
-      # If we are looking at a Clip, and this is the Clip where the dropped item should be inserted ...
-      if (not nodeInserted) and (tempNodeData.nodetype == 'ClipNode') and (treeCtrl.GetItemText(tempNode) == treeCtrl.GetItemText(destNode)):
+        print "DragAndDropObjects.ChangeClipOrder():  Collection data:"
+        print sourceCollection
+        print
 
-         # Create a new node in the tree BEFORE the active node (as signalled by the nodeCounter counter), naming it after   
-         # the Source Clip
-         newNode = treeCtrl.InsertItemBefore(parentNode, nodeCounter, sourceClip.id)   
-         # Identify this as a Clip node by assigning the appropriate NodeData   
-         nodedata = DatabaseTreeTab._NodeData(nodetype='ClipNode', recNum=sourceClip.number, parent=sourceClip.collection_num)   
-         # Associate the NodeData with the node   
-         treeCtrl.SetPyData(newNode, nodedata)   
-         # We know the new node is a Clip, so assign the proper image   
-         treeCtrl.set_image(newNode, "Clip16")   
-         
-         # The node has now been inserted, and should not be inserted again.
-         nodeInserted = True
-         
-         # If there are Clip Notes, we need to make sure they travel with the Clip
-         if noteList != []:
-             # We accomplish this using the TreeCtrl's "add_note_nodes" method
-             treeCtrl.add_note_nodes(noteList, newNode, Clip=sourceClip.number)
+        dlg = Dialogs.ErrorDialog(None, msg % (sourceCollection.id, tmpClip.id, e.user))
+        dlg.ShowModal()
+        dlg.Destroy()
 
-         # Since we just inserted a new Node, we need to increment our NodeCounter
-         nodeCounter += 1
-         # Open a copy of the Clip that is being inserted
-         localClip = Clip.Clip(sourceClip.number)
-         # Lock the Clip Record
-         localClip.lock_record()
-         # Set the Clip's Sort Order based on the NodeCounter
-         localClip.sort_order = nodeCounter
-         # Save the Clip Record
-         localClip.db_save()
-         # Unlock the Clip Record
-         localClip.unlock_record()
+    if allClipsLocked:
 
-      # Increment the Node Counter
-      nodeCounter += 1
+        # If we are changing Clip Sort Order, the clip's Notes need to travel with the Clip.  The first step is to
+        # get a list of those Notes.
+        noteList = DBInterface.list_of_notes(Clip=sourceClip.number)
 
-      # If the current node is a Clip, let's reset its sort order
-      if (tempNodeData.nodetype == 'ClipNode'):
-         # Load the Clip
-         localClip = Clip.Clip(tempNodeData.recNum)
-         # Lock the Clip Record
-         localClip.lock_record()
-         # Reset the Sort Order based on the NodeCounter
-         localClip.sort_order = nodeCounter
-         # Save the Clip
-         localClip.db_save()
-         # Unlock the Clip Record
-         localClip.unlock_record()
+        # Remove the old Clip from the Tree   
+        # delete_Node needs to be able to climb the tree, so we need to build the Node List that   
+        # tells it what to delete.  Start with the sourceCollection.   
+        nodeList = (sourceCollection.id,)   
+        # Load the Current Collection so we can find out about its parent, and work backwards from here.   
+        tempCollection = Collection.Collection(sourceCollection.number)   
+        # While the Current Collection has a defined parent...   
+        while tempCollection.parent > 0:   
+           # Make the Parent the Current Collection   
+           tempCollection = Collection.Collection(tempCollection.parent)   
+           # Add the Parent (now the Current Collection) to the FRONT of the Node List   
+           nodeList = (tempCollection.id,) + nodeList   
+        # Now add the Collections Root to the front of the Node List and the Clip to the end of the Node List   
+        nodeList = (_('Collections'), ) + nodeList + (sourceClip.id, )   
+        # Now request that the defined node be deleted   
+        treeCtrl.delete_Node(nodeList, 'ClipNode')
 
-      # If we are looking at the last Child in the Parent's Node, exit the while loop
-      if tempNode == treeCtrl.GetLastChild(parentNode):
-          # We need to message the re-introduction of the node.
-          # Now let's communicate with other Transana instances if we're in Multi-user mode
-          if not TransanaConstants.singleUserVersion:
-              msg = "AClSO %s"
-              # We have a nodeList from deleting the node above.  We'll use that as the basis for the current nodeList,
-              # but we need to insert the DropNode into it at the second-to-last position
-              nodeList = nodeList[:-1] + (treeCtrl.GetItemText(destNode),) + (nodeList[-1],)
-              data = (nodeList[1],)
+        # Insert the new node in the proper position.  This is done by manipulating the tree directly, as "add_Node"
+        # doesn't know about Sort Order
+        # First, let's identify the Parent Node we're working with
+        parentNode = treeCtrl.GetItemParent(destNode)
 
-              for nd in nodeList[2:]:
-                  msg += " >|< %s"
-                  data += (nd, )
+        # We need to figure out the position amongst the parentNode's children where we should drop the new node.
+        # Initialize a variable to track this.
+        nodeCounter = 0
 
-              if DEBUG:
-                  print 'DragAndDropObjects.CreateClip(): Message to send =', msg % data
-                    
-              if TransanaGlobal.chatWindow != None:
-                  TransanaGlobal.chatWindow.SendMessage(msg % data)
+        # What we need to do here is to iterate through all the Clips in a Collection, reassigning SortOrders
+        # as we go, and insert the new record (both into the tree and into the SortOrder) as we go.  Since we
+        # know the tree structure has the correct order and can tell us where to insert the new value, we will
+        # use the Tree Structure for our iteration rather than going out to the DBInterface.
+          
+        # wxTreeCtrl requires the "cookie" value to list children.  Initialize it.
+        cookie = 0
+        # Get the first child of the dropNode 
+        (tempNode, cookie) = treeCtrl.GetFirstChild(parentNode)
 
-          break
-      # If not, load the next Child record
-      else:
-         (tempNode, cookie) = treeCtrl.GetNextChild(parentNode, cookie)
+        # The node is getting inserted twice on the Mac.  Let's make sure that doesn't happen by tracking it explicitly.
+        nodeInserted = False
+
+        # Iterate through all the dropNode's children
+        while tempNode.IsOk():
+            # Get the current child's Node Data
+            tempNodeData = treeCtrl.GetPyData(tempNode)
+            # If we are looking at a Clip, and this is the Clip where the dropped item should be inserted ...
+            if (not nodeInserted) and (tempNodeData.nodetype == 'ClipNode') and (treeCtrl.GetItemText(tempNode) == treeCtrl.GetItemText(destNode)):
+
+                # Create a new node in the tree BEFORE the active node (as signalled by the nodeCounter counter), naming it after   
+                # the Source Clip
+                newNode = treeCtrl.InsertItemBefore(parentNode, nodeCounter, sourceClip.id)   
+                # Identify this as a Clip node by assigning the appropriate NodeData   
+                nodedata = DatabaseTreeTab._NodeData(nodetype='ClipNode', recNum=sourceClip.number, parent=sourceClip.collection_num)   
+                # Associate the NodeData with the node   
+                treeCtrl.SetPyData(newNode, nodedata)   
+                # We know the new node is a Clip, so assign the proper image   
+                treeCtrl.set_image(newNode, "Clip16")   
+             
+                # The node has now been inserted, and should not be inserted again.
+                nodeInserted = True
+             
+                # If there are Clip Notes, we need to make sure they travel with the Clip
+                if noteList != []:
+                    # We accomplish this using the TreeCtrl's "add_note_nodes" method
+                    treeCtrl.add_note_nodes(noteList, newNode, Clip=sourceClip.number)
+
+                # Since we just inserted a new Node, we need to increment our NodeCounter
+                nodeCounter += 1
+                # Open a copy of the Clip that is being inserted
+#                localClip = Clip.Clip(sourceClip.number)
+                # Lock the Clip Record
+#                localClip.lock_record()
+                # Set the Clip's Sort Order based on the NodeCounter
+                Clips[sourceClip.number].sort_order = nodeCounter
+                # Save the Clip Record
+                Clips[sourceClip.number].db_save()
+                # Unlock the Clip Record
+#                localClip.unlock_record()
+
+            # Increment the Node Counter
+            nodeCounter += 1
+
+            # If the current node is a Clip, let's reset its sort order
+            if (tempNodeData.nodetype == 'ClipNode'):
+                # Load the Clip
+#                localClip = Clip.Clip(tempNodeData.recNum)
+                # Lock the Clip Record
+#                localClip.lock_record()
+                # Reset the Sort Order based on the NodeCounter
+                Clips[tempNodeData.recNum].sort_order = nodeCounter
+                # Save the Clip
+                Clips[tempNodeData.recNum].db_save()
+                # Unlock the Clip Record
+#                localClip.unlock_record()
+
+            # If we are looking at the last Child in the Parent's Node, exit the while loop
+            if tempNode == treeCtrl.GetLastChild(parentNode):
+                # We need to message the re-introduction of the node.
+                # Now let's communicate with other Transana instances if we're in Multi-user mode
+                if not TransanaConstants.singleUserVersion:
+                    msg = "AClSO %s"
+                    # We have a nodeList from deleting the node above.  We'll use that as the basis for the current nodeList,
+                    # but we need to insert the DropNode into it at the second-to-last position
+                    nodeList = nodeList[:-1] + (treeCtrl.GetItemText(destNode),) + (nodeList[-1],)
+                    data = (nodeList[1],)
+
+                    for nd in nodeList[2:]:
+                        msg += " >|< %s"
+                        data += (nd, )
+
+                    if DEBUG:
+                        print 'DragAndDropObjects.CreateClip(): Message to send =', msg % data
+                        
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+                break
+            # If not, load the next Child record
+            else:
+                (tempNode, cookie) = treeCtrl.GetNextChild(parentNode, cookie)
+
+    for tmpClipNum in Clips.keys():
+        Clips[tmpClipNum].unlock_record()
+
+    return allClipsLocked
 
 def CreateQuickClip(clipData, kwg, kw, dbTree):
     """ Create a "Quick Clip", which is the implementation of a simplified form of Clip Creation """
@@ -2271,7 +2406,60 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
             quickClip.id = baseName + str(baseNum)
             quickClip.collection_num = collectNum
             quickClip.episode_num = clipData.episodeNum
-            quickClip.media_filename = sourceEpisode.media_filename
+
+            # Handle multiple video data here.
+            
+            # Start the clip off with the Episode's offset, though this could change if the first video wasn't used!
+            quickClip.offset = sourceEpisode.offset
+            # Initially, assume that we don't need to shift the Clip offset, i.e. that the offset shift is ZERO
+            offsetShift = 0
+            # If there's no Video Checkbox data (ie no video checkboxes) or the first entry's "Include in Clip" option is selected ...
+            if (clipData.videoCheckboxData == []) or (clipData.videoCheckboxData[0][0]):
+                # The Clip's Media Filename comes from the Episode Record
+                quickClip.media_filename = sourceEpisode.media_filename
+            # Audio defaults to 1, but if there are multiple videos and the first video should NOT include audio ...
+            if (clipData.videoCheckboxData != []) and (not clipData.videoCheckboxData[0][1]):
+                # ... then we should set it to 0 (off)
+                quickClip.audio = 0
+
+            # For each video after the first one (which has already been handled) ...
+            for x in range(1, len(clipData.videoCheckboxData)):
+                # ... get the checkbox data
+                (videoCheck, audioCheck) = clipData.videoCheckboxData[x]
+                # If the video is supposed to be included in the Clip ...
+                if videoCheck:
+                    # if this is the FIRST video to be included, put the data in the Clip object.
+                    if quickClip.media_filename == '':
+                        # Grab the file name
+                        quickClip.media_filename = sourceEpisode.additional_media_files[x - 1]['filename']
+                        # If we wind up here, we need to shift the offset values.  Remember the amount to shift them.
+                        offsetShift = sourceEpisode.additional_media_files[x - 1]['offset']
+                        # Add the offset shift value to the Clip's gobal offset
+                        quickClip.offset += offsetShift
+                        # Note whether the audio should be played by default
+                        quickClip.audio = audioCheck
+                    # if this is NOT hte first video to be included, put the data in the additional_media_files structure,
+                    # adjusting the offset by the offsetShift value if needed.  (YES, minus here, plus above.)
+                    else:
+                        quickClip.additional_media_files = {'filename' : sourceEpisode.additional_media_files[x - 1]['filename'],
+                                                            'length'   : quickClip.clip_stop - quickClip.clip_start,
+                                                            'offset'   : sourceEpisode.additional_media_files[x - 1]['offset'] - offsetShift,
+                                                            'audio'    : audioCheck }
+            # if NO media files were selected to be included, create an error message.
+            if quickClip.media_filename == '':
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Quick Clip Creation cancelled.  No media files have been selected for inclusion.'), 'utf8')
+                else:
+                    prompt = _('Quick Clip Creation cancelled.  No media files have been selected for inclusion.')
+                errordlg = Dialogs.ErrorDialog(None, prompt)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                # If Clip Creation fails, we don't need to continue any more.
+                contin = False
+                # Let's get out of here!
+                return
+    
             quickClip.clip_start = clipData.clipStart
             quickClip.clip_stop = clipData.clipStop
             quickClip.sort_order = DBInterface.getMaxSortOrder(collectNum) + 1

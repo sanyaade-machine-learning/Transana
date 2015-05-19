@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -40,46 +40,71 @@ import string
 
 class ProcessSearch(object):
     """ This class handles all processing related to Searching. """
-    def __init__(self, dbTree, searchCount):
+    def __init__(self, dbTree, searchCount, kwg=None, kw=None):
         """ Initialize the ProcessSearch class.  The dbTree parameter accepts a wxTreeCtrl as the Database Tree where
             Search Results should be displayed.  The searchCount parameter accepts the number that should be included
-            in the Default Search Title. """
+            in the Default Search Title. Optional kwg (Keyword Group) and kw (Keyword) parameters implement Quick Search
+            for the keyword specified. """
 
         # Note the Database Tree that accepts Search Results
         self.dbTree = dbTree
+        # If kwg and kw are None, we are doing a regular (full) search.
+        if (kwg == None) or (kw == None):
+            # Create the Search Dialog Box
+            dlg = SearchDialog.SearchDialog(_("Search") + " %s" % searchCount)
+            # Display the Search Dialog Box and record the Result
+            result = dlg.ShowModal()
+            # If the user selects OK ...
+            if result == wx.ID_OK:
+                # ... get the search name from the dialog
+                searchName = dlg.searchName.GetValue().strip()
+                # Search Name is required.  If it was eliminated, put it back!
+                if searchName == '':
+                    searchName = _("Search") + " %s" % searchCount
+                # ... and get the search terms from the dialog
+                searchTerms = dlg.searchQuery.GetValue().split('\n')
+            # Destroy the Search Dialog Box
+            dlg.Destroy()
+        # if kwg and kw are passed in, we're doing a Quick Search
+        else:
+            # There's no dialog.  Just say the user said OK.
+            result = wx.ID_OK
+            # The Search Name is built from the kwg : kw combination
+            searchName = "%s : %s" % (kwg, kw)
+            # The Search Terms are just the keyword group and keyword passed in
+            searchTerms = ["%s:%s" % (kwg, kw)]
 
-        # Create the Search Dialog Box
-        dlg = SearchDialog.SearchDialog(_("Search") + " %s" % searchCount)
-        # Display the Search Dialog Box and record the Result
-        result = dlg.ShowModal()
-        # If OK is pressed, process the requested Search
+        # If OK is pressed (or Quick Search), process the requested Search
         if result == wx.ID_OK:
             # Increment the Search Counter
             self.searchCount = searchCount + 1
-
-            # The "Keywords" node itself is always item 0 in the node list
+            # The "Search" node itself is always item 0 in the node list
             searchNode = self.dbTree.select_Node((_("Search"),), 'SearchRootNode')
+            # We need to collect a list of the named searches already done.
             namedSearches = []
+            # Get the first child node from the Search root node
             (childNode, cookieVal) = self.dbTree.GetFirstChild(searchNode)
+            # As long as there are child nodes ...
             while childNode.IsOk():
+                # Add the node name to the named searches list ...
                 namedSearches.append(self.dbTree.GetItemText(childNode))
+                # ... and get the next child node
                 (childNode, cookieVal) = self.dbTree.GetNextChild(childNode, cookieVal)
-
-            searchName = dlg.searchName.GetValue().strip()
-
+            # We need to give each search result a unique name.  So note the search count number
+            nameIncrementValue = searchCount
+            # As long as there's already a named search with the name we want to use ...
             while (searchName in namedSearches):
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_('You already have a Search Result named "%s".\nPlease enter a new Search Name.'), 'utf8')
+                # ... if this is our FIRST attempt ...
+                if nameIncrementValue == searchCount:
+                    # ... append the appropriate number on the end of the search name
+                    searchName += unicode(_(' - Search %d'), 'utf8') % nameIncrementValue
+                # ... if this is NOT our first attempt ...
                 else:
-                    prompt = _('You already have a Search Result named "%s".\nPlease enter a new Search Name.')
-                dlg2 = wx.TextEntryDialog(dlg, prompt % searchName, _('Transana Error'), searchName)
-                if dlg2.ShowModal() == wx.ID_OK:
-                    searchName = dlg2.GetValue().strip()
-                else:
-                    searchName = ''
-                dlg2.Destroy()
-                
+                    # ... remove the previous number and add the appropriate next number to try
+                    searchName = searchName[:searchName.rfind(' ')] + ' %d' % nameIncrementValue
+                # Increment our counter by one.  We'll keep trying new numbers until we find one that works.
+                nameIncrementValue += 1
+            # As long as there's a search name (and there's no longer a way to eliminate it!
             if searchName != '':
                 # Add a Search Results Node to the Database Tree
                 nodeListBase = [_("Search"), searchName]
@@ -91,7 +116,7 @@ class ProcessSearch(object):
                 #  with the queries.  Parameters are not integrated into the queries in order to allow
                 #  for automatic processing of apostrophes and other text that could otherwise interfere
                 #  with the SQL execution.)
-                (seriesQuery, collectionQuery, params) = self.BuildQueries(dlg.searchQuery)
+                (seriesQuery, collectionQuery, params) = self.BuildQueries(searchTerms)
 
                 # Get a Database Cursor
                 dbCursor = DBInterface.get_db().cursor()
@@ -152,10 +177,6 @@ class ProcessSearch(object):
         else:
             self.searchCount = searchCount
 
-        # Destroy the Search Dialog Box
-        dlg.Destroy()
-
-
     def GetSearchCount(self):
         """ This method is called to determine whether the Search Counter was incremented, that is, whether the
             search was performed or cancelled. """
@@ -198,9 +219,9 @@ class ProcessSearch(object):
         havingStr = ''
 
         # We now will go through the Search Terms line by line and prepare to convert the Search Request to SQL
-        for lineNum in range(queryText.GetNumberOfLines()):
+        for lineNum in range(len(queryText)):
             # Capture the Line being processed, and remove whitespace from either end
-            tempStr = string.strip(queryText.GetLineText(lineNum))
+            tempStr = string.strip(queryText[lineNum])
 
             # Initialize the "Continuation" string, which holds a BOOLEAN Operator ("AND" or "OR")
             continStr = ''

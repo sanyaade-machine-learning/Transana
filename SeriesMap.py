@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2008  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2009  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -24,6 +24,9 @@ if DEBUG:
 
 # import Python's os and sys modules
 import os, sys
+# import Python's platform module
+import platform
+# import Python's string module
 import string
 # load wxPython for GUI
 import wx
@@ -155,8 +158,8 @@ class SeriesMap(wx.Frame):
         self.toolBar.AddTool(T_FILE_PRINTSETUP, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintSetup.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Set up Page'))
         self.toolBar.AddTool(T_FILE_PRINTPREVIEW, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintPreview.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print Preview'))
 
-        # Disable Print Preview on the Mac
-        if 'wxMac' in wx.PlatformInfo:
+        # Disable Print Preview on the PPC Mac
+        if platform.processor() == 'powerpc':
             self.toolBar.EnableTool(T_FILE_PRINTPREVIEW, False)
             
         self.toolBar.AddTool(T_FILE_PRINT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Print.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print'))
@@ -252,7 +255,7 @@ class SeriesMap(wx.Frame):
         # Set the Cursor to the Hourglass while the report is assembled
         TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
         # Set up parameters for creating the Filter Dialog.  Series Map Filter requires Series Number (as episodeNum) for the Config Save.
-        title = string.join([self.title, _("Filter Dialog")], ' ')
+        title = string.join([self.title, unicode(_("Filter Dialog"), 'utf8')], ' ')
         # Series Map wants the Clip Filter
         clipFilter = True
         # Series Map wants Keyword Color customization.

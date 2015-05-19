@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,40 +16,53 @@
 
 """This module implements the Clip class as part of the Data Objects."""
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 
 DEBUG = False
 if DEBUG:
     print "Clip DEBUG is ON!"
 
+# import wxPython
 import wx
-from DataObject import *
-from DBInterface import *
-from TransanaExceptions import *
-import Episode
+# import Python's os module
+import os
+# import Python's types module
+import types
+# import Transana's Clip Keyword object
 import ClipKeywordObject
+# import Transana's Collection Object
 import Collection
-import Transcript
+# Import the Transana base Data Object
+import DataObject
+# Import the Transana Database Interface
+import DBInterface
+# import Transana's Dialogs
+import Dialogs
+# Import Transana's Episode Object
+import Episode
+# import Transana's Miscellaneous Functions
+import Misc
+# import Transana's Note Object
 import Note
+# Import Transana's exceptions
+from TransanaExceptions import *
 # Import the Transana Constants
 import TransanaConstants
 # Import Transana's Global Variables
 import TransanaGlobal
-# import Transana's Dialogs
-import Dialogs
-import Misc
-import types
+# import Transana's Transcript object
+import Transcript
 
 TIMECODE_CHAR = "\\'a4"   # Note that this differs from the TIMECODE_CHAR in TranscriptEditor.py
                           # because this is for RTF text and that is for parsed text.
 
-class Clip(DataObject):
+class Clip(DataObject.DataObject):
     """This class defines the structure for a clip object.  A clip object
     describes a portion of a video (or other media) file."""
 
     def __init__(self, id_or_num=None, collection_name=None, collection_parent=0):
         """Initialize an Clip object."""
-        DataObject.__init__(self)
+        DataObject.DataObject.__init__(self)
         # By default, use the Video Root folder if one has been defined
         self.useVideoRoot = (TransanaGlobal.configData.videoPath != '')
 
@@ -66,9 +79,17 @@ class Clip(DataObject):
             self.episode_num = 0
             # Keep a list of transcript objects associated with this clip
             self.transcripts = []
-            self.media_filename = 0
+            self.media_filename = ""
+            # Initialize an empty list for additional media files
+            self.additional_media_files = []
             self.clip_start = 0
             self.clip_stop = 0
+            # With multiple videos, it's possible the clip time values need an offset
+            # (if the first Episode video isn't included in the Clip.)
+            self.offset = 0
+            # With multiple videos, it's possible to not want the AUDIO for the first video track,
+            # but default to True
+            self.audio = 1
             self.sort_order = 0
             
         # Create empty placeholders for Series and Episode IDs.  These only get populated if the
@@ -76,6 +97,7 @@ class Clip(DataObject):
         # Episode may no longer exist.
         self._series_id = ""
         self._episode_id = ""
+
 
 
 # Public methods
@@ -88,8 +110,13 @@ class Clip(DataObject):
         str = str + "collection_id = %s\n" % self.collection_id
         str = str + "episode_num = %s\n" % self.episode_num
         str = str + "media_filename = %s\n" % self.media_filename 
+        str = str + "Additional media file:\n"
+        for addFile in self.additional_media_files:
+            str += '  %s  %s %s %s\n' % (addFile['filename'], addFile['offset'], addFile['length'], addFile['audio'])
         str = str + "clip_start = %s (%s)\n" % (self.clip_start, Misc.time_in_ms_to_str(self.clip_start))
         str = str + "clip_stop = %s (%s)\n" % (self.clip_stop, Misc.time_in_ms_to_str(self.clip_stop))
+        str += "offset = %s\n" % Misc.time_in_ms_to_str(self.offset)
+        str += "audio = %s\n" % self.audio
         str = str + "sort_order = %s\n" % self.sort_order
         # Iterate through transcript objects
         for tr in self.transcripts:
@@ -122,58 +149,88 @@ class Clip(DataObject):
 
     def db_load_by_name(self, clip_name, collection_name, collection_parent=0):
         """Load a record by ID / Name."""
+        self.clear()
         # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
         if 'unicode' in wx.PlatformInfo:
             clip_name = clip_name.encode(TransanaGlobal.encoding)
             collection_name = collection_name.encode(TransanaGlobal.encoding)
+        # Get a database connection
         db = DBInterface.get_db()
+        # craft a query to get Clip data
         query = """ SELECT a.*, b.*
           FROM Clips2 a, Collections2 b
           WHERE ClipID = %s AND
                 a.CollectNum = b.CollectNum AND
                 b.CollectID = %s AND
                 b.ParentCollectNum = %s """
+        # Get a database cursor
         c = db.cursor()
+        # Execute the query
         c.execute(query, (clip_name, collection_name, collection_parent))
+        # Get the number of rows returned
         n = c.rowcount
+        # if we don't get exactly one result ...
         if (n != 1):
+            # close the cursor
             c.close()
+            # clear the current Clip
             self.clear()
+            # Raise an exception saying the record is not found
             raise RecordNotFoundError, (collection_name + ", " + clip_name, n)
+        # If we get exactly one result ...
         else:
+            # get the data from the cursor
             r = DBInterface.fetch_named(c)
+            # Load the data into the Clip object
             self._load_row(r)
+            # Load additional Media Files, which aren't handled in the "old" code
+            self.load_additional_vids()
+            # Refresh the Keywords
             self.refresh_keywords()
-            
+        # Close the Database Cursor
         c.close()
         
     def db_load_by_num(self, num):
         """Load a record by record number."""
+        self.clear()
+        # Get a database Connection
         db = DBInterface.get_db()
+        # Craft a query to get the Clip data
         query = """
         SELECT a.*, b.*
           FROM Clips2 a, Collections2 b
           WHERE a.ClipNum = %s AND
                 a.CollectNum = b.CollectNum
         """
+        # Get a database cursor
         c = db.cursor()
+        # Execute the query
         c.execute(query, (num,))
+        # Get the number of rows returned
         n = c.rowcount
+        # If we don't get exactly one result ...
         if (n != 1):
+            # close the database cursor
             c.close()
+            # clear the current Clip object
             self.clear()
+            # Raise an exception indicating the data was not found
             raise RecordNotFoundError, (num, n)
+        # If we get exactly one result ...
         else:
+            # ... get the data from the cursor
             r = DBInterface.fetch_named(c)
+            # ... load the data into the Clip Object
             self._load_row(r)
+            # Load Additional Media Files, which aren't handled in the "old" code
+            self.load_additional_vids()
+            # Refresh the Keywords
             self.refresh_keywords()
-
+        # Close the database cursor
         c.close()
 
     def db_save(self):
-        """Save the record to the database using Insert or Update as
-        appropriate."""
-
+        """Save the record to the database using Insert or Update as appropriate."""
         # Define and implement Demo Version limits
         if TransanaConstants.demoVersion and (self.number == 0):
             # Get a DB Cursor
@@ -204,7 +261,7 @@ class Clip(DataObject):
             raise SaveError, _("Clip cannot start before media file begins.")
         else:
             # videoPath probably has the OS.sep character, but we need the generic "/" character here.
-            videoPath = TransanaGlobal.configData.videoPath.replace('\\', '/')
+            videoPath = TransanaGlobal.configData.videoPath
             # Determine if we are supposed to extract the Video Root Path from the Media Filename and extract it if appropriate
             if self.useVideoRoot and (videoPath == self.media_filename[:len(videoPath)]):
                 tempMediaFilename = self.media_filename[len(videoPath):]
@@ -212,21 +269,7 @@ class Clip(DataObject):
                 tempMediaFilename = self.media_filename
 
             # Substitute the generic OS seperator "/" for the Windows "\".
-            self.media_filename = self.media_filename.replace('\\', '/')
-            # If we are using the ANSI version of wxPython 
-            # then we need to block Unicode characters from media filenames.
-            # Unicode characters still cause problems on the Mac for the Multi-User version of Transana,
-            # but can be made to work if shared waveforming is done on a Windows computer.
-            if ('ansi' in wx.PlatformInfo):
-                # Create a string of legal characters for the file names
-                allowedChars = TransanaConstants.legalFilenameCharacters
-                # check each character in the file name string
-                for char in self.media_filename:
-                    # If the character is illegal ...
-                    if allowedChars.find(char) == -1:
-                        # No need to Unicode the message, as this onlyappears in the ANSI version of wxPython!
-                        msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.') % (self.media_filename, char)
-                        raise SaveError, msg
+            tempMediaFilename = tempMediaFilename.replace('\\', '/')
             # If we're not in Unicode mode ...
             if 'ansi' in wx.PlatformInfo:
                 # ... we don't need to encode the string values, but we still need to copy them to our local variables.
@@ -246,7 +289,7 @@ class Clip(DataObject):
 
         values = (id, self.collection_num, self.episode_num, \
                       tempMediaFilename, \
-                      self.clip_start, self.clip_stop, comment, \
+                      self.clip_start, self.clip_stop, self.offset, self.audio, comment, \
                       self.sort_order)
         if (self._db_start_save() == 0):
             if DBInterface.record_match_count("Clips2", \
@@ -262,10 +305,10 @@ class Clip(DataObject):
             query = """
             INSERT INTO Clips2
                 (ClipID, CollectNum, EpisodeNum, 
-                 MediaFile, ClipStart, ClipStop, ClipComment,
+                 MediaFile, ClipStart, ClipStop, ClipOffset, Audio, ClipComment,
                  SortOrder)
                 VALUES
-                (%s,%s,%s,%s,%s,%s,%s,%s)
+                (%s,%s,%s,%s,%s,%s,%s,%s,%s, %s)
             """
         else:
             if DBInterface.record_match_count("Clips2", \
@@ -287,12 +330,14 @@ class Clip(DataObject):
                     MediaFile = %s,
                     ClipStart = %s,
                     ClipStop = %s,
+                    ClipOffset = %s,
+                    Audio = %s,
                     ClipComment = %s,
                     SortOrder = %s
                 WHERE ClipNum = %s
             """
             values = values + (self.number,)
-        
+
         c = DBInterface.get_db().cursor()
         c.execute(query, values)
         if self.number == 0:
@@ -328,7 +373,31 @@ class Clip(DataObject):
             if tr.number != -1:
                 # save the transcript
                 tr.db_save()
-            
+
+        # To save the additional video file names, we must first delete them from the database!
+        # Craft a query to remove all existing Additonal Videos
+        query = "DELETE FROM AdditionalVids2 WHERE ClipNum = %d" % self.number
+        # Execute the query
+        c.execute(query)
+        # Define the query to insert the additional media files into the databse
+        query = "INSERT INTO AdditionalVids2 (EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio) VALUES (%s, %s, %s, %s, %s, %s)"
+        # For each additional media file ...
+        for vid in self.additional_media_files:
+            # Encode the filename
+            tmpFilename = vid['filename'].encode(TransanaGlobal.encoding)
+            # Determine if we are supposed to extract the Video Root Path from the Media Filename and extract it if appropriate
+            if self.useVideoRoot and (videoPath == tmpFilename[:len(videoPath)]):
+                tmpFilename = tmpFilename[len(videoPath):]
+            # Substitute the generic OS seperator "/" for the Windows "\".
+            tmpFilename = tmpFilename.replace('\\', '/')
+            # In Windows single-user, audio of "True" isn't being stored correctly.  It seems to be OK in MU.  (Haven't checked Mac-SU.)
+            if vid['audio'] == True:
+                vid['audio'] = 1
+            # Get the data for each insert query
+            data = (0, self.number, tmpFilename, vid['length'], vid['offset'], vid['audio'])
+            # Execute the query
+            c.execute(query, data)
+
         # Add the Episode keywords back
         for kws in self._kwlist:
             DBInterface.insert_clip_keyword(0, self.number, kws.keywordGroup, kws.keyword, kws.example)
@@ -413,6 +482,12 @@ class Clip(DataObject):
             if result:
                 DBInterface.delete_all_keywords_for_a_group(0, self.number)
 
+            if result:
+                # Craft a query to remove all existing Additonal Videos
+                query = "DELETE FROM AdditionalVids2 WHERE ClipNum = %d" % self.number
+                # Execute the query
+                c.execute(query)
+
             # Delete the actual Clip record.
             self._db_do_delete(use_transactions, c, result)
 
@@ -455,13 +530,13 @@ class Clip(DataObject):
         
         # Lock the Clip Record.  Call this second so the Clip is not identified as locked if the
         # Clip Transcript record lock fails.
-        DataObject.lock_record(self)
+        DataObject.DataObject.lock_record(self)
             
 
     def unlock_record(self):
         """ Override the DataObject Unlock Method """
         # Unlock the Clip Record
-        DataObject.unlock_record(self)
+        DataObject.DataObject.unlock_record(self)
         # Also unlock the Clip Transcript records
 
         # For each transcript in the clip transcript list ...
@@ -482,7 +557,7 @@ class Clip(DataObject):
         # If we have a clips that's not currently in the database ...
         else:
             # ... we can use the old duplicate method.  If needed, we may want to copy all the data manually here.
-            newClip = DataObject.duplicate(self)
+            newClip = DataObject.DataObject.duplicate(self)
         # Eliminate the new clip's object number so it will get a new on when saved.
         newClip.number = 0
         # A new Clip should get a new Clip Transcripts!
@@ -588,6 +663,42 @@ class Clip(DataObject):
         # Return the results
         return res
 
+    def load_additional_vids(self):
+        """Load additional media file names from the database."""
+        # Get a database connection
+        db = DBInterface.get_db()
+        # Create a database cursor
+        c = db.cursor()
+        # Define the DB Query
+        query = "SELECT MediaFile, VidLength, Offset, Audio FROM AdditionalVids2 WHERE ClipNum = %s ORDER BY AddVidNum"
+        # Execute the query
+        c.execute(query, self.number)
+        # For each video in the query results ...
+        for (vidFilename, vidLength, vidOffset, audio) in c.fetchall():
+            # Detection of the use of the Video Root Path is platform-dependent and must be done for EACH filename!
+            if wx.Platform == "__WXMSW__":
+                # On Windows, check for a colon in the position, which signals the presence or absence of a drive letter
+                useVideoRoot = (vidFilename[1] != ':')
+            else:
+                # On Mac OS-X and *nix, check for a slash in the first position for the root folder designation
+                useVideoRoot = (vidFilename[0] != '/')
+            # If we are using the Video Root Path, add it to the Filename
+            if useVideoRoot:
+                video = TransanaGlobal.configData.videoPath.replace('\\', '/') + DBInterface.ProcessDBDataForUTF8Encoding(vidFilename)
+            else:
+                video = DBInterface.ProcessDBDataForUTF8Encoding(vidFilename)
+            # Add the video to the additional media files list
+            self.additional_media_files = {'filename' : video,
+                                           'length'   : vidLength,
+                                           'offset'   : vidOffset,
+                                           'audio'    : audio}
+        # Close the database cursor
+        c.close()
+
+    def remove_an_additional_vid(self, indx):
+        """ remove ONE additional media file from the list of additional media files """
+        del(self._additional_media[indx])
+
     def GetNodeData(self, includeClip=True):
         """ Returns the Node Data list (list of parent collections) needed for Database Tree Manipulation """
         # Load the Clip's collection
@@ -624,10 +735,11 @@ class Clip(DataObject):
         self.collection_num = r['CollectNum']
         self.collection_id = r['CollectID']
         self.episode_num = r['EpisodeNum']
-        # TranscriptNum is the Transcript Number the Clip was created FROM, not the number of the Clip Transcript!
         self.media_filename = r['MediaFile']
         self.clip_start = r['ClipStart']
         self.clip_stop = r['ClipStop']
+        self.offset = r['ClipOffset']
+        self.audio = r['Audio']
         self.sort_order = r['SortOrder']
 
         # Initialize a list of Transcript objects
@@ -657,7 +769,7 @@ class Clip(DataObject):
             self.useVideoRoot = (self.media_filename[0] != '/')
         # If we are using the Video Root Path, add it to the Filename
         if self.useVideoRoot:
-            self.media_filename = TransanaGlobal.configData.videoPath + self.media_filename
+            self.media_filename = TransanaGlobal.configData.videoPath.replace('\\', '/') + self.media_filename
 
     def _sync_collection(self):
         """Synchronize the Collection ID property to reflect the current state
@@ -697,11 +809,36 @@ class Clip(DataObject):
         return tempList
 
     def _get_fname(self):
-        return self._fname.replace('\\', '/')
+        return self._fname.replace('/', os.sep)
     def _set_fname(self, fname):
-        self._fname = fname
+        self._fname = fname.replace('\\', '/')
     def _del_fname(self):
         self._fname = ""
+
+    def _get_additional_media(self):
+        temp_additional_media = []
+        for vid in self._additional_media:
+            vid['filename'] = vid['filename'].replace('/', os.sep)
+            temp_additional_media.append(vid)
+        return temp_additional_media
+    def _set_additional_media(self, vidDict):
+        # If we receive a Dictionary Object ...
+        if isinstance(vidDict, dict):
+            # ... replace the backslashes in the filename item
+            vidDict['filename'] = vidDict['filename'].replace('\\', '/')
+            # Add the dictionary object to the media files list
+            self._additional_media.append(vidDict)
+        # If we receive something else (a list or a tuple, most likely) ...
+        else:
+            # ... for each element (which should be a dictionary object) ...
+            for vid in vidDict:
+                # ... replace the backslashes in the filename item
+                vid['filename'] = vid['filename'].replace('\\', '/')
+                # Add the dictionary object to the media files list
+                self._additional_media.append(vid)
+
+    def _del_additional_media(self):
+        self._additional_media = []
 
     def _get_clip_start(self):
         return self._clip_start
@@ -716,6 +853,20 @@ class Clip(DataObject):
         self._clip_stop = cs
     def _del_clip_stop(self):
         self._clip_stop = -1
+
+    def _get_offset(self):
+        return self._offset
+    def _set_offset(self, offset):
+        self._offset = offset
+    def _del_offset(self):
+        self._offset = 0
+
+    def _get_audio(self):
+        return self._audio
+    def _set_audio(self, val):
+        self._audio = val
+    def _del_audio(self):
+        self._audio = 1  # Default to True
 
     def _get_sort_order(self):
         return self._sort_order
@@ -772,10 +923,16 @@ class Clip(DataObject):
                         """Number of the Clip's transcript record in the Transcript Table.""")
     media_filename = property(_get_fname, _set_fname, _del_fname,
                         """The name (including path) of the media file.""")
+    additional_media_files = property(_get_additional_media, _set_additional_media, _del_additional_media,
+                        """A list of additional media files (including path).""")
     clip_start = property(_get_clip_start, _set_clip_start, _del_clip_start,
                         """Starting position of the Clip in the media file.""")
     clip_stop = property(_get_clip_stop, _set_clip_stop, _del_clip_stop,
                         """Ending position of the Clip in the media file.""")
+    offset = property(_get_offset, _set_offset, _del_offset,
+                      """Offset amount for a Clip.  Needed if the first Episode video is not used in a multi-video Clip. """)
+    audio = property(_get_audio, _set_audio, _del_audio,
+                     """ Is Audio included in the first video in a multi-video clip? """)
     sort_order = property(_get_sort_order, _set_sort_order, _del_sort_order,
                         """Sort Order position within the parent Collection.""")
     keyword_list = property(_get_kwlist, _set_kwlist, _del_kwlist,

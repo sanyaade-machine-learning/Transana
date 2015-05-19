@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -25,6 +25,8 @@ if DEBUG:
 
 # Import wxPython
 import wx
+# Import the Transana Clip Object
+import Clip
 # Import the Transana Collection Object
 import Collection
 # import Transana's Dialogs
@@ -54,7 +56,7 @@ class PlayAllClips(wx.Dialog):
     a user interface dialog and determines what clips are played in what
     order."""
     
-    def __init__(self, collection=None, controlObject=None, searchColl=None, treeCtrl=None):
+    def __init__(self, collection=None, controlObject=None, searchColl=None, treeCtrl=None, singleObject=None):
         """Initialize an PlayAllClips object."""
         # The controlObject parameter, pointing to the Transana ControlObject, is required.
         # If this routine is requested from a Collection,
@@ -62,6 +64,9 @@ class PlayAllClips(wx.Dialog):
         # If this routine is requested from a Search Collection,
         #   the searchCollection Node should be passed in the searchColl parameter and
         #   the entire dbTree should be passed in using the treeCtrl parameter.
+        # If this routine is requested for a single object, as in Video Only Presentation Mode,
+        #   the singleObject should be the Episode or Clip object to be displayed.
+        #   (A collection CANNOT be passed in with a singleObject.)
 
         # Show Clips in Nested Collection.  (If we add a Filter Dialog, this will become optional, but
         # for now, it's just True.
@@ -69,6 +74,8 @@ class PlayAllClips(wx.Dialog):
         
         # Remember Control Object information sent in by the calling routine
         self.ControlObject = controlObject
+        # Remember the singleObject setting too
+        self.singleObject = singleObject
 
         # If a video is currently playing, it must be stopped!
         if self.ControlObject.IsPlaying() or self.ControlObject.IsPaused():
@@ -101,8 +108,14 @@ class PlayAllClips(wx.Dialog):
         elif searchColl != None:
             # Get the Collection Node's Data
             itemData = treeCtrl.GetPyData(searchColl)
-            # Load the Real Collection (not the search result collection) to get its data
-            self.collection = Collection.Collection(itemData.recNum)
+            # If we have a Search Collection, it has a recNum.  A Search Result node has recNum == 0.  See which we have.
+            if itemData.recNum != 0:
+                # Load the Real Collection (not the search result collection) to get its data
+                self.collection = Collection.Collection(itemData.recNum)
+            # If it's a search collection ...
+            else:
+                # ... we don't have a collection yet.
+                self.collection = None
             # Initialize the Clip List to an empty list
             self.clipList = []
             # Create an empty list for Nested Collections so we can recurse through them
@@ -147,6 +160,14 @@ class PlayAllClips(wx.Dialog):
                     # ... get the next Child Item and continue the loop
                     (item, cookie) = treeCtrl.GetNextChild(currentNode, cookie)
 
+        # If a Single Object (Episode or Clip) is passed in ...
+        elif singleObject != None:
+            # Initialize the Clip List to an empty list
+            self.clipList = []
+            # Create an empty list for Nested Collections
+            nestedCollections = []
+            # Remember the collection (which should be None) to avoid processing problems.
+            self.collection = collection
 
         # Register with the ControlObject.  (This allows coordination between the various components that make up Transana.)
         self.ControlObject.Register(PlayAllClips = self)
@@ -178,40 +199,63 @@ class PlayAllClips(wx.Dialog):
 
         # Add a label that says "Now Playing:"
         lblNowPlaying = wx.StaticText(self, -1, _("Now Playing:"))
-
-        # Add a label that identifies the Collection
-        if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_("Collection: %s"), 'utf8')
+        # If we have a defined collection (ie NOT a Search Result node) ...
+        if self.collection != None:
+            # Add a label that identifies the Collection
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Collection: %s"), 'utf8')
+            else:
+                prompt = _("Collection: %s")
+            self.lblCollection = wx.StaticText(self, -1, prompt % self.collection.GetNodeString())
+        # If we have a single object ...
+        elif self.singleObject != None:
+            # Determine the type of the passed-in object and set the prompt accordingly.
+            if type(self.singleObject) == Clip.Clip:
+                prompt = _("Clip: %s")
+            else:
+                prompt = _("Episode: %s")
+            # Convert the prompt to Unicode
+            if 'unicode' in wx.PlatformInfo:
+                prompt = unicode(prompt, 'utf8')
+            # Display the prompt
+            self.lblCollection = wx.StaticText(self, -1, prompt % self.singleObject.id)
+        # If we have a Search Result Node ...
         else:
-            prompt = _("Collection: %s")
-        self.lblCollection = wx.StaticText(self, -1, prompt % self.collection.GetNodeString())
+            # ... create a blank label, which will get filled in in just a moment with the first clip's Collection name
+            self.lblCollection = wx.StaticText(self, -1, "")
 
-        # Add a label that identifies the Clip
-        if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_("Clip: %s   (%s of %s)"), 'utf8')
+        # If we do NOT have a single object ...
+        if self.singleObject == None:
+            # Add a label that identifies the Clip
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Clip: %s   (%s of %s)"), 'utf8')
+            else:
+                prompt = _("Clip: %s   (%s of %s)")
+            self.lblClip = wx.StaticText(self, -1, prompt % (' ', 0, len(self.clipList)))
+
+            # Add a button for Previous
+            self.btnPrevious = wx.Button(self, ID_BTNPREVIOUS, _("Previous"))
+            self.btnPrevious.Bind(wx.EVT_BUTTON, self.OnChangeClip)
+        # If we DO have a single object ...
         else:
-            prompt = _("Clip: %s   (%s of %s)")
-        self.lblClip = wx.StaticText(self, -1, prompt % (' ', 0, len(self.clipList)))
-
-        # Add a button for Previous
-        self.btnPrevious = wx.Button(self, ID_BTNPREVIOUS, _("Previous"))
-        self.btnPrevious.Bind(wx.EVT_BUTTON, self.OnChangeClip)
+            # ... then the Clip Label should be blank.  (The other label handles single Episodes and Clips)
+            self.lblClip = wx.StaticText(self, -1, "")
 
         # Add a button for Pause/Play functioning
         self.btnPlayPause = wx.Button(self, ID_BTNPLAYPAUSE, _("Pause"))
-
         wx.EVT_BUTTON(self, ID_BTNPLAYPAUSE, self.OnPlayPause)
 
         # Add a button to Cancel the Playing of Clips
         self.btnCancel = wx.Button(self, ID_BTNCANCEL, _("Cancel"))
-
         wx.EVT_BUTTON(self, ID_BTNCANCEL, self.OnClose)
 
-        # Add a button for Next
-        self.btnNext = wx.Button(self, ID_BTNNEXT, _("Next"))
-        self.btnNext.Bind(wx.EVT_BUTTON, self.OnChangeClip)
+        # If we do NOT have a single object ...
+        if self.singleObject == None:
+            # Add a button for Next
+            self.btnNext = wx.Button(self, ID_BTNNEXT, _("Next"))
+            self.btnNext.Bind(wx.EVT_BUTTON, self.OnChangeClip)
 
         # Link to a method that handles window move attempts
         wx.EVT_MOVE(self, self.OnMove)
@@ -235,10 +279,12 @@ class PlayAllClips(wx.Dialog):
             box.Add((1, 5))
         else:
             box = wx.BoxSizer(wx.HORIZONTAL)
-            box.Add(self.btnPrevious, 0, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
+            if self.singleObject == None:
+                box.Add(self.btnPrevious, 0, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
             box.Add(self.btnPlayPause, 0, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
             box.Add(self.btnCancel, 0, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
-            box.Add(self.btnNext, 0, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
+            if self.singleObject == None:
+                box.Add(self.btnNext, 0, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 5)
             box.Add((10, 1), 0, wx.EXPAND)
             box.Add(lblNowPlaying, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL)
             box.Add((10,1), 1, wx.EXPAND)
@@ -250,26 +296,24 @@ class PlayAllClips(wx.Dialog):
         self.SetSizer(box)
         self.Fit()
 
-
         # Tell the Dialog to Lay out the widgets, and to adjust them automatically
         self.Layout()
         self.SetAutoLayout(True)
 
         # Now that the size is determined, let's reposition the dialog.
         if not self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
-            (left, top, width, height) = self.ControlObject.VideoWindow.frame.GetRect()        
+            (left, top, width, height) = self.ControlObject.VideoWindow.GetRect()        
         self.xPos = left
         self.yPos = top + height - self.GetSize()[1]
         self.SetPosition((self.xPos, self.yPos))
 
+        # Point to the first clip in the list as the clip that should be played
+        self.clipNowPlaying = 0
 
         # Add a Timer.  The timer checks to see if the clip that is playing has stopped, which
         # is the signal that it is time to load the next clip
         self.playAllClipsTimer = wx.Timer(self, ID_PLAYALLCLIPSTIMER)
         wx.EVT_TIMER(self, ID_PLAYALLCLIPSTIMER, self.OnTimer)
-
-        # Point to the first clip in the list as the clip that should be played
-        self.clipNowPlaying = 0
 
         # If there are clips to play, play them
         if len(self.clipList) > 0:
@@ -278,6 +322,15 @@ class PlayAllClips(wx.Dialog):
             # 1.5 second additional delay hopefully gives a clip enough time to load and play.
             # If clips are getting skipped, this increment may need to be increased.
             self.playAllClipsTimer.Start(TIMER_INTERVAL + EXTRA_LOAD_TIME)
+            # Show the Play All Clips Dialog
+            self.ShowModal()
+        # If we have a single object ...
+        elif singleObject != None:
+            # Initialize the flag that says a clip has started playing to FALSE or the first video will not play!
+            self.HasStartedPlaying = False
+            # Start the timer, which will detect when the episode / clip is done.  Since the video is already loaded,
+            # there's no need for additional time.
+            self.playAllClipsTimer.Start(TIMER_INTERVAL)
             # Show the Play All Clips Dialog
             self.ShowModal()
         else:
@@ -346,8 +399,6 @@ class PlayAllClips(wx.Dialog):
             if self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
                 # Let's wrap the Collection Name to fit inside the window.  (Needed with the GetNodeString() change.)
                 self.lblCollection.Wrap(self.GetSizeTuple()[0] - 20)
-            # now we need to resize the PlayAllClips window to adjust for the wrapped Collection name
-            self.Fit()
             # If we're in PRESENT_ALL presentation mode ...
             if self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
                 # Now we need to reposition the window because of the changed size
@@ -401,6 +452,9 @@ class PlayAllClips(wx.Dialog):
                 dlg.Destroy()
                 # Get out of Play All Clips.
                 self.OnClose(event)
+            # If the video volume doesn't exist on a Mac, or the video cannot be found ...
+            except wx._core.PyAssertionError:
+                pass
 
         else:
 
@@ -411,6 +465,15 @@ class PlayAllClips(wx.Dialog):
 
     def PlayAfterLoading(self):
         """ After a Clip is done loading, it needs to be told to Play. """
+        # I can't figure out why Vista with WMV files has lost the Clip Start position by this point during Play All Clips.
+        # The correct start position gets set, but then something clears it.
+        # Fortunately, this corrects it.
+
+        # If the current video position is earlier than the clip start ...
+        if self.ControlObject.VideoWindow.GetCurrentVideoPosition() < self.ControlObject.currentObj.clip_start:
+            # ... then set the video start to the clip start.
+            self.ControlObject.SetVideoStartPoint(self.ControlObject.currentObj.clip_start)
+        
         # Play the next clip
         self.ControlObject.Play()
 

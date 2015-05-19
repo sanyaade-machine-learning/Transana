@@ -1,4 +1,4 @@
-# Copyright (C) 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2007-2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -651,7 +651,7 @@ class NotesBrowser(wx.Dialog):
                     # We can immediately forget that we have an active note, since the note doesn't exist!
                     self.activeNote = None
                     # Display an error message to the user
-                    errordlg = Dialogs.ErrorDialog(None, err.args)
+                    errordlg = Dialogs.ErrorDialog(None, err.explanation)
                     errordlg.ShowModal()
                     errordlg.Destroy()
 

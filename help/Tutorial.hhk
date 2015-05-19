@@ -6,147 +6,172 @@
            <param name="Local" value="Tutorial.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="The Sample Video">
+           <param name="Name" value="The Sample Video - Tutorial">
            <param name="ID" value=20>
            <param name="Local" value="SampleVideo.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Starting Transana">
+           <param name="Name" value="Starting Transana - Tutorial">
            <param name="ID" value=30>
            <param name="Local" value="StartingTransana.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Transana Main Screen">
+           <param name="Name" value="Transana Main Screen - Tutorial">
            <param name="ID" value=35>
            <param name="Local" value="TransanaWindow.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Transana's Organizational Structure">
+           <param name="Name" value="First Use Configuration - Tutorial">
+           <param name="ID" value=37>
+           <param name="Local" value="FirstUse.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Transana's Organizational Structure - Tutorial">
            <param name="ID" value=40>
            <param name="Local" value="OrganizationalStructure.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Creating Keyword Groups and Keywords">
+           <param name="Name" value="Creating Keyword Groups and Keywords - Tutorial">
            <param name="ID" value=50>
            <param name="Local" value="CreatingKeywords.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Create a Series">
+           <param name="Name" value="Creating a Series - Tutorial">
            <param name="ID" value=60>
            <param name="Local" value="CreateSeries.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Add an Episode">
+           <param name="Name" value="Add an Episode - Tutorial">
            <param name="ID" value=70>
            <param name="Local" value="CreateEpisode.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Adding a Transcript">
+           <param name="Name" value="Adding a Transcript - Tutorial">
            <param name="ID" value=80>
            <param name="Local" value="CreateTranscript.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="About Waveforms">
+           <param name="Name" value="Waveforms and More Notes - Tutorial">
            <param name="ID" value=90>
            <param name="Local" value="WaveForms.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Transcribing a Video">
+           <param name="Name" value="Transcribing a Media File - Tutorial">
            <param name="ID" value=100>
            <param name="Local" value="Transcribing.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Adding Time Codes">
+           <param name="Name" value="Adding Time Codes - Tutorial">
            <param name="ID" value=110>
-           <param name="Local" value="AddingTimeCodes.htm">
+           <param name="Local" value="AddingTimeCodes.htm - Tutorial">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Reloading your Video">
+           <param name="Name" value="Precise Control of Media File Position - Tutorial">
+           <param name="ID" value=115>
+           <param name="Local" value="AdvancedTimeCodes.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Overlapping Speech - Tutorial">
+           <param name="ID" value=115>
+           <param name="Local" value="AdvancedTimeCodes.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Reloading your Media File - Tutorial">
            <param name="ID" value=120>
            <param name="Local" value="ReloadingVideo.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Playing a Transcribed Video">
+           <param name="Name" value="Playing a Transcribed Media File - Tutorial">
            <param name="ID" value=130>
            <param name="Local" value="PlayingVideo.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Analyzing a Video - An Overview">
+           <param name="Name" value="Analyzing a Video - An Overview - Tutorial">
            <param name="ID" value=140>
            <param name="Local" value="AnalysisOverview.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Creating a Collection">
+           <param name="Name" value="Creating a Collection - Tutorial">
            <param name="ID" value=150>
            <param name="Local" value="CreateCollection.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Creating Clips">
+           <param name="Name" value="Creating Standard Clips - Tutorial">
            <param name="ID" value=160>
            <param name="Local" value="CreateClips.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Viewing a Clip">
+           <param name="Name" value="Viewing a Clip - Tutorial">
            <param name="ID" value=170>
            <param name="Local" value="ViewClip.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Adding a Keyword to an Existing Clip">
+           <param name="Name" value="Creating Another Clip - Tutorial">
+           <param name="ID" value=175>
+           <param name="Local" value="CreateAnotherClip.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Adding a Keyword to an Existing Clip - Tutorial">
            <param name="ID" value=180>
            <param name="Local" value="AddKeywordtoClip.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Create Another Clip">
-           <param name="ID" value=185>
-           <param name="Local" value="CreateAnotherClip.htm">
-       </object>
-  <li> <object type="text/sitemap">
-           <param name="Name" value="Create More Clips">
+           <param name="Name" value="Creating More Clips - Tutorial">
            <param name="ID" value=190>
            <param name="Local" value="CreateMoreClips.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Quick Clips">
+           <param name="Name" value="Quick Clips - Tutorial">
            <param name="ID" value=195>
            <param name="Local" value="QuickClips.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Working with Collections">
+           <param name="Name" value="Working with Collections - Tutorial">
            <param name="ID" value=200>
            <param name="Local" value="WorkWithCollections.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Transana's Reports">
+           <param name="Name" value="Alternate Visualizations - Tutorial">
+           <param name="ID" value=202>
+           <param name="Local" value="AlternateVisualizations.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Transana's Reports - Tutorial">
            <param name="ID" value=205>
            <param name="Local" value="Reports.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Searching for Keywords">
+           <param name="Name" value="Searching for Keywords - Tutorial">
            <param name="ID" value=210>
            <param name="Local" value="SearchforKeywords.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Converting Search Results to Collections">
+           <param name="Name" value="Converting Search Results to Collections - Tutorial">
            <param name="ID" value=220>
            <param name="Local" value="ConverttoCollection.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Creating New Collections from Existing Clips">
+           <param name="Name" value="Working with Notes - Tutorial">
            <param name="ID" value=230>
-           <param name="Local" value="AggregateCollections.htm">
+           <param name="Local" value="WorkingWithNotes.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Making a Presentation">
+           <param name="Name" value="Collaboration - Tutorial">
+           <param name="ID" value=235>
+           <param name="Local" value="Collaboration.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Making a Presentation - Tutorial">
            <param name="ID" value=240>
            <param name="Local" value="Presentation.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Using Transana with PowerPoint">
+           <param name="Name" value="Using Transana with PowerPoint - Tutorial">
            <param name="ID" value=245>
            <param name="Local" value="PowerPoint.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Conclusion">
+           <param name="Name" value="Conclusion - Tutorial">
            <param name="ID" value=250>
            <param name="Local" value="Conclusion.htm">
        </object>

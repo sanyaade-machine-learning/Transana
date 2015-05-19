@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -628,6 +628,9 @@ class ReportGenerator(wx.Object):
                             reportText.SetBold(False)
                             # Add the data to the report, the file name in this case
                             reportText.InsertStyledText(_('  %s\n') % clipObj.media_filename)
+                            # Add Additional Media File info
+                            for mediaFile in clipObj.additional_media_files:
+                                reportText.InsertStyledText(_('       %s\n') % mediaFile['filename'])
                             
                         # If we're supposed to show the Clip Time data ...
                         if self.showTime:
@@ -721,6 +724,9 @@ class ReportGenerator(wx.Object):
                             reportText.SetBold(False)
                             # Add the data to the report, the file name in this case
                             reportText.InsertStyledText(_('  %s\n') % episodeObj.media_filename)
+                            # Add Additional Media File info
+                            for mediaFile in episodeObj.additional_media_files:
+                                reportText.InsertStyledText(_('       %s\n') % mediaFile['filename'])
                                 
                     # if we are supposed to show Keywords ...
                     if self.showKeywords:
@@ -844,6 +850,9 @@ class ReportGenerator(wx.Object):
                         reportText.SetBold(False)
                         # Add the data to the report, the Clip media file name in this case
                         reportText.InsertStyledText('  %s\n' % clipObj.media_filename)
+                        # Add Additional Media File info
+                        for mediaFile in clipObj.additional_media_files:
+                            reportText.InsertStyledText(_('       %s\n') % mediaFile['filename'])
 
                     # If we're supposed to show Clip Time data ...
                     if self.showTime:

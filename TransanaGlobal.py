@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -77,23 +77,9 @@ else:
 # We need to know the MySQL version to know if UTF-8 is supported.  Initialize that here.
 DBVersion = 0
 
-# Create a Configuration Data Object.  This automatically load previously saved configuration information
-configData = ConfigData.ConfigData()
-
-# Now that we've loaded the Configuration Data, we can see if we need to alter the default encoding
-# If we're on Windows, single-user, using Russian, use KOI8r encoding instead of Latin-1,
-# Chinese uses big5, Japanese uses cp932, and Korean uses cp949
-if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-    if (configData.language == 'ru'):
-        encoding = 'koi8_r'
-    elif (configData.language == 'zh'):
-        encoding = TransanaConstants.chineseEncoding
-    elif (configData.language == 'el'):
-        encoding = 'iso8859_7'
-    elif (configData.language == 'ja'):
-        encoding = 'cp932'
-    elif (configData.language == 'ko'):
-        encoding = 'cp949'
+# We need to know if we are doing a global resize of windows so we can know whether to fire
+# OnSize events or not.  (This helps avoid recursive resize calls.)
+resizingAll = False
 
 # Create a variable for the global User Name information
 userName = ''
@@ -196,8 +182,6 @@ def getColorDefs(filename):
     # Return the list of colors we've loaded
     return colorList
 
-# Get our initial GRAPHICS color definitions
-transana_graphicsColorList = getColorDefs(configData.colorConfigFilename)
 # We want enough colors for TEXT, but not too many.  This list seems about right to me.  I doubt my color names are standard.
 # But then, I'm often perplexed by the colors that are included and excluded by most programs.  (Excel for example.)
 # Each entry is made up of a color name and a tuple of the RGB values for the color.
@@ -258,9 +242,6 @@ def SetColorVariables():
             if x + y < len(transana_graphicsColorList) - 1:
                 keywordMapColourSet.append(transana_graphicsColorList[x + y][0])
     return (transana_colorNameList, transana_colorLookup, keywordMapColourSet)
-
-# Get key color manipulation data structures from our ColorVariables function
-(transana_colorNameList, transana_colorLookup, keywordMapColourSet) = SetColorVariables()
 
 # The following exists only to ensure that the color names are available for translation.
 # (I had to take the translation code out of the color definition data structure, as color names were only showing up in

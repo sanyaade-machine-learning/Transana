@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -24,7 +24,6 @@
 #        obviously heavily based on DataObject.   DKW
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
-# Based on code/ideas/logic from UKeywordObject Delphi unit by DKW
 
 import wx
 from TransanaExceptions import *

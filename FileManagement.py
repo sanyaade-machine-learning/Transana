@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -21,16 +21,11 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare <rasambhare@wisc.edu>'
 
-if __name__ == '__main__':
-    import wxversion
-    wxversion.select('2.6.1.0-unicode')
-    
 import wx  # Import wxPython
 
 if __name__ == '__main__':
     __builtins__._ = wx.GetTranslation
-    if ('unicode' in wx.PlatformInfo) and (wx.VERSION_STRING >= '2.6'):
-        wx.SetDefaultPyEncoding('utf_8')
+    wx.SetDefaultPyEncoding('utf_8')
 
 import os                # used to determine what files are on the local computer
 import sys               # Python sys module, used in exception reporting
@@ -132,17 +127,17 @@ class FMFileDropTarget(wx.FileDropTarget):
           if targetDir != '':
              self.FileManagementWindow.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
              # for each file in the list...
-             for file in filenames:
+             for fileNm in filenames:
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_('Copying %s to %s'), 'utf8')
                 else:
                     prompt = _('Copying %s to %s')
-                self.FileManagementWindow.SetStatusText(prompt % (file, targetDir))
+                self.FileManagementWindow.SetStatusText(prompt % (fileNm, targetDir))
                 # extract the file name...
-                (dir, fn) = os.path.split(file)
+                (dir, fn) = os.path.split(fileNm)
                 # copy the file to the destination path
-                shutil.copyfile(file, os.path.join(targetDir, fn))
+                shutil.copyfile(fileNm, os.path.join(targetDir, fn))
                 # Update the File Window where the files were dropped.
                 self.FileManagementWindow.RefreshFileList(targetLbl.GetLabel(), targetDir, target, filter)
                 # Let's update the target control after every file so that the new files show up in the list ASAP.
@@ -165,7 +160,7 @@ class FMFileDropTarget(wx.FileDropTarget):
          # For each file in the fileList ...
          for fileName in filenames:
             # Divide the fileName into directory and filename portions
-            (sourceDir, file) = os.path.split(fileName)
+            (sourceDir, fileNm) = os.path.split(fileName)
             # Get the File Size
             fileSize = os.path.getsize(fileName)
             if 'unicode' in wx.PlatformInfo:
@@ -173,10 +168,10 @@ class FMFileDropTarget(wx.FileDropTarget):
                 prompt = unicode(_('Copying %s to %s'), 'utf8')
             else:
                 prompt = _('Copying %s to %s')
-            self.FileManagementWindow.SetStatusText(prompt % (file, targetDir))
+            self.FileManagementWindow.SetStatusText(prompt % (fileNm, targetDir))
 
             # The SRBFileTransfer class handles file transfers and provides Progress Feedback
-            dlg = SRBFileTransfer.SRBFileTransfer(self.FileManagementWindow, _("SRB File Transfer"), file, fileSize, sourceDir, self.FileManagementWindow.srbConnectionID, targetDir, SRBFileTransfer.srb_UPLOAD, self.FileManagementWindow.srbBuffer)
+            dlg = SRBFileTransfer.SRBFileTransfer(self.FileManagementWindow, _("SRB File Transfer"), fileNm, fileSize, sourceDir, self.FileManagementWindow.srbConnectionID, targetDir, SRBFileTransfer.srb_UPLOAD, self.FileManagementWindow.srbBuffer)
             success = dlg.TransferSuccessful()
             dlg.Destroy()
 
@@ -375,7 +370,7 @@ class FileManagement(wx.Dialog):
       lay.left.SameAs(self, wx.Left, 10)
       lay.right.LeftOf(self.btnCopy, 10)
       lay.bottom.SameAs(self, wx.Bottom, 60)
-      self.sourceFile = wx.ListCtrl(self, ID_SOURCEFILE, style=wx.LC_LIST | wx.LC_SORT_ASCENDING | wx.LC_NO_HEADER)
+      self.sourceFile = wx.ListCtrl(self, ID_SOURCEFILE, style=wx.LC_LIST | wx.LC_NO_HEADER)    # wx.LC_SORT_ASCENDING | 
       self.sourceFile.SetConstraints(lay)
 
       # Make the Source File List a FileDropTarget
@@ -432,7 +427,7 @@ class FileManagement(wx.Dialog):
       lay.left.SameAs(self.lblDest, 0)
       lay.right.SameAs(self, wx.Right, 10)
       lay.bottom.SameAs(self, wx.Bottom, 60)
-      self.destFile = wx.ListCtrl(self, ID_DESTFILE, style=wx.LC_LIST | wx.LC_SORT_ASCENDING | wx.LC_NO_HEADER) 
+      self.destFile = wx.ListCtrl(self, ID_DESTFILE, style=wx.LC_LIST | wx.LC_NO_HEADER)   # wx.LC_SORT_ASCENDING | 
       self.destFile.SetConstraints(lay)
 
       # Make the Destination File List a FileDropTarget
@@ -572,8 +567,6 @@ class FileManagement(wx.Dialog):
       
       # Signal that the Connection has been broken by resetting the ConnectionID value to None
       self.srbConnectionID = None
-         
-      # print "Disconnect\n\n"
 
    def CloseWindow(self, event):
       """ Clean up upon closing the File Management Window """
@@ -757,8 +750,8 @@ class FileManagement(wx.Dialog):
          # Create a File Data Object, which holds the File Names that are to be dragged
          tdo = wx.FileDataObject()
          # Add File names to the File Data object
-         for file in fileList:
-            tdo.AddFile(file)
+         for fileNm in fileList:
+            tdo.AddFile(fileNm)
          # Create a Drop Source Object, which enables the Drag operation
          tds = wx.DropSource(sourceFile)
          # Associate the Data to be dragged with the Drop Source Object
@@ -851,9 +844,9 @@ class FileManagement(wx.Dialog):
          (targetLbl == self.LOCAL_LABEL):
 
          # For each file in the fileList ...
-         for file in fileList:
+         for fileNm in fileList:
             # Build the full File Name by joining the source path with the file name from the list
-            fileName = os.path.join(sourceDir, file)
+            fileName = os.path.join(sourceDir, fileNm)
             # If we want to MOVE the file ...
             if moveFlag:
                if 'unicode' in wx.PlatformInfo:
@@ -862,8 +855,17 @@ class FileManagement(wx.Dialog):
                else:
                    prompt = _('Moving %s to %s')
                self.SetStatusText(prompt % (fileName, targetDir))
-               # os.Rename accomplishes a fast Move (at least on Windows)  TODO:  Test this on Mac!
-               os.rename(fileName, os.path.join(targetDir, file))
+               try:
+                   # os.Rename accomplishes a fast Move
+                   os.rename(fileName, os.path.join(targetDir, fileNm))
+               except:
+                   errMsg = _('File "%s" could not be moved.')
+                   if 'unicode' in wx.PlatformInfo:
+                       errMsg = unicode(errMsg, 'utf8')
+                   dlg = Dialogs.ErrorDialog(self, errMsg % fileNm)
+                   dlg.ShowModal()
+                   dlg.Destroy()
+                   
                self.SetStatusText(_('Move complete.'))
             # ... otherwise we want to copy the file
             else:
@@ -874,7 +876,7 @@ class FileManagement(wx.Dialog):
                    prompt = _('Copying %s to %s')
                self.SetStatusText(prompt % (fileName, targetDir))
                # shutil is the most efficient way I have found to copy a file on the local file system
-               shutil.copyfile(fileName, os.path.join(targetDir, file))
+               shutil.copyfile(fileName, os.path.join(targetDir, fileNm))
                self.SetStatusText(_('Copy complete.'))
             # Let's update the target control after every file so that the new files show up in the list ASAP.
             self.RefreshFileList(targetLbl, targetDir, targetFile, targetFilter)
@@ -886,9 +888,9 @@ class FileManagement(wx.Dialog):
            (targetLbl == self.REMOTE_LABEL):
 
          # For each file in the fileList ...
-         for file in fileList:
+         for fileNm in fileList:
             # Build the full File Name by joining the source path with the file name from the list
-            fileName = os.path.join(sourceDir, file)
+            fileName = os.path.join(sourceDir, fileNm)
             # Get the File Size
             fileSize = os.path.getsize(fileName)
             # If we want to MOVE the file ...
@@ -909,13 +911,13 @@ class FileManagement(wx.Dialog):
                self.SetStatusText(prompt % (fileName, targetDir))
 
             # The SRBFileTransfer class handles file transfers and provides Progress Feedback
-            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), file, fileSize, sourceDir, self.srbConnectionID, targetDir, SRBFileTransfer.srb_UPLOAD, self.srbBuffer)
+            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), fileNm, fileSize, sourceDir, self.srbConnectionID, targetDir, SRBFileTransfer.srb_UPLOAD, self.srbBuffer)
             success = dlg.TransferSuccessful()
             dlg.Destroy()
 
             if moveFlag:
                 if success:
-                    self.DeleteFile(sourceLbl, sourceDir, file)
+                    self.DeleteFile(sourceLbl, sourceDir, fileNm)
                     self.SetStatusText(_('Move complete.'))
                 else:
                     self.SetStatusText(_('Move cancelled.'))
@@ -934,9 +936,9 @@ class FileManagement(wx.Dialog):
            (targetLbl == self.LOCAL_LABEL):
 
          # For each file in the fileList ...
-         for file in fileList:
+         for fileNm in fileList:
             # Build the full File Name by joining the source path with the file name from the list
-            fileName = os.path.join(sourceDir, file)
+            fileName = os.path.join(sourceDir, fileNm)
             # If we want to MOVE the file ...
             if moveFlag:
                if 'unicode' in wx.PlatformInfo:
@@ -956,18 +958,17 @@ class FileManagement(wx.Dialog):
 
             # Find the File Size
             buf = ' ' * 25
-            srb.srb_get_dataset_system_metadata(2, sourceFile.FindItem(-1, file), buf, 25)
-      
+            srb.srb_get_dataset_system_metadata(2, sourceFile.FindItem(-1, fileNm), buf, 25)
             # Strip whitespace and null character (c string terminator) from buf
             buf = string.strip(buf)[:-1]
             # The SRBFileTransfer class handles file transfers and provides Progress Feedback
-            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), file, int(buf), targetDir, self.srbConnectionID, sourceDir, SRBFileTransfer.srb_DOWNLOAD, self.srbBuffer)
+            dlg = SRBFileTransfer.SRBFileTransfer(self, _("SRB File Transfer"), fileNm, int(buf), targetDir, self.srbConnectionID, sourceDir, SRBFileTransfer.srb_DOWNLOAD, self.srbBuffer)
             success = dlg.TransferSuccessful()
             dlg.Destroy()
 
             if moveFlag:
                 if success:
-                    self.DeleteFile(sourceLbl, sourceDir, file)
+                    self.DeleteFile(sourceLbl, sourceDir, fileNm)
                     self.SetStatusText(_('Move complete.'))
                 else:
                     self.SetStatusText(_('Move cancelled.'))
@@ -986,9 +987,9 @@ class FileManagement(wx.Dialog):
            (targetLbl == self.REMOTE_LABEL):
 
          # For each file in the fileList ...
-         for file in fileList:
+         for fileNm in fileList:
             # Build the full File Name by joining the source path with the file name from the list
-            fileName = sourceDir + '/' + file
+            fileName = sourceDir + '/' + fileNm
             # If we want to MOVE the file ...
             if moveFlag:
                if 'unicode' in wx.PlatformInfo:
@@ -1007,11 +1008,11 @@ class FileManagement(wx.Dialog):
                self.SetStatusText(prompt % (fileName, targetDir))
 
             if 'unicode' in wx.PlatformInfo:
-                tmpFile = file.encode(TransanaGlobal.encoding)
+                tmpFile = fileNm.encode(TransanaGlobal.encoding)
                 tmpSourceDir = sourceDir.encode(TransanaGlobal.encoding)
                 tmpTargetDir = targetDir.encode(TransanaGlobal.encoding)
             else:
-                tmpFile = file
+                tmpFile = fileNm
                 tmpSourceDir = sourceDir
                 tmpTargetDir = targetDir
 
@@ -1031,7 +1032,7 @@ class FileManagement(wx.Dialog):
                self.srbErrorMessage(Result)
                
             if moveFlag:
-               self.DeleteFile(sourceLbl, sourceDir, file)
+               self.DeleteFile(sourceLbl, sourceDir, fileNm)
                self.SetStatusText(_('Move complete.'))
             else:
                self.SetStatusText(_('Copy complete.'))
@@ -1266,11 +1267,11 @@ class FileManagement(wx.Dialog):
                break
            # Macs requires an odd conversion.
            if 'wxMac' in wx.PlatformInfo:
-               file = Misc.convertMacFilename(control.GetItemText(item))
+               fileNm = Misc.convertMacFilename(control.GetItemText(item))
            else:
-               file = control.GetItemText(item)
+               fileNm = control.GetItemText(item)
            # Add the item to the File List.
-           fileList.append(file)
+           fileList.append(fileNm)
            
        # Update all listed Files in the Database with the new File Path
        if not DBInterface.UpdateDBFilenames(self, filePath, fileList):
@@ -1649,10 +1650,10 @@ class FileManagement(wx.Dialog):
             #        have the Help file read it that way.  If the user leave Help open, it won't get
             #        updated on subsequent calls, but for now that's okay by me.
             
-            file = open(os.getenv("HOME") + '/TransanaHelpContext.txt', 'w')
-            pickle.dump(helpContext, file)
-            file.flush()
-            file.close()
+            fileObj = open(os.getenv("HOME") + '/TransanaHelpContext.txt', 'w')
+            pickle.dump(helpContext, fileObj)
+            fileObj.flush()
+            fileObj.close()
 
             # On OS X 10.4, when Transana is packed with py2app, the Help call stopped working.
             # It seems we have to remove certain environment variables to get it to work properly!
@@ -2055,6 +2056,7 @@ class FileManagement(wx.Dialog):
                   tempStr = string.strip(buf)
                   # Add the result to the File List
                   filelist.append(tempStr)
+
                # Make another call to the SRB to see if there are more records to read into the SRB's Data Buffer
                srbCatalogCount = srb.srb_get_more_subcolls(self.srbConnectionID.value)
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -41,10 +41,10 @@ class DataWindow(wx.Dialog):
 
         # add a Notebook Control to the Dialog Box
         lay = wx.LayoutConstraints()
-        lay.top.SameAs(self, wx.Top, 5)
-        lay.left.SameAs(self, wx.Left, 5)
-        lay.bottom.SameAs(self, wx.Bottom, 5)
-        lay.right.SameAs(self, wx.Right, 5)
+        lay.top.SameAs(self, wx.Top, 0)
+        lay.left.SameAs(self, wx.Left, 0)
+        lay.bottom.SameAs(self, wx.Bottom, 0)
+        lay.right.SameAs(self, wx.Right, 0)
         # The wxCLIP_CHILDREN style allegedly reduces flicker.
         self.nb = wx.Notebook(self, -1, style=wx.CLIP_CHILDREN)
         # In order to 
@@ -161,8 +161,13 @@ class DataWindow(wx.Dialog):
         self.nb.DeletePage(1)
 
     def OnSize(self, event):
-        (left, top) = self.GetPositionTuple()
-        self.ControlObject.UpdateWindowPositions('Data', left - 4, YLower = top - 4)
+        """ Data Window Resize Event """
+        # If we're not resizing ALL the Transana Windows ...  (avoid recursive calls!)
+        if not TransanaGlobal.resizingAll:
+            # Get the size of the Data Window
+            (left, top) = self.GetPositionTuple()
+            # Ask the Control Object to resize all other windows
+            self.ControlObject.UpdateWindowPositions('Data', left - 4, YLower = top - 4)
         # Call to Layout() is required so that the Notebook Control resizes properly
         self.Layout()
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2002 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2002 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -49,13 +49,7 @@ def ReportRecordLockedException(rtype, id, e):<BR>
 
 __author__ = 'Nathaniel Case <nacase@wisc.edu>, David K. Woods <dwoods@wcer.wisc.edu>'
 
-# Import Python's gettext module
-#import gettext
-# Define the gettext function.  I'm not sure why this module requires it when
-# others don't, but it does.  DKW
-#_ = gettext.gettext
 import wx
-#_ = wx.GetTranslation
 
 
 import exceptions
@@ -67,14 +61,14 @@ class RecordLockedError(exceptions.Exception):
         prompt = _("Database operation failed due to record lock by %s")
         if ('unicode' in wx.PlatformInfo) and isinstance(prompt, str):
             prompt = unicode(prompt, 'utf8')
-        self.args = prompt % user
+        self.explanation = prompt % user
 
 class RecordNotFoundError(exceptions.Exception):
     """Raised when the specified record was not found in the database."""
     def __init__(self, record, rowcount):
         self.record = record    # name, number, etc.
         self.rowcount = rowcount
-        self.args = _("Record not found in database.")
+        self.explanation = _("Record not found in database.")
         
 class SaveError(exceptions.Exception):
     """Raised when a record save attempt fails."""
@@ -86,7 +80,7 @@ class SaveError(exceptions.Exception):
             prompt = unicode(_("Unable to save.  %s"), 'utf8')
         else:
             prompt = _("Unable to save.  %s")
-        self.args = prompt % reason
+        self.explanation = prompt % reason
         self.reason = reason
 
 class DeleteError(exceptions.Exception):
@@ -96,7 +90,7 @@ class DeleteError(exceptions.Exception):
         prompt = _("Unable to delete.  %s")
         if 'unicode' in wx.PlatformInfo:
             prompt = unicode(prompt, 'utf8')
-        self.args = prompt % reason
+        self.explanation = prompt % reason
 
 class InvalidLockError(SaveError):
     """Raised when a record lock that is no longer valid halts the save."""
@@ -106,22 +100,22 @@ class InvalidLockError(SaveError):
 class NotImplementedError(exceptions.Exception):
     """Raised when a feature is not yet implemented."""
     def __init__(self):
-        self.args = _("This feature is not yet implemented.")
+        self.explanation = _("This feature is not yet implemented.")
 
 class ImageLoadError(exceptions.Exception):
     """Raised when a image file was not successfully loaded."""
-    def __init__(self, args=_("Unable to load image file.")):
-        self.args = args
+    def __init__(self, explanation=_("Unable to load image file.")):
+        self.explanation = explanation
 
 class ProgrammingError(exceptions.Exception):
     """Raised when program reaches invalid state due to programming error."""
-    def __init__(self, args=_("Programming error.")):
-        self.args = args
+    def __init__(self, explanation=_("Programming error.")):
+        self.explanation = explanation
 
 class GeneralError(exceptions.Exception):
     """General error message."""
-    def __init__(self, args=_("General error")):
-        self.args = args
+    def __init__(self, explanation=_("General error")):
+        self.explanation = explanation
 
 def ReportRecordLockedException(rtype, idVal, e):
     """ Report a RecordLocked exception """

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -181,7 +181,7 @@ class RecordLock(wx.Dialog):
         # Start by clearing the list of users with locks that can be cleared.
         self.usersWithLocksThatCanBeCleared.Clear()
         # Determine if the user currently has a Transcript in Edit Mode.
-        inReadOnlyMode = TransanaGlobal.menuWindow.ControlObject.TranscriptWindow.dlg.editor.get_read_only()
+        inReadOnlyMode = TransanaGlobal.menuWindow.ControlObject.TranscriptWindow[TransanaGlobal.menuWindow.ControlObject.activeTranscript].dlg.editor.get_read_only()
         # If the current user has records locked and if there is only one instance of the current user 
         # in the UserName list, then allow the user to unlock his/her own records.  If there are multiple
         # instances of the current user's account in use, we better not clear ANY locks for this user.

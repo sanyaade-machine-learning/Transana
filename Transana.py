@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -20,18 +20,6 @@ definition."""
 __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 
 import sys                          # import Python's sys module
-# You can't use wxversion if you've used py2exe.  Test for that first!Also, there are problems with this
-# on the Mac when we build an app bundle.
-if (__name__ == '__main__') and (sys.platform == 'win32') and (not hasattr(sys, 'frozen')):
-    # The first thing we need to do is confirm the proper wxPython version.
-    import wxversion
-
-    # At the moment, different platforms require different wxPythons!
-    if sys.platform == 'win32':
-        wxversion.select(["2.7.2.0-unicode", "2.8.1.1-unicode"])  # Enable this line for UNICODE wxPython
-    else:
-        wxversion.select(["2.6.3-unicode", "2.8.1.1-unicode"])  # Enable this line for UNICODE wxPython
-
 import wx                           # import wxPython's wxWindows implementation
 import os
 import gettext                      # localization module
@@ -48,6 +36,8 @@ if "__WXMAC__" in wx.PlatformInfo:
 
 import DBInterface                  # import the Database Interface module
 import time                         # import the time module (Python)
+# import Transana's ConfigData module
+import ConfigData
 
 DEBUG = False
 if DEBUG:
@@ -66,8 +56,33 @@ class Transana(wx.App):
     logic that instantiates all other objects."""
     
     def OnInit(self):
-        # Use UTF-8 Encoding throughout Transana to allow maximum internationalization
+        """ Initialize the application """
+        # In wxPython, you used to be able to initialize the ConfigData object in the TransanaGlobal module, even though the
+        # wx.App() hadn't been initialized yet.  Moving from wxPython 2.8.1 to wxPython 2.8.9, this stopped being true
+        # at least on the Mac.  Therefore, we moved creation of the ConfigData object to here in the code.
+        # However, there are MANY references to ConfigData being in the TransanaGlobal module, so that's where we'll keep it.
+        TransanaGlobal.configData = ConfigData.ConfigData()
+        # Now that we've loaded the Configuration Data, we can see if we need to alter the default encoding
+        # If we're on Windows, single-user, using Russian, use KOI8r encoding instead of Latin-1,
+        # Chinese uses big5, Japanese uses cp932, and Korean uses cp949
+        if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+            if (TransanaGlobal.configData.language == 'ru'):
+                TransanaGlobal.encoding = 'koi8_r'
+            elif (TransanaGlobal.configData.language == 'zh'):
+                TransanaGlobal.encoding = TransanaConstants.chineseEncoding
+            elif (TransanaGlobal.configData.language == 'el'):
+                TransanaGlobal.encoding = 'iso8859_7'
+            elif (TransanaGlobal.configData.language == 'ja'):
+                TransanaGlobal.encoding = 'cp932'
+            elif (TransanaGlobal.configData.language == 'ko'):
+                TransanaGlobal.encoding = 'cp949'
 
+        # Create the global transana graphics colors, once the ConfigData object exists.
+        TransanaGlobal.transana_graphicsColorList = TransanaGlobal.getColorDefs(TransanaGlobal.configData.colorConfigFilename)
+        # Set essential global color manipulation data structures once the ConfigData object exists.
+        (TransanaGlobal.transana_colorNameList, TransanaGlobal.transana_colorLookup, TransanaGlobal.keywordMapColourSet) = TransanaGlobal.SetColorVariables()
+        
+        # Use UTF-8 Encoding throughout Transana to allow maximum internationalization
         if ('unicode' in wx.PlatformInfo) and (wx.VERSION_STRING >= '2.6'):
             wx.SetDefaultPyEncoding('utf_8')
 
@@ -183,6 +198,8 @@ class Transana(wx.App):
             msg = _('Transana is unable to access any Database at "%s".\nPlease check to see if this path is available.')
             if not TransanaConstants.labVersion:
                 msg += '\n' + _('Would you like to restore the default Database path?')
+            if ('unicode' in wx.PlatformInfo) and isinstance(msg, str):
+                msg = unicode(msg, 'utf8')
             msg = msg % TransanaGlobal.configData.databaseDir
             if TransanaConstants.labVersion:
                 dlg = Dialogs.ErrorDialog(None, msg)

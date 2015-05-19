@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -91,7 +91,7 @@ if 'unicode' in wx.PlatformInfo:
 else:
     RUSSIAN_LABEL = 'Russian'
 SWEDISH_LABEL = 'Svenska'
-CHINESE_LABEL = 'English prompts, Chinese data'
+CHINESE_LABEL = 'Chinese - Simplified'
 EASTEUROPE_LABEL = _("English prompts, Eastern European data (ISO-8859-2 encoding)")
 JAPANESE_LABEL = 'English prompts, Japanese data'
 KOREAN_LABEL = 'English prompts, Korean data'
@@ -112,8 +112,8 @@ class MenuWindow(wx.Frame):
             screenDims = wx.ClientDisplayRect()
             self.left = screenDims[0]
             self.top = screenDims[1]
-            self.width = screenDims[2] - 2
-            self.height = screenDims[3] - 2
+            self.width = screenDims[2]
+            self.height = screenDims[3]
             winstyle = wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION      # | wx.MAXIMIZE
             
         # on Mac OS-X ...
@@ -132,8 +132,8 @@ class MenuWindow(wx.Frame):
             screenDims = wx.ClientDisplayRect()
             self.left = screenDims[0]
             self.top = screenDims[1]
-            self.width = screenDims[2] - 2
-            self.height = screenDims[3] - 2
+            self.width = screenDims[2]
+            self.height = screenDims[3]
             winstyle = wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION      # | wx.MAXIMIZE
 
         # Now create the Frame for the Menu Bar
@@ -142,6 +142,13 @@ class MenuWindow(wx.Frame):
 
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
+
+        # Initialize Window Layout variables (saved position and size)
+        self.menuWindowLayout = None
+        self.visualizationWindowLayout = None
+        self.videoWindowLayout = None
+        self.transcriptWindowLayout = None
+        self.dataWindowLayout = None
 
         # If no language has been specified, request an initial language
         if TransanaGlobal.configData.language == '':
@@ -178,8 +185,13 @@ class MenuWindow(wx.Frame):
                     TransanaGlobal.encoding = 'koi8_r'
             elif initialLanguage == SWEDISH_LABEL:
                 TransanaGlobal.configData.language = 'sv'
+            # Chinese
+            elif initialLanguage == CHINESE_LABEL:
+                TransanaGlobal.configData.language = 'zh'
+                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+                    TransanaGlobal.encoding = TransanaConstants.chineseEncoding
 
-            # Chinese, Japanese, and Korean are a special circumstance.  We don't have
+            # Japanese, and Korean are a special circumstance.  We don't have
             # translations for these languages, but want to be able to allow users to
             # work in these languages.  It's not possible on the Mac for now, and it
             # already works on the Windows MU version.  The Windows single-user version
@@ -187,10 +199,6 @@ class MenuWindow(wx.Frame):
             #
             # NOTE:  There are multiple possible encodings for these languages.  I've picked
             #        these at random.
-            elif initialLanguage == CHINESE_LABEL:
-                TransanaGlobal.configData.language = 'zh'
-                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-                    TransanaGlobal.encoding = TransanaConstants.chineseEncoding
             elif initialLanguage == EASTEUROPE_LABEL:
                 TransanaGlobal.configData.language = 'easteurope'
                 if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
@@ -284,14 +292,18 @@ class MenuWindow(wx.Frame):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'sv', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.presLan_sv = gettext.translation('Transana', 'locale', languages=['sv']) # Swedish
+        # Chinese
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'zh', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.presLan_zh = gettext.translation('Transana', 'locale', languages=['zh']) # Chinese
 
         # We're starting to face the situation where not all the translations may be up-to-date.  Let's build some checks.
         # Initialize an empty variable
         outofdateLanguage = ''
 
         # Install English as the initial language if no language has been specified
-        # NOTE:  Eastern European Encoding, Greek, Japanese, Korean, and Chinese will use English prompts
-        if (TransanaGlobal.configData.language in ['', 'en', 'easteurope', 'el', 'ja', 'ko', 'zh']) :
+        # NOTE:  Eastern European Encoding, Greek, Japanese, Korean will use English prompts
+        if (TransanaGlobal.configData.language in ['', 'en', 'easteurope', 'el', 'ja', 'ko']) :
             lang = wx.LANGUAGE_ENGLISH
             self.presLan_en.install()
 
@@ -383,6 +395,12 @@ class MenuWindow(wx.Frame):
             self.presLan_sv.install()
             outofdateLanguage = 'Swedish'
 
+        # Chinese
+        elif (TransanaGlobal.configData.language == 'zh'):
+            lang = wx.LANGUAGE_CHINESE
+            self.presLan_zh.install()
+            outofdateLanguage = 'Chinese - Simplified'
+
         # Due to a problem with wx.Locale on the Mac (It won't load anything but English), I'm disabling 
         # i18n functionality of the wxPython layer on the Mac.  This code accomplishes that.
 #        if "__WXMAC__" in wx.PlatformInfo:
@@ -400,10 +418,10 @@ class MenuWindow(wx.Frame):
 
         # Check to see if we have a translation, and if it is up-to-date.
         
-        # NOTE:  "Graphics Color Configuration" works for version 2.30.  If you update this, also update the phrase
+        # NOTE:  "Include in Clip" works for version 2.40.  If you update this, also update the phrase
         # below in the OnOptionsLanguage method.)
         
-        if (outofdateLanguage != '') and ("&Graphics Color Configuration" == _("&Graphics Color Configuration")):
+        if (outofdateLanguage != '') and ("Include in Clip" == _("Include in Clip")):
             # If not, display an information message.
             prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
             dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
@@ -489,8 +507,6 @@ class MenuWindow(wx.Frame):
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_WORDTRACK, self.OnOptionsWordTrack)
         # Define handler for Options > Auto-Arrange
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_AUTOARRANGE, self.OnOptionsAutoArrange)
-        # Define handler for Options > Waveform Quick-load
-        wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_WAVEFORMQUICKLOAD, self.OnOptionsWaveformQuickload)
         # Define handler for Options > Visualization Style changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_VISUALIZATION_WAVEFORM, MenuSetup.MENU_OPTIONS_VISUALIZATION_HYBRID, self.OnOptionsVisualizationStyle)
         # Define handler for Options > Video Size changes
@@ -575,7 +591,7 @@ class MenuWindow(wx.Frame):
             # (The other windows all close automatically.)
             if self.ControlObject != None:
                 if self.ControlObject.VideoWindow != None:
-                    self.ControlObject.VideoWindow.frame.Close()
+                    self.ControlObject.VideoWindow.close()
             # Terminate MySQL if using the embedded version.
             # (This is slow, so should be done as late as possible, preferably after windows are closed.)
             if TransanaConstants.singleUserVersion:
@@ -1005,7 +1021,8 @@ class MenuWindow(wx.Frame):
         # Chinese (English prompts)
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ZH:
             TransanaGlobal.configData.language = 'zh'
-            self.presLan_en.install()
+            self.presLan_zh.install()
+            outofdateLanguage = 'Chinese - Simplified'
 
         # Eastern Europe Encoding (English prompts)
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EASTEUROPE:
@@ -1035,10 +1052,10 @@ class MenuWindow(wx.Frame):
 
         # Check to see if we have a translation, and if it is up-to-date.
         
-        # NOTE:  "Graphics Color Configuration" works for version 2.30.  If you update this, also update the phrase
+        # NOTE:  "Include in Clip" works for version 2.40.  If you update this, also update the phrase
         # above in the __init__ method.)
         
-        if (outofdateLanguage != '') and ("&Graphics Color Configuration" == _("&Graphics Color Configuration")):
+        if (outofdateLanguage != '') and ("Include in Clip" == _("Include in Clip")):
             # If not, display an information message.
             prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
             dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
@@ -1062,17 +1079,49 @@ class MenuWindow(wx.Frame):
 
     def OnOptionsAutoArrange(self, event):
         """ Handler for Options > Auto-Arrange """
-        # All we need to do is toggle the global value when the menu option is changed
+        # We need to toggle the global value when the menu option is changed
         TransanaGlobal.configData.autoArrange = event.IsChecked()
+
+        # If we turn Auto-Arrange ON ...
+        if event.IsChecked():
+            # ... let's restore the windows to the positions saved earlier.
+            # Menu Window
+            if self.menuWindowLayout != None:
+                self.SetPosition(self.menuWindowLayout[0])
+                self.SetSize(self.menuWindowLayout[1])
+            # Visualization Window
+            if self.visualizationWindowLayout != None:
+                self.ControlObject.VisualizationWindow.SetPosition(self.visualizationWindowLayout[0])
+                self.ControlObject.VisualizationWindow.SetSize(self.visualizationWindowLayout[1])
+            # Video Window
+            if self.videoWindowLayout != None:
+                self.ControlObject.VideoWindow.SetPosition(self.videoWindowLayout[0])
+                self.ControlObject.VideoWindow.SetSize(self.videoWindowLayout[1])
+                # Try to get the graphic to update
+                self.ControlObject.VideoWindow.Refresh()
+            # Transcript Window
+            if self.transcriptWindowLayout != None:
+                self.ControlObject.TranscriptWindow[0].dlg.SetPosition(self.transcriptWindowLayout[0])
+                self.ControlObject.TranscriptWindow[0].dlg.SetSize(self.transcriptWindowLayout[1])
+                # Auto-arrange additional transcripts
+                self.ControlObject.AutoArrangeTranscriptWindows()
+            # Data window
+            if self.dataWindowLayout != None:
+                self.ControlObject.DataWindow.SetPosition(self.dataWindowLayout[0])
+                self.ControlObject.DataWindow.SetSize(self.dataWindowLayout[1])
+        # If we turn Auto-Arrange OFF ...
+        else:
+            # ... remember the current window layouts
+            self.menuWindowLayout = (self.GetPosition(), self.GetSize())
+            self.visualizationWindowLayout = (self.ControlObject.VisualizationWindow.GetPosition(), self.ControlObject.VisualizationWindow.GetSize())
+            self.videoWindowLayout = (self.ControlObject.VideoWindow.GetPosition(), self.ControlObject.VideoWindow.GetSize())
+            self.transcriptWindowLayout = (self.ControlObject.TranscriptWindow[0].dlg.GetPosition(), self.ControlObject.TranscriptWindow[0].dlg.GetSize())
+            self.dataWindowLayout = (self.ControlObject.DataWindow.GetPosition(), self.ControlObject.DataWindow.GetSize())
 
     def OnOptionsWordTrack(self, event):
         """ Handler for Options > Auto Word-tracking """
         # Set global value appropriately when state changes
         TransanaGlobal.configData.wordTracking = event.IsChecked()
-
-    def OnOptionsWaveformQuickload(self, event):
-        """ Handler for Options > Waveform Quick-load menu command """
-        TransanaGlobal.configData.waveformQuickLoad = event.IsChecked()
 
     def OnOptionsVisualizationStyle(self, event):
         """ Handler for Options > Visualization Style menu """
@@ -1201,12 +1250,19 @@ class MenuWindow(wx.Frame):
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_RU, _("&Russian"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_SV) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_SV, _("S&wedish"))
+        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_ZH) != None:
+            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_ZH, _("&Chinese - Simplified"))
+        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_EASTEUROPE) != None:
+            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_EASTEUROPE, _("English prompts, Eastern European data (ISO-8859-2 encoding)"))
+        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_EL) != None:
+            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_EL, _("English prompts, Greek data"))
+        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_JA) != None:
+            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_JA, _("English prompts, Japanese data"))
         if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
             self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_QUICK_CLIPS, _("&Quick Clip Mode"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_QUICKCLIPWARNING, _("Show Quick Clip Warning"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_WORDTRACK, _("Auto &Word-tracking"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"))
-        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_WAVEFORMQUICKLOAD, _("&Waveform Quick-load"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION, _("Vi&sualization Style"))
         self.menuBar.optionsvisualizationmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION_WAVEFORM, _("&Waveform"))
         self.menuBar.optionsvisualizationmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION_KEYWORD, _("&Keyword"))
@@ -1215,9 +1271,13 @@ class MenuWindow(wx.Frame):
         self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_ALL, _("&All Windows"))
         self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_VIDEO, _("&Video Only"))
         self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_TRANS, _("Video and &Transcript Only"))
+        self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_AUDIO, _("A&udio and Transcript Only"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT, _("&Presentation Mode"))
 
-        self.menuBar.SetLabelTop(4, _("&Help"))
+        if not 'wxMac' in wx.PlatformInfo:
+            self.menuBar.SetLabelTop(4, _("&Help"))
+        else:
+            wx.App_SetMacHelpMenuTitleName(_("&Help"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_MANUAL, _("&Manual"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_TUTORIAL, _("&Tutorial"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_NOTATION, _("Transcript &Notation"))
@@ -1283,9 +1343,12 @@ class MenuWindow(wx.Frame):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'sv', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             languages.append(SWEDISH_LABEL)
+        # Swedish
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'zh', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            languages.append(CHINESE_LABEL)
         # Easern Europe encoding, Greek, Japanese, Korean, and Chinese
         if ('wxMSW' in wx.PlatformInfo) and TransanaConstants.singleUserVersion:
-            languages.append(CHINESE_LABEL)
             languages.append(EASTEUROPE_LABEL)
             languages.append(GREEK_LABEL)
             languages.append(JAPANESE_LABEL)

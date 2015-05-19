@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -48,11 +48,9 @@ class ConfigData(object):
             self.autoArrange = False
         else:
             self.autoArrange = True
-        # Waveform Quickload is enabled by default
-        self.waveformQuickLoad = True
 
         # Set default values for Dialog Size values which are not saved as part of the configuration file
-        self.clipPropertiesSize = (680, 500)
+        self.clipPropertiesSize = (680, 550)
         self.keywordListEditSize = (600, 385)
     
     def __repr__(self):
@@ -70,7 +68,6 @@ class ConfigData(object):
             str = str + 'quickClipMode = %s\n' % self.quickClipMode
         str = str + 'wordTracking = %s\n' % self.wordTracking
         str = str + 'autoArrange = %s\n' % self.autoArrange
-        str = str + 'QuickLoad = %s\n' % self.waveformQuickLoad
         str = str + 'Visualization style = %s\n' % self.visualizationStyle
         str = str + 'messageServer = %s\n' % self.messageServer
         str = str + 'messageServerPort = %s\n' % self.messageServerPort
@@ -114,19 +111,24 @@ class ConfigData(object):
             temp = defaultDatabaseDir.encode('latin1')
         except UnicodeError:
             # If not, try the Program Dir + 'database'
-            defaultDatabaseDir = os.path.join(TransanaGlobal.programDir, 'database')
+            defaultDatabaseDir = os.path.join(TransanaGlobal.programDir, 'databases')
             # Unfortunately, the Program Dir might not be Latin-1 compatible.  Check that.
+
+            # for testing non-English systems
+            # defaultDatabaseDir = u'E:\\Video\\\u4eb2\u4eb3\u4eb2'
+            # print "ConfigData.LoadConfiguration(): defaultDatabaseDir overridden"
+
             try:
                 # See if the new Database Dir is Latin-1 compatible
                 temp = defaultDatabaseDir.encode('latin1')
             except UnicodeError:
                 # If we're still in trouble, let's build the path from scratch
                 if 'wxMSW' in wx.PlatformInfo:
-                    defaultDatabaseDir = os.path.join('C:', 'Transana 2', 'database')
+                    defaultDatabaseDir = 'C:' + os.sep + 'Transana 2' + os.sep + 'databases'
                 else:
                     # Actually, I have no idea if this will work.  I'd bet permissions issues will prevent it.
                     # But I have no way to pursue the issue further for the Mac until I find a user who's willing to help.
-                    defaultDatabaseDir = os.path.join('Transana 2', 'database')
+                    defaultDatabaseDir = os.path.join('Transana 2', 'databases')
 
         # Define the Default Database Host
         if TransanaConstants.singleUserVersion:
@@ -487,24 +489,25 @@ class ConfigData(object):
         defaultProfilePath = None
         # Try to get the proper Profile Path from the OS.
         if "__WXMSW__" in wx.Platform:
-            # Windows 2K and XP should use APPDATA, which generally points to
-            # C:\Documents and Settings\USERNAME\Application Data
-            defaultProfilePath = os.getenv("APPDATA")
+            # Define a wx.StandardPaths object
+            sp = wx.StandardPaths.Get()
+            # Get the user's document directory
+            defaultProfilePath = sp.GetDocumentsDir()
         elif "__WXMAC__" in wx.Platform:
             # Mac OS/X should use HOME, which generally points to
             # /Users/USERNAME
             defaultProfilePath = os.getenv("HOME")
         else: # Assuming that getenv("HOME") returns something useful
             defaultProfilePath = os.getenv("HOME")
-
-        # defaultProfilePath = u'E:\\Video\\\u4eb2\u4eb3\u4eb2'
-        # print "ConfigData.GetDefaultProfilePath() overridden"
-
         # I think the above fails for Windows 98 and Windows Me.  So if we don't get
         # something from the above, let's fall back to using the Program Directory here.
         if defaultProfilePath == None:
             defaultProfilePath = TransanaGlobal.programDir
         else:
             defaultProfilePath = os.path.join(defaultProfilePath, 'Transana 2')
-        
+
+        # for testing non-English systems
+        # defaultProfilePath = u'E:\\Video\\\u4eb2\u4eb3\u4eb2'
+        # print "ConfigData.GetDefaultProfilePath() overridden"
+
         return defaultProfilePath

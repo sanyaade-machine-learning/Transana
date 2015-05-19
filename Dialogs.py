@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -129,82 +129,127 @@ class QuestionDialog(wx.MessageDialog):
     """Replacement for wxMessageDialog with style=wx.YES_NO | wx.ICON_QUESTION."""
 
     def __init__(self, parent, msg, header=_("Transana Confirmation"), noDefault=False, useOkCancel=False):
+        """ QuestionDialog Parameters:
+                parent        Parent Window
+                msg           Message to display
+                header        Dialog box header, "Transana Confirmation by default
+                noDefault     Set the No or Cancel button as the default, instead of Yes or OK
+                useOkCancel   Use OK / Cancel as the button labels rather than Yes / No """
+        
         # This should be easy, right?  Just use the OS MessageDialog like so:
         # wx.MessageDialog.__init__(self, parent, msg, _("Transana Information"), \
         #                     wx.OK | wx.CENTRE | wx.ICON_INFORMATION)
         # That's all there is to it, right?
         #
-        # Yeah, right.  Unfortunately, on Windows, this dialog isn't TRULY modal.  It's modal to the parent window
+        # Yeah, right.  Unfortunately, on Windows, the MessageDialog isn't TRULY modal.  It's modal to the parent window
         # it's called from, but you can still select one of the other Transana Windows and do stuff.  This message
         # can even get hidden behind other windows, and cause all kinds of problems.  According to Robin Dunn,
-        # writing my own class to do this is the only solution.  Here goes.
+        # writing my own class to do this is the only solution.
 
-        # print "InfoDialog", msg
+        # Set the default result to indicate failure
         self.result = -1
-
+        # Remember the noDefault setting
+        self.noDefault = noDefault
+        # Define the default Window style
         dlgStyle = wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP
-        if noDefault:
-            dlgStyle = dlgStyle | wx.NO_DEFAULT
+        
+        # Create a small dialog box
         wx.Dialog.__init__(self, parent, -1, header, size=(350, 150), style=dlgStyle)
-
+        # Create a main vertical sizer
         box = wx.BoxSizer(wx.VERTICAL)
+        # Create a horizontal sizer for the first row
         box2 = wx.BoxSizer(wx.HORIZONTAL)
+        # Create a horizontal sizer for the buttons
         boxButtons = wx.BoxSizer(wx.HORIZONTAL)
 
+        # Create an empty bitmap for the question mark graphic
         bitmap = wx.EmptyBitmap(32, 32)
+        # Get the Question mark graphic and put it in the bitmap
         bitmap = wx.ArtProvider_GetBitmap(wx.ART_QUESTION, wx.ART_MESSAGE_BOX, (32, 32))
+        # Create a bitmap screen object for the graphic
         graphic = wx.StaticBitmap(self, -1, bitmap)
-
+        # Add the graphic to the first row horizontal sizer
         box2.Add(graphic, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, 10)
-        
-        message = wx.StaticText(self, -1, msg)
 
+        # Create a text screen object for the dialog text
+        message = wx.StaticText(self, -1, msg)
+        # Add it to the first row sizer
         box2.Add(message, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 10)
+        # Add the first row to the main sizer
         box.Add(box2, 0, wx.EXPAND)
 
+        # Determine the appropriate text and ID values for the buttons.
+        # if useOkCancel is True ...
         if useOkCancel:
+            # ... set the buttons to OK and Cancel
             btnYesText = _("OK")
             btnYesID = wx.ID_OK
             btnNoText = _("Cancel")
             btnNoID = wx.ID_CANCEL
+        # If useOkCancel is False (the default) ...
         else:
+            # ... set the buttons to Yes and No
             btnYesText = _("&Yes")
             btnYesID = wx.ID_YES
             btnNoText = _("&No")
             btnNoID = wx.ID_NO
+        # Create the first button, which is Yes or OK
         btnYes = wx.Button(self, btnYesID, btnYesText)
+        # Bind the button event to its method
         btnYes.Bind(wx.EVT_BUTTON, self.OnButton)
-        btnNo = wx.Button(self, btnNoID, btnNoText)
-        btnNo.Bind(wx.EVT_BUTTON, self.OnButton)
+        # Create the second button, which is No or Cancel
+        self.btnNo = wx.Button(self, btnNoID, btnNoText)
+        # Bind the button event to its method
+        self.btnNo.Bind(wx.EVT_BUTTON, self.OnButton)
+        # Add an expandable spacer to the button sizer
         boxButtons.Add((20,1), 1)
+        # If we're on the Mac, we want No/Cancel then Yes/OK
         if "__WXMAC__" in wx.PlatformInfo:
-            boxButtons.Add(btnNo, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+            # Add No first
+            boxButtons.Add(self.btnNo, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+            # Add a spacer
             boxButtons.Add((20,1))
+            # Then add Yes
             boxButtons.Add(btnYes, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        # If we're not on the Mac, we want Yes/OK then No/Cancel
         else:
+            # Add Yes first
             boxButtons.Add(btnYes, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+            # Add a spacer
             boxButtons.Add((20,1))
-            boxButtons.Add(btnNo, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+            # Then add No
+            boxButtons.Add(self.btnNo, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        # Add a final expandable spacer
         boxButtons.Add((20,1), 1)
+        # Add the button bar to the main sizer
         box.Add(boxButtons, 0, wx.ALIGN_CENTER | wx.EXPAND)
-
-        # Make the Yes button the default
-        self.SetDefaultItem(btnYes)
-
+        # Turn AutoLayout On
         self.SetAutoLayout(True)
-
+        # Set the form's main sizer
         self.SetSizer(box)
+        # Fit the form
         self.Fit()
+        # Lay the form out
         self.Layout()
-
+        # Center the form on screen
         self.CentreOnScreen()
 
     def OnButton(self, event):
+        """ Button Event Handler """
+        # Set the result variable to the ID of the button that was pressed
         self.result = event.GetId()
+        # Close the form
         self.Close()
 
     def LocalShowModal(self):
+        """ ShowModal wasn't working right.  This allows some modification. """
+        # If No/Cancel should be the default button ...
+        if self.noDefault:
+            # ... set the focus to the No button
+            self.btnNo.SetFocus()
+        # Show the form modally
         self.ShowModal()
+        # Return the result to indicate what button was pressed
         return self.result
 
 

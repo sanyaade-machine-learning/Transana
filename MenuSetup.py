@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -100,7 +100,6 @@ MENU_OPTIONS_VISUALIZATION_WAVEFORM =  wx.NewId()
 MENU_OPTIONS_VISUALIZATION_KEYWORD  =  wx.NewId()
 MENU_OPTIONS_VISUALIZATION_HYBRID   =  wx.NewId()
 # Options menu continued
-MENU_OPTIONS_WAVEFORMQUICKLOAD  =  wx.NewId()
 # Options Video Size menu
 MENU_OPTIONS_VIDEOSIZE          =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_50       =  wx.NewId()
@@ -113,9 +112,10 @@ MENU_OPTIONS_PRESENT            =  wx.NewId()
 MENU_OPTIONS_PRESENT_ALL        =  wx.NewId()
 MENU_OPTIONS_PRESENT_VIDEO      =  wx.NewId()
 MENU_OPTIONS_PRESENT_TRANS      =  wx.NewId()
+MENU_OPTIONS_PRESENT_AUDIO      =  wx.NewId()
 
 # Help Menu
-MENU_HELP_MANUAL                =  wx.NewId()
+MENU_HELP_MANUAL                =  wx.ID_HELP   # Constant used to improve Mac standardization
 MENU_HELP_TUTORIAL              =  wx.NewId()
 MENU_HELP_NOTATION              =  wx.NewId()
 MENU_HELP_WEBSITE               =  wx.NewId()
@@ -238,9 +238,12 @@ class MenuSetup(wx.MenuBar):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'sv', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_SV, _("S&wedish"), kind=wx.ITEM_RADIO)
-        # Chinese, Greek, Japanese, and Korean
+        # Chinese
+        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'zh', 'LC_MESSAGES', 'Transana.mo')
+        if os.path.exists(dir):
+            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_ZH, _("&Chinese - Simplified"), kind=wx.ITEM_RADIO)
+        # Greek, Japanese, and Korean
         if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_ZH, _("English prompts, Chinese data"), kind=wx.ITEM_RADIO)
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EASTEUROPE, _("English prompts, Eastern European data (ISO-8859-2 encoding)"), kind=wx.ITEM_RADIO)
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EL, _("English prompts, Greek data"), kind=wx.ITEM_RADIO)
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_JA, _("English prompts, Japanese data"), kind=wx.ITEM_RADIO)
@@ -253,7 +256,6 @@ class MenuSetup(wx.MenuBar):
         self.optionsmenu.Append(MENU_OPTIONS_QUICKCLIPWARNING, _("Show Quick Clip Warning"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_WORDTRACK, _("Auto Word-&tracking"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"), kind=wx.ITEM_CHECK)
-        self.optionsmenu.Append(MENU_OPTIONS_WAVEFORMQUICKLOAD, _("&Waveform Quick-load"), kind=wx.ITEM_CHECK)
         
         self.optionsmenu.AppendSeparator()
         
@@ -276,6 +278,7 @@ class MenuSetup(wx.MenuBar):
         self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_ALL, _("&All Windows"), kind=wx.ITEM_RADIO)
         self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_VIDEO, _("&Video Only"), kind=wx.ITEM_RADIO)
         self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_TRANS, _("Video and &Transcript Only"), kind=wx.ITEM_RADIO)
+        self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_AUDIO, _("A&udio and Transcript Only"), kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_PRESENT, _("&Presentation Mode"), self.optionspresentmenu)
         self.Append(self.optionsmenu, _("&Options"))
 
@@ -306,7 +309,7 @@ class MenuSetup(wx.MenuBar):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_RU, True)
         elif TransanaGlobal.configData.language == 'sv':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_SV, True)
-        elif (TransanaGlobal.configData.language == 'zh') and (TransanaConstants.singleUserVersion):
+        elif (TransanaGlobal.configData.language == 'zh'):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_ZH, True)
         elif (TransanaGlobal.configData.language == 'easteurope') and (TransanaConstants.singleUserVersion):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EASTEUROPE, True)
@@ -323,7 +326,6 @@ class MenuSetup(wx.MenuBar):
         self.optionsmenu.Check(MENU_OPTIONS_QUICKCLIPWARNING, TransanaGlobal.configData.quickClipWarning)
         self.optionsmenu.Check(MENU_OPTIONS_WORDTRACK, TransanaGlobal.configData.wordTracking)
         self.optionsmenu.Check(MENU_OPTIONS_AUTOARRANGE, TransanaGlobal.configData.autoArrange)
-        self.optionsmenu.Check(MENU_OPTIONS_WAVEFORMQUICKLOAD, TransanaGlobal.configData.waveformQuickLoad)
 
         # Set the Visualization Style to reflect the Configuration Data value
         if TransanaGlobal.configData.visualizationStyle == 'Keyword':
@@ -358,3 +360,5 @@ class MenuSetup(wx.MenuBar):
         self.helpmenu.Append(MENU_HELP_FUND, _("&Fund Transana"))
         self.helpmenu.Append(MENU_HELP_ABOUT, _("&About"))
         self.Append(self.helpmenu, _("&Help"))
+
+        wx.App_SetMacHelpMenuTitleName(_("&Help"))

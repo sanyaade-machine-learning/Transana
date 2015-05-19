@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -142,6 +142,7 @@ class WaveformProgress(wx.Dialog):
         # Call the wxProcess Object's Redirect method.  This allows us to capture the process's output!
         self.process.Redirect()
         # Encode the filenames to UTF8 so that unicode files are handled properly
+        process = process.encode('utf8')
         tempMediaFilename = inputFile.encode('utf8')
         tempWaveFilename = outputFile.encode('utf8')
         # Call the Audio Extraction program using wxExecute, capturing the output via wxProcess.  This call MUST be asynchronous. 

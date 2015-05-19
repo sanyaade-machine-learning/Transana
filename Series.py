@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,27 +16,32 @@
 
 """This module implements the Series class as part of the Data Objects."""
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
-
-# Based on code/ideas/logic from USeriesObject Delphi unit by DKW
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 
 DEBUG = False
 if DEBUG:
     print "Series DEBUG is ON!"
 
+# Import wxPython
 import wx
-from DataObject import DataObject
-from Note import Note
-from Episode import Episode
+# import Python's types module
+import types
+# Import Transana's base Data Object
+import DataObject
+# import Transana's Database Interface
+import DBInterface
+# import Transana Dialogs
+import Dialogs
+# import Transana's Episode object
+import Episode
+# Import Transana's Note object
+import Note
+# import Transana's Exceptions
 from TransanaExceptions import *
 # import Transana's Globals
 import TransanaGlobal
-import DBInterface
-import types
-# import Transana Dialogs
-import Dialogs
 
-class Series(DataObject):
+class Series(DataObject.DataObject):
     """This class defines the structure for a series object.  A series object
     holds information about a group (e.g., a Series) of video files
     (e.g., Episodes)."""
@@ -44,7 +49,7 @@ class Series(DataObject):
     def __init__(self, id_or_num=None):
         """Initialize an Series object.  If a record ID number or Series ID
         is given, load it from the database."""
-        DataObject.__init__(self)
+        DataObject.DataObject.__init__(self)
         if type(id_or_num) in (int, long):
             self.db_load_by_num(id_or_num)
         elif isinstance(id_or_num, types.StringTypes):
@@ -208,7 +213,7 @@ class Series(DataObject):
             # Detect, Load, and Delete all Series Notes.
             notes = self.get_note_nums()
             for note_num in notes:
-                note = Note(note_num)
+                note = Note.Note(note_num)
                 result = result and note.db_delete(0)
                 del note
             del notes
@@ -217,7 +222,7 @@ class Series(DataObject):
             # Episode Notes, and Episode Keywords
             episodes = self.get_episode_nums()
             for episode_num in episodes:
-                episode = Episode(episode_num)
+                episode = Episode.Episode(episode_num)
                 # Store the result so we can rollback the transaction on failure
                 result = result and episode.db_delete(0)
                 del episode

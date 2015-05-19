@@ -1,4 +1,4 @@
-# Copyright (C) 2002-2008 The Board of Regents of the University of Wisconsin System
+# Copyright (C) 2002-2009 The Board of Regents of the University of Wisconsin System
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -51,7 +51,7 @@ if DEBUG2:
 class RTFParseError(exceptions.Exception):
     """Raised when an error is encountered while parsing an RTF document."""
     def __init__(self, msg="Unspecified RTF parsing error"):
-        self.args = msg
+        self.explanation = msg
     
 
 class DocAttribute:

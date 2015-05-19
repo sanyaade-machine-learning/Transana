@@ -1,0 +1,73 @@
+<HTML>
+<HEAD>
+<TITLE>Working with Multiple Media Files</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Working with Multiple Media Files</H1><HR>
+
+
+<H2>Introduction</H2>
+
+Transana has the capacity to work with up to four media files at the same time.  You can create episodes with data from a multiple camera video shoot and analyze it in a single interface.  You can create clips that include any number of these media files, allowing you to emphasize different perspectives during analysis.<P>
+
+Not surprisingly, working with multiple media files is an inherently complex process.  A number of things must all come together for it to work right.  While this is occasionally challenging, the results are often worth the extra effort invovled in getting everything set up correctly for analysis.<P>
+
+To work with Transana, all media files for use in simultaneous analysis must maintain the same time line in order to remain synchronized.  Transana assumes you will have continuous overlapping media files that may differ only a small amount in when they start or end.  If your recordings contain pauses, they are not suitable for simultaneous analysis with Transana, as they don't maintain matching continuous timelines.  Such media files must be analyzed independently of each other.<P>
+
+Transana includes a synchronization utility that allows you to align media files with each other so that Transana can determine, within a frame or two, how to synchronize the files.  See <A HREF="synchronize.htm">Synchronization</A> for more details.  <P>
+
+<H2>Using Transana with multiple media files</H2><P>
+
+To work with multiple simultaneous media files in Transana, the first step is to open the <A HREF="addepisode.htm">Episode Properties</A> screen either by <A HREF="createepisode.htm">adding an episode</A> or by <A HREF="addepisode.htm">editing the properties of an existing episode</A>.  Then add up to four media files with overlapping continuous timelines using the <B>Add File</B> button.  These media files will be displayed from left to right in the <A HREF="videowindow.htm">Video Window</A> in the order added.<P>
+
+<IMG SRC="images/episodepropertiesmultimedia.gif"><P>
+
+Before leaving the Episode Properties screen, you need to synchronize your media files, letting Transana know how to overlap them so that the contents align properly and precisely.  Transana uses the first media file for reference, so you need to do synchronization for the second and all subsequent files.  Please see <A HREF="synchronize.htm">Synchronize Media Files</A> for more detail and instructions for this important task.  (If you edit all your media files so they start at the same instant, you can skip this step.)  <P>
+
+When you open a transcript for a file with multiple video files, you will see all of the media files, side by side in the <A HREF="videowindow.htm">Video Window</A>.  Audio files are displayed with black rectangles to maintain screen layout.  <P>
+
+<IMG SRC="images/fullmultivid.gif"><P>
+
+Because different media files may have different audio content, each media file has an associated <B>Play Audio</B> checkbox which allows you full control over which media files contribute to the audio  during video playback.  Each media file also has a different color waveform so that differences in audio tracks are reflected in the <A HREF="SoundWindow.htm">Visualization window</A>.<P>
+
+You can reflect the differences between the different media files using Transana's <A HREF="multitrans.htm">multiple transcripts</A> feature if needed.  Please note that you may find it easier to transcribe the media files individually, then create an episode for the combined files.  Transana's transcription controls are somewhat less responsive during transcription when you have multiple media files open due to the demands and the lack of responsiveness of multiple simultaneous media players.<P>
+
+
+<H2>Creating Clips with Multiple Media files</H2>
+
+The process of <A HREF="createclips.htm">creating clips</A> with multiple media files is very similar to creating clips with single media files.  There are two minor additional considerations.  First, you can select which media files from the episode are included in the clip.  Each media source has an associated <B>Include in Clip</B> checkbox, and only those media files with this option checked will be included.  This allows you to emphasize some viewpoints of the data and to exclude others as you are making clips.  Second, since media file audio may be independent of media file video (when external microphones are used, for example,) each media file also has a <B>Play Audio</B> checkbox which affects what sound tracks are played by default in the clips.<P>
+
+The interaction between these two checkboxes can be        a bit subtle.  If a media file's <B>Include in Clip</B> checkbox is unchecked during clip creation, neither video nor audio from that media file will be included in the clip.  If <B>Include in Clip</B> is checked but <B>Play Audio</B> is unchecked, the media file will be included in the clip, but the <B>Play Audio</B> checkbox will be unchecked by default when the clip  is loaded.  This allows you to create clips that emphasize audio from some media files over others.  However, you cannot include audio from a video file without including the video.  In addition, the audio from the media file that has <B>Play Audio</B> unchecked can be restored in the clip simply by checking <B>Play Audio</B> after the clip is loaded.<P>
+
+<H2>Troubleshooting</H2>
+
+<H3>Data Collection and Preparation</H3>
+
+It's a good idea to have clear overlap of content at the beginning of the media files, as this makes synchronization much easier.  A common sharp noise at the beginning of all media files can really help with synchronization as well.  <P>
+
+Transana cannot at this time read embedded SMPTE time code information, and must rely on the individual media files to be true to the time line.  First off, there is the issue of "drift" caused by dropped frames in video.  It is important that your media collection and processing procedures eliminate dropped frames as much as possible.  Second, different capture devices may have slight variations in their capture speeds which can lead to problems with loss of synchronization.<P>
+
+Transana requires that media files remain synchronized on their own, and files that do not do this may not be suitable for simultaneous analysis with the current release of Transana.  Using capture devices that are all the same make and model, making sure batteries are fresh, using digital rather than analog recorders, and using the same computer to process all media files help reduce synchronization problems caused by differing device speeds.  It is imperative to test all equipment for compatibility before you collect a lot of data you want to analyze simultaneously.  Transana is unable to overcome limitations of data collection procedures or equipment.  (I have worked with video from a 3-camera shoot of a focus group that lasted almost 2 hours without synchronization problems.)<P>
+
+If you have breaks in your video streams, such as when you need to change the tape in one of the cameras, you will need to use video editing software to insert video from one of the other cameras into the break in the stream.  This is the only effective way to maintain the integrity of the timeline with frame-level accuracy for video files when there is a break in recording.  Additionally, when capturing video for simultaneous analysis with Transana, camera operators should be instructed to record continuously and not use the camera's pause button.<P>
+
+<H3>Performance Issues</H3>
+
+There are several factors that effect program performance when working with multiple simultaneous media files.<P>
+
+First, use the most powerful computer you have access to.  My trusty 733Mhz PowerPC Mac G4, which runs single-media Transana well, struggles with three media files and updates them unevenly; it's just too slow.  My laptop works much better with multiple media files.  Playing multiple media files requires CPU power, and there's no way around that.  Unfortunately, trial and error is the only way to determine what your system, with your media files, will be able to handle.<P>
+
+Second, the subtleties of media file construction matter a LOT.  Reducing the size of the video image to 320 x 240 or smaller (from 640 x 480 or higher) makes a tremendous difference.  (Transana is forced to display the videos smaller than that anyway to make room for multiple media files, so this does not reflect a loss of image quality.)  Reducing the internal quality of the video, and particularly the data rate used during encoding, also helps performance, often with minimal impact on the obvious visual quality of the video.  Reducing the audio quality can also make a big difference.  It may require some trial-and-error with your video editing or conversion software to find settings that produce video that is of high-enough quality that works to meet your research needs on your available hardware.  I have generally had good luck with medium quality MPEG-1 recordings and with MOV files set to 512Kbps throughput (which is one of the default profiles in my video editor.)  Your mileage may vary.<P>
+
+Third, reduce multi-tasking on your computer.  My single-CPU 3.4Ghz Pentium 4 computer at home struggles with 3 MPEG-1 files, while my 3.2Ghz computer at the office does not.  My theory is that the office computer has fewer background processes running.  If you are having performance problems, close your e-mail client, chat utility, and web browser, as well as any other programs you can live without.  Monitor your CPU usage to see what programs are running and how much they are taking in the way of CPU resources.  Check for viruses and spyware that may be slowing your system down.<P>
+
+Fourth, keep your expectations realistic.  You will be able to hear minor synchronizaton errors, and will probably not be able to get multiple media files aligned so well that the audio "echo" completely disappears.  When an additional media source kicks in at the beginning of a set of media files, you will hear distortion for a few seconds as the media streams get synchronized.  Please understand that your computer is doing the best it can with the resources it has available, but that handling multiple media files within Transana is a very demanding task.<P>
+
+And finally, remember that once you figure out a recipe for making this work, it gets a lot easier.  The first time through the process of getting multiple media streams working properly is difficult.  The second time is easier.  By the third time, you'll have it figured out and it will start to seem routine.<P>
+
+<A HREF="multitrans.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<A HREF="synchronize.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

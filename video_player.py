@@ -1,4 +1,4 @@
-# Copyright (C) 2006 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2006 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -31,41 +31,29 @@ import wx
 # import the wxPython MediaCtrl
 import wx.media
 
-# If running as a stand-alone ...
-if __name__ == '__main__':
-    # ... we need GetTranslations.  Otherwise, it's handled by Transana's infrastructure
-    __builtins__._ = wx.GetTranslation
-    # We also need to fake some configuration data usually provided by Transana
-    class ConfigData(object):
-        def __init__(self):
-            self.videoSize = 100
-    class TransanaGlobalObject(object):
-        def __init__(self):
-            self.programDir = ''
-            self.configData = ConfigData()
-    TransanaGlobal = TransanaGlobalObject()
-else:
-    # import the Transana Global data
-    import TransanaGlobal
+# Import Transana's Dialogs
+import Dialogs
+# import the Transana Global data
+import TransanaGlobal
 
 CONTROL_PROGRESSNOTIFICATION = wx.NewId()
-# if wx.VERSION[0] == 2 and wx.VERSION[1] <= 6:
-#      WMPBACKEND = wx.media.MEDIABACKEND_DIRECTSHOW
-#  else:
-#      WMPBACKEND = wx.media.MEDIABACKEND_WMP10
 
-
-# Declare the main VideoFrame class, designed to interact with the rest of Transana
-class VideoFrame(wx.Dialog):
-    """ Video player frame.  This is based on wxMediaCtrl, and should allow increased support for video formats over
-        previous media control components. """
+# Declare the main VideoPlayer class, designed to interact with the rest of Transana
+class VideoPlayer(wx.Panel):
+    """ Media Player Panel control for the Video Window.  This is based on wxMediaCtrl. """
         
-    def __init__(self, parent = None, parentVideoWindow = None, pos=(30, 30), size=wx.Size(480, 420)):
-        """ Initialize the Video Frame object """
-        # Create a Dialog to hold the Video Window
-        wx.Dialog.__init__(self, parent, -1, _("Video"), pos=pos, size=size, style = wx.RESIZE_BORDER | wx.CAPTION )
-        # Remember the parent VideoWindow so we can interact with its methods
-        self.parentVideoWindow = parentVideoWindow
+    def __init__(self, parent=None, pos=(30, 30), size=wx.Size(480, 420), includeCheckBoxes=False, offset=0, playerNum=-1):
+        """ Initialize the Media Player Panel object """
+        # Create a Panel to hold the Media Player
+        wx.Panel.__init__(self, parent, -1, size=(358, 285))
+        # We need to know the Media Player Panel's parent window
+        self.parent = parent
+        # Remember the includeCheckBoxes setting
+        self.includeCheckBoxes = includeCheckBoxes
+        # Remember the (optional) offset value
+        self.offset = offset
+        # remember the (optional) playerNum value
+        self.playerNum = playerNum
         # Initialize the Play State
         self.playState = None
         # Initialize the Loading State variable
@@ -78,13 +66,24 @@ class VideoFrame(wx.Dialog):
         if 'wxMac' in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
         # Set the background color to Black.  
-        self.SetBackgroundColour(wx.BLACK)
-
+        self.SetBackgroundColour(wx.WHITE)
+        # If Transana is installed in a folder that contains accented characters, we need to adjust the programDir to handle that
+        if ('unicode' in wx.PlatformInfo) and isinstance(TransanaGlobal.programDir, str):
+            TransanaGlobal.programDir = TransanaGlobal.programDir.decode('cp1250')
+        # Build the full file name for the Splash Screen image
         imgFileName = os.path.join(TransanaGlobal.programDir, 'images', 'splash.gif')
+        # Get the Splash Srceen image
         self.splashImage = wx.Image(imgFileName)
+        # Get the size of the Video Player Panel
         (width, height) = self.GetClientSize()
-        self.splashImage.Rescale(width, height)
-        self.graphic = wx.StaticBitmap(self, -1, self.splashImage.ConvertToBitmap())
+        # Get a copy of the original image so the original is preserved, doesn't lose resolution.
+        self.splash = self.splashImage.Copy()
+        # Rescale the image to the size of the panel
+        self.splash.Rescale(width, height)
+        # Convert the image to a bitmap
+        self.graphic = wx.BitmapFromImage(self.splash)
+        # Place the Splash graphic on the panel
+        dc = wx.BufferedDC(wx.ClientDC(self), self.graphic)
 
         # Define timer for progress notification to other windows
         self.ProgressNotification = wx.Timer(self, CONTROL_PROGRESSNOTIFICATION)
@@ -98,90 +97,225 @@ class VideoFrame(wx.Dialog):
             self.backend = wx.media.MEDIABACKEND_GSTREAMER
         else:
             self.backend = wx.media.MEDIABACKEND_QUICKTIME
-            
+        # Initialize the Media Player to None
         self.movie = None
-
+        # Create the Media Player
         self.CreateMediaPlayer()
+        # Hide the Media Player
         self.movie.Show(False)
-
+        # Bind the OnMediaLoaded event, so we know when video loading is COMPLETE
         self.Bind(wx.media.EVT_MEDIA_LOADED, self.OnMediaLoaded)
+        # Bind the OnMediaStop event so we know when the media file has stopped playing.
         self.Bind(wx.media.EVT_MEDIA_STOP, self.OnMediaStop)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
 
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        box.Add(self.movie, 1, wx.EXPAND | wx.ALL, 0)
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
         
-        # Bind event handlers
+        # Bind the Close event handler
         wx.EVT_CLOSE(self, self.OnCloseWindow)
+        # Initialize some variables
         self.done = 0
-        
         self.VideoStartPoint = 0
         self.VideoEndPoint = 0
         self.FileName = ""
-        self.Rate = 1.0
-
-        self.SetSizer(box)
-        self.SetAutoLayout(True)
-        self.Layout()
+        # Set initial playback speed based on configuration setting
+        self.Rate = TransanaGlobal.configData.videoSpeed / 10.0
 
     def CreateMediaPlayer(self, flNm=""):
+        """ Create the actual Media Player component """
+        # If the Progress Notification timer is running, STOP it!!
         self.ProgressNotification.Stop()
+
+        self.Freeze()
+        
+        # If there is a media player already defined ...
         if self.movie:
+            # ...destroy it ...
             self.movie.Destroy()
+            # ... and remove all evidence of it!
             self.movie = None
-            try:
-                wx.Yield()
-            except:
-                pass
+            # If we are including check boxes ...
+            if self.includeCheckBoxes:
+                # ... then destroy the existing checkboxes.
+                self.includeInClip.Destroy()
+                self.playAudio.Destroy()
+                # If we are on a Player with a Syncronization indicator ...
+                if self.playerNum > 1:
+                    # ... destroy the synchronization indicator
+                    self.synch.Destroy()
+        # Create a new Media Player control
         self.movie = wx.media.MediaCtrl(self, id=-1, fileName=flNm, szBackend=self.backend)
-        box = wx.BoxSizer(wx.HORIZONTAL)
+        # Create a sizer to handle the media control
+        box = wx.BoxSizer(wx.VERTICAL)
         box.Add(self.movie, 1, wx.EXPAND | wx.ALL, 0)
+        # If we are including check boxes ...
+        if self.includeCheckBoxes:
+            # ... create a checkbox sizer
+            hSizer = wx.BoxSizer(wx.HORIZONTAL)
+            # If we have multiple players ...
+            if self.playerNum > 0:
+                # add a left spacer
+                hSizer.Add((5, 0), 0)
+                # Add a color swatch to indicate the waveform color
+                colorDefs = (wx.RED, wx.BLUE, wx.GREEN, wx.CYAN)
+                # Create an empty bitmap
+                bmp = wx.EmptyBitmap(16, 16)
+                # Create a Device Context for manipulating the bitmap
+                dc = wx.BufferedDC(None, bmp)
+                # Begin the drawing process
+                dc.BeginDrawing()
+                # Paint the bitmap white
+                dc.SetBackground(wx.Brush(wx.WHITE))
+                # Clear the device context
+                dc.Clear()
+                # Define the pen to draw with
+                pen = wx.Pen(wx.Colour(0, 0, 0), 1, wx.SOLID)
+                # Set the Pen for the Device Context
+                dc.SetPen(pen)
+                # Define the brush to paint with in the defined color
+                brush = wx.Brush(colorDefs[self.playerNum - 1])
+                # Set the Brush for the Device Context
+                dc.SetBrush(brush)
+                # Draw a black border around the color graphic, leaving a little white space
+                dc.DrawRectangle(1, 1, 14, 14)
+                # End the drawing process
+                dc.EndDrawing()
+                # Select a different object into the Device Context, which allows the bmp to be used.
+                dc.SelectObject(wx.EmptyBitmap(5,5))
+                # Create a graphic object
+                graphic = wx.StaticBitmap(self, -1, bmp)
+                # Add it to the sizer
+                hSizer.Add(graphic, 0)
+            # If we've got mulitple players and we're on one later than the first ...
+            if self.playerNum > 1:
+                # ... create a synchronization indicator
+                self.synch = wx.StaticText(self, -1, '0')
+                # ... and add the sychronization indicator to the sizer
+                hSizer.Add(self.synch, 0, wx.LEFT, 2)
+            # add a spacer
+            hSizer.Add((0, 0), 1)
+            # Add a checkbox for VIDEO clip inclusion
+            self.includeInClip = wx.CheckBox(self, -1, _("Include in Clip"))
+            # It defaults to "checked"
+            self.includeInClip.SetValue(True)
+            # Bind a CheckBox Event Handler
+            self.includeInClip.Bind(wx.EVT_CHECKBOX, self.OnIncludeCheck)
+            # Add the check box and some space to the sizer
+            hSizer.Add(self.includeInClip, 0, wx.TOP, 1)
+            hSizer.Add((5, 0))
+            # Add a checkbox for AUDIO play/mute/inclusion
+            self.playAudio = wx.CheckBox(self, -1, _("Play Audio"))
+            # It defaults to "checked"
+            self.playAudio.SetValue(True)
+            # Bind a CheckBox Event Handler
+            self.playAudio.Bind(wx.EVT_CHECKBOX, self.OnAudioCheck)
+            # Add the check box to the sizer
+            hSizer.Add(self.playAudio, 0, wx.TOP, 1)
+            # Add a right spacer
+            hSizer.Add((0, 0), 1)
+            # If we have multiple players ...
+            if self.playerNum > 0:
+                # Create a graphic object
+                graphic = wx.StaticBitmap(self, -1, bmp)
+                # Add it to the sizer
+                hSizer.Add(graphic, 0)
+                # add a left spacer
+                hSizer.Add((5, 0), 0)
+            # Add the checkbox sizer to the panel's main sizer
+            box.Add(hSizer, 0, wx.EXPAND)
+        # Set the main sizer
         self.SetSizer(box)
-        self.SetAutoLayout(True)
-        self.Layout()
+
+        self.movie.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
+
+        self.Thaw()
+        
+        # Adjust the media player size to fit the window, now that it's been laid out.
+        self.OnSize(None)
         # There's no way to detect when the Media Player's control buttons are pressed!
         # Therefore, we ALWAYS need the ProgressNotification loop running.
         self.ProgressNotification.Start(UPDATE_PROGRESS_INTERVAL)
 
-    def SetFilename(self, filename):
+    def SetFilename(self, filename, offset=0):
+        """ Load a file in a media player.  If an offset is passed, the video will be positioned to that offset. """
+        # If a file name is specified
         if filename != '':
-            self.graphic.Show(False)
+            # hide the Transana graphic
+#            self.graphic.Show(False)
+            # Show the media player control
             self.movie.Show(True)
+            # If we're including check boxes ...
+            if self.includeCheckBoxes:
+                # ... show the check boxes!
+                self.includeInClip.Show(True)
+                self.playAudio.Show(True)
+            # If we're on Windows, we may need to change media player back ends!
             if ('wxMSW' in wx.PlatformInfo):
+                # Break out the file extension
                 (videoFilename, videoExtension) = os.path.splitext(filename)
+                # If the extension is one that requires the QuickTime players ...
                 if videoExtension.lower() in ['.mov', '.mp4']:
+                    # ... indicate we need the QuickTime back end
                     backendNeeded = wx.media.MEDIABACKEND_QUICKTIME
+                # If not QuickTime ...
                 else:
-#                    backendNeeded = WMPBACKEND
+                    # ... Check the Configuration data to see which WMP back end we need.
                     if TransanaGlobal.configData.mediaPlayer == 1:
                         backendNeeded = wx.media.MEDIABACKEND_DIRECTSHOW
                     else:
                         backendNeeded = wx.media.MEDIABACKEND_WMP10
+                # If the current back end is different from the needed back end ...
                 if self.backend != backendNeeded:
+                    # ... signal the back end that we need ...
                     self.backend = backendNeeded
+                    # ... and recreate the Media Player using the new back end type.
                     self.CreateMediaPlayer(filename)
             # We need to have a flag that indicates that the video is in the process of loading
             self.isLoading = True
+            # We don't know the media length in some back ends until the load is complete.
             self.mediaLengthKnown = False
+            # Try to load the file in the media player.  If successful ...
             if self.movie.Load(filename):
+                # ... remember the file name
                 self.FileName = filename
-                self.VideoStartPoint = 0
+                # Initialize the start and end points
+                if offset <= 0:
+                    self.VideoStartPoint = 0
+                else:
+                    self.VideoStartPoint = offset
                 self.VideoEndPoint = 0
-                self.GetSizer().Layout()
+            # If the file load FAILS ...
             else:
-                print "Unable to load file.  Unsupported format?"
+                # Display an error message
+                msg = _('Transana was unable to load media file "%s".')
+                if 'unicode' in wx.PlatformInfo:
+                    msg = unicode(msg, 'utf8')
+                dlg = Dialogs.ErrorDialog(self, msg % filename)
+                dlg.ShowModal()
+                dlg.Destroy()
+                # Signal that the media file did not load
                 self.isLoading = False
                 self.FileName = ""
-            self.Update()
+        # If no filename is specified ...
         else:
-            self.graphic.Show(True)
+            # Display the Splash Screen
+#            self.graphic.Show(True)
+            # "unload" what might be in the Media Player
             self.movie.Load('')
+            # Hide the Media Player
             self.movie.Show(False)
+            # If there are checkboxes (multiple videos) ...
+            if self.includeCheckBoxes:
+                # ... hide them too.
+                self.includeInClip.Show(False)
+                self.playAudio.Show(False)
             # If the graphic has been hidden, it may be the wrong size.  This fixes that.
             self.OnSize(None)
-            self.Update()
+        # Update the Panel on screen
+        self.Update()
     
     def GetFilename(self):
+        """ Get the name of the currently-loaded media file """
         return self.FileName
 
     def SetVideoStartPoint(self, TimeCode):
@@ -191,27 +325,37 @@ class VideoFrame(wx.Dialog):
             # TimeCode must be an int on the Mac.
             if not isinstance(TimeCode, int):
                 TimeCode = int(TimeCode)
+            # Set the video start point locally.  DO NOT adjust the time code for the local media player's offset.
             self.VideoStartPoint = TimeCode
+            # Set the video player's current position (which DOES adjust for offset)
             self.SetCurrentVideoPosition(TimeCode)
-            if self.parentVideoWindow != None:
-                # notify the rest of Transana of the change.  However, calling parentVideoWindow.UpdateVideoPosition calls this method, causing
-                # recursion problems, so we make the call to the parentVideoWindow's ControlObject.
-                self.parentVideoWindow.ControlObject.UpdateVideoPosition(self.VideoStartPoint)
+            if self.parent != None:
+                # If this is the ONLY media player or the FIRST media player ...
+                if self.playerNum in [-1, 1]:
+                    # notify the rest of Transana of the change.
+                    self.parent.ControlObject.UpdateVideoPosition(self.VideoStartPoint + self.parent.globalOffset)
                    
     def GetVideoStartPoint(self):
+        """ Get the current Video Start Point """
         return self.VideoStartPoint
         
     def SetVideoEndPoint(self, TimeCode):
-        self.VideoEndPoint = TimeCode
+        """ Set the Video End Point """
+        # Adjust the time code for the local media player's offset
+        self.VideoEndPoint = TimeCode - self.offset
 
     def GetVideoEndPoint(self):
+        """ Get the current Video End Point """
         return self.VideoEndPoint
  
     def GetTimecode(self):
         """Return the current position in ms."""
-        return self.movie.Tell()
+        # Report the current video position, adjusted for the local media player offset.  This is the VIRTUAL TimeCode position,
+        # rather than the ACTUAL TimeCode Position.
+        return self.movie.Tell() + self.offset
 
     def GetMediaLength(self):
+        """ Get the length of the current media file, if it's known """
         if not self.mediaLengthKnown:
             return -1
         else:
@@ -224,6 +368,7 @@ class VideoFrame(wx.Dialog):
                 return self.movie.Length()
 
     def GetState(self):
+        """ Get the current state of the Media Player """
         # If there's a defined video ...
         if self.movie != None:
             return self.movie.GetState()
@@ -236,43 +381,63 @@ class VideoFrame(wx.Dialog):
         if not isinstance(TimeCode, int):
             TimeCode = int(TimeCode)
         # On the Mac, the start point can't be less than 0
-        if TimeCode < 0:
+        if TimeCode < self.offset:
             TimeCode = 0
-        # On the Mac, the start point can't be after the end
-        if (self.mediaLengthKnown) and (TimeCode > self.GetMediaLength() - 50):
-            self.VideoStartPoint = self.GetMediaLength() - 50
-            TimeCode = self.GetMediaLength() - 50
+        else:
+            TimeCode -= self.offset
+        # On the Mac, the start point can't be after the end.  A 5 ms adjustment (1/6 of a frame) is too small to be noticable.
+        if (self.mediaLengthKnown) and (TimeCode > self.GetMediaLength() - 5):
+            self.VideoStartPoint = self.GetMediaLength() - 5
+            TimeCode = self.GetMediaLength() - 5
+        # Find the appropriate spot in the media file
         self.movie.Seek(TimeCode)
 
+    # NOTE:  GetPlayBackSpeed and SetPlayBackSpeed seem to disagree with each other by a factor of 10!!!!
     def GetPlayBackSpeed(self):
+        """ Get the current Playback Speed """
         return self.Rate
     
+    # NOTE:  GetPlayBackSpeed and SetPlayBackSpeed seem to disagree with each other by a factor of 10!!!!
     def SetPlayBackSpeed(self, playbackSpeed):
         """ Sets the play back speed."""
         # Reset the Rate value.  The Options Setting screen uses values 1 - 20 to represent 0.1 to 2.0, so divide by 10!
         self.Rate = playbackSpeed / 10.0
         # Set the playback Rate, if we're NOT using the QuickTime Back End.  If we are, that would cause the video to
         # play, so we'll skip it.
-        if (self.backend != wx.media.MEDIABACKEND_QUICKTIME):
+        if (self.backend != wx.media.MEDIABACKEND_QUICKTIME) or self.IsPlaying():
             self.movie.SetPlaybackRate(self.Rate)
+        # Let's adjust the configuration value as well.
+        TransanaGlobal.configData.videoSpeed = int(self.Rate * 10)
 
     def IsPlaying(self):
+        """ Is the media player currently playing? """
         return self.GetState() == wx.media.MEDIASTATE_PLAYING
 
     def IsPaused(self):
-        return self.GetState() == wx.media.MEDIASTATE_PAUSED
+        """ Is the media player currently paused? """
+        # When we have multiple media players, not all of which have started playing, some media players may be
+        # paused while others may be stopped.  Functionally, we need Paused and Stopped to be treated the same.
+        return self.GetState() in [wx.media.MEDIASTATE_PAUSED, wx.media.MEDIASTATE_STOPPED]
 
     def IsStopped(self):
-        return self.GetState() == wx.media.MEDIASTATE_STOPPED
+        """ Is the media player currently stopped? """
+        # When we have multiple media players, not all of which have started playing, some media players may be
+        # paused while others may be stopped.  Functionally, we need Paused and Stopped to be treated the same.
+        return self.GetState() in [wx.media.MEDIASTATE_PAUSED, wx.media.MEDIASTATE_STOPPED]
 
     def IsLoading(self):
+        """ Is the media player currently in the process of loading a media file? """
         return self.isLoading
 
     def PlaySegment(self, t0, t1):
         """Play the segment of the video from timecode t0 to t1."""
+        # Stop playback, if needed.
         self.Stop()
+        # Set the start point
         self.SetVideoStartPoint(t0)
+        # Set the end point
         self.SetVideoEndPoint(t1)
+        # Start media playback
         self.Play()
             
     def Play(self):
@@ -306,31 +471,66 @@ class VideoFrame(wx.Dialog):
         self.PostPos()
 
     def OnCloseWindow(self, event):
+        """ Close event handler """
+        # Stop the Progress Notification timer
         self.ProgressNotification.Stop()
+        # Destroy the current Panel
         self.Destroy()
 
     def OnMediaLoaded(self, event):
-        # Indicate that the loading process is complete
-        self.isLoading = False
+        """ This event is triggered when media loading is complete.  Only then are certain things known about the media file. """
+        # We can now know the media length
         self.mediaLengthKnown = True
-        # Putting this here allows it to show up under QuickTime!
-        self.movie.ShowPlayerControls(wx.media.MEDIACTRLPLAYERCONTROLS_DEFAULT | wx.media.MEDIACTRLPLAYERCONTROLS_VOLUME)
-        # once the video is loaded, we can determine its size and should react to that.
-        self.OnSizeChange()
+        # Putting this here allows the Media Player control to show up under QuickTime!
+        # self.movie.ShowPlayerControls(wx.media.MEDIACTRLPLAYERCONTROLS_DEFAULT | wx.media.MEDIACTRLPLAYERCONTROLS_VOLUME)
+        # Once the video is loaded, we can determine its size and should react to that.
+        self.parent.OnSizeChange()
         self.Update()
+        # Often, the Seek has also not occurred correctly.  This detects and fixes that problem.
+        if self.VideoStartPoint != self.GetTimecode():
+            self.SetCurrentVideoPosition(self.VideoStartPoint)
+        # Indicate that the loading process is complete.  (Moved later due to a PlayAllClips problem.)
+        self.isLoading = False
         # Play All Clips is having trouble starting because "Play()" is called before loading is complete.
         # This structure allows the Play() to be called once the load is done.
         if self.playWhenLoaded:
             self.Play()
+        # If on Windows ...
         elif "wxMSW" in wx.PlatformInfo:
+            # ... prevent automatic playback upon load.
             self.Stop()
-        # Often, the Seek has also not occurred correctly.  This detects and fixes that problem.
-        if self.VideoStartPoint != self.GetTimecode():
-            self.SetCurrentVideoPosition(self.VideoStartPoint)
+
+    def OnPaint(self, event):
+        # If the movie player is NOT shown, we need to show the background image
+        if not self.movie.IsShown():
+            # Get the size of the Video Player Panel
+            (width, height) = self.GetClientSize()
+            # Get a COPY of the original splash image
+            self.splash = self.splashImage.Copy()
+            # Loading two consecutive audio files crashes unless we make sure that the window client height is greater than 0
+            if height > 0:
+                # Rescale the image to the size of the panel
+                self.splash.Rescale(width, height)
+                # Convert the image to a bitmap
+                self.graphic = wx.BitmapFromImage(self.splash)
+                # Show the image on the panel background
+                dc = wx.BufferedPaintDC(self, self.graphic)
+        event.Skip()
+
+    def OnRightUp(self, event):
+        """ Right Mouse Button Up event handler """
+        # let the parent control handle this one!
+        event.Skip()
+        # Explicitly call the parent's OnRightUp method.
+        self.parent.OnRightUp(event)
 
     def OnSizeChange(self):
+        """ OBSOLETE.  Handle size changes that are not event-driven """
+        
+        print "video_player.OnSizeChange() disabled as obsolete"
+        
         # Only change the size of the video window if Auto Arrange is ON!
-        if TransanaGlobal.configData.autoArrange:
+        if FALSE and TransanaGlobal.configData.autoArrange:
             (sizeX, sizeY) = self.movie.GetBestSize()
             # Now that we have a size, let's position the window
             #  Determine the screen size 
@@ -367,11 +567,11 @@ class VideoFrame(wx.Dialog):
                                pos[1], 
                                minWidth, 
                                minHeight + controlBarSize + headerHeight)
-            if self.parentVideoWindow != None:
-                self.parentVideoWindow.UpdateVideoWindowPosition(rect[0] + rect[2] - minWidth - 3, 
-                                                                 pos[1], 
-                                                                 minWidth, 
-                                                                 minHeight + controlBarSize + headerHeight)
+            if self.parent != None:
+                self.parent.UpdateVideoWindowPosition(rect[0] + rect[2] - minWidth - 3, 
+                                                      pos[1], 
+                                                      minWidth, 
+                                                      minHeight + controlBarSize + headerHeight)
 
     def OnSize(self, event):
         """ Process Size Change event and notify the ControlObject """
@@ -379,27 +579,26 @@ class VideoFrame(wx.Dialog):
         # from a real even, then we should process underlying OnSize events.
         if event != None:
             event.Skip()
-        # We can't update the graphic's size if it's hidden, as that causes problems visually on the Mac.
-        if self.graphic.IsShown():
-            # For resizing the graphic, we need the ClientSize (sans toolbar)
-            (width, height) = self.GetClientSize()
-
-            if (width > 0) and (height > 0):
-                self.graphic.Destroy()
-                imgFileName = os.path.join(TransanaGlobal.programDir, 'images', 'splash.gif')
-                self.splashImage = wx.Image(imgFileName)
-                self.splashImage.Rescale(width, height)
-                self.graphic = wx.StaticBitmap(self, -1, self.splashImage.ConvertToBitmap(), pos=(0, 0), size=(width, height))
-                self.graphic.Refresh()
-        # for updating window position, we need the ful window size
-        (width, height) = self.GetSize()
-        pos = self.GetPosition()
-        if self.parentVideoWindow != None:
-            self.parentVideoWindow.UpdateVideoWindowPosition(pos[0], pos[1], width, height)
+        try:
+            # We can't update the graphic's size if it's hidden, as that causes problems visually on the Mac.
+            if self.movie and self.movie.IsShown():
+                # ... refresh the media player
+                self.movie.Refresh()
+                self.Refresh()
+        except wx._core.PyDeadObjectError:
+            pass
 
     def OnMediaStop(self, event):
-        wx.CallAfter(self.SetCurrentVideoPosition, self.VideoStartPoint)
-        wx.CallAfter(self.PostPos)
+        """ This event is triggered when media play stops """
+        # See if OTHER media players continue to play.  If so, leave this player at the video end position.  If NOT ...
+        if not self.parent.IsPlaying():
+            # ... reset the video position back to the Start Point
+            wx.CallAfter(self.SetCurrentVideoPosition, self.VideoStartPoint)
+            # Signal Transana that the video position has changed
+            wx.CallAfter(self.PostPos)
+        elif (self.VideoEndPoint <= 0) or (self.VideoEndPoint >= self.movie.Length() - 66):
+            # Set the video to the last frame
+            wx.CallAfter(self.SetCurrentVideoPosition, self.movie.Length() - 1)
 
     def OnProgressNotification(self, event):
         # Detect Play State Change and notify the VideoWindow.
@@ -408,12 +607,12 @@ class VideoFrame(wx.Dialog):
             # If it has, communicate that to the VideoWindow.  The Mac doesn't seem to differentiate between
             # Stop and Pause the say Windows does, so pass "Stopped" for either Stop or Pause.
             if self.movie.GetState() != wx.media.MEDIASTATE_PLAYING:
-                if self.parentVideoWindow != None:
-                    self.parentVideoWindow.UpdatePlayState(wx.media.MEDIASTATE_STOPPED)
+                if self.parent != None:
+                    self.parent.UpdatePlayState(wx.media.MEDIASTATE_STOPPED)
             # Pass "Play" for play.
             else:
-                if self.parentVideoWindow != None:
-                    self.parentVideoWindow.UpdatePlayState(wx.media.MEDIASTATE_PLAYING)
+                if self.parent != None:
+                    self.parent.UpdatePlayState(wx.media.MEDIASTATE_PLAYING)
             # Update the local playState variable
             self.playState = self.movie.GetState()
 
@@ -426,168 +625,66 @@ class VideoFrame(wx.Dialog):
         except:
             pass
 
-        # The timer that calls this routine runs whether the video is playing or not.  We only need to think
-        # about updating the rest of Transana if the video is playing.
-        if self.IsPlaying():
-            # If playing, check to see if the current segment has ended.
-            if (self.VideoEndPoint > 0) and (self.GetTimecode() >= self.VideoEndPoint):
-                self.Stop()
-                # If we're NOT in PlayAllClips mode, ...
-                if (self != None) and (self.parentVideoWindow.ControlObject.PlayAllClipsWindow == None):
-                    # ... reset the video to the original start point.  (This will break PlayAllClips, though.)    
-                    self.SetVideoStartPoint(self.VideoStartPoint)
-
-
-            self.PostPos()
+        # We need to trap PyDeadObjectErrors here
+        try:
+            # The timer that calls this routine runs whether the video is playing or not.  We only need to think
+            # about updating the rest of Transana if the video is playing.
+            if self.IsPlaying():
+                self.PostPos()
+        except wx._core.PyDeadObjectError:
+            pass
 
     def PostPos(self):
-        if self.parentVideoWindow != None:
-            self.parentVideoWindow.UpdateVideoPosition(self.GetTimecode())
+        """ Inform other elements of the current video position """
+        # If we are not shutting down Transana (to avoid a crash) ...
+        if (self.parent != None) and (self.parent.ControlObject != None) and (not self.parent.ControlObject.shuttingDown):
+            tc = self.GetTimecode()
+            if self.playerNum == -1:
+                # ... then update the parent (Video Window)'s Video Position with the current time code
+                self.parent.UpdateVideoPosition(tc)
+            else:
+                self.parent.UpdateVideoPosition(tc, self.playerNum)
 
+    def OnIncludeCheck(self, event):
+        """ Event handler for the includeInClip Checkbox """
+        # If the includeInClip checkbox has been UNCHECKED ...
+        if not self.includeInClip.GetValue():
+            # ... remember the value of the PlayAudio checkbox ...
+            self.includeAudioSetting = self.playAudio.GetValue()
+            # ... and then make sure it is UNCHECKED.  If you're not including the media in the clip, you shouldn't hear it!
+            self.SetAudioCheck(False)
+        # If the includeInClip checkbox has been CHECKED ...
+        else:
+            # ... then restore the PlayAudio checkbox to its prior setting
+            self.SetAudioCheck(self.includeAudioSetting)
+        # Notify the parent of the change (so waveform can be updated)
+        self.parent.VideoCheckboxChange()
         
-if __name__ == '__main__':
-    # Create a Stand-alone video controller
-    import time
-    
-    MENU_FILE_NEW        =  wx.NewId()
-    MENU_FILE_OPEN       =  wx.NewId()
-    MENU_FILE_EXIT       =  wx.NewId()
+    def OnAudioCheck(self, event):
+        """ Event handler for Audio checkbox """
+        # If the box has just been checked ...
+        if self.playAudio.GetValue():
+            # ... restore the audio by setting the volume to the previous level
+            self.movie.SetVolume(1.0)
+            # If the audio is included, the media file MUST be included in Clips.
+            self.includeInClip.SetValue(True)
+        # If the box has just been un-checked ...
+        else:
+            # ... set the audio level to 0.0
+            self.movie.SetVolume(0.0)
+        # Notify the parent of the change (so waveform can be updated)
+        self.parent.VideoCheckboxChange()
 
-    TIMER_INTERVAL = 100
+    def SetAudioCheck(self, val):
+        """ Set the Audio Checkbox value """
+        # Set the value of the checkbox
+        self.playAudio.SetValue(val)
+        # Set the Audio Playback Level by triggering the AudioCheck event
+        self.OnAudioCheck(None)
 
-    class ControlWindow(wx.Frame):
-        def __init__(self, VideoWindow, pos=(100, 600), size=wx.Size(500, 100)):
-
-            wx.Frame.__init__(self, None, -1, "Video Controller", pos=pos, size=size,
-                             style = wx.RESIZE_BORDER | wx.CAPTION )
-            self.SetBackgroundColour(wx.WHITE)
-            self.VideoWindow = VideoWindow
-            menuBar = wx.MenuBar()
-            fileMenu = wx.Menu()
-            fileMenu.Append(MENU_FILE_NEW, "&New")
-            fileMenu.Append(MENU_FILE_OPEN, "&Open")
-            fileMenu.Append(MENU_FILE_EXIT, "E&xit")
-            menuBar.Append(fileMenu, "&File")
-
-            self.SetMenuBar(menuBar)
-
-            wx.EVT_MENU(self, MENU_FILE_NEW, self.OnFileNew)
-            wx.EVT_MENU(self, MENU_FILE_OPEN, self.OnFileOpen)
-            wx.EVT_MENU(self, MENU_FILE_EXIT, self.OnFileExit)
-
-            self.ButtonPlay = wx.Button(self, -1, "Play")
-            self.Bind(wx.EVT_BUTTON, self.OnPlay, self.ButtonPlay)
-            self.ButtonPause = wx.Button(self, -1, "Pause")
-            self.Bind(wx.EVT_BUTTON, self.OnPause, self.ButtonPause)
-            self.ButtonStop = wx.Button(self, -1, "Stop")
-            self.Bind(wx.EVT_BUTTON, self.OnStop, self.ButtonStop)
-            self.ButtonPlaySeg = wx.Button(self, -1, "Play Segment")
-            self.Bind(wx.EVT_BUTTON, self.OnPlaySegment, self.ButtonPlaySeg)
-            self.ButtonResize = wx.Button(self, -1, "Resize")
-            self.Bind(wx.EVT_BUTTON, self.OnResize, self.ButtonResize)
-            self.Rate = 1.0
-            self.ButtonRate = wx.Button(self, -1, "Rate")
-            self.Bind(wx.EVT_BUTTON, self.OnRate, self.ButtonRate)
-        
-            btnBox = wx.BoxSizer(wx.HORIZONTAL)
-            btnBox.Add(self.ButtonPlay, 1, wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.EXPAND, 10)
-            btnBox.Add(self.ButtonPause, 1, wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.EXPAND, 10)
-            btnBox.Add(self.ButtonStop, 1, wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.EXPAND, 10)
-            btnBox.Add(self.ButtonPlaySeg, 1, wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.EXPAND, 10)
-            btnBox.Add(self.ButtonResize, 1, wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.EXPAND, 10)
-            btnBox.Add(self.ButtonRate, 1, wx.ALIGN_LEFT | wx.ALIGN_TOP | wx.EXPAND, 10)
-
-            box = wx.BoxSizer(wx.VERTICAL)
-            box.Add(btnBox, 1, wx.ALIGN_LEFT | wx.EXPAND, 5)
-
-            self.txt = wx.StaticText(self, -1, 'Video Position:  %10d' % 0)
-            txtbox = wx.BoxSizer(wx.HORIZONTAL)
-            txtbox.Add(self.txt, 1, wx.EXPAND, 10)
-            box.Add(txtbox, 1, wx.ALIGN_LEFT, 5)
-            
-
-            self.CreateStatusBar()
-            self.SetStatusText('Program opened.')
-
-            self.SetSizer(box)
-            self.Fit()
-            self.SetSizeHints(minW = self.GetSize()[0], minH = self.GetSize()[1], maxH = self.GetSize()[1])
-            self.SetAutoLayout(True)
-            self.Layout()
-            
-            self.Show(True)
-
-            # Create a timer to handle waiting for the video to load
-            self.Timer = wx.Timer(self)
-            self.Bind(wx.EVT_TIMER, self.OnTimer)
-            self.Timer.Start(TIMER_INTERVAL)
-
-
-        def OnFileNew(self, event):
-            self.SetStatusText('New.')
-            self.VideoWindow.SetFilename('')
-
-        def OnFileOpen(self, event):
-            self.SetStatusText('Opening Video File.')
-            dlg = wx.FileDialog(self, message="Select Video File:", defaultDir="E:\Video", defaultFile="", style=wx.OPEN | wx.CHANGE_DIR)
-            if dlg.ShowModal() == wx.ID_OK:
-                self.VideoWindow.SetFilename(dlg.GetPath())
-                self.Rate = 1.0
-            dlg.Destroy()
-                
-        def OnFileExit(self, event):
-            self.Timer.Stop()
-            self.SetStatusText('Program closing.')
-            self.VideoWindow.Close()
-            self.VideoWindow = None
-            self.Close()
-
-        def OnResize(self, event):
-            self.VideoWindow.SetSize(wx.Size(500, 400))
-            self.SetStatusText('Window resized to (500, 400).')
-            
-        def OnPlay(self, event):
-            self.SetStatusText('Play.')
-            self.Timer.Start(TIMER_INTERVAL)
-            self.VideoWindow.Play()
-            
-        def OnPause(self, event):
-            self.VideoWindow.Pause()
-            
-        def OnStop(self, event):
-            self.VideoWindow.Stop()
-            self.SetStatusText('Stop.')
-
-        def OnPlaySegment(self, event):
-            self.Timer.Start(TIMER_INTERVAL)
-            self.VideoWindow.PlaySegment(10000, 19000)
-
-        def OnRate(self, event):
-            self.Rate += 0.2
-            if self.Rate > 1.5:
-                self.Rate = 0.6
-            self.VideoWindow.SetPlayBackSpeed(self.Rate * 10)
-            
-        def OnTimer(self, event):
-            if self.VideoWindow.movie != None:
-                pos = self.VideoWindow.GetTimecode()
-                length = self.VideoWindow.GetMediaLength()
-                self.txt.SetLabel('Video Position:  %10d / %10d     State:  %s     Rate: %2.1f     Time:  %s' % (pos, length, self.VideoWindow.GetState(), self.Rate, time.asctime()[-13:-5]))
-                if (self.VideoWindow.VideoEndPoint > 0) and (pos > self.VideoWindow.VideoEndPoint):
-                    self.OnStop(event)
-
-        def UpdatePlayState(self, state):
-            print "UpdatePlayState:", state
-
-            
-    class MyApp(wx.App):
-        def OnInit(self):
-            self.frame = VideoFrame()
-            self.frame.Show(True)
-            controller = ControlWindow(self.frame)
-            self.SetTopWindow(controller)
-            return True
-            
-
-    app = MyApp(0)
-    app.MainLoop()
+    def GetVideoCheckboxDataForClips(self):
+        """ Return the data about this media player checkboxes needed for Clip Creation """
+        if self.includeCheckBoxes:
+            return (self.includeInClip.GetValue(), self.playAudio.GetValue())
+        else:
+            return None

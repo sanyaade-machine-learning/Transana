@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -29,15 +29,7 @@ ALLOW_UNICODE_ENTRY = False
 if ALLOW_UNICODE_ENTRY:
     print "TranscriptionUI ALLOW_UNICODE_ENTRY is ON!"
 
-if __name__ == '__main__':
-    import wxversion
-    wxversion.select('2.6-unicode')
-    
 import wx
-
-if __name__ == '__main__':
-    __builtins__._ = wx.GetTranslation
-    wx.SetDefaultPyEncoding('utf_8')
 
 import gettext
 import os
@@ -368,9 +360,16 @@ class _TranscriptDialog(wx.Dialog):
             event.Skip()
 
     def OnSize(self, event):
-        (left, top) = self.GetPositionTuple()
-        (width, height) = self.GetSize()
-        self.ControlObject.UpdateWindowPositions('Transcript', width + left, YUpper = top - 4)
+        """ Transcription Window Resize Method """
+        # If we are not doing global resizing of all windows ...
+        if not TransanaGlobal.resizingAll:
+            # Get the position of the Transcript window
+            (left, top) = self.GetPositionTuple()
+            # Get the size of the Transcript window
+            (width, height) = self.GetSize()
+            # Call the ControlObject's routine for adjusting all windows
+            self.ControlObject.UpdateWindowPositions('Transcript', width + left, YUpper = top - 4)
+        # Call the Transcript Window's Layout.
         self.Layout()
         # We may need to scroll to keep the current selection in the visible part of the window.
         # Find the start of the selection.
@@ -454,35 +453,4 @@ class _TranscriptDialog(wx.Dialog):
         x = rect[0]
         # rect[1] compensates if Start menu is on Top
         y = rect[1] + rect[3] - height - 3
-        return (x, y)
-
-
-class TranscriptionTestApp(wx.App):
-    """Test class container for a TranscriptionUI."""
-
-    def OnInit(self):
-        gettext.install('Transana', './locale', False)
-        # Define supported languages
-        self.presLan_en = gettext.translation('Transana', './locale', \
-                languages=['en']) # English
-        self.presLan_en.install()
-        
-        self.transcriptWindow = TranscriptionUI(None)
-        self.SetTopWindow(self.transcriptWindow.dlg)
-        self.transcriptWindow.dlg.editor.load_transcript("SampleTranscript.rtf")
-        self.transcriptWindow.dlg.editor.set_read_only()
-        self.transcriptWindow.dlg.toolbar.Enable(True)
-        self.transcriptWindow.dlg.EnableSearch(True)
-        self.transcriptWindow.Show()
-        self.transcriptWindow.dlg.editor.SaveRTFDocument('test.rtf')
-        return True
-        
-def main():
-    """Stand-alone test for Transcription UI.  Does not require database
-    connection or other Transana components."""
-    
-    app = TranscriptionTestApp(0)
-    app.MainLoop()
-    
-if __name__ == '__main__':
-    main()
+        return (x, y)    

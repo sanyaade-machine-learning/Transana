@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,30 +16,37 @@
 
 """This module implements the Collection class as part of the Data Objects."""
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
-# Based on code/ideas/logic from UCollectionObject Delphi unit by DKW
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 
 DEBUG = False
 if DEBUG:
     print "Collection DEBUG is ON!"
 
+# import wxPython
 import wx
-from DataObject import DataObject
-import DBInterface
-import Clip
-import Note
-from TransanaExceptions import *
-import TransanaGlobal
+# import Python's types module
 import types
+# import Transana's Clip Object
+import Clip
+# import Transana's base Data Object
+import DataObject
+# import Transana's Database Interface
+import DBInterface
+# import Transana's Note Object
+import Note
+# import Transana's Exceptions
+from TransanaExceptions import *
+# import Transana's Globals
+import TransanaGlobal
 
-class Collection(DataObject):
+class Collection(DataObject.DataObject):
     """This class defines the structure for a collection object.  A collection
     holds information about a group of video clips."""
 
     def __init__(self, id_or_num=None, parent=0):
         """Initialize an Collection object.  If a record ID number or
         Collection ID is given, load it from the Database."""
-        DataObject.__init__(self)
+        DataObject.DataObject.__init__(self)
         if type(id_or_num) in (int, long):
             self.db_load_by_num(id_or_num)
         elif isinstance(id_or_num, types.StringTypes):
@@ -52,11 +59,11 @@ class Collection(DataObject):
     def __repr__(self):
         str = 'Collection Object:\n'
         str = str + "Number = %s\n" % self.number
-        str = str + "id = %s\n" % self.id
+        str = str + "id = %s\n" % self.id.encode('utf8')
         str = str + "parent = %s\n" % self.parent
-        str = str + "comment = %s\n" % self.comment
-        str = str + "owner = %s\n" % self.owner
-        str = str + "Default KWG = %s\n\n" % self.keyword_group
+        str = str + "comment = %s\n" % self.comment.encode('utf8')
+        str = str + "owner = %s\n" % self.owner.encode('utf8')
+        str = str + "Default KWG = %s\n\n" % self.keyword_group.encode('utf8')
         return str
 
     def db_load_by_name(self, name, parent_num=0):

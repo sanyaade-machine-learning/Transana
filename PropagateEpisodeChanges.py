@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -541,7 +541,7 @@ class PropagateClipChanges(wx.Dialog):
                         # Update the Keyword Example Node to the NEW Clip ID
                         parent.tree.SetItemText(exampleNode, clipObj.id)
                         # Add a Keyword Example record to the Undo list in case the user Cancels.
-                        undoData.append(('KWE', clipObj.number, clipObj.id, originalClip.id, kwg, kw))
+                        undoData.append(('KWE', clipObj.number, clipObj.episode_num, clipObj.id, originalClip.id, kwg, kw))
                         # If we're in the Multi-User mode, we need to send a message about the change
                         if not TransanaConstants.singleUserVersion:
                             # Begin constructing the message with the old and new names for the node
@@ -571,7 +571,7 @@ class PropagateClipChanges(wx.Dialog):
                     # Rename the Tree node
                     parent.tree.rename_Node(nodeList, 'ClipNode', clipObj.id)
                     # Add a Clip record to the Undo list in case the user Cancels.
-                    undoData.append(('Clip', clipObj.number, clipObj.id, originalClip.id, clipNodeData))
+                    undoData.append(('Clip', clipObj.number, clipObj.episode_num, clipObj.id, originalClip.id, clipNodeData))
                     # If we're in the Multi-User mode, we need to send a message about the change
                     if not TransanaConstants.singleUserVersion:
                         # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
@@ -598,7 +598,7 @@ class PropagateClipChanges(wx.Dialog):
                 # Now let's communicate with other Transana instances if we're in Multi-user mode
                 if not TransanaConstants.singleUserVersion:
                     # Build the message to update Keyword Visualizations.
-                    msg = 'Clip %d' % clipObj.number
+                    msg = 'Clip %d %d' % (clipObj.number, clipObj.episode_num)
 
                     if DEBUG:
                         print 'Message to send = "UKL %s"' % msg
@@ -650,9 +650,9 @@ class PropagateClipChanges(wx.Dialog):
                 # If the record is a Clip record ...
                 if undoRec[0] == 'Clip':
                     # ... assemble the node list based on the values in the Undo record
-                    nodeList = (_("Collections"),) + undoRec[4] + (undoRec[2],)
+                    nodeList = (_("Collections"),) + undoRec[5] + (undoRec[3],)
                     # Rename the correct Tree node
-                    parent.tree.rename_Node(nodeList, 'ClipNode', undoRec[3])
+                    parent.tree.rename_Node(nodeList, 'ClipNode', undoRec[4])
 
                     # If we're in the Multi-User mode, we need to send a message about the change
                     if not TransanaConstants.singleUserVersion:
@@ -664,7 +664,7 @@ class PropagateClipChanges(wx.Dialog):
                             # Prepend the new Node's name on the Message with the appropriate seperator
                             msg += node + ' >|< ' 
                         # Begin constructing the message with the old and new names for the node
-                        msg += undoRec[3]
+                        msg += undoRec[4]
 
                         if DEBUG:
                             print 'Message to send = "RN %s"' % msg.encode('latin1')
@@ -677,11 +677,11 @@ class PropagateClipChanges(wx.Dialog):
                 # If the record is a Keyword Example record ...
                 else:
                     # .. Build the Keyword Example Node List for the OLD Clip ID
-                    nodeList = (_('Keywords'), undoRec[4], undoRec[5], undoRec[2])
+                    nodeList = (_('Keywords'), undoRec[5], undoRec[6], undoRec[3])
                     # Select the Keyword Example Node
                     exampleNode = parent.tree.select_Node(nodeList, 'KeywordExampleNode')
                     # Update the Keyword Example Node to the NEW Clip ID
-                    parent.tree.SetItemText(exampleNode, undoRec[3])
+                    parent.tree.SetItemText(exampleNode, undoRec[4])
                     # If we're in the Multi-User mode, we need to send a message about the change
                     if not TransanaConstants.singleUserVersion:
                         # Begin constructing the message with the old and new names for the node
@@ -715,7 +715,7 @@ class PropagateClipChanges(wx.Dialog):
                     if TransanaGlobal.chatWindow != None:
                         # Cache the Update Keywords messages for later processing
                         messageCache.append("UKL %s" % msg)
-                        messageCache.append("UKV %s" % msg)
+                        messageCache.append("UKV %s %s" % (msg, undoRec[2]))
                 
             # ... and inform the user that the changes were cancelled.  To avoid confusion, clear the report information already generated.
             self.memo.Clear()

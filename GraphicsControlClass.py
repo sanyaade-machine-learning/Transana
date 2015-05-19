@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2007  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2009  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -34,6 +34,8 @@
                                             Currently supported events for this are:
                                               OnLeftDown()
                                               OnLeftUp()
+               name=None                 Object identifier, used by Synchronize.py.  event.GetId() isn't returning the correct
+                                         object Id on the Mac.
 
       SetColour(colour)                  Sets Drawing Color (using wxNamedColours)
       SetFontColour(colour)              Sets Text Color (using wxNamedColours)
@@ -63,10 +65,13 @@ class GraphicsControl(wx.ScrolledWindow):
     """ Graphics Control Class implements a Graphic Control used for doing some
         low-level drawing in the Visualization Window and the Keyword Map """
     def __init__(self, parent, ID, pos=wx.Point(100, 100), size=(800, 600), canvassize=(999, 999),
-                 drawEnabled=False, visualizationMode=False, passMouseEvents=False):
+                 drawEnabled=False, visualizationMode=False, passMouseEvents=False, name=None):
         self.parent = parent
         self.drawEnabled = drawEnabled
         self.visualizationMode = visualizationMode
+        # "name" is used by the Synchronize routine to keep track of which visualization is being worked on.  On the Mac,
+        # event.GetId() is not returning the proper Id value of the GraphicsControl object, so we need this workaround.
+        self.name = name
         # The control should never be larger than the canvas, but should allow a margin (22, 22) for the scroll bars if needed.
         # With a small canvas, we allow 6 pixels for the frame.
         size = (min(size[0] + 22, canvassize[0] + 6), min(size[1] + 22, canvassize[1] + 6))
@@ -499,6 +504,8 @@ class GraphicsControl(wx.ScrolledWindow):
             self.lines.append((self.colour, self.thickness, self.curLine))
             self.curLine = []
             self.ReleaseMouse()
+        # allow underlying event processing
+        event.Skip()
 
     def OnMotion(self, event):
         if self.drawing and event.Dragging() and event.LeftIsDown():
@@ -604,6 +611,8 @@ class GraphicsControl(wx.ScrolledWindow):
                 self.reSetSelection = True
         # We need to indicate that we're not dragging any more.
         self.isDragging = False
+        # allow underlying event processing
+        event.Skip()
 
     def OnPassMouseLeftDown(self, event):
         """ Enables passing the Left Mouse Down event up to the parent object """
@@ -757,16 +766,31 @@ class GraphicsControl(wx.ScrolledWindow):
             # Load the Bitmap into the temporary Image
             # self.backgroundImage.LoadFile(filename, wx.BITMAP_TYPE_BMP)
             self.backgroundImage.LoadFile(filename, wx.BITMAP_TYPE_PNG)
-
             # Resize the Bitmap to the size of the Graphic Control
             self.backgroundImage.Rescale(self.canvassize[0], self.canvassize[1])
             # Convert the wxImage to a wxBitmap
             tempBitmap = wx.BitmapFromImage(self.backgroundImage)
             # Set the active image (self.bmpBuffer) to the Bitmap
             self.bmpBuffer = tempBitmap
-        
-            self.Refresh(False)  # Required to get the image to show up!
-        
+            # Required to get the image to show up!
+            self.Refresh(False)
+
+    def SetBackgroundGraphic(self, img):
+        """ Take a wxImage and make it the Waveform Background """
+        # Clear the BackgroundGraphicName variable, which refers to a file name
+        self.backgroundGraphicName = ''
+        # Save the passed-in wxImage as the visualizationImage
+        self.visualizationImage = img
+        # Create a wxImage
+        self.backgroundImage = img
+        # Resize the Bitmap to the size of the Graphic Control
+        self.backgroundImage.Rescale(self.canvassize[0], self.canvassize[1])
+        # Convert the wxImage to a wxBitmap
+        tempBitmap = wx.BitmapFromImage(self.backgroundImage)
+        # Set the active image (self.bmpBuffer) to the Bitmap
+        self.bmpBuffer = tempBitmap
+        # Required to get the image to show up!
+        self.Refresh(False)
 
     # Define the Method that Saves the image as a Graphic
     def SaveAs(self):
@@ -798,7 +822,7 @@ class GraphicsControl(wx.ScrolledWindow):
 
     def DrawCursor(self, currentPosition):
         (width, height) = self.GetSizeTuple()
-        y = int(currentPosition * self.canvassize[0] + 1)
+        y = int(currentPosition * self.canvassize[0])
         # If there is an existing cursor, eliminate it.  (It would be in the temporary (lines2[]) layer)
         if (self.cursorPosition != None) and (len(self.lines2) > self.cursorPosition):
             del(self.lines2[self.cursorPosition])

@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2008  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2009  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -65,6 +65,8 @@ import Transcript
 import TranscriptEditor
 # Load the Printout Class
 import TranscriptPrintoutClass
+# import python's platform module
+import platform
 
 # Declare Control IDs
 # Menu Item and Toolbar Item for File > Filter
@@ -94,6 +96,9 @@ T_FILE_EXIT          =  wx.NewId()
 # Menu Item and Toolbar Item for Help > Help
 M_HELP_HELP          =  wx.NewId()
 T_HELP_HELP          =  wx.NewId()
+# Toolbar Items for Search buttons
+T_SEARCH_BACK        =  wx.NewId()
+T_SEARCH_FORWARD     =  wx.NewId()
 
 class TextReport(wx.Frame):
     """ This is the main class for the Text Report infrastrucure.
@@ -149,10 +154,10 @@ class TextReport(wx.Frame):
         # Add a Print Preview button to the Toolbar
         self.toolBar.AddTool(T_FILE_PRINTPREVIEW, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "PrintPreview.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print Preview'))
 
-        # Disable Print Preview on the Mac
-        if 'wxMac' in wx.PlatformInfo:
+        # Disable Print Preview on the PPC Mac
+        if platform.processor() == 'powerpc':
             self.toolBar.EnableTool(T_FILE_PRINTPREVIEW, False)
-            
+
         # Add a Print button to the Toolbar
         self.toolBar.AddTool(T_FILE_PRINT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Print.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Print'))
         # If a help context is defined ...
@@ -163,6 +168,16 @@ class TextReport(wx.Frame):
             self.toolBar.AddTool(T_HELP_HELP, bmp, shortHelpString=_("Help"))
         # Add an Exit button to the Toolbar
         self.toolBar.AddTool(T_FILE_EXIT, wx.Bitmap(os.path.join(TransanaGlobal.programDir, "images", "Exit.xpm"), wx.BITMAP_TYPE_XPM), shortHelpString=_('Exit'))
+        # Add a toolbar separator
+        self.toolBar.AddSeparator()
+        # Add the Search Backwards button
+        self.toolBar.AddTool(T_SEARCH_BACK, wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16)), shortHelpString=_('Search backwards'))
+        # Create a text box for search terms, with the toolbar as its parent.
+        self.searchText = wx.TextCtrl(self.toolBar, -1, size=(100, 20), style=wx.TE_PROCESS_ENTER)
+        # Add the text box to the toolbar.
+        self.toolBar.AddControl(self.searchText)
+        # Add the Search Forwards button
+        self.toolBar.AddTool(T_SEARCH_FORWARD, wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16)), shortHelpString=_('Search forwards'))
         # Actually create the Toolbar
         self.toolBar.Realize()
         # Let's go ahead and keep the menu for non-Mac platforms
@@ -222,6 +237,9 @@ class TextReport(wx.Frame):
         wx.EVT_MENU(self, T_FILE_PRINT, self.OnPrint)                                 # Attach Toolbar Print to a method
         wx.EVT_MENU(self, M_FILE_EXIT, self.CloseWindow)                              # Attach CloseWindow to File > Exit
         wx.EVT_MENU(self, T_FILE_EXIT, self.CloseWindow)                              # Attach CloseWindow to Toolbar Exit
+        wx.EVT_MENU(self, T_SEARCH_BACK, self.OnSearch)                               # Attach Toolbar Search Backwards to Search method
+        wx.EVT_MENU(self, T_SEARCH_FORWARD, self.OnSearch)                            # Attach Toolbar Search Forwards to Search method
+        self.searchText.Bind(wx.EVT_TEXT_ENTER, self.OnSearch)                        # Attach Search Box Enter event to Search method
         if self.helpContext != None:
             wx.EVT_MENU(self, M_HELP_HELP, self.OnHelp)                               # Attach OnHelp to Help > Help
             wx.EVT_MENU(self, T_HELP_HELP, self.OnHelp)                               # Attach OnHelp to Toolbar Help
@@ -472,6 +490,25 @@ class TextReport(wx.Frame):
     def CloseWindow(self, event):
         """ Close the Report on File Exit """
         self.Close()
+
+    def OnSearch(self, event):
+        """ Implement the Toolbar's QuickSearch """
+        # Get the text for the search
+        txt = self.searchText.GetValue()
+        # If there is text ...
+        if txt != '':
+            # If searching forward ...
+            if event.GetId() in [T_SEARCH_FORWARD, self.searchText.GetId()]:
+                # ... set the search direction to next
+                direction = "next"
+            # If searching backwards ...
+            elif event.GetId() == T_SEARCH_BACK:
+                # ... set the search direction to backwards
+                direction = "back"
+            # Perform the search in the report text
+            self.reportText.find_text(txt, direction)
+            # Set the focus back on the report text component, rather than the button, so Paste or typing work.
+            self.reportText.SetFocus()
 
     def GetCenterSpacer(self, style, text):
         """ The wxSTC control doesn't support paragraph centering.  This method fakes it.

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -304,7 +304,25 @@ class KeywordsTab(wx.Panel):
             dlg.Destroy()
         except TransanaExceptions.RecordLockedError, e:
             self.handleRecordLock(e)
-
+        # Process TypeError exception, which probably indicates that the underlying object has been deleted.
+        except TypeError, e:
+            if self.clipObj != None:
+                tempObjType = _('Clip')
+            else:
+                tempObjType = _('Episode')
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                msg = unicode(_('You cannot proceed because %s "%s" cannot be found.'), 'utf8') + \
+                      unicode(_('\nIt may have been deleted by another user.'), 'utf8')
+                msg = msg % (unicode(tempObjType, 'utf8'), obj.id)
+            else:
+                msg = _('You cannot proceed because %s "%s" cannot be found.') + \
+                      _('\nIt may have been deleted by another user.') % (tempObjType, obj.id)
+            dlg = Dialogs.ErrorDialog(self.parent, msg)
+            dlg.ShowModal()
+            dlg.Destroy()
+            # Clear the deleted objects from the Transana Interface.  Otherwise, problems arise.
+            wx.CallAfter(self.parent.parent.ControlObject.ClearAllWindows)
 
     def OnDelete(self, event):
         """ Selecting 'Delete' from the popup menu deletes a keyword """
@@ -377,6 +395,27 @@ class KeywordsTab(wx.Panel):
                         
             except TransanaExceptions.RecordLockedError, e:
                 self.handleRecordLock(e)
+            # Process TypeError exception, which probably indicates that the underlying object has been deleted.
+            except TypeError, e:
+                if self.clipObj != None:
+                    obj = self.clipObj
+                    tempObjType = _('Clip')
+                else:
+                    obj = self.episodeObj
+                    tempObjType = _('Episode')
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    msg = unicode(_('You cannot proceed because %s "%s" cannot be found.'), 'utf8') + \
+                          unicode(_('\nIt may have been deleted by another user.'), 'utf8')
+                    msg = msg % (unicode(tempObjType, 'utf8'), obj.id)
+                else:
+                    msg = _('You cannot proceed because %s "%s" cannot be found.') + \
+                          _('\nIt may have been deleted by another user.') % (tempObjType, obj.id)
+                dlg = Dialogs.ErrorDialog(self.parent, msg)
+                dlg.ShowModal()
+                dlg.Destroy()
+                # Clear the deleted objects from the Transana Interface.  Otherwise, problems arise.
+                wx.CallAfter(self.parent.parent.ControlObject.ClearAllWindows)
 
     def handleRecordLock(self, e):
         """ Handles Record Lock exceptions """

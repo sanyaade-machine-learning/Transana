@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -152,6 +152,13 @@ class ReportGenerator(wx.Object):
             centerSpacer = self.report.GetCenterSpacer(style, self.configLine)
             # ... and insert the spacer and the subtitle.
             reportText.InsertStyledText('\n' + centerSpacer + self.configLine)
+
+        if (self.searchText != None) or (self.configName != ''):
+            # Set the font for the Report Title
+            reportText.SetFont('Courier New', 13, 0x000000, 0xFFFFFF)
+            # Get the style specified associated with this font
+            style = reportText.GetStyleAccessor("size:13,face:Courier New,fore:#000000,back:#ffffff,bold")
+
         # Skip a couple of lines.
         reportText.InsertStyledText('\n\n')
 

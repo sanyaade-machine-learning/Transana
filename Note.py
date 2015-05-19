@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,22 +16,28 @@
 
 """This module implements the Note class as part of the Data Objects."""
 
-__author__ = 'Nathaniel Case, David K. Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'David K. Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 
+# import wxPython
 import wx
-from DataObject import DataObject
-from TransanaExceptions import *
-import TransanaGlobal
-import DBInterface
+# import Python's types module
 import types
+# import Transana's base Data Object
+import DataObject
+# import Transana's Database Interface
+import DBInterface
+# import Transana's Exceptions
+from TransanaExceptions import *
+# import Transana's Globals
+import TransanaGlobal
 
-class Note(DataObject):
+class Note(DataObject.DataObject):
     """This class defines the structure for a note object.  A note object
     holds a note that can be attached to various objects."""
 
     def __init__(self, id_or_num=None, **kwargs):
         """Initialize an Note object."""
-        DataObject.__init__(self)
+        DataObject.DataObject.__init__(self)
         if type(id_or_num) in (int, long):
             self.db_load_by_num(id_or_num)
         elif isinstance(id_or_num, types.StringTypes):

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -508,9 +508,8 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                     self.InsertWhisper()
 
                 else:
-                    
+
                     startpos = self.GetCurrentPos()
-                    self.StartStyling(startpos, STYLE_MASK)
                     self.AddText(obj.text)
 
                     # If we receive Unicode objects, we need to decode them so we can figure out their correct length, which
@@ -525,7 +524,7 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                     if DEBUG:
                         print "RichTextEditCtrl.__ParseRTFStream(): Adding text '%s' with style %s, len =%d /%d" % (txt, self.style, len(obj.text), len(txt))
                         
-    #                self.SetStyling(len(obj.text), self.style)
+                    self.StartStyling(startpos, STYLE_MASK)
                     self.SetStyling(len(txt), self.style)
 
             else:

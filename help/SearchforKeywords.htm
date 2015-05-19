@@ -3,35 +3,67 @@
 <TITLE>Searching for Keywords</TITLE>
 </HEAD>
 
-<BODY    >
+<BODY>
 
-<H2><I>Searching for Keywords<HR ></I></H2><P>
-Transana lets you search for clips and episodes that contain specified keywords. This is useful when you want to look for evidence to support a certain hypothesis, especially when you have large amounts of video data.<P>
-Searches have names, and, once created, they appear in reverse chronological order under the Search node in the database tree. This lets you keep track of what you've searched for, and what you found when you searched. You can save the results of a search as a collection. <P>
-<FONT COLOR="Red">Activity: </FONT>Follow these directions to perform a search:<P>
-1. Right-click the <B>Search</B> node in the database tree in the Data window and choose <B>Search</B> from the pop-up menu. Transana opens the Boolean Keyword Search dialog box<P>
-<IMG SRC="images/keywordsearch.gif"  ALT="keywordsearch"   BORDER=0><P>
-2. Type <B>Symmetry </B>in the field labeled <B>Search Name</B>. <P>
-3. Click <B>Symmetry</B> in the list of keywords in the dialog box. You might have to scroll down to see this keyword.<P>
-4. Click <B>Add Keywords to Query</B>. <P>
-5. Click <B>Search</B> to begin searching.<P>
-Transana finds one episode and six clips that have the keyword Symmetry assigned to them. It shows you the result of the search under <B>Symmetry,</B> under the <B>Search </B>node. Notice that the search name appears under the <B>Search</B> node with an icon of a magnifying glass next to it.<P>
+<H2><I>Searching for Keywords</I><HR></H2>
+
+Transana lets you search for clips and episodes that contain specified keywords. Searches are named, and, once created, they appear in reverse chronological order under the <B>Search</B> node in the database tree. This lets you keep track of what you've searched for and what you found when you searched. You can save the results of a search as a collection, but search results are not otherwise permanent. <P>
+
+<H3>Quick Search</H3>
+
+A <B>Quick Search</B> in Transana is one designed to show all clips that have been coded with a single keyword.<P>
+
+<FONT COLOR="Red">Activity: </FONT>Follow these directions to perform a quick search:<P>
+
+1. Right-click the keyword <B>Symmetry</B> in the <B>Tutorial</B> keyword group in the database tree in the Data window.  Choose <B>Quick Search</B> from the pop-up menu. <P>
+
+Transana creates a <B>Search Result</B> named <B>Symmetry</B> under the <B>Search</B> node.  The program finds six clips that have the keyword <B>Symmetry</B> assigned to them. Subsequent quick searches for the same keyword will be numbered.<P>
+
 <IMG SRC="images/demosearch.gif"  ALT="demosearch"   BORDER=0><P>
-Notice that the series/episode and collection/clip structure you have set up is preserved in the search results.  This search returns a small set of results. The next activity uses Boolean operators.<P>
-<FONT COLOR="Red">Activity: </FONT>Perform a second search using the keywords <B>Symmetry</B> and <B>Confusion.</B> Follow these directions:<P>
+
+Notice that the series/episode and collection/clip structure you have set up is preserved in the search results.  This search returns a small set of results, so it's not that helpful, but when you have a very large, complex data set, this helps you know which clips have been returned in the search results. <P>
+
+<H3>Standard Search</H3>
+
+Standard searches allow you to do more complex searches, combining multiple keywords using boolean logic.<P>
+
+<FONT COLOR="Red">Activity: </FONT>Perform a standard search using the keywords <B>Symmetry</B> and <B>Confusion.</B> Follow these directions:<P>
+
 1. Right-click the <B>Search</B> node in the database tree in the Data window and choose <B>Search</B> from the pop-up menu. Transana opens the Boolean Keyword Search dialog box<P>
+
+<IMG SRC="images/keywordsearch.gif"  ALT="keywordsearch"   BORDER=0><P>
+
 2. Type <B>Symmetry and Confusion </B>in the field labeled <B>Search Name</B>. <P>
+
 3. Click <B>Symmetry</B> in the list of keywords in the dialog box. <P>
+
 4. Click <B>Add Keywords to Query</B>. <P>
+
 5. Click the <B>AND</B> button under the label <B>Operators</B> in the dialog box.<P>
-6. Click <B>Confusion</B> in the list of keywords in the dialog box.  Add it to your Search.<P>
-7. Click <B>Search</B> to begin searching.<P>
+
+6. Double-click <B>Confusion</B> in the list of keywords in the dialog box to add it to your search.<P>
+
+7. Notice that the <B>Search</B> button is now enabled.  Transana's search dialog is designed to only allow legal searches.  If the <B>Search</B> button is not enabled for you, it's because you have open parentheses or a dangling boolean operator or some other mistake in your search specification.<P>
+
+8. Notice in the lower left hand corner of the search dialog box that there are buttons that allow you to load, save, and delete search specifications.  While we will not use these now, they can be useful when you wish to design a search you will use repeatedly as your data evolves.<P>
+
+9. Click <B>Search</B> to begin searching.<P>
+
 Transana displays the results of your search in the database tree.<P>
+
 <IMG SRC="images/demosearch2.gif"  ALT="demosearch2"   BORDER=0><P>
-This search produced four clips, which you can review by right-clicking the <B>Symmetry</B> collection under the <B>Symmetry and Confusion</B> Search Result node and selecting <B>Play All Clips</B>.  In one clip, a student talks about the carpet being symmetrical if it's all gray. In the second, a student suggests that symmetry may have something to do with houses.  In the third,  the class discusses symmetry as meaning things that are the same, and in the fourth, the teacher is asking about how students will know if they can always create symmetrical two-by-two designs.<P>
-The clip <B>Proof</B> in this instance is a false positive result. In this clip, the students are clear about the concept of symmetry, but are expressing confusion about the broader implication of their initial finding that they can always create symmetrical two-by-two designs.  Let's drop it from your Search Result (but not from its Collection) by right-clicking the clip in the search result and selecting <B>Drop for Search Result</B> from the pop-up menu.<P>
+
+This search produced four clips, which you can review by right-clicking the <B>Symmetry and Confusion</B> Search Result node and selecting <B>Play All Clips</B>.  In one clip, a student suggests that symmetry may have something to do with houses.  In the second, a student talks about the carpet being symmetrical if it's all gray. In the third,  the class discusses symmetry as meaning things that are the same, and in the fourth, the teacher is asking about how students will know if they can always create symmetrical two-by-two designs.<P>
+
+The clip <B>Proof</B> in this instance is a false positive result. In this clip, the students are clear about the concept of symmetry, but are expressing confusion about the broader implication of their initial finding that they can always create symmetrical two-by-two designs.  Let's drop it from your Search Result (but not from its original Collection) by right-clicking the clip in the search result and selecting <B>Drop from Search Result</B> from the pop-up menu.<P>
+
 <IMG SRC="images/demosearch3.gif"  ALT="demosearch3"   BORDER=0><P>
-<A HREF="reports.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<A HREF="converttocollection.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+<FONT COLOR="red">Advanced Topic:</FONT>  The boolean operators used in Transana's search are subject to an "order of operations" just like other mathematical operators are.  This has important implications for your searches which you need to understand if you will ever use more than two search terms.  See <A HREF="search.htm">Search</A> in the Transana Manual for more information.<P>
+
+<A HREF="reports.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="converttocollection.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
 
 </BODY>
 </HTML>

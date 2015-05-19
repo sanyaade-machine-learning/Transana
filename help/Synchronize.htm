@@ -1,0 +1,40 @@
+<HTML>
+<HEAD>
+<TITLE>Synchronize Media Files</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Synchronize Media Files</H1><HR>
+
+<H2>Introduction</H2>
+
+If you want to work with multiple media files at the same time, the files must be synchronized.  There has to be a way for corresponding points in different media files to be lined up with each other so that the same content from different files can be displayed at precisely the same time.  In reality, cameras are never started at the same instant, and the internal clocks in video cameras cannot be synchronized precisely without professional-grade equipment.  Fortunately, Transana provides a mechanism for lining up your media files and letting the program know how to get your media files synchronized.<P>
+
+<H2>Synchronizing files</H2>
+
+When your media files don't start at precisely the same point, Transana provides a tool for synchronizing media files, which you access through the <A HREF="addepisode.htm">Episode Properties</A> form.  Transana's Synchronization tool uses the first media file as the reference, so you need to synchronize the second and subsequent media files.<P>
+
+To initiate this process, select a media file other than the first media file from the media file list on the <A HREF="addepisode.htm">Episode Properties</A> form, then press the <B>Synchronize</B> button.  This will load the Synchronization tool, displaying the first video file in the list, which is used as the common reference point within Transana, and the selected video file.<P>
+
+<IMG SRC="images/synchronize.gif" ALT=""><P>
+
+When the Synchronization tool first comes up, the waveform diagrams show about 30 seconds of the media files.  (NOTE:  Using the waveforms make the synchronization process MUCH easier.  Therefore, Transana requires that media files used in simultaneous media file analysis be in a Transana-friendly format that Audio Extraction and waveform generation work with.)<P>
+
+The first step is to achive rough synchronization.  To do this, you should play the two video files separately and pause them at nearly the same spot, or you can use the scroll bars to find matching places in the Waveforms, clicking in the waveforms on identical points to position the media files.  (How easy or difficult this will be depends on the length of your media files, the extent to which the audio tracks are similar, and how well you know the content.)  With 30 seconds of waveform showing, you should be able to get within about half a dozen frames, or about a fifth of a second.<P>
+
+Once rough alignment is achieved, you should zoom in very close on the waveforms by moving the Zoom slider to the left.  Look for unique spots in the waveforms and use the mouse to select identical spots on the two waveforms.  Repeat this process, zooming in closer each time, until you get near-perfect overlap of the audio when you press the <B>Play both</B> button.<P>
+
+
+<IMG SRC="images/synchronize3.gif" ALT=""><P>
+
+Once you have achieved good synchronization, probably judged best by listening rather than watching, press the <B>OK</B> button.  Don't press the <B>Play both</B> button repeatedly, as at least in my experience, this tends to take the media files out of synchronization.<P>
+
+Once you have synchronized all the media files, load the Episode and play it at least to the point where all media files are playing near the beginning.  (I typically do this by left-clicking then right-clicking in the <A HREF="soundwindow.htm">Visualization Window</A>.)  Pause the media files, and select a spot near the end, but before any media files have ended and again tell the media files to play.  If the synchronization is good, you can start transcription and analysis process.  Sometimes it is necesssary to re-do your synchronization once or twice before you achieve acceptable results.  The reason for this is that the process of playing and pausing multiple media files simultaneously, even within the Synchronization tool, is limited by CPU speed and the precision of the operating system and media players being accessed.  Even if you get the two files playing in perfect synchronization, they may be off by a frame or two by the time both media players have paused.<P>
+
+<A HREF="multimedia.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="propagateepisodechanges.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

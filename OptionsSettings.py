@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2008 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2009 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -23,6 +23,8 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
 import wx
 # import the Python os module
 import os
+# import the Python sys module
+import sys
 # import Transana's Database Interface
 import DBInterface
 # import Transana Dialogs
@@ -289,8 +291,8 @@ class OptionsSettings(wx.Dialog):
             #   wx.media.MEDIABACKEND_DIRECTSHOW allows speed adjustment, but not WMV or WMA formats.
             #   wx.media.MEDIABACKEND_WMP10 allows WMV and WMA formats, but speed adjustment is broken.
             # Let's allow the user to select which back end to use!
-            # This option is Windows only!
-            if 'wxMSW' in wx.PlatformInfo:
+            # This option is Windows 2000 / XP only, but NOT VISTA!!!!!!  (sys.getwindowsversion()[0] of 5 = XP / 2K, 6 = Vista)
+            if ('wxMSW' in wx.PlatformInfo) and (sys.getwindowsversion()[0] < 6):
                 # Add the Media Player Option Label to the Transcriber Settings Tab
                 lblMediaPlayer = wx.StaticText(panelTranscriber, -1, _("Media Player Selection"), style=wx.ST_NO_AUTORESIZE)
                 lay = wx.LayoutConstraints()
@@ -615,7 +617,7 @@ class OptionsSettings(wx.Dialog):
             # Update the Global Transcription Setback
             TransanaGlobal.configData.transcriptionSetback = self.transcriptionSetback.GetValue()
             # If on Windows ...
-            if 'wxMSW' in wx.PlatformInfo:
+            if ('wxMSW' in wx.PlatformInfo) and (sys.getwindowsversion()[0] < 6):
                 # Update the Media Player selection
                 TransanaGlobal.configData.mediaPlayer = self.chMediaPlayer.GetSelection()
             # Update the Global Video Speed
