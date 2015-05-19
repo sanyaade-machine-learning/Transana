@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2003 - 2012 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2013 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -66,7 +66,7 @@ class AboutBox(wx.Dialog):
         mainSizer.Add(version, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
 
         # Create a label for the Program Copyright
-        str = _("Copyright 2002-2012\nThe Board of Regents of the University of Wisconsin System")
+        str = _("Copyright 2002-2013\nThe Board of Regents of the University of Wisconsin System")
         copyright = wx.StaticText(self, -1, str, style=wx.ALIGN_CENTRE)
         # Apply the last specified font (from Program Version) to the copyright label
         font = self.GetFont()

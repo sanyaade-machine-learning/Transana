@@ -3146,6 +3146,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             series_name = self.GetItemText(sel)
         
         if n == 0:      # Paste
+            # Do we need to propagate Keywords?  Assume NO!
+            needToPropagate = False
             # specify the data formats to accept
             df = wx.CustomDataFormat('DataTreeDragData')
             # Specify the data object to accept data for this format
@@ -3181,9 +3183,11 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             dlg = Dialogs.QuestionDialog(None, prompt % promptdata)
                             result = dlg.LocalShowModal()
                             dlg.Destroy()
+                            # Determine if we need to propagate keywords
+                            needToPropagate = (result == wx.ID_YES)
                         # If we don't have a Keyword ...
                         else:
-                            # ... we skip a prompt and indicate the user said Yes
+                            # ... we skip a prompt and indicate the user said Yes (but we DON'T need to propagate Keywords!)
                             result = wx.ID_YES
                     # Multiple DESTINATION items
                     else:
@@ -3205,9 +3209,11 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             dlg = Dialogs.QuestionDialog(None, prompt % promptdata)
                             result = dlg.LocalShowModal()
                             dlg.Destroy()
+                            # Determine if we need to propagate keywords
+                            needToPropagate = (result == wx.ID_YES)
                         # If we don't have a Keyword ...
                         else:
-                            # ... we skip a prompt and indicate the user said Yes
+                            # ... we skip a prompt and indicate the user said Yes (but we DON'T need to propagate Keywords!)
                             result = wx.ID_YES
                 # One SOURCE item
                 else:
@@ -3217,6 +3223,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         result = wx.ID_YES
                         # Prompt gets handled by DragAndDropObjects.DropKeyword().  We DO want user confirmation
                         confirmations = True
+                        # If we have a Keyword Node ...
+                        if data.nodetype == 'KeywordNode':
+                            # ... we need to propagate keywords
+                            needToPropagate = True
                     # Multiple DESTINATION items
                     else:
                         # If the SOURCE is a Keyword, get User confirmation
@@ -3237,6 +3247,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             dlg = Dialogs.QuestionDialog(self.parent, prompt % promptdata)
                             result = dlg.LocalShowModal()
                             dlg.Destroy()
+                            # Determine if we need to propagate keywords
+                            needToPropagate = (result == wx.ID_YES)
                         # If we don't have a Keyword ...
                         else:
                             # ... we skip a prompt and indicate the user said Yes
@@ -3248,20 +3260,22 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 if result == wx.ID_YES:
                     # ... initialize a Keyword List
                     kwList = []
-                    # If data is a list, there are multiple nodes to paste
-                    if isinstance(data, list):
-                        # For each keyword node item in the data list ...
-                        for datum in data:
+                    # If we need to propagate keywords, build the keyword list
+                    if needToPropagate:
+                        # If data is a list, there are multiple nodes to paste
+                        if isinstance(data, list):
+                            # For each keyword node item in the data list ...
+                            for datum in data:
+                                # ... create a Clip Keyword Object with the Keyword information ...
+                                ckw = ClipKeywordObject.ClipKeyword(datum.parent, datum.text)
+                                # ... and add the Clip Keyword Object to the Keyword List
+                                kwList.append(ckw)
+                        # If data is a single Keyword Node item ...
+                        else:
                             # ... create a Clip Keyword Object with the Keyword information ...
-                            ckw = ClipKeywordObject.ClipKeyword(datum.parent, datum.text)
+                            ckw = ClipKeywordObject.ClipKeyword(data.parent, data.text)
                             # ... and add the Clip Keyword Object to the Keyword List
                             kwList.append(ckw)
-                    # If data is a single Keyword Node item ...
-                    else:
-                        # ... create a Clip Keyword Object with the Keyword information ...
-                        ckw = ClipKeywordObject.ClipKeyword(data.parent, data.text)
-                        # ... and add the Clip Keyword Object to the Keyword List
-                        kwList.append(ckw)
 
                     # For each Series in the selected items ...
                     for item in selItems:
@@ -3270,11 +3284,13 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         # If data is a list, there are multiple Episode nodes to paste
                         if isinstance(data, list):
                             # ... get the item's data ...
-                            selData = self.GetPyData(sel)
-                            # Now get a list of all Episodes in the Series and iterate through them
-                            for tempEpisodeNum, tempEpisodeID, tempSeriesNum in DBInterface.list_of_episodes_for_series(self.GetItemText(sel)):
-                                # ... propagating the new Episode Keywords to all Clips from that Episode
-                                self.parent.ControlObject.PropagateEpisodeKeywords(tempEpisodeNum, kwList)
+#                            selData = self.GetPyData(sel)
+                            # If we need to propagate keywords ...
+                            if needToPropagate:
+                                # Now get a list of all Episodes in the Series and iterate through them
+                                for tempEpisodeNum, tempEpisodeID, tempSeriesNum in DBInterface.list_of_episodes_for_series(self.GetItemText(sel)):
+                                    # ... propagating the new Episode Keywords to all Clips from that Episode
+                                    self.parent.ControlObject.PropagateEpisodeKeywords(tempEpisodeNum, kwList)
                             # Iterate through the Episode nodes
                             for datum in data:
                                 # ... and paste the data
@@ -3284,11 +3300,13 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             # If we're not displaying confirmation messages ...
                             if not confirmations:
                                 # ... get the item's data ...
-                                selData = self.GetPyData(sel)
-                                # Now get a list of all Episodes in the Series and iterate through them ...
-                                for tempEpisodeNum, tempEpisodeID, tempSeriesNum in DBInterface.list_of_episodes_for_series(self.GetItemText(sel)):
-                                    # ... propagating the new Episode Keywords to all Clips from that Episode
-                                    self.parent.ControlObject.PropagateEpisodeKeywords(tempEpisodeNum, kwList)
+#                                selData = self.GetPyData(sel)
+                                # If we need to propagate keywords ...
+                                if needToPropagate:
+                                    # Now get a list of all Episodes in the Series and iterate through them ...
+                                    for tempEpisodeNum, tempEpisodeID, tempSeriesNum in DBInterface.list_of_episodes_for_series(self.GetItemText(sel)):
+                                        # ... propagating the new Episode Keywords to all Clips from that Episode
+                                        self.parent.ControlObject.PropagateEpisodeKeywords(tempEpisodeNum, kwList)
                             # ... and paste the data
                             DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'], confirmations=confirmations)
 

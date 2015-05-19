@@ -498,6 +498,41 @@ class DataTreeDropTarget(wx.PyDropTarget):
 
                     # If the user said yes, or we didn't ask anything ...
                     if result == wx.ID_YES:
+                        # If we have multiple Keywords dropped on a Series Node ...
+                        if (len(sourceDataList) > 1) and \
+                           (sourceDataList[0].nodetype == 'KeywordNode') and \
+                           (self.dropData.nodetype in ['SeriesNode', 'EpisodeNode']):
+                            # Create a Keyword List
+                            kwList = []
+
+                            # Iterate through the source data list
+                            for sourceData in sourceDataList:
+                                # Create a temporary keyword
+                                tmpKeyword = Keyword.Keyword(sourceData.parent, sourceData.text)
+                                # Append the keyword to the Keyword List
+                                kwList.append(tmpKeyword)
+                            # Start handling Exceptions
+                            try:
+                                # If we're dropping on a Series ...
+                                if self.dropData.nodetype == 'SeriesNode':
+                                    # Load the dropped-on Series
+                                    tmpSeries = Series.Series(self.dropData.recNum)
+                                    # Now get a list of all Episodes in the Series and iterate through them
+                                    for tempEpisodeNum, tempEpisodeID, tempSeriesNum in DBInterface.list_of_episodes_for_series(tmpSeries.id):
+                                        # Propagate the Keyword List to each Episode in the Series
+                                        TransanaGlobal.menuWindow.ControlObject.PropagateEpisodeKeywords(tempEpisodeNum, kwList)
+                                # If we're dropping on an Episode ...
+                                elif self.dropData.nodetype == 'EpisodeNode':
+                                    # Propagate the Keyword List to the Episode
+                                    TransanaGlobal.menuWindow.ControlObject.PropagateEpisodeKeywords(self.dropData.recNum, kwList)
+                            # If an exception arises ...
+                            except:
+                                # ... add the exception to the error log
+                                print "EXCEPTION:"
+                                print sys.exc_info()[0]
+                                print sys.exc_info()[1]
+                                import traceback
+                                traceback.print_exc(file=sys.stdout)
                         # Iterate through the source data list
                         for sourceData in sourceDataList:
                             # If a previous drag of a Tree Node Data Object has been cleared, the sourceData.nodetype
@@ -1014,6 +1049,7 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
     # Trying to deal with a Mac issue temporarily.  Dragging within the Transcript sometimes triggers this method when it shouldn't.  Can't find the cause.
     if not TransanaConstants.macDragDrop and ("__WXMAC__" in wx.PlatformInfo) and (type(sourceData) == type(ClipDragDropData())):
         return
+
     if targetType == 'Series':
         # Prompt for confirmation if that is desired
         if confirmations:

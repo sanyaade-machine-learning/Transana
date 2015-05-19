@@ -1108,8 +1108,16 @@ class RTFTowxRichTextCtrlParser:
                     if DEBUG:
                         print "Word-style Unicode specification:", val
 
+                    # Word ellipsis character causes problems.  These come across as "\'85"
+                    #(hex for 133) and needs to be replaced with the unicode equivalent.
+                    if (val in [133]):
+                        # 22 is the HEX value for chr(34), the quotation mark character.
+                        val = 46
+                        # Replace smart quote with regular quotes in the self.buffer text.  
+                        txt += "..."
+
                     # "smart" Apostophes are sometimes represented as /'91 and /'92, val=145 and 146
-                    if (val in [145, 146]):
+                    elif (val in [145, 146]):
                         # 27 is the HEX value for chr(39), the apostrophe character.
                         val = 39
                         # Replace the hex representation in the self.buffer text.  
@@ -1514,11 +1522,27 @@ class RTFTowxRichTextCtrlParser:
                 self.fontName += txt
             # Otherwise ...
             else:
-                # ... then add that text to the wxRichTextCtrl.
                 # NOTE:  I don't appear to need to decode things here.  I think RTF takes care of that in the way it
                 #        encodes Unicode characters.  If you run into encoding problems, try determing self.encoding from
                 #        the RTF file (maybe the ansicpg in the rtf header) and use txt.decode(self.encoding).
-                self.txtCtrl.WriteText(txt)
+
+                # Start Exception Handling
+                try:
+                    # ... then add that text to the wxRichTextCtrl.
+                    self.txtCtrl.WriteText(txt)
+                # If we get a UnicodeDecodeError ...
+                except UnicodeDecodeError:
+                    # ... put a SPACE in the Transcript
+                    self.txtCtrl.WriteText(' ')
+
+                    # ... and put a note in the Error Log!
+                    print "RTFParser.RTFTowxRichTextCtrlParser.process_txt():  UnicodeDecodeError:", len(txt),
+                    if len(txt) == 1:
+                        print ord(txt)
+                    else:
+                        for x in txt:
+                            print ord(x),
+                        print
 
     def process_control_word(self):        
         """ Process a Rich Text Format control word """

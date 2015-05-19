@@ -423,6 +423,8 @@ class ChatWindow(wx.Frame):
     def SendMessage(self, message):
         """ Send a message through the chatWindow's socket """
         try:
+            # Process Windows Messages, if needed.  (Completes SAVES, in theory!)
+            wx.YieldIfNeeded()
             msg = '%s ||| ' % message
             # If we're using Unicode, we need to encode the messages passed to the socket.
             if 'unicode' in wx.PlatformInfo:

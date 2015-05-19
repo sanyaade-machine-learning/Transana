@@ -22,6 +22,7 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 import wx
 from wx import grid
 
+import Clip
 import Collection
 # import Database Calls
 import DBInterface
@@ -59,8 +60,8 @@ class EpisodeClipsTab(wx.Panel):
         # Populate the Grid with initial values
         #   Grid is read-only, not editable
         self.gridClips.EnableEditing(False)
-        #   Grid has 5 columns (one of which will not be visible), no rows initially
-        self.gridClips.CreateGrid(1, 5)
+        #   Grid has 4 columns (one of which will not be visible), no rows initially
+        self.gridClips.CreateGrid(1, 4)
         # Set the height of the Column Headings
         self.gridClips.SetColLabelSize(20)
         #Set the minimum acceptable column width to 0 to allow for the hidden column
@@ -69,25 +70,22 @@ class EpisodeClipsTab(wx.Panel):
         self.gridClips.SetColMinimalWidth(0, 30)
         self.gridClips.SetColMinimalWidth(1, 30)
         self.gridClips.SetColMinimalWidth(2, 30)
-        self.gridClips.SetColMinimalWidth(3, 30)
-        self.gridClips.SetColMinimalWidth(4, 0)
+        self.gridClips.SetColMinimalWidth(3, 0)
         # Set Default Text in the Header row
-        self.gridClips.SetColLabelValue(0, _("Clip Start"))
-        self.gridClips.SetColLabelValue(1, _("Clip End"))
-        self.gridClips.SetColLabelValue(2, _("Collection ID"))
-        self.gridClips.SetColLabelValue(3, _("Clip ID"))
+        self.gridClips.SetColLabelValue(0, _("Clip Time"))
+        self.gridClips.SetColLabelValue(1, _("Clip ID"))
+        self.gridClips.SetColLabelValue(2, _("Keywords"))
         # We don't need Row labels
         self.gridClips.SetRowLabelSize(0)
         # Set the column widths
         self.gridClips.SetColSize(0, 65)
-        self.gridClips.SetColSize(1, 65)
-        self.gridClips.SetColSize(2, 100)
         if width > 330:
-            self.gridClips.SetColSize(3, width - 230)
+            self.gridClips.SetColSize(1, width - 185)
         else:
-            self.gridClips.SetColSize(3, 100)
-        # The 4th column should not be visible.  The data is necessary for loading clips, but should not be displayed.
-        self.gridClips.SetColSize(4, 0)
+            self.gridClips.SetColSize(1, 140)
+        self.gridClips.SetColSize(2, 250)
+        # The 3rd column should not be visible.  The data is necessary for loading clips, but should not be displayed.
+        self.gridClips.SetColSize(3, 0)
 
         # Display Cell Data
         self.DisplayCells(TimeCode)
@@ -116,12 +114,31 @@ class EpisodeClipsTab(wx.Panel):
 
         # Add the data to the Grid
         for loop in range(len(clipData)):
-            self.gridClips.SetCellValue(loop, 0, Misc.time_in_ms_to_str(clipData[loop]['ClipStart']))
-            self.gridClips.SetCellValue(loop, 1, Misc.time_in_ms_to_str(clipData[loop]['ClipStop']))
-            self.gridClips.SetCellValue(loop, 2, clipData[loop]['CollectID'])
-            self.gridClips.SetCellValue(loop, 3, clipData[loop]['ClipID'])
+            # load the Clip
+            tmpClip = Clip.Clip(clipData[loop]['ClipNum'])
+            # Initialize the string for all the Keywords
+            kwString = ''
+            # Initialize the prompt for building the keyword string
+            kwPrompt = '%s'
+            # For each Keyword in the Keyword List ...
+            for kws in tmpClip.keyword_list:
+                # ... add the Keyword to the Keyword List
+                kwString += kwPrompt % kws.keywordPair
+                # After the first keyword, we need a NewLine in front of the Keywords.  This accompishes that!
+                kwPrompt = '\n%s'
+
+            # Insert the data values into the Grid Row
+            self.gridClips.SetCellValue(loop, 0, "%s -\n %s" % (Misc.time_in_ms_to_str(clipData[loop]['ClipStart']), Misc.time_in_ms_to_str(clipData[loop]['ClipStop'])))
+            self.gridClips.SetCellValue(loop, 1, tmpClip.GetNodeString(includeClip=True))
+            # make the Collection / Clip ID line auto-word-wrap
+            self.gridClips.SetCellRenderer(loop, 1, grid.GridCellAutoWrapStringRenderer())
+            self.gridClips.SetCellValue(loop, 2, kwString)
             # Convert value to a string
-            self.gridClips.SetCellValue(loop, 4, "%s" % clipData[loop]['ClipNum'])
+            self.gridClips.SetCellValue(loop, 3, "%s" % clipData[loop]['ClipNum'])
+
+            # Auto-size THIS row
+            self.gridClips.AutoSizeRow(loop, True)
+                                        
 
     def Refresh(self, TimeCode=None):
         """ Redraw the contents of this tab to reflect possible changes in the data since the tab was created. """
@@ -132,9 +149,8 @@ class EpisodeClipsTab(wx.Panel):
     def OnCellLeftDClick(self, event):
         if self.ControlObject != None:
             # Load the Clip
-            # Switched to CallAfter because of crashes on the Mac.  It *appears* to be working!
-#            self.ControlObject.LoadClipByNumber(int(self.gridClips.GetCellValue(event.GetRow(), 4)))
-            wx.CallAfter(self.ControlObject.LoadClipByNumber, int(self.gridClips.GetCellValue(event.GetRow(), 4)))
+            # Switched to CallAfter because of crashes on the Mac.
+            wx.CallAfter(self.ControlObject.LoadClipByNumber, int(self.gridClips.GetCellValue(event.GetRow(), 3)))
 
             # NOTE:  LoadClipByNumber eliminates the EpisodeClipsTab, so no further processing can occur!!
             #        There used to be code here to select the Clip in the Database window, but it stopped
