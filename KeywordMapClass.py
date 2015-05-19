@@ -142,7 +142,9 @@ class KeywordMap(wx.Frame):
             self.whitespaceHeight = TransanaGlobal.configData.keywordMapWhitespace
             self.hGridLines = TransanaGlobal.configData.keywordMapHorizontalGridLines
             self.vGridLines = TransanaGlobal.configData.keywordMapVerticalGridLines
-            self.colorOutput = TransanaGlobal.configData.colorOutput
+            # We default to Color Output.  When this was configurable, if a new Map was
+            # created in B & W, the colors never worked right afterwards.
+            self.colorOutput = True
         else:
             # Get the Configuration values for the Keyword Visualization Options
             self.barHeight = TransanaGlobal.configData.keywordVisualizationBarHeight
@@ -430,11 +432,6 @@ class KeywordMap(wx.Frame):
                         TransanaGlobal.configData.keywordVisualizationHorizontalGridLines = self.hGridLines
                         TransanaGlobal.configData.keywordVisualizationVerticalGridLines = self.vGridLines
 
-                    # If we're showing a Keyword Map ...
-                    if not self.embedded:
-                        # ... remember the colorOutput setting.  (This doesn't currently get saved.)
-                        TransanaGlobal.configData.colorOutput = self.colorOutput
-
             if errorMsg != '':
                 errorDlg = Dialogs.ErrorDialog(self, errorMsg)
                 errorDlg.ShowModal()
@@ -453,11 +450,6 @@ class KeywordMap(wx.Frame):
 
     # Define the Method that implements Printer Setup
     def OnPrintSetup(self, event):
-#        printerDialog = wx.PrintDialog(self)
-#        printerDialog.GetPrintDialogData().SetPrintData(self.printData)
-#        printerDialog.GetPrintDialogData().SetSetupDialog(True)
-#        printerDialog.ShowModal()
-#        self.printData = printerDialog.GetPrintDialogData().GetPrintData()
         # Destroying the printerDialog also wipes out the printData object in wxPython 2.5.1.5.  Don't do this.
         # printerDialog.Destroy()
 
@@ -720,6 +712,9 @@ class KeywordMap(wx.Frame):
             self.MediaLength = self.endTime
 
         if self.filteredKeywordList == []:
+            # If we deleted the last keyword in a filtered list, the Filter Dialog ended up with
+            # duplicate entries.  This should prevent it!!
+            self.unfilteredKeywordList = []
             # Get the list of Keywords to be displayed
             SQLText = """SELECT ck.KeywordGroup, ck.Keyword
                            FROM Clips2 cl, ClipKeywords2 ck
@@ -728,9 +723,11 @@ class KeywordMap(wx.Frame):
                            GROUP BY ck.keywordgroup, ck.keyword
                            ORDER BY KeywordGroup, Keyword, ClipStart"""
             self.DBCursor.execute(SQLText, EpisodeNum)
-            for row in self.DBCursor.fetchall():
-                self.filteredKeywordList.append((row[0], row[1]))
-                self.unfilteredKeywordList.append((row[0], row[1], True))
+            for (kwg, kw) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                self.filteredKeywordList.append((kwg, kw))
+                self.unfilteredKeywordList.append((kwg, kw, True))
 
         # Create the Keyword Placement lines to be displayed.  We need them to be in ClipStart, ClipNum order so colors will be
         # distributed properly across bands.
@@ -741,6 +738,9 @@ class KeywordMap(wx.Frame):
                        ORDER BY ClipStart, ClipNum, KeywordGroup, Keyword"""
         self.DBCursor.execute(SQLText, EpisodeNum)
         for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) in self.DBCursor.fetchall():
+            kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+            kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+            clipID = DBInterface.ProcessDBDataForUTF8Encoding(clipID)
             # If we're dealing with an Episode, self.clipNum will be None and we want all clips.
             # If we're dealing with a Clip, we only want to deal with THIS clip!
             if (self.clipNum == None) or (clipNum == self.clipNum):
@@ -773,6 +773,9 @@ class KeywordMap(wx.Frame):
         self.DBCursor.execute(SQLText, self.episodeNum)
         # Iterate through the results ...
         for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) in self.DBCursor.fetchall():
+            kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+            kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+            clipID = DBInterface.ProcessDBDataForUTF8Encoding(clipID)
             # If we're dealing with an Episode, self.clipNum will be None and we want all clips.
             # If we're dealing with a Clip, we only want to deal with THIS clip!
             if (self.clipNum == None) or (clipNum == self.clipNum):
@@ -863,8 +866,6 @@ class KeywordMap(wx.Frame):
             if self.hGridLines:
                 self.graphic.AddLines([(10, self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2))])
             for KWG, KW in self.filteredKeywordList:
-                KWG = DBInterface.ProcessDBDataForUTF8Encoding(KWG)
-                KW = DBInterface.ProcessDBDataForUTF8Encoding(KW)
                 self.graphic.AddText("%s : %s" % (KWG, KW), 10, self.CalcY(Count) - 7)
                 # Add Horizontal Grid Lines, if appropriate
                 if self.hGridLines and (Count % 2 == 1):
@@ -915,7 +916,7 @@ class KeywordMap(wx.Frame):
                 if self.vGridLines:
                     # We want Grid Lines in light gray
                     self.graphic.SetColour('LIGHT GREY')
-                    self.graphic.AddLines([(self.CalcX(0), self.CalcY(0) - 6 - int(self.whitespaceHeight / 2), self.CalcX(0), self.CalcY(len(self.filteredKeywordList)) - 6 - int(self.whitespaceHeight / 2))])
+                    self.graphic.AddLines([(self.CalcX(self.startTime), self.CalcY(0) - 6 - int(self.whitespaceHeight / 2), self.CalcX(self.startTime), self.CalcY(len(self.filteredKeywordList)) - 6 - int(self.whitespaceHeight / 2))])
                     self.graphic.AddLines([(self.CalcX(self.endTime), self.CalcY(0) - 6 - int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(len(self.filteredKeywordList)) - 6 - int(self.whitespaceHeight / 2))])
                     # Reset the graphic color following drawing the Grid Lines
                     self.graphic.SetColour("BLACK")
@@ -1120,8 +1121,12 @@ class KeywordMap(wx.Frame):
         if not self.embedded:
             # First, let's make sure we're actually on the data portion of the graph
             if (time > 0) and (time < self.MediaLength) and (kw != None):
+                if 'unicode' in wx.PlatformInfo:
+                    prompt = unicode(_("Keyword:  %s : %s,  Time: %s"), 'utf8')
+                else:
+                    prompt = _("Keyword:  %s : %s,  Time: %s")
                 # Set the Status Text to indicate the current Keyword and Time values
-                self.SetStatusText(_("Keyword:  %s : %s,  Time: %s") % (kw[0], kw[1], Misc.time_in_ms_to_str(time)))
+                self.SetStatusText(prompt % (kw[0], kw[1], Misc.time_in_ms_to_str(time)))
                 if (self.keywordClipList.has_key(kw)):
                     # initialize the string that will hold the names of clips being pointed to
                     clipNames = ''
@@ -1193,8 +1198,12 @@ class KeywordMap(wx.Frame):
         clipNames = {}
         # First, let's make sure we're actually on the data portion of the graph
         if (time > 0) and (time < self.MediaLength) and (kw != None) and (self.keywordClipList.has_key(kw)):
+            if 'unicode' in wx.PlatformInfo:
+                prompt = unicode(_("Keyword:  %s : %s,  Time: %s"), 'utf8')
+            else:
+                prompt = _("Keyword:  %s : %s,  Time: %s")
             # Set the Status Text to indicate the current Keyword and Time values
-            self.SetStatusText(_("Keyword:  %s : %s,  Time: %s") % (kw[0], kw[1], Misc.time_in_ms_to_str(time)))
+            self.SetStatusText(prompt % (kw[0], kw[1], Misc.time_in_ms_to_str(time)))
             # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
             clips = self.keywordClipList[kw]
             # Iterate through the Clip List ...

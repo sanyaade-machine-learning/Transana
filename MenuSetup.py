@@ -53,6 +53,7 @@ MENU_TRANSCRIPT_CHARACTERMAP    =  wx.NewId()
 MENU_TRANSCRIPT_ADJUSTINDEXES   =  wx.NewId()
 
 # Tools Menu
+MENU_TOOLS_NOTESBROWSER         =  wx.NewId()
 MENU_TOOLS_FILEMANAGEMENT       =  wx.NewId()
 MENU_TOOLS_IMPORT_DATABASE      =  wx.NewId()
 MENU_TOOLS_EXPORT_DATABASE      =  wx.NewId()
@@ -61,7 +62,7 @@ MENU_TOOLS_CHAT                 =  wx.NewId()
 MENU_TOOLS_RECORDLOCK           =  wx.NewId()
 
 # Options Menu
-MENU_OPTIONS_SETTINGS           =  wx.NewId()
+MENU_OPTIONS_SETTINGS           =  wx.ID_PREFERENCES  # Constant used to improve Mac standardization
 MENU_OPTIONS_LANGUAGE           =  wx.NewId()
 MENU_OPTIONS_LANGUAGE_EN        =  wx.NewId()
 MENU_OPTIONS_LANGUAGE_DA        =  wx.NewId()  # Danish
@@ -165,6 +166,7 @@ class MenuSetup(wx.MenuBar):
 
         # Built the Tools menu
         self.toolsmenu = wx.Menu()
+        self.toolsmenu.Append(MENU_TOOLS_NOTESBROWSER, _("&Notes Browser"))
         self.toolsmenu.Append(MENU_TOOLS_FILEMANAGEMENT, _("&File Management"))
         self.toolsmenu.Append(MENU_TOOLS_IMPORT_DATABASE, _("&Import Database"))
         self.toolsmenu.Append(MENU_TOOLS_EXPORT_DATABASE, _("&Export Database"))

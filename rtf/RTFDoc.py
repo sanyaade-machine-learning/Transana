@@ -151,11 +151,10 @@ class RTFDoc(TextDoc):
         elif hasattr(filename, "write"):
             self.f = filename
             self.alreadyOpen = 1
-        # Let's differentiate between Windows and Mac   DKW
-        if sys.platform == 'darwin':  # Use python rather than wxPython to detect platform info
-            self.f.write('{\\rtf1\\mac\\ansicpg1252\\deff0\n')
-        else:
-            self.f.write('{\\rtf1\\ansi\\ansicpg1252\\deff0\n')
+        # Let's NOT differentiate between Windows and Mac.  This routine produces RTF that works
+        # on Windows, but Word for Mac can't seem to oen it properly.  Technically, we're following
+        # ansi, not mac, standards.  DKW
+        self.f.write('{\\rtf1\\ansi\\ansicpg1252\\deff0\n')
             
         # Let's add a Default Font specifier, to try to deal with the Mac Font problem  DKW
         self.f.write('\stshfloch2 \stshfhich2\n')
@@ -622,14 +621,28 @@ class RTFDoc(TextDoc):
         # Should we deal with self.opened here?  Ignoring for now
         try:
             num = self.fontTable.index(face)
+
+            # DKW -- COLOR BUG FIX
+            # Under certain circumstances, some text is exporting to RTF in the WRONG COLOR.
+            # To fix that, I'm adding color specs to this font face code.
+            # First, get the color values.
+            fgindex = self.color_map[self.fgColor]
+            bgindex = self.color_map[self.bgColor]
+
             # Space added to the end of this string to fix a formatting bug in Transana
             # where trailing spaces were disappearing if you changed a word's font.
-            self.text = self.text + "\\f%d\\fs%d " % (num, size*2)
+# DKW            self.text = self.text + "\\f%d\\fs%d " % (num, size*2)
+            # DKW -- COLOR BUG FIX
+            # Add the font AND COLOR information to the RTF Text
+            self.text = self.text + "\\f%d\\fs%d\\cf%d\\cb%d " % (num, size*2, fgindex, bgindex)
+            
             self.fontFace = face
             self.fontSize = size
-            #self.font_type = "\\f%d\\fs%d\\cf%d\\cb%d" % (num, size*2)
-            #self.font_type = "\\f%d\\fs%d\\cf%d\\cb%d" % (num, size*2,0,2)
-            self.font_type = "\\f%d\\fs%d" % (num, size*2)
+#DKW            self.font_type = "\\f%d\\fs%d" % (num, size*2)
+            # DKW -- COLOR BUG FIX
+            # Add font and COLOR information to the font type variable.
+            self.font_type = "\\f%d\\fs%d\\cf%d\\cb%d" % (num, size*2, fgindex, bgindex)
+            
         except:
             print "exception, invalid font spec'd?"
             return  # Invalid font specified, ignore call

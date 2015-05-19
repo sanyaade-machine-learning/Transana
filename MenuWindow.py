@@ -38,6 +38,8 @@ import Dialogs
 import FileManagement
 # Import Transana Menu Setup
 import MenuSetup
+# import Transana's Notes Browser
+import NotesBrowser
 # import Database Import
 import XMLImport
 # import Database Import
@@ -354,11 +356,11 @@ class MenuWindow(wx.Frame):
 
         # Due to a problem with wx.Locale on the Mac (It won't load anything but English), I'm disabling 
         # i18n functionality of the wxPython layer on the Mac.  This code accomplishes that.
-        if "__WXMAC__" in wx.PlatformInfo:
-            lang = wx.LANGUAGE_ENGLISH
+#        if "__WXMAC__" in wx.PlatformInfo:
+#            lang = wx.LANGUAGE_ENGLISH
             
-            if (TransanaGlobal.configData.language != 'en'):
-                print "wxPython language selection over-ridden for the Mac"
+#            if (TransanaGlobal.configData.language != 'en'):
+#                print "wxPython language selection over-ridden for the Mac"
             
         # This provides localization for wxPython
         self.locale = wx.Locale(lang, wx.LOCALE_LOAD_DEFAULT | wx.LOCALE_CONV_ENCODING)
@@ -416,6 +418,8 @@ class MenuWindow(wx.Frame):
         # Define handler for Transcript > Adjust Indexes
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, self.OnAdjustIndexes)
 
+        # Define handler for Tools > Notes Browser
+        wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_NOTESBROWSER, self.OnNotesBrowser)
         # Define handler for Tools > File Management
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_FILEMANAGEMENT, self.OnFileManagement)
         # Define handler for Tools > Import Database
@@ -479,8 +483,10 @@ class MenuWindow(wx.Frame):
             
 
     def OnMove(self, event):
-        # We need to block moving the Menu Bar.  This should allow that.
-        self.Move(wx.Point(self.left, self.top))
+        # We need to block moving the Menu Bar.  This should allow that, except on Linux, where it causes problems in Gnome
+        # (and perhaps elsewhere.)
+        if not ('wxGTK' in wx.PlatformInfo):
+            self.Move(wx.Point(self.left, self.top))
     
     def OnCloseWindow(self, event):
         """ This code forces the Video Window to close when the "X" is used to close the Menu Bar """
@@ -491,9 +497,11 @@ class MenuWindow(wx.Frame):
         if self.ControlObject.DataWindowHasSearchNodes():
             # If so, prompt the user about if they really want to exit.
             # Define the Message Dialog
-            dlg = wx.MessageDialog(self, _('You have unsaved Search Results.  Are you sure you want to exit Transana without converting them to Collections?'), _('Transana Confirmation'), wx.YES_NO)
+#            dlg = wx.MessageDialog(self, _('You have unsaved Search Results.  Are you sure you want to exit Transana without converting them to Collections?'), _('Transana Confirmation'), wx.YES_NO | wx.ICON_QUESTION)
             # Display the Message Dialog and capture the response
-            result = dlg.ShowModal()
+#            result = dlg.ShowModal()
+            dlg = Dialogs.QuestionDialog(self, _('You have unsaved Search Results.  Are you sure you want to exit Transana without converting them to Collections?'))
+            result = dlg.LocalShowModal()
             # Destroy the Message Dialog
             dlg.Destroy()
         else:
@@ -595,9 +603,11 @@ class MenuWindow(wx.Frame):
         if self.ControlObject.DataWindowHasSearchNodes():
             # If so, prompt the user about if they really want to exit.
             # Define the Message Dialog
-            dlg = wx.MessageDialog(self, _('You have unsaved Search Results.  Are you sure you want to close this database without converting them to Collections?'), _('Transana Confirmation'), wx.YES_NO)
+#            dlg = wx.MessageDialog(self, _('You have unsaved Search Results.  Are you sure you want to close this database without converting them to Collections?'), _('Transana Confirmation'), wx.YES_NO | wx.ICON_QUESTION)
             # Display the Message Dialog and capture the response
-            result = dlg.ShowModal()
+#            result = dlg.ShowModal()
+            dlg = Dialogs.QuestionDialog(self, _('You have unsaved Search Results.  Are you sure you want to close this database without converting them to Collections?'))
+            result = dlg.LocalShowModal()
             # Destroy the Message Dialog
             dlg.Destroy()
         else:
@@ -656,18 +666,25 @@ class MenuWindow(wx.Frame):
 
     def OnPrinterSetup(self, event):
         """ Printer Setup method """
-        # Create a Print Setup Dialog
-        printerDialog = wx.PrintDialog(self)
-        # Supply the existing PrintData to the Print Setup Dialog
-        printerDialog.GetPrintDialogData().SetPrintData(TransanaGlobal.printData)
-        # Indicate that we want the Print Setup Dialog to be displayed
-        printerDialog.GetPrintDialogData().SetSetupDialog(True)
-        # Show the Print Setup Dialog
-        if printerDialog.ShowModal() == wx.ID_OK:
-            # Update the PrintData object's information
-            TransanaGlobal.printData = printerDialog.GetPrintDialogData().GetPrintData()
-        # DON'T Destroy the Print Setup Dialog, as that wipes out the saved Printer Data!!
-        # printerDialog.Destroy()
+        # Let's use PAGE Setup here ('cause you can do Printer Setup from Page Setup.)  It's a better system
+        # that allows Landscape on Mac.
+
+        # Get the global Print Data
+        self.printData = TransanaGlobal.printData
+        # Create a PageSetupDialogData object based on the global printData defined in __init__
+        pageSetupDialogData = wx.PageSetupDialogData(self.printData)
+        # Calculate the paper size from the paper ID (Obsolete?)
+        pageSetupDialogData.CalculatePaperSizeFromId()
+        # Create a Page Setup Dialog based on the Page Setup Dialog Data
+        pageDialog = wx.PageSetupDialog(self, pageSetupDialogData)
+        # Show the Page Dialog box
+        pageDialog.ShowModal()
+        # Extract the print data from the page dialog
+        self.printData = wx.PrintData(pageDialog.GetPageSetupData().GetPrintData())
+        # reflect the print data changes globally
+        TransanaGlobal.printData = self.printData
+        # Destroy the Page Dialog
+        pageDialog.Destroy()
 
 
     def OnSaveTranscript(self, event):
@@ -745,11 +762,21 @@ class MenuWindow(wx.Frame):
             
         dlg.Destroy()
 
+    def OnNotesBrowser(self, event):
+        """ Notes Browser """
+        # Instantiate a Notes Browser window
+        notesBrowser = NotesBrowser.NotesBrowser(self, -1, _("Notes Browser"))
+        # Register the Control Object with the Notes Browser
+        notesBrowser.Register(self.ControlObject)
+        # Display the Notes Browser
+        notesBrowser.ShowModal()
+        # NotesBrowser destroys itself!  No need for notesBrowser.Destroy() here.
+
     def OnImportDatabase(self, event):
         """ Import Database """
         temp = XMLImport.XMLImport(self, -1, _('Transana XML Import'))
         result = temp.get_input()
-        if (result != None) and (result[_("XML Filename")] != ''):
+        if (result != None) and (result[_("Transana-XML Filename")] != ''):
             temp.Import()
             # If MU, we need to signal other copies that we've imported a database!
             # First, test to see if we're in the Multi-user version.
@@ -765,7 +792,7 @@ class MenuWindow(wx.Frame):
         """ Export Database """
         temp = XMLExport.XMLExport(self, -1, _('Transana XML Export'))
         result = temp.get_input()
-        if (result != None) and (result[_("XML Filename")] != ''):
+        if (result != None) and (result[_("Transana-XML Filename")] != ''):
             temp.Export()
         temp.Close()
 
@@ -1038,6 +1065,7 @@ class MenuWindow(wx.Frame):
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, _("&Adjust Indexes"))
 
         self.menuBar.SetLabelTop(2, _("Too&ls"))
+        self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_NOTESBROWSER, _("&Notes Browser"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_FILEMANAGEMENT, _("&File Management"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_IMPORT_DATABASE, _("&Import Database"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_EXPORT_DATABASE, _("&Export Database"))

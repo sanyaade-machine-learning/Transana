@@ -119,6 +119,85 @@ class InfoDialog(wx.MessageDialog):
 
         self.CentreOnScreen()
 
+class QuestionDialog(wx.MessageDialog):
+    """Replacement for wxMessageDialog with style=wx.YES_NO | wx.ICON_QUESTION."""
+
+    def __init__(self, parent, msg, header=_("Transana Confirmation"), noDefault=False, useOkCancel=False):
+        # This should be easy, right?  Just use the OS MessageDialog like so:
+        # wx.MessageDialog.__init__(self, parent, msg, _("Transana Information"), \
+        #                     wx.OK | wx.CENTRE | wx.ICON_INFORMATION)
+        # That's all there is to it, right?
+        #
+        # Yeah, right.  Unfortunately, on Windows, this dialog isn't TRULY modal.  It's modal to the parent window
+        # it's called from, but you can still select one of the other Transana Windows and do stuff.  This message
+        # can even get hidden behind other windows, and cause all kinds of problems.  According to Robin Dunn,
+        # writing my own class to do this is the only solution.  Here goes.
+
+        # print "InfoDialog", msg
+        self.result = -1
+
+        dlgStyle = wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP
+        if noDefault:
+            dlgStyle = dlgStyle | wx.NO_DEFAULT
+        wx.Dialog.__init__(self, parent, -1, header, size=(350, 150), style=dlgStyle)
+
+        box = wx.BoxSizer(wx.VERTICAL)
+        box2 = wx.BoxSizer(wx.HORIZONTAL)
+        boxButtons = wx.BoxSizer(wx.HORIZONTAL)
+
+        bitmap = wx.EmptyBitmap(32, 32)
+        bitmap = wx.ArtProvider_GetBitmap(wx.ART_QUESTION, wx.ART_MESSAGE_BOX, (32, 32))
+        graphic = wx.StaticBitmap(self, -1, bitmap)
+
+        box2.Add(graphic, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, 10)
+        
+        message = wx.StaticText(self, -1, msg)
+
+        box2.Add(message, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALIGN_CENTER_VERTICAL | wx.ALL, 10)
+        box.Add(box2, 0, wx.EXPAND)
+
+        if useOkCancel:
+            btnYesText = _("OK")
+            btnYesID = wx.ID_OK
+            btnNoText = _("Cancel")
+            btnNoID = wx.ID_CANCEL
+        else:
+            btnYesText = _("&Yes")
+            btnYesID = wx.ID_YES
+            btnNoText = _("&No")
+            btnNoID = wx.ID_NO
+        btnYes = wx.Button(self, btnYesID, btnYesText)
+        btnYes.Bind(wx.EVT_BUTTON, self.OnButton)
+        btnNo = wx.Button(self, btnNoID, btnNoText)
+        btnNo.Bind(wx.EVT_BUTTON, self.OnButton)
+        boxButtons.Add((20,1), 1)
+        if "__WXMAC__" in wx.PlatformInfo:
+            boxButtons.Add(btnNo, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+            boxButtons.Add((20,1))
+            boxButtons.Add(btnYes, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        else:
+            boxButtons.Add(btnYes, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+            boxButtons.Add((20,1))
+            boxButtons.Add(btnNo, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        boxButtons.Add((20,1), 1)
+        box.Add(boxButtons, 0, wx.ALIGN_CENTER | wx.EXPAND)
+
+        self.SetAutoLayout(True)
+
+        self.SetSizer(box)
+        self.Fit()
+        self.Layout()
+
+        self.CentreOnScreen()
+
+    def OnButton(self, event):
+        self.result = event.GetId()
+        self.Close()
+
+    def LocalShowModal(self):
+        self.ShowModal()
+        return self.result
+
 
 class GenForm(wx.Dialog):
     """General dialog form used for getting basic field input."""

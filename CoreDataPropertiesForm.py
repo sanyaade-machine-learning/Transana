@@ -162,9 +162,9 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         lay.width.PercentOf(self.panel, wx.Width, 31)  # 31% width, allows for three across positioning
         lay.height.AsIs()
         # The Format Combo Box has different options depending on the value of Type
-        if self.obj.dc_type == _('Image'):
+        if self.obj.dc_type == unicode(_('Image'), 'utf8'):
             options = imageOptions
-        elif self.obj.dc_type == _('Sound'):
+        elif self.obj.dc_type == unicode(_('Sound'), 'utf8'):
             options = soundOptions
         else:
             options = allOptions
@@ -233,9 +233,9 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         currentString = self.format_combo.GetValue()
 
         # Determine the appropriate options for the Format Combo based on the current value of the Type Field
-        if self.type_combo.GetStringSelection() == _('Image'):
+        if self.type_combo.GetStringSelection() == unicode(_('Image'), 'utf8'):
             options = imageOptions
-        elif self.type_combo.GetStringSelection() == _('Sound'):
+        elif self.type_combo.GetStringSelection() == unicode(_('Sound'), 'utf8'):
             options = soundOptions
         else:
             options = allOptions

@@ -129,7 +129,7 @@ class NotePropertiesForm(Dialogs.GenForm):
         clipID_edit = self.new_edit_box(_("Clip ID"), lay, clipID)
         clipID_edit.Enable(False)
 
-        # Title/Comment layout
+        # Comment layout
         lay = wx.LayoutConstraints()
         lay.top.Below(collectionID_edit, 10)       # 10 under Collection ID
         
@@ -140,7 +140,7 @@ class NotePropertiesForm(Dialogs.GenForm):
 #        lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
 #        lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
 #        lay.height.AsIs()
-#        comment_edit = self.new_edit_box("Title/Comment", lay, self.obj.comment)
+#        comment_edit = self.new_edit_box("Comment", lay, self.obj.comment)
 #        comment_edit.Enable(False)
 
         # Note taker layout

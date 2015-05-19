@@ -30,6 +30,7 @@ import wx
 from TransanaExceptions import *
 import DBInterface
 import Dialogs
+import Misc
 import TransanaGlobal
 import inspect
 # import Python String module
@@ -316,13 +317,17 @@ class Keyword(object):
                 (originalKeyword.lower() != keyword.lower())):
                 # If duplication is found, ask the user if we should MERGE the keywords.
                 if 'unicode' in wx.PlatformInfo:
+                    oKG = unicode(originalKeywordGroup, 'utf8')
+                    oKW = unicode(originalKeyword, 'utf8')
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_('A Keyword named "%s : %s" already exists.  Do you want to merge\n"%s : %s" with "%s : %s"?'), 'utf8') % (self.keywordGroup, self.keyword, originalKeywordGroup, originalKeyword, self.keywordGroup, self.keyword)
+                    prompt = unicode(_('A Keyword named "%s : %s" already exists.  Do you want to merge\n"%s : %s" with "%s : %s"?'), 'utf8') % (self.keywordGroup, self.keyword, oKG, oKW, self.keywordGroup, self.keyword)
                 else:
                     prompt = _('A Keyword named "%s : %s" already exists.  Do you want to merge\n"%s : %s" with "%s : %s"?') % (self.keywordGroup, self.keyword, originalKeywordGroup, originalKeyword, self.keywordGroup, self.keyword)
-                dlg = wx.MessageDialog(None,  prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+                dlg = Dialogs.QuestionDialog(None,  prompt)
+                result = dlg.LocalShowModal()
+                dlg.Destroy()
                 # If the user wants to merge ...
-                if dlg.ShowModal() == wx.ID_YES:
+                if result == wx.ID_YES:
                     # .. then signal the user's desire to merge.
                     mergeKeywords = True
                 # If the user does NOT want to merge keywords ...
@@ -664,7 +669,7 @@ currently locked by %s.  Please try again later.""")
             dlg.ShowModal()
             dlg.Destroy()
         # Remove white space from the Keyword Group.
-        self._keywordGroup = keywordGroup.strip()
+        self._keywordGroup = Misc.unistrip(keywordGroup)
         
     def _del_keywordGroup(self):
         self._keywordGroup = ""
@@ -684,7 +689,8 @@ currently locked by %s.  Please try again later.""")
             dlg = Dialogs.ErrorDialog(None, prompt)
             dlg.ShowModal()
             dlg.Destroy()
-        self._keyword = keyword.strip()
+        self._keyword = Misc.unistrip(keyword)
+        
     def _del_keyword(self):
         self._keyword = ""
 

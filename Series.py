@@ -200,6 +200,10 @@ class Series(DataObject):
             DBInterface.delete_filter_records(6, self.number)
             #   Delete Series Keyword Percentage Map records
             DBInterface.delete_filter_records(7, self.number)
+            #   Delete Series Report records
+            DBInterface.delete_filter_records(10, self.number)
+            #   Delete Series Clip Data Export records
+            DBInterface.delete_filter_records(14, self.number)
 
             # Detect, Load, and Delete all Series Notes.
             notes = self.get_note_nums()

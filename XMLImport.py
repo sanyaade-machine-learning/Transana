@@ -39,6 +39,7 @@ import Collection
 import Clip
 import Keyword
 import ClipKeywordObject
+import Misc
 import Note
 import DBInterface
 import TransanaGlobal
@@ -48,6 +49,8 @@ import os
 import sys
 # import Python's Regular Expression parser
 import re
+# import Python's cPickle module
+import cPickle
 
 MENU_FILE_EXIT = wx.NewId()
 
@@ -78,7 +81,7 @@ class XMLImport(Dialogs.GenForm):
        lay.left.SameAs(self.panel, wx.Left, 10)
        lay.width.PercentOf(self.panel, wx.Width, 80)  # 80% width
        lay.height.AsIs()
-       self.XMLFile = self.new_edit_box(_("XML Filename"), lay, '')
+       self.XMLFile = self.new_edit_box(_("Transana-XML Filename"), lay, '')
        self.XMLFile.SetDropTarget(EditBoxFileDropTarget(self.XMLFile))
 
        # Browse button layout
@@ -105,6 +108,9 @@ class XMLImport(Dialogs.GenForm):
    def Import(self):
        # use the LONGEST title here to set the width of the dialog box!
        progress = wx.ProgressDialog(_('Transana XML Import'), _('Importing Transcript records (This may be slow because of the size of Transcript records.)'), style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
+       if progress.GetSize()[0] > 800:
+            progress.SetSize((800, progress.GetSize()[1]))
+            progress.Centre()
        self.XMLVersionNumber = 0.0
        recNumbers = {}
        recNumbers['Series'] = {0:0}
@@ -112,7 +118,7 @@ class XMLImport(Dialogs.GenForm):
        recNumbers['Transcript'] = {0:0}
        recNumbers['Collection'] = {0:0}
        recNumbers['Clip'] = {0:0}
-
+       recNumbers['Note'] = {0:0}
        clipTranscripts = {}
 
        db = DBInterface.get_db()
@@ -133,7 +139,8 @@ class XMLImport(Dialogs.GenForm):
            dataType = None
            for line in f:
                lineCount += 1
-               line = line.strip()
+               # We can't just use strip() here.  Strings ending with the a with a grave (Alt-133) get corrupted!
+               line = Misc.unistrip(line)
 
                if DEBUG:
                    print "Line %d: '%s' %s %s" % (lineCount, line, objectType, dataType)
@@ -171,9 +178,10 @@ class XMLImport(Dialogs.GenForm):
                    # Version 1.0 -- Original Transana XML for Transana 2.0 release
                    # Version 1.1 -- Unicode encoding added to Transana XML for Transana 2.1 release
                    # Version 1.2 -- Filter Table added to Transana XML for Transana 2.11 release
+                   # Version 1.3 -- FilterData handling changed to accomodate Unicode data for Transana 2.21 release
                    if self.XMLVersionNumber == '1.0':
                        self.importEncoding = 'latin-1'
-                   elif self.XMLVersionNumber in ['1.1', '1.2']:
+                   elif self.XMLVersionNumber in ['1.1', '1.2', '1.3']:
                        self.importEncoding = 'utf8'
                    else: 
                        msg = _('The Database you are trying to import was created with a later version\nof Transana.  Please upgrade your copy of Transana and try again.')
@@ -265,7 +273,8 @@ class XMLImport(Dialogs.GenForm):
                           objectType == 'Episode' or \
                           objectType == 'Transcript' or \
                           objectType == 'Collection' or \
-                          objectType == 'Clip':
+                          objectType == 'Clip' or \
+                          objectType == 'Note':
                            oldNumber = currentObj.number
                            currentObj.number = 0
 
@@ -283,16 +292,9 @@ class XMLImport(Dialogs.GenForm):
                            currentObj.db_save()
                            # Let's keep a record of the old and new object numbers for each object saved.
                            recNumbers[objectType][oldNumber] = currentObj.number
-                           
-                       elif  objectType == 'CoreData' or \
-                             objectType == 'Note':
-                           currentObj.number = 0
 
-#                           if DEBUG and (objectType == 'Note'):
-#                               tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
-#                               tmpdlg.ShowModal()
-#                               tmpdlg.Destroy()
-                               
+                       elif  objectType == 'CoreData':
+                           currentObj.number = 0
                            currentObj.db_save()
 
                        elif objectType == 'Keyword':
@@ -305,9 +307,67 @@ class XMLImport(Dialogs.GenForm):
                                print "Save the Filter Data here!"
                                print self.FilterReportType
                                print self.FilterScope
-                               print self.FilterConfigName
+                               print self.FilterConfigName.encode('utf8')
                                print self.FilterFilterDataType
-#                               print self.FilterFilterData
+                               print type(self.FilterFilterData)
+
+                           # Starting with XML Version 1.3, we have to deal with encoding issues
+                           if not self.XMLVersionNumber in ['1.0', '1.1', '1.2']:
+                               if self.FilterFilterDataType in ['1', '2', '3', '5', '6', '7']:
+                                   # Unpack the pickled data, which must be done differently depending on its current form
+                                   if type(self.FilterFilterData).__name__ == 'array':
+                                       data = cPickle.loads(self.FilterFilterData.tostring())
+                                   elif type(self.FilterFilterData).__name__ == 'unicode':
+                                       data = cPickle.loads(self.FilterFilterData.encode('utf-8'))
+                                   else:
+                                       data = cPickle.loads(self.FilterFilterData)
+                                   # Re-pickle the data.  It's in a common form now that's somehow friendlier.
+                                   data = cPickle.dumps(data)
+
+                               elif self.FilterFilterDataType in ['4', '8']:
+                                   pass
+
+                               # All other data is encoded and needs to be decoded, but was not pickled.
+                               else:
+                                   self.FilterFilterData = DBInterface.ProcessDBDataForUTF8Encoding(self.FilterFilterData)
+                               
+
+                           # Certain FilterDataTypes need to have their DATA adjusted for the new object numbers!
+                           # This should be done before the save.
+                           # So if we have Clips or Notes Filter Data ...
+                           if self.FilterFilterDataType in ['2', '8']:
+                               # ... initialize a List for accepting the altered Filter Data
+                               filterData = []
+                               # Unpack the pickled data, which must be done differently depending on its current form
+                               if type(self.FilterFilterData).__name__ == 'array':
+                                   data = cPickle.loads(self.FilterFilterData.tostring())
+                               elif type(self.FilterFilterData).__name__ == 'unicode':
+                                   data = cPickle.loads(self.FilterFilterData.encode('utf-8'))
+                               else:
+                                   data = cPickle.loads(self.FilterFilterData)
+                               # Iterate through the data records
+                               for dataRec in data:
+                                   # If we have a Clip record ...
+                                   if self.FilterFilterDataType == '2':
+                                       # ... and if the Collection Number still exists in the new data set ...
+                                       if recNumbers['Collection'].has_key(dataRec[1]):
+                                           # ... get the new Collection Number ...
+                                           collNum = recNumbers['Collection'][dataRec[1]]
+                                           # ... and substitute it into the data record
+                                           filterData.append((dataRec[0], collNum, dataRec[2]))
+                                   # If we have a Notes record ...
+                                   elif self.FilterFilterDataType == '8':
+                                       # ... and if the Note Number still exists in the new data set ...
+                                       if recNumbers['Note'].has_key(dataRec[0]):
+                                           # ... get the new Note number ...
+                                           noteNum = recNumbers['Note'][dataRec[0]]
+                                           # ... and substitute it into the data record
+                                           filterData.append((noteNum, ) + dataRec[1:])
+                                    # NOTE that data records without new references are automatically dropped from
+                                    #      the filter data!
+                               # Now re-pickle the filter data
+                               self.FilterFilterData = cPickle.dumps(filterData)
+                               
                            query = """ INSERT INTO Filters2
                                            (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
                                          VALUES
@@ -322,6 +382,10 @@ class XMLImport(Dialogs.GenForm):
 
                    except:
                        if DEBUG:
+                           if (objectType == 'Transcript'):
+                               tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
+                               tmpdlg.ShowModal()
+                               tmpdlg.Destroy()
                            import traceback
                            traceback.print_exc(file=sys.stdout)
                        # If an error arises, for now, let's interrupt the import process.  It may be possible
@@ -570,7 +634,11 @@ class XMLImport(Dialogs.GenForm):
                    dataType = None
 
                elif dataType == 'SeriesNum':
-                   currentObj.series_num = recNumbers['Series'][int(line)]
+                   # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                   try:
+                       currentObj.series_num = recNumbers['Series'][int(line)]
+                   except:
+                       pass
                    dataType = None
 
                elif dataType == 'EpisodeNum':
@@ -578,28 +646,33 @@ class XMLImport(Dialogs.GenForm):
                    # A user had a problem with a Transcript Record existing when the parent Episode
                    # had been deleted.  Therefore, let's check to see if the old Episode record existed
                    # by checking to see if the old episode number is a Key value in the Episode recNumbers table.
-                   if recNumbers['Episode'].has_key(int(line)):
-                       currentObj.episode_num = recNumbers['Episode'][int(line)]
-                   else:
-                       # If the old record number doesn't exist, substitute 0 and show an error message.
-                       currentObj.episode_num = 0
-                       if isinstance(currentObj, ClipKeywordObject.ClipKeyword):
-                           if 'unicode' in wx.PlatformInfo:
-                               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                               prompt = unicode(_('Episode Number %s cannot be found for %s at line number %d.'), 'utf8')
-                           else:
-                               prompt = _('Episode Number %s cannot be found for %s at line number %d.')
-                           vals = (line, objectType, lineCount)
+                   # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                   if (line.strip() != 'None'):
+                       if recNumbers['Episode'].has_key(int(line)):
+                           try:
+                               currentObj.episode_num = recNumbers['Episode'][int(line)]
+                           except:
+                               pass
                        else:
-                           if 'unicode' in wx.PlatformInfo:
-                               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                               prompt = unicode(_('Episode Number %s cannot be found for %s record %d at line number %d.'), 'utf8')
+                           # If the old record number doesn't exist, substitute 0 and show an error message.
+                           currentObj.episode_num = 0
+                           if isinstance(currentObj, ClipKeywordObject.ClipKeyword):
+                               if 'unicode' in wx.PlatformInfo:
+                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                   prompt = unicode(_('Episode Number %s cannot be found for %s at line number %d.'), 'utf8')
+                               else:
+                                   prompt = _('Episode Number %s cannot be found for %s at line number %d.')
+                               vals = (line, objectType, lineCount)
                            else:
-                               prompt = _('Episode Number %s cannot be found for %s record %d at line number %d.')
-                           vals = (line, objectType, currentObj.number, lineCount)
-                       errordlg = Dialogs.ErrorDialog(None, prompt % vals)
-                       errordlg.ShowModal()
-                       errordlg.Destroy()
+                               if 'unicode' in wx.PlatformInfo:
+                                   # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                   prompt = unicode(_('Episode Number %s cannot be found for %s record %d at line number %d.'), 'utf8')
+                               else:
+                                   prompt = _('Episode Number %s cannot be found for %s record %d at line number %d.')
+                               vals = (line, objectType, currentObj.number, lineCount)
+                           errordlg = Dialogs.ErrorDialog(None, prompt % vals)
+                           errordlg.ShowModal()
+                           errordlg.Destroy()
                    dataType = None
 
                elif dataType == 'TranscriptNum':
@@ -608,16 +681,28 @@ class XMLImport(Dialogs.GenForm):
                        if line != '0':
                            clipTranscripts[currentObj.number] = line
                    else:
-                       currentObj.transcript_num = recNumbers['Transcript'][int(line)]
+                       # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                       try:
+                           currentObj.transcript_num = recNumbers['Transcript'][int(line)]
+                       except:
+                           pass
                    dataType = None
 
                elif dataType == 'CollectNum':
-                   currentObj.collection_num = recNumbers['Collection'][int(line)]
+                   # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                   try:
+                       currentObj.collection_num = recNumbers['Collection'][int(line)]
+                   except:
+                       pass
                    dataType = None
 
                elif dataType == 'ClipNum':
                    if objectType in ['Transcript', 'Note']:
-                       currentObj.clip_num = recNumbers['Clip'][int(line)]
+                       # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                       try:
+                           currentObj.clip_num = recNumbers['Clip'][int(line)]
+                       except:
+                           pass
                    elif objectType == 'ClipKeyword':
                        try:
                            currentObj.clipNum = recNumbers['Clip'][int(line)]
@@ -833,7 +918,10 @@ class XMLImport(Dialogs.GenForm):
                        currentObj.text = currentObj.text + '\n'
                    # We just add the encoded line, without the ProcessLine() call, because NoteText is stored in the Database
                    # as a BLOB, and thus is encoded and handled differently.
-                   currentObj.text = currentObj.text + unicode(line, self.importEncoding)
+#                   currentObj.text = currentObj.text + unicode(line, self.importEncoding)
+                   # This now requires ProcessLine since we're not treating NoteText as a BLOB any more. 
+# 9/11/2007                   currentObj.text = currentObj.text + self.ProcessLine(line)
+                   currentObj.text = currentObj.text + line.decode(self.importEncoding)
                    # We DO NOT reset DataType here, as NoteText may be many lines long!
                    # dataType = None
 
@@ -842,12 +930,20 @@ class XMLImport(Dialogs.GenForm):
                     dataType = None
 
                elif dataType == 'ReportScope':
-                    if self.FilterReportType in ['5', '6', '7']:
+                    if self.FilterReportType in ['5', '6', '7', '10', '14']:
                         self.FilterScope = recNumbers['Series'][int(line)]
-                    elif self.FilterReportType in ['1', '2', '3']:
+                    elif self.FilterReportType in ['1', '2', '3', '8', '11']:
                         self.FilterScope = recNumbers['Episode'][int(line)]
-                    elif self.FilterReportType in ['4']:
+                    # Collection Clip Data Export (ReportType 4) only needs translation if ReportScope != 0
+                    elif (self.FilterReportType in ['12']) or ((self.FilterReportType == '4') and (int(line) != 0)):
                         self.FilterScope = recNumbers['Collection'][int(line)]
+                    elif self.FilterReportType in ['13']:
+                        # FilterScopes for ReportType 13 (Notes Report) are constants, not object numbers!
+                        self.FilterScope = int(line)
+                    # Collection Clip Data Export (ReportType 4) for ReportScope 0, the Collection Root, needs
+                    # a FilterScope of 0
+                    elif ((self.FilterReportType == '4') and (int(line) == 0)):
+                        self.FilterScope = 0
                     else:
                        if 'unicode' in wx.PlatformInfo:
                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -860,7 +956,7 @@ class XMLImport(Dialogs.GenForm):
                     dataType = None
 
                elif dataType == 'ConfigName': 
-                    self.FilterConfigName = line
+                    self.FilterConfigName = DBInterface.ProcessDBDataForUTF8Encoding(line)
                     dataType = None
 
                elif dataType == 'FilterDataType': 
@@ -872,9 +968,15 @@ class XMLImport(Dialogs.GenForm):
                    # text is added as a single line.
                    if self.FilterFilterData != '':
                        self.FilterFilterData += '\n'
-                   # We just add the encoded line, without the ProcessLine() call, because Filter Data is stored in the Database
-                   # as a BLOB, and thus is encoded and handled differently.
-                   self.FilterFilterData += unicode(line, self.importEncoding)
+                   # Starting with XML Version 1.3, we have to deal with encoding issues differently
+                   if self.XMLVersionNumber in ['1.0', '1.1', '1.2']:
+                       # We just add the encoded line, without the ProcessLine() call, because Filter Data is stored in the Database
+                       # as a BLOB, and thus is encoded and handled differently.
+                       self.FilterFilterData += unicode(line, self.importEncoding)
+                   # Starting with XML Version 1.3 ...
+                   else:
+                       # we don't encode on a line by line basis for FilterData
+                       self.FilterFilterData += line
                    # We DO NOT reset DataType here, as Filter Data may be many lines long!
                    # dataType = None
 
@@ -943,11 +1045,6 @@ class XMLImport(Dialogs.GenForm):
        progress.Update(100)
        progress.Destroy()
 
-#       print
-#       print "recNumber Records:"
-#       for record in recNumbers:
-#           for val in recNumbers[record]:
-#               print record, val, recNumbers[record][val]
 
    def ProcessLine(self, txt):
        """ Process most lines read from the XML file to apply the proper encoding, if needed. """
@@ -972,7 +1069,7 @@ class XMLImport(Dialogs.GenForm):
                         os.path.dirname(sys.argv[0]),
                         "",
                         "", 
-                        _("XML Files (*.xml)|*.xml|All files (*.*)|*.*"), 
+                        _("Transana-XML Files (*.tra)|*.tra|XML Files (*.xml)|*.xml|All files (*.*)|*.*"), 
                         wx.OPEN | wx.FILE_MUST_EXIST)
         # If user didn't cancel ..
         if fs != "":

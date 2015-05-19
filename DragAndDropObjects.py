@@ -542,8 +542,23 @@ def CreateClip(clipData, dropData, tree, dropNode):
     # Get the Clip Stop Time from the clipData Object
     tempClip.clip_stop = clipData.clipStop
 
+    # Check to see if the clip goes all the way to the end of the media file.  If so, it's probably an accident
+    # due to the lack of an ending time code.  We'll skip this in the last 30 seconds of the media file, though.
+    if (tempClip.clip_stop == TransanaGlobal.menuWindow.ControlObject.VideoWindow.GetMediaLength()) and \
+       (tempClip.clip_stop - tempClip.clip_start > 30000):
+        prompt = _('The ending point for this Clip is the end of the media file.  Do you want to create this clip?')
+#        errordlg = wx.MessageDialog(None, prompt, _("Transana Error"), style=wx.YES_NO | wx.ICON_QUESTION)
+#        result = errordlg.ShowModal()
+        errordlg = Dialogs.QuestionDialog(None, prompt, _("Transana Error"))
+        result = errordlg.LocalShowModal()
+        errordlg.Destroy()
+        # If the user says NO, they don't want to create it ...
+        if result == wx.ID_NO:
+            # .. cancel Clip Creation
+            return
+
     # Check to see if the clip ends after the media file ends (due to Adjust Indexes)
-    if tempClip.clip_stop >= TransanaGlobal.menuWindow.ControlObject.VideoWindow.GetMediaLength():
+    if tempClip.clip_stop > TransanaGlobal.menuWindow.ControlObject.VideoWindow.GetMediaLength():
         prompt = _('The ending point for this Clip is after the end of the media file.  This clip may not end where you expect.')
         errordlg = Dialogs.ErrorDialog(None, prompt)
         errordlg.ShowModal()
@@ -712,9 +727,10 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             prompt = unicode(_('Do you want to add Keyword "%s:%s" to all the Episodes in\nSeries "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
         else:
             prompt = _('Do you want to add Keyword "%s:%s" to all the Episodes in\nSeries "%s"?') % (sourceData.parent, sourceData.text, targetName)
-        dlg = wx.MessageDialog(parent,  prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-        
-        result = dlg.ShowModal()
+#        dlg = wx.MessageDialog(parent,  prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#        result = dlg.ShowModal()
+        dlg = Dialogs.QuestionDialog(parent, prompt)
+        result = dlg.LocalShowModal()
         dlg.Destroy()
         if result == wx.ID_NO:
             return
@@ -761,8 +777,10 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             prompt = unicode(_('Do you want to add Keyword "%s:%s" to\nEpisode "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
         else:
             prompt = _('Do you want to add Keyword "%s:%s" to\nEpisode "%s"?') % (sourceData.parent, sourceData.text, targetName)
-        dlg = wx.MessageDialog(parent, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-        result = dlg.ShowModal()
+#        dlg = wx.MessageDialog(parent,  prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#        result = dlg.ShowModal()
+        dlg = Dialogs.QuestionDialog(parent, prompt)
+        result = dlg.LocalShowModal()
         dlg.Destroy()
         if result == wx.ID_NO:
             return
@@ -798,8 +816,10 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             prompt = unicode(_('Do you want to add Keyword "%s:%s" to all the Clips in\nCollection "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
         else:
             prompt = _('Do you want to add Keyword "%s:%s" to all the Clips in\nCollection "%s"?') % (sourceData.parent, sourceData.text, targetName)
-        dlg = wx.MessageDialog(parent,  prompt , _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-        result = dlg.ShowModal()
+#        dlg = wx.MessageDialog(parent,  prompt , _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#        result = dlg.ShowModal()
+        dlg = Dialogs.QuestionDialog(parent, prompt)
+        result = dlg.LocalShowModal()
         dlg.Destroy()
         if result == wx.ID_NO:
             return
@@ -873,8 +893,10 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
             prompt = unicode(_('Do you want to add Keyword "%s:%s" to\nClip "%s"?'), 'utf8') % (sourceData.parent, sourceData.text, targetName)
         else:
             prompt = _('Do you want to add Keyword "%s:%s" to\nClip "%s"?') % (sourceData.parent, sourceData.text, targetName)
-        dlg = wx.MessageDialog(parent,  prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-        result = dlg.ShowModal()
+#        dlg = wx.MessageDialog(parent,  prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#        result = dlg.ShowModal()
+        dlg = Dialogs.QuestionDialog(parent, prompt)
+        result = dlg.LocalShowModal()
         dlg.Destroy()
         if result == wx.ID_NO:
             return
@@ -977,8 +999,10 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
          prompt = unicode(_('Do you want to %s all Clips from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceCollection.id, destCollection.id)
       else:
          prompt = _('Do you want to %s all Clips from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceCollection.id, destCollection.id)
-      dlg = wx.MessageDialog(treeCtrl,  prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-      result = dlg.ShowModal()
+#      dlg = wx.MessageDialog(treeCtrl,  prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#      result = dlg.ShowModal()
+      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+      result = dlg.LocalShowModal()
       dlg.Destroy()
       if result == wx.ID_YES:
          # If confirmed, iterate through the list of Clips
@@ -1013,8 +1037,10 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
          prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
       else:
          prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
-      dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-      result = dlg.ShowModal()
+#      dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#      result = dlg.ShowModal()
+      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+      result = dlg.LocalShowModal()
       dlg.Destroy()
       if result == wx.ID_YES:
          # Copy or Move the Clip to the Destination Collection
@@ -1056,8 +1082,10 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
              prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
          else:
              prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
-         dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-         result = dlg.ShowModal()
+#         dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#         result = dlg.ShowModal()
+         dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+         result = dlg.LocalShowModal()
          dlg.Destroy()
          if result == wx.ID_YES:
             # Copy or Move the Clip to the Destination Collection
@@ -1093,8 +1121,10 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
          prompt = unicode(_('Do you want to add Clip "%s" as an example of Keyword "%s:%s"?'), 'utf8') % (sourceData.text, kwg, kw)
       else:
          prompt = _('Do you want to add Clip "%s" as an example of Keyword "%s:%s"?') % (sourceData.text, kwg, kw)
-      dlg = wx.MessageDialog(treeCtrl, prompt, "Transana Confirmation", style=wx.YES_NO | wx.ICON_QUESTION)
-      result = dlg.ShowModal()
+#      dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#      result = dlg.ShowModal()
+      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+      result = dlg.LocalShowModal()
       dlg.Destroy()
       if result == wx.ID_YES:
          # Locate the appropriate ClipKeyword Record in the Database and flag it as an example
@@ -1167,8 +1197,10 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
          prompt = unicode(_('Do you want to %s Keyword "%s" from\nKeyword Group "%s" to\nKeyword Group "%s"?'), 'utf8') % (copyMovePrompt, sourceData.text, sourceData.parent, treeCtrl.GetItemText(destNode))
       else:
          prompt = _('Do you want to %s Keyword "%s" from\nKeyword Group "%s" to\nKeyword Group "%s"?') % (copyMovePrompt, sourceData.text, sourceData.parent, treeCtrl.GetItemText(destNode))
-      dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-      result = dlg.ShowModal()
+#      dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#      result = dlg.ShowModal()
+      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+      result = dlg.LocalShowModal()
       dlg.Destroy()
       if result == wx.ID_YES:
          # Determine if we're copying or moving data
@@ -1290,9 +1322,11 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
          prompt = unicode(_('Do you want to %s all Search Results Clips from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?'), 'utf8') % (copyMovePrompt, sourceCollectionId, destCollectionId)
       else:
          prompt = _('Do you want to %s all Search Results Clips from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?') % (copyMovePrompt, sourceCollectionId, destCollectionId)
-      dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#      dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
       # Show the confirmation prompt Dialog
-      result = dlg.ShowModal()
+#      result = dlg.ShowModal()
+      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+      result = dlg.LocalShowModal()
       # Clean up after the confirmation Dialog
       dlg.Destroy()
       # Process the results only if the user confirmed.
@@ -1394,9 +1428,11 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
          prompt = unicode(_('Do you want to %s Search Results Clip "%s" from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?'), 'utf8') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
       else:
          prompt = _('Do you want to %s Search Results Clip "%s" from\nSearch Results Collection "%s" to\nSearch Results Collection "%s"?') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
-      dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#      dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
       # Display the confirmation Dialog Box
-      result = dlg.ShowModal()
+#      result = dlg.ShowModal()
+      dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+      result = dlg.LocalShowModal()
       # Clean up after the confirmation Dialog box
       dlg.Destroy()
       # If the user confirmed, process the request.
@@ -1471,9 +1507,11 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
              prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
          else:
              prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClipId, sourceCollectionId, destCollectionId)
-         dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+#         dlg = wx.MessageDialog(treeCtrl, prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
          # Display the Confirmation Dialog Box
-         result = dlg.ShowModal()
+#         result = dlg.ShowModal()
+         dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
+         result = dlg.LocalShowModal()
          # Clean up the Confirmation Dialog Box
          dlg.Destroy()
          # If the user confirmed ...
@@ -1944,8 +1982,23 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
             # If so, cancel the Clip creation
             return
 
+        # Check to see if the clip goes all the way to the end of the media file.  If so, it's probably an accident
+        # due to the lack of an ending time code.  We'll skip this in the last 30 seconds of the media file, though.
+        if (clipData.clipStop == sourceEpisode.tape_length) and \
+           (clipData.clipStop - clipData.clipStart > 30000):
+            prompt = _('The ending point for this Clip is the end of the media file.  Do you want to create this clip?')
+#            errordlg = wx.MessageDialog(None, prompt, _("Transana Error"), style=wx.YES_NO | wx.ICON_QUESTION)
+#            result = errordlg.ShowModal()
+            errordlg = Dialogs.QuestionDialog(None, prompt, _("Transana Error"))
+            result = errordlg.LocalShowModal()
+            errordlg.Destroy()
+            # If the user says NO, they don't want to create it ...
+            if result == wx.ID_NO:
+                # .. cancel Clip Creation
+                return
+
         # Check to see if the clip ends after the media file ends (due to Adjust Indexes)
-        if clipData.clipStop >= sourceEpisode.tape_length:
+        if clipData.clipStop > sourceEpisode.tape_length:
             prompt = _('The ending point for this Clip is after the end of the media file.  This clip may not end where you expect.')
             errordlg = Dialogs.ErrorDialog(None, prompt)
             errordlg.ShowModal()
@@ -2081,16 +2134,22 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
             
             # If we're in multi-user mode ...
             if not TransanaConstants.singleUserVersion:
+                if 'unicode' in wx.PlatformInfo:
+                    data = (unicode(_("Transana Users"), 'utf8'), TransanaGlobal.userName)
+                else:
+                    data = (_("Transana Users"), TransanaGlobal.userName)
                 # ... determine if the Username is already a Keyword
                 if DBInterface.check_username_as_keyword():
                     # Add the new Keyword to the data tree
                     dbTree.add_Node('KeywordNode', (_('Keywords'), _("Transana Users"), TransanaGlobal.userName), 0, _("Transana Users"))
                     # Inform the Message Server of the added Keyword
-                    msg = "AK %s >|< %s"
                     if TransanaGlobal.chatWindow != None:
-                        TransanaGlobal.chatWindow.SendMessage(msg % (_("Transana Users"), TransanaGlobal.userName))
+                        msg = "AK %s >|< %s"
+                        if 'unicode' in wx.PlatformInfo:
+                            msg = unicode(msg, 'utf8')
+                        TransanaGlobal.chatWindow.SendMessage(msg % data)
                 # Add the keyword to the Quick Clip
-                quickClip.add_keyword(_("Transana Users"), TransanaGlobal.userName)
+                quickClip.add_keyword(data[0], data[1])
             # Save the Quick Clip
             quickClip.db_save()
 

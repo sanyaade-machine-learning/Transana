@@ -79,6 +79,7 @@ class ControlObject(object):
         self.VisualizationWindow = None
         self.DataWindow = None
         self.PlayAllClipsWindow = None
+        self.NotesBrowserWindow = None
         self.ChatWindow = None
 
         # Initialize variables
@@ -92,7 +93,7 @@ class ControlObject(object):
                                         # with the Visualization Window's IDLE event trying to call the
                                         # VideoWindow after it's been destroyed.
         
-    def Register(self, Menu='', Video='', Transcript='', Data='', Visualization='', PlayAllClips='', Chat=''):
+    def Register(self, Menu='', Video='', Transcript='', Data='', Visualization='', PlayAllClips='', NotesBrowser='', Chat=''):
         """ The ControlObject can extert control only over those objects it knows about.  This method
             provides a way to let the ControlObject know about other objects.  This infrastructure allows
             for objects to be swapped in and out.  For example, if you need a different video window
@@ -101,7 +102,7 @@ class ControlObject(object):
             player will handle all tasks for the program.  """
         # This function expects parameters passed by name and "registers" the components that
         # need to be available to the ControlObject to be controlled.  To remove an
-        # objecct registration, pass in "None"
+        # object registration, pass in "None"
         if Menu != '':
             self.MenuWindow = Menu                       # Define the Menu Window Object
         if Video != '':
@@ -114,6 +115,8 @@ class ControlObject(object):
             self.VisualizationWindow = Visualization     # Define the Visualization Window Object
         if PlayAllClips != '':
             self.PlayAllClipsWindow = PlayAllClips       # Define the Play All Clips Window Object
+        if NotesBrowser != '':
+            self.NotesBrowserWindow = NotesBrowser             # Define the Notes Browser Window Object
         if Chat != '':
             self.ChatWindow = Chat                       # Define the Chat Window Object
 
@@ -366,10 +369,10 @@ class ControlObject(object):
             # If logon fails, inform user and offer to try again twice.
             elif logonCount <= 3:
                 # Create a Dialog Box
-                dlg = wx.MessageDialog(self.MenuWindow, _('Transana was unable to connect to the database.\nWould you like to try again?'),
-                                         _('Transana Database Connection'), wx.YES_NO | wx.ICON_QUESTION)
+                dlg = Dialogs.QuestionDialog(self.MenuWindow, _('Transana was unable to connect to the database.\nWould you like to try again?'),
+                                         _('Transana Database Connection'))
                 # If the user does not want to try again, set the counter to 4, which will cause the program to exit
-                if dlg.ShowModal() == wx.ID_NO:
+                if dlg.LocalShowModal() == wx.ID_NO:
                     logonCount = 4
                 # Clean up the Dialog Box
                 dlg.Destroy()
@@ -568,7 +571,8 @@ class ControlObject(object):
                 self.VideoWindow.SetCurrentVideoPosition(videoStart)
 
         # We need to explicitly set the Clip Endpoint, if it's not known.
-        if self.VideoEndPoint == -1:
+        # If nothing is loaded, currentObj will be None.  Check to avoid an error.
+        if (self.VideoEndPoint == -1) and (self.currentObj != None):
             if type(self.currentObj).__name__ == 'Episode':
                 videoEnd = self.currentObj.tape_length
             elif type(self.currentObj).__name__ == 'Clip':
@@ -764,12 +768,18 @@ class ControlObject(object):
                         # Set the Window Position in the PlayAllClips Dialog
                         self.PlayAllClipsWindow.xPos = left + 2
                         self.PlayAllClipsWindow.yPos = height - 58
+                        # We need a bit more adjustment on the Mac
+                        if 'wxMac' in wx.PlatformInfo:
+                            self.PlayAllClipsWindow.yPos += 24
                         self.PlayAllClipsWindow.SetRect(wx.Rect(self.PlayAllClipsWindow.xPos, self.PlayAllClipsWindow.yPos, width - 4, 56))
                         # Make the PlayAllClipsWindow the focus
                         self.PlayAllClipsWindow.SetFocus()
 
                 # See if Presentation Mode is set to "Video and Transcript"
                 if self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_TRANS):
+                    # We need to make a slight adjustment for the Mac for the menu height
+                    if 'wxMac' in wx.PlatformInfo:
+                        height += TransanaGlobal.menuHeight
                     # Set the Video Window to take up the top 70% of the Client Display Area
                     self.VideoWindow.SetDims(left + 2, top + 2, width - 4, int(0.7 * height) - 3)
                     # Set the Transcript Window to take up the bottom 30% of the Client Display Area
@@ -966,10 +976,10 @@ class ControlObject(object):
             result = wx.ID_YES
            
             if prompt:
-                dlg = wx.MessageDialog(None, \
+                dlg = Dialogs.QuestionDialog(None, \
                     _("Transcript has changed.  Do you want to save it before continuing?"), \
-                    _("Question"), wx.YES_NO | wx.ICON_QUESTION)
-                result = dlg.ShowModal()
+                    _("Question"))
+                result = dlg.LocalShowModal()
                 dlg.Destroy()
             
             if result == wx.ID_YES:
@@ -992,16 +1002,19 @@ class ControlObject(object):
         dlg = wx.FileDialog(None, wildcard="*.rtf", style=wx.SAVE)
         if dlg.ShowModal() == wx.ID_OK:
             fname = dlg.GetPath()
+            # Mac doesn't automatically append the file extension.  Do it if necessary.
+            if not fname.upper().endswith(".RTF"):
+                fname += '.rtf'
             if os.path.exists(fname):
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_('A file named "%s" already exists.  Do you want to replace it?'), 'utf8')
                 else:
                     prompt = _('A file named "%s" already exists.  Do you want to replace it?')
-                dlg2 = wx.MessageDialog(None, prompt % fname,
-                                        _('Transana Confirmation'), style = wx.YES_NO | wx.ICON_QUESTION | wx.STAY_ON_TOP)
+                dlg2 = Dialogs.QuestionDialog(None, prompt % fname,
+                                        _('Transana Confirmation'))
                 dlg2.CentreOnScreen()
-                if dlg2.ShowModal() == wx.ID_YES:
+                if dlg2.LocalShowModal() == wx.ID_YES:
                     self.TranscriptWindow.SaveTranscriptAs(fname)
                 dlg2.Destroy()
             else:
@@ -1032,7 +1045,7 @@ class ControlObject(object):
     def UpdateDataWindowKeywordsTab(self):
         """ Update the Keywords Tab in the Data Window """
         # If the Keywords Tab is the currently displayed tab ...
-        if self.DataWindow.nb.GetPageText(self.DataWindow.nb.GetSelection()) == _('Keywords'):
+        if self.DataWindow.nb.GetPageText(self.DataWindow.nb.GetSelection()) == unicode(_('Keywords'), 'utf8'):
             # ... then refresh the Tab
             self.DataWindow.KeywordsTab.Refresh()
 

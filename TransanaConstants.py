@@ -32,7 +32,7 @@ import string
 singleUserVersion = True
 
 # Program Version Number
-versionNumber = '2.20'
+versionNumber = '2.21'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'

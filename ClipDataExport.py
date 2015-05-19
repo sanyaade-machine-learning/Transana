@@ -22,6 +22,7 @@ import wx
 # import Python's os module
 import os
 import Dialogs
+import Series
 import Episode
 import Collection
 import Clip
@@ -32,8 +33,9 @@ import Misc
 
 class ClipDataExport(Dialogs.GenForm):
     """ This class creates the tab-delimited text file that is the Clip Data Export. """
-    def __init__(self, parent, id, episodeNum=0, collectionNum=0):
+    def __init__(self, parent, id, seriesNum=0, episodeNum=0, collectionNum=0):
         # Remember the episode or collection that triggered creation of this report
+        self.seriesNum = seriesNum
         self.episodeNum = episodeNum
         self.collectionNum = collectionNum
 
@@ -102,15 +104,49 @@ class ClipDataExport(Dialogs.GenForm):
             EXPORT_ENCODING = 'latin1'
 
         # Initialize values for data structures for this report
+        # The Episode List is the list of Episodes to be sent to the Filter Dialog for the Series report
+        episodeList = []
         # The Clip List is the list of Clips to be sent to the Filter Dialog
         clipList = []
         # The Clip Lookup allows us to find the Clip Number based on the data from the Clip List
         clipLookup = {}
         # The Keyword List is the list of Keywords to be sent to the Filter Dialog
         keywordList = []
+        # Show a WAIT cursor.  Assembling the data can take noticable time in some cases.
+        TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+
+        # If we have an Series Number, we set up the Series Clip Data Export
+        if self.seriesNum <> 0:
+            # Get the Series record
+            tempSeries = Series.Series(self.seriesNum)
+            # obtain a list of all Episodes in that Series
+            tempEpisodeList = DBInterface.list_of_episodes_for_series(tempSeries.id)
+            # initialize the temporary clip List
+            tempClipList = []
+            # iterate through the Episode List ...
+            for episodeRecord in tempEpisodeList:
+                # ... and add each Episode's Clips to the Temporary clip list
+                tempClipList += DBInterface.list_of_clips_by_episode(episodeRecord[0])
+                # Add the Episode data to the Filter Dialog's Episode List
+                episodeList.append((episodeRecord[1], tempSeries.id, True))
+            # For all the Clips ...
+            for clipRecord in tempClipList:
+                # ... add the Clip to the Clip List for filtering ...
+                clipList.append((clipRecord['ClipID'], clipRecord['CollectNum'], True))
+                # ... retain a pointer to the Clip Number keyed to the Clip ID and Collection Number ...
+                clipLookup[(clipRecord['ClipID'], clipRecord['CollectNum'])] = clipRecord['ClipNum']
+                # ... now get all the keywords for this Clip ...
+                clipKeywordList = DBInterface.list_of_keywords(Clip = clipRecord['ClipNum'])
+                # ... and iterate through the list of clip keywords.
+                for clipKeyword in clipKeywordList:
+                    # If the keyword isn't already in the Keyword List ...
+                    if (clipKeyword[0], clipKeyword[1], True) not in keywordList:
+                        # ... add the keyword to the keyword list for filtering.
+                        keywordList.append((clipKeyword[0], clipKeyword[1], True))
+            
 
         # If we have an Episode Number, we set up the Episode Clip Data Export
-        if self.episodeNum <> 0:
+        elif self.episodeNum <> 0:
             # First, we get a list of all the Clips for the Episode specified
             tempClipList = DBInterface.list_of_clips_by_episode(self.episodeNum)
             # For all the Clips ...
@@ -128,26 +164,43 @@ class ClipDataExport(Dialogs.GenForm):
                         # ... add the keyword to the keyword list for filtering.
                         keywordList.append((clipKeyword[0], clipKeyword[1], True))
 
-        # If we don't have an Episode number, but DO have a Collection Number, we set up the Clips for the Collection specified
-        elif self.collectionNum <> 0:
-            # First, load the specified collection.  We need its data.
-            tempCollection = Collection.Collection(self.collectionNum)
-            # Get a list of all teh Clips for the Collection specified.
-            tempClipList = DBInterface.list_of_clips_by_collection(tempCollection.id, tempCollection.parent)
-            # For all the Clips ...
-            for (clipNo, clipName, collNo) in tempClipList:
-                # ... add the Clip to the Clip List for filtering ...
-                clipList.append((clipName, collNo, True))
-                # ... retain a pointer to the Clip Number keyed to the Clip ID and Collection Number ...
-                clipLookup[(clipName, collNo)] = clipNo
-                # ... now get all the keywords for this Clip ...
-                clipKeywordList = DBInterface.list_of_keywords(Clip = clipNo)
-                # ... and iterate through the list of clip keywords.
-                for clipKeyword in clipKeywordList:
-                    # If the keyword isn't already in the Keyword List ...
-                    if (clipKeyword[0], clipKeyword[1], True) not in keywordList:
-                        # ... add the keyword to the keyword list for filtering.
-                        keywordList.append((clipKeyword[0], clipKeyword[1], True))
+        # If we don't have Series Number or an Episode number, but DO have a Collection Number, we set up the Clips
+        # for the Collection specified.  If we have neither, it's the GLOBAL Clip Data Export, requesting ALL the
+        # Clips in the database!  We can handle both of these cases together.
+        else:
+            # If we have a specific collection specified ...
+            if self.collectionNum <> 0:
+                # ... load the specified collection.  We need its data.
+                tempCollection = Collection.Collection(self.collectionNum)
+                # Put the selected Collection's data into the Collection List as a starting place.
+                tempCollectionList = [(tempCollection.number, tempCollection.id, tempCollection.parent)]
+            # If we don't have any selected collection ...
+            else:
+                # ... then we should initialise the Collection List with data for all top-level collections, with parent = 0
+                tempCollectionList = DBInterface.list_of_collections()
+            # Iterate through the Collection List as long as it has entries
+            while len(tempCollectionList) > 0:
+                # Get the list of Clips for the current Collection
+                tempClipList = DBInterface.list_of_clips_by_collection(tempCollectionList[0][1], tempCollectionList[0][2])
+                # For all the Clips ...
+                for (clipNo, clipName, collNo) in tempClipList:
+                    # ... add the Clip to the Clip List for filtering ...
+                    clipList.append((clipName, collNo, True))
+                    # ... retain a pointer to the Clip Number keyed to the Clip ID and Collection Number ...
+                    clipLookup[(clipName, collNo)] = clipNo
+                    # ... now get all the keywords for this Clip ...
+                    clipKeywordList = DBInterface.list_of_keywords(Clip = clipNo)
+                    # ... and iterate through the list of clip keywords.
+                    for clipKeyword in clipKeywordList:
+                        # If the keyword isn't already in the Keyword List ...
+                        if (clipKeyword[0], clipKeyword[1], True) not in keywordList:
+                            # ... add the keyword to the keyword list for filtering.
+                            keywordList.append((clipKeyword[0], clipKeyword[1], True))
+
+                # Get the nested collections for the current collection and add them to the Collection List
+                tempCollectionList += DBInterface.list_of_collections(tempCollectionList[0][0])
+                # Remove the current Collection from the list.  We're done with it.
+                del(tempCollectionList[0])
 
         # Put the Clip List in alphabetical order in preparation for Filtering..
         clipList.sort()
@@ -157,8 +210,14 @@ class ClipDataExport(Dialogs.GenForm):
         # Prepare the Filter Dialog.
         # Set the title for the Filter Dialog
         title = _("Clip Data Export Filter Dialog")
+        # If we have a Series-based report ...
+        if self.seriesNum != 0:
+            # ... reportType 14 indicates Series Clip Data Export to the Filter Dialog
+            reportType = 14
+            # ... the reportScope is the Series Number.
+            reportScope = self.seriesNum
         # If we have an Episode-based report ...
-        if self.episodeNum != 0:
+        elif self.episodeNum != 0:
             # ... reportType 3 indicates Episode Clip Data Export to the Filter Dialog
             reportType = 3
             # ... the reportScope is the Episode Number.
@@ -169,21 +228,54 @@ class ClipDataExport(Dialogs.GenForm):
             reportType = 4
             # ... the reportScope is the Collection Number.
             reportScope = self.collectionNum
-        
-        # Create a Filter Dialog, passing all the necessary parameters.
-        dlgFilter = FilterDialog.FilterDialog(None, -1, title, reportType=reportType, reportScope=reportScope,
-                                              clipFilter=True, keywordFilter=True, keywordSort=False,
-                                              options=False)
+
+        # If we are basing the report on a Series ...
+        if self.seriesNum != 0:
+            # ... create a Filter Dialog, passing all the necessary parameters.  We want to include the Episode List
+            dlgFilter = FilterDialog.FilterDialog(None, -1, title, reportType=reportType, reportScope=reportScope,
+                                                  episodeFilter=True, clipFilter=True, keywordFilter=True)
+        # If we are basing the report on a Collection (but not the Collection Root) ...
+        elif self.collectionNum != 0:
+            # ... create a Filter Dialog, passing all the necessary parameters.  We want to be able to include Nested Collections
+            dlgFilter = FilterDialog.FilterDialog(None, -1, title, reportType=reportType, reportScope=reportScope,
+                                                  clipFilter=True, keywordFilter=True, reportContents=True,
+                                                  showNestedData=True)
+        # If we are doing the report on anything other than a Series or non-root Collection (i.e. it's an Episode report
+        # or the Collection Root report, which MUST have nested data) ...
+        else:
+            # ... create a Filter Dialog, passing all the necessary parameters.  We DON'T need Nested Collections
+            dlgFilter = FilterDialog.FilterDialog(None, -1, title, reportType=reportType, reportScope=reportScope,
+                                                  clipFilter=True, keywordFilter=True)
+        # If we have a Series-based report ...
+        if self.seriesNum != 0:
+            # ... populate the Episode Data Structure
+            dlgFilter.SetEpisodes(episodeList)
         # Populate the Clip and Keyword Data Structures
         dlgFilter.SetClips(clipList)
         dlgFilter.SetKeywords(keywordList)
 
+        # restore the cursor, now that the data is set up for the filter dialog
+        TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+
         # If the user clicks OK ...
         if dlgFilter.ShowModal() == wx.ID_OK:
+            # Set the WAIT cursor.  It can take a while to build the data file.
             TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-            # Get the revised Clip and Keyword data from the Filter Dialog
+            # If we have a Series-based report ...
+            if self.seriesNum != 0:
+                # ... get the revised Episode data from the Filter Dialog
+                episodeList = dlgFilter.GetEpisodes()
+            # Get the revised Clip, and Keyword data from the Filter Dialog
             clipList = dlgFilter.GetClips()
             keywordList = dlgFilter.GetKeywords()
+            # If we have a Collection-based report ...
+            if self.collectionNum != 0:
+                # ... get the setting for including nested collections (not relevant for other reports)
+                showNested = dlgFilter.GetShowNestedData()
+            # If we have a report other than based on a Collection ...
+            else:
+                # ... nesting is meaningless, so we can just initialize this variable to False.
+                showNested = False
 
             # Get the user-specified File Name
             fs = self.exportFile.GetValue()
@@ -203,8 +295,9 @@ class ClipDataExport(Dialogs.GenForm):
             # Open the output file for writing.
             f = file(fs, 'w')
 
+            prompt = unicode(_('Collection Name\tClip Name\tMedia File\tClip Start\tClip End\tClip Length (seconds)'), 'utf8')
             # Write the Header line.  We're creating a tab-delimited file, so we'll use tabs to separate the items.
-            f.write(_('Collection Name\tClip Name\tMedia File\tClip Start\tClip End\tClip Length (seconds)'))
+            f.write(prompt.encode(EXPORT_ENCODING))
             # Add keywords to the Header.  Iterate through the Keyword List.
             for keyword in keywordList:
                 # See if the user has left the keyword "checked" in the filter dialog.
@@ -219,37 +312,49 @@ class ClipDataExport(Dialogs.GenForm):
             # Now iterate through the Clip List
             for clipRec in clipList:
                 # See if the user has left the clip "checked" in the filter dialog.
-                if clipRec[2]:
+                # Also, if we are using a collection report, either Nested Data should be requested OR the current
+                # clip should be from the main collection if it is to be included in the report.
+                if clipRec[2] and ((self.collectionNum == 0) or (showNested) or (clipRec[1] == self.collectionNum)):
                     # Load the Clip data.  The ClipLookup dictionary allows this easily.
                     clip = Clip.Clip(clipLookup[clipRec[0], clipRec[1]])
+                    # Get the collection the clip is from.
+                    collection = Collection.Collection(clip.collection_num)
                     # Encode string values using the Export Encoding
-                    collectionID = clip.collection_id.encode(EXPORT_ENCODING)
+                    collectionID = collection.GetNodeString().encode(EXPORT_ENCODING)  # clip.collection_id.encode(EXPORT_ENCODING)
                     clipID = clip.id.encode(EXPORT_ENCODING)
                     clipMediaFilename = clip.media_filename.encode(EXPORT_ENCODING)
-                    # Write the Clip's data values to the output file.  We're creating a tab-delimited file,
-                    # so we'll use tabs to separate the items.
-                    f.write('%s\t%s\t%s\t%s\t%s\t%10.4f' % (collectionID, clipID, clipMediaFilename,
-                                                        Misc.time_in_ms_to_str(clip.clip_start), Misc.time_in_ms_to_str(clip.clip_stop),
-                                                        (clip.clip_stop - clip.clip_start) / 1000.0))
+                    # If we're doing a Series report, we need the clip's source episode and Series for Episode Filter comparison.
+                    if self.seriesNum != 0:
+                        episode = Episode.Episode(clip.episode_num)
+                        series = Series.Series(episode.series_num)
+                    # Implement Episode filtering if needed.  If we have a Series Report, we need to confirm that the Source Episode
+                    # is "checked" in the filter list.  (If we don't have a Series Report, this check isn't needed.)
+                    if (self.seriesNum == 0) or ((episode.id, series.id, True) in episodeList):
+                        # Write the Clip's data values to the output file.  We're creating a tab-delimited file,
+                        # so we'll use tabs to separate the items.
+                        f.write('%s\t%s\t%s\t%s\t%s\t%10.4f' % (collectionID, clipID, clipMediaFilename,
+                                                            Misc.time_in_ms_to_str(clip.clip_start), Misc.time_in_ms_to_str(clip.clip_stop),
+                                                            (clip.clip_stop - clip.clip_start) / 1000.0))
 
-                    # Now we iterate through the keyword list ...
-                    for keyword in keywordList:
-                        # ... looking only at those keywords the user left "checked" in the filter dialog ...
-                        if keyword[2]:
-                            # ... and check to see if the Clip HAS the keyword.
-                            if clip.has_keyword(keyword[0], keyword[1]):
-                                # If so, we write a "1", indicating True.
-                                f.write('\t1')
-                            else:
-                                # If not, we write a "0", indicating False.
-                                f.write('\t0')
-                    # Add a line break to signal the end of the Clip record
-                    f.write('\n')
+                        # Now we iterate through the keyword list ...
+                        for keyword in keywordList:
+                            # ... looking only at those keywords the user left "checked" in the filter dialog ...
+                            if keyword[2]:
+                                # ... and check to see if the Clip HAS the keyword.
+                                if clip.has_keyword(keyword[0], keyword[1]):
+                                    # If so, we write a "1", indicating True.
+                                    f.write('\t1')
+                                else:
+                                    # If not, we write a "0", indicating False.
+                                    f.write('\t0')
+                        # Add a line break to signal the end of the Clip record
+                        f.write('\n')
 
             # Flush the output file's buffer (probably unnecessary)
             f.flush()
             # Close the output file.
             f.close()
+            # Restore the cursor when we're done.
             TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
             # If so, create a prompt to inform the user and ask to overwrite the file.
             if 'unicode' in wx.PlatformInfo:

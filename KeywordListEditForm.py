@@ -204,7 +204,8 @@ class KeywordListEditForm(Dialogs.GenForm):
         self.kw_groups = DBInterface.list_of_keyword_groups()
         self.kw_group_lb.Clear()
         self.kw_group_lb.InsertItems(self.kw_groups, 0)
-        self.kw_group_lb.SetSelection(0)
+        if len(self.kw_groups) > 0:
+            self.kw_group_lb.SetSelection(0)
 
     def refresh_keywords(self):
         """Refresh the keywords listbox."""
@@ -260,8 +261,8 @@ class KeywordListEditForm(Dialogs.GenForm):
                             prompt = unicode(_('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?'), 'utf8')
                         else:
                             prompt = _('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?')
-                        dlg = wx.MessageDialog(self, prompt % (self.obj.id, kwg, kw, self.obj.id, kwg, kw), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-                        result = dlg.ShowModal()
+                        dlg = Dialogs.QuestionDialog(self, prompt % (self.obj.id, kwg, kw, self.obj.id, kwg, kw))
+                        result = dlg.LocalShowModal()
                         dlg.Destroy()
                         if result == wx.ID_YES:
                             # If the entry is found, delete it and stop looking
@@ -288,7 +289,8 @@ class KeywordListEditForm(Dialogs.GenForm):
         selPos = self.kw_group_lb.FindString(kwm.kw_group.GetStringSelection())
         if selPos == -1:
             selPos = 0
-        self.kw_group_lb.SetSelection(selPos)
+        if not self.kw_group_lb.IsEmpty():
+            self.kw_group_lb.SetSelection(selPos)
         # Refresh the Keyword List, in case it was changed.
         self.refresh_keywords()
         # We must refresh the Keyword List in the DBTree to reflect changes made in the

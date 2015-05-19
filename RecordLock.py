@@ -82,7 +82,7 @@ class RecordLock(wx.Dialog):
         # Put the Memo control in the Memo Sizer
         boxMemo.Add(self.memo, 1, wx.EXPAND)
         # Add the Memo display to the Report Sizer
-        boxReport.Add(boxMemo, 9, wx.EXPAND)
+        boxReport.Add(boxMemo, 6, wx.EXPAND)
 
         # Create a Sizer for the User section
         boxUser = wx.BoxSizer(wx.VERTICAL)

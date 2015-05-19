@@ -510,10 +510,10 @@ class OptionsSettings(wx.Dialog):
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     msg = unicode(msg, 'utf8')
-                # Can't use Dialogs.InfoDialog because Cancel is an option
-                dlg = wx.MessageDialog(TransanaGlobal.menuWindow, msg % (episodeCount, clipCount), _("Transana Confirmation"), wx.OK | wx.CANCEL | wx.ICON_INFORMATION)
+                # Can't use Dialogs.InfoDialog because Cancel is an option.  Added an OkCancel option to QuestionDialog.
+                dlg = Dialogs.QuestionDialog(TransanaGlobal.menuWindow, msg % (episodeCount, clipCount), useOkCancel=True)
                 # Display the Dialog
-                result = dlg.ShowModal()
+                result = dlg.LocalShowModal()
                 # Destroy the Dialog
                 dlg.Destroy
                 # if the User says OK ...

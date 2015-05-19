@@ -207,6 +207,8 @@ class Collection(DataObject):
             # Delete all Collection-based Filter Configurations
             #   Delete Collection Clip Data Export records
             DBInterface.delete_filter_records(4, self.number)
+            #   Delete Collection Report records
+            DBInterface.delete_filter_records(12, self.number)
 
             # Detect, Load, and Delete all Collection Notes
             notes = self.get_note_nums()
@@ -288,6 +290,24 @@ class Collection(DataObject):
         # Complete the nodeData structure by the Collection Name to the end
         nodeData = nodeData + (self.id,)
         return nodeData
+
+    def GetNodeString(self):
+        """ Returns a string that delineates the full nested collection structure for the present collection """
+        # Initialize a string variable
+        st = ''
+        # Get the collection's Node Data
+        nodeData = self.GetNodeData()
+        # For each node in the Node Data ...
+        for node in nodeData:
+            # ... if this isn't the first node, ...
+            if st != '':
+                # ... add a ">" character to indicate we're moving to a new nesting level
+                st += ' > '
+            # ... and append the node text onto the string
+            st += node
+        # Return the string
+        return st
+        
         
 # Private methods    
 

@@ -27,7 +27,9 @@
                size=(800, 600),          Size within Parent (Will be full frame if only control)
                canvassize=(999, 999),    Size of the underlying graphics canvas (Visual control will shrink to fit)
                drawEnabled=false,        Is free-hand drawing enabled?
-               transanaMode=false,       Is this used in Transana?  (Cannot be used with drawEnabled, as both options specify how to process mouse events.)
+               visualizationMode=false,  Is this used for the Visualization in Transana?  (Cannot be used with
+                                         drawEnabled, as both options specify how to process mouse events.  If true,
+                                         this optimizes graphic creation speed as well.)
                passMouseEvents=false)    Should the GraphicsControlClass pass MouseEvents back up to the parent?
                                             Currently supported events for this are:
                                               OnLeftDown()
@@ -48,7 +50,6 @@
       LoadFile(filename.bmp)             Loads a BITMAP image, which is resized to fit the control
       SaveAs                             Saves the Buffered Image as a JPEG graphic
       SetDimensions(x, y, width, height) Alters the dimensions of the Graphic Area, including resizing the underlying Bitmap if there is one.
-    I anticipate adding more methods very soon to faciliate printing, to set text font properties, and to add more shape-drawing options.
     """
 
 __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
@@ -62,10 +63,10 @@ class GraphicsControl(wx.ScrolledWindow):
     """ Graphics Control Class implements a Graphic Control used for doing some
         low-level drawing in the Visualization Window and the Keyword Map """
     def __init__(self, parent, ID, pos=wx.Point(100, 100), size=(800, 600), canvassize=(999, 999),
-                 drawEnabled=False, transanaMode=False, passMouseEvents=False):
+                 drawEnabled=False, visualizationMode=False, passMouseEvents=False):
         self.parent = parent
         self.drawEnabled = drawEnabled
-        self.transanaMode = transanaMode
+        self.visualizationMode = visualizationMode
         # The control should never be larger than the canvas, but should allow a margin (22, 22) for the scroll bars if needed.
         # With a small canvas, we allow 6 pixels for the frame.
         size = (min(size[0] + 22, canvassize[0] + 6), min(size[1] + 22, canvassize[1] + 6))
@@ -76,7 +77,7 @@ class GraphicsControl(wx.ScrolledWindow):
         self.SetBackgroundColour(wx.WHITE)
 
         # We do not add ScrollBars in Transana Mode
-        if transanaMode == False:
+        if visualizationMode == False:
             # Add Scrollbars
             self.SetScrollbars(20, 20, int(round(canvassize[0]/20.0)), int(round(canvassize[1]/20.0)))
 
@@ -86,6 +87,8 @@ class GraphicsControl(wx.ScrolledWindow):
         # Start with NO background graphic
         self.backgroundGraphicName = ''
         self.backgroundImage = None
+        # Initialize the temporary visualization image to None.
+        self.visualizationImage = None
         # Set default line color, pattern, and thickness
         self.thickness = 1
         self.linepattern = wx.SOLID
@@ -109,7 +112,7 @@ class GraphicsControl(wx.ScrolledWindow):
         self.cursorPosition = None
         # Initialize startTime and endTime
         self.startTime = 0.0
-        self.endTime = 0.0  # Set it to duration only if in transanaMode, see below
+        self.endTime = 0.0  # Set it to duration only if in visualizationMode, see below
         self.isDragging = False
         self.reSetSelection = False
         self.lastRedTop = 0
@@ -126,7 +129,7 @@ class GraphicsControl(wx.ScrolledWindow):
             wx.EVT_LEFT_DOWN(self, self.OnLeftDown)
             wx.EVT_LEFT_UP(self, self.OnLeftUp)
             wx.EVT_MOTION(self, self.OnMotion)
-        elif transanaMode:
+        elif visualizationMode:
             self.drawing = False
             self.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
             # Mouse Events for Transana's Click and Select behavior
@@ -176,6 +179,8 @@ class GraphicsControl(wx.ScrolledWindow):
         # Remove background graphic
         self.backgroundGraphicName = ''
         self.backgroundImage = None
+        # Initialize the Temporary Visualization Image to None to trigger creation when needed
+        self.visualizationImage = None
         # Signal the need to redraw the control
         self.reInitBuffer = True
 
@@ -220,8 +225,12 @@ class GraphicsControl(wx.ScrolledWindow):
 
     def AddLines2(self, newlines):
         """ Adds new lines (send as a list) to the second layer of the drawing """
-        self.lines2.append((self.colour, self.thickness, newlines))
-        self.reInitBuffer = True
+        # If the temporary line is in bounds of the graphic ...
+        if (newlines[0][0] >= 0) and (newlines[0][0] <= self.canvassize[0]):
+            # ... add the line to the temporary line buffer ...
+            self.lines2.append((self.colour, self.thickness, newlines))
+            # ... and signal that the image needs to be redrawn.
+            self.reInitBuffer = True
 
     def AddText(self, text, x, y):
         """ Adds new Text Objects to the drawing """
@@ -240,24 +249,70 @@ class GraphicsControl(wx.ScrolledWindow):
 
     def InitBuffer(self):
         """ Initialize the Bitmap used for buffering the display """
+        # If the temporary Visualization Image has NOT been created ...
+        if (self.visualizationImage == None):
 
-        # Initialize the Buffer to an empty Bitmap
-        self.bmpBuffer = wx.EmptyBitmap(self.canvassize[0], self.canvassize[1])
+            # Initialize the Buffer to an empty Bitmap
+            self.bmpBuffer = wx.EmptyBitmap(self.canvassize[0], self.canvassize[1])
 
-        # If a Background Graphic is defined, load it as the base graphic.  Otherwise, create an empty bitmap.
-        if self.backgroundGraphicName != '':
-            # If the image is already loaded in memory, use that.  Otherwise, go to the disk.
-            if self.backgroundImage != None:
-                # TODO: Implement better rescaling. Rescale background image
-                # Convert the wxImage to a wxBitmap
-                tempBitmap = wx.BitmapFromImage(self.backgroundImage)
-                # Set the active image (self.bmpBuffer) to the Bitmap
-                self.bmpBuffer = tempBitmap
+            # If a Background Graphic is defined, load it as the base graphic.  Otherwise, create an empty bitmap.
+            if self.backgroundGraphicName != '':
+                # If the image is already loaded in memory, use that.  Otherwise, go to the disk.
+                if self.backgroundImage != None:
+                    # TODO: Implement better rescaling. Rescale background image
+                    # Convert the wxImage to a wxBitmap
+                    tempBitmap = wx.BitmapFromImage(self.backgroundImage)
+                    # Set the active image (self.bmpBuffer) to the Bitmap
+                    self.bmpBuffer = tempBitmap
+                else:
+                    self.LoadFile(self.backgroundGraphicName)
+                # Create a Buffered Device Context using the initial bitmap
+                dc = wx.BufferedDC(None, self.bmpBuffer)
+
             else:
-                self.LoadFile(self.backgroundGraphicName)
-            # Create a Buffered Device Context using the initial bitmap
-            dc = wx.BufferedDC(None, self.bmpBuffer)
+                # Create a Buffered Device Context using the initial bitmap
+                dc = wx.BufferedDC(None, self.bmpBuffer)
 
+                # Set the Brush and Background colors to the Background Color
+                dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
+                # Clear the drawing
+                dc.Clear()
+                # If we have a backgroundImage but not a backgroundGraphicName, we need to blit the image onto the Device Context!
+                # We do this WITHOUT rescaling the image.
+                if self.backgroundImage != None:
+                    # Create a Memory Device Context 
+                    dc2 = wx.MemoryDC()
+                    # Load the Waveform image into the memory DC
+                    dc2.SelectObject(self.backgroundImage.ConvertToBitmap())
+                    # Copy the MemoryDC image onto the visualization window image's Device Context
+                    dc.Blit(0, 0, self.backgroundImage.GetWidth(), self.backgroundImage.GetHeight(), dc2, 0, 0, wx.COPY, False)
+                    # Now create a pen to draw a line between the image and the rest of the graphic.
+                    dc.SetPen(wx.Pen(wx.LIGHT_GREY, 1, wx.SOLID))
+                    # Draw the line here.
+                    dc.DrawLine(0, self.backgroundImage.GetHeight()-1, self.backgroundImage.GetWidth()-1, self.backgroundImage.GetHeight()-1)
+            # Set the Pen to the defined Color, thickness, and pattern
+            self.pen = wx.Pen(self.colourDef, self.thickness, self.linepattern)
+            # Draw any defined lines
+            self.DrawLines(dc)
+
+            # If we're showing a Keyword Visualization, not one of the Maps or Graphs ...
+            if self.visualizationMode:
+                # ... copy the temporary Visualization Image BEFORE we add the temporary lines to it
+                self.visualizationImage = self.bmpBuffer.ConvertToImage().Copy()
+                
+            # Draw lines based on timecodes
+            # You can choose two different methods. 
+            #   a. DrawRect: Very responsive, covers selection with grey diagonal lines
+            #   b. SetSelection: Much less responsive, highlights (paints in white areas actually).
+            # Note that SetSelection will find and add lines to the self.lines structures and
+            # DrawLines will do the actual painting. If SetSelection is not used, DrawLines will
+            # only paint the GREY marker in response to a single left click.
+
+            # Now draw the temporary lines
+            self.DrawRect(dc)
+            self.DrawLines2(dc)
+            
+        # If the temporary Visualization Image HAS been created (to speed up drawing and prevent video stuttering) ...
         else:
             # Create a Buffered Device Context using the initial bitmap
             dc = wx.BufferedDC(None, self.bmpBuffer)
@@ -266,40 +321,34 @@ class GraphicsControl(wx.ScrolledWindow):
             dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
             # Clear the drawing
             dc.Clear()
-            # If we have a backgroundImage but not a backgroundGraphicName, we need to blit the image onto the Device Context!
-            # We do this WITHOUT rescaling the image.
-            if self.backgroundImage != None:
-                # Create a Memory Device Context 
-                dc2 = wx.MemoryDC()
-                # Load the Waveform image into the memory DC
-                dc2.SelectObject(self.backgroundImage.ConvertToBitmap())
-                # Copy the MemoryDC image onto the visualization window image's Device Context
-                dc.Blit(0, 0, self.backgroundImage.GetWidth(), self.backgroundImage.GetHeight(), dc2, 0, 0, wx.COPY, False)
-                # Now create a pen to draw a line between the image and the rest of the graphic.
-                dc.SetPen(wx.Pen(wx.LIGHT_GREY, 1, wx.SOLID))
-                # Draw the line here.
-                dc.DrawLine(0, self.backgroundImage.GetHeight()-1, self.backgroundImage.GetWidth()-1, self.backgroundImage.GetHeight()-1)
+            # Create a Memory Device Context 
+            dc2 = wx.MemoryDC()
+            # Load the temporary Visualization Image into the memory DC
+            dc2.SelectObject(self.visualizationImage.ConvertToBitmap())
+            # Copy the MemoryDC image onto the visualization window image's Device Context
+            dc.Blit(0, 0, self.visualizationImage.GetWidth(), self.visualizationImage.GetHeight(), dc2, 0, 0, wx.COPY, False)
+            # Now create a pen to draw a line between the image and the rest of the graphic.
+            dc.SetPen(wx.Pen(wx.LIGHT_GREY, 1, wx.SOLID))
+            # Draw the line here.
+            dc.DrawLine(0, self.visualizationImage.GetHeight()-1, self.visualizationImage.GetWidth()-1, self.visualizationImage.GetHeight()-1)
+            # Draw lines based on timecodes
+            # You can choose two different methods. 
+            #   a. DrawRect: Very responsive, covers selection with grey diagonal lines
+            #   b. SetSelection: Much less responsive, highlights (paints in white areas actually).
+            # Note that SetSelection will find and add lines to the self.lines structures and
+            # DrawLines will do the actual painting. If SetSelection is not used, DrawLines will
+            # only paint the GREY marker in response to a single left click.
 
-        # Set the Pen to the defined Color, thickness, and pattern
-        self.pen = wx.Pen(self.colourDef, self.thickness, self.linepattern)
-        # Draw lines based on timecodes
-        # You can choose two different methods. 
-        #   a. DrawRect: Very responsive, covers selection with grey diagonal lines
-        #   b. SetSelection: Much less responsive, highlights (paints in white areas actually).
-        # Note that SetSelection will find and add lines to the self.lines structures and
-        # DrawLines will do the actual painting. If SetSelection is not used, DrawLines will
-        # only paint the GREY marker in response to a single left click.
+            # Now draw the temporary lines
+            self.DrawRect(dc)
+            self.DrawLines2(dc)
 
-        # self.SetSelection(dc)
-        self.DrawRect(dc)
-        # Draw any defined lines
-        self.DrawLines(dc)
         # Signal that the control has been redrawn
         self.reInitBuffer = False
 
     def DrawRect(self, dc):
         """ Draw a rectangle surrounding the current selection. """
-        if self.transanaMode:
+        if self.visualizationMode:
             dc.BeginDrawing()
             dc.SetBrush(wx.Brush("GREY", wx.BDIAGONAL_HATCH))
             # Get start and end X coords from startTime and endTime
@@ -312,7 +361,7 @@ class GraphicsControl(wx.ScrolledWindow):
             dc.EndDrawing()
         
     def DrawLines(self, dc):
-        """ Redraw all lines that have been recorded """
+        """ Redraw all lines that have been recorded EXCEPT THE TEMPORARY LINES """
         # Let the Device Context know that we are beginning to draw
         dc.BeginDrawing()
 
@@ -352,19 +401,6 @@ class GraphicsControl(wx.ScrolledWindow):
                     # ...DC's DrawLine will be adequate.
                     dc.DrawLine(*coords)
 
-        # For each line in lines2, determine the color, line thickness, and line list
-        for colour, thickness, line in self.lines2:
-            # Create a Pen
-            self.SetColour(colour)
-            pen = wx.Pen(self.colourDef, thickness, self.linepattern)
-            # Set the Pen for the Device Context
-            dc.SetPen(pen)
-            # Draw the lines in the line list
-            # dc.DrawLine(**dict(line)) #TODO: This would work if points were (x,y)
-            for coords in line:
-                # apply(dc.DrawLine, coords)
-                dc.DrawLine(*coords)
-
         # For each text item, determine the string, position, color, size, family, and alignment
         for text, x, y, colour, size, family, alignment in self.text:
             # Create a Font
@@ -386,6 +422,25 @@ class GraphicsControl(wx.ScrolledWindow):
         # Let the Device Context know we are done drawing
         dc.EndDrawing()
 
+    def DrawLines2(self, dc):
+        """ Redraw the TEMPORARY lines that have been recorded """
+        # Let the Device Context know that we are beginning to draw
+        dc.BeginDrawing()
+        # For each line in lines2, determine the color, line thickness, and line list
+        for colour, thickness, line in self.lines2:
+            # Create a Pen
+            self.SetColour(colour)
+            pen = wx.Pen(self.colourDef, thickness, self.linepattern)
+            # Set the Pen for the Device Context
+            dc.SetPen(pen)
+            # Draw the lines in the line list
+            # dc.DrawLine(**dict(line)) #TODO: This would work if points were (x,y)
+            for coords in line:
+                # apply(dc.DrawLine, coords)
+                dc.DrawLine(*coords)
+        # Let the Device Context know we are done drawing
+        dc.EndDrawing()
+
     def SetSelection(self, dc):
         """ Add lines to the lines2[] structure based on startTime, endTime, canvassize """
         # The Selection should be added to the temporary lines2[] structure so it can be removed without affecting
@@ -393,7 +448,7 @@ class GraphicsControl(wx.ScrolledWindow):
         
         # Add lines to create a new selection only if
         #   resetSelection is True which occurs after a resize or a new selection
-        if self.transanaMode and self.reSetSelection:
+        if self.visualizationMode and self.reSetSelection:
             startX = int(self.canvassize[0]*self.parent.PctPosFromTimeCode(self.startTime))
             endX = int(self.canvassize[0]*self.parent.PctPosFromTimeCode(self.endTime))
             oldColour = self.colour
@@ -466,9 +521,9 @@ class GraphicsControl(wx.ScrolledWindow):
             dc.EndDrawing()
 
     # Transana requires some specific Mouse behaviors of this control, which are enabled only if
-    # drawEnabled is false and transanaMode is true
+    # drawEnabled is false and visualizationMode is true
     def TransanaOnLeftDown(self, event):
-        """ Left Mouse Button pressed, transanaMode == true """
+        """ Left Mouse Button pressed, visualizationMode == true """
         # Allow the underlying control to fire it's LeftDown method.
         event.Skip()
         # Left-click behavior in the Visualization Window is as follows:
@@ -504,7 +559,7 @@ class GraphicsControl(wx.ScrolledWindow):
             self.isDragging = True
 
     def TransanaOnLeftUp(self, event):
-        """ Left Mouse Button released, transanaMode == true """
+        """ Left Mouse Button released, visualizationMode == true """
         # If Shift is pressed, that means we're making a selection, just as dragging does.
         if event.ShiftDown():
             # Note the current mouse position
@@ -629,7 +684,7 @@ class GraphicsControl(wx.ScrolledWindow):
             dc.EndDrawing()
         
     def TransanaOnRightUp(self, event):
-        """ Right Mouse Button Released, transanaMode == true """
+        """ Right Mouse Button Released, visualizationMode == true """
         self.x = event.GetX() + (self.GetViewStart()[0] * self.GetScrollPixelsPerUnit()[0])
         self.y = event.GetY() + (self.GetViewStart()[1] * self.GetScrollPixelsPerUnit()[1])
         # Return the position and event to the Parent control
@@ -639,7 +694,7 @@ class GraphicsControl(wx.ScrolledWindow):
         """" Resize event for the GraphicsControlClass Widget """
         # Clear the temporary lines2[] structure
         self.ClearTransanaSelection()
-        if self.transanaMode:
+        if self.visualizationMode:
             # Find x position and add grey marker to lines[]
             x = self.canvassize[0]*self.parent.PctPosFromTimeCode(self.startTime)
             self.SetStartMarker(x)
@@ -689,6 +744,8 @@ class GraphicsControl(wx.ScrolledWindow):
         if filename != None:
             # Remember the graphic filename
             self.backgroundGraphicName = filename
+            # Signal that the Visualization Image needs to be re-drawn
+            self.visualizationImage = None
             # Add Image Handler that allows BMP
             # wx.Image_AddHandler(wx.BMPHandler())
 
@@ -742,19 +799,24 @@ class GraphicsControl(wx.ScrolledWindow):
     def DrawCursor(self, currentPosition):
         (width, height) = self.GetSizeTuple()
         y = int(currentPosition * self.canvassize[0] + 1)
-        # If there is an existing cursor, eliminate it.  (It would be in the temporary (lines2[]) layer
-        if self.cursorPosition != None:
+        # If there is an existing cursor, eliminate it.  (It would be in the temporary (lines2[]) layer)
+        if (self.cursorPosition != None) and (len(self.lines2) > self.cursorPosition):
             del(self.lines2[self.cursorPosition])
-        # Remember the original color
-        oldColour = self.colour
-        # Change the color to grey for the cursor
-        self.colour = "GREY"
-        # Draw the new cursor to the temporary (lines2[]) layer
-        self.AddLines2([(int(y), 0, int(y), int(height-6))])
-        # Restore the original color
-        self.colour = oldColour
-        # Remember the cursor position in the "lines" structure so that it can be removed
-        self.cursorPosition = len(self.lines2) - 1
+        # If there is NO entry for the cursor in self.lines2, and as long as the CURRENT POSITION wasn't just inserted, we add a temporary
+        # line for the cursor
+        if (len(self.lines2) == 0) or ((len(self.lines2) > 0) and (int(y) != self.lines2[-1][2][0][0]) and (int(y) != self.lines2[-1][2][0][0] + 1)):
+            # Remember the original color
+            oldColour = self.colour
+            # Change the color to grey for the cursor
+            self.colour = "GREY"
+            # Draw the new cursor to the temporary (lines2[]) layer
+            self.AddLines2([(int(y), 0, int(y), int(height-6))])
+            # Restore the original color
+            self.colour = oldColour
+        # As long as the cursor entry has been made to the self.lines2 list ...
+        if len(self.lines2) > 0:
+            # ... remember the cursor position in the "lines" structure so that it can be removed
+            self.cursorPosition = len(self.lines2) - 1
         
         self.reInitBuffer = True
  

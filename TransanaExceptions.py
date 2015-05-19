@@ -55,7 +55,7 @@ __author__ = 'Nathaniel Case <nacase@wisc.edu>, David K. Woods <dwoods@wcer.wisc
 # others don't, but it does.  DKW
 #_ = gettext.gettext
 import wx
-_ = wx.GetTranslation
+#_ = wx.GetTranslation
 
 
 import exceptions
@@ -64,7 +64,10 @@ class RecordLockedError(exceptions.Exception):
     """Raised when a database operation fails because the record is locked."""
     def __init__(self, user=None):
         self.user = user
-        self.args = _("Database operation failed due to record lock by %s") % user
+        prompt = _("Database operation failed due to record lock by %s")
+        if ('unicode' in wx.PlatformInfo) and isinstance(prompt, str):
+            prompt = unicode(prompt, 'utf8')
+        self.args = prompt % user
 
 class RecordNotFoundError(exceptions.Exception):
     """Raised when the specified record was not found in the database."""
@@ -76,10 +79,13 @@ class RecordNotFoundError(exceptions.Exception):
 class SaveError(exceptions.Exception):
     """Raised when a record save attempt fails."""
     def __init__(self, reason):
-        if ('unicode' in wx.PlatformInfo) and isinstance(reason, str):
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            reason = unicode(reason, 'utf8')
-        prompt = _("Unable to save.  %s")
+        if ('unicode' in wx.PlatformInfo):
+            if isinstance(reason, str):
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                reason = unicode(reason, 'utf8')
+            prompt = unicode(_("Unable to save.  %s"), 'utf8')
+        else:
+            prompt = _("Unable to save.  %s")
         self.args = prompt % reason
         self.reason = reason
 
@@ -116,16 +122,18 @@ class GeneralError(exceptions.Exception):
 
 def ReportRecordLockedException(rtype, idVal, e):
     """ Report a RecordLocked exception """
-    msg = _('You cannot proceed because you cannot obtain a lock on %s "%s"' + \
-            '.\nThe record is currently locked by %s.\nPlease try again later.')
     if 'unicode' in wx.PlatformInfo:
         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-        if isinstance(msg, str):
-            msg = unicode(msg, 'utf8')
+        msg = unicode(_('You cannot proceed because you cannot obtain a lock on %s "%s"') + \
+                      _('.\nThe record is currently locked by %s.\nPlease try again later.'), 'utf8')
         if isinstance(rtype, str):
             rtype = unicode(rtype, 'utf8')
         if isinstance(idVal, str):
             id = unicode(idVal, 'utf8')
+    else:
+        msg = _('You cannot proceed because you cannot obtain a lock on %s "%s"') + \
+              _('.\nThe record is currently locked by %s.\nPlease try again later.')
+
     import Dialogs
     dlg = Dialogs.ErrorDialog(None, msg % (rtype, idVal, e.user))
     dlg.ShowModal()

@@ -48,15 +48,15 @@ import NoteEditor
 import os
 import sys
 import string
-import CollectionSummaryReport
 import SeriesMap
 import KeywordMapClass
-import KeywordUsageReport
+import ReportGenerator
 import KeywordSummaryReport
 import ClipDataExport
 import PlayAllClips
 import DragAndDropObjects           # Implements Drag and Drop logic and objects
 import cPickle                      # Used in Drag and Drop
+import Misc                         # Transana's Miscellaneous functions
 
 class DatabaseTreeTab(wx.Panel):
     """This class defines the object for the "Database" tab of the Data
@@ -802,7 +802,7 @@ class DatabaseTreeTab(wx.Panel):
         # If there's not a Clip Creation object in the Clipboard, display an error message
         if not success:
             if "__WXMAC__" in wx.PlatformInfo:
-                prompt = _('To add a Clip, select the desired potion of a transcript, press the "Select Clip Text" button in the\nTranscript Toolbar, then right-click the target Collection and choose "Add Clip".')
+                prompt = _('To add a Clip, select the desired portion of a transcript and choose "Add Clip" for the target Collection.')
             else:
                 prompt = _("To add a Clip, select the desired portion of a transcript and drag the selection onto a Collection.")
             dlg = Dialogs.InfoDialog(self, prompt)
@@ -993,14 +993,14 @@ class DatabaseTreeTab(wx.Panel):
                     if seriesNum != 0:
                         nodeType = 'SeriesNoteNode'
                         series = parentObj
-                        nodeData = (_('Series'), series.id, note.id)
+                        nodeData = ('Series', series.id, note.id)
                         parentNum = series.number
                         msgType = 'ASN'
                         nodeDataRoot = 'Series'
                     elif episodeNum != 0:
                         nodeType = 'EpisodeNoteNode'
                         episode = parentObj
-                        nodeData = (_('Series'), episode.series_id, episode.id, note.id)
+                        nodeData = ('Series', episode.series_id, episode.id, note.id)
                         parentNum = episode.number
                         msgType = 'AEN'
                         nodeDataRoot = 'Series'
@@ -1008,14 +1008,14 @@ class DatabaseTreeTab(wx.Panel):
                         nodeType = 'TranscriptNoteNode'
                         transcript = parentObj
                         episode = Episode.Episode(num = transcript.episode_num)
-                        nodeData = (_('Series'), episode.series_id, episode.id, transcript.id, note.id)
+                        nodeData = ('Series', episode.series_id, episode.id, transcript.id, note.id)
                         parentNum = transcript.number
                         msgType = 'ATN'
                         nodeDataRoot = 'Series'
                     elif collectionNum != 0:
                         nodeType = 'CollectionNoteNode'
                         collection = parentObj
-                        nodeData = (_('Collections'),) + collection.GetNodeData() + (note.id,)
+                        nodeData = ('Collections',) + collection.GetNodeData() + (note.id,)
                         parentNum = collection.number  # This is the NOTE's parent, not the Collection's parent!!
                         msgType = 'ACN'
                         nodeDataRoot = 'Collections'
@@ -1023,7 +1023,7 @@ class DatabaseTreeTab(wx.Panel):
                         nodeType = 'ClipNoteNode'
                         clip = parentObj
                         collection = Collection.Collection(clip.collection_num)
-                        nodeData = (_('Collections'),) + collection.GetNodeData() + (clip.id, note.id)
+                        nodeData = ('Collections',) + collection.GetNodeData() + (clip.id, note.id)
                         parentNum = clip.number
                         msgType = 'AClN'
                         nodeDataRoot = 'Collections'
@@ -1867,6 +1867,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Refresh the Tree Node so that changes are displayed appropriately (such as new children are indicated if the node was empty)
         self.Refresh()
 
+    def add_note_nodes(self, note_ids, item, **parent_num):
+        """ Add the notes specified in note_ids to item """
+        if len(note_ids) > 0:
+            for n in note_ids:
+                noteitem = self.AppendItem(item, n)
+                self.set_image(noteitem, "Note16")
+                note = Note.Note(n, **parent_num)
+                nodedata = _NodeData(nodetype='NoteNode', recNum=note.number)  # Identify this as a Note node
+                self.SetPyData(noteitem, nodedata)                          # Associate this data with the node
+                del note
+
     def create_search_node(self):
         """ Create the root Search node """
         self.searches = []
@@ -1952,6 +1963,21 @@ class _DBTreeCtrl(wx.TreeCtrl):
             nodeType is the type of node to be added, and nodeData is a list that gives the tree structure
             that describes where the node should be added. """
         currentNode = self.GetRootItem()
+        # See if we need to encode the first element of the tuple/list
+        # (This shouldn't have to be so complicated!  But it's different on Mac-PPC and in different circumstances!)
+        if type(_(nodeData[0])).__name__ == 'str':
+            # We need to translate the root node name and convert it to Unicode.
+            if type(nodeData) == type(()):
+                nodeData = (unicode(_(nodeData[0]), 'utf8'),) + nodeData[1:]
+            elif type(nodeData) == type([]):
+                nodeData = [unicode(_(nodeData[0]), 'utf8')] + nodeData[1:]
+        # Even if we don't need to encode it, we need to translate it
+        else:
+            # We need to translate the root node name and convert it to Unicode.
+            if type(nodeData) == type(()):
+                nodeData = (_(nodeData[0]),) + nodeData[1:]
+            elif type(nodeData) == type([]):
+                nodeData = [_(nodeData[0])] + nodeData[1:]
 
         if DEBUG:
             print "DatabaseTreeTab.add_Node():"
@@ -1979,7 +2005,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         for node in nodeData:
 
-            node = node.strip()
+            node = Misc.unistrip(node)
 
             if DEBUG:
                 print "Looking for '%s'  (%s)" % (node, type(node))
@@ -2002,7 +2028,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     if DEBUG:
                         print "childNode is OK"
                         
-                    itemText = self.GetItemText(childNode).strip()
+                    itemText = Misc.unistrip(self.GetItemText(childNode))
                     
                     if DEBUG:
                         print "Looking in %s at %s for %s." % (self.GetItemText(currentNode), itemText, node)
@@ -2101,7 +2127,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                         # If the expected node is a Episode...
                         elif expectedNodeType == 'EpisodeNode':
-                            tempEpisode = Episode.Episode(series=self.GetItemText(currentNode).strip(), episode=node)
+                            tempEpisode = Episode.Episode(series=Misc.unistrip(self.GetItemText(currentNode)), episode=node)
                             currentRecNum = tempEpisode.number
 
                         # If the expected node is a Transcript...
@@ -2138,7 +2164,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                         # If the LAST node is a SearchEpisode...
                         elif expectedNodeType == 'SearchEpisodeNode':
-                            tempEpisode = Episode.Episode(series=self.GetItemText(currentNode).strip(), episode=node)
+                            tempEpisode = Episode.Episode(series=Misc.unistrip(self.GetItemText(currentNode)), episode=node)
                             currentRecNum = tempEpisode.number
 
                         # If the LAST node is a SearchTranscript...
@@ -2196,9 +2222,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                 nt = nodeType
                             
                             if DEBUG:
+                                print "DatabaseTreeTab.add_Node:",
                                 print "Evaluate(%s, %s, %s, %s)" % (node, nt, self.GetItemText(child), childData)
 
-                            while self.Evaluate(node, nt, child, childData):
+                            while self.Evaluate(tmpNode, nt, child, childData):
 
                                 (child, cookieVal) = self.GetNextChild(currentNode, cookieVal)
                                 if child.IsOk():
@@ -2310,14 +2337,14 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         for node in nodeData:
 
-            node = node.strip()
+            node = Misc.unistrip(node)
 
             # print "Looking for %s" % node
 
             notDone = True
             (childNode, cookieItem) = self.GetFirstChild(currentNode)
             while notDone and (currentNode != None):
-                itemText = self.GetItemText(childNode).strip()
+                itemText = Misc.unistrip(self.GetItemText(childNode))
                 # if childNode.IsOk():
                 #     print "Looking in %s at %s for %s." % (self.GetItemText(currentNode), itemText, node)
 
@@ -2397,6 +2424,22 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # print "Root node = %s" % self.GetItemText(currentNode)
         # print "nodeData = ", nodeData, "of type", nodeType
         
+        # See if we need to encode the first element of the tuple/list
+        # (This shouldn't have to be so complicated!  But it's different on Mac-PPC and in different circumstances!)
+        if type(_(nodeData[0])).__name__ == 'str':
+            # We need to translate the root node name and convert it to Unicode.
+            if type(nodeData) == type(()):
+                nodeData = (unicode(_(nodeData[0]), 'utf8'),) + nodeData[1:]
+            elif type(nodeData) == type([]):
+                nodeData = [unicode(_(nodeData[0]), 'utf8')] + nodeData[1:]
+        # Even if we don't need to encode it, we need to translate it
+        else:
+            # We need to translate the root node name and convert it to Unicode.
+            if type(nodeData) == type(()):
+                nodeData = (_(nodeData[0]),) + nodeData[1:]
+            elif type(nodeData) == type([]):
+                nodeData = [_(nodeData[0])] + nodeData[1:]
+
         # Having nodes and subnodes with the same name causes a variety of problems.  We need to track how far
         # down the tree branches we are to keep track of what object NodeTypes we should be working with.
         nodeListPos = 0
@@ -2415,7 +2458,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         for node in nodeData:
 
-            node = node.strip()
+            node = Misc.unistrip(node)
 
             if not TransanaConstants.singleUserVersion and sendMessage:
                 if msgData != '':
@@ -2442,7 +2485,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             (childNode, cookieItem) = self.GetFirstChild(currentNode)
 
             while notDone and (currentNode != None):
-                itemText = self.GetItemText(childNode).strip()
+                itemText = Misc.unistrip(self.GetItemText(childNode))
                 childNodeData = self.GetPyData(childNode)
 
                 # To accept a node and climb on, the node text must match the text of the node being sought.
@@ -2512,8 +2555,9 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Series Menu
         self.create_menu("series",
                         (_("Paste"),
-                         _("Add Episode"), _("Add Series Note"), _("Delete Series"), _("Keyword Usage Report"),
+                         _("Add Episode"), _("Add Series Note"), _("Delete Series"), _("Series Report"),
                          _("Series Keyword Sequence Map"), _("Series Keyword Bar Graph"), _("Series Keyword Percentage Graph"),
+                         _("Clip Data Export"),
                          _("Series Properties")),
                         self.OnSeriesCommand)
 
@@ -2521,7 +2565,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         self.create_menu("episode",
                         (_("Paste"),
                          _("Add Transcript"), _("Add Episode Note"), _("Delete Episode"),
-                         _("Keyword Map"), _("Keyword Usage Report"), _("Clip Data Export"),
+                         _("Episode Report"), _("Keyword Map"), _("Clip Data Export"),
                          _("Episode Properties")),
                         self.OnEpisodeCommand)
 
@@ -2532,15 +2576,15 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         # Collection Root Menu
         self.create_menu("coll_root",
-                        (_("Add Collection"),),
+                       (_("Add Collection"), _("Collection Report"), _('Clip Data Export')),
                         self.OnCollRootCommand)
 
         # Collection Menu
         self.create_menu("collection",
                         (_("Cut"), _("Copy"), _("Paste"),
                          _("Add Clip"), _("Add Nested Collection"), _("Add Collection Note"),
-                         _("Collection Summary Report"), _("Delete Collection"),
-                         _("Keyword Usage Report"), _("Clip Data Export"), _("Play All Clips"),
+                         _("Delete Collection"),
+                         _("Collection Report"), _("Clip Data Export"), _("Play All Clips"),
                          _("Collection Properties")),
                         self.OnCollectionCommand)
 
@@ -2586,17 +2630,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
         
         # The Search Results Node Menu
         self.create_menu("searchresults",
-                         (_("Clear"), _("Convert to Collection"), _("Rename")),
+                         (_("Clear"), _("Convert to Collection"), _("Search Collection Report"), _("Rename")),
                          self.OnSearchResultsCommand)
         
         # The Search Series Node Menu
         self.create_menu("searchseries",
-                        (_("Drop from Search Result"), _("Keyword Usage Report")),
+                        (_("Drop from Search Result"), _("Search Series Report")),
                         self.OnSearchSeriesCommand)
         
         # The Search Episode Node Menu
         self.create_menu("searchepisode",
-                        (_("Drop from Search Result"), _("Keyword Map"), _("Keyword Usage Report")),
+                        (_("Drop from Search Result"), _("Episode Report"), _("Keyword Map")),
                         self.OnSearchEpisodeCommand)
         
         # The Search Transcript Node Menu
@@ -2607,7 +2651,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # The Search Collection Node Menu
         self.create_menu("searchcollection",
                         (_("Cut"), _("Copy"), _("Paste"),
-                         _("Collection Summary Report"), _("Drop from Search Result"), _("Keyword Usage Report"),
+                         _("Drop from Search Result"), _("Search Collection Report"),
                          _("Play All Clips"), _("Rename")),
                         self.OnSearchCollectionCommand)
         
@@ -2695,8 +2739,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 prompt = unicode(_('Are you sure you want to delete Series "%s" and all related Episodes, Transcripts and Notes?'), 'utf8')
             else:
                 prompt = _('Are you sure you want to delete Series "%s" and all related Episodes, Transcripts and Notes?')
-            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-            result = dlg.ShowModal()
+            dlg = Dialogs.QuestionDialog(self, prompt % (self.GetItemText(sel)))
+            result = dlg.LocalShowModal()
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
@@ -2742,8 +2786,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
                 
-        elif n == 4:    # Keyword Usage Report
-            KeywordUsageReport.KeywordUsageReport(seriesName = series_name)
+        elif n == 4:    # Series Report
+            # Call the Report Generator.  We pass the Series Name and want to show Keywords.
+            ReportGenerator.ReportGenerator(title=_("Transana Series Report"), seriesName=series_name,
+                                                  showKeywords=True)
 
         elif n == 5:    # Series Map -- Sequence Mode
             SeriesMap.SeriesMap(self, _("Series Keyword Sequence Map"), selData.recNum, series_name, 1)
@@ -2753,8 +2799,11 @@ class _DBTreeCtrl(wx.TreeCtrl):
             
         elif n == 7:    # Series Map -- Percentage Mode
             SeriesMap.SeriesMap(self, _("Series Keyword Percentage Graph"), selData.recNum, series_name, 3)
+
+        elif n == 8:    # Clip Data Export
+            self.ClipDataExport(seriesNum = selData.recNum)
             
-        elif n == 8:    # Properties
+        elif n == 9:    # Properties
             series = Series.Series()
             # FIXME: Gracefully handle when we can't load the series.
             # (yes, this can happen.  for example if another user changes
@@ -2813,8 +2862,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 prompt = unicode(_('Are you sure you want to delete Episode "%s" and all related Transcripts and Notes?\n(Please note that the video file associated with this Episode will not be deleted.)'), 'utf8')
             else:
                 prompt = _('Are you sure you want to delete Episode "%s" and all related Transcripts and Notes?\n(Please note that the video file associated with this Episode will not be deleted.)')
-            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-            result = dlg.ShowModal()
+            dlg = Dialogs.QuestionDialog(self, prompt % (self.GetItemText(sel)))
+            result = dlg.LocalShowModal()
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
@@ -2856,11 +2905,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
                 
-        elif n == 4:    # Keyword Map Report
-            self.KeywordMapReport(selData.recNum, series_name, episode_name)
+        elif n == 4:    # Episode Report Generator
+            # Call the Report Generator.  We pass the Series and Episode names, and we want to show
+            # File Names, Time data, and Keywords but not Transcripts, Comments, or Clip Notes by default.
+            # (The point of including parameters set to false is that it triggers their availability as options.)
+            ReportGenerator.ReportGenerator(title=_("Transana Episode Report"), seriesName=series_name,
+                                            episodeName=episode_name, showFile=True, showTime=True,
+                                            showTranscripts=False, showKeywords=True,
+                                            showComments=False, showClipNotes=False)
 
-        elif n == 5:    # Keyword Usage Report
-            KeywordUsageReport.KeywordUsageReport(seriesName = series_name, episodeName = episode_name)
+        elif n == 5:    # Keyword Map Report
+            self.KeywordMapReport(selData.recNum, series_name, episode_name)
 
         elif n == 6:    # Clip Data Export
             self.ClipDataExport(episodeNum = selData.recNum)
@@ -2898,8 +2953,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 prompt = unicode(_('Are you sure you want to delete Transcript "%s" and all related Notes?'), 'utf8')
             else:
                 prompt = _('Are you sure you want to delete Transcript "%s" and all related Notes?')
-            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-            result = dlg.ShowModal()
+            dlg = Dialogs.QuestionDialog(self, prompt % (self.GetItemText(sel)))
+            result = dlg.LocalShowModal()
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
@@ -2958,6 +3013,20 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         if n == 0:      # Add Collection
             self.parent.add_collection(0)
+
+        elif n == 1:    # (Global) Collection Report
+            # Call the Report Generator.  We pass an empty collection to signal the Global report. 
+            # We want to show file names, clip time data, and keywords but not transcripts, Comments, collection
+            # notes, or clip notes by default.  We also want to include 
+            # nested collection data by default.  (The Global version is always empty without nested collections.)
+            # (The point of including parameters set to false is that it triggers their availability as options.)
+            ReportGenerator.ReportGenerator(title=_("Transana Collection Report"), collection=Collection.Collection(),
+                                            showFile=True, showTime=True, showTranscripts=False, showKeywords=True,
+                                            showComments=False, showCollectionNotes=False, showClipNotes=False,
+                                            showNested=True)
+
+        elif n == 2:    # (Global) Clip Data Export
+            self.ClipDataExport()
 
         else:
             raise MenuIDError
@@ -3037,14 +3106,20 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
 
         elif n == 3:    # Add Clip
-            # Get the Transcript Selection information from the ControlObject.
-            (transcriptNum, startTime, endTime, text) = self.parent.ControlObject.GetTranscriptSelectionInfo()
-            # If there's a selection in the text ...
-            if text != '':
-                # ... copy it to the clipboard by faking a Drag event!
-                self.parent.ControlObject.TranscriptWindow.dlg.editor.OnStartDrag(evt, copyToClipboard=True)
-            # Add the Clip.
-            self.parent.add_clip(coll_name)
+            try:
+                # Get the Transcript Selection information from the ControlObject.
+                (transcriptNum, startTime, endTime, text) = self.parent.ControlObject.GetTranscriptSelectionInfo()
+                # If there's a selection in the text ...
+                if text != '':
+                    # ... copy it to the clipboard by faking a Drag event!
+                    self.parent.ControlObject.TranscriptWindow.dlg.editor.OnStartDrag(evt, copyToClipboard=True)
+                # Add the Clip.
+                self.parent.add_clip(coll_name)
+            except:
+                msg = _('You must make a selection in a transcript to be able to add a Clip.')
+                errordlg = Dialogs.InfoDialog(None, msg)
+                errordlg.ShowModal()
+                errordlg.Destroy()
 
         elif n == 4:    # Add Nested Collection
             coll = Collection.Collection(coll_name, parent_num)
@@ -3053,10 +3128,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         elif n == 5:    # Add Note
             self.parent.add_note(collectionNum=selData.recNum)
 
-        elif n == 6:    # Collection Summary Report
-            CollectionSummaryReport.CollectionSummaryReport(self, sel)       # (selData, coll_name)
-
-        elif n == 7:    # Delete
+        elif n == 6:    # Delete
             # Load the Selected Collection
             collection = Collection.Collection(selData.recNum)
             # Get user confirmation of the Collection Delete request
@@ -3065,8 +3137,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 prompt = unicode(_('Are you sure you want to delete Collection "%s" and all related Nested Collections, Clips and Notes?'), 'utf8')
             else:
                 prompt = _('Are you sure you want to delete Collection "%s" and all related Nested Collections, Clips and Notes?')
-            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-            result = dlg.ShowModal()
+            dlg = Dialogs.QuestionDialog(self, prompt % (self.GetItemText(sel)))
+            result = dlg.LocalShowModal()
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
@@ -3133,14 +3205,22 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
 
-        elif n == 8:    # Keyword Usage Report
+        elif n == 7:    # Collection Report
+            # Get the appropriate collection
             coll = Collection.Collection(coll_name, parent_num)
-            KeywordUsageReport.KeywordUsageReport(collection = coll)
+            # Call the Report Generator.  We pass the Collection Object, and we want to show
+            # file names, clip time data, and keywords but not transcripts, Comments, collection notes, or
+            # clip notes by default.  We also want to include nested collection data by default.
+            # (The point of including parameters set to false is that it triggers their availability as options.)
+            ReportGenerator.ReportGenerator(title=_("Transana Collection Report"), collection=coll,
+                                            showFile=True, showTime=True,
+                                            showTranscripts=False, showKeywords=True, showComments=False,
+                                            showCollectionNotes=False, showClipNotes=False, showNested=True)
 
-        elif n == 9:    # Clip Data Export
+        elif n == 8:    # Clip Data Export
             self.ClipDataExport(collectionNum = selData.recNum)
 
-        elif n == 10:    # Play All Clips
+        elif n == 9:    # Play All Clips
             coll = Collection.Collection(coll_name, parent_num)
             # Play All Clips takes the current Collection and the ControlObject as parameters.
             # (The ControlObject is owned not by the _DBTreeCtrl but by its parent)
@@ -3152,7 +3232,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Let's clear all the Windows, since we don't want to stay in the last Clip played.
             self.parent.ControlObject.ClearAllWindows()
 
-        elif n == 11:    # Properties
+        elif n == 10:    # Properties
             # FIXME: Gracefully handle when we can't load the Collection.
             coll = Collection.Collection(coll_name, parent_num)
             self.parent.edit_collection(coll)
@@ -3238,14 +3318,20 @@ class _DBTreeCtrl(wx.TreeCtrl):
             self.OnItemActivated(evt)                            # Use the code for double-clicking the Clip
 
         elif n == 4:    # Add Clip
-            # Get the Transcript Selection information from the ControlObject.
-            (transcriptNum, startTime, endTime, text) = self.parent.ControlObject.GetTranscriptSelectionInfo()
-            # If a selection has been made ...
-            if text != '':
-                # ... copy that to the Clipboard by faking a Drag event!
-                self.parent.ControlObject.TranscriptWindow.dlg.editor.OnStartDrag(evt, copyToClipboard=True)
-            # Add the Clip
-            self.parent.add_clip(coll_name)
+            try:
+                # Get the Transcript Selection information from the ControlObject.
+                (transcriptNum, startTime, endTime, text) = self.parent.ControlObject.GetTranscriptSelectionInfo()
+                # If a selection has been made ...
+                if text != '':
+                    # ... copy that to the Clipboard by faking a Drag event!
+                    self.parent.ControlObject.TranscriptWindow.dlg.editor.OnStartDrag(evt, copyToClipboard=True)
+                # Add the Clip
+                self.parent.add_clip(coll_name)
+            except:
+                msg = _('You must make a selection in a transcript to be able to add a Clip.')
+                errordlg = Dialogs.InfoDialog(None, msg)
+                errordlg.ShowModal()
+                errordlg.Destroy()
 
         elif n == 5:    # Add Note
             self.parent.add_note(clipNum=selData.recNum)
@@ -3263,8 +3349,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 prompt = unicode(_('Are you sure you want to delete Clip "%s" and all related Notes?'), 'utf8')
             else:
                 prompt = _('Are you sure you want to delete Clip "%s" and all related Notes?')
-            dlg = wx.MessageDialog(self, prompt % self.GetItemText(sel), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-            result = dlg.ShowModal()
+            dlg = Dialogs.QuestionDialog(self, prompt % self.GetItemText(sel))
+            result = dlg.LocalShowModal()
             dlg.Destroy()
 
             # If the user confirms the Delete Request...
@@ -3434,8 +3520,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 prompt = unicode(_('Are you sure you want to delete Note "%s"?'), 'utf8')
             else:
                 prompt = _('Are you sure you want to delete Note "%s"?')
-            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-            result = dlg.ShowModal()
+            dlg = Dialogs.QuestionDialog(self, prompt % (self.GetItemText(sel)))
+            result = dlg.LocalShowModal()
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
@@ -3586,9 +3672,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                 msg = unicode(msg, 'utf8')
-            id = wx.MessageDialog(self, msg % kwg_name, _("Transana Confirmation"), \
-                        wx.YES | wx.NO | wx.CENTRE | wx.ICON_QUESTION).ShowModal()
-            if id == wx.ID_YES:
+            dlg = Dialogs.QuestionDialog(self, msg % kwg_name)
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            if result == wx.ID_YES:
                 try:
                     # Delete the Keyword group
                     DBInterface.delete_keyword_group(kwg_name)
@@ -3697,9 +3784,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                 msg = unicode(msg, 'utf8')
-            id = wx.MessageDialog(self, msg % (kw_group, kw_name), _("Transana Confirmation"), \
-                        wx.YES | wx.NO | wx.CENTRE | wx.ICON_QUESTION).ShowModal()
-            if id == wx.ID_YES:
+            dlg = Dialogs.QuestionDialog(self, msg % (kw_group, kw_name))
+            result = dlg.LocalShowModal()
+            dlg.Destroy()
+            if result == wx.ID_YES:
                 try:
                     # Delete the Keyword
                     DBInterface.delete_keyword(kw_group, kw_name)
@@ -3728,11 +3816,11 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         traceback.print_exc(file=sys.stdout)
                         
                     # Display the Exception Message, allow "continue" flag to remain true
-                    prompt = "%s"
-                    if 'unicode' in wx.PlatformInfo:
-                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                        prompt = unicode(prompt, 'utf8')
-                    errordlg = Dialogs.ErrorDialog(None, prompt % sys.exc_info()[1])
+                    errmsg = sys.exc_info()[1]
+                    # If this is a TransanaExceptions.GeneralError, we need the "args" parameter!  This should already be Unicode!
+                    if hasattr(errmsg, 'args'):
+                        errmsg = errmsg.args
+                    errordlg = Dialogs.ErrorDialog(None, errmsg)
                     errordlg.ShowModal()
                     errordlg.Destroy()
 
@@ -3817,8 +3905,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 prompt = unicode(_('Do you want to remove Clip "%s" as an example of Keyword "%s:%s"?'), 'utf8')
             else:
                 prompt = _('Do you want to remove Clip "%s" as an example of Keyword "%s:%s"?')
-            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel), kwg, kw), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-            result = dlg.ShowModal()
+            dlg = Dialogs.QuestionDialog(self, prompt % (self.GetItemText(sel), kwg, kw))
+            result = dlg.LocalShowModal()
             dlg.Destroy()
             if result == wx.ID_YES:
                DBInterface.SetKeywordExampleStatus(kwg, kw, selData.recNum, 0)
@@ -3864,8 +3952,19 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # Finally, if the Search result is converted, remove the converted Node
                 # from the Search Results.
                 self.delete_Node((_('Search'), self.GetItemText(sel)), 'SearchResultsNode')
-            
-        elif n == 2:    # Rename
+
+        elif n == 2:    # Search Collection Report
+            # Use the Report Generator, passing the selected item as the Search Collection
+            # and passing in a pointer to the Tree Control.  We want to show file names, clip time data,
+            # and Keywords but not Transcripts, Comments, collectoin notes, or clip notes by default
+            # and include nested collection data by default.
+            # (The point of including parameters set to false is that it triggers their availability as options.)
+            ReportGenerator.ReportGenerator(title=_("Transana Collection Report"), searchColl=sel, treeCtrl=self,
+                                            showFile=True, showTime=True,
+                                            showTranscripts=False, showKeywords=True, showComments=False,
+                                            showCollectionNotes=False, showClipNotes=False, showNested=True)
+
+        elif n == 3:    # Rename
             self.EditLabel(sel)
             
         else:
@@ -3879,8 +3978,11 @@ class _DBTreeCtrl(wx.TreeCtrl):
         if n == 0:        # Drop for Search Results
             self.DropSearchResult(sel)
             
-        elif n == 1:      # Keyword Usage Report
-            KeywordUsageReport.KeywordUsageReport(searchSeries=sel, treeCtrl=self)
+        elif n == 1:      # Search Series Report
+            # Show the Report Generator.  We pass the tree node as the searchSeries, as well as
+            # passing a reference to the TreeCtrl.  We want to show Keywords.
+            ReportGenerator.ReportGenerator(title=_("Transana Series Report"), searchSeries=sel,
+                                            treeCtrl=self, showKeywords=True)
 
         else:
             raise MenuIDError
@@ -3896,17 +3998,24 @@ class _DBTreeCtrl(wx.TreeCtrl):
         if n == 0:      # Drop for Search Results
             self.DropSearchResult(sel)
 
-        elif n == 1:      # Keyword Map Report
-            selData = self.GetPyData(sel)
-            self.KeywordMapReport(selData.recNum, series_name, episode_name)
-            
-        elif n == 2:    # Keyword Usage Report
+        elif n == 1:    # Search Episode Report
             msg = _('Please note that even though you are requesting this report based on Search Results, the data in \nthe report includes only Clips that are in Collections.  It does not include Search Results Clips.')
             infodlg = Dialogs.InfoDialog(self.parent, msg)
             infodlg.ShowModal()
             infodlg.Destroy()
-            KeywordUsageReport.KeywordUsageReport(seriesName = series_name, episodeName = episode_name)
+            # Use the report Generator.  We pass the REAL Series Name and Episode Name, not the Search Node ones
+            # because we have no way to get the appropriate Search Node Clips only.  We want to show file names,
+            # clip time data, and Keywords but not Transcripts, Comments, or Clip Notes by default.
+            # (The point of including parameters set to false is that it triggers their availability as options.)
+            ReportGenerator.ReportGenerator(title=_("Transana Episode Report"), seriesName = series_name,
+                                            episodeName = episode_name, showFile=True, showTime=True,
+                                            showTranscripts=False, showKeywords=True,
+                                            showComments=False, showClipNotes=False)
 
+        elif n == 2:      # Keyword Map Report
+            selData = self.GetPyData(sel)
+            self.KeywordMapReport(selData.recNum, series_name, episode_name)
+            
         else:
             raise MenuIDError
 
@@ -3954,23 +4063,26 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 data = cPickle.loads(cdo.GetData())
                 DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
 
-        elif n == 3:      # Collection Summary Report
-            CollectionSummaryReport.CollectionSummaryReport(self, sel)  # (self.GetPyData(sel), self.GetItemText(sel))
-
-        elif n == 4:    # Drop for Search Results
+        elif n == 3:    # Drop for Search Results
             self.DropSearchResult(sel)
 
-        elif n == 5:    # Keyword Usage Report
-            # Specify the Keyword Usage Report, passing the selected item as the Search Collection
-            # and passing in a pointer to the Tree Control.
-            KeywordUsageReport.KeywordUsageReport(searchColl=sel, treeCtrl=self)
+        elif n == 4:    # Search Collection Report
+            # Use the Report Generator, passing the selected item as the Search Collection
+            # and passing in a pointer to the Tree Control.  We want to show file names, clip time data,
+            # and Keywords but not Transcripts, Comments, collectoin notes, or clip notes by default
+            # and include nested collection data by default.
+            # (The point of including parameters set to false is that it triggers their availability as options.)
+            ReportGenerator.ReportGenerator(title=_("Transana Collection Report"), searchColl=sel, treeCtrl=self,
+                                            showFile=True, showTime=True,
+                                            showTranscripts=False, showKeywords=True, showComments=False,
+                                            showCollectionNotes=False, showClipNotes=False, showNested=True)
 
-        elif n == 6:    # Play All Clips
+        elif n == 5:    # Play All Clips
             # Play All Clips takes the current Collection and the ControlObject as parameters.
             # (The ControlObject is owned not by the _DBTreeCtrl but by its parent)
             PlayAllClips.PlayAllClips(searchColl=sel, controlObject=self.parent.ControlObject, treeCtrl=self)
 
-        elif n == 7:    # Rename
+        elif n == 6:    # Rename
             self.EditLabel(sel)
             
         else:
@@ -4118,19 +4230,26 @@ class _DBTreeCtrl(wx.TreeCtrl):
             #   Our data could be a ClipDragDropData object if the source is the Transcript (clip creation)
             dfClip = wx.CustomDataFormat('ClipDragDropData')
 
-            # Specify the data object to accept data for these formats
-            #   A DataTreeDragData object will populate the cdoNode object
-            cdoNode = wx.CustomDataObject(dfNode)
-            #   A ClipDragDropData object will populate the cdoClip object
-            cdoClip = wx.CustomDataObject(dfClip)
+            # Test to see if one of the custom formats is available.  Otherwise, we get odd error messages
+            # on the Mac.
+            if wx.TheClipboard.IsSupported(dfNode) or wx.TheClipboard.IsSupported(dfClip):
+                # Specify the data object to accept data for these formats
+                #   A DataTreeDragData object will populate the cdoNode object
+                cdoNode = wx.CustomDataObject(dfNode)
+                #   A ClipDragDropData object will populate the cdoClip object
+                cdoClip = wx.CustomDataObject(dfClip)
 
-            # Create a composite Data Object from the object types defined above
-            cdo = wx.DataObjectComposite()
-            cdo.Add(cdoNode)
-            cdo.Add(cdoClip)
+                # Create a composite Data Object from the object types defined above
+                cdo = wx.DataObjectComposite()
+                cdo.Add(cdoNode)
+                cdo.Add(cdoClip)
 
-            # Try to get data from the Clipboard
-            success = wx.TheClipboard.GetData(cdo)
+                # Try to get data from the Clipboard
+                success = wx.TheClipboard.GetData(cdo)
+            # If neither of the custom formats is available ...
+            else:
+                # ... then we know not to worry about clipboard data being available
+                success = False
 
             # Close the Clipboard
             # wx.TheClipboard.Close()
@@ -4470,11 +4589,16 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         # If we are renaming a keyword ...
                         if sel_item_data.nodetype == 'KeywordNode':
                             # ... Change the Object's Keyword property
-                            tempObject.keyword = event.GetLabel().strip()
+                            tempObject.keyword = Misc.unistrip(event.GetLabel())
+                            # We need to remember the new string to see if it has been changed
+                            tempStr = tempObject.keyword
+                                
                         # If we're not renaming a keyword ...
                         else:
                             # ... Change the Object Name
-                            tempObject.id = event.GetLabel().strip()
+                            tempObject.id = Misc.unistrip(event.GetLabel())
+                            # We need to remember the new string to see if it has been changed
+                            tempStr = tempObject.id
                             
                         # Save the Object
                         result = tempObject.db_save()
@@ -4483,15 +4607,16 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                         # If there are leading spaces in the edited label, it causes problems.  The object
                         # doesn't have the leading spaces the label does, so can't be found.  Therefore,
-                        # we need to strip() the whitespace.
-                        if event.GetLabel() != event.GetLabel().strip():
+                        # we need to strip() the whitespace, using the unicode-safe unistrip() method.
+                        # This could also be triggered by changes to a keyword to correct for use of parentheses.
+                        if event.GetLabel() != tempStr:
                             # We have to use CallAfter to change the label we're already in the middle of editing.
-                            wx.CallAfter(self.SetItemText, sel_item, event.GetLabel().strip())
+                            wx.CallAfter(self.SetItemText, sel_item, tempStr)
                         
                         # If we're in the Multi-User mode, we need to send a message about the change
                         if not TransanaConstants.singleUserVersion:
                             # Begin constructing the message with the old and new names for the node
-                            msg = " >|< %s >|< %s" % (originalName, event.GetLabel().strip())
+                            msg = " >|< %s >|< %s" % (originalName, tempStr)
                             # Get the full Node Branch by climbing it to two levels above the root
                             while (self.GetItemParent(self.GetItemParent(sel_item)) != self.GetRootItem()):
                                 # Update the selected node indicator
@@ -4624,13 +4749,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Now signal the DB Tree to select / display the selected Clip
         self.select_Node(nodeList, 'ClipNode')
 
-    def ClipDataExport(self, episodeNum = 0, collectionNum = 0):
+    def ClipDataExport(self, seriesNum = 0, episodeNum = 0, collectionNum = 0):
         """ Implements the Clip Data Export routine """
         # Create the Clip Data Export dialog box, passing the appropriate parameter
-        if episodeNum > 0:
+        if seriesNum > 0:
+            clipExport = ClipDataExport.ClipDataExport(self, -1, seriesNum = seriesNum)
+        elif episodeNum > 0:
             clipExport = ClipDataExport.ClipDataExport(self, -1, episodeNum = episodeNum)
-        else:
+        elif collectionNum > 0:
             clipExport = ClipDataExport.ClipDataExport(self, -1, collectionNum = collectionNum)
+        else:
+            clipExport = ClipDataExport.ClipDataExport(self, -1)
         # Set up the confirmation loop signal variable
         repeat = True
         # While we are in the confirmation loop ...
@@ -4657,12 +4786,11 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     else:
                         prompt = _('A file named "%s" already exists.  Do you want to replace it?')
                     # Create the dialog for the prompt for the user
-                    dlg2 = wx.MessageDialog(None, prompt % result[_('Export Filename')],
-                                            _('Transana Confirmation'), style = wx.YES_NO | wx.ICON_QUESTION | wx.STAY_ON_TOP)
+                    dlg2 = Dialogs.QuestionDialog(None, prompt % result[_('Export Filename')])
                     # Center the confirmation dialog on screen
                     dlg2.CentreOnScreen()
                     # Show the confirmation dialog and get the user response.  If the user DOES NOT say to overwrite the file, ...
-                    if dlg2.ShowModal() != wx.ID_YES:
+                    if dlg2.LocalShowModal() != wx.ID_YES:
                         # ... nullify the results of the Clip Data Export dialog so the file won't be overwritten ...
                         result = None
                         # ... and signal that the user should be re-prompted.

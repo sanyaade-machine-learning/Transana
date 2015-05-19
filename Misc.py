@@ -1,3 +1,4 @@
+# -*- coding: cp1252 -*-
 # Copyright (C) 2002 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
@@ -193,3 +194,36 @@ def convertMacFilename(filename):
 
     filename = filename.replace(unichr(121) + unichr(776), unichr(255))  # y with Umlaut
     return filename
+
+
+# There a problem in Python using string.strip() with strings encoded with UTF-8.
+# To demonstrate, run the following lines:
+#
+#    s = u'Matti\xe0'
+#    t = s.encode('utf8')
+#
+# s will equal u'Matti\xe0' and t will equal 'Matti\xc3\xa0'.
+#
+#    print s, t.decode('utf8')
+#
+# will print:
+#
+#    Mattià Mattià
+#
+# which is correct.
+#
+# The problem is that t.strip() will reduce 'Matti\xc3\xa0' to 'Matti\xc3'.  If you do that,
+# you can no longer decode t with UTF-8.  The string is broken and irretrievable.
+#
+# This method is a replacement for string.strip() that avoids this problem with UTF-8 strings.
+def unistrip(strng):
+    """ A unicode-safe replacement for string.strip() """
+    # We can safely use lstrip() to remove whitespace from the left side of the string.
+    strng = strng.lstrip()
+    # Now we can check the right side of the string character by character.  If the string still has
+    # characters and the last character is whitespace ...
+    while (len(strng) > 0) and (strng[-1] in string.whitespace):
+        # ... drop the last character from the string
+	strng = strng[:-1]
+    # return the results
+    return strng

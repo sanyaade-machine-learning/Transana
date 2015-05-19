@@ -109,7 +109,7 @@ class VisualizationWindow(wx.Dialog):
 
         # The waveform is held in a GraphicsControlClass object that handles all the waveform display.
         # At this time, the GraphicsControlClass is not aware of Sizers or Constraints
-        self.waveform = GraphicsControlClass.GraphicsControl(self, -1, wx.Point(1, 1), wx.Size(int(width-12), int(height-48-headerHeight)), (width-14, height-52-headerHeight), transanaMode=True)
+        self.waveform = GraphicsControlClass.GraphicsControl(self, -1, wx.Point(1, 1), wx.Size(int(width-12), int(height-48-headerHeight)), (width-14, height-52-headerHeight), visualizationMode=True)
         box.Add(self.waveform, 1, wx.EXPAND, 0)
 
         # Add the Timeline Panel, which holds the time line and scale information
@@ -377,13 +377,14 @@ class VisualizationWindow(wx.Dialog):
                             import traceback
                             traceback.print_exc(file=sys.stdout)
 
-                # If we're building a Hybrid visualization, capture the waveform picture
-                if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
+                # If we're building a Hybrid visualization, capture the waveform picture.
+                # But if waveforFilename has been cleared, we're waveforming and shouldn't do this yet!
+                if (TransanaGlobal.configData.visualizationStyle == 'Hybrid') and (self.waveformFilename != ''):
                     # Get the waveform Bitmap and convert it to an Image
                     hybridWaveform = self.waveform.bmpBuffer.ConvertToImage()
                     # Rescale the image so that it matches the size alloted for the Waveform (HYBRIDOFFSET)
                     hybridWaveform.Rescale(hybridWaveform.GetWidth(), HYBRIDOFFSET)
-                    
+
             if TransanaGlobal.configData.visualizationStyle in ['Keyword', 'Hybrid']:
                 # Clear the Visualization
                 self.waveform.Clear()
@@ -483,8 +484,8 @@ class VisualizationWindow(wx.Dialog):
 
                 # If we're bulding a Hybrid visualization, so far we've created and stored the waveform, then
                 # wiped it out in favor of an offset Keyword visualization.  Here, we combine the two
-                # visualizations!
-                if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
+                # visualizations!  If waveforFilename has been cleared, we're waveforming and shouldn't do this yet!
+                if (TransanaGlobal.configData.visualizationStyle == 'Hybrid') and (self.waveformFilename != ''):
                     # Here's a trick.  By setting the waveform's backgroundImage but NOT setting the
                     # backgroundGraphicName, you can add a background image to the GraphicsControlClass
                     # that does not resize to fill the image.  The current offset Keyword visualization
@@ -635,7 +636,7 @@ class VisualizationWindow(wx.Dialog):
 
     def OnZoomIn(self, event):
         """ Zoom in on a portion of the Waveform Diagram """
-        if (self.startPoint != 0) and (self.startPoint < self.endPoint):
+        if (self.startPoint < self.endPoint):
             # Keep track of the new position.  This allows the user to zoom back out in the same steps used to zoom in
             self.zoomInfo.append((int(self.startPoint), int(self.endPoint - self.startPoint)))
             # Limit video playback to the selected part of the media by setting the VideoStartPoint and VideoEndPoint in the
@@ -776,8 +777,10 @@ class VisualizationWindow(wx.Dialog):
                 # Check the user's response to the dialog. 
                 if ((not 'wxMac' in wx.PlatformInfo) or (not self.ControlObject.PlayAllClipsWindow)):
                     # Politely ask the user to create the waveform
-                    dlg = wx.MessageDialog(self, _("No wave file exists.  Would you like to create one now?"), _("Transana Wave File Creation"), wx.YES_NO | wx.ICON_QUESTION | wx.CENTRE)
-                    if dlg.ShowModal() == wx.ID_YES:
+#                    dlg = wx.MessageDialog(self, _("No wave file exists.  Would you like to create one now?"), _("Transana Wave File Creation"), wx.YES_NO | wx.ICON_QUESTION | wx.CENTRE)
+#                    if dlg.ShowModal() == wx.ID_YES:
+                    dlg = Dialogs.QuestionDialog(self, _("No wave file exists.  Would you like to create one now?"), _("Transana Wave File Creation"))
+                    if dlg.LocalShowModal() == wx.ID_YES:
                         try:
                             # Turn off OnIdle Redraw during audio extraction.
                             self.redrawWhenIdle = False
@@ -839,11 +842,11 @@ class VisualizationWindow(wx.Dialog):
                     else:
                         # User declined to create the WAV file now
                         dllvalue = 1  # Signal that the WAV file was NOT created!
+                    # Destroy the Dialog that asked to create the Wave file    
+                    dlg.Destroy()
                 else:
                     # User was not eligible to create the WAV file now
                     dllvalue = 1  # Signal that the WAV file was NOT created!
-                # Destroy the Dialog that asked to create the Wave file    
-                dlg.Destroy()
                 # If the user said no or there was a problem with Wave Extraction ...
                 if dllvalue != 0:
                     # Remove whatever image might be there now.  First, clear the file names.
@@ -857,6 +860,15 @@ class VisualizationWindow(wx.Dialog):
 
             # assign a temporary filename for the Waveform Graphic
             self.waveformFilename = TransanaGlobal.configData.visualizationPath + 'tempWave.png'
+
+        # If we're in Hybrid mode, clear the visualization to prevent waveform contamination!
+        if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
+            self.ClearVisualization()
+
+        # It's possible we lost the waveformFilename during audio extraction.  It's okay to re-create it here!
+        if self.waveformFilename == '':
+            # Build the correct filename for the Waveform Graphic
+            self.waveformFilename = os.path.join(TransanaGlobal.configData.visualizationPath, filenameroot + '.png')
 
         # Now that audio extraction is complete, signal that it's time to draw the Waveform Diagram during
         # Idle time.

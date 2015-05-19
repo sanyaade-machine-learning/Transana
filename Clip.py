@@ -35,6 +35,8 @@ import Note
 import TransanaConstants
 # Import Transana's Global Variables
 import TransanaGlobal
+# import Transana's Dialogs
+import Dialogs
 import types
 
 TIMECODE_CHAR = "\\'a4"   # Note that this differs from the TIMECODE_CHAR in TranscriptEditor.py
@@ -357,11 +359,12 @@ class Clip(DataObject):
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(prompt, 'utf8') % data
+                    prompt = prompt + unicode(_('\nAre you sure you want to delete it?'), 'utf8')
                 else:
                     prompt = prompt % data
-                prompt = prompt + _('\nAre you sure you want to delete it?')
-                dlg = wx.MessageDialog(None, prompt, _('Delete Clip'), wx.YES_NO | wx.CENTRE | wx.ICON_QUESTION | wx.STAY_ON_TOP)
-                if dlg.ShowModal() == wx.ID_NO:
+                    prompt = prompt + _('\nAre you sure you want to delete it?')
+                dlg = Dialogs.QuestionDialog(None, prompt, _('Delete Clip'))
+                if dlg.LocalShowModal() == wx.ID_NO:
                     dlg.Destroy()
                     # A Transcaction was started and the record was locked in _db_start_delete().  Unlock it here if the
                     # user cancels the delete (after rolling back the Transaction)!
@@ -504,8 +507,8 @@ class Clip(DataObject):
                         prompt = unicode(_('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?'), 'utf8')
                     else:
                         prompt = _('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?')
-                    dlg = wx.MessageDialog(TransanaGlobal.menuWindow, prompt % (self.id, kwg, kw, self.id, kwg, kw), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
-                    result = dlg.ShowModal()
+                    dlg = Dialogs.QuestionDialog(TransanaGlobal.menuWindow, prompt % (self.id, kwg, kw, self.id, kwg, kw))
+                    result = dlg.LocalShowModal()
                     dlg.Destroy()
                     if result == wx.ID_YES:
                         # If the entry is found and the user confirms, delete it

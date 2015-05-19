@@ -28,6 +28,7 @@ import Dialogs
 import DBInterface
 import TransanaGlobal
 from RichTextEditCtrl import RichTextEditCtrl
+import cPickle
 import pickle
 import os
 import sys
@@ -63,7 +64,7 @@ class XMLExport(Dialogs.GenForm):
         lay.left.SameAs(self.panel, wx.Left, 10)
         lay.width.PercentOf(self.panel, wx.Width, 80)  # 80% width
         lay.height.AsIs()
-        self.XMLFile = self.new_edit_box(_("XML Filename"), lay, '')
+        self.XMLFile = self.new_edit_box(_("Transana-XML Filename"), lay, '')
         self.XMLFile.SetDropTarget(EditBoxFileDropTarget(self.XMLFile))
 
         # Browse button layout
@@ -87,14 +88,17 @@ class XMLExport(Dialogs.GenForm):
         # Use UTF-8 regardless of the current encoding for consistency in the Transana XML files
         EXPORT_ENCODING = 'utf8'
         # use the LONGEST title here!  That determines the size of the Dialog Box.
-        progress = wx.ProgressDialog(_('Transana XML Export'), _('Exporting Transcript records (This may be slow because of the size of Transcript records.)') + '\nConverting', style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
+        progress = wx.ProgressDialog(_('Transana XML Export'), _('Exporting Transcript records (This may be slow because of the size of Transcript records.)'), style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
+        if progress.GetSize()[0] > 800:
+            progress.SetSize((800, progress.GetSize()[1]))
+            progress.Centre()
 
         db = DBInterface.get_db()
        
         try:
             fs = self.XMLFile.GetValue()
-            if fs[-4:].lower() != '.xml':
-                fs = fs + '.xml'
+            if (fs[-4:].lower() != '.xml') and (fs[-4:].lower() != '.tra'):
+                fs = fs + '.tra'
             # On the Mac, if no path is specified, the data is exported to a file INSIDE the application bundle, 
             # where no one will be able to find it.  Let's put it in the user's HOME directory instead.
             # I'm okay with not handling this on Windows, where it will be placed in the Program's folder
@@ -212,7 +216,8 @@ class XMLExport(Dialogs.GenForm):
             # Version 1.0 -- Original Transana XML for Transana 2.0 release
             # Version 1.1 -- Unicode encoding added to Transana XML for Transana 2.1 release
             # Version 1.2 -- Filter Table added to Transana XML for Transana 2.11 release
-            f.write('    1.2\n');
+            # Version 1.3 -- FilterData handling changed to accomodate Unicode data for Transana 2.21 release
+            f.write('    1.3\n');
             f.write('  </TransanaXMLVersion>\n');
 
             progress.Update(9, _('Writing Series Records'))
@@ -527,7 +532,8 @@ class XMLExport(Dialogs.GenForm):
                             else:
                                 prompt1 = _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)')
                                 prompt2 = _('\nConverting %s')
-                            progress.Update(60, prompt1 + prompt2 % TranscriptID)
+
+                            progress.Update(60, prompt1 + prompt2 % DBInterface.ProcessDBDataForUTF8Encoding(TranscriptID))
 
                             # unpickle the text and style info
                             (bufferContents, specs, attrs) = pickle.loads(RTFText)
@@ -558,7 +564,9 @@ class XMLExport(Dialogs.GenForm):
                         else:
                             rtfData = RTFText
 			# now simply write the RTF data to the file.  (This does NOT need to be encoded, as the RTF already is!)
-			f.write('%s' % rtfData)
+			# (but check to make sure there's actually RTF data there!)
+			if rtfData != None:
+                            f.write('%s' % rtfData)
                         f.write('      </RTFText>\n')
                     f.write('    </Transcript>\n')
                 if dbCursor.rowcount > 0:
@@ -636,23 +644,28 @@ class XMLExport(Dialogs.GenForm):
                     f.write('      <ID>\n')
                     f.write('        %s\n' % NoteID.encode(EXPORT_ENCODING))
                     f.write('      </ID>\n')
-                    if SeriesNum != 0:
+                    # Note Series Numbers could be None instead of 0.
+                    if (SeriesNum != 0) and (SeriesNum != None):
                         f.write('      <SeriesNum>\n')
                         f.write('        %s\n' % SeriesNum)
                         f.write('      </SeriesNum>\n')
-                    if EpisodeNum != 0:
+                    # Note Episode Numbers could be None instead of 0.
+                    if (EpisodeNum != 0) and (EpisodeNum != None):
                         f.write('      <EpisodeNum>\n')
                         f.write('        %s\n' % EpisodeNum)
                         f.write('      </EpisodeNum>\n')
-                    if CollectNum != 0:
+                    # Note Collection Numbers could be None instead of 0.
+                    if (CollectNum != 0) and (CollectNum != None):
                         f.write('      <CollectNum>\n')
                         f.write('        %s\n' % CollectNum)
                         f.write('      </CollectNum>\n')
-                    if ClipNum != 0:
+                    # Note Clip Numbers could be None instead of 0.
+                    if (ClipNum != 0) and (ClipNum != None):
                         f.write('      <ClipNum>\n')
                         f.write('        %s\n' % ClipNum)
                         f.write('      </ClipNum>\n')
-                    if TranscriptNum != 0:
+                    # Note Transcript Numbers could be None instead of 0.
+                    if (TranscriptNum != 0) and (TranscriptNum != None):
                         f.write('      <TranscriptNum>\n')
                         f.write('        %s\n' % TranscriptNum)
                         f.write('      </TranscriptNum>\n')
@@ -678,7 +691,14 @@ class XMLExport(Dialogs.GenForm):
                                     except UnicodeDecodeError, e:
                                         NoteText = unicode(NoteText.decode(TransanaGlobal.encoding))
                         f.write('      <NoteText>\n')
-                        f.write('        %s\n' % NoteText.encode(EXPORT_ENCODING))
+                        # If note text is found ...
+                        if NoteText != None:
+                            # ... add it to the output file ...
+                            f.write('        %s\n' % NoteText.encode(EXPORT_ENCODING))
+                        # ... but if NO note text is found ...
+                        else:
+                            # ... explicitly note that!  (This was crashing the export/import process.)
+                            f.write('        %s\n' % _('(No Note Text found.)').encode(EXPORT_ENCODING))
                         f.write('      </NoteText>\n')
                     f.write('    </Note>\n')
                 if dbCursor.rowcount > 0:
@@ -693,31 +713,93 @@ class XMLExport(Dialogs.GenForm):
                 if dbCursor.rowcount > 0:
                     f.write('  <FilterFile>\n')
                 for (ReportType, ReportScope, ConfigName, FilterDataType, FilterData) in dbCursor.fetchall():
-                    f.write('    <Filter>\n')
-                    f.write('      <ReportType>\n')
-                    f.write('        %s\n' % ReportType)
-                    f.write('      </ReportType>\n')
-                    f.write('      <ReportScope>\n')
-                    f.write('        %s\n' % ReportScope)
-                    f.write('      </ReportScope>\n')
-                    f.write('      <ConfigName>\n')
-                    f.write('        %s\n' % ConfigName.encode(EXPORT_ENCODING))
-                    f.write('      </ConfigName>\n')
-                    f.write('      <FilterDataType>\n')
-                    f.write('        %s\n' % FilterDataType)
-                    f.write('      </FilterDataType>\n')
-                    # FilterData is a BLOB field in the database.  Therefore, it's probably of type array, and needs to be converted.
-                    if type(FilterData).__name__ == 'array':
-                        if (FilterData.typecode == 'u'):
-                            FilterData = FilterData.tounicode()
+
+                    if DEBUG:
+                        print "FilterData rec:", ReportType, ReportScope, ConfigName.encode('utf8'), FilterDataType,
+                        if FilterData == None:
+                            print "FilterData == None"
                         else:
-                            FilterData = FilterData.tostring()
-                            if ('unicode' in wx.PlatformInfo):
-                                FilterData = unicode(FilterData, EXPORT_ENCODING)
-                    f.write('      <FilterData>\n')
-                    f.write('        %s\n' % FilterData.encode(EXPORT_ENCODING))
-                    f.write('      </FilterData>\n')
-                    f.write('    </Filter>\n')
+                            print
+                            
+                    if FilterData != None:
+                        f.write('    <Filter>\n')
+                        f.write('      <ReportType>\n')
+                        f.write('        %s\n' % ReportType)
+                        f.write('      </ReportType>\n')
+                        f.write('      <ReportScope>\n')
+                        f.write('        %s\n' % ReportScope)
+                        f.write('      </ReportScope>\n')
+                        f.write('      <ConfigName>\n')
+                        f.write('        %s\n' % ConfigName.encode(EXPORT_ENCODING))
+                        f.write('      </ConfigName>\n')
+                        f.write('      <FilterDataType>\n')
+                        f.write('        %s\n' % FilterDataType)
+                        f.write('      </FilterDataType>\n')
+
+                        # The following code was used for TransanaXML version 1.2.  If the FilterData included unicode
+                        # characters, particularly Russian or Chinese characters, the export would fail
+                        
+                        # FilterData is a BLOB field in the database.  Therefore, it's probably of type array, and needs to be converted.
+                        # if type(FilterData).__name__ == 'array':
+                        #     if (FilterData.typecode == 'u'):
+                        #         FilterData = FilterData.tounicode()
+                        #     else:
+                        #         FilterData = FilterData.tostring()
+                        #         if ('unicode' in wx.PlatformInfo):
+                        #             FilterData = unicode(FilterData, EXPORT_ENCODING)
+                        # f.write('      <FilterData>\n')
+                        # f.write('        %s\n' % FilterData.encode(EXPORT_ENCODING))
+                        # f.write('      </FilterData>\n')
+
+                        # For TransanaXML version 1.3, we fix problems with encoding in the Filter Data.  We're not just
+                        # unpickling and repickling the data.  We're converting it to a form that's more friendly for output.
+
+                        # For FilterDataTypes for Episodes (1), Clips (2), Keywords(3), Keyword Groups (5), Transcripts (6),
+                        # and Collection (7), we have LIST data to process.
+                        if FilterDataType in [1, 2, 3, 5, 6, 7]:
+                            # MySQL for Python often saves the data as an array ...
+                            if type(FilterData).__name__ == 'array':
+                                # ... so convert it to a string and un-pickle it
+                                filterDataList = cPickle.loads(FilterData.tostring())
+                            # If it's not an array ...
+                            else:
+                                # ... just un-pickle the data.
+                                filterDataList = cPickle.loads(FilterData)
+
+                        # For FilterDataType for Keyword Colors (4), we have DICTIONARY data that's already been encoded.
+                        # For FilterDataType for Notes (8), we have a LIST that's already been encoded.
+                        elif FilterDataType in [4, 8]:
+                            # MySQL for Python often saves the data as an array ...
+                            if type(FilterData).__name__ == 'array':
+                                # ... so convert it to a string
+                                filterDataList = FilterData.tostring()
+                            else:
+                                filterDataList = FilterData
+
+                        # Other filter data types (9 though 17 so far as of 2.21) are of UNPICKLED, UNENCODED data
+                        else:
+                            # MySQL for Python often saves the data as an array ...
+                            if type(FilterData).__name__ == 'array':
+                                # ... so convert it to a string
+                                filterDataList = FilterData.tostring()
+                            else:
+                                filterDataList = FilterData
+                            # Encode the string using the export encoding
+                            filterDataList = filterDataList.encode(EXPORT_ENCODING)
+
+                        # If we have data from FilterDataTypes 1, 2, 3, 5, 6, or 7 ...
+                        if FilterDataType in [1, 2, 3, 5, 6, 7]:
+                            # ... we need to re-pickle the data
+                            FilterData = cPickle.dumps(filterDataList)
+                        # Otherwise ...
+                        else:
+                            # ... the data's ready for output.
+                            FilterData = filterDataList
+
+                        f.write('      <FilterData>\n')
+                        f.write('        %s\n' % FilterData)
+                        f.write('      </FilterData>\n')
+                        f.write('    </Filter>\n')
                 if dbCursor.rowcount > 0:
                     f.write('  </FilterFile>\n')
                 dbCursor.close()
@@ -753,7 +835,7 @@ class XMLExport(Dialogs.GenForm):
                         TransanaGlobal.programDir,
                         "",
                         "", 
-                        _("XML Files (*.xml)|*.xml|All files (*.*)|*.*"), 
+                        _("Transana-XML Files (*.tra)|*.tra|XML Files (*.xml)|*.xml|All files (*.*)|*.*"), 
                         wx.SAVE)
         # If user didn't cancel ..
         if fs != "":

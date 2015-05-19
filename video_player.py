@@ -308,47 +308,49 @@ class VideoFrame(wx.Dialog):
             self.SetCurrentVideoPosition(self.VideoStartPoint)
 
     def OnSizeChange(self):
-        (sizeX, sizeY) = self.movie.GetBestSize()
-        # Now that we have a size, let's position the window
-        #  Determine the screen size 
-        rect = wx.ClientDisplayRect()
-        #  Get the current position of the Video Window
-        pos = self.GetPosition()
-        #  Establish the minimum width of the media player control 
-        # (if media is audio-only, for example)
-        minWidth = max(sizeX, 300)
-        # use Movie Height
-        minHeight = sizeY 
-        # Adjust Video Size, unless you are showing the Splash Screen
-        sizeAdjust = TransanaGlobal.configData.videoSize
-        # Take Video Size Menu spec into account (50%, 66%, 100%, 150%, 200%)
-        minWidth = int(minWidth * sizeAdjust / 100.0)
-        minHeight = int(minHeight * sizeAdjust / 100.0)
+        # Only change the size of the video window if Auto Arrange is ON!
+        if TransanaGlobal.configData.autoArrange:
+            (sizeX, sizeY) = self.movie.GetBestSize()
+            # Now that we have a size, let's position the window
+            #  Determine the screen size 
+            rect = wx.ClientDisplayRect()
+            #  Get the current position of the Video Window
+            pos = self.GetPosition()
+            #  Establish the minimum width of the media player control 
+            # (if media is audio-only, for example)
+            minWidth = max(sizeX, 300)
+            # use Movie Height
+            minHeight = sizeY 
+            # Adjust Video Size, unless you are showing the Splash Screen
+            sizeAdjust = TransanaGlobal.configData.videoSize
+            # Take Video Size Menu spec into account (50%, 66%, 100%, 150%, 200%)
+            minWidth = int(minWidth * sizeAdjust / 100.0)
+            minHeight = int(minHeight * sizeAdjust / 100.0)
 
-        # We need to know the height of the Window Header to adjust the size of the Graphic Area
-        headerHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
-        #  Set the dimensions of the video window as follows:
-        #    left:    right-justify to the screen 
-        #           (left side of screen - media player width - 3 pixel margin)
-        #    top:     leave top position unchanged
-        #    width:   use minimum media player width established above
-        #    height:  use height of Movie  + ControlBarSize + headerHeight pixels for the player controls
-        # rect[0] compensates if the Start Menu is on the left side of the screen
-        if self.backend == WMPBACKEND:
-            controlBarSize = 65
-        elif self.backend == wx.media.MEDIABACKEND_QUICKTIME:
-            controlBarSize = 10
-        else:
-            controlBarSize = 100  # This'll be quite noticable!
-        self.SetDimensions(rect[0] + rect[2] - minWidth - 3, 
-                           pos[1], 
-                           minWidth, 
-                           minHeight + controlBarSize + headerHeight)
-        if self.parentVideoWindow != None:
-            self.parentVideoWindow.UpdateVideoWindowPosition(rect[0] + rect[2] - minWidth - 3, 
-                                                             pos[1], 
-                                                             minWidth, 
-                                                             minHeight + controlBarSize + headerHeight)
+            # We need to know the height of the Window Header to adjust the size of the Graphic Area
+            headerHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
+            #  Set the dimensions of the video window as follows:
+            #    left:    right-justify to the screen 
+            #           (left side of screen - media player width - 3 pixel margin)
+            #    top:     leave top position unchanged
+            #    width:   use minimum media player width established above
+            #    height:  use height of Movie  + ControlBarSize + headerHeight pixels for the player controls
+            # rect[0] compensates if the Start Menu is on the left side of the screen
+            if self.backend == WMPBACKEND:
+                controlBarSize = 65
+            elif self.backend == wx.media.MEDIABACKEND_QUICKTIME:
+                controlBarSize = 10
+            else:
+                controlBarSize = 100  # This'll be quite noticable!
+            self.SetDimensions(rect[0] + rect[2] - minWidth - 3, 
+                               pos[1], 
+                               minWidth, 
+                               minHeight + controlBarSize + headerHeight)
+            if self.parentVideoWindow != None:
+                self.parentVideoWindow.UpdateVideoWindowPosition(rect[0] + rect[2] - minWidth - 3, 
+                                                                 pos[1], 
+                                                                 minWidth, 
+                                                                 minHeight + controlBarSize + headerHeight)
 
     def OnSize(self, event):
         """ Process Size Change event and notify the ControlObject """

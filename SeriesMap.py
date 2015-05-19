@@ -129,7 +129,9 @@ class SeriesMap(wx.Frame):
         self.vGridLines = TransanaGlobal.configData.seriesMapVerticalGridLines
         self.singleLineDisplay = TransanaGlobal.configData.singleLineDisplay
         self.showLegend = TransanaGlobal.configData.showLegend
-        self.colorOutput = TransanaGlobal.configData.colorOutput
+        # We default to Color Output.  When this was configurable, if a new Map was
+        # created in B & W, the colors never worked right afterwards.
+        self.colorOutput = True
         # Get the number of lines per page for multi-page reports
         self.linesPerPage = 66
         # If we have a Series Keyword Sequence Map in multi-line mode ...
@@ -396,8 +398,6 @@ class SeriesMap(wx.Frame):
                             
                     # Get the colorOutput value from the dialog 
                     self.colorOutput = dlgFilter.GetColorOutput()
-                    # Remember the colorOutput value.  (This doesn't currently get saved.)
-                    TransanaGlobal.configData.colorOutput = self.colorOutput
 
             if errorMsg != '':
                 errorDlg = Dialogs.ErrorDialog(self, errorMsg)
@@ -698,6 +698,9 @@ class SeriesMap(wx.Frame):
         self.DBCursor.execute(SQLText, self.seriesNum)
 
         for (EpisodeNum, EpisodeID, SeriesNum, MediaFile, EpisodeLength, SeriesID) in self.DBCursor.fetchall():
+            EpisodeID = DBInterface.ProcessDBDataForUTF8Encoding(EpisodeID)
+            SeriesID = DBInterface.ProcessDBDataForUTF8Encoding(SeriesID)
+            MediaFile = DBInterface.ProcessDBDataForUTF8Encoding(MediaFile)
 
             self.episodeList.append((EpisodeID, SeriesID, True))
 
@@ -717,11 +720,13 @@ class SeriesMap(wx.Frame):
                            ORDER BY KeywordGroup, Keyword, ClipStart"""
             self.DBCursor.execute(SQLText, EpisodeNum)
 
-            for row in self.DBCursor.fetchall():
-                if not (row[0], row[1]) in self.filteredKeywordList:
-                    self.filteredKeywordList.append((row[0], row[1]))
-                if not (row[0], row[1], True) in self.unfilteredKeywordList:
-                    self.unfilteredKeywordList.append((row[0], row[1], True))
+            for (kwg, kw) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                if not (kwg, kw) in self.filteredKeywordList:
+                    self.filteredKeywordList.append((kwg, kw))
+                if not (kwg, kw, True) in self.unfilteredKeywordList:
+                    self.unfilteredKeywordList.append((kwg, kw, True))
 
             # Sort the Keyword List
             self.unfilteredKeywordList.sort()
@@ -735,6 +740,9 @@ class SeriesMap(wx.Frame):
                            ORDER BY ClipStart, ClipNum, KeywordGroup, Keyword"""
             self.DBCursor.execute(SQLText, EpisodeNum)
             for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) in self.DBCursor.fetchall():
+                kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+                kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+                clipID = DBInterface.ProcessDBDataForUTF8Encoding(clipID)
                 # If we're dealing with an Episode, self.clipNum will be None and we want all clips.
                 # If we're dealing with a Clip, we only want to deal with THIS clip!
                 if (self.clipNum == None) or (clipNum == self.clipNum):
@@ -745,25 +753,6 @@ class SeriesMap(wx.Frame):
 
         # Sort the Keyword List
         self.filteredKeywordList.sort()
-
-        if DEBUG:
-            print
-            print "SeriesMap.ProcessSeries:"
-            print
-            print "episodeList:"
-            print self.episodeList
-            print
-            print "filteredKeywordList:"
-            print self.filteredKeywordList
-            print
-            print "clipList:"
-            print self.clipList
-            if self.reportType == 2:
-                print
-                print "epLengths:"
-                print epLengths
-            print
-            print
 
     def UpdateKeywordVisualization(self):
         """ Update the Keyword Visualization following something that could have changed it. """
@@ -788,6 +777,10 @@ class SeriesMap(wx.Frame):
         self.DBCursor.execute(SQLText, self.episodeNum)
         # Iterate through the results ...
         for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum, episodeName) in self.DBCursor.fetchall():
+            kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
+            kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
+            clipID = DBInterface.ProcessDBDataForUTF8Encoding(clipID)
+            episodeName = DBInterface.ProcessDBDataForUTF8Encoding(episodeName)
             # If we're dealing with an Episode, self.clipNum will be None and we want all clips.
             # If we're dealing with a Clip, we only want to deal with THIS clip!
             if (self.clipNum == None) or (clipNum == self.clipNum):
@@ -995,8 +988,6 @@ class SeriesMap(wx.Frame):
                     Count += 1
                     # Iterate through the Keyword List from the Filter Dialog ...
                     for KWG, KW in self.filteredKeywordList:
-                        KWG = DBInterface.ProcessDBDataForUTF8Encoding(KWG)
-                        KW = DBInterface.ProcessDBDataForUTF8Encoding(KW)
                         # ... and add the Keywords to the Vertical Axis.
                         self.graphic.AddText("%s : %s" % (KWG, KW), 10, self.CalcY(Count) - 7)
                         # Add this data to the Y Position Lookup dictionary.
@@ -1417,7 +1408,7 @@ class SeriesMap(wx.Frame):
             # We want Grid Lines in light gray
             self.graphic.SetColour('LIGHT GREY')
             # Add the line for the Start Value
-            self.graphic.AddLines([(self.CalcX(0), self.CalcY(0) - 6 - int(self.whitespaceHeight / 2), self.CalcX(0), vGridBottom)])
+            self.graphic.AddLines([(self.CalcX(self.startTime), self.CalcY(0) - 6 - int(self.whitespaceHeight / 2), self.CalcX(self.startTime), vGridBottom)])
             # Add the line for the End Value
             self.graphic.AddLines([(self.CalcX(endVal), self.CalcY(0) - 6 - int(self.whitespaceHeight / 2), self.CalcX(endVal), vGridBottom)])
             # Reset the graphic color following drawing the Grid Lines
@@ -1474,13 +1465,23 @@ class SeriesMap(wx.Frame):
             # We use a different key to mark overlaps depending on whether we're in singleLineDisplay mode or not.
             overlapKey = self.FindKeyword(y)
             # First, let's make sure we're actually on the data portion of the graph
-            if (time > 0) and (time < self.MediaLength) and (overlapKey != None):
+            if (time > 0) and (time < self.MediaLength) and (overlapKey != None) and (overlapKey != '') and (overlapKey != ('', '', '')):
                 if self.singleLineDisplay:
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Episode:  %s,  Time: %s"), 'utf8')
+                    else:
+                        prompt = _("Episode:  %s,  Time: %s")
                     # Set the Status Text to indicate the current Episode value
-                    self.SetStatusText(_("Episode:  %s,  Time: %s") % (overlapKey, Misc.time_in_ms_to_str(time)))
+                    self.SetStatusText(prompt % (overlapKey, Misc.time_in_ms_to_str(time)))
                 else:
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Episode:  %s,  Keyword:  %s : %s,  Time: %s"), 'utf8')
+                    else:
+                        prompt = _("Episode:  %s,  Keyword:  %s : %s,  Time: %s")
                     # Set the Status Text to indicate the current Keyword and Time values
-                    self.SetStatusText(_("Episode:  %s,  Keyword:  %s : %s,  Time: %s") % (overlapKey[0], overlapKey[1], overlapKey[2], Misc.time_in_ms_to_str(time)))
+                    self.SetStatusText(prompt % (overlapKey[0], overlapKey[1], overlapKey[2], Misc.time_in_ms_to_str(time)))
                 if (self.keywordClipList.has_key(overlapKey)):
                     # initialize the string that will hold the names of clips being pointed to
                     clipNames = ''
@@ -1573,8 +1574,13 @@ class SeriesMap(wx.Frame):
                         (epName, KWG, KW, length) = currentRow[key]
             # If a data record was found ...
             if KWG != '':
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_("Episode:  %s,  Keyword:  %s : %s"), 'utf8')
+                else:
+                    prompt = _("Episode:  %s,  Keyword:  %s : %s")
                 # ... set the Status bar text:
-                self.SetStatusText(_("Episode:  %s,  Keyword:  %s : %s") % (epName, KWG, KW))
+                self.SetStatusText(prompt % (epName, KWG, KW))
                 # If we have a Series Keyword Bar Graph ...
                 if self.reportType == 2:
                     # ... report Keyword info and Clip Length.
@@ -1611,8 +1617,12 @@ class SeriesMap(wx.Frame):
             # If we have a Series Keyword Sequence Map ...
             # (The Bar Graph and Percentage Graph do not have defined Click behaviors!)
             if self.reportType == 1:
+                if 'unicode' in wx.PlatformInfo:
+                    prompt = unicode(_("Episode:  %s,  Keyword:  %s : %s,  Time: %s"), 'utf8')
+                else:
+                    prompt = _("Episode:  %s,  Keyword:  %s : %s,  Time: %s")
                 # Set the Status Text to indicate the current Keyword and Time values
-                self.SetStatusText(_("Episode:  %s,  Keyword:  %s : %s,  Time: %s") % (kw[0], kw[1], kw[2], Misc.time_in_ms_to_str(time)))
+                self.SetStatusText(prompt % (kw[0], kw[1], kw[2], Misc.time_in_ms_to_str(time)))
                 # Get the list of Clips that contain the current Keyword from the keyword / Clip List dictionary
                 clips = self.keywordClipList[kw]
                 # Iterate through the Clip List ...

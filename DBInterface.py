@@ -54,7 +54,6 @@ import TransanaExceptions
 
 _dbref = None
 
-
 def InitializeSingleUserDatabase():
     """ For single-user Transana only, this initializes (starts) the embedded MySQL Server. """
     # See if the "databases" path exists off the Transana Program folder
@@ -300,6 +299,7 @@ def establish_db_exists():
         # Execute the Query
         dbCursor.execute(query)
 
+
         # Notes Table: Test for existence and create if needed
         query = """
                   CREATE TABLE IF NOT EXISTS Notes2
@@ -320,6 +320,7 @@ def establish_db_exists():
         query = SetTableType(hasInnoDB, query)
         # Execute the Query
         dbCursor.execute(query)
+
 
         # Keywords Table: Test for existence and create if needed
         query = """
@@ -602,9 +603,9 @@ def get_db():
                     prompt = unicode(_('Database "%s" does not exist.  Would you like to create it?\n(If you do not have rights to create a database, see your system administrator.)'), 'utf8')
                 else:
                     prompt = _('Database "%s" does not exist.  Would you like to create it?\n(If you do not have rights to create a database, see your system administrator.)')
-                dlg = wx.MessageDialog(None, prompt % databaseName, _('Transana Database Error'), wx.YES_NO | wx.ICON_ERROR)
+                dlg = Dialogs.QuestionDialog(None, prompt % databaseName)
                 # Display the Dialog
-                result = dlg.ShowModal()
+                result = dlg.LocalShowModal()
                 # Clean up after the Dialog
                 dlg.Destroy()
                 # If the user wants to create a new Database ...
@@ -926,7 +927,7 @@ def locate_quick_clips_collection():
     if not TransanaConstants.singleUserVersion:
         collectionName += " - %s" % get_username()
     # Execute the query
-    DBCursor.execute(query, collectionName)
+    DBCursor.execute(query, collectionName.encode(TransanaGlobal.encoding))
     # See if the Quick Clips Collection already exists.  If so, return the Collection Number and False to indicate we didn't create
     # a new collection.
     if DBCursor.rowcount == 1:
@@ -1025,7 +1026,8 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
     l = []
     if TimeCode == None:
         query = """
-                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum FROM Clips2 a, Collections2 b
+                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment
+                    FROM Clips2 a, Collections2 b
                     WHERE a.CollectNum = b.CollectNum AND
                           a.EpisodeNum = %s
                     ORDER BY a.ClipStart, b.CollectID, a.ClipID
@@ -1033,7 +1035,8 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
         args = (EpisodeNum)
     else:
         query = """
-                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum FROM Clips2 a, Collections2 b
+                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment
+                    FROM Clips2 a, Collections2 b
                     WHERE a.CollectNum = b.CollectNum AND
                           a.EpisodeNum = %s AND 
                           ClipStart <= %s AND 
@@ -1052,7 +1055,7 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
             ClipID = ProcessDBDataForUTF8Encoding(ClipID)
             CollectID = ProcessDBDataForUTF8Encoding(CollectID)
         # Add a dictionary object to the results list that spells out the clip data
-        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum']})
+        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'], 'Comment' : row['ClipComment']})
 
     DBCursor.close()
     return l
@@ -1110,53 +1113,58 @@ def list_of_notes(** kwargs):
     Collection.
     
     Examples: list_of_notes(Series=12)
-              list_of_notes(Episode=14)"""
+              list_of_notes(Episode=14)
+
+    The optional parameter "includeNumber=True" causes (note number, note id) tuples
+    to be returned rather than just a list of note ids. """
+    # Initialize the note list to hold the query results
     notelist = []
-   
+    # Build the query
+    query = "SELECT NoteNum, NoteID From Notes2"
     if kwargs.has_key("Series"):
-        query = """
-        SELECT NoteID From Notes2
-            WHERE   SeriesNum = %s
-        """
+        query += " WHERE   SeriesNum = %s"
         values = (kwargs['Series'],)
     elif kwargs.has_key("Episode"):
-        query = """
-        SELECT NoteID FROM Notes2
-            WHERE   EpisodeNum = %s
-        """
+        query += " WHERE   EpisodeNum = %s"
         values = (kwargs['Episode'],)
     elif kwargs.has_key("Transcript"):
-        query = """
-        SELECT NoteID FROM Notes2
-            WHERE   TranscriptNum = %s
-        """
+        query += " WHERE   TranscriptNum = %s"
         values = (kwargs['Transcript'],)
     elif kwargs.has_key("Collection"):
-        query = """
-        SELECT NoteID FROM Notes2
-            WHERE   CollectNum = %s
-        """
+        query += " WHERE   CollectNum = %s"
         values = (kwargs['Collection'],)
     elif kwargs.has_key("Clip"):
-        query = """
-        SELECT NoteID FROM Notes2
-            WHERE   ClipNum = %s
-        """
-        values = (kwargs['Clip'])
+        query += " WHERE   ClipNum = %s"
+        values = (kwargs['Clip'],)
     else:
         return []   # Should we raise an exception?
-
-    query = query + "   ORDER BY NoteID\n"
+    query = query + " ORDER BY NoteID"
+    # Get a database
     db = get_db()
+    # Get a database cursor
     DBCursor = db.cursor()
-    DBCursor.execute(query, values)
-    r = DBCursor.fetchall()    # return array of tuples with results
+    # Execute our query
+    DBCursor.execute(query % values)
+    # Get the results set
+    r = DBCursor.fetchall()
+    # Iterate through the records in the query results
     for tup in r:
-        id = tup[0]
+        # Identify the Note ID
+        id = tup[1]
+        # Convert for Unicode, if needed
         if 'unicode' in wx.PlatformInfo:
             id = ProcessDBDataForUTF8Encoding(id)
-        notelist.append(id)
+        # If we want both the Note Number and Note ID ...
+        if kwargs.has_key("includeNumber"):
+            # ... add both elements to the Note List in a tuple
+            notelist.append((tup[0], id))
+        # Otherwise ...
+        else:
+            # ... just add the Note ID to the Note List
+            notelist.append(id)
+    # Close the database cursor
     DBCursor.close()
+    # Return the Note List
     return notelist
 
 def list_of_node_notes(** kwargs):
@@ -1202,6 +1210,73 @@ def list_of_node_notes(** kwargs):
     # Close the Database Cursor
     DBCursor.close()
     # Return the list as the function results
+    return notelist
+
+def list_of_all_notes(reportType=None, searchText=None):
+    """ Get a list of all Notes for the Notes Browser """
+    # initialize the Notes List as empty
+    notelist = []
+
+    # We want to display all the Notes in each section in alphabetical order.
+
+    # Query for ALL Notes in order of NoteID.
+    query = """ SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, NoteTaker
+                FROM Notes2 N"""
+    # If we want the Series report, limit the query to Series notes
+    if reportType == 'SeriesNode':
+        query += " WHERE SeriesNum <> 0"
+    # If we want the Episode report, limit the query to Episode notes
+    elif reportType == 'EpisodeNode':
+        query += " WHERE EpisodeNum <> 0"
+    # If we want the Transcript report, limit the query to Transcript notes
+    elif reportType == 'TranscriptNode':
+        query += " WHERE TranscriptNum <> 0"
+    # If we want the Collection report, limit the query to Collection notes
+    elif reportType == 'CollectionNode':
+        query += " WHERE CollectNum <> 0"
+    # If we want the Clip report, limit the query to Clip notes
+    elif reportType == 'ClipNode':
+        query += " WHERE ClipNum <> 0"
+    # If searchText is passed in, we want to limit the results to notes containing that text.
+    # We need to add that to our Query
+    if searchText != None:
+        if (reportType != None):
+            query += " AND "
+        else:
+            query += " WHERE "
+        query += "LOWER(CAST(NoteText AS CHAR)) like '%%%s%%'" % searchText.lower().encode(TransanaGlobal.encoding)
+        
+    # We always want to sort by NoteID
+    query += " ORDER BY NoteID"
+    # Make sure we have a Database connection
+    db = get_db()
+    # Get a database cursor
+    DBCursor = db.cursor()
+    # Execute the query
+    DBCursor.execute(query)
+    # Get the Results Set
+    results = DBCursor.fetchall()
+    # For each row in the results set ...
+    for row in results:
+        # Pull out the elements that need to be encoded
+        ID = row[1]
+        noteTaker = row[7]
+        # Encode the elements, if needed
+        if 'unicode' in wx.PlatformInfo:
+            ID = ProcessDBDataForUTF8Encoding(ID)
+            noteTaker = ProcessDBDataForUTF8Encoding(noteTaker)
+        # Create a Dictionary Object to be added to the Notes List
+        notelist.append({'NoteNum' : row[0],
+                         'NoteID' : ID,
+                         'SeriesNum' : row[2],
+                         'EpisodeNum' : row[3],
+                         'TranscriptNum' : row[4],
+                         'CollectionNum' : row[5],
+                         'ClipNum' : row[6],
+                         'NoteTaker' : noteTaker})
+    # Close the Database Cursor
+    DBCursor.close()
+    # Return the Note List as the Function Result
     return notelist
 
 def list_of_keyword_groups():
@@ -1363,7 +1438,10 @@ def check_username_as_keyword():
     if DBCursor.rowcount == 0:
         import Keyword
         tempKeyword = Keyword.Keyword()
-        tempKeyword.keywordGroup = _("Transana Users")
+        if 'unicode' in wx.PlatformInfo:
+            tempKeyword.keywordGroup = unicode(_("Transana Users"), 'utf8')
+        else:
+            tempKeyword.keywordGroup = _("Transana Users")
         tempKeyword.keyword = get_username()
         tempKeyword.db_save()
         # Return True to indicate that a keyword was created
@@ -1786,6 +1864,9 @@ def delete_keyword(group, kw_name):
     if 'unicode' in wx.PlatformInfo:
         kwg = group.encode(TransanaGlobal.encoding)
         kw = kw_name.encode(TransanaGlobal.encoding)
+    else:
+        kwg = group
+        kw = kw_name
     DBCursor = get_db().cursor()
     DBCursor.execute("BEGIN")
     t = ""
@@ -1798,15 +1879,16 @@ def delete_keyword(group, kw_name):
 
     DBCursor.execute(query, (kwg, kw, ""))
     for row in fetchall_named(DBCursor):
+        msg = _('%s  Keyword "%s : %s" is locked by %s\n')
         tempkwg = row['KeywordGroup']
         tempkw = row['Keyword']
         temprl = row['RecordLock']
         if 'unicode' in wx.PlatformInfo:
+            msg = unicode(msg, 'utf8')
             tempkwg = ProcessDBDataForUTF8Encoding(tempkwg)
             tempkw = ProcessDBDataForUTF8Encoding(tempkw)
             temprl = ProcessDBDataForUTF8Encoding(temprl)
-        t = _('%s  Keyword "%s : %s" is locked by %s\n') % \
-                    (t, tempkwg, tempkw, temprl)
+        t =  msg % (t, tempkwg, tempkw, temprl)
 
     query = """SELECT a.KeywordGroup, a.Keyword, b.EpisodeID, b.RecordLock
         FROM ClipKeywords2 a, Episodes2 b
@@ -1819,13 +1901,14 @@ def delete_keyword(group, kw_name):
 
     DBCursor.execute(query, (kwg, kw, 0, ""))
     for row in fetchall_named(DBCursor):
+        msg = _('%s  Episode "%s" is locked by %s\n')
         tempepid = row['EpisodeID']
         temprl = row['RecordLock']
         if 'unicode' in wx.PlatformInfo:
+            msg = unicode(msg, 'utf8')
             tempepid = ProcessDBDataForUTF8Encoding(tempepid)
             temprl = ProcessDBDataForUTF8Encoding(temprl)
-        t = _('%s  Episode "%s" is locked by %s\n') % \
-                    (t, tempepid, temprl)
+        t = msg % (t, tempepid, temprl)
 
     # Clips next
     query = """SELECT a.KeywordGroup, a.Keyword, c.ClipID, c.RecordLock
@@ -1838,13 +1921,14 @@ def delete_keyword(group, kw_name):
     """
     DBCursor.execute(query, (kwg, kw, 0, ""))
     for row in fetchall_named(DBCursor):
+        msg = _('%s  Clip "%s" is locked by %s\n')
         tempclid = row['ClipID']
         temprl = row['RecordLock']
         if 'unicode' in wx.PlatformInfo:
+            msg = unicode(msg, 'utf8')
             tempclid = ProcessDBDataForUTF8Encoding(tempclid)
             temprl = ProcessDBDataForUTF8Encoding(temprl)
-        t = _('%s  Clip "%s" is locked by %s\n') % \
-                    (t, tempclid, temprl)
+        t = msg % (t, tempclid, temprl)
 
     if t == "":
         # Delphi Transana had a confirmation dialog here, but we won't do
@@ -1869,10 +1953,11 @@ def delete_keyword(group, kw_name):
     else:
         DBCursor.execute("ROLLBACK")
         DBCursor.close()
-        msg = _('Unable to delete keyword "%s : %s".\n%s') % (group, kw_name, t)
+        msg = _('Unable to delete keyword "%s : %s".\n%s')
         if 'unicode' in wx.PlatformInfo:
-            msg = msg.encode(TransanaGlobal.encoding)
-        raise Exception, msg
+            msg = unicode(msg, 'utf8')
+        msg = msg % (group, kw_name, t)
+        raise TransanaExceptions.GeneralError, msg
     DBCursor.close()
 
 def delete_filter_records(reportType, reportScope):
@@ -2146,8 +2231,8 @@ def DeleteDatabase(username, password, server, database):
                     prompt = unicode(_('Are you sure you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.'), 'utf8')
                 else:
                     prompt = _('Are you sure you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.')
-                dlg = wx.MessageDialog(None, prompt % database, _('Delete Database'), wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
-                result = dlg.ShowModal()
+                dlg = Dialogs.QuestionDialog(None, prompt % database, _('Delete Database'), noDefault=True)
+                result = dlg.LocalShowModal()
                 dlg.Destroy()
                 if result == wx.ID_YES:
                     # Give the user another chance to back out!
@@ -2156,14 +2241,14 @@ def DeleteDatabase(username, password, server, database):
                         prompt = unicode(_('Are you ABSOLUTELY SURE you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.'), 'utf8')
                     else:
                         prompt = _('Are you ABSOLUTELY SURE you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.')
-                    dlg = wx.MessageDialog(None, prompt % database, _('Delete Database'), wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION)
-                    result = dlg.ShowModal()
+                    dlg = Dialogs.QuestionDialog(None, prompt % database, _('Delete Database'), noDefault=True)
+                    result = dlg.LocalShowModal()
                     dlg.Destroy()
                     if result == wx.ID_YES:
                         # Get a Database Cursor
                         dbCursor = dbConn.cursor()
                         # Query the Database to delete the desired database
-                        dbCursor.execute('DROP DATABASE IF EXISTS %s' % database)
+                        dbCursor.execute('DROP DATABASE IF EXISTS %s' % database.encode(TransanaGlobal.encoding))
                         # Close the Database Cursor
                         dbCursor.close()
                         # If we get this far, return True rather than False
@@ -2173,9 +2258,6 @@ def DeleteDatabase(username, password, server, database):
                     # shut down the database server (in multi-user mode), then the server 
                     # won't be able to start up again.  
                     # (To get the server going again, you need to restore the missing database's folder!)
-
-
-
             finally:
                 # Close the Database Connection
                 dbConn.close()

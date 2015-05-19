@@ -33,12 +33,12 @@ if (__name__ == '__main__') and (sys.platform == 'win32') and (not hasattr(sys, 
         wxversion.select(["2.6.3-unicode", "2.8.1.1-unicode"])  # Enable this line for UNICODE wxPython
 
 import wx                           # import wxPython's wxWindows implementation
-from TransanaExceptions import *    # import all exception classes
 import os
 import gettext                      # localization module
 if __name__ == '__main__':
     # Define the "_" method, pointing it to wxPython's GetTranslation method
     __builtins__._ = wx.GetTranslation
+from TransanaExceptions import *    # import all exception classes
 import Dialogs                      # import Transana Error Dialog
 import TransanaConstants            # import the Transana Constants
 import TransanaGlobal               # import Transana's Global Variables
@@ -211,10 +211,10 @@ class Transana(wx.App):
                     loggedOn = True
                 # If logon fails, inform user and offer to try again twice.
                 elif logonCount <= 3:
-                    dlg = wx.MessageDialog(TransanaGlobal.menuWindow, _('Transana was unable to connect to the database.\nWould you like to try again?'),
-                                             _('Transana Database Connection'), wx.YES_NO | wx.ICON_QUESTION)
+                    dlg = Dialogs.QuestionDialog(TransanaGlobal.menuWindow, _('Transana was unable to connect to the database.\nWould you like to try again?'),
+                                             _('Transana Database Connection'))
                     # If the user does not want to try again, set the counter to 4, which will cause the program to exit
-                    if dlg.ShowModal() == wx.ID_NO:
+                    if dlg.LocalShowModal() == wx.ID_NO:
                         logonCount = 4
                     # Clean up the Dialog Box
                     dlg.Destroy()
@@ -242,8 +242,8 @@ class Transana(wx.App):
                     TransanaGlobal.connectionTimer.Start(600000)
         else:
             loggedOn = False
-            dlg = wx.MessageDialog(TransanaGlobal.menuWindow, msg, _('Transana Database Connection'), wx.YES_NO | wx.ICON_ERROR)
-            if dlg.ShowModal() == wx.ID_YES:
+            dlg = Dialogs.QuestionDialog(TransanaGlobal.menuWindow, msg, _('Transana Database Connection'))
+            if dlg.LocalShowModal() == wx.ID_YES:
                 TransanaGlobal.configData.databaseDir = os.path.join(TransanaGlobal.configData.GetDefaultProfilePath(), 'databases')
                 TransanaGlobal.configData.SaveConfiguration()
             # Clean up the Dialog Box

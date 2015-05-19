@@ -54,13 +54,13 @@ class CollectionPropertiesForm(Dialogs.GenForm):
         lay.height.AsIs()
         owner_edit = self.new_edit_box(_("Owner"), lay, self.obj.owner, maxLen=100)
 
-        # Title/Comment layout
+        # Comment layout
         lay = wx.LayoutConstraints()
         lay.top.Below(id_edit, 10)              # 10 under ID
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
-        comment_edit = self.new_edit_box(_("Title/Comment"), lay, self.obj.comment, maxLen=255)
+        comment_edit = self.new_edit_box(_("Comment"), lay, self.obj.comment, maxLen=255)
 
         # Default KW Group Layout
         lay = wx.LayoutConstraints()
@@ -99,7 +99,7 @@ class CollectionPropertiesForm(Dialogs.GenForm):
         if d:
             self.obj.id = d[_('Collection ID')]
             self.obj.owner = d[_('Owner')]
-            self.obj.comment = d[_('Title/Comment')]
+            self.obj.comment = d[_('Comment')]
             self.obj.keyword_group = self.kwg_choice.GetStringSelection()
         else:
             self.obj = None

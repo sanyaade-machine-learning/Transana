@@ -14,14 +14,15 @@
 #along with this program; if not, write to the Free Software
 #Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
-""" This class implements a Print Preview and Printing mechanism, for RTF-based Transcripts within
-    Transana, based on the wxPython Print Framework. """
+""" This class implements a Print Preview and Printing mechanism for RTF-based Transcripts within
+    Transana and TEXT-based Notes, based on the wxPython Print Framework. """
 
 __author__ = "David K. Woods <dwoods@wcer.wisc.edu>, Nate Case"
 
-# This unit is designed to implement Print Preview and Print mechanisms for Transana's Transcript Printing and
-# the Collection Summary Report.  It is designed to receive a Transcript or a Collection, depending on
-# whether we are printing a Transcript of the Report.  This unit should handle all pagination automatically.
+# This unit is designed to implement Print Preview and Print mechanisms for Transana's Transcript Printing and Note
+# printing.  It is designed to receive a Transcript object or Note text, depending on
+# whether we are printing a Transcript or a Note.  (Yeah, it's not consistent, but I thought being able to handle
+# ANY plain text might be helpful elsewhere.)  This unit should handle all pagination automatically.
 #
 # To use it, do the following:
 #
@@ -29,7 +30,7 @@ __author__ = "David K. Woods <dwoods@wcer.wisc.edu>, Nate Case"
 #
 #        a wxPrintData Object
 #        the Title of your report, a String
-#        a Transana Transcript Object           (for now.  A collection-based version will be added later.)
+#        a Transana Transcript Object OR a Transana Note's plain text
 #        optionally, a subtitle for the report
 #
 #    This function returns a tuple of data elements required in the next step.  They are:
@@ -82,9 +83,9 @@ import Misc
 # import the Transana Transcript Object
 import Transcript
 # import the Transana Collection Object
-import Collection
+#import Collection
 # import the Transana Clip Object
-import Clip
+#import Clip
 #import the Transana RTF Parser class
 RTFModulePath = "rtf"
 if sys.path.count(RTFModulePath) == 0:
@@ -156,186 +157,331 @@ def RTFDocAttrTowxFont(docattr):
     
 #----------------------------------------------------------------------
 
-def ProcessTranscript(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines, xPos, yPos, yInc, titleHeight):
-        # Parse the RTF transcript data into a usable data structure
-        parser = RTFParser.RTFParser()
-        parser.buf = inText
-        parser.read_stream()
-        # Now construct the data structure used in the for loop below, which expects a sequence of
-        # tuples of the following format: ((wxFont, wxColor, style), text)
-        #
-        # where the first element is a wxFont which defines the style of the text
-        # the second element is the text that uses this style
-        data = []
-        # Initialize lineWidth.  (Issue 230)
-        lineWidth = 0
-        (cur_font, cur_color, cur_style) = GetDefaultFont()
-        for obj in parser.stream:
-            if obj.attr:
-                (cur_font, cur_color, cur_style) = RTFDocAttrTowxFont(obj.attr)
-            else:
-                newitem = ((cur_font, cur_color, cur_style), obj.text)
-                data.append(newitem)
-        # Initialize the string variable used in constructing text elements
-        tempLine = ''
-        # Iterate through all the data sent in, one "line" at a time.
-        # NOTE:  "line" here refers to a line in the incoming data structure, which
-        #        probably does not correspond with a printed line on the printout.
-        for line in data:
-            # each line is made up of a font spec and the associated text.
-            (fontSpec, text) = line
-            # Find a Line Break character, if there is one.
+def ProcessRTF(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines, xPos, yPos, yInc, titleHeight):
+    """ Process Rich Text Format data for PrepareData() """
+    # Parse the RTF transcript data into a usable data structure
+    parser = RTFParser.RTFParser()
+    parser.buf = inText
+    parser.read_stream()
+    # Now construct the data structure used in the for loop below, which expects a sequence of
+    # tuples of the following format: ((wxFont, wxColor, style), text)
+    #
+    # where the first element is a wxFont which defines the style of the text
+    # the second element is the text that uses this style
+    data = []
+    # Initialize lineWidth.  (Issue 230)
+    lineWidth = 0
+    (cur_font, cur_color, cur_style) = GetDefaultFont()
+    for obj in parser.stream:
+        if obj.attr:
+            (cur_font, cur_color, cur_style) = RTFDocAttrTowxFont(obj.attr)
+        else:
+            newitem = ((cur_font, cur_color, cur_style), obj.text)
+            data.append(newitem)
+    # Initialize the string variable used in constructing text elements
+    tempLine = ''
+    # Iterate through all the data sent in, one "line" at a time.
+    # NOTE:  "line" here refers to a line in the incoming data structure, which
+    #        probably does not correspond with a printed line on the printout.
+    for line in data:
+        # each line is made up of a font spec and the associated text.
+        (fontSpec, text) = line
+        # Find a Line Break character, if there is one.
+        breakPos = text.find('\n')
+
+        # Set the Device Context font to the identified fontSpec
+        dc.SetFont(fontSpec[0])
+
+        # There is a bug in wxPython.  wx.ColourRGB() transposes Red and Blue.  This hack fixes it!
+        color = wx.ColourRGB(fontSpec[1])
+        
+        rgbValue = (color.Red() << 16) | (color.Green() << 8) | color.Blue()
+        
+        dc.SetTextForeground(wx.ColourRGB(rgbValue))
+
+        # First, let's see if this starts with a line break
+        while breakPos == 0:
+
+            # If so, add it to the datLines structure
+            datLines = datLines + ((fontSpec, '\n'),)
+            # Add the current datLines structure to the page
+            thisPageData.append(datLines)
+
+            (dummy, yInc) = dc.GetTextExtent('Xy')
+
+            # Reset datLines and tempLine
+            datLines = ()
+            tempLine = ''
+            # Reset horizontal position to the horizontal margin
+            xPos = xMargin
+            lineWidth = 0
+            # Increment the vertical position by the height of the line plus a blank line
+            yPos = yPos + yInc                 # + fontSpec.GetPointSize() + 6
+            # Reset yInc
+            yInc = 0
+
+            # It is possible there are additional line breaks, so let's see if there are more to process.
+            text = text[1:]
             breakPos = text.find('\n')
 
-            # Set the Device Context font to the identified fontSpec
-            dc.SetFont(fontSpec[0])
 
-            # There is a bug in wxPython.  wx.ColourRGB() transposes Red and Blue.  This hack fixes it!
-            color = wx.ColourRGB(fontSpec[1])
+        # Now let's check for line breaks elsewhere in the line.  Actually, this shouldn't happen!
+        if breakPos > 0:
+            print "Line Break inside the line, not at the beginning"
+
+        # Break the line into words at whitespace breaks
+        if ('unicode' in wx.PlatformInfo) and (type(text).__name__ == 'str'):
+            words = []
+            words.append(unicode(text, TransanaGlobal.encoding))
+        else:
+
+            # This "text.split()" call, necessary for line breaks, causes loss of whitespace.
+            # We have to do some head stands to avoid it.
+            words = text.split()
             
-            rgbValue = (color.Red() << 16) | (color.Green() << 8) | color.Blue()
-            
-            dc.SetTextForeground(wx.ColourRGB(rgbValue))
+        # We need to retain leading whitespace
+        if (len(text) > 0) and (text[0] == ' ') and (len(words) > 0):
+            # This syntax captures all leading whitespace.
+            words[0] = text[:text.find(words[0])] + words[0]
+        # We also need to retain trailing whitespace
+        if (len(text) > 0) and (text[len(text)-1] == ' ') and (len(words) > 0):
+            words[len(words)-1] = words[len(words)-1] + ' '
+        # Check for text that is ONLY whitespace, as this was getting lost if formatting was applied on both sides
+        if (len(text) > 0) and (len(words) == 0):
+            words = []
+            words.append(text)
 
-            # First, let's see if this starts with a line break
-            while breakPos == 0:
+        # Iterate through the words
+        for word in words:
+            text = text[len(word):]
 
-                # If so, add it to the datLines structure
-                datLines = datLines + ((fontSpec, '\n'),)
-                # Add the current datLines structure to the page
+            while (len(text) > 0) and (string.whitespace.find(text[0]) > -1):
+                word = word + text[0]
+                text = text[1:]
+
+            # Determine the line width if we add the current word to it
+            (lineWidth, lineHeight) = dc.GetTextExtent(tempLine + word)
+            # If this text element has the largest height, use that for the vertical increment (yInc)
+            if lineHeight > yInc:
+                yInc = lineHeight
+
+            # If the line is still within our margins, add the word and a space to the temporary line 
+            if xPos + lineWidth < sizeX - xMargin:
+                tempLine = tempLine + word
+
+            # If the line would be too wide ...
+            else:
+
+                datLines = datLines + ((fontSpec, tempLine),)
+
                 thisPageData.append(datLines)
 
-                (dummy, yInc) = dc.GetTextExtent('Xy')
-
-                # Reset datLines and tempLine
+                # Initialize a new line
                 datLines = ()
-                tempLine = ''
-                # Reset horizontal position to the horizontal margin
-                xPos = xMargin
-                lineWidth = 0
-                # Increment the vertical position by the height of the line plus a blank line
-                yPos = yPos + yInc                 # + fontSpec.GetPointSize() + 6
+                
+                # Increment the vertical position marker
+                yPos = yPos + yInc
                 # Reset yInc
                 yInc = 0
 
-                # It is possible there are additional line breaks, so let's see if there are more to process.
+                # Check to see if we've reached the bottom of the page, with a one inch margin and one line's height
+                if yPos >= sizeY - titleHeight - int(yMargin):
+
+                    # Add the page to the final document data structure
+                    pageData.append(thisPageData)
+                    # Initialize a new page
+                    thisPageData = []
+                    # Reset the vertical position indicator
+                    yPos = yMargin + titleHeight
+                # Start a new temporary line with the word that did not fit on the last line
+                tempLine = word
+
+                (tempLineWidth, tempLineHeight) = dc.GetTextExtent(word)
+                xPos = xMargin + tempLineWidth
+
+        # When done looking at words, add the final part to the line we're building for this page
+        datLines = datLines + ((fontSpec, tempLine),)
+
+        # Add the line we're building to the Page, but don't add a blank line to the top of a page
+        if (thisPageData != []) or ((len(datLines) != 1) or (datLines[0][1] != '')):
+            thisPageData.append(datLines)
+
+            xPos = xPos + lineWidth
+
+            datLines = ()
+            tempLine = ''
+
+        # Check to see if we've reached the bottom of the page, with a one inch margin and one line's height.
+        # DKW 5/24/2004 -- I've thrown in titleHeight here because the title height approximates the
+        #                  height of the boxed entry on the Collection Summary Report, while it is 0 for
+        #                  printing a Transcript.  TODO:  Make this more precise.
+        if yPos >= sizeY - titleHeight - int(yMargin):
+
+            # Add the page to the final document data structure
+            pageData.append(thisPageData)
+            # Initialize a new page
+            thisPageData = []
+            # Reset the vertical position indicator
+            yPos = yMargin + titleHeight
+    return (pageData, thisPageData, datLines, xPos, yPos, yInc)
+
+def ProcessTXT(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines, xPos, yPos, yInc, titleHeight):
+    """ Process Plain Text data for PrepareData() """
+    # Construct the data structure used in the for loop below, which expects a sequence of
+    # tuples of the following format: ((wxFont, wxColor, style), text)
+    #
+    # where the first element is a wxFont which defines the style of the text
+    # the second element is the text that uses this style
+    data = []
+    # Initialize lineWidth.  (Issue 230)
+    lineWidth = 0
+    fontSpec = GetDefaultFont()
+    
+    # Initialize the string variable used in constructing text elements
+    tempLine = ''
+
+    # each line is made up of a font spec and the associated text.
+    lines = inText.split('\n')
+
+    # Set the Device Context font to the identified fontSpec
+    dc.SetFont(fontSpec[0])
+
+    # There is a bug in wxPython.  wx.ColourRGB() transposes Red and Blue.  This hack fixes it!
+    color = wx.ColourRGB(fontSpec[1])
+    
+    rgbValue = (color.Red() << 16) | (color.Green() << 8) | color.Blue()
+    
+    dc.SetTextForeground(wx.ColourRGB(rgbValue))
+
+    # First, let's see if this starts with a line break
+    for text in lines:
+        # If so, add it to the datLines structure
+        datLines = datLines + ((fontSpec, '\n'),)
+        # Add the current datLines structure to the page
+        thisPageData.append(datLines)
+
+        (dummy, yInc) = dc.GetTextExtent('Xy')
+
+        # Reset datLines and tempLine
+        datLines = ()
+        tempLine = ''
+        # Reset horizontal position to the horizontal margin
+        xPos = xMargin
+        lineWidth = 0
+        # Increment the vertical position by the height of the line plus a blank line
+        yPos = yPos + yInc                 # + fontSpec.GetPointSize() + 6
+        # Reset yInc
+        yInc = 0
+
+        # Break the line into words at whitespace breaks
+        if ('unicode' in wx.PlatformInfo) and (type(text).__name__ == 'str'):
+            words = []
+            words.append(unicode(text, TransanaGlobal.encoding))
+        else:
+
+            # This "text.split()" call, necessary for line breaks, causes loss of whitespace.
+            # We have to do some head stands to avoid it.
+            words = text.split()
+            
+        # We need to retain leading whitespace
+        if (len(text) > 0) and (text[0] == ' ') and (len(words) > 0):
+            # This syntax captures all leading whitespace.
+            words[0] = text[:text.find(words[0])] + words[0]
+        # We also need to retain trailing whitespace
+        if (len(text) > 0) and (text[len(text)-1] == ' ') and (len(words) > 0):
+            words[len(words)-1] = words[len(words)-1] + ' '
+        # Check for text that is ONLY whitespace, as this was getting lost if formatting was applied on both sides
+        if (len(text) > 0) and (len(words) == 0):
+            words = []
+            words.append(text)
+
+        # Iterate through the words
+        for word in words:
+            text = text[len(word):]
+
+            while (len(text) > 0) and (string.whitespace.find(text[0]) > -1):
+                word = word + text[0]
                 text = text[1:]
-                breakPos = text.find('\n')
 
+            # Determine the line width if we add the current word to it
+            (lineWidth, lineHeight) = dc.GetTextExtent(tempLine + word)
+            # If this text element has the largest height, use that for the vertical increment (yInc)
+            if lineHeight > yInc:
+                yInc = lineHeight
 
-            # Now let's check for line breaks elsewhere in the line.  Actually, this shouldn't happen!
-            if breakPos > 0:
-                print "Line Break inside the line, not at the beginning"
+            # If the line is still within our margins, add the word and a space to the temporary line 
+            if xPos + lineWidth < sizeX - xMargin:
+                tempLine = tempLine + word
 
-            # Break the line into words at whitespace breaks
-            if ('unicode' in wx.PlatformInfo) and (type(text).__name__ == 'str'):
-                words = []
-                words.append(unicode(text, TransanaGlobal.encoding))
+            # If the line would be too wide ...
             else:
 
-                # This "text.split()" call, necessary for line breaks, causes loss of whitespace.
-                # We have to do some head stands to avoid it.
-                words = text.split()
-                
-            # We need to retain leading whitespace
-            if (len(text) > 0) and (text[0] == ' ') and (len(words) > 0):
-                # This syntax captures all leading whitespace.
-                words[0] = text[:text.find(words[0])] + words[0]
-            # We also need to retain trailing whitespace
-            if (len(text) > 0) and (text[len(text)-1] == ' ') and (len(words) > 0):
-                words[len(words)-1] = words[len(words)-1] + ' '
-            # Check for text that is ONLY whitespace, as this was getting lost if formatting was applied on both sides
-            if (len(text) > 0) and (len(words) == 0):
-                words = []
-                words.append(text)
+                datLines = datLines + ((fontSpec, tempLine),)
 
-            # Iterate through the words
-            for word in words:
-                text = text[len(word):]
-
-                while (len(text) > 0) and (string.whitespace.find(text[0]) > -1):
-                    word = word + text[0]
-                    text = text[1:]
-
-                # Determine the line width if we add the current word to it
-                (lineWidth, lineHeight) = dc.GetTextExtent(tempLine + word)
-                # If this text element has the largest height, use that for the vertical increment (yInc)
-                if lineHeight > yInc:
-                    yInc = lineHeight
-
-                # If the line is still within our margins, add the word and a space to the temporary line 
-                if xPos + lineWidth < sizeX - xMargin:
-                    tempLine = tempLine + word
-
-                # If the line would be too wide ...
-                else:
-
-                    datLines = datLines + ((fontSpec, tempLine),)
-
-                    thisPageData.append(datLines)
-
-                    # Initialize a new line
-                    datLines = ()
-                    
-                    # Increment the vertical position marker
-                    yPos = yPos + yInc
-                    # Reset yInc
-                    yInc = 0
-
-                    # Check to see if we've reached the bottom of the page, with a one inch margin and one line's height
-                    if yPos >= sizeY - titleHeight - int(yMargin):
-
-                        # Add the page to the final document data structure
-                        pageData.append(thisPageData)
-                        # Initialize a new page
-                        thisPageData = []
-                        # Reset the vertical position indicator
-                        yPos = yMargin + titleHeight
-                    # Start a new temporary line with the word that did not fit on the last line
-                    tempLine = word
-
-                    (tempLineWidth, tempLineHeight) = dc.GetTextExtent(word)
-                    xPos = xMargin + tempLineWidth
-
-            # When done looking at words, add the final part to the line we're building for this page
-            datLines = datLines + ((fontSpec, tempLine),)
-
-            # Add the line we're building to the Page, but don't add a blank line to the top of a page
-            if (thisPageData != []) or ((len(datLines) != 1) or (datLines[0][1] != '')):
                 thisPageData.append(datLines)
 
-                xPos = xPos + lineWidth
-
+                # Initialize a new line
                 datLines = ()
-                tempLine = ''
+                
+                # Increment the vertical position marker
+                yPos = yPos + yInc
+                # Reset yInc
+                yInc = 0
 
-            # Check to see if we've reached the bottom of the page, with a one inch margin and one line's height.
-            # DKW 5/24/2004 -- I've thrown in titleHeight here because the title height approximates the
-            #                  height of the boxed entry on the Collection Summary Report, while it is 0 for
-            #                  printing a Transcript.  TODO:  Make this more precise.
-            if yPos >= sizeY - titleHeight - int(yMargin):
+                # Check to see if we've reached the bottom of the page, with a one inch margin and one line's height
+                if yPos >= sizeY - titleHeight - int(yMargin):
 
-                # Add the page to the final document data structure
-                pageData.append(thisPageData)
-                # Initialize a new page
-                thisPageData = []
-                # Reset the vertical position indicator
-                yPos = yMargin + titleHeight
-        return (pageData, thisPageData, datLines, xPos, yPos, yInc)
+                    # Add the page to the final document data structure
+                    pageData.append(thisPageData)
+                    # Initialize a new page
+                    thisPageData = []
+                    # Reset the vertical position indicator
+                    yPos = yMargin + titleHeight
+                # Start a new temporary line with the word that did not fit on the last line
+                tempLine = word
 
-def PrepareData(printData, transcriptObj=None, collectionTree=None, collectionNode=None, title='', subtitle=''):
-    """ This method takes a data structure of an unknown number of data lines and prepares them for use by MyPrintout,
-        Transana's custom wxPrintout Object.  The main task accomplished here is to divide the data into seperate Pages.
-        It returns a wxBitmap Object and a list object needed by the MyPrintout class. """
-    # First, determine the type of paper being used so that the graphic can be set to the correct size
+                (tempLineWidth, tempLineHeight) = dc.GetTextExtent(word)
+                xPos = xMargin + tempLineWidth
+
+        # When done looking at words, add the final part to the line we're building for this page
+        datLines = datLines + ((fontSpec, tempLine),)
+
+        # Add the line we're building to the Page, but don't add a blank line to the top of a page
+        if (thisPageData != []) or ((len(datLines) != 1) or (datLines[0][1] != '')):
+            thisPageData.append(datLines)
+
+            xPos = xPos + lineWidth
+
+            datLines = ()
+            tempLine = ''
+
+        # Check to see if we've reached the bottom of the page, with a one inch margin and one line's height.
+        # DKW 5/24/2004 -- I've thrown in titleHeight here because the title height approximates the
+        #                  height of the boxed entry on the Collection Summary Report, while it is 0 for
+        #                  printing a Transcript.  TODO:  Make this more precise.
+        if yPos >= sizeY - titleHeight - int(yMargin):
+
+            # Add the page to the final document data structure
+            pageData.append(thisPageData)
+            # Initialize a new page
+            thisPageData = []
+            # Reset the vertical position indicator
+            yPos = yMargin + titleHeight
+    return (pageData, thisPageData, datLines, xPos, yPos, yInc)
+
+def GetPaperSize():
+    """ Determine the size of the paper in pixels """
+    # Get the current print definitions
+    printData = TransanaGlobal.printData
+    # Determine the type of paper being used so that the graphic can be set to the correct size
     papersize = printData.GetPaperId()
-    if (papersize == wx.PAPER_LETTER) or (papersize == wx.PAPER_LETTERSMALL) or (papersize == wx.PAPER_NOTE):
+    if papersize in [wx.PAPER_LETTER, wx.PAPER_LETTERSMALL, wx.PAPER_NOTE, wx.PAPER_LETTER_ROTATED]:
         sizeX = int(8.5 * DPI)    # 8.5 inches x DPI dots per inch
         sizeY = 11 * DPI          # 11 inches x DPI dots per inch
     elif papersize == wx.PAPER_LEGAL:
         sizeX = int(8.5 * DPI)    # 8.5 inches x DPI dots per inch
         sizeY = 14 * DPI          # 14 inches x DPI dots per inch
-    elif (papersize == wx.PAPER_A4) or (papersize == wx.PAPER_A4SMALL):
+    elif papersize in [wx.PAPER_A4, wx.PAPER_A4SMALL, wx.PAPER_A4_ROTATED]:
         sizeX = int(210 / 25.4 * DPI)    # 210 mm converted to inches x DPI dots per inch
         sizeY = int(297 / 25.4 * DPI)    # 297 mm converted to inches x DPI dots per inch
     elif papersize == wx.PAPER_CSHEET:
@@ -359,10 +505,10 @@ def PrepareData(printData, transcriptObj=None, collectionTree=None, collectionNo
     elif papersize == wx.PAPER_EXECUTIVE:
         sizeX = int(7.25 * DPI)   # 7.25 inches x DPI dots per inch
         sizeY = int(10.5 * DPI)   # 10.5 inches x DPI dots per inch
-    elif papersize == wx.PAPER_A3:
+    elif papersize in [wx.PAPER_A3, wx.PAPER_A3_ROTATED]:
         sizeX = int(297 / 25.4 * DPI)    # 210 mm converted to inches x DPI dots per inch
         sizeY = int(420 / 25.4 * DPI)    # 297 mm converted to inches x DPI dots per inch
-    elif papersize == wx.PAPER_A5:
+    elif papersize in [wx.PAPER_A5, wx.PAPER_A5_ROTATED]:
         sizeX = int(148 / 25.4 * DPI)    # 148 mm converted to inches x DPI dots per inch
         sizeY = int(210 / 25.4 * DPI)    # 210 mm converted to inches x DPI dots per inch
     elif papersize == wx.PAPER_B4:
@@ -377,9 +523,21 @@ def PrepareData(printData, transcriptObj=None, collectionTree=None, collectionNo
     elif papersize == wx.PAPER_QUARTO:
         sizeX = int(215 / 25.4 * DPI)    # 215 mm converted to inches x DPI dots per inch
         sizeY = int(275 / 25.4 * DPI)    # 275 mm converted to inches x DPI dots per inch
+    elif papersize == wx.PAPER_9X11:
+        sizeX =  9 * DPI          #  9 inches x DPI dots per inch
+        sizeY = 11 * DPI          # 11 inches x DPI dots per inch
+    elif papersize == wx.PAPER_10X11:
+        sizeX = 10 * DPI          # 10 inches x DPI dots per inch
+        sizeY = 11 * DPI          # 11 inches x DPI dots per inch
     elif papersize == wx.PAPER_10X14:
         sizeX = 10 * DPI          # 10 inches x DPI dots per inch
         sizeY = 14 * DPI          # 14 inches x DPI dots per inch
+    elif papersize == wx.PAPER_12X11:
+        sizeX = 12 * DPI          # 12 inches x DPI dots per inch
+        sizeY = 11 * DPI          # 11 inches x DPI dots per inch
+    elif papersize == wx.PAPER_15X11:
+        sizeX = 15 * DPI          # 15 inches x DPI dots per inch
+        sizeY = 11 * DPI          # 11 inches x DPI dots per inch
     elif papersize == wx.PAPER_FANFOLD_US:
         sizeX = int(14.875 * DPI) # 14-7/8 inches x DPI dots per inch
         sizeY = 11 * DPI          # 11 inches x DPI dots per inch
@@ -402,6 +560,15 @@ def PrepareData(printData, transcriptObj=None, collectionTree=None, collectionNo
         temp = sizeX
         sizeX = sizeY
         sizeY = temp
+    return (sizeX, sizeY)
+
+def PrepareData(printData, transcriptObj=None, noteTxt=None, title='', subtitle=''):
+    """ This method takes a data structure of an unknown number of data lines and prepares them for use by MyPrintout,
+        Transana's custom wxPrintout Object.  The main task accomplished here is to divide the data into seperate Pages.
+        It returns a wxBitmap Object and a list object needed by the MyPrintout class. """
+
+    # Determine the size of the currently selected printer paper
+    (sizeX, sizeY) = GetPaperSize()
 
     # Create an empty Bitmap image the size needed for the printout.  This serves two purposes:
     # 1.  It allows us to calculate line sizes so that the data can be divided up into pages correctly.
@@ -443,125 +610,44 @@ def PrepareData(printData, transcriptObj=None, collectionTree=None, collectionNo
     # Initialize this to 0
     yInc = 0
 
+    # Each line is made up of tuples of text elements.  Initialize a tuple for this line
+    datLines = ()
+
     # This report module is used for printing Transcripts and for printing the Collection Summary Report.
     # If transcriptObj is not None, we're printing a Transcript
     if transcriptObj != None:
 
-        # Each line is made up of tuples of text elements.  Initialize a tuple for this line
-        datLines = ()
-
         (pageData, thisPageData, datLines, xPos, yPos, yInc) = \
-                   ProcessTranscript(dc, sizeX, sizeY, transcriptObj.GetTranscriptWithoutTimeCodes(), pageData, thisPageData, datLines, xPos, yPos, yInc, titleHeight)
+                   ProcessRTF(dc, sizeX, sizeY, transcriptObj.GetTranscriptWithoutTimeCodes(), pageData, thisPageData, datLines, xPos, yPos, yInc, titleHeight)
 
-        # If there is a final page we were working on when we examined the last of the data,
-        # add it to the final document data structure
-        if thisPageData != []:
-            pageData.append(thisPageData)
-
-        if False:
-            print
-            print "PrepareData pageData:"
-            for page in pageData:
-                for line in page:
-                    for segment in line:
-                        (fontSpec, text) = segment
-                        if text != '\n':
-                            print text,
-                    print
-                print ' --------------- Page Break --------------- '
-            print
-
-
-        # Return the blank bitmap and the document data structure to the calling routine.
-        return (graphic, pageData)
-        
-    # If transcriptObj is None, we're printing a Collection Summary Report.
+    # If transcriptObj is None, we're printing a Note.
     else:
 
-        # print "Collection Summary Report requested."
+        (pageData, thisPageData, datLines, xPos, yPos, yInc) = \
+                   ProcessTXT(dc, sizeX, sizeY, noteTxt, pageData, thisPageData, datLines, xPos, yPos, yInc, titleHeight)
 
-        yPos = yPos + int(DPI / 6)
-        # Define Fonts
-        defaultFont = GetDefaultFont()
-        titleFont = GetTitleFont()
-        drawBoxFont = defaultFont[:2] + ([STYLE_DRAW_BOX],)
+    # If there is a final page we were working on when we examined the last of the data,
+    # add it to the final document data structure
+    if thisPageData != []:
+        pageData.append(thisPageData)
 
-        # OLD:  Prepare the Clip List based on the List of Clips in the Collection from the Database
-        # clipList = DBInterface.list_of_clips_by_collectionnum(collectionNumber)
-        # NEW:  Prepare the Clip List based on the Database Tree.  The old way gave inaccurate results for Search Results Nodes
-        #       that had been modified in the Database Tree.  Search Results Nodes have no data in the Database yet.
-        clipList = []
-        (currentNode, cookieVal) = collectionTree.GetFirstChild(collectionNode)
-        while currentNode.IsOk():
-            currentNodeData = collectionTree.GetPyData(currentNode)
-            if currentNodeData.nodetype in ['ClipNode', 'SearchClipNode']:
-                clipList.append((currentNodeData.recNum, collectionTree.GetItemText(currentNode), currentNodeData.parent))
-            (currentNode, cookieVal) = collectionTree.GetNextChild(collectionNode, cookieVal)
+    if False:
+        print
+        print "PrepareData pageData:"
+        for page in pageData:
+            for line in page:
+                for segment in line:
+                    (fontSpec, text) = segment
+                    if text != '\n':
+                        print text,
+                print
+            print ' --------------- Page Break --------------- '
+        print
 
-        for (clipNum, clipName, parentCollectionNum) in clipList:
-            tempClip = Clip.Clip(clipNum)
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('Clip: %s'), 'utf8')
-            else:
-                prompt = _('Clip: %s')
-            datLines = ((defaultFont, '\n'), (defaultFont, '\n'), (drawBoxFont, prompt % clipName), (defaultFont, '\n'))
-            # Add the current datLines structure to the page
-            thisPageData.append(datLines)
-            
-            # Set the device context's font to the correct font
-            dc.SetFont(defaultFont[0])
-            # Some file names won't fit in the alloted space.  If it won't fit, truncate from the left.
-            filename = tempClip.media_filename
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('File: %s'), 'utf8')
-            else:
-                prompt = _('File: %s')
-            (lineWidth, lineHeight) = dc.GetTextExtent(prompt % filename)
-            while lineWidth > sizeX - (2.2 * DPI):
-                filename = '...' + filename[4:]
-                (lineWidth, lineHeight) = dc.GetTextExtent(prompt % filename)
 
-            datLines = ((defaultFont, prompt % filename), (defaultFont, '\n'))
-            # Add the current datLines structure to the page
-            thisPageData.append(datLines)
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('Start: %s          Stop: %s          (Length: %s)'), 'utf8')
-            else:
-                prompt = _('Start: %s          Stop: %s          (Length: %s)')
-            datLines = ((defaultFont, prompt % (Misc.time_in_ms_to_str(tempClip.clip_start), Misc.time_in_ms_to_str(tempClip.clip_stop), Misc.time_in_ms_to_str(tempClip.clip_stop - tempClip.clip_start))), (defaultFont, '\n'), (defaultFont, '\n'))
-            # Add the current datLines structure to the page
-            thisPageData.append(datLines)
-            # Determine the height of these lines and add it to the position counter
-            (lineWidth, lineHeight) = dc.GetTextExtent('Xy')
-            yPos = yPos + (5 * lineHeight + 2)  # Add space for the box and blank space.  It might be too much.  I'm guessing at a value here.
-            datLines = ()
-
-            (pageData, thisPageData, datLines, xPos, yPos, yInc) = \
-                       ProcessTranscript(dc, sizeX, sizeY, tempClip.GetTranscriptWithoutTimeCodes(), pageData, thisPageData, datLines, xPos, yPos, yInc, titleHeight)
-
-        # If it's not a Transcript Printout, it's a Collection Summary Report
-        # If there is a final page we were working on when we examined the last of the data,
-        # add it to the final document data structure
-        if thisPageData != []:
-            pageData.append(thisPageData)
-
-        if False:
-            print
-            print "PrepareData pageData:"
-            for page in pageData:
-                for line in page:
-                    for segment in line:
-                        (fontSpec, text) = segment
-                        if text != '\n':
-                            print text,
-                    print
-                print ' --------------- Page Break --------------- '
-            print
-
-        return (graphic, pageData)
+    # Return the blank bitmap and the document data structure to the calling routine.
+    return (graphic, pageData)
+        
 
 #----------------------------------------------------------------------
 

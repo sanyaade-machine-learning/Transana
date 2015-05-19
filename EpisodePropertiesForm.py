@@ -132,13 +132,13 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         browse.SetConstraints(lay)
         wx.EVT_BUTTON(self, wx.ID_FILE1, self.OnBrowse)
 
-        # Title/Comment layout
+        # Comment layout
         lay = wx.LayoutConstraints()
         lay.top.Below(self.fname_edit, 10)      # 10 under media filename
         lay.left.SameAs(self.panel, wx.Left, 10)       # 10 from left
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
-        comment_edit = self.new_edit_box(_("Title/Comment"), lay, self.obj.comment, maxLen=255)
+        comment_edit = self.new_edit_box(_("Comment"), lay, self.obj.comment, maxLen=255)
 
         # Keyword Group layout [label]
         lay = wx.LayoutConstraints()
@@ -278,7 +278,8 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         self.kw_groups = DBInterface.list_of_keyword_groups()
         self.kw_group_lb.Clear()
         self.kw_group_lb.InsertItems(self.kw_groups, 0)
-        self.kw_group_lb.SetSelection(0)
+        if len(self.kw_groups) > 0:
+            self.kw_group_lb.SetSelection(0)
 
     def refresh_keywords(self):
         """Refresh the keywords listbox."""
@@ -471,7 +472,8 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         selPos = self.kw_group_lb.FindString(kwm.kw_group.GetStringSelection())
         if selPos == -1:
             selPos = 0
-        self.kw_group_lb.SetSelection(selPos)
+        if not self.kw_group_lb.IsEmpty():
+            self.kw_group_lb.SetSelection(selPos)
         # Refresh the Keyword List, in case it was changed.
         self.refresh_keywords()
         # We must refresh the Keyword List in the DBTree to reflect changes made in the
@@ -499,7 +501,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
             self.obj.id = gen_input[_('Episode ID')]
             self.obj.media_filename = gen_input[_('Media Filename')]
             self.obj.tape_date = self.dt_edit.GetValue()
-            self.obj.comment = gen_input[_('Title/Comment')]
+            self.obj.comment = gen_input[_('Comment')]
             # Keyword list is already updated via the OnAddKW() callback
         else:
             self.obj = None

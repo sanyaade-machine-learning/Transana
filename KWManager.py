@@ -294,8 +294,10 @@ class KWManager(wx.Dialog):
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
             msg = unicode(msg, 'utf8')
-        id = wx.MessageDialog(self, msg % kw_name, _("Confirmation"), wx.YES | wx.NO | wx.CENTRE | wx.ICON_QUESTION).ShowModal()
-        if id == wx.ID_YES:
+        dlg = Dialogs.QuestionDialog(self, msg % kw_name)
+        result = dlg.LocalShowModal()
+        dlg.Destroy()
+        if result == wx.ID_YES:
             DBInterface.delete_keyword(self.kw_group.GetStringSelection(), kw_name)
             self.kw_lb.Delete(sel)
             self.definition.SetValue('')
@@ -304,6 +306,8 @@ class KWManager(wx.Dialog):
                     # We need the UNTRANSLATED Root Node here
                     msgData = "%s >|< %s >|< %s >|< %s" % ('KeywordNode', 'Keywords', self.kw_group.GetStringSelection(), kw_name)
                     TransanaGlobal.chatWindow.SendMessage("DN %s" % msgData)
+                    # We need to update the Keyword Visualization no matter what here, when deleting a keyword
+                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
 
     def OnKeywordSelect(self, evt):
         """Invoked when a keyword is selected in the listbox."""

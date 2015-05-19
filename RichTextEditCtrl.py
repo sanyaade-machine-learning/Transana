@@ -100,17 +100,20 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         self.SetMarginType(0, stc.STC_MARGIN_NUMBER)
         # We need a slighly wider Line Number section on the Mac.  This code determines an optimum width by platform
         if "__WXMAC__" in wx.PlatformInfo:
-            lineNumberWidth = self.TextWidth(stc.STC_STYLE_LINENUMBER, '88888 ')
+            self.lineNumberWidth = self.TextWidth(stc.STC_STYLE_LINENUMBER, '88888 ')
         else:
-            lineNumberWidth = self.TextWidth(stc.STC_STYLE_LINENUMBER, '8888 ')
+            self.lineNumberWidth = self.TextWidth(stc.STC_STYLE_LINENUMBER, '8888 ')
         # Apply the Line Number section width determined above
-        self.SetMarginWidth(0, lineNumberWidth)
+        self.SetMarginWidth(0, self.lineNumberWidth)
         # Set the STC right and left Margins
         self.SetMargins(6, 6)
 
         # Set the STC Selection Colors to white text on a blue background
         self.SetSelForeground(1, "white")
         self.SetSelBackground(1, "blue")
+
+        # We need to capture key strokes so we can intercept the Paste command.
+        self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
 
         # Define the STC Events we need to implement or modify.
         # Character Added event
@@ -134,6 +137,113 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         # There was a problem with the font being changed inappropriately during
         # data loading.  This flag helps prevent that.
         self.loadingData = False
+
+    def OnKeyDown(self, event):
+        """ We need to capture the Paste call to intercept it and remove Time Codes from the
+            Clipboard Data """
+        # We only need to intercept Ctrl-V on Windows or Command-V on the Mac.  First, see if the
+        # platform-appropriate modified key is currently pressed
+        if (('wxMac' not in wx.PlatformInfo) and event.ControlDown()) or \
+           (('wxMac' in wx.PlatformInfo) and event.CmdDown()):
+            # Look for "C" (Copy)
+            if event.GetKeyCode() == 67:    # Ctrl-C
+                # If so, call our modified Copy() method
+                self.Copy()
+            # Look for "V" (Paste)
+            elif event.GetKeyCode() == 86:  # Ctrl-V
+                # If so, call our modified Paste() method
+                self.Paste()
+            # Look for "X" (Cut)
+            elif event.GetKeyCode() == 88:  # Ctrl-X
+                # If so, call our modified Cut() method
+                self.Cut()
+            # For anything other than Ctrl/Cmd- C, V, or X ...
+            else:
+                # ... we let processing drop to the STC
+                event.Skip()
+        # If the keystroke isn't modified platform-approptiately ...
+        else:       
+            # ... we let processing drop to the STC
+            event.Skip()
+
+    def PutEditedSelectionInClipboard(self):
+        tempTxt = self.GetSelectedText()
+        # Initialize an empty string for the modified data
+        newSt = ''
+        # Created a TextDataObject to hold the text data from the clipboard
+        tempDataObject = wx.TextDataObject()
+        # Track whether we're skipping characters or not.  Start out NOT skipping
+        skipChars = False
+        # Now let's iterate through the characters in the text
+        for ch in tempTxt:
+            # Detect the time code character
+            if ch == TransanaConstants.TIMECODE_CHAR:
+                # If Time Code, start skipping characters
+                skipChars = True
+            # if we're skipping characters and we hit the ">" end of time code data symbol ...
+            elif (ch == '>') and skipChars:
+                # ... we can stop skipping characters.
+                skipChars = False
+            # If we're not skipping characters ...
+            elif not skipChars:
+                # ... add the character to the new string.
+                newSt += ch
+        # Save the new string in the Text Data Object
+        tempDataObject.SetText(newSt)
+        # Place the Text Data Object in the Clipboard
+        wx.TheClipboard.SetData(tempDataObject)
+
+    def Cut(self):
+        if 'wxMac' in wx.PlatformInfo:
+            self.PutEditedSelectionInClipboard()
+            self.ReplaceSelection('')
+        else:
+            stc.StyledTextCtrl.Cut(self)
+
+    def Copy(self):
+        if 'wxMac' in wx.PlatformInfo:
+            self.PutEditedSelectionInClipboard()
+        else:
+            stc.StyledTextCtrl.Copy(self)
+
+    def Paste(self):
+        """ We need to intercept the STC's Paste() method to deal with time codes.  We need to strip
+            time codes out of the clipboard before pasting, as they don't paste properly. """
+        # Initialize an empty string for the modified data
+        newSt = ''
+        # Created a TextDataObject to hold the text data from the clipboard
+        tempDataObject = wx.TextDataObject()
+        # Read the text data from the clipboard
+        wx.TheClipboard.GetData(tempDataObject)
+        # Track whether we're skipping characters or not.  Start out NOT skipping
+        skipChars = False
+        # Now let's iterate through the characters in the text
+        for ch in tempDataObject.GetText():
+            # Detect the time code character
+            if ch == TransanaConstants.TIMECODE_CHAR:
+                # If Time Code, start skipping characters
+                skipChars = True
+            # if we're skipping characters and we hit the ">" end of time code data symbol ...
+            elif (ch == '>') and skipChars:
+                # ... we can stop skipping characters.
+                skipChars = False
+            # If we're not skipping characters ...
+            elif not skipChars:
+                # ... add the character to the new string.
+                newSt += ch
+        # Save the new string in the Text Data Object
+        tempDataObject.SetText(newSt)
+        # Place the Text Data Object in the Clipboard
+        wx.TheClipboard.SetData(tempDataObject)
+        # if we're on Mac, we need to close the Clipboard to call Paste.  We don't need this on
+        # Windows, but the Mac requires it.
+        if 'wxMac' in wx.PlatformInfo:
+            wx.TheClipboard.Close()
+        # Call the STC's Paste method to complete the paste.
+        stc.StyledTextCtrl.Paste(self)
+        # If we're on the Mac, we need to re-open the clipboard after the paste.  This is not needed on Windows.
+        if 'wxMac' in wx.PlatformInfo:
+            wx.TheClipboard.Open()
 
     def __ResetBuffer(self):
         """ Reset the wxSTC buffer -- that is, re-initialize the Rich Text Control's data """
@@ -470,7 +580,8 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                 else:
                     self.SetStyling(len(seq), self.STYLE_HIDDEN)
                     
-        self.ProgressDlg.Update(100)
+        if self.ProgressDlg:
+            self.ProgressDlg.Update(100)
 
     def InsertRisingIntonation(self):
         """ Insert the Rising Intonation (Up Arrow) symbol """
@@ -606,8 +717,14 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         # to this new style
         self.last_pos = curpos + offset
 
-    def InsertStyledText(self, text, length=1):
+    def InsertStyledText(self, text, length=0):
         """Insert text with the current style."""
+        # Determine the length if needed
+        if length == 0:
+            if isinstance(text, unicode):
+                length = len(text.encode(TransanaGlobal.encoding))  # Maybe 'utf8' instead of TransanaGlobal.encoding??
+            else:
+                length = len(text)
         # Determine the current cursor position
         curpos = self.GetCurrentPos()
         # Insert the text
@@ -681,6 +798,26 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
 
         # Okay, we're done loading the data now.
         self.loadingData = False
+
+    def InsertRTFText(self, text):
+        """ Add RTF text at the cursor, without clearing the whole document.  Used to insert
+            Clip Transcripts into TextReports. """
+        # Start exception trapping
+        try:
+            # Create an instance of the RTF Parser
+            parse = RTFParser.RTFParser()
+            # Assign the RTF Text String to the Parser's buffer
+            parse.buf = text
+            # Process the RTF Stream
+            parse.read_stream()
+        # Handle exceptions if needed
+        except:
+            print "Unhandled/ignored exception in RTF parsing"
+            traceback.print_exc()
+        # If no exception occurs ...
+        else:
+            # ... Actually parse the RTF Stream and put the text in the RTFTextEditCtrl
+            self.__ParseRTFStream(parse.stream)
 
     def LoadRTFFile(self, filename):
         """Load a RTF file into the editor."""

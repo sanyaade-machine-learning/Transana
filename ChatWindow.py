@@ -614,51 +614,80 @@ class ChatWindow(wx.Frame):
 
                         # Add Note Message
                         elif messageHeader in ['ASN', 'AEN', 'ATN', 'ACN', 'AClN']:
+                            # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
-                            # The first element in the nodelist is the UNTRANSLATED root node label.  This avoids problems
-                            # in mixed-language environments.  But we now need to translate it.
-                            nodelist = (_(nodelist[0]),) + nodelist[1:]
+                            # Initialize variables
                             parentNum = 0
                             objectType = None
                             nodeType = None
                             tempObj = None
                             parentNum = 0
                             nodeCount = 0
+                            # Iterate through the node list to figure out what kind of Note we're looking at
                             for node in nodelist[:-1]:
+                                # Count how far into the list we are
                                 nodeCount += 1
-                                if (objectType == None) and (node == _('Series')):
+                                # If the first entry in the node list is the "Series" Root Node ...
+                                if (objectType == None) and (node == 'Series'):
+                                    # ... then we're climbing up the Series branch, and are at a Series record.
                                     objectType = 'Series'
+                                # If we're already at a Series record ...
                                 elif (objectType == 'Series'):
+                                    # ... then we're moving on to an Episode next
                                     objectType = 'Episode'
+                                    # We might have a Series Note, at least if we stop here!
                                     nodeType = 'SeriesNoteNode'
+                                    # Let's load the Series record ...
                                     tempObj = Series.Series(node)
+                                    # .. and note that the parent of the NEXT object is this series' number!
                                     parentNum = tempObj.number
+                                # If we're already at an Episode record ...
                                 elif (objectType == 'Episode'):
+                                    # ... then we're moving on to a Transcript next
                                     objectType = 'Transcript'
+                                    # we might have an Episode Note if we stop here!
                                     nodeType = 'EpisodeNoteNode'
+                                    # Let's load the Episode Record
                                     tempObj = Episode.Episode(series=tempObj.id, episode=node)
+                                    # .. and note that the parent of the NEXT object is this Episode's number!
                                     parentNum = tempObj.number
+                                # If we're already at a Transcript record ...
                                 elif (objectType == 'Transcript'):
+                                    # ... then the only way to go is to a Transcript Note!
                                     objectType = 'Transcript Note'
+                                    # We have a Transcript Note
                                     nodeType = 'TranscriptNoteNode'
+                                    # Load the Transcript record ...
                                     tempObj = Transcript.Transcript(node, ep=parentNum)
+                                    # ... and note that the parent of the Transcript Note is this Trasncript.
                                     parentNum = tempObj.number
-                                elif (objectType == None) and (node == _('Collections')):
+                                # If our node is the Collections Root Node ...
+                                elif (objectType == None) and (node == 'Collections'):
+                                    # ... then the first level of object we're looking at is a Collection.
                                     objectType = 'Collections'
                                 # if we're looking at a Collection and either we don't have a Clip Note or we're not at the end of the list yet...
                                 elif (objectType == 'Collections') and ((messageHeader != 'AClN') or (nodeCount < len(nodelist) - 1)):
+                                    # ... then we're still looking at a Collection
                                     objectType = 'Collections'
+                                    # ... and if we stop here, we've got a Collection Note
                                     nodeType = 'CollectionNoteNode'
+                                    # Load the Collection
                                     tempObj = Collection.Collection(node, parentNum)
+                                    # ... and note that the collection is the parent of the NEXT object.
                                     parentNum = tempObj.number
                                 # if we're looking at a Collection and we have a Clip Note and we're at the end of the list ...
                                 elif (objectType == 'Collections') and (messageHeader == 'AClN') and (nodeCount == len(nodelist) - 1):
+                                    # ... then we're looking at a Clip
                                     objectType = 'Clip'
+                                    # ... and we're dealing with a Clip Note
                                     nodeType = 'ClipNoteNode'
+                                    # Load the Clip ...
                                     tempObj = Clip.Clip(node, tempObj.id, tempObj.parent)
+                                    # ... and note its number as the parent number of the Note
                                     parentNum = tempObj.number
-
+                            # Initialize the Temporary Note object
                             tempNote = None
+                            # Load the Note, which we do a bit differently based on what kind of parent object we have.
                             if nodeType == 'SeriesNoteNode':
                                 tempNote = Note.Note(nodelist[-1], Series=tempObj.number)
                             elif nodeType == 'EpisodeNoteNode':
@@ -669,8 +698,12 @@ class ChatWindow(wx.Frame):
                                 tempNote = Note.Note(nodelist[-1], Collection=tempObj.number)
                             elif nodeType == 'ClipNoteNode':
                                 tempNote = Note.Note(nodelist[-1], Clip=tempObj.number)
-
+                            # Add the Note to the Database Tree
                             self.ControlObject.DataWindow.DBTab.tree.add_Node(nodeType, nodelist, tempNote.number, tempObj.number, False, avoidRecursiveYields = True)
+                            # If the Notes Browser is open ...
+                            if self.ControlObject.NotesBrowserWindow != None:
+                                # ... add the Note to the Notes Browser
+                                self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('A', tempNote)
 
                         # Add Keyword Group Message
                         elif messageHeader == 'AKG':
@@ -697,10 +730,13 @@ class ChatWindow(wx.Frame):
                             # The second element in the nodelist is the UNTRANSLATED root node label.  This avoids problems
                             # in mixed-language environments.  But we now need to translate it.
                             # The last element is the name the Node should be changed to.
-                            nodelist = (nodelist[0], _(nodelist[1])) + nodelist[2:]
-
+                            nodelist = (nodelist[0], unicode(_(nodelist[1]), 'utf8')) + nodelist[2:]
                             if DEBUG:
-                                print "Calling rename_Node(%s, %s, %s)" % (nodelist[1:-1], nodelist[0], nodelist[-1])
+                                tmpstr = "Calling rename_Node(%s, %s, %s) %s %s" % (nodelist[1:-1], nodelist[0], nodelist[-1], \
+                                         type(nodelist[0]), type(nodelist[-1]))
+                                tmpDlg = wx.MessageDialog(None, tmpstr)
+                                tmpDlg.ShowModal()
+                                tmpDlg.Destroy()
                                 
                             self.ControlObject.DataWindow.DBTab.tree.rename_Node(nodelist[1:-1], nodelist[0], nodelist[-1])
                             
@@ -710,11 +746,11 @@ class ChatWindow(wx.Frame):
                                 self.ControlObject.DataWindow.DBTab.tree.updateKWGroupsData()
 
                             # If we're renaming  a Keyword ...
-                            if nodelist[0] == 'KeywordNode':
+                            elif nodelist[0] == 'KeywordNode':
                                 # ... see if we have an Episode or Clip object currently loaded ...
                                 if isinstance(self.ControlObject.currentObj, Episode.Episode) or isinstance(self.ControlObject.currentObj, Clip.Clip):
                                     # ... let's see if the Keywords Tab is being shown ...
-                                    if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == _('Keywords'):
+                                    if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == unicode(_('Keywords'), 'utf8'):
                                         # ... and if so, iterate through its keywords ...
                                         for kw in self.ControlObject.currentObj.keyword_list:
                                             # ... and see if it contains the keyword that was changed.
@@ -724,14 +760,101 @@ class ChatWindow(wx.Frame):
                                                 # ... and refresh the keyword list
                                                 self.ControlObject.currentObj.refresh_keywords()
                                                 break
-                                
+
+                            # If we're renaming a Note ...
+                            elif nodelist[0] in ['SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
+                                # ... if the Notes Browser is open, we need to update the note there as well.
+                                if self.ControlObject.NotesBrowserWindow != None:
+                                    # The first element in the nodelist is the NOTE Node Type.
+                                    nodeType = nodelist[0]
+                                    # The NOTE Node type can be dropped from the node list
+                                    nodelist = nodelist[1:]
+                                    # Initialize variables
+                                    parentNum = 0
+                                    objectType = None
+                                    tempObj = None
+                                    parentNum = 0
+                                    nodeCount = 0
+                                    # Iterate through the node list to figure out what kind of Note we're looking at,
+                                    # (skipping the old and new note names, which aren't needed here!)
+                                    for node in nodelist[:-2]:
+                                        # Keep track of our position in the list.
+                                        nodeCount += 1
+                                        # If the first entry in the node list is the "Series" Root Node ...
+                                        if (objectType == None) and (node == unicode(_('Series'), 'utf8')):
+                                            # ... then we're climbing up the Series branch, and are at a Series record.
+                                            objectType = 'Series'
+                                        # If we're already at a Series record ...
+                                        elif (objectType == 'Series'):
+                                            # ... then we're moving on to an Episode next
+                                            objectType = 'Episode'
+                                            # Let's load the Series record ...
+                                            tempObj = Series.Series(node)
+                                            # .. and note that the parent of the NEXT object is this series' number!
+                                            parentNum = tempObj.number
+                                        # If we're already at an Episode record ...
+                                        elif (objectType == 'Episode'):
+                                            # ... then we're moving on to a Transcript next
+                                            objectType = 'Transcript'
+                                            # Let's load the Episode Record
+                                            tempObj = Episode.Episode(series=tempObj.id, episode=node)
+                                            # .. and note that the parent of the NEXT object is this Episode's number!
+                                            parentNum = tempObj.number
+                                        # If we're already at a Transcript record ...
+                                        elif (objectType == 'Transcript'):
+                                            # ... then the only way to go is to a Transcript Note!
+                                            objectType = 'Transcript Note'
+                                            # Load the Transcript record ...
+                                            tempObj = Transcript.Transcript(node, ep=parentNum)
+                                            # ... and note that the parent of the Transcript Note is this Trasncript.
+                                            parentNum = tempObj.number
+                                        # If our node is the Collections Root Node ...
+                                        elif (objectType == None) and (node == unicode(_('Collections'), 'utf8')):
+                                            # ... then the first level of object we're looking at is a Collection.
+                                            objectType = 'Collections'
+                                        # if we're looking at a Collection and either we don't have a Clip Note or we're not at the end of the list yet...
+                                        elif (objectType == 'Collections') and ((nodeType == 'CollectionNoteNode') or (nodeCount < len(nodelist) - 2)):
+                                            # ... then we're still looking at a Collection
+                                            objectType = 'Collections'
+                                            # Load the Collection
+                                            tempObj = Collection.Collection(node, parentNum)
+                                            # ... and note that the collection is the parent of the NEXT object.
+                                            parentNum = tempObj.number
+                                        # if we're looking at a Collection and we have a Clip Note and we're at the end of the list ...
+                                        elif (objectType == 'Collections') and (nodeType == 'ClipNoteNode') and (nodeCount == len(nodelist) - 2):
+                                            # ... then we're looking at a Clip
+                                            objectType = 'Clip'
+                                            # Load the Clip ...
+                                            tempObj = Clip.Clip(node, tempObj.id, tempObj.parent)
+                                            # ... and note its number as the parent number of the Note
+                                            parentNum = tempObj.number
+                                    # Initialize the Temporary Note object
+                                    tempNote = None
+                                    # Load the Note, which we do a bit differently based on what kind of parent object we have.
+                                    if nodeType == 'SeriesNoteNode':
+                                        tempNote = Note.Note(nodelist[-1], Series=tempObj.number)
+                                    elif nodeType == 'EpisodeNoteNode':
+                                        tempNote = Note.Note(nodelist[-1], Episode=tempObj.number)
+                                    elif nodeType == 'TranscriptNoteNode':
+                                        tempNote = Note.Note(nodelist[-1], Transcript=tempObj.number)
+                                    elif nodeType == 'CollectionNoteNode':
+                                        tempNote = Note.Note(nodelist[-1], Collection=tempObj.number)
+                                    elif nodeType == 'ClipNoteNode':
+                                        tempNote = Note.Note(nodelist[-1], Clip=tempObj.number)
+                                    # Rename the Note in the Database Tree
+                                    self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('R', tempNote, oldName=nodelist[-2])
+
                         # Delete Node
                         elif messageHeader == 'DN':
                             nodelist = ConvertMessageToNodeList(message)
-                            # The first element in the nodelist is the nodeType, which we need for the delete_Node call.
-                            # The second element in the nodelist is the UNTRANSLATED root node label.  This avoids problems
-                            # in mixed-language environments.  But we now need to translate it.
-                            nodelist = (nodelist[0], _(nodelist[1])) + nodelist[2:]
+                            # Check the TYPE of the translated second element.
+                            if type(_(nodelist[1])).__name__ == 'str':
+                                # If string, translate it and convert it to unicode
+                                nodelist = (nodelist[0],) + (unicode(_(nodelist[1]), 'utf8'),) + nodelist[2:]
+                            # If not string, it's unicode!
+                            else:
+                                # ... in which case, we just translate it.
+                                nodelist = (nodelist[0],) + (_(nodelist[1]),) + nodelist[2:]
                             self.ControlObject.DataWindow.DBTab.tree.delete_Node(nodelist[1:], nodelist[0], sendMessage=False)
                             # If we're removing a Keyword Group ...
                             if nodelist[0] == 'KeywordGroupNode':
@@ -741,7 +864,7 @@ class ChatWindow(wx.Frame):
                                 # ... see if we have an Episode or Clip object currently loaded ...
                                 if isinstance(self.ControlObject.currentObj, Episode.Episode) or isinstance(self.ControlObject.currentObj, Clip.Clip):
                                     # ... let's see if the Keywords Tab is being shown ...
-                                    if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == _('Keywords'):
+                                    if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == unicode(_('Keywords'), 'utf8'):
                                         # ... and if so, iterate through its keywords ...
                                         for kw in self.ControlObject.currentObj.keyword_list:
                                             # ... and see if it contains the keyword that was changed.
@@ -753,11 +876,11 @@ class ChatWindow(wx.Frame):
                                                 break
 
                             # If we're deleting  a Keyword ...
-                            if nodelist[0] == 'KeywordNode':
+                            elif nodelist[0] == 'KeywordNode':
                                 # ... see if we have an Episode or Clip object currently loaded ...
                                 if isinstance(self.ControlObject.currentObj, Episode.Episode) or isinstance(self.ControlObject.currentObj, Clip.Clip):
                                     # ... let's see if the Keywords Tab is being shown ...
-                                    if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == _('Keywords'):
+                                    if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == unicode(_('Keywords'), 'utf8'):
                                         # ... and if so, iterate through its keywords ...
                                         for kw in self.ControlObject.currentObj.keyword_list:
                                             # ... and see if it contains the keyword that was changed.
@@ -767,7 +890,29 @@ class ChatWindow(wx.Frame):
                                                 # ... and refresh the keyword list
                                                 self.ControlObject.currentObj.refresh_keywords()
                                                 break
-                                                
+                            # If we're deleting a Note Node ...
+                            elif nodelist[0] in ['SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']:
+                                # ... and the Notes Browser is open, we need to delete the Note from there too.
+                                if self.ControlObject.NotesBrowserWindow != None:
+                                    # Determine the Note Browser's root node based on the type of Note we're deleting
+                                    if nodelist[0] == 'SeriesNoteNode':
+                                        nodeType = 'Series'
+                                    elif nodelist[0] == 'EpisodeNoteNode':
+                                        nodeType = 'Episode'
+                                    elif nodelist[0] == 'TranscriptNoteNode':
+                                        nodeType = 'Transcript'
+                                    elif nodelist[0] == 'CollectionNoteNode':
+                                        nodeType = 'Collection'
+                                    elif nodelist[0] == 'ClipNoteNode':
+                                        nodeType = 'Clip'
+                                    else:
+                                        nodeType = None
+                                    # The Note Object has already been DELETED, so we can't load the Note itself!
+                                    # Therefore, we must build its NodeList here and pass it!  We pass the UNTRANSLATED
+                                    # object type.
+                                    if nodeType != None:
+                                        self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('D', (nodeType, nodelist[-1]))
+
                         # Update Keyword List
                         elif messageHeader == 'UKL':
                             # Parse the message at the space into object type and object number
@@ -779,7 +924,7 @@ class ChatWindow(wx.Frame):
                                  (msgData[0] == 'Clip'))) and \
                                (self.ControlObject.currentObj.number == int(msgData[1])):
                                 # Let's see if the Keywords Tab is being shown
-                                if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == _('Keywords'):
+                                if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == unicode(_('Keywords'), 'utf8'):
                                     # If so, update it.  (Its Refresh() method updates data from the database.)
                                     self.ControlObject.DataWindow.KeywordsTab.Refresh()
                                     # ... and refresh the keyword list
@@ -984,10 +1129,9 @@ def ConnectToMessageServer():
             else:
                 msg = _('No Transana Message Server has been specified.\nWould you like to specify one now?')
             # Display the error message, seek user feedback
-            dlg = wx.MessageDialog(TransanaGlobal.menuWindow, msg, 
-                                   _('Transana Message Server Connection'), wx.YES_NO | wx.ICON_QUESTION)
+            dlg = Dialogs.QuestionDialog(TransanaGlobal.menuWindow, msg, _('Transana Message Server Connection'))
             # Note the user's feedback
-            result = dlg.ShowModal()
+            result = dlg.LocalShowModal()
             # Destroy the message dialog
             dlg.Destroy()
             # If the user says "Yes" ...

@@ -92,8 +92,13 @@
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Notes">
-           <param name="ID" value=100>
+           <param name="ID" value=95>
            <param name="Local" value="Notes.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Notes Browser">
+           <param name="ID" value=100>
+           <param name="Local" value="NotesBrowser.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Keyword Summary Report">
@@ -101,14 +106,9 @@
            <param name="Local" value="KeywordSummaryReport.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Keyword Usage Report">
+           <param name="Name" value="Series, Episode, and Collection Reports">
            <param name="ID" value=102>
-           <param name="Local" value="KeywordUsageReport.htm">
-       </object>
-  <li> <object type="text/sitemap">
-           <param name="Name" value="Collection Summary Report">
-           <param name="ID" value=103>
-           <param name="Local" value="CollectionSummaryReport.htm">
+           <param name="Local" value="SECReports.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Keyword Map">

@@ -99,26 +99,16 @@ class TranscriptionUI(object):
         
         # let's figure out what format the desired transcript was saved as
         if transcriptObj.text != None:
-            temp = transcriptObj.text[2:5]
-            
-            if DEBUG:
-                print "TranscriptionUI.LoadTranscript():  temp == 'rtf'?? ", temp
-                
             try:
+                # was it plain text?
+                if transcriptObj.text[:4] == 'txt\n':
+                    self.dlg.editor.load_transcript(transcriptObj, 'text')
                 # was it RTF?
-                if temp != u'rtf':
-                    
-                    if DEBUG:
-                        print "TranscriptionUI.LoadTranscript():  loading with pickle"
-                        
-                    self.dlg.editor.load_transcript(transcriptObj, 'pickle')
+                elif transcriptObj.text[2:5] == u'rtf':
+                    self.dlg.editor.load_transcript(transcriptObj)
                 # or was it pickled?
                 else:
-                    
-                    if DEBUG:
-                        print "TranscriptionUI.LoadTranscript():  loading without pickle"
-                        
-                    self.dlg.editor.load_transcript(transcriptObj) # flies off to transcripteditor.py
+                    self.dlg.editor.load_transcript(transcriptObj, 'pickle')
             except UnicodeDecodeError:
                 if DEBUG:
                     import sys, traceback
@@ -206,259 +196,21 @@ class TranscriptionUI(object):
         self.get_toolbar().OnUndo(event)
 
     def TranscriptCut(self):
-        # On the Mac, we need to leave the Clipboard open to handle complex objects, which get lost when the Clipboard
-        # is closed.  However, this interferes with the internal Paste operation.  So we'll explicitly close the Clipboard here
-        if "__WXMAC__" in wx.PlatformInfo:
-            wx.TheClipboard.Close()
+        """  Pass-through for the Cut() method """
         self.get_editor().Cut()
-        # On the Mac, we need to leave the Clipboard open to handle complex objects, which get lost when the Clipboard
-        # is closed.  However, this interferes with the internal Paste operation.  So we'll explicitly re-open the Clipboard here
-        if "__WXMAC__" in wx.PlatformInfo:
-            wx.TheClipboard.Open()
 
     def TranscriptCopy(self):
-        # On the Mac, we need to leave the Clipboard open to handle complex objects, which get lost when the Clipboard
-        # is closed.  However, this interferes with the internal Paste operation.  So we'll explicitly close the Clipboard here
-        if "__WXMAC__" in wx.PlatformInfo:
-            wx.TheClipboard.Close()
+        """  Pass-through for the Copy() method """
         self.get_editor().Copy()
-        # On the Mac, we need to leave the Clipboard open to handle complex objects, which get lost when the Clipboard
-        # is closed.  However, this interferes with the internal Paste operation.  So we'll explicitly re-open the Clipboard here
-        if "__WXMAC__" in wx.PlatformInfo:
-            wx.TheClipboard.Open()
 
     def TranscriptPaste(self):
-        # On the Mac, we need to leave the Clipboard open to handle complex objects, which get lost when the Clipboard
-        # is closed.  However, this interferes with the internal Paste operation.  So we'll explicitly close the Clipboard here
-        if "__WXMAC__" in wx.PlatformInfo:
-            wx.TheClipboard.Close()
+        """  Pass-through for the Paste() method """
         self.get_editor().Paste()
-        # On the Mac, we need to leave the Clipboard open to handle complex objects, which get lost when the Clipboard
-        # is closed.  However, this interferes with the internal Paste operation.  So we'll explicitly re-open the Clipboard here
-        if "__WXMAC__" in wx.PlatformInfo:
-            wx.TheClipboard.Open()
 
     def CallFontDialog(self):
-        """ Trigger the TransanaFontDialog, either updating the font settings for the selected text or
-            changing the the font settingss for the current cursor position. """
-        # Let's try to remember the cursor position
-        self.dlg.editor.cursorPosition = (self.dlg.editor.GetCurrentPos(), self.dlg.editor.GetSelection())
-        # Get current Font information from the Editor
-        editorFont = self.dlg.editor.get_font()
+        """  Pass-through for the CallFontDialog() method """
+        self.dlg.editor.CallFontDialog()
 
-        # If we don't have a text selection, we can just get the wxFontData and go.
-        if self.dlg.editor.GetSelection()[0] == self.dlg.editor.GetSelection()[1]:
-            # Create and populate a wxFont object
-            font = wx.Font(editorFont[1], wx.FONTFAMILY_DEFAULT, wx.NORMAL, wx.NORMAL, faceName=editorFont[0])
-            # font.SetFaceName(editorFont[0])
-            #font.SetPointSize(editorFont[1])
-            if self.dlg.editor.get_bold():
-                font.SetWeight(wx.BOLD)
-            if self.dlg.editor.get_italic():
-                font.SetStyle(wx.ITALIC)
-            if self.dlg.editor.get_underline():
-                font.SetUnderlined(True)
-
-            # Create and populate a wxFontData object
-            fontData = wx.FontData()
-            fontData.EnableEffects(True)
-            fontData.SetInitialFont(font)
-
-            # There is a bug in wxPython.  wx.ColourRGB() transposes Red and Blue.  This hack fixes it!
-            color = wx.ColourRGB(editorFont[2])
-            rgbValue = (color.Red() << 16) | (color.Green() << 8) | color.Blue()
-            fontData.SetColour(wx.ColourRGB(rgbValue))
-            
-        # If we DO have a selection, we need to check, for mixed font specs in the selection
-        else:
-            # Set the Wait cursor (This doesn't appear to show up.)
-            self.dlg.editor.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-            
-            # First, get the initial values for the Font Dialog.  This will match the
-            # formatting of the LAST character in the selection.
-            fontData = TransanaFontDialog.TransanaFontDef()
-            fontData.fontFace = editorFont[0]
-            fontData.fontSize = editorFont[1]
-            if self.dlg.editor.get_bold():
-                fontData.fontWeight = TransanaFontDialog.tfd_BOLD
-            else:
-                fontData.fontWeight = TransanaFontDialog.tfd_OFF
-            if self.dlg.editor.get_italic():
-                fontData.fontStyle = TransanaFontDialog.tfd_ITALIC
-            else:
-                fontData.fontStyle = TransanaFontDialog.tfd_OFF
-            if self.dlg.editor.get_underline():
-                fontData.fontUnderline = TransanaFontDialog.tfd_UNDERLINE
-            else:
-                fontData.fontUnderline = TransanaFontDialog.tfd_OFF
-            # There is a bug in wxPython.  wx.ColourRGB() transposes Red and Blue.  This hack fixes it!
-            color = wx.ColourRGB(editorFont[2])
-            rgbValue = (color.Red() << 16) | (color.Green() << 8) | color.Blue()
-            fontData.fontColorDef = wx.ColourRGB(rgbValue)
-
-            # Now we need to iterate through the selection and look for any characters with different font values.
-            for selPos in range(self.dlg.editor.GetSelection()[0], self.dlg.editor.GetSelection()[1]):
-                # We don't touch the settings for TimeCodes or Hidden TimeCode Data, so these characters can be ignored.                
-                if not (self.dlg.editor.GetStyleAt(selPos) in [self.dlg.editor.STYLE_TIMECODE, self.dlg.editor.STYLE_HIDDEN]):
-                    # Get the Font Attributes of the current Character
-                    attrs = self.dlg.editor.style_attrs[self.dlg.editor.GetStyleAt(selPos)]
-
-                    # Now look for specs that are different, and flag the TransanaFontDef object if one is found.
-                    # If the the Symbol Font is used, we ignore this.  (We don't want to change the Font Face of Special Characters.)
-                    if (fontData.fontFace != None) and (attrs.font_face != 'Symbol') and (attrs.font_face != fontData.fontFace):
-                        del(fontData.fontFace)
-
-                    if (fontData.fontSize != None) and (attrs.font_size != fontData.fontSize):
-                        del(fontData.fontSize)
-
-                    if (fontData.fontWeight != TransanaFontDialog.tfd_AMBIGUOUS) and \
-                       ((attrs.bold == True) and (fontData.fontWeight == TransanaFontDialog.tfd_OFF)) or \
-                       ((attrs.bold == False) and (fontData.fontWeight == TransanaFontDialog.tfd_BOLD)):
-                        fontData.fontWeight = TransanaFontDialog.tfd_AMBIGUOUS
-
-                    if (fontData.fontStyle != TransanaFontDialog.tfd_AMBIGUOUS) and \
-                       ((attrs.italic == True) and (fontData.fontStyle == TransanaFontDialog.tfd_OFF)) or \
-                       ((attrs.italic == False) and (fontData.fontStyle == TransanaFontDialog.tfd_ITALIC)):
-                        fontData.fontStyle = TransanaFontDialog.tfd_AMBIGUOUS
-
-                    if (fontData.fontUnderline != TransanaFontDialog.tfd_AMBIGUOUS) and \
-                       ((attrs.underline == True) and (fontData.fontUnderline == TransanaFontDialog.tfd_OFF)) or \
-                       ((attrs.underline == False) and (fontData.fontUnderline == TransanaFontDialog.tfd_UNDERLINE)):
-                        fontData.fontUnderline = TransanaFontDialog.tfd_AMBIGUOUS
-
-                    color = wx.ColourRGB(attrs.font_fg)
-                    rgbValue = (color.Red() << 16) | (color.Green() << 8) | color.Blue()
-                    if (fontData.fontColorDef != None) and (fontData.fontColorDef != wx.ColourRGB(rgbValue)):
-                        del(fontData.fontColorDef)
-            # Set the cursor back to normal
-            self.dlg.editor.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-
-        # Create the TransanaFontDialog.
-        # Note:  We used to use the wx.FontDialog, but this proved inadequate for a number of reasons.
-        #        It offered very few font choices on the Mac, and it couldn't handle font ambiguity.
-        fontDialog = TransanaFontDialog.TransanaFontDialog(self.dlg, fontData)
-        # Display the FontDialog and get the user feedback
-        if fontDialog.ShowModal() == wx.ID_OK:
-            # If we don't have a text selection, we can just update the current font settings.
-            if self.dlg.editor.GetSelection()[0] == self.dlg.editor.GetSelection()[1]:
-                # OLD MODEL -- All characters formatted with all attributes -- no ambiguity allowed.
-                # This still applies if there is no selection!
-                # Get the wxFontData from the Font Dialog
-                newFontData = fontDialog.GetFontData()
-                # Extract the Font and Font Color from the FontData
-                newFont = newFontData.GetChosenFont()
-                newColor = newFontData.GetColour()
-                # Set the appropriate Font Attributes.  (Remember, there can be no font ambiguity if there's no selection.)
-                if newFont.GetWeight() == wx.BOLD:
-                    self.dlg.editor.set_bold(True)
-                else:
-                    self.dlg.editor.set_bold(False)
-                if newFont.GetStyle() == wx.NORMAL:
-                    self.dlg.editor.set_italic(False)
-                else:
-                    self.dlg.editor.set_italic(True)
-                if newFont.GetUnderlined():
-                    self.dlg.editor.set_underline(True)
-                else:
-                    self.dlg.editor.set_underline(False)
-                # Build a RGB value from newColor.  For some reason the
-                # GetRGB() method was returning values in BGR format instead of
-                # RGB. -- Nate
-                rgbValue = (newColor.Red() << 16) | (newColor.Green() << 8) | newColor.Blue()
-                self.dlg.editor.set_font(newFont.GetFaceName(), newFont.GetPointSize(), rgbValue, 0xffffff)
-
-            else:
-                # Set the Wait cursor
-                self.dlg.editor.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-                # NEW MODEL -- Only update those attributes not flagged as ambiguous.  This is necessary
-                # when processing a selection
-                # Get the TransanaFontDef data from the Font Dialog.
-                newFontData = fontDialog.GetFontDef()
-                
-                # print
-                # print "newFontData =", newFontData
-
-                # Now we need to iterate through the selection and update the font information.
-                # It doesn't work to try to apply formatting to the whole block, as ambiguous attributes
-                # lose their values.
-                for selPos in range(self.dlg.editor.GetSelection()[0], self.dlg.editor.GetSelection()[1]):
-                    # We don't want to update the formatting of Time Codes or of hidden Time Code Data.  
-                    if not (self.dlg.editor.GetStyleAt(selPos) in [self.dlg.editor.STYLE_TIMECODE, self.dlg.editor.STYLE_HIDDEN]):
-                        # Select the character we want to work on from the larger selection
-                        self.dlg.editor.SetSelection(selPos, selPos + 1)
-                        # Get the previous font attributes for this character
-                        attrs = self.dlg.editor.style_attrs[self.dlg.editor.GetStyleAt(selPos)]
-
-                        # Now alter those characteristics that are not ambiguous in the newFontData.
-                        # Where the specification is ambiguous, use the old value from attrs.
-                        
-                        # We don't want to change the font of special symbols!  Therefore, we don't change
-                        # the font name for anything in Symbol font.
-                        if (newFontData.fontFace != None) and \
-                           (attrs.font_face != 'Symbol'):
-                            fontFace = newFontData.fontFace
-                        else:
-                            fontFace = attrs.font_face
-                        
-                        # print chr(self.dlg.editor.GetCharAt(selPos)), "fontFace = ", fontFace
-                        
-                        if newFontData.fontSize != None:
-                            fontSize = newFontData.fontSize
-                        else:
-                            fontSize = attrs.font_size
-
-                        if newFontData.fontWeight == TransanaFontDialog.tfd_BOLD:
-                            self.dlg.editor.set_bold(True)
-                        elif newFontData.fontWeight == TransanaFontDialog.tfd_OFF:
-                            self.dlg.editor.set_bold(False)
-                        else:
-                            # if fontWeight is ambiguous, use the old value
-                            if attrs.bold:
-                                self.dlg.editor.set_bold(True)
-                            else:
-                                self.dlg.editor.set_bold(False)
-
-                        if newFontData.fontStyle == TransanaFontDialog.tfd_OFF:
-                            self.dlg.editor.set_italic(False)
-                        elif newFontData.fontStyle == TransanaFontDialog.tfd_ITALIC:
-                            self.dlg.editor.set_italic(True)
-                        else:
-                            # if fontStyle is ambiguous, use the old value
-                            if attrs.italic:
-                                self.dlg.editor.set_italic(True)
-                            else:
-                                self.dlg.editor.set_italic(False)
-
-                        if newFontData.fontUnderline == TransanaFontDialog.tfd_UNDERLINE:
-                            self.dlg.editor.set_underline(True)
-                        elif newFontData.fontUnderline == TransanaFontDialog.tfd_OFF:
-                            self.dlg.editor.set_underline(False)
-                        else:
-                            # if fontUnderline is ambiguous, use the old value
-                            if attrs.underline:
-                                self.dlg.editor.set_underline(True)
-                            else:
-                                self.dlg.editor.set_underline(False)
-
-                        if newFontData.fontColorDef != None:
-                            color = newFontData.fontColorDef
-                            rgbValue = (color.Red() << 16) | (color.Green() << 8) | color.Blue()
-                        else:
-                            # There is a bug in wxPython.  wx.ColourRGB() transposes Red and Blue.  This hack fixes it!
-                            color = wx.ColourRGB(attrs.font_fg)
-                            rgbValue = (color.Blue() << 16) | (color.Green() << 8) | color.Red()
-                        # Now apply the font settings for the current character
-                        self.dlg.editor.set_font(fontFace, fontSize, rgbValue, 0xffffff)
-                # Set the cursor back to normal
-                self.dlg.editor.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
-
-        # Destroy the Font Dialog Box, now that we're done with it.
-        fontDialog.Destroy()
-        # Let's try restoring the Cursor Position when all is said and done.
-        self.dlg.editor.RestoreCursor()
-        # We've probably taken the focus from the editor.  Let's return it.
-        self.dlg.editor.SetFocus()
-        
     def AdjustIndexes(self, adjustmentAmount):
         """ Adjust Transcript Time Codes by the specified amount """
         # If the transcript is "Read-Only", it must be put into "Edit" mode.  Let's do

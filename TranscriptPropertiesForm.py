@@ -18,11 +18,14 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 
-import DBInterface
-import Dialogs
-
+# import wxPython
 import wx
-from Transcript import *
+# import Transana's Database Interface
+import DBInterface
+# Import Transana's Dialogs
+import Dialogs
+# Import the Transcript Object
+import Transcript
 
 class TranscriptPropertiesForm(Dialogs.GenForm):
     """Form containing Transcript fields."""
@@ -71,13 +74,13 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
         lay.height.AsIs()
         transcriber_edit = self.new_edit_box(_("Transcriber"), lay, self.obj.transcriber, maxLen=100)
 
-        # Title/Comment layout
+        # Comment layout
         lay = wx.LayoutConstraints()
         lay.top.Below(transcriber_edit, 10)     # 10 under transcriber
         lay.left.SameAs(id_edit, wx.Left, 0)     # Same as id_edit (10 from left)
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
-        comment_edit = self.new_edit_box(_("Title/Comment"), lay, self.obj.comment, maxLen=255)
+        comment_edit = self.new_edit_box(_("Comment"), lay, self.obj.comment, maxLen=255)
 
         # File to Import layout
         lay = wx.LayoutConstraints()
@@ -105,37 +108,61 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
 
     def OnBrowseClick(self, event):
         """ Method for when Browse button is clicked """
-        dlg = wx.FileDialog(None, wildcard="*.rtf", style=wx.OPEN)
+        # Allow for RTF, TXT or *.* combinations
+        dlg = wx.FileDialog(None, wildcard="Rich Text Format Files (*.rtf)|*.rtf|Text Files(*.txt)|*.txt|All Files (*.*)|*.*", style=wx.OPEN)
+        # Get a file selection from the user
         if dlg.ShowModal() == wx.ID_OK:
+            # If the user clicks OK, set the file to import to the selected path.
             self.rtfname_edit.SetValue(dlg.GetPath())
+        # Destroy the File Dialog
         dlg.Destroy()
 
     def get_input(self):
         """Show the dialog and return the modified Series Object.  Result
         is None if user pressed the Cancel button."""
-        d = Dialogs.GenForm.get_input(self)     # inherit parent method
+        # inherit parent method from Dialogs.Gen(eric)Form
+        d = Dialogs.GenForm.get_input(self)
+        # If the Form is created (not cancelled?) ...
         if d:
+            # Set the Transcript ID
             self.obj.id = d[_('Transcript ID')]
+            # Set the Transcriber
             self.obj.transcriber = d[_('Transcriber')]
-            self.obj.comment = d[_('Title/Comment')]
+            # Set the Comment
+            self.obj.comment = d[_('Comment')]
+            # Get the Media File to import
             fname = d[_('RTF File to import  (optional)')]
+            # If a media file is entered ...
             if fname:
+                # ... start exception handling ...
                 try:
+                    # Open the file
                     f = open(fname, "r")
+                    # Read the file straight into the Transcript Text
                     self.obj.text = f.read()
+                    # if the text does NOT have an RTF header ...
+                    if (self.obj.text[:5].lower() != '{\\rtf'):
+                        # ... add "txt" to the start of the file to signal that it's probably a text file
+                        self.obj.text = 'txt\n' + self.obj.text
+                    # Close the file
                     f.close()
+                # If exceptions are raised ...
                 except:
+                    # ... we don't need to do anything here.  (Error message??)
+                    # The consequence is probably that the Transcript Text will be blank.
                     pass
+        # If there's no input from the user ...
         else:
+            # ... then we can set the Transcript Object to None to signal this.
             self.obj = None
-
+        # Return the Transcript Object we've created / edited
         return self.obj
         
 class AddTranscriptDialog(TranscriptPropertiesForm):
     """Dialog used when adding a new Transcript."""
 
     def __init__(self, parent, id, episode):
-        obj = Transcript()
+        obj = Transcript.Transcript()
         obj.series_id = episode.series_id
         obj.episode_num = episode.number
         obj.episode_id = episode.id

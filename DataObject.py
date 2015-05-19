@@ -34,6 +34,7 @@ __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 import DBInterface
 import inspect
 import copy
+import Misc
 from MySQLdb import *
 from TransanaExceptions import *
 import TransanaGlobal
@@ -157,29 +158,15 @@ class DataObject(object):
         notelist = []
         
         t = self._prefix()
-#        table = self._table()
 
-# NOTE:  This query is causing too many records to be deleted.  If there are multiple transcripts with the same name
-#        in different episodes and they all have notes, deleting ONE episode will cause all of the Transcript Notes
-#        to be deleted.  I presume the same would happen if there were multiple Episodes of the same name in different
-#        Series.  Deleting one Episode would cause all of the noted for similarly-named episodes to be deleted.
-#        DKW 10/27/2003
-
-#        query = """
-#        SELECT NoteNum FROM Notes2 a, %s b
-#            WHERE a.%sNum = b.%sNum and
-#                    %sID = %%s
-#            ORDER BY NoteID
-#        """ % (table, t, t, t)
         query = """
         SELECT NoteNum FROM Notes2
             WHERE %sNum = %%s
             ORDER BY NoteID
-        """ % t
+        """ % (t,)
 
         db = DBInterface.get_db()
         c = db.cursor()
-#        c.execute(query, (self.id,))
         c.execute(query, (self.number,))
         r = c.fetchall()    # return array of tuples with results
         for tup in r:
@@ -410,7 +397,7 @@ class DataObject(object):
     def _get_id(self):
         return self._id
     def _set_id(self, id):
-        self._id = id.strip()
+        self._id = Misc.unistrip(id)
     def _del_id(self):
         self._id = ""
 

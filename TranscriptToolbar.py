@@ -275,11 +275,14 @@ class TranscriptToolbar(wx.ToolBar):
                     idVal = self.parent.editor.TranscriptObj.id
                     TransanaExceptions.ReportRecordLockedException(rtype, idVal, e)
                 else:
-                    msg = _('You cannot proceed because you cannot obtain a lock on the Clip Transcript.\n' + \
-                            'The record is currently locked by %s.\nPlease try again later.') 
                     if 'unicode' in wx.PlatformInfo:
+                        msg = unicode(_('You cannot proceed because you cannot obtain a lock on the Clip Transcript.\n'), 'utf8') + \
+                              unicode(_('The record is currently locked by %s.\nPlease try again later.'), 'utf8')
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                        msg = unicode(msg, 'utf8') % (e.user)
+                        msg = msg % (e.user)
+                    else:
+                        msg = _('You cannot proceed because you cannot obtain a lock on the Clip Transcript.\n') + \
+                              _('The record is currently locked by %s.\nPlease try again later.') 
                     dlg = Dialogs.ErrorDialog(self.parent, msg)
                     dlg.ShowModal()
                     dlg.Destroy()
@@ -288,14 +291,17 @@ class TranscriptToolbar(wx.ToolBar):
                 # Reject the attempt to go into Edit mode by toggling the button back to its original state
                 self.ToggleTool(self.CMD_READONLY_ID, not self.GetToolState(self.CMD_READONLY_ID))
                 if self.parent.editor.TranscriptObj.id != '':
-                    msg = _('You cannot proceed because %s "%s" cannot be found.' + \
-                            '\nIt may have been deleted by another user.')
                     if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                        msg = unicode(msg, 'utf8') % (_('Transcript'), self.parent.editor.TranscriptObj.id)
+                        msg = unicode(_('You cannot proceed because %s "%s" cannot be found.'), 'utf8') + \
+                              unicode(_('\nIt may have been deleted by another user.'), 'utf8')
+                        msg = msg % (_('Transcript'), self.parent.editor.TranscriptObj.id)
+                    else:
+                        msg = _('You cannot proceed because %s "%s" cannot be found.') + \
+                              _('\nIt may have been deleted by another user.') % (_('Transcript'), self.parent.editor.TranscriptObj.id)
                 else:
-                    msg = _('You cannot proceed because the Clip Transcript cannot be found.\n' + \
-                            'It may have been deleted by another user.')
+                    msg = _('You cannot proceed because the Clip Transcript cannot be found.\n') + \
+                          _('It may have been deleted by another user.')
                     if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                         msg = unicode(msg, 'utf8')

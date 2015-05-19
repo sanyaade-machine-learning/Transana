@@ -153,7 +153,7 @@ class Note(DataObject):
         # Determine if we are creating a new record or saving an existing one
         if (self._db_start_save() == 0):  # Creating new record
             # Check to see that no identical record exists
-            if DBInterface.record_match_count("Notes2", \
+            if DBInterface.record_match_count('Notes2', \
                                               ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum"), \
                                               (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num) ) > 0:
                 targetObject = _('object')
@@ -184,7 +184,7 @@ class Note(DataObject):
             
         else:  # Saving an existing record
             # Check to see that no identical record with a different number exists (!NoteNum specifies "Not same note number")
-            if DBInterface.record_match_count("Notes2", \
+            if DBInterface.record_match_count('Notes2', \
                                               ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum", "!NoteNum"), \
                                               (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, self.number) ) > 0:
                 targetObject = _('object')
@@ -216,7 +216,7 @@ class Note(DataObject):
                               TranscriptNum = %s,
                               NoteTaker = %s,
                               NoteText = %s
-                          WHERE NoteNum = %s """
+                          WHERE NoteNum = %s """ 
             values = values + (self.number,)
 
         c = DBInterface.get_db().cursor()

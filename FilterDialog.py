@@ -76,14 +76,23 @@ class FilterDialog(wx.Dialog):
           reportType     1 = Keyword Map  (reportScope is the Episode Number)
                          2 = Keyword Visualization  (reportScope is the Episode Number)
                          3 = Episode Clip Data Export (reportScope is the Episode Number)
-                         4 = Collection Clip Data Export (reportScope is the Collection Number!)
+                         4 = Collection Clip Data Export (reportScope is the Collection Number, or 0 for Collection Root)
                          5 = Series Keyword Sequence Map (reportScope is the Series Number)
                          6 = Series Keyword Bar Graph (reportScope is the Series Number)
                          7 = Series Keyword Percentage Map (reportScope is the Series Number)
                          8 = Episode Clip Data Coder Reliabiltiy Export (reportScope is the Episode Number)
+                         9 = Keyword Summary Report for all Keyword Groups (configSave not yet implemented) (reportScope is not yet defined)
+                        10 = Series Report (reportScope is Series Number)
+                        11 = Episode Report (reportScope is Episode Number)
+                        12 = Collection Report (reportScope is Collection Number)
+                        13 = Notes Report (reportScope is 1 for all notes, 2 for Series, 3 for Episodes, 4 for Transcripts, 5 for Collections,
+                                           6 for Clips)
+                        14 = Series Clip Data Export (reportScope is the Series Number)
 
-            *** ADDING A REPORT TYPE?  Remember to add the delete_filter_records call to the appropriate
-                object's db_delete() method! ***
+            *** ADDING A REPORT TYPE?  Remember to add the delete_filter_records() call to the appropriate
+                object's db_delete() method!
+
+                ALSO, remember to add the ReportScope conversion to XMLImport for Filter Imports! ***
                          
         Optional parameters are:
           configName        (current Configuration Name)
@@ -91,15 +100,16 @@ class FilterDialog(wx.Dialog):
           episodeFilter     (boolean)
           episodeSort       (boolean)
           transcriptFilter  (boolean)
-          clipFilter        (boolean)
-          clipSort          (boolean)
           collectionFilter  (boolean)
           collectionSort    (boolean)  * NOT FULLY IMPLEMENTED
-          keywordFilter     (boolean)
+          clipFilter        (boolean)
+          clipSort          (boolean)
           keywordGroupFilter(boolean)
           keywordGroupColor (boolean)  * NOT FULLY IMPLEMENTED
+          keywordFilter     (boolean)
           keywordSort       (boolean)
           keywordColor      (boolean)
+          notesFilter       (boolean)
           options           (boolean)
           startTime         (number of milliseconds)
           endTime           (number of milliseconds)
@@ -109,7 +119,16 @@ class FilterDialog(wx.Dialog):
           vGridLines        (boolean)
           singleLineDisplay (boolean)
           showLegend        (boolean)
-          colorOutput       (boolean) """
+          colorOutput       (boolean)
+          showClipTranscripts (boolean)
+          showClipKeywords    (boolean)
+          showNestedData      (boolean)
+          showFile            (boolean)
+          showTime            (boolean)
+          showComments        (boolean)
+          showCollectionNotes (boolean)
+          showClipNotes       (boolean) """
+    
     def __init__(self, parent, id, title, reportType, **kwargs):
         """ Initialize the Transana Filter Dialog Box """
         # Create a Dialog Box
@@ -130,16 +149,16 @@ class FilterDialog(wx.Dialog):
             self.configName = ''
 
         if self.kwargs.has_key('startTime') and self.kwargs['startTime']:
-            self.startTime = Misc.time_in_ms_to_str(self.kwargs['startTime'])
+            self.startTimeVal = Misc.time_in_ms_to_str(self.kwargs['startTime'])
         else:
-            self.startTime = Misc.time_in_ms_to_str(0)
+            self.startTimeVal = Misc.time_in_ms_to_str(0)
         if self.kwargs.has_key('endTime'):
             if self.kwargs['endTime']:
-                self.endTime = Misc.time_in_ms_to_str(self.kwargs['endTime'])
+                self.endTimeVal = Misc.time_in_ms_to_str(self.kwargs['endTime'])
             else:
-                self.endTime = Misc.time_in_ms_to_str(parent.MediaLength)
+                self.endTimeVal = Misc.time_in_ms_to_str(parent.MediaLength)
         else:
-            self.endTime = self.startTime
+            self.endTimeVal = self.startTimeVal
 
         # Create BoxSizers for the Dialog
         vBox = wx.BoxSizer(wx.VERTICAL)
@@ -187,10 +206,59 @@ class FilterDialog(wx.Dialog):
         # Everything in this Dialog goes inside a Notebook.  Create that notebook control
         self.notebook = wx.Notebook(self, -1)
 
+        # If Report Contents Specification is requested ...
+        if self.kwargs.has_key('reportContents') and self.kwargs['reportContents']:
+            # ... build a Panel for Report Contents ...
+            self.reportContentsPanel = wx.Panel(self.notebook, -1)
+            # Create vertical and horizontal Sizers for the Panel
+            pnlVSizer = wx.BoxSizer(wx.VERTICAL)
+            # ... place the Time Range Panel on the Notebook, creating a Time Range tab ...
+            self.notebook.AddPage(self.reportContentsPanel, _("Report Contents"))
+            
+            # The Episode and Collection Reports need options for
+            # showing Clip Transcripts, showing Clip Keywords, and showing Nested Data
+            if self.kwargs.has_key('showNestedData'):
+                self.showNestedData = wx.CheckBox(self.reportContentsPanel, -1, _("Include Clips from Nested Collections"))
+                self.showNestedData.SetValue(self.kwargs['showNestedData'])
+                pnlVSizer.Add(self.showNestedData, 0, wx.TOP | wx.LEFT, 10)
+                text1 = wx.StaticText(self.reportContentsPanel, -1, _("(Unchecking this will cause clips from nested collections to\nbe skipped even if checked on the Clips tab.)"))
+                pnlVSizer.Add(text1, 0, wx.LEFT, 30)
+            if self.kwargs.has_key('showFile'):
+                self.showFile = wx.CheckBox(self.reportContentsPanel, -1, _("Show Media File Name"))
+                self.showFile.SetValue(self.kwargs['showFile'])
+                pnlVSizer.Add(self.showFile, 0, wx.TOP | wx.LEFT, 10)
+            if self.kwargs.has_key('showTime'):
+                self.showTime = wx.CheckBox(self.reportContentsPanel, -1, _("Show Clip Time"))
+                self.showTime.SetValue(self.kwargs['showTime'])
+                pnlVSizer.Add(self.showTime, 0, wx.TOP | wx.LEFT, 10)
+            if self.kwargs.has_key('showClipTranscripts'):
+                self.showClipTranscripts = wx.CheckBox(self.reportContentsPanel, -1, _("Show Clip Transcripts"))
+                self.showClipTranscripts.SetValue(self.kwargs['showClipTranscripts'])
+                pnlVSizer.Add(self.showClipTranscripts, 0, wx.TOP | wx.LEFT, 10)
+            if self.kwargs.has_key('showClipKeywords'):
+                self.showClipKeywords = wx.CheckBox(self.reportContentsPanel, -1, _("Show Clip Keywords"))
+                self.showClipKeywords.SetValue(self.kwargs['showClipKeywords'])
+                pnlVSizer.Add(self.showClipKeywords, 0, wx.TOP | wx.LEFT, 10)
+            if self.kwargs.has_key('showComments'):
+                self.showComments = wx.CheckBox(self.reportContentsPanel, -1, _("Show Comments"))
+                self.showComments.SetValue(self.kwargs['showComments'])
+                pnlVSizer.Add(self.showComments, 0, wx.TOP | wx.LEFT, 10)
+            if self.kwargs.has_key('showCollectionNotes'):
+                self.showCollectionNotes = wx.CheckBox(self.reportContentsPanel, -1, _("Show Collection Notes"))
+                self.showCollectionNotes.SetValue(self.kwargs['showCollectionNotes'])
+                pnlVSizer.Add(self.showCollectionNotes, 0, wx.TOP | wx.LEFT, 10)
+            if self.kwargs.has_key('showClipNotes'):
+                self.showClipNotes = wx.CheckBox(self.reportContentsPanel, -1, _("Show Clip Notes"))
+                self.showClipNotes.SetValue(self.kwargs['showClipNotes'])
+                pnlVSizer.Add(self.showClipNotes, 0, wx.TOP | wx.LEFT, 10)
+
+            # Now declare the panel's vertical sizer as the panel's official sizer
+            self.reportContentsPanel.SetSizer(pnlVSizer)
+
         # If Episode Filtering is requested ...
         if self.kwargs.has_key('episodeFilter') and self.kwargs['episodeFilter']:
             # ... build a Panel for Episodes ...
-            self.episodesPanel = wx.Panel(self.notebook, -1)  # , style=wx.WANTS_CHARS
+            self.episodesPanel = wx.Panel(self.notebook, -1)
             # Create vertical and horizontal Sizers for the Panel
             pnlVSizer = wx.BoxSizer(wx.VERTICAL)
             pnlHSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -251,17 +319,17 @@ class FilterDialog(wx.Dialog):
         #If transcript filter is requested... (Kathleen)
         if self.kwargs.has_key('transcriptFilter') and self.kwargs['transcriptFilter']:
             # ... build a Panel for Transcript List ...
-            self.transcriptPanel = wx.Panel(self.notebook, -1)  # , style=wx.WANTS_CHARS
+            self.transcriptPanel = wx.Panel(self.notebook, -1)
             # Create vertical and horizontal Sizers for the Panel
             pnlVSizer = wx.BoxSizer(wx.VERTICAL)
             pnlHSizer = wx.BoxSizer(wx.HORIZONTAL)
             # ... place the Transcripts Panel on the Notebook, creating a Transcripts tab ...
             self.notebook.AddPage(self.transcriptPanel, _("Transcripts"))
-            # ... place a Check List Ctrl on the Keyword Group Panel ...
+            # ... place a Check List Ctrl on the Transcripts Panel ...
             self.transcriptList = CheckListCtrl(self.transcriptPanel)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.transcriptList, 1, wx.EXPAND)
-            # The keyword Group List needs two columns, Episode and Transcript.
+            # The Transcripts List needs four columns, Series, Episode, Transcript, and Number of Clips.
             self.transcriptList.InsertColumn(0, _("Series"))
             self.transcriptList.InsertColumn(1, _("Episode"))
             self.transcriptList.InsertColumn(2, _("Transcript"))
@@ -274,18 +342,18 @@ class FilterDialog(wx.Dialog):
             
         #If collection filter is requested... (Kathleen)
         if self.kwargs.has_key('collectionFilter') and self.kwargs['collectionFilter']:
-            # ... build a Panel for collection ...
-            self.collectionPanel = wx.Panel(self.notebook, -1)  # , style=wx.WANTS_CHARS
+            # ... build a Panel for Collections ...
+            self.collectionPanel = wx.Panel(self.notebook, -1)
             # Create vertical and horizontal Sizers for the Panel
             pnlVSizer = wx.BoxSizer(wx.VERTICAL)
             pnlHSizer = wx.BoxSizer(wx.HORIZONTAL)
             # ... place the Collections Panel on the Notebook, creating a Collections tab ...
             self.notebook.AddPage(self.collectionPanel, _("Collections"))
-            # ... place a Check List Ctrl on the Keyword Group Panel ...
+            # ... place a Check List Ctrl on the Collections Panel ...
             self.collectionList = CheckListCtrl(self.collectionPanel)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.collectionList, 1, wx.EXPAND)
-            # The keyword Group List needs one column, Keyword Group and Keyword.
+            # The Collections List needs one column, Collection.
             self.collectionList.InsertColumn(0, _("Collection"))
             # Add the panel's horizontal sizer to the panel's vertical sizer so we can expand in two dimensions
             pnlVSizer.Add(pnlHSizer, 1, wx.EXPAND, 0)
@@ -295,7 +363,7 @@ class FilterDialog(wx.Dialog):
         # If Clip Filtering is requested ...
         if self.kwargs.has_key('clipFilter') and self.kwargs['clipFilter']:
             # ... build a Panel for Clips ...
-            self.clipsPanel = wx.Panel(self.notebook, -1)  # , style=wx.WANTS_CHARS
+            self.clipsPanel = wx.Panel(self.notebook, -1)
             # Create vertical and horizontal Sizers for the Panel
             pnlVSizer = wx.BoxSizer(wx.VERTICAL)
             pnlHSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -305,7 +373,7 @@ class FilterDialog(wx.Dialog):
             self.clipList = CheckListCtrl(self.clipsPanel)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.clipList, 1, wx.EXPAND)
-            # The clip List needs two columns, Clip ID and Collection nesting.
+            # The Clip List needs two columns, Clip ID and Collection nesting.
             self.clipList.InsertColumn(0, _("Clip ID"))
             self.clipList.InsertColumn(1, _("Collection ID(s)"))
 
@@ -326,23 +394,23 @@ class FilterDialog(wx.Dialog):
             # Now declare the panel's vertical sizer as the panel's official sizer
             self.clipsPanel.SetSizer(pnlVSizer)
 
-        #If keyword group filter is requested...  (Kathleen)
+        #If Keyword Group filter is requested...  (Kathleen)
         if self.kwargs.has_key('keywordGroupFilter') and self.kwargs['keywordGroupFilter']:
-            # ... build a Panel for Keywords ...
-            self.keywordGroupPanel = wx.Panel(self.notebook, -1)  # , style=wx.WANTS_CHARS
+            # ... build a Panel for Keyword Groups ...
+            self.keywordGroupPanel = wx.Panel(self.notebook, -1)
             # Create vertical and horizontal Sizers for the Panel
             pnlVSizer = wx.BoxSizer(wx.VERTICAL)
             pnlHSizer = wx.BoxSizer(wx.HORIZONTAL)
             # ... place the Keyword Groups Panel on the Notebook, creating a Keyword Groups tab ...
-            self.notebook.AddPage(self.keywordGroupPanel, _("KW Groups"))
-            # Determine if Keyword Color specification is enabled or disabled.
+            self.notebook.AddPage(self.keywordGroupPanel, _("Keyword Groups"))
+            # Determine if Keyword Group Color specification is enabled or disabled.
             if self.kwargs.has_key('keywordGroupColor') and self.kwargs['keywordGroupColor']:
                 self.keywordGroupColor = True
             else:
                 self.keywordGroupColor = False
             # If Keyword Group Color Specification is enabled ...
             if self.keywordGroupColor:
-                # ... we need to use the ColorListCtrl for the Keywords List.
+                # ... we need to use the ColorListCtrl for the Keyword Groups List.
                 self.keywordGroupList = ColorListCtrl.ColorListCtrl(self.keywordGroupPanel)
             # If Keyword Group Color specification is disabled ...
             else:
@@ -350,7 +418,7 @@ class FilterDialog(wx.Dialog):
                 self.keywordGroupList = CheckListCtrl(self.keywordGroupPanel)
             # ... and place it on the panel's horizontal sizer.
             pnlHSizer.Add(self.keywordGroupList, 1, wx.EXPAND)
-            # The keyword Group List needs one column, Keyword Group and Keyword.
+            # The Keyword Groups List needs one column, Keyword Group.
             self.keywordGroupList.InsertColumn(0, _("Keyword Group"))
             # Add the panel's horizontal sizer to the panel's vertical sizer so we can expand in two dimensions
             pnlVSizer.Add(pnlHSizer, 1, wx.EXPAND, 0)
@@ -360,7 +428,7 @@ class FilterDialog(wx.Dialog):
         # If Keyword Filtering is requested ...
         if self.kwargs.has_key('keywordFilter') and self.kwargs['keywordFilter']:
             # ... build a Panel for Keywords ...
-            self.keywordsPanel = wx.Panel(self.notebook, -1)  # , style=wx.WANTS_CHARS
+            self.keywordsPanel = wx.Panel(self.notebook, -1)
             # Create vertical and horizontal Sizers for the Panel
             pnlVSizer = wx.BoxSizer(wx.VERTICAL)
             pnlHSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -432,10 +500,31 @@ class FilterDialog(wx.Dialog):
         else:
             self.keywordColor = False
         
+        #If Notes filter is requested...
+        if self.kwargs.has_key('notesFilter') and self.kwargs['notesFilter']:
+            # ... build a Panel for Notes ...
+            self.notesPanel = wx.Panel(self.notebook, -1)
+            # Create vertical and horizontal Sizers for the Panel
+            pnlVSizer = wx.BoxSizer(wx.VERTICAL)
+            pnlHSizer = wx.BoxSizer(wx.HORIZONTAL)
+            # ... place the Notes Panel on the Notebook, creating a Notes tab ...
+            self.notebook.AddPage(self.notesPanel, _("Notes"))
+            # ... place a Check List Ctrl on the Notes Panel ...
+            self.notesList = CheckListCtrl(self.notesPanel)
+            # ... and place it on the panel's horizontal sizer.
+            pnlHSizer.Add(self.notesList, 1, wx.EXPAND)
+            # The Notes List needs two columns, Note ID and Parent.
+            self.notesList.InsertColumn(0, _("Note"))
+            self.notesList.InsertColumn(1, _("Parent"))
+            # Add the panel's horizontal sizer to the panel's vertical sizer so we can expand in two dimensions
+            pnlVSizer.Add(pnlHSizer, 1, wx.EXPAND, 0)
+            # Now declare the panel's vertical sizer as the panel's official sizer
+            self.notesPanel.SetSizer(pnlVSizer)
+
         # If Options Specification is requested ...
         if self.kwargs.has_key('options') and self.kwargs['options']:
             # ... build a Panel for Options ...
-            self.optionsPanel = wx.Panel(self.notebook, -1)  # , style=wx.WANTS_CHARS
+            self.optionsPanel = wx.Panel(self.notebook, -1)
             # Create vertical and horizontal Sizers for the Panel
             pnlVSizer = wx.BoxSizer(wx.VERTICAL)
             # ... place the Time Range Panel on the Notebook, creating a Time Range tab ...
@@ -449,13 +538,13 @@ class FilterDialog(wx.Dialog):
                 startTimeTxt = wx.StaticText(self.optionsPanel, -1, _("Start Time"))
                 pnlVSizer.Add(startTimeTxt, 0, wx.TOP | wx.LEFT, 10)
                 # Add the Start Time field
-                self.startTime = wx.TextCtrl(self.optionsPanel, -1, self.startTime)
+                self.startTime = wx.TextCtrl(self.optionsPanel, -1, self.startTimeVal)
                 pnlVSizer.Add(self.startTime, 0, wx.LEFT, 10)
                 # Add a label for the End Time field
                 endTimeTxt = wx.StaticText(self.optionsPanel, -1, _("End Time"))
                 pnlVSizer.Add(endTimeTxt, 0, wx.TOP | wx.LEFT, 10)
                 # Add the End Time field
-                self.endTime = wx.TextCtrl(self.optionsPanel, -1, self.endTime)
+                self.endTime = wx.TextCtrl(self.optionsPanel, -1, self.endTimeVal)
                 pnlVSizer.Add(self.endTime, 0, wx.LEFT, 10)
                 # Add a note that says this data does not get saved.
                 tRTxt = wx.StaticText(self.optionsPanel, -1, _("NOTE:  Setting the End Time to 0 will set it to the end of the Media File.\nTime Range data is not saved as part of the Filter Configuration data."))
@@ -731,7 +820,7 @@ class FilterDialog(wx.Dialog):
                                     ConfigName = %s
                               ORDER BY FilterDataType DESC"""
                 # Build the data values that match the query
-                values = (self.reportType, reportScope, self.configName)
+                values = (self.reportType, reportScope, self.configName.encode(TransanaGlobal.encoding))
                 # Execute the query with the appropriate data values
                 DBCursor.execute(query, values)
                 # We may get multiple records, one for each tab on the Filter Dialog.
@@ -863,7 +952,7 @@ class FilterDialog(wx.Dialog):
                             fileCollectionData = cPickle.loads(filterData.tostring())
                         else:
                             fileCollectionData = cPickle.loads(filterData)
-                        # Clear the Transcript List
+                        # Clear the Collections List
                         self.collectionList.DeleteAllItems()
                         # Determine if this list is Ordered
                         if self.kwargs.has_key('CollectionSort') and self.kwargs['CollectionSort']:
@@ -874,6 +963,170 @@ class FilterDialog(wx.Dialog):
                         # then feed the results to the Keyword Tab.
                         self.SetCollections(self.ReconcileLists(formCollectionData, fileCollectionData, listIsOrdered=orderedList))
                         
+                    # If the data is for the Notes Tab (filterDataType 8) ...
+                    elif filterDataType == 8:
+                        # Get the current Notes data from the Form
+                        formNotesData = self.GetNotes()
+                        # Get the Notes data from the Database.
+                        # (If MySQLDB returns an Array, convert it to a String!)
+                        if type(filterData).__name__ == 'array':
+                            fileNotesData = cPickle.loads(filterData.tostring())
+                        else:
+                            fileNotesData = cPickle.loads(filterData)
+
+                        # The Notes List is special, in that it contains the object type as part of the data
+                        # that is displayed to the user.  This has to be localized, or Notes Filters won't work
+                        # if loaded in a language different than they were saved in.  (The Save translates this
+                        # part of the data to English.)
+                        
+                        # We need to iterate through the list
+                        for recNum in range(len(fileNotesData)):
+                            # See what type of record we have and replace English with the localized version
+                            if fileNotesData[recNum][2][:len('Series')] == 'Series':
+                                fileNotesData[recNum] = (fileNotesData[recNum][0], fileNotesData[recNum][1], unicode(_('Series'), 'utf8') + fileNotesData[recNum][2][len('Series'):], fileNotesData[recNum][3])
+                            elif fileNotesData[recNum][2][:len('Episode')] == 'Episode':
+                                fileNotesData[recNum] = (fileNotesData[recNum][0], fileNotesData[recNum][1], unicode(_('Episode'), 'utf8') + fileNotesData[recNum][2][len('Episode'):], fileNotesData[recNum][3])
+                            elif fileNotesData[recNum][2][:len('Transcript')] == 'Transcript':
+                                fileNotesData[recNum] = (fileNotesData[recNum][0], fileNotesData[recNum][1], unicode(_('Transcript'), 'utf8') + fileNotesData[recNum][2][len('Transcript'):], fileNotesData[recNum][3])
+                            elif fileNotesData[recNum][2][:len('Collection')] == 'Collection':
+                                fileNotesData[recNum] = (fileNotesData[recNum][0], fileNotesData[recNum][1], unicode(_('Collection'), 'utf8') + fileNotesData[recNum][2][len('Collection'):], fileNotesData[recNum][3])
+                            elif fileNotesData[recNum][2][:len('Clip')] == 'Clip':
+                                fileNotesData[recNum] = (fileNotesData[recNum][0], fileNotesData[recNum][1], unicode(_('Clip'), 'utf8') + fileNotesData[recNum][2][len('Clip'):], fileNotesData[recNum][3])
+
+                        # Clear the Notes List
+                        self.notesList.DeleteAllItems()
+                        # Determine if this list is Ordered
+                        if self.kwargs.has_key('NotesSort') and self.kwargs['NotesSort']:
+                            orderedList = True
+                        else:
+                            orderedList = False
+                        # We need to compare the file data to the form data and reconcile differences,
+                        # then feed the results to the Notes Tab.
+                        self.SetNotes(self.ReconcileLists(formNotesData, fileNotesData, listIsOrdered=orderedList))
+
+                    # If the data is for the Start Time (filterDataType 9) ...
+                    elif filterDataType == 9:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the start time value
+                        self.startTime.SetValue(filterData)
+
+                    # If the data is for the End Time (filterDataType 10) ...
+                    elif filterDataType == 10:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the end time value
+                        self.endTime.SetValue(filterData)
+
+                    # If the data is for the Bar Height (filterDataType 11) ...
+                    elif filterDataType == 11:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the bar height value
+                        self.barHeight.SetStringSelection(filterData)
+
+                    # If the data is for the Bar White Space (filterDataType 12) ...
+                    elif filterDataType == 12:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the white space value
+                        self.whitespace.SetStringSelection(filterData)
+
+                    # If the data is for the Horizontal Grid Lines (filterDataType 13) ...
+                    elif filterDataType == 13:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Horizontal Grid Lines value
+                        self.hGridLines.SetValue(filterData == 'True')
+
+                    # If the data is for the Vertical Grid Lines (filterDataType 14) ...
+                    elif filterDataType == 14:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Vertical Grid Lines value
+                        self.vGridLines.SetValue(filterData == 'True')
+
+                    # If the data is for the Single Line Display (filterDataType 15) ...
+                    elif filterDataType == 15:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Single Line Display value
+                        self.singleLineDisplay.SetValue(filterData == 'True')
+
+                    # If the data is for the Show Legend value (filterDataType 16) ...
+                    elif filterDataType == 16:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Show Legend value
+                        self.showLegend.SetValue(filterData == 'True')
+
+                    # If the data is for the Color Output value (filterDataType 17) ...
+                    elif filterDataType == 17:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Color Output value
+                        self.colorOutput.SetValue(filterData == 'True')
+
+                    # If the data is for the Include Nested Collection Data value (filterDataType 101) ...
+                    elif filterDataType == 101:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Show Nested Collection Data value
+                        self.showNestedData.SetValue(filterData == 'True')
+
+                    # If the data is for the Show Media Filename Data value (filterDataType 102) ...
+                    elif filterDataType == 102:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Show Media Filename Data value
+                        self.showFile.SetValue(filterData == 'True')
+
+                    # If the data is for the Show Clip Time Data value (filterDataType 103) ...
+                    elif filterDataType == 103:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Show Clip Time Data value
+                        self.showTime.SetValue(filterData == 'True')
+
+                    # If the data is for the Show Clip Transcripts value (filterDataType 104) ...
+                    elif filterDataType == 104:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Show Clip Transcripts value
+                        self.showClipTranscripts.SetValue(filterData == 'True')
+
+                    # If the data is for the Show Clip Keywords value (filterDataType 105) ...
+                    elif filterDataType == 105:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Show Clip Keywords value
+                        self.showClipKeywords.SetValue(filterData == 'True')
+
+                    # If the data is for the Show Comments value (filterDataType 106) ...
+                    elif filterDataType == 106:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Show Comments value
+                        self.showComments.SetValue(filterData == 'True')
+
+                    # If the data is for the Show Collection Notes value (filterDataType 107) ...
+                    elif filterDataType == 107:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Show Collection Notes value
+                        self.showCollectionNotes.SetValue(filterData == 'True')
+
+                    # If the data is for the Show Clip Notes value (filterDataType 108) ...
+                    elif filterDataType == 108:
+                        if type(filterData).__name__ == 'array':
+                            filterData = filterData.tostring()
+                        # Set the Show Clip Notes value
+                        self.showClipNotes.SetValue(filterData == 'True')
+
+                    # If we have an unknown filterDataType ...
+                    else:
+                        print "Unknown Filter Data:", self.reportType, reportScope, self.configName, filterDataType, type(filterData), filterData
+
             # Destroy the Choice Dialog
             dlg.Destroy()
 
@@ -904,12 +1157,11 @@ class FilterDialog(wx.Dialog):
                     else:
                         prompt = _('A configuration named "%s" already exists.  Do you want to replace it?')
                     # Build a dialog to notify the user of the duplication and ask what to do
-                    dlg2 = wx.MessageDialog(self, prompt % configName, _('Transana Confirmation'),
-                                            style = wx.YES_NO | wx.ICON_QUESTION | wx.STAY_ON_TOP)
+                    dlg2 = Dialogs.QuestionDialog(self, prompt % configName)
                     # Center the dialog on the screen
                     dlg2.CentreOnScreen()
                     # Display the dialog and get the user's response
-                    if dlg2.ShowModal() != wx.ID_YES:
+                    if dlg2.LocalShowModal() != wx.ID_YES:
                         # If the user doesn't say to replace, create an error message (never displayed) to signal there's a problem.
                         errorMsg = 'Duplicate Filename'
                     # Clean up after prompting the user for feedback
@@ -935,7 +1187,15 @@ class FilterDialog(wx.Dialog):
                                                          ('ReportType', 'ReportScope', 'ConfigName'),
                                                          (self.reportType, reportScope, configName)) > 0:
                             # Update existing record.  Note that each report may generate multiple records in the database,
-                            # FilterDataType 1 = Episodes, FilterDataType 2 = Clips, FilterDataType 3 = Keywords, 4 = Keyword Colors
+                            # FilterDataTypes
+                            #   1 = Episodes,
+                            #   2 = Clips,
+                            #   3 = Keywords,
+                            #   4 = Keyword Colors,
+                            #   5 = Keyword Groups (not implemented -- Fix XMLExport and XMLImport when implementing!)
+                            #   6 = Transcripts    (not implemented -- Fix XMLExport and XMLImport when implementing!)
+                            #   7 = Collections    (not implemented -- Fix XMLExport and XMLImport when implementing!)
+                            #   8 = Notes
 
                             # Build the Update Query for Data
                             query = """ UPDATE Filters2
@@ -947,9 +1207,11 @@ class FilterDialog(wx.Dialog):
 
                             # If we have a Series Keyword Sequence Map (reportType 5), or
                             # a Series Keyword Bar Graph (reportType 6), or
-                            # a Series Keyword Percentage Graph (reportType 7),
+                            # a Series Keyword Percentage Graph (reportType 7), or
+                            # a Series Report (reportType 10), or
+                            # a Series Clip Data Export (reportType 14),
                             # update Episode Data (FilterDataType 1)
-                            if self.reportType in [5, 6, 7]:
+                            if self.reportType in [5, 6, 7, 10, 14]:
                                 # Pickle the Episode Data
                                 episodes = cPickle.dumps(self.GetEpisodes())
                                 # Build the values to match the query, including the pickled Episode data
@@ -962,8 +1224,11 @@ class FilterDialog(wx.Dialog):
                             # a Series Keyword Sequence Map (reportType 5), or
                             # a Series Keyword Bar Graph (reportType 6), or
                             # a Series Keyword Percentage Graph (reportType 7),
+                            # an Episode Report (reportType 11),
+                            # a Collection Report (reportType 12), or
+                            # a Series Clip Data Export (reportType 14),
                             # update Clip Data (FilterDataType 2)
-                            if self.reportType in [1, 3, 4, 5, 6, 7]:
+                            if self.reportType in [1, 3, 4, 5, 6, 7, 11, 12, 14]:
                                 # Pickle the Clip Data
                                 clips = cPickle.dumps(self.GetClips())
                                 # Build the values to match the query, including the pickled Clip data
@@ -977,8 +1242,12 @@ class FilterDialog(wx.Dialog):
                             # a Series Keyword Sequence Map (reportType 5), or
                             # a Series Keyword Bar Graph (reportType 6), or
                             # a Series Keyword Percentage Graph (reportType 7),
+                            # a Series Report (reportType 10)
+                            # an Episode Report (reportType 11),
+                            # a Collection Report (reportType 12), or
+                            # a Series Clip Data Export (reportType 14),
                             # update Keyword Data (FilterDataType 3)
-                            if self.reportType in [1, 2, 3, 4, 5, 6, 7]:
+                            if self.reportType in [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 14]:
                                 # Pickle the Keyword Data
                                 keywords = cPickle.dumps(self.GetKeywords())
                                 # Build the values to match the query, including the pickled Keyword data
@@ -997,6 +1266,15 @@ class FilterDialog(wx.Dialog):
                                 values = (keywordColors, self.reportType, reportScope, configName, 4)
                                 # Execute the query with the appropriate data
                                 DBCursor.execute(query, values)
+                            # If we have a Notes Report (reportType 13)
+                            # update Notes Data (FilterDataType 8)
+                            if self.reportType in [13]:
+                                # Pickle the Notes Data
+                                notes = cPickle.dumps(self.GetNotes())
+                                # Build the values to match the query, including the pickled Notes data
+                                values = (notes, self.reportType, reportScope, configName, 8)
+                                # Execute the query with the appropriate data
+                                DBCursor.execute(query, values)
                         else:
                             # Insert new record.  Note that each report may generate up to 4 records in the database,
                             # FilterDataType 1 = Episodes, FilterDataType 2 = Clips, FilterDataType 3 = Keywords, 4 = Keyword Colors
@@ -1010,8 +1288,10 @@ class FilterDialog(wx.Dialog):
                             # If we have a Series Keyword Sequence Map (reportType 5), or
                             # a Series Keyword Bar Graph (reportType 6), or
                             # a Series Keyword Percentage Graph (reportType 7),
+                            # a Series Report (reportType 10), or
+                            # a Series Clip Data Export (reportType 14),
                             # insert Episode Data (FilterDataType 1)
-                            if self.reportType in [5, 6, 7]:
+                            if self.reportType in [5, 6, 7, 10, 14]:
                                 # Pickle the Episode Data
                                 episodes = cPickle.dumps(self.GetEpisodes())
                                 # Build the values to match the query, including the pickled Episode data
@@ -1024,8 +1304,11 @@ class FilterDialog(wx.Dialog):
                             # a Series Keyword Sequence Map (reportType 5), or
                             # a Series Keyword Bar Graph (reportType 6), or
                             # a Series Keyword Percentage Graph (reportType 7),
+                            # an Episode Report (reportType 11),
+                            # a Collection Report (reportType 12), or
+                            # a Series Clip Data Export (reportType 14),
                             # insert Clip Data (FilterDataType 2)
-                            if self.reportType in [1, 3, 4, 5, 6, 7]:
+                            if self.reportType in [1, 3, 4, 5, 6, 7, 11, 12, 14]:
                                 # Pickle the Clip Data
                                 clips = cPickle.dumps(self.GetClips())
                                 # Build the values to match the query, including the pickled Clip data
@@ -1039,8 +1322,12 @@ class FilterDialog(wx.Dialog):
                             # a Series Keyword Sequence Map (reportType 5), or
                             # a Series Keyword Bar Graph (reportType 6), or
                             # a Series Keyword Percentage Graph (reportType 7),
+                            # a Series Report (reportType 10)
+                            # an Episode Report (reportType 11),
+                            # a Collection Report (reportType 12), or
+                            # a Series Clip Data Export (reportType 14),
                             # insert Keyword Data (FilterDataType 3)
-                            if self.reportType in [1, 2, 3, 4, 5, 6, 7]:
+                            if self.reportType in [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 14]:
                                 # Pickle the Keyword Data
                                 keywords = cPickle.dumps(self.GetKeywords())
                                 # Build the values to match the query, including the pickled Keyword data
@@ -1059,6 +1346,140 @@ class FilterDialog(wx.Dialog):
                                 values = (self.reportType, reportScope, configName, 4, keywordColors)
                                 # Execute the query with the appropriate data
                                 DBCursor.execute(query, values)
+                            # If we have a Notes Report (reportType 13)
+                            # insert Notes Data (FilterDataType 8)
+                            if self.reportType in [13]:
+                                # The Notes List has some translated content!  Specifically, the first part of each Note's PARENT
+                                # indicates what type of record the note is attached to in the LOCAL language.  We have to translate
+                                # this part of the note's parent to English before saving it.  Otherwise, you can't save a configuration
+                                # in one language and then use it in another.
+
+                                # First, let's get the list of notes.
+                                notesList = self.GetNotes()
+                                # Now we need to iterate through the list
+                                for recNum in range(len(notesList)):
+                                    # See what type of record we have and replace the localized version with English
+                                    if notesList[recNum][2][:len(unicode(_('Series'), 'utf8'))] == unicode(_('Series'), 'utf8'):
+                                        notesList[recNum] = (notesList[recNum][0], notesList[recNum][1], u'Series' + notesList[recNum][2][len(unicode(_('Series'), 'utf8')):], notesList[recNum][3])
+                                    elif notesList[recNum][2][:len(unicode(_('Episode'), 'utf8'))] == unicode(_('Episode'), 'utf8'):
+                                        notesList[recNum] = (notesList[recNum][0], notesList[recNum][1], u'Episode' + notesList[recNum][2][len(unicode(_('Episode'), 'utf8')):], notesList[recNum][3])
+                                    elif notesList[recNum][2][:len(unicode(_('Transcript'), 'utf8'))] == unicode(_('Transcript'), 'utf8'):
+                                        notesList[recNum] = (notesList[recNum][0], notesList[recNum][1], u'Transcript' + notesList[recNum][2][len(unicode(_('Transcript'), 'utf8')):], notesList[recNum][3])
+                                    elif notesList[recNum][2][:len(unicode(_('Collection'), 'utf8'))] == unicode(_('Collection'), 'utf8'):
+                                        notesList[recNum] = (notesList[recNum][0], notesList[recNum][1], u'Collection' + notesList[recNum][2][len(unicode(_('Collection'), 'utf8')):], notesList[recNum][3])
+                                    elif notesList[recNum][2][:len(unicode(_('Clip'), 'utf8'))] == unicode(_('Clip'), 'utf8'):
+                                        notesList[recNum] = (notesList[recNum][0], notesList[recNum][1], u'Clip' + notesList[recNum][2][len(unicode(_('Clip'), 'utf8')):], notesList[recNum][3])
+
+                                # Pickle the Notes Data
+                                notes = cPickle.dumps(notesList)
+                                # Build the values to match the query, including the pickled Notes data
+                                values = (self.reportType, reportScope, configName, 8, notes)
+                                # Execute the query with the appropriate data
+                                DBCursor.execute(query, values)
+
+                            # We need a debugging message if the save is requested for an unknown reportType
+                            if self.reportType not in [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 14]:
+                                tmpDlg = Dialogs.ErrorDialog(self, "FilterDialog.OnFileSave() doesn't yet implement Save for reportType %d." % self.reportType)
+                                tmpDlg.ShowModal()
+                                tmpDlg.Destroy()
+
+                            # Close the cursor
+                            DBCursor.close()
+
+                        # Filter Data Options information may not already exist, so
+                        # need to be checked individually.  These Filter Data Types include:
+                            #   9 = Start Time
+                            #  10 = End Time
+                            #  11 = Keyword Bar Height
+                            #  12 = Bar Whitespace
+                            #  13 = Horizontal Grid Lines
+                            #  14 = Vertical Grid Lines
+                            #  15 = Single Line Display
+                            #  16 = Show Legend
+                            #  17 = Color Output
+                            
+                        # If we have a Keyword Map (reportType 1), or
+                        # a Series Keyword Sequence Map (reportType 5), 
+                        # insert Start Time data (FilterDataType 9)
+                        # and End Time data (FilterDataType 10)
+                        if self.reportType in [1, 5]:
+                            self.SaveFilterData(self.reportType, reportScope, configName, 9, self.startTime.GetValue())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 10, self.endTime.GetValue())
+
+                        # If we have a Keyword Map (reportType 1), or
+                        # a Keyword Visualization (reportType 2), or
+                        # a Series Keyword Sequence Map (reportType 5), or
+                        # a Series Keyword Bar Graph (reportType 6), or
+                        # a Series Keyword Percentage Graph (reportType 7),
+                        # insert Keyword Bar Height Data (FilterDataType 11),
+                        # Space Between Bars data (FilterDataType 12),
+                        # Horizontal Grid Lines data (FilterDataType 13), and
+                        # Vertical Grid Lines data (FilterDataType 14)
+                        if self.reportType in [1, 2, 5, 6, 7]:
+                            self.SaveFilterData(self.reportType, reportScope, configName, 11, self.barHeight.GetStringSelection())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 12, self.whitespace.GetStringSelection())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 13, self.hGridLines.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 14, self.vGridLines.IsChecked())
+
+                        # a Series Keyword Sequence Map (reportType 5), 
+                        # insert Single Line Display Data (FilterDataType 15)
+                        if self.reportType in [5]:
+                            self.SaveFilterData(self.reportType, reportScope, configName, 15, self.singleLineDisplay.IsChecked())
+
+                        # a Series Keyword Sequence Map (reportType 5), or
+                        # a Series Keyword Bar Graph (reportType 6), or
+                        # a Series Keyword Percentage Graph (reportType 7),
+                        # insert Show Legend Data (FilterDataType 16)
+                        if self.reportType in [5, 6, 7]:
+                            self.SaveFilterData(self.reportType, reportScope, configName, 16, self.showLegend.IsChecked())
+
+                        # If we have a Keyword Map (reportType 1), or
+                        # a Series Keyword Sequence Map (reportType 5), or
+                        # a Series Keyword Bar Graph (reportType 6), or
+                        # a Series Keyword Percentage Graph (reportType 7),
+                        # insert Color output Data (FilterDataType 17)
+                        if self.reportType in [1, 5, 6, 7]:
+                            self.SaveFilterData(self.reportType, reportScope, configName, 17, self.colorOutput.IsChecked())
+
+                        # Report Content Options information may not already exist, so
+                        # need to be checked individually.  These Filter Data Types include:
+                            # 101 = Include Nested Collections
+                            # 102 = Show Media File Names
+                            # 103 = Show Clip Times
+                            # 104 = Show Clip Transcripts
+                            # 105 = Show Keywords
+                            # 106 = Show Comments
+                            # 107 = Show Collection Notes
+                            # 108 = Show Clip Notes
+
+                        # If we have a Collection Report (reportType 12), or
+                        # a Collection Clip Data Export (reportType 4) AND reportScope != 0
+                        #   (Collection Clip Data Export NOT from Root Collection Node), 
+                        # insert Include Nested Collections Data (FilterDataType 101)
+                        if (self.reportType in [12]) or ((self.reportType == 4) and (reportScope != 0)):
+                            self.SaveFilterData(self.reportType, reportScope, configName, 101, self.showNestedData.IsChecked())
+
+                        # If we have an Episode Report (reportType 11), or
+                        # a Collection Report (reportType 12), 
+                        # insert Show Media Filename Data (FilterDataType 102),
+                        # Show Clip Time (FilterDataType 103),
+                        # Show Clip Transcripts (FilterDataType 104),
+                        # Show Clip Keywords (FilterDataType 105),
+                        # Show Comments (FilterDataType 106), and
+                        # Show Clip Notes (Filter Data Type 108)
+                        if self.reportType in [11, 12]:
+                            self.SaveFilterData(self.reportType, reportScope, configName, 102, self.showFile.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 103, self.showTime.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 104, self.showClipTranscripts.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 105, self.showClipKeywords.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 106, self.showComments.IsChecked())
+                            self.SaveFilterData(self.reportType, reportScope, configName, 108, self.showClipNotes.IsChecked())
+
+                        # If we have a Collection Report (reportType 12), 
+                        # insert Show Collection Notes (Filter Data Type 107)
+                        if self.reportType in [12]:
+                            self.SaveFilterData(self.reportType, reportScope, configName, 107, self.showCollectionNotes.IsChecked())
+
                 # If we can't proceed with the save ...
                 else:
                     # If there's already an error message, we DON'T show it.
@@ -1074,6 +1495,34 @@ class FilterDialog(wx.Dialog):
                         dlg2.Destroy()
             # Destroy the Dialog that allows the user to name the configuration
             dlg.Destroy()
+
+    def SaveFilterData(self, reportType, reportScope, configName, filterDataType, filterData):
+        """  """
+        # Check to see if the Configuration record already exists
+        if DBInterface.record_match_count('Filters2',
+                                         ('ReportType', 'ReportScope', 'ConfigName', 'FilterDataType'),
+                                         (reportType, reportScope, configName, filterDataType)) > 0:
+            # Build the Update Query for Data
+            query = """ UPDATE Filters2
+                          SET FilterData = %s
+                          WHERE ReportType = %s AND
+                                ReportScope = %s AND
+                                ConfigName = %s AND
+                                FilterDataType = %s """
+            values = (filterData, reportType, reportScope, configName, filterDataType)
+        else:
+            query = """ INSERT INTO Filters2
+                            (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
+                          VALUES
+                            (%s, %s, %s, %s, %s) """
+            values = (reportType, reportScope, configName, filterDataType, filterData)
+        # Get a database cursor
+        DBCursor = DBInterface.get_db().cursor()
+        # Execute the query with the appropriate data
+        DBCursor.execute(query, values)
+        # Close the cursor
+        DBCursor.close()
+
 
     def OnFileDelete(self, event):
         """ Delete a Filter Configuration appropriate to the current Report specifications """
@@ -1092,9 +1541,12 @@ class FilterDialog(wx.Dialog):
                 # Remember the Configuration Name
                 localConfigName = dlg.GetStringSelection()
                 # Better confirm this.
-                dlg2 = wx.MessageDialog(self, _('Are you sure you want to delete Filter Configuration "%s"?') % self.configName,
-                                        _("Transana Confirmation"), wx.YES_NO | wx.ICON_INFORMATION)
-                if dlg2.ShowModal() == wx.ID_YES:
+                if 'unicode' in wx.PlatformInfo:
+                    prompt = unicode(_('Are you sure you want to delete Filter Configuration "%s"?'), 'utf8')
+                else:
+                    prompt = _('Are you sure you want to delete Filter Configuration "%s"?')
+                dlg2 = Dialogs.QuestionDialog(self, prompt % localConfigName)
+                if dlg2.LocalShowModal() == wx.ID_YES:
                     # Clear the global configuration name
                     self.configName = ''
                     # Get a Database Cursor
@@ -1105,7 +1557,7 @@ class FilterDialog(wx.Dialog):
                                         ReportScope = %s AND
                                         ConfigName = %s """
                     # Build the data values that match the query
-                    values = (self.reportType, reportScope, localConfigName)
+                    values = (self.reportType, reportScope, localConfigName.encode(TransanaGlobal.encoding))
                     # Execute the query with the appropriate data values
                     DBCursor.execute(query, values)
                 dlg2.Destroy()
@@ -1118,53 +1570,61 @@ class FilterDialog(wx.Dialog):
         # Determine which Tab is currently showing
         selectedTab = self.notebook.GetPageText(self.notebook.GetSelection())
         # If we're looking at the Episodes tab ...
-        if selectedTab == _("Episodes"):
+        if selectedTab == unicode(_("Episodes"), 'utf8'):
             # ... iterate through the Episodes in the Episode List
             for x in range(self.episodeList.GetItemCount()):
                 # If the Episode List Item's checked status does not match the desired status ...
                 if self.episodeList.IsChecked(x) != (btnID == T_CHECK_ALL):
                     # ... then toggle the item so it will match
                     self.episodeList.ToggleItem(x)
-        # if we're looking at the Clips tab ...
-        elif selectedTab == _("Clips"):
-            # ... iterate through the Clips in the Clip List
-            for x in range(self.clipList.GetItemCount()):
-                # If the clip List Item's checked status does not match the desired status ...
-                if self.clipList.IsChecked(x) != (btnID == T_CHECK_ALL):
-                    # ... then toggle the item so it will match
-                    self.clipList.ToggleItem(x)
-        # if we're looking at the Keywords tab ...
-        elif selectedTab == _("Keywords"):
-            # ... iterate through the Keywords in the Keyword List
-            for x in range(self.keywordList.GetItemCount()):
-                # If the keyword List Item's checked status does not match the desired status ...
-                if self.keywordList.IsChecked(x) != (btnID == T_CHECK_ALL):
-                    # ... then toggle the item so it will match
-                    self.keywordList.ToggleItem(x)
-        # if we're looking at the Keywords Group tab ...
-        elif selectedTab == _("Keyword Groups"):
-            # ... iterate through the Keyword Groups in the Keyword Group List
-            for x in range(self.keywordGroupList.GetItemCount()):
-                # If the keyword Group List Item's checked status does not match the desired status ...
-                if self.keywordGroupList.IsChecked(x) != (btnID == T_CHECK_ALL):
-                    # ... then toggle the item so it will match
-                    self.keywordGroupList.ToggleItem(x)
         # if we're looking at the Transcripts tab ...
-        elif selectedTab == +("Transcripts"):
+        elif selectedTab == unicode(_("Transcripts"), 'utf8'):
             # ... iterate through the Transcript items in the Transcript List
             for x in range(self.transcriptList.GetItemCount()):
-                # If the keyword Group List Item's checked status does not match the desired status ...
+                # If the Transcript List Item's checked status does not match the desired status ...
                 if self.transcriptList.IsChecked(x) != (btnID == T_CHECK_ALL):
                     # ... then toggle the item so it will match
                     self.transcriptList.ToggleItem(x)
         # if we're looking at the Collections tab ...
-        elif selectedTab == +("Collections"):
-            # ... iterate through the Transcript items in the Transcript List
+        elif selectedTab == unicode(_("Collections"), 'utf8'):
+            # ... iterate through the Collection items in the Collection List
             for x in range(self.collectionList.GetItemCount()):
-                # If the keyword Group List Item's checked status does not match the desired status ...
+                # If the Collection List Item's checked status does not match the desired status ...
                 if self.collectionList.IsChecked(x) != (btnID == T_CHECK_ALL):
                     # ... then toggle the item so it will match
                     self.collectionList.ToggleItem(x)
+        # if we're looking at the Clips tab ...
+        elif selectedTab == unicode(_("Clips"), 'utf8'):
+            # ... iterate through the Clips in the Clip List
+            for x in range(self.clipList.GetItemCount()):
+                # If the Clip List Item's checked status does not match the desired status ...
+                if self.clipList.IsChecked(x) != (btnID == T_CHECK_ALL):
+                    # ... then toggle the item so it will match
+                    self.clipList.ToggleItem(x)
+        # if we're looking at the Keywords tab ...
+        elif selectedTab == unicode(_("Keywords"), 'utf8'):
+            # ... iterate through the Keywords in the Keyword List
+            for x in range(self.keywordList.GetItemCount()):
+                # If the Keyword List Item's checked status does not match the desired status ...
+                if self.keywordList.IsChecked(x) != (btnID == T_CHECK_ALL):
+                    # ... then toggle the item so it will match
+                    self.keywordList.ToggleItem(x)
+        # if we're looking at the Keywords Group tab ...
+        elif selectedTab == unicode(_("Keyword Groups"), 'utf8'):
+            # ... iterate through the Keyword Groups in the Keyword Group List
+            for x in range(self.keywordGroupList.GetItemCount()):
+                # If the Keyword Group List Item's checked status does not match the desired status ...
+                if self.keywordGroupList.IsChecked(x) != (btnID == T_CHECK_ALL):
+                    # ... then toggle the item so it will match
+                    self.keywordGroupList.ToggleItem(x)
+        # if we're looking at the Notes tab ...
+        elif selectedTab == unicode(_("Notes"), 'utf8'):
+            # ... iterate through the Notes in the Notes List
+            for x in range(self.notesList.GetItemCount()):
+                # If the Notes List Item's checked status does not match the desired status ...
+                if self.notesList.IsChecked(x) != (btnID == T_CHECK_ALL):
+                    # ... then toggle the item so it will match
+                    self.notesList.ToggleItem(x)
                     
     def OnButton(self, event):
         """ Process Button Events for the Filter Dialog """
@@ -1258,10 +1718,42 @@ class FilterDialog(wx.Dialog):
             # ... then the Legend is not available.
             self.showLegend.Enable(False)
             
+    def GetShowClipTranscripts(self):
+        """ Return the value of showClipTranscripts on the Report Contents tab """
+        return self.showClipTranscripts.GetValue()
+
+    def GetShowClipKeywords(self):
+        """ Return the value of showClipKeywords on the Report Contents tab """
+        return self.showClipKeywords.GetValue()
+
+    def GetShowFile(self):
+        """ Return the value of showFile on the Report Contents tab """
+        return self.showFile.GetValue()
+
+    def GetShowTime(self):
+        """ Return the value of showTime on the Report Contents tab """
+        return self.showTime.GetValue()
+
+    def GetShowComments(self):
+        """ Return the value of showComments on the Report Contents tab """
+        return self.showComments.GetValue()
+
+    def GetShowCollectionNotes(self):
+        """ Return the value of showCollectionNotes on the Report Contents tab """
+        return self.showCollectionNotes.GetValue()
+
+    def GetShowClipNotes(self):
+        """ Return the value of showClipNotes on the Report Contents tab """
+        return self.showClipNotes.GetValue()
+
+    def GetShowNestedData(self):
+        """ Return the value of showNestedData on the Report Contents tab """
+        return self.showNestedData.GetValue()
+
     def SetEpisodes(self, episodeList):
         """ Allows the calling routine to provide a list of Episodes that should be included on the Episodes Tab.
             A sorted list of (episodeID, seriesID, checked(boolean)) information should be passed in. """
-        # Iterate through the episode list that was passed in
+        # Iterate through the Episode list that was passed in
         for (episodeID, seriesID, checked) in episodeList:
             # Create a new Item in the Episode List at the end of the list.  Add the Episode ID data.
             index = self.episodeList.InsertStringItem(sys.maxint, episodeID)
@@ -1285,7 +1777,7 @@ class FilterDialog(wx.Dialog):
         """ Allows the calling routine to retrieve the episode data from the Filter Dialog.  A sorted list
             of (episodeID, seriesID, checked(boolean)) information is returned.  (Unchecked items ARE included,
             as we don't want to lose their information for later processing.) """
-        # Create an empty episode list
+        # Create an empty Episode list
         episodeList = []
         # Iterate throught the EpisodeListCtrl items
         for x in range(self.episodeList.GetItemCount()):
@@ -1297,9 +1789,9 @@ class FilterDialog(wx.Dialog):
     def SetTranscripts(self, transcriptList):
         """ Allows the calling routine to provide a list of Transcripts that should be included on the Transcripts Tab.
             A sorted list of (seriesID,episodeID, transcriptID, numClips,checked(boolean)) information should be passed in. """
-        # Iterate through the episode list that was passed in
-        for (seriesID, episodeID, transcriptID, numClips,checked) in transcriptList:
-            # Create a new Item in the transcript List at the end of the list.  Add the transcript ID data.
+        # Iterate through the Transcript list that was passed in
+        for (seriesID, episodeID, transcriptID, numClips, checked) in transcriptList:
+            # Create a new Item in the Transcript List at the end of the list.  Add the Transcript ID data.
             index = self.transcriptList.InsertStringItem(sys.maxint, seriesID)
             # Add the Episode data
             self.transcriptList.SetStringItem(index, 1, episodeID)
@@ -1314,7 +1806,7 @@ class FilterDialog(wx.Dialog):
         self.transcriptList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
         # Set the Column width for Transcript Data
         self.transcriptList.SetColumnWidth(1, wx.LIST_AUTOSIZE)
-        # Set the Column with for Series Data
+        # Set the Column with for Number of Clips Data
         #self.transcriptList.SetColumnWith(2, wx.LIST_AUTOSIZE)
         # lay out the transcript Panel
         self.transcriptPanel.Layout()
@@ -1324,24 +1816,24 @@ class FilterDialog(wx.Dialog):
         self.CenterOnScreen()
 
     def GetTranscripts(self):
-        """ Allows the calling routine to retrieve the transcript data from the Filter Dialog.  A sorted list
+        """ Allows the calling routine to retrieve the Transcript data from the Filter Dialog.  A sorted list
             of (episodeID, transcriptID, checked(boolean)) information is returned.  (Unchecked items ARE included,
             as we don't want to lose their information for later processing.) """
-        # Create an empty episode list
+        # Create an empty Transcript list
         transcriptList = []
-        # Iterate throught the EpisodeListCtrl items
+        # Iterate throught the TranscriptListCtrl items
         for x in range(self.transcriptList.GetItemCount()):
-            # Append the list item's data to the episode list
+            # Append the list item's data to the Transcript list
             transcriptList.append((self.transcriptList.GetItem(x, 0).GetText(), self.transcriptList.GetItem(x, 1).GetText(), self.transcriptList.GetItem(x,2).GetText(),self.transcriptList.GetItem(x,3).GetText(),self.transcriptList.IsChecked(x)))
-        # Return the episode list
+        # Return the Transcript list
         return transcriptList
     
-    def SetCollections(self,collectionList):
-        """ Allows the calling routine to provide a list of Transcripts that should be included on the Transcripts Tab.
-            A sorted list of (seriesID,episodeID, transcriptID, numClips,checked(boolean)) information should be passed in. """
-        # Iterate through the episode list that was passed in
-        for (collID,checked) in collectionList:
-            # Create a new Item in the transcript List at the end of the list.  Add the transcript ID data.
+    def SetCollections(self, collectionList):
+        """ Allows the calling routine to provide a list of Collections that should be included on the Collections Tab.
+            A sorted list of (collectionID, checked(boolean)) information should be passed in. """
+        # Iterate through the Collection list that was passed in
+        for (collID, checked) in collectionList:
+            # Create a new Item in the Collection List at the end of the list.  Add the Collection ID data.
             index = self.collectionList.InsertStringItem(sys.maxint, collID)
             # If the item should be checked, check it!
             if checked:
@@ -1349,7 +1841,7 @@ class FilterDialog(wx.Dialog):
         # Set the column width for Collection Name
         self.collectionList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
         
-        # lay out the collection Panel
+        # lay out the Collections Panel
         self.collectionPanel.Layout()
         # Lay out the Dialog
         self.Layout()
@@ -1357,16 +1849,16 @@ class FilterDialog(wx.Dialog):
         self.CenterOnScreen()
     
     def GetCollections(self):
-        """ Allows the calling routine to retrieve the transcript data from the Filter Dialog.  A sorted list
-            of (episodeID, transcriptID, checked(boolean)) information is returned.  (Unchecked items ARE included,
+        """ Allows the calling routine to retrieve the Collections data from the Filter Dialog.  A sorted list
+            of (collectionID, checked(boolean)) information is returned.  (Unchecked items ARE included,
             as we don't want to lose their information for later processing.) """
-        # Create an empty episode list
+        # Create an empty Collections list
         collectionList = []
-        # Iterate throught the EpisodeListCtrl items
+        # Iterate throught the CollectionListCtrl items
         for x in range(self.collectionList.GetItemCount()):
-            # Append the list item's data to the episode list
+            # Append the list item's data to the Collections list
             collectionList.append((self.collectionList.GetItem(x, 0).GetText(),self.collectionList.IsChecked(x)))
-        # Return the episode list
+        # Return the Collections list
         return collectionList
     
     def SetClips(self, clipList):
@@ -1374,18 +1866,14 @@ class FilterDialog(wx.Dialog):
             A sorted list of (clipName, collectionNumber, checked(boolean)) information should be passed in. """
         # Save the original data.  We'll need it to retrieve the Collection Number data
         self.originalClipData = clipList
-        # Iterate through the clip list that was passed in
+        # Iterate through the Clip list that was passed in
         for (clipID, collectNum, checked) in clipList:
             # Create a new Item in the Clip List at the end of the list.  Add the Clip ID data.
             index = self.clipList.InsertStringItem(sys.maxint, clipID)
             # Add the Collection data
             tempColl = Collection.Collection(collectNum)
-            tempStr = ""
-            for coll in tempColl.GetNodeData():
-                if tempStr != "":
-                    tempStr += " > "
-                tempStr += coll
-            self.clipList.SetStringItem(index, 1, tempStr)
+            # Add the Collection's Node String
+            self.clipList.SetStringItem(index, 1, tempColl.GetNodeString())
             # If the item should be checked, check it!
             if checked:
                 self.clipList.CheckItem(index)
@@ -1393,7 +1881,7 @@ class FilterDialog(wx.Dialog):
         self.clipList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
         # Set the Column width for Collection Data
         self.clipList.SetColumnWidth(1, wx.LIST_AUTOSIZE)
-        # lay out the Keywords Panel
+        # lay out the Clips Panel
         self.clipsPanel.Layout()
         # Lay out the Dialog
         self.Layout()
@@ -1401,23 +1889,23 @@ class FilterDialog(wx.Dialog):
         self.CenterOnScreen()
 
     def GetClips(self):
-        """ Allows the calling routine to retrieve the clip data from the Filter Dialog.  A sorted list
+        """ Allows the calling routine to retrieve the Clip data from the Filter Dialog.  A sorted list
             of (clipID, collectNum, checked(boolean)) information is returned.  (Unchecked items ARE included,
             as we don't want to lose their information for later processing.) """
-        # Create an empty clip list
+        # Create an empty Clip list
         clipList = []
         # Iterate throught the ClipListCtrl items
         for x in range(self.clipList.GetItemCount()):
-            # Append the list item's data to the clip list
+            # Append the list item's data to the Clip list
             clipList.append((self.clipList.GetItem(x, 0).GetText(), self.originalClipData[x][1], self.clipList.IsChecked(x)))
         # Return the clip list
         return clipList
-            
+
     def SetKeywordGroups(self, kwGroupList):
         """ Allows the calling routine to provide a list of keyword groups that should be included on the Keywords Tab.
             A sorted list of (keywordgroup, checked(boolean)) information should be passed in.
             If Keyword Group Colors are enabled, SetKeywordGroupColors() should be called before SetKeywordGroups(). """
-        # Iterate through the keyword list that was passed in
+        # Iterate through the keyword group list that was passed in
         for kwrec in kwGroupList:
             # Unpack the data record
             (kwg, checked) = kwrec
@@ -1436,7 +1924,7 @@ class FilterDialog(wx.Dialog):
             self.keywordGroupList.SetItemData(index, colorSpec)
         # Set the column width for Keyword Groups
         self.keywordGroupList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
-        # lay out the Keywords Panel
+        # lay out the Keyword Groups Panel
         self.keywordGroupPanel.Layout()
         # Lay out the Dialog
         self.Layout()
@@ -1447,13 +1935,13 @@ class FilterDialog(wx.Dialog):
         """ Allows the calling routine to retrieve the keyword Group data from the Filter Dialog.  A sorted list
             of (keywordgroup, checked(boolean)) information is returned.  (Unchecked items ARE included,
             as we don't want to lose their information for later processing.) """
-        # Create an empty keyword list
+        # Create an empty keyword groups list
         keywordGroupList = []
-        # Iterate throught the KeywordListCtrl items
+        # Iterate throught the KeywordGroupListCtrl items
         for x in range(self.keywordGroupList.GetItemCount()):
-            # Append the list item's data to the keyword list
+            # Append the list item's data to the keyword Groups list
             keywordGroupList.append((self.keywordGroupList.GetItem(x, 0).GetText(), self.keywordGroupList.IsChecked(x)))
-        # Return the keyword list
+        # Return the keyword groups list
         return keywordGroupList
     
     def SetKeywords(self, kwList):
@@ -1518,6 +2006,40 @@ class FilterDialog(wx.Dialog):
         # return the updated dictionary object
         return self.keywordColors
 
+    def SetNotes(self, notesList):
+        """ Allows the calling routine to provide a list of Notes that should be included on the Notes tab. """
+        # Iterate through the note list that was passed in
+        for (noteNum, noteID, noteParent, checked) in notesList:
+            # Create a new Item in the Note List at the end of the list.  Add the Note ID data.
+            index = self.notesList.InsertStringItem(sys.maxint, noteID)
+            # Add the Note Parent data
+            self.notesList.SetStringItem(index, 1, noteParent)
+            # If the item should be checked, check it!
+            if checked:
+                self.notesList.CheckItem(index)
+            # Add the note number to the note list's Item Data
+            self.notesList.SetItemData(index, noteNum)
+        # Set the column widths for Note Name and Parent 
+        self.notesList.SetColumnWidth(0, wx.LIST_AUTOSIZE)
+        self.notesList.SetColumnWidth(1, wx.LIST_AUTOSIZE)
+        
+        # lay out the Notes Panel
+        self.notesPanel.Layout()
+        # Lay out the Dialog
+        self.Layout()
+        # Center the Dialog on the screen
+        self.CenterOnScreen()
+    
+    def GetNotes(self):
+        """ Allows the calling routine to retrieve Notes data from the Filter Dialog.  """
+        noteList = []
+        # Iterate through the notes list ...
+        for x in range(self.notesList.GetItemCount()):
+            # build the list to return
+            noteList.append((self.notesList.GetItemData(x), self.notesList.GetItem(x, 0).GetText(), self.notesList.GetItem(x, 1).GetText(), self.notesList.IsChecked(x)))
+        # return the updated dictionary object
+        return noteList
+        
     def GetStartTime(self):
         """ Return the value of the Start Time text control on the Options tab """
         return self.startTime.GetValue()
@@ -1602,7 +2124,7 @@ class FilterLoadDialog(wx.Dialog):
         box2.Add((1, 1), 1, wx.LEFT, 9)
         # If this is for the appropriate report type ...
         # (Copy Configuration has been implemented for Keyword Map, Keyword Visualization, Series Keyword Sequence Map,
-        # Series Keyword Bar Graph, and Series Keyword Percentage Graph.)
+        # Series Keyword Bar Graph, Series Keyword Percentage Graph, and Collection Report.)
         if self.reportType in [1, 2, 5, 6, 7]:
             # ... display the Copy Configuration button
             btnCopy = wx.Button(self, -1, _("Copy Configuration"))
@@ -1666,18 +2188,18 @@ class FilterLoadDialog(wx.Dialog):
                 # Different reportTypes have different rules for what to copy.
                 # For the Keyword Map and the Keyword Visualization ...
                 if self.reportType in [1, 2]:
-                    # Build the database query.  We only duplicate FilterDataType 3 (Keywords) and FilterDataType 4 (Keyword Colors),
-                    # not FilterDataType 1 (Episodes) or FilterDataType 2 (Clips).  Different Scopes will have the same Keywords and
+                    # Build the database query.  We do not duplicate 
+                    # FilterDataType 1 (Episodes) or FilterDataType 2 (Clips).  Different Scopes will have the same Keywords and
                     # Colors, but never the same Episodes or Clips.
                     query = """ SELECT ReportType, ReportScope, ConfigName, FilterDataType, FilterData
                                   FROM Filters2
                                   WHERE ReportType = %s AND
                                         ReportScope = %s AND
                                         ConfigName = %s AND
-                                        (FilterDataType = 3 OR
-                                         FilterDataType = 4)"""
+                                        FilterDataType <> 1 AND
+                                        FilterDataType <> 2 """
                     # Set up the data values that match the query
-                    values = (self.reportType, copyReportScope, copyConfigName)
+                    values = (self.reportType, copyReportScope, copyConfigName.encode(TransanaGlobal.encoding))
                 # For the Keyword Series Sequence Map, the Keyword Series Bar Graph, and the Keyword Series Percentage Graph ...
                 elif self.reportType in [5, 6, 7]:
                     # Build the database query.  We can duplicate all FilterDataTypes.
@@ -1687,7 +2209,7 @@ class FilterLoadDialog(wx.Dialog):
                                         ReportScope = %s AND
                                         ConfigName = %s"""
                     # Set up the data values that match the query
-                    values = (copyReportType, copyReportScope, copyConfigName)
+                    values = (copyReportType, copyReportScope, copyConfigName.encode(TransanaGlobal.encoding))
 
                 # Execute the query with the data values
                 DBCursor.execute(query, values)
@@ -1722,13 +2244,13 @@ class FilterLoadDialog(wx.Dialog):
                                                 ReportScope = %s AND
                                                 ConfigName = %s AND
                                                 FilterDataType = %s """
-                            values = (rowFilterData, self.reportType, self.reportScope, newConfigName, rowFilterDataType)
+                            values = (rowFilterData, self.reportType, self.reportScope, newConfigName.encode(TransanaGlobal.encoding), rowFilterDataType)
                         else:
                             query = """ INSERT INTO Filters2
                                             (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
                                           VALUES
                                             (%s, %s, %s, %s, %s) """
-                            values = (self.reportType, self.reportScope, newConfigName, rowFilterDataType, rowFilterData)
+                            values = (self.reportType, self.reportScope, newConfigName.encode(TransanaGlobal.encoding), rowFilterDataType, rowFilterData)
                         # Execute the query with the data values
                         DBCursor.execute(query, values)
 
@@ -1774,7 +2296,7 @@ class FilterLoadDialog(wx.Dialog):
         # Graph, use a Series-based Query.
         # The Report Type must be DIFFERENT.
         # The Report Scope must be the SAME.
-        if self.reportType in [5, 6, 7]:
+        elif self.reportType in [5, 6, 7]:
             # Build the database query
             query = """ SELECT s.SeriesID, f.ReportType, f.ReportScope, f.ConfigName
                           FROM Series2 s, Filters2 f
@@ -1851,8 +2373,12 @@ class FilterCopyConfigDialog(wx.Dialog):
         if (len(configNames) > 0) and len(configNames[0]) == 5:
             self.choices.InsertColumn(1, _('Episode'))
             self.choices.InsertColumn(2, _('Configuration Name'))
+            # Note how many colums we have
+            maxCol = 3
         else:
             self.choices.InsertColumn(1, _('Configuration Name'))
+            # Note how many colums we have
+            maxCol = 2
 
         # We'll need to be able to look up return data based on List Item Index.  We'll use a dictionary to hold the data.
         self.dataLookup = {}
@@ -1878,7 +2404,7 @@ class FilterCopyConfigDialog(wx.Dialog):
         # We need to know how wide the window needs to be.  Start with room for the margins and the ScrollBar
         windowWidth = 40
         # For each column ...
-        for x in range(3):
+        for x in range(maxCol):
             # Set the width to the widest item ...
             self.choices.SetColumnWidth(x, wx.LIST_AUTOSIZE)
             colWidth1 = self.choices.GetColumnWidth(x)

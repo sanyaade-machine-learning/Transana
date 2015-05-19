@@ -276,6 +276,8 @@ class Episode(DataObject):
             DBInterface.delete_filter_records(3, self.number)
             #   Delete Episode Clip Data Coder Reliability Export records (Kathleen Liston's code)
             DBInterface.delete_filter_records(8, self.number)
+            #   Delete Episode Report records
+            DBInterface.delete_filter_records(11, self.number)
 
             # Detect, Load, and Delete all Clip Notes.
             notes = self.get_note_nums()

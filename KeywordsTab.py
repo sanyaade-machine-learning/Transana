@@ -118,29 +118,39 @@ class KeywordsTab(wx.Panel):
         """ This method allows up to update all data when this tab is displayed.  This is necessary as the objects may have
             been changed since they were originally loaded.  """
 
-        # If a Series Object is defined, reload it
-        if self.seriesObj != None:
-            self.seriesObj = Series.Series(self.seriesObj.number)
-        # If an Episode Object is defined, reload it
-        if self.episodeObj != None:
-            self.episodeObj = Episode.Episode(self.episodeObj.number)
-        # If a Collection Object is defined, reload it
-        if self.collectionObj != None:
-            self.collectionObj = Collection.Collection(self.collectionObj.number)
-        # If a Clip Object is defined, reload it
-        if self.clipObj != None:
-            self.clipObj = Clip.Clip(self.clipObj.number)
+        try:
+            # If a Series Object is defined, reload it
+            if self.seriesObj != None:
+                self.seriesObj = Series.Series(self.seriesObj.number)
+            # If an Episode Object is defined, reload it
+            if self.episodeObj != None:
+                self.episodeObj = Episode.Episode(self.episodeObj.number)
+            # If a Collection Object is defined, reload it
+            if self.collectionObj != None:
+                self.collectionObj = Collection.Collection(self.collectionObj.number)
+            # If a Clip Object is defined, reload it
+            if self.clipObj != None:
+                self.clipObj = Clip.Clip(self.clipObj.number)
 
-        # Get the local keyword list pointer aimed at the appropriate source object.
-        # NOTE:  If a Clip is defined use it (whether an episode is defined or not.)  If
-        #        no clip is defined but an episode is defined, use that.
-        if self.clipObj != None:
-            self.kwlist = self.clipObj.keyword_list
-        elif self.episodeObj != None:
-            self.kwlist = self.episodeObj.keyword_list
+            # Get the local keyword list pointer aimed at the appropriate source object.
+            # NOTE:  If a Clip is defined use it (whether an episode is defined or not.)  If
+            #        no clip is defined but an episode is defined, use that.
+            if self.clipObj != None:
+                self.kwlist = self.clipObj.keyword_list
+            elif self.episodeObj != None:
+                self.kwlist = self.episodeObj.keyword_list
 
-        # Update the Tab Display
-        self.UpdateKeywords()
+            # Update the Tab Display
+            self.UpdateKeywords()
+        except TransanaExceptions.RecordNotFoundError:
+            msg = _("The appropriate Keyword data could not be loaded from the database.")
+            if not TransanaConstants.singleUserVersion:
+                msg += '\n' + _("This data may have been deleted by another user.")
+            tmpDlg = Dialogs.ErrorDialog(self.parent, msg)
+            tmpDlg.ShowModal()
+            tmpDlg.Destroy()
+            # Return to the database tab
+            self.parent.parent.ControlObject.ShowDataTab(0)
 
 
     def UpdateKeywords(self):
@@ -173,7 +183,15 @@ class KeywordsTab(wx.Panel):
                 prompt = unicode(_('Collection: "%s"'), 'utf8')
             else:
                 prompt = _('Collection: "%s"')
-            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % self.collectionObj.id)
+            # We want to show the full collection path, but it gets pretty wide pretty quickly, so let's do it
+            # on multiple lines.  First, let's get the individual Collection nodes
+            collNodes = self.collectionObj.GetNodeData()
+            # Put the first node out with the Collection prompt
+            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % collNodes[0])
+            # Iterate through rest of the nodes, skipping the first ...
+            for node in collNodes[1:]:
+                # ... and add them to the ListCtrl
+                self.lbKeywordsList.InsertStringItem(sys.maxint, '    > "%s"' % node)
 
         if self.clipObj != None:
             if 'unicode' in wx.PlatformInfo:
