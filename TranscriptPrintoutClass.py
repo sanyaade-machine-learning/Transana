@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2006  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2007  The Board of Regents of the University of Wisconsin System
 #
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -580,19 +580,34 @@ class MyPrintout(wx.Printout):
         self.pageData = pageData
 
     def OnBeginDocument(self, start, end):
-        return self.base_OnBeginDocument(start, end)
+        if wx.VERSION[0] == 2 and wx.VERSION[1] <= 6:
+            return self.base_OnBeginDocument(start, end)
+        else:
+            return super(MyPrintout, self).OnBeginDocument(start, end)
 
     def OnEndDocument(self):
-        self.base_OnEndDocument()
+        if wx.VERSION[0] == 2 and wx.VERSION[1] <= 6:
+            self.base_OnEndDocument()
+        else:
+            super(MyPrintout, self).OnEndDocument()
 
     def OnBeginPrinting(self):
-        self.base_OnBeginPrinting()
+        if wx.VERSION[0] == 2 and wx.VERSION[1] <= 6:
+            self.base_OnBeginPrinting()
+        else:
+            super(MyPrintout, self).OnBeginPrinting()
 
     def OnEndPrinting(self):
-        self.base_OnEndPrinting()
+        if wx.VERSION[0] == 2 and wx.VERSION[1] <= 6:
+            self.base_OnEndPrinting()
+        else:
+            super(MyPrintout, self).OnEndPrinting()
 
     def OnPreparePrinting(self):
-        self.base_OnPreparePrinting()
+        if wx.VERSION[0] == 2 and wx.VERSION[1] <= 6:
+            self.base_OnPreparePrinting()
+        else:
+            super(MyPrintout, self).OnPreparePrinting()
 
     def HasPage(self, page):
         # The HasPage function tells the framework if a given page number exists.
@@ -933,4 +948,3 @@ if __name__ == '__main__':
     # run the application
     app = MyApp(0)
     app.MainLoop()
- 

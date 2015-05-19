@@ -1,4 +1,4 @@
-# Copyright (C) 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2006 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -49,6 +49,11 @@ else:
     import TransanaGlobal
 
 CONTROL_PROGRESSNOTIFICATION = wx.NewId()
+if wx.VERSION[0] == 2 and wx.VERSION[1] <= 6:
+    WMPBACKEND = wx.media.MEDIABACKEND_DIRECTSHOW
+else:
+    WMPBACKEND = wx.media.MEDIABACKEND_WMP10
+
 
 # Declare the main VideoFrame class, designed to interact with the rest of Transana
 class VideoFrame(wx.Dialog):
@@ -67,6 +72,8 @@ class VideoFrame(wx.Dialog):
         self.isLoading = False
         # We need a flag that indicates that we want to Play as soon as the Load is complete
         self.playWhenLoaded = False
+        # We're having trouble knowing the media length.  Let's track whether we know it yet.
+        self.mediaLengthKnown = False
         # The Mac requires the following so that versions look more similar across platforms
         if 'wxMac' in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
@@ -85,7 +92,10 @@ class VideoFrame(wx.Dialog):
 
         # set default back end to QuickTime, as then either type of media can be opened.  If we
         # set it to DirectShow for Windows, we can't later load Quicktime files
-        self.backend = wx.media.MEDIABACKEND_QUICKTIME
+        if 'wxGTK' in wx.PlatformInfo:
+            self.backend = wx.media.MEDIABACKEND_GSTREAMER
+        else:
+            self.backend = wx.media.MEDIABACKEND_QUICKTIME
             
         self.movie = None
 
@@ -118,7 +128,6 @@ class VideoFrame(wx.Dialog):
             self.movie.Destroy()
             self.movie = None
             wx.Yield()
-            
         self.movie = wx.media.MediaCtrl(self, id=-1, fileName=flNm, szBackend=self.backend)
         box = wx.BoxSizer(wx.HORIZONTAL)
         box.Add(self.movie, 1, wx.EXPAND | wx.ALL, 0)
@@ -135,15 +144,16 @@ class VideoFrame(wx.Dialog):
             self.movie.Show(True)
             if ('wxMSW' in wx.PlatformInfo):
                 (videoFilename, videoExtension) = os.path.splitext(filename)
-                if videoExtension in ['.mov']:
+                if videoExtension in ['.mov', '.mp4']:
                     backendNeeded = wx.media.MEDIABACKEND_QUICKTIME
                 else:
-                    backendNeeded = wx.media.MEDIABACKEND_DIRECTSHOW
+                    backendNeeded = WMPBACKEND
                 if self.backend != backendNeeded:
                     self.backend = backendNeeded
                     self.CreateMediaPlayer(filename)
             # We need to have a flag that indicates that the video is in the process of loading
             self.isLoading = True
+            self.mediaLengthKnown = False
             if self.movie.Load(filename):
                 self.FileName = filename
                 self.VideoStartPoint = 0
@@ -171,7 +181,7 @@ class VideoFrame(wx.Dialog):
         if not isinstance(TimeCode, int):
             TimeCode = int(TimeCode)
         self.VideoStartPoint = TimeCode
-        self.movie.Seek(TimeCode)
+        self.SetCurrentVideoPosition(TimeCode)
         if self.parentVideoWindow != None:
             # notify the rest of Transana of the change.  However, calling parentVideoWindow.UpdateVideoPosition calls this method, causing
             # recursion problems, so we make the call to the parentVideoWindow's ControlObject.
@@ -191,13 +201,26 @@ class VideoFrame(wx.Dialog):
         return self.movie.Tell()
 
     def GetMediaLength(self):
-        return self.movie.Length()
+        if not self.mediaLengthKnown:
+            return -1
+        else:
+            return self.movie.Length()
 
     def GetState(self):
         return self.movie.GetState()
     
     def SetCurrentVideoPosition(self, TimeCode):
         """ Set the current video position. """
+        # TimeCode must be an int on the Mac.
+        if not isinstance(TimeCode, int):
+            TimeCode = int(TimeCode)
+        # On the Mac, the start point can't be less than 0
+        if TimeCode < 0:
+            TimeCode = 0
+        # On the Mac, the start point can't be after the end
+        if (self.mediaLengthKnown) and (TimeCode > self.GetMediaLength() - 50):
+            self.VideoStartPoint = self.GetMediaLength() - 50
+            TimeCode = self.GetMediaLength() - 50
         self.movie.Seek(TimeCode)
 
     def GetPlayBackSpeed(self):
@@ -258,7 +281,7 @@ class VideoFrame(wx.Dialog):
     def Stop(self):
         """Stop the video. (stop playback and return position to Video Start Point)."""
         self.movie.Stop()
-        self.movie.Seek(self.VideoStartPoint)
+        self.SetCurrentVideoPosition(self.VideoStartPoint)
         self.PostPos()
 
     def OnCloseWindow(self, event):
@@ -268,6 +291,7 @@ class VideoFrame(wx.Dialog):
     def OnMediaLoaded(self, event):
         # Indicate that the loading process is complete
         self.isLoading = False
+        self.mediaLengthKnown = True
         # Putting this here allows it to show up under QuickTime!
         self.movie.ShowPlayerControls(wx.media.MEDIACTRLPLAYERCONTROLS_DEFAULT | wx.media.MEDIACTRLPLAYERCONTROLS_VOLUME)
         # once the video is loaded, we can determine its size and should react to that.
@@ -281,7 +305,7 @@ class VideoFrame(wx.Dialog):
             self.Stop()
         # Often, the Seek has also not occurred correctly.  This detects and fixes that problem.
         if self.VideoStartPoint != self.GetTimecode():
-            self.movie.Seek(self.VideoStartPoint)
+            self.SetCurrentVideoPosition(self.VideoStartPoint)
 
     def OnSizeChange(self):
         (sizeX, sizeY) = self.movie.GetBestSize()
@@ -310,7 +334,7 @@ class VideoFrame(wx.Dialog):
         #    width:   use minimum media player width established above
         #    height:  use height of Movie  + ControlBarSize + headerHeight pixels for the player controls
         # rect[0] compensates if the Start Menu is on the left side of the screen
-        if self.backend == wx.media.MEDIABACKEND_DIRECTSHOW:
+        if self.backend == WMPBACKEND:
             controlBarSize = 65
         elif self.backend == wx.media.MEDIABACKEND_QUICKTIME:
             controlBarSize = 10
@@ -351,7 +375,7 @@ class VideoFrame(wx.Dialog):
             self.parentVideoWindow.UpdateVideoWindowPosition(pos[0], pos[1], width, height)
 
     def OnMediaStop(self, event):
-        wx.CallAfter(self.movie.Seek, self.VideoStartPoint)
+        wx.CallAfter(self.SetCurrentVideoPosition, self.VideoStartPoint)
         wx.CallAfter(self.PostPos)
 
     def OnProgressNotification(self, event):

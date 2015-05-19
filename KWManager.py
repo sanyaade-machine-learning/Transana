@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -307,10 +307,12 @@ class KWManager(wx.Dialog):
 
     def OnKeywordSelect(self, evt):
         """Invoked when a keyword is selected in the listbox."""
-        kw = Keyword.Keyword(self.kw_group.GetStringSelection(), self.kw_lb.GetStringSelection())
-        self.definition.SetValue(kw.definition)
-        self.edit_kw.Enable(self.deleteEnabled)
-        self.del_kw.Enable(self.deleteEnabled)
+        # Check to see if there IS a keyword selected.  (an error was being raised!)
+        if self.kw_lb.GetStringSelection() != '':
+            kw = Keyword.Keyword(self.kw_group.GetStringSelection(), self.kw_lb.GetStringSelection())
+            self.definition.SetValue(kw.definition)
+            self.edit_kw.Enable(self.deleteEnabled)
+            self.del_kw.Enable(self.deleteEnabled)
 
     def OnKeywordDoubleClick(self, event):
         """Double-clicking a keyword calls the Edit Properties screen!"""
@@ -342,11 +344,11 @@ class KWManager(wx.Dialog):
                         # if the user pressed "OK" ...
                         try:
                             # Try to save the Keyword Data
-                            kw.db_save()
+                            result = kw.db_save()
+                            originalKeyword = self.kw_lb.GetStringSelection()
+                            originalKeywordGroup = self.kw_group.GetStringSelection()
                             # See if the Keyword Group has been changed.  If it has, update the form.
                             if kw.keywordGroup != self.kw_group.GetStringSelection():
-                                originalKeyword = self.kw_lb.GetStringSelection()
-                                originalKeywordGroup = self.kw_group.GetStringSelection()
                                 # See if the new Keyword Group exists, and if not, create it
                                 if self.kw_group.FindString(kw.keywordGroup) == -1:
                                     self.kw_group.Append(kw.keywordGroup)
@@ -365,17 +367,33 @@ class KWManager(wx.Dialog):
                                 # Clear the Definition field
                                 self.definition.SetValue('')
                             else:
-                                originalKeyword = self.kw_lb.GetStringSelection()
                                 # If the Keyword has been changed, update it on the form.
                                 if kw.keyword != originalKeyword:
                                     self.kw_lb.SetString(self.kw_lb.GetSelection(), kw.keyword)
                                 # Update the Definition on the Form
                                 self.definition.SetValue(kw.definition)
                                 if not TransanaConstants.singleUserVersion:
-                                    if TransanaGlobal.chatWindow != None:
+                                    # We only rename the node if the chat window exists AND IF WE'RE NOT MERGING KEYWORDS
+                                    if (TransanaGlobal.chatWindow != None) and result:
                                         # We need the UNTRANSLATED Root Node here
                                         msgData = "%s >|< %s >|< %s >|< %s >|< %s" % ('KeywordNode', 'Keywords', kw.keywordGroup, originalKeyword, kw.keyword)
                                         TransanaGlobal.chatWindow.SendMessage("RN %s" % msgData)
+                            # if result if False, we have merged keywords!
+                            if not result:
+                                # First remove the keyword from the list.  If the keyword was merged to a different keyword group,
+                                # there won't be one to delete, though.
+                                if self.kw_lb.GetSelection() > -1:
+                                    self.kw_lb.Delete(self.kw_lb.GetSelection())
+                                    # Then, if MU, send the message to others to remove the original keyword from the tree
+                                    if not TransanaConstants.singleUserVersion:
+                                        if TransanaGlobal.chatWindow != None:
+                                            msgData = "KeywordNode >|< Keywords >|< %s >|< %s" % (originalKeywordGroup, originalKeyword)
+                                            TransanaGlobal.chatWindow.SendMessage("DN %s" % msgData)
+                            # This computer updates the keyword visualization later, but other computers might need to update it now.
+                            if not TransanaConstants.singleUserVersion:
+                                # We need to update the Keyword Visualization no matter what here, when deleting a keyword group
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
                             # If we do all this, we don't need to continue any more.
                             contin = False
                         # Handle "SaveError" exception

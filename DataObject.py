@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -279,6 +279,11 @@ class DataObject(object):
         c.execute(query, self.number)
         
         qr = c.fetchone()       # get query row results
+
+        if DEBUG:
+            print "DataObject._get_db_fields():\n", query, qr
+            print
+        
         if (close_c):
             c.close()
         return qr
@@ -324,12 +329,9 @@ class DataObject(object):
             raise SaveError, prompt % (tname, tname)
         else:
             # Verify record lock is still good
-            db = DBInterface.get_db()
-            
             if (self.number == 0) or \
                 ((self.record_lock == DBInterface.get_username()) and
                 ((DBInterface.ServerDateTime() - self.lock_time).days <= 1)):
-                c = db.cursor()
                 # If record num is 0, this is a NEW record and needs to be
                 # INSERTed.  Otherwise, it is an existing record to be UPDATEd.
                 if (self.number == 0):
@@ -423,7 +425,11 @@ class DataObject(object):
         return self._get_db_fields(('RecordLock',))[0]
 
     def _get_lt(self):
-        return self._get_db_fields(('LockTime',))[0]
+        lt = self._get_db_fields(('LockTime',))
+        if len(lt) > 0:
+            return lt[0]
+        else:
+            return DBInterface.ServerDateTime()
 
     def _get_isLocked(self):
         return self._isLocked

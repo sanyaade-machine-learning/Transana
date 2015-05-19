@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -29,15 +29,14 @@ from TransanaExceptions import *
 import TransanaConstants
 import TransanaGlobal
 
-if TransanaConstants.NEWVIDEOPLAYER:
-    from video_player import *
-elif wx.Platform == "__WXMSW__":
-    from video_msw import *
-elif wx.Platform == "__WXMAC__":
-    from video_mac import *
-else:
-    raise GeneralError, \
-        "Sorry, no media player support is available on this platform."
+from video_player import *
+#elif wx.Platform == "__WXMSW__":
+#    from video_msw import *
+#elif wx.Platform == "__WXMAC__":
+#    from video_mac import *
+#else:
+#    raise GeneralError, \
+#        "Sorry, no media player support is available on this platform."
 
 class VideoWindow(object):
     """This class implements the media player responsible for various playback

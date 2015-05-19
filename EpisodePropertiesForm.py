@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -335,12 +335,11 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         (fn, ext) = os.path.splitext(self.obj.media_filename)
         # Have the default File Type match the extension, but use "All Videos" if blank.
         # If it's an unrecognized type, go to "All Files"
-        if ext.lower() in ['.mp3', '.wav', '.au', '.snd']:
-            fileType = '*.mp3;*.wav;*.au;*.snd'
-        elif ext.lower() in ['', '.mpg', '.mpeg', '.avi']:
-            fileType = '*.mpg;*.mpeg;*.avi'
+        if ext.lower() in ['.mpg', '.avi', '.mov', '.mp4', '.wmv', '.mp3', '.wav', '.wma']:
+            fileType =  '*.mpg;*.avi;*.mov;*.mp4;*.wmv;*.mp3;*.wav;*.wma'
         else:
             fileType = ''
+            
         fs = wx.FileSelector(_("Select a media file"),
                         dirName,
                         fileName,

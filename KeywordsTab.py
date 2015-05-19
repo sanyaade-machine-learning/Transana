@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -182,6 +182,16 @@ class KeywordsTab(wx.Panel):
             else:
                 prompt = _('Clip: "%s"')
             self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % self.clipObj.id)
+            # Update the Keyword Visualization, as the clip's keywords have probably changed.
+            self.parent.parent.ControlObject.UpdateKeywordVisualization()
+            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+            if not TransanaConstants.singleUserVersion:
+                # We need to update the Keyword Visualization for the current ClipObject
+                if DEBUG:
+                    print 'Message to send = "UKV %s %s %s"' % ('Clip', self.clipObj.number, self.clipObj.episode_num)
+                    
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', self.clipObj.number, self.clipObj.episode_num))
 
         self.lbKeywordsList.InsertStringItem(sys.maxint, '')
 

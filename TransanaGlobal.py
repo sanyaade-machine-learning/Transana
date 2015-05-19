@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -60,6 +60,9 @@ if os.path.isfile(programDir):
 if 'wxMac' in wx.PlatformInfo:
     # We set it to 24 on the Mac!  It used to be 0, but seems to need to be 24 for wxPython 2.6.1.0.
     menuHeight = 24
+elif 'wxGTK' in wx.PlatformInfo:
+    # Linux, at least my FC6-Gnome setup, requires space for the Linux menu and Transana's menu.
+    menuHeight = 72
 else:
     # While we default to 44, this value actually can get altered elsewhere to reflect the height of
     # the title/header bar.  XP using Large Fonts, for example, needs a larger value.
@@ -99,6 +102,8 @@ if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
         encoding = 'koi8_r'
     elif (configData.language == 'zh'):
         encoding = TransanaConstants.chineseEncoding
+    elif (configData.language == 'el'):
+        encoding = 'iso8859_7'
     elif (configData.language == 'ja'):
         encoding = 'cp932'
     elif (configData.language == 'ko'):

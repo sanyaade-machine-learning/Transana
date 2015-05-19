@@ -116,6 +116,16 @@
            <param name="Local" value="KeywordMap.htm">
        </object>
   <li> <object type="text/sitemap">
+           <param name="Name" value="Series Keyword Graphs">
+           <param name="ID" value=105>
+           <param name="Local" value="SeriesMap.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Clip Data Export">
+           <param name="ID" value=106>
+           <param name="Local" value="ExportClip.htm">
+       </object>
+  <li> <object type="text/sitemap">
            <param name="Name" value="Filter Dialog">
            <param name="ID" value=107>
            <param name="Local" value="FilterDialog.htm">

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -39,7 +39,7 @@ class KeywordListEditForm(Dialogs.GenForm):
 
     def __init__(self, parent, id, title, obj, keywords):
         # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style
-        Dialogs.GenForm.__init__(self, parent, id, title, (600,385), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Edit Keywords')
+        Dialogs.GenForm.__init__(self, parent, id, title, size=TransanaGlobal.configData.keywordListEditSize, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Edit Keywords')
         # Define the minimum size for this dialog as the initial size
         self.SetSizeHints(600, 385)
 
@@ -175,12 +175,29 @@ class KeywordListEditForm(Dialogs.GenForm):
         self.ekw_lb.SetConstraints(lay)
         self.ekw_lb.Bind(wx.EVT_KEY_DOWN, self.OnKeywordKeyDown)
 
+        # We need to capture the OK and Cancel button clicks locally.  We'll use FindWindowByID to locate the correct widgets.
+        self.Bind(wx.EVT_BUTTON, self.OnOK, self.FindWindowById(wx.ID_OK))
+        self.Bind(wx.EVT_BUTTON, self.OnCancel, self.FindWindowById(wx.ID_CANCEL))
+
         self.Layout()
         self.SetAutoLayout(True)
         self.CenterOnScreen()
         
         self.kw_group_lb.SetFocus()
-        
+
+    def OnOK(self, event):
+        """ Intercept the OK button click and process it """
+        # Remember the SIZE of the dialog box for next time.
+        TransanaGlobal.configData.keywordListEditSize = self.GetSize()
+        # Now process the event normally
+        event.Skip(True)
+
+    def OnCancel(self, event):
+        """ Intercept the Cancel button click and process it """
+        # Remember the SIZE of the dialog box for next time.
+        TransanaGlobal.configData.keywordListEditSize = self.GetSize()
+        # now process the event normally
+        event.Skip(True)
 
     def refresh_keyword_groups(self):
         """Refresh the keyword groups listbox."""

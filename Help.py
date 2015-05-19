@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -30,6 +30,7 @@ import wx.html
 import os, sys
 # import Python's pickle module
 import pickle
+
 
 class Help(object):
     """ This class implements Help Calls to the Transana Manual """
@@ -88,11 +89,12 @@ if __name__ == '__main__':
             # NOTE:  The Mac lacks the capacity for command line parameters, so we pass the help context via
             #        a pickled string on the Mac and by command line elsewhere.
             if "__WXMAC__" in wx.PlatformInfo:
-                if os.path.exists('/Applications/Transana 2/TransanaHelpContext.txt'):
-                    file = open('/Applications/Transana 2/TransanaHelpContext.txt', 'r')
-                    helpContext = pickle.load(file)
-                    file.close()
-                    os.remove('/Applications/Transana 2/TransanaHelpContext.txt')
+                
+                if os.path.exists(os.getenv("HOME") + '/TransanaHelpContext.txt'):
+                    helpfile = open(os.getenv("HOME") + '/TransanaHelpContext.txt', 'r')
+                    helpContext = pickle.load(helpfile)
+                    helpfile.close()
+                    os.remove(os.getenv("HOME") + '/TransanaHelpContext.txt')
                 else:
                     helpContext = 'Welcome'
             else:

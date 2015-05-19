@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -449,7 +449,10 @@ class Transcript(DataObject):
                     # This would sometimes get called while I was using cPickle instead of Pickle.
                     # You could probably remove the exception handling stuff and be okay, but it's
                     # not hurting anything like it is.
-                    self.dlg.editor.load_transcript(transcriptObj, 'pickle')
+                    # self.dlg.editor.load_transcript(transcriptObj, 'pickle')
+
+                    # NOPE.  There is no self.dlg.editor here!
+                    pass
 
         # self.text gets set to be our data
         # then load_transcript is called, from transcriptionui.LoadTranscript()
@@ -475,4 +478,3 @@ class Transcript(DataObject):
                 self.series_id = DBInterface.ProcessDBDataForUTF8Encoding(self.series_id)
             if row.has_key('EpisodeID'):
                 self.episode_id = DBInterface.ProcessDBDataForUTF8Encoding(self.episode_id)
-

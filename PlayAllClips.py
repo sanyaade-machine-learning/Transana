@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -36,6 +36,9 @@ import MenuSetup
 # import Transana's Exceptions
 import TransanaExceptions
 
+TIMER_INTERVAL = 500
+EXTRA_LOAD_TIME = 1500
+
 # Declare GUI Constants for the Play All Clips Dialog
 ID_PLAYALLCLIPSTIMER = wx.NewId()
 ID_BTNPLAYPAUSE      = wx.NewId()
@@ -63,7 +66,7 @@ class PlayAllClips(wx.Dialog):
         # If a video is currently playing, it must be stopped!
         if self.ControlObject.IsPlaying() or self.ControlObject.IsPaused():
             self.ControlObject.Stop()
-        
+
         # Get a list of all the clips that should be played in order
 
         # If PlayAllClips is requested for a Collection ...
@@ -132,102 +135,79 @@ class PlayAllClips(wx.Dialog):
         # vs. Standard Transana Mode
 
         # Add a label that says "Now Playing:"
-        lay = wx.LayoutConstraints()
-        if self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
-            lay.left.SameAs(self, wx.Left, 10)
-            lay.top.SameAs(self, wx.Top, 10)
-        else:
-            lay.left.PercentOf(self, wx.Width, 30)
-            lay.top.SameAs(self, wx.Top, 6)
-        lay.width.AsIs()
-        lay.height.AsIs()
         lblNowPlaying = wx.StaticText(self, -1, _("Now Playing:"))
-        lblNowPlaying.SetConstraints(lay)
 
         # Add a label that identifies the Collection
-        lay = wx.LayoutConstraints()
-        if self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
-            lay.left.SameAs(self, wx.Left, 10)
-            lay.top.Below(lblNowPlaying, 5)
-        else:
-            lay.left.PercentOf(self, wx.Width, 40)
-            lay.top.SameAs(self, wx.Top, 6)
-        lay.width.AsIs()
-        lay.height.AsIs()
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
             prompt = unicode(_("Collection: %s"), 'utf8')
         else:
             prompt = _("Collection: %s")
         self.lblCollection = wx.StaticText(self, -1, prompt % self.collection.id)
-        self.lblCollection.SetConstraints(lay)
 
         # Add a label that identifies the Clip
-        lay = wx.LayoutConstraints()
-        if self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
-            lay.left.SameAs(self, wx.Left, 10)
-            lay.top.Below(self.lblCollection, 5)
-            lay.right.SameAs(self, wx.Right, 10)
-        else:
-            lay.left.PercentOf(self, wx.Width, 60)
-            lay.top.SameAs(self, wx.Top, 6)
-            lay.width.AsIs()
-        lay.height.AsIs()
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
             prompt = unicode(_("Clip: %s   (%s of %s)"), 'utf8')
         else:
             prompt = _("Clip: %s   (%s of %s)")
         self.lblClip = wx.StaticText(self, -1, prompt % (' ', 0, len(self.clipList)))
-        self.lblClip.SetConstraints(lay)
 
         # Add a button for Pause/Play functioning
-        lay = wx.LayoutConstraints()
-        lay.left.SameAs(self, wx.Left, 10)
-        if self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
-            lay.top.Below(self.lblClip, 5)
-            lay.right.PercentOf(self, wx.Width, 48)
-            lay.height.AsIs()
-        else:
-            lay.top.SameAs(self, wx.Top, 1)
-            lay.width.PercentOf(self, wx.Width, 12)
-            # Layout was funky on the Mac.
-            if "__WXMAC__" in wx.PlatformInfo:
-                lay.height.AsIs()
-            else:
-                lay.bottom.SameAs(self, wx.Bottom, 1)
         self.btnPlayPause = wx.Button(self, ID_BTNPLAYPAUSE, _("Pause"))
-        self.btnPlayPause.SetConstraints(lay)
 
         wx.EVT_BUTTON(self, ID_BTNPLAYPAUSE, self.OnPlayPause)
 
         # Add a button to Cancel the Playing of Clips
-        lay = wx.LayoutConstraints()
-        if self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
-            lay.left.PercentOf(self, wx.Width, 52)
-            lay.top.Below(self.lblClip, 5)
-            lay.right.SameAs(self, wx.Right, 10)
-            lay.height.AsIs()
-        else:
-            lay.left.RightOf(self.btnPlayPause, 10)
-            lay.top.SameAs(self, wx.Top, 1)
-            lay.width.SameAs(self.btnPlayPause, wx.Width)
-            # Layout was funky on the Mac.
-            if "__WXMAC__" in wx.PlatformInfo:
-                lay.height.AsIs()
-            else:
-                lay.bottom.SameAs(self, wx.Bottom, 1)
         self.btnCancel = wx.Button(self, ID_BTNCANCEL, _("Cancel"))
-        self.btnCancel.SetConstraints(lay)
 
         wx.EVT_BUTTON(self, ID_BTNCANCEL, self.OnClose)
 
         # Link to a method that handles window move attempts
         wx.EVT_MOVE(self, self.OnMove)
 
+        # Define the layout differently depending on the Presentation Mode setting.
+        if self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
+            box = wx.BoxSizer(wx.VERTICAL)
+            box.Add((1, 5))
+            box.Add(lblNowPlaying, 0, wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 10)
+            box.Add((1, 5))
+            box.Add(self.lblCollection, 0, wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 10)
+            box.Add((1, 5))
+            box.Add(self.lblClip, 0, wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT, 10)
+            box.Add((1, 5))
+            btnSizer = wx.BoxSizer(wx.HORIZONTAL)
+            btnSizer.Add(self.btnPlayPause, 1, wx.ALIGN_LEFT | wx.LEFT | wx.RIGHT | wx.EXPAND, 10)
+            btnSizer.Add(self.btnCancel, 1, wx.ALIGN_RIGHT | wx.LEFT | wx.RIGHT | wx.EXPAND, 10)
+            box.Add(btnSizer, 1, wx.EXPAND, 0)
+            box.Add((1, 5))
+        else:
+            box = wx.BoxSizer(wx.HORIZONTAL)
+            box.Add(self.btnPlayPause, 1, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 10)
+            box.Add(self.btnCancel, 1, wx.ALIGN_LEFT | wx.LEFT | wx.ALIGN_CENTER_VERTICAL | wx.EXPAND, 10)
+            box.Add((10, 1), 1, wx.EXPAND)
+            box.Add(lblNowPlaying, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL)
+            box.Add((10,1), 1, wx.EXPAND)
+            box.Add(self.lblCollection, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL)
+            box.Add((10, 1), 1, wx.EXPAND)
+            box.Add(self.lblClip, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL)
+            box.Add((10, 1), 1, wx.EXPAND)
+
+        self.SetSizer(box)
+        self.Fit()
+
+
         # Tell the Dialog to Lay out the widgets, and to adjust them automatically
         self.Layout()
         self.SetAutoLayout(True)
+
+        # Now that the size is determined, let's reposition the dialog.
+        if not self.ControlObject.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
+            (left, top, width, height) = self.ControlObject.VideoWindow.frame.GetRect()        
+        self.xPos = left
+        self.yPos = top + height - self.GetSize()[1]
+        self.SetPosition((self.xPos, self.yPos))
+
 
         # Add a Timer.  The timer checks to see if the clip that is playing has stopped, which
         # is the signal that it is time to load the next clip
@@ -241,10 +221,9 @@ class PlayAllClips(wx.Dialog):
         if len(self.clipList) > 0:
             # Initialize the flag that says a clip has started playing to TRUE or the first video will never load!
             self.HasStartedPlaying = True
-            # 0.5 second delay hopefully gives a clip enough time to load and play.
+            # 1.5 second additional delay hopefully gives a clip enough time to load and play.
             # If clips are getting skipped, this increment may need to be increased.
-            self.playAllClipsTimer.Start(500)
-
+            self.playAllClipsTimer.Start(TIMER_INTERVAL + EXTRA_LOAD_TIME)
             # Show the Play All Clips Dialog
             self.ShowModal()
         else:
@@ -260,79 +239,112 @@ class PlayAllClips(wx.Dialog):
         """ This method should be polled periodically when this dialog is displayed.  If the media player is paused or playing,
             everything is fine and nothing needs to be done.  If not, we need to load the next clip and play it. """
 
-        # Occasionally, clips were getting skipped.  It seems that there can be up to a 0.1 second delay
-        # between when a video is loaded and when it starts playing (at least on Windows) because of the
-        # way video_msw.py works.  It has a timer that checks to see if the video is done loading before
-        # it starts playing.  So I'm introducing this HasStartedPlaying variable to try to make sure no
-        # clips get skipped
+        if DEBUG:
+            print self.clipNowPlaying,
+            if self.clipNowPlaying < len(self.clipList):
+                print self.clipList[self.clipNowPlaying]
+            else:
+                print
+            print "IsLoading()", (self.ControlObject.IsLoading())
+            print "IsPlaying()", (self.ControlObject.IsPlaying())
+            print "IsPaused()", self.ControlObject.IsPaused()
+            print "Getlabel() != Play", self.btnPlayPause.GetLabel() != _("Play")
+            print "HasStartedPlaying:", (self.HasStartedPlaying)
+            print
 
-        # Check to see if the video is NOT playing and NOT paused ...
+        # The original code doesn't work with the new video player infrastructure.  This is an attempt to start over.
 
-        # On the Mac, sometimes IsPaused() returns True even when it shouldn't.  Apparently the QuickTime Player on the Mac
-        # has some difficulty distinguishing between Paused and Stopped.  Therefore, part of the test to see if we're Paused
-        # has to include the label on the Pause button, which only changes when we mean to Pause.
+        # If the clip is playing, we don't do anything!
+        if self.ControlObject.IsPlaying():
 
-        if (not self.ControlObject.IsLoading()) and \
-           (not self.ControlObject.IsPlaying()) and \
-           (not self.ControlObject.IsPaused() or self.btnPlayPause.GetLabel() != _("Play")):
-            # If it is neither playing nor paused, see if we have reached the end of the list
+            if DEBUG:
+                print "Clip is playing."
+            
+            self.HasStartedPlaying = True
 
-            if self.clipNowPlaying >= len(self.clipList):
-                # If so, close the PlayAllClips window.
-                self.OnClose(event)
-            elif (not self.ControlObject.IsLoading()) and (self.HasStartedPlaying):
-                # If we are neither paused nor playing, nor are we out of clips, then
-                # we need to load the next clip!!
-                # First, update the label to tell what clip is up
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_("Clip: %s   (%s of %s)"), 'utf8')
-                else:
-                    prompt = _("Clip: %s   (%s of %s)")
-                self.lblClip.SetLabel(prompt % (self.clipList[self.clipNowPlaying][1], self.clipNowPlaying + 1, len(self.clipList)))
+        # If a Clip is in the process of loading, we don't need to do anything but wait for it to finish loading
+        elif self.ControlObject.IsLoading():
 
-                # Stop the timer long enough to load the Clip.  That way, if the MediaFile is bad, we don't
-                # get repeated attempts to load the clip.
+            if DEBUG:
+                print "Clip is loading.  Don't do anything!", self.clipNowPlaying
+
+        elif (self.clipNowPlaying > len(self.clipList) - 1) and self.HasStartedPlaying:
+
+            if DEBUG:
+                print "All clips have played.  (%s > %s).  We need to close." % (self.clipNowPlaying, len(self.clipList) - 1)
+
+            self.OnClose(event)
+            
+        # If a clip has been loaded and has started playing, but isn't playing any more, then load another!
+        elif self.HasStartedPlaying:
+
+            if DEBUG:
+                print "Clip isn't playing, paused, or loading.  We need to load the next clip!", self.clipNowPlaying, self.clipList[self.clipNowPlaying]
+
+            # First, update the label to tell what clip is up
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Clip: %s   (%s of %s)"), 'utf8')
+            else:
+                prompt = _("Clip: %s   (%s of %s)")
+            self.lblClip.SetLabel(prompt % (self.clipList[self.clipNowPlaying][1], self.clipNowPlaying + 1, len(self.clipList)))
+
+            # In MU, it's possible a clip in the Play All Clips list could get deleted by another user.
+            # Therefore, we need to be prepared to catch the exception that is raised by failing to be
+            # able to load the Clip.
+            try:
+                # Loading a Clip is slow.  Let's stop the timer, so it doesn't cause problems.  (It was with QuickTime video on Windows.)
                 self.playAllClipsTimer.Stop()
 
-                # In MU, it's possible a clip in the Play All Clips list could get deleted by another user.
-                # Therefore, we need to be prepared to catch the exception that is raised by failing to be
-                # able to load the Clip.
-                try:
-                    # Try to Load the next clip into the ControlObject
+                # Try to Load the next clip into the ControlObject
+                if not self.ControlObject.LoadClipByNumber(self.clipList[self.clipNowPlaying][0]):
+                    # If the Media File has been moved, this failed.  Try one more time.
                     if not self.ControlObject.LoadClipByNumber(self.clipList[self.clipNowPlaying][0]):
-                        # If the Media File has been moved, this failed.  Try one more time.
-                        if not self.ControlObject.LoadClipByNumber(self.clipList[self.clipNowPlaying][0]):
-                            # if it fails a second time, signal that Play All Clips should be stopped
-                            # by setting the Clip List Pointer to the end of the list
-                            self.clipNowPlaying = len(self.clipList)
-                    # Clip loaded.  Restart the timer.
-                    self.playAllClipsTimer.Start(500)
+                        # if it fails a second time, signal that Play All Clips should be stopped
+                        # by setting the Clip List Pointer to the end of the list
+                        self.clipNowPlaying = len(self.clipList)
+                        
+                # Increment the pointer to the next clip
+                self.clipNowPlaying = self.clipNowPlaying + 1
+                self.HasStartedPlaying = False
 
-                    # Play the next clip
-                    self.ControlObject.Play()
-                    # Increment the pointer to the next clip
-                    self.clipNowPlaying = self.clipNowPlaying + 1
-                    self.HasStartedPlaying = False
-                # If a Clip cannot be found ...  (This should only happen in MU if a clip is deleted by another user.)
-                except TransanaExceptions.RecordNotFoundError:
-                    # Build an error message
-                    msg = 'Clip "%s" could not be found.\nPerhaps it was deleted by another user.\nPlay All Clips cannot continue.'
-                    if 'unicode' in wx.PlatformInfo:
-                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                        msg = unicode(msg, 'utf8')
-                    # Display the error message
-                    dlg = Dialogs.ErrorDialog(self, msg % self.clipList[self.clipNowPlaying][1])
-                    dlg.ShowModal()
-                    dlg.Destroy()
-                    # Get out of Play All Clips.
-                    self.OnClose(event)
+                # Let's display the Keywords Tab during PlayAllClips
+                self.ControlObject.ShowDataTab(1)
 
-        # If a video has not yet been flagged as playing but it HAS started playing, flag it as having started.
-        elif (not self.HasStartedPlaying) and (self.ControlObject.IsPlaying()):
-            # Let's display the Keywords Tab during PlayAllClips
-            self.ControlObject.ShowDataTab(1)
-            self.HasStartedPlaying = True
+                # Now that the clip is loading, re-start the timer.  the extra 1.5 seconds give the clip time to load.
+                self.playAllClipsTimer.Start(TIMER_INTERVAL + EXTRA_LOAD_TIME)
+
+            # If a Clip cannot be found ...  (This should only happen in MU if a clip is deleted by another user.)
+            except TransanaExceptions.RecordNotFoundError:
+                # Build an error message
+                msg = 'Clip "%s" could not be found.\nPerhaps it was deleted by another user.\nPlay All Clips cannot continue.'
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    msg = unicode(msg, 'utf8')
+                # Display the error message
+                dlg = Dialogs.ErrorDialog(self, msg % self.clipList[self.clipNowPlaying][1])
+                dlg.ShowModal()
+                dlg.Destroy()
+                # Get out of Play All Clips.
+                self.OnClose(event)
+
+        else:
+
+            if DEBUG:
+                print "Clip load has been called, but Play hasn't quite started yet!"
+
+            self.PlayAfterLoading()
+
+    def PlayAfterLoading(self):
+        """ After a Clip is done loading, it needs to be told to Play. """
+        # Play the next clip
+        self.ControlObject.Play()
+
+        # Clip loaded.  Restart the timer to the shorter interval.
+        wx.CallAfter(self.playAllClipsTimer.Start, TIMER_INTERVAL)
+
+        if DEBUG:
+            print "Clip", self.clipNowPlaying, "has been told to play"
 
     def OnPlayPause(self, event):
         """ If playing, then pause.  If paused, then play. """
@@ -349,7 +361,7 @@ class PlayAllClips(wx.Dialog):
             # Change the label on the button
             self.btnPlayPause.SetLabel(_("Pause"))
             # Restart the timer.
-            wx.CallAfter(self.playAllClipsTimer.Start, 500)
+            wx.CallAfter(self.playAllClipsTimer.Start, TIMER_INTERVAL)
 
     def OnMove(self, event):
         """ Detect attempts to move the Play All Windows dialog, and block it if appropriate. """

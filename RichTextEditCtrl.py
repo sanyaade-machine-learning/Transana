@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -89,9 +89,9 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         self.__ResetBuffer()                # Initialize the STC, including defining default font(s)
 
         # Set the Default Style based on the Default Font information in the Configuration object
-        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, "size:" + str(TransanaGlobal.configData.defaultFontSize) + ",face:" + TransanaGlobal.configData.defaultFontFace + ",fore:#000000,back:#ffffff")
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, "size:%s,face:%s,fore:#000000,back:#ffffff" % (str(TransanaGlobal.configData.defaultFontSize), TransanaGlobal.configData.defaultFontFace))
         # Set the Line Number style based on the Default Font Face
-        self.StyleSetSpec(stc.STC_STYLE_LINENUMBER, "size:10,face:" + TransanaGlobal.configData.defaultFontFace)
+        self.StyleSetSpec(stc.STC_STYLE_LINENUMBER, "size:10,face:%s" % TransanaGlobal.configData.defaultFontFace)
         # Indicated that we want Word Wrap
         self.SetWrapMode(stc.STC_WRAP_WORD)
         # Let's set the default Tab Width to 4 to maintain compatibility with Transana 1.24
@@ -147,7 +147,7 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         self.EmptyUndoBuffer()
 
         # Redefine the Default Style, just in case
-        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, "size:" + str(TransanaGlobal.configData.defaultFontSize) + ",face:" + TransanaGlobal.configData.defaultFontFace + ",fore:#000000,back:#ffffff")
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, "size:%s,face:%s,fore:#000000,back:#ffffff" % (str(TransanaGlobal.configData.defaultFontSize), TransanaGlobal.configData.defaultFontFace))
         # Clear out all defined styles.  Internally, the wxSTC resets all styles to the default style.
         self.StyleClearAll()
         # Reset the data structures that keep track of the defined styles.
@@ -162,7 +162,7 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         self.last_pos = 0
 
         # Define the initial style, Style 0, based on the user-specified defaults
-        self.__GetStyle("size:" + str(TransanaGlobal.configData.defaultFontSize) + ",face:" + TransanaGlobal.configData.defaultFontFace + ",fore:#000000,back:#ffffff")
+        self.__GetStyle("size:%s,face:%s,fore:#000000,back:#ffffff" % (str(TransanaGlobal.configData.defaultFontSize), TransanaGlobal.configData.defaultFontFace))
         # Reset the global style currently being used to this default style
         self.style = 0
         # Redefine the Hidden and Timecode styles, which Transana always requires.
@@ -179,7 +179,7 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
             self.StyleSetVisible(self.STYLE_HIDDEN, False)
 
         # Define the particulars of the Timecode style, which is to use the default font in red.            
-        self.StyleSetSpec(self.STYLE_TIMECODE, "size:" + str(TransanaGlobal.configData.defaultFontSize) + ",face:" + TransanaGlobal.configData.defaultFontFace + ",fore:#FF0000,back:#ffffff")
+        self.StyleSetSpec(self.STYLE_TIMECODE, "size:%s,face:%s,fore:#FF0000,back:#ffffff" % (str(TransanaGlobal.configData.defaultFontSize), TransanaGlobal.configData.defaultFontFace))
 
     def GetStyleAccessor(self, spec):
         """This method is simply a public wrapper around __GetStyle()"""
@@ -247,9 +247,9 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                 attr = StyleSettings()
                 if (self.num_styles == stc.STC_STYLE_LINENUMBER):
                     # Define the StyleSpec appropriate for stc.STC_STYLE_LINENUMBER
-                    self.StyleSetSpec(self.num_styles, "size:10,face:" + TransanaGlobal.configData.defaultFontFace+',fore:#000000,back:#ffffff')
+                    self.StyleSetSpec(self.num_styles, "size:10,face:%s,fore:#000000,back:#ffffff" % TransanaGlobal.configData.defaultFontFace)
                     # Also place that style in style_specs
-                    self.style_specs.append("size:10,face:" + TransanaGlobal.configData.defaultFontFace+',fore:#000000,back:#ffffff')
+                    self.style_specs.append("size:10,face:%s,fore:#000000,back:#ffffff" % TransanaGlobal.configData.defaultFontFace)
                     attr.font_size = 10
                 else:
                     # Define the StyleSpec appropriate for stc.STC_STYLE_DEFAULT
@@ -484,22 +484,22 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
             # and loaded without difficulty.  Unfortunately, the Mac cannot display this character.
             # This has been abandoned for now, though might be resurrected if they fix the wxSTC.
             
-            # ch = unicode('\xe2\x86\x91', 'utf8')  # \u2191
-            # len = 3
-            # self.InsertUnicodeChar(ch, len)
+            ch = unicode('\xe2\x86\x91', 'utf8')  # \u2191
+            len = 3
+            self.InsertUnicodeChar(ch, len)
 
             # The new approach, the "Symbol" way, is to insert the appropriate character in the Symbol
             # Font to display the up arrow character.  This is a different character on Windows than it
             # is on Mac.  Therefore, there needs to be code in loading and saving files that translates
             # this character so that files will work cross-platform.
-            if 'wxMac' in wx.PlatformInfo:
-                ch = unicode('\xe2\x89\xa0', 'utf8')
-                len = 3
-            else:
-                ch = unicode('\xc2\xad', 'utf8')
-                len = 2
+#            if 'wxMac' in wx.PlatformInfo:
+#                ch = unicode('\xe2\x89\xa0', 'utf8')
+#                len = 3
+#            else:
+#                ch = unicode('\xc2\xad', 'utf8')
+#                len = 2
             # We insert the specified character in Symbol Font.
-            self.InsertSymbol(ch, len)
+#            self.InsertSymbol(ch, len)
         else:
             ch = '\xAD'
             self.InsertSymbol(ch)
@@ -516,22 +516,22 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
             # and loaded without difficulty.  Unfortunately, the Mac cannot display this character.
             # This has been abandoned for now, though might be resurrected if they fix the wxSTC.
             
-            # ch = unicode('\xe2\x86\x93', 'utf8')
-            # len = 3
-            # self.InsertUnicodeChar(ch, len)
+            ch = unicode('\xe2\x86\x93', 'utf8')
+            len = 3
+            self.InsertUnicodeChar(ch, len)
 
             # The new approach, the "Symbol" way, is to insert the appropriate character in the Symbol
             # Font to display the up arrow character.  This is a different character on Windows than it
             # is on Mac.  Therefore, there needs to be code in loading and saving files that translates
             # this character so that files will work cross-platform.
-            if 'wxMac' in wx.PlatformInfo:
-                ch = unicode('\xc3\x98', 'utf8')
-                len = 2
-            else:
-                ch = unicode('\xc2\xaf', 'utf8')
-                len = 2
+#            if 'wxMac' in wx.PlatformInfo:
+#                ch = unicode('\xc3\x98', 'utf8')
+#                len = 2
+#            else:
+#                ch = unicode('\xc2\xaf', 'utf8')
+#                len = 2
             # We insert the specified character in Symbol Font.
-            self.InsertSymbol(ch, len)
+#            self.InsertSymbol(ch, len)
         else:
             ch = '\xAF'
             self.InsertSymbol(ch)

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -66,6 +66,7 @@ MENU_OPTIONS_LANGUAGE           =  wx.NewId()
 MENU_OPTIONS_LANGUAGE_EN        =  wx.NewId()
 MENU_OPTIONS_LANGUAGE_DA        =  wx.NewId()  # Danish
 MENU_OPTIONS_LANGUAGE_DE        =  wx.NewId()  # German
+MENU_OPTIONS_LANGUAGE_EASTEUROPE = wx.NewId()  # Central and Eastern European Encoding (iso-8859-2)
 MENU_OPTIONS_LANGUAGE_EL        =  wx.NewId()  # Greek
 MENU_OPTIONS_LANGUAGE_ES        =  wx.NewId()  # Spanish
 MENU_OPTIONS_LANGUAGE_FI        =  wx.NewId()  # Finnish
@@ -80,20 +81,31 @@ MENU_OPTIONS_LANGUAGE_PL        =  wx.NewId()  # Polish
 MENU_OPTIONS_LANGUAGE_RU        =  wx.NewId()  # Russian
 MENU_OPTIONS_LANGUAGE_SV        =  wx.NewId()  # Swedish
 MENU_OPTIONS_LANGUAGE_ZH        =  wx.NewId()  # Chinese
+
 # NOTE:  Adding languages?  Don't forget to update the EVT_MENU_RANGE settings.
 #        If you scan through MenuSetup.py and MenuWindow.py for language code and add the language for MySQL
-#        in DBInterface.InitializeSingleUserDatabase(), you should be all set.
+#        in DBInterface.InitializeSingleUserDatabase(), set export encoding in ClipDataExport, set GetNewData()
+#        and ChangeLanguages() in ControlObjectClass, you should be all set.
 
-MENU_OPTIONS_SIMPLE_CLIPS       =  wx.NewId()
+if 'wxMSW' in wx.PlatformInfo:
+    MENU_OPTIONS_QUICK_CLIPS    =  wx.NewId()
 MENU_OPTIONS_WORDTRACK          =  wx.NewId()
 MENU_OPTIONS_AUTOARRANGE        =  wx.NewId()
+# Options Visualization Style menu
+MENU_OPTIONS_VISUALIZATION          =  wx.NewId()
+MENU_OPTIONS_VISUALIZATION_WAVEFORM =  wx.NewId()
+MENU_OPTIONS_VISUALIZATION_KEYWORD  =  wx.NewId()
+MENU_OPTIONS_VISUALIZATION_HYBRID   =  wx.NewId()
+# Options menu continued
 MENU_OPTIONS_WAVEFORMQUICKLOAD  =  wx.NewId()
+# Options Video Size menu
 MENU_OPTIONS_VIDEOSIZE          =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_50       =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_66       =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_100      =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_150      =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_200      =  wx.NewId()
+# Options Presentation Mode menu
 MENU_OPTIONS_PRESENT            =  wx.NewId()
 MENU_OPTIONS_PRESENT_ALL        =  wx.NewId()
 MENU_OPTIONS_PRESENT_VIDEO      =  wx.NewId()
@@ -178,9 +190,9 @@ class MenuSetup(wx.MenuBar):
         if os.path.exists(dir):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_DE, _("&German"), kind=wx.ITEM_RADIO)
         # Greek
-        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'el', 'LC_MESSAGES', 'Transana.mo')
-        if os.path.exists(dir):
-            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EL, _("Gree&k"), kind=wx.ITEM_RADIO)
+#        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'el', 'LC_MESSAGES', 'Transana.mo')
+#        if os.path.exists(dir):
+#            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EL, _("Gree&k"), kind=wx.ITEM_RADIO)
         # Spanish
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'es', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -221,19 +233,31 @@ class MenuSetup(wx.MenuBar):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'sv', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_SV, _("S&wedish"), kind=wx.ITEM_RADIO)
-        # Chinese, Japanese, and Korean
+        # Chinese, Greek, Japanese, and Korean
         if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_ZH, _("English prompts, Chinese data"), kind=wx.ITEM_RADIO)
+            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EASTEUROPE, _("English prompts, Eastern European data (ISO-8859-2 encoding)"), kind=wx.ITEM_RADIO)
+            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EL, _("English prompts, Greek data"), kind=wx.ITEM_RADIO)
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_JA, _("English prompts, Japanese data"), kind=wx.ITEM_RADIO)
             # Korean support must be removed due to a bug in wxSTC on Windows.
             # self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_KO, _("English prompts, Korean data"), kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_LANGUAGE, _("&Language"), self.optionslanguagemenu)
         self.optionsmenu.AppendSeparator()
-        self.optionsmenu.Append(MENU_OPTIONS_SIMPLE_CLIPS, _("Quick Clip Mode"), kind=wx.ITEM_CHECK)
+        if 'wxMSW' in wx.PlatformInfo:
+            self.optionsmenu.Append(MENU_OPTIONS_QUICK_CLIPS, _("&Quick Clip Mode"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_WORDTRACK, _("Auto Word-&tracking"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_WAVEFORMQUICKLOAD, _("&Waveform Quick-load"), kind=wx.ITEM_CHECK)
+        
         self.optionsmenu.AppendSeparator()
+        
+        # Add a menu for the Visualization Options
+        self.optionsvisualizationmenu = wx.Menu()
+        self.optionsvisualizationmenu.Append(MENU_OPTIONS_VISUALIZATION_WAVEFORM, _("&Waveform"), kind=wx.ITEM_RADIO)
+        self.optionsvisualizationmenu.Append(MENU_OPTIONS_VISUALIZATION_KEYWORD, _("&Keyword"), kind=wx.ITEM_RADIO)
+        self.optionsvisualizationmenu.Append(MENU_OPTIONS_VISUALIZATION_HYBRID, _("&Hybrid"), kind=wx.ITEM_RADIO)
+        self.optionsmenu.AppendMenu(MENU_OPTIONS_VISUALIZATION, _("Vi&sualization Style"), self.optionsvisualizationmenu)
+        
         self.optionsvideomenu = wx.Menu()
         self.optionsvideomenu.Append(MENU_OPTIONS_VIDEOSIZE_50, "&50%", kind=wx.ITEM_RADIO)
         self.optionsvideomenu.Append(MENU_OPTIONS_VIDEOSIZE_66, "&66%", kind=wx.ITEM_RADIO)
@@ -241,6 +265,7 @@ class MenuSetup(wx.MenuBar):
         self.optionsvideomenu.Append(MENU_OPTIONS_VIDEOSIZE_150, "15&0%", kind=wx.ITEM_RADIO)
         self.optionsvideomenu.Append(MENU_OPTIONS_VIDEOSIZE_200, "&200%", kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_VIDEOSIZE, _("&Video Size"), self.optionsvideomenu)
+        
         self.optionspresentmenu = wx.Menu()
         self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_ALL, _("&All Windows"), kind=wx.ITEM_RADIO)
         self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_VIDEO, _("&Video Only"), kind=wx.ITEM_RADIO)
@@ -253,8 +278,8 @@ class MenuSetup(wx.MenuBar):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_DA, True)
         elif TransanaGlobal.configData.language == 'de':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_DE, True)
-        elif TransanaGlobal.configData.language == 'el':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EL, True)
+#        elif TransanaGlobal.configData.language == 'el':
+#            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EL, True)
         elif TransanaGlobal.configData.language == 'es':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_ES, True)
         elif TransanaGlobal.configData.language == 'fi':
@@ -277,16 +302,29 @@ class MenuSetup(wx.MenuBar):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_SV, True)
         elif (TransanaGlobal.configData.language == 'zh') and (TransanaConstants.singleUserVersion):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_ZH, True)
+        elif (TransanaGlobal.configData.language == 'easteurope') and (TransanaConstants.singleUserVersion):
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EASTEUROPE, True)
+        elif (TransanaGlobal.configData.language == 'el') and (TransanaConstants.singleUserVersion):
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EL, True)
         elif (TransanaGlobal.configData.language == 'ja') and (TransanaConstants.singleUserVersion):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_JA, True)
         elif (TransanaGlobal.configData.language == 'ko') and (TransanaConstants.singleUserVersion):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_KO, True)
             
         # Set Options Menu items to their initial values based on Configuration Data
-        self.optionsmenu.Check(MENU_OPTIONS_SIMPLE_CLIPS, TransanaGlobal.configData.quickClipMode)
+        if 'wxMSW' in wx.PlatformInfo:
+            self.optionsmenu.Check(MENU_OPTIONS_QUICK_CLIPS, TransanaGlobal.configData.quickClipMode)
         self.optionsmenu.Check(MENU_OPTIONS_WORDTRACK, TransanaGlobal.configData.wordTracking)
         self.optionsmenu.Check(MENU_OPTIONS_AUTOARRANGE, TransanaGlobal.configData.autoArrange)
         self.optionsmenu.Check(MENU_OPTIONS_WAVEFORMQUICKLOAD, TransanaGlobal.configData.waveformQuickLoad)
+
+        # Set the Visualization Style to reflect the Configuration Data value
+        if TransanaGlobal.configData.visualizationStyle == 'Keyword':
+            self.optionsvisualizationmenu.Check(MENU_OPTIONS_VISUALIZATION_KEYWORD, True)
+        elif TransanaGlobal.configData.visualizationStyle == 'Hybrid':
+            self.optionsvisualizationmenu.Check(MENU_OPTIONS_VISUALIZATION_HYBRID, True)
+        else:
+            self.optionsvisualizationmenu.Check(MENU_OPTIONS_VISUALIZATION_WAVEFORM, True)
         
         # Set the VideoSize Menu to reflect the Configuration Data value
         if TransanaGlobal.configData.videoSize == 50:
@@ -299,6 +337,10 @@ class MenuSetup(wx.MenuBar):
             self.optionsmenu.Check(MENU_OPTIONS_VIDEOSIZE_150, True)
         elif TransanaGlobal.configData.videoSize == 200:
             self.optionsmenu.Check(MENU_OPTIONS_VIDEOSIZE_200, True)
+            
+        # Disable the automatic "Window" menu on the Mac.  It's not accessible for i18n, etc.
+        if 'wxMac' in wx.PlatformInfo:
+            wx.MenuBar.SetAutoWindowMenu(False)
 
         # Build the Help Menu
         self.helpmenu = wx.Menu()

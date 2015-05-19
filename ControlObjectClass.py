@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -71,6 +71,7 @@ class ControlObject(object):
         this is to allow greater modularity of code, so that modules can be swapped in and out in with
         changes affecting only this object if the APIs change.  """
     def __init__(self):
+        """ Initialize the ControlObject """
         # Define Objects that need controlling (initializing to None)
         self.MenuWindow = None
         self.VideoWindow = None
@@ -150,12 +151,13 @@ class ControlObject(object):
         # reset the video start and end points
         self.VideoStartPoint = 0                                     # Set the Video Start Point to the beginning of the video
         self.VideoEndPoint = 0                                       # Set the Video End Point to 0, indicating that the video should not end prematurely
-
         
         # Remove any tabs in the Data Window beyond the Database Tab
         self.DataWindow.DeleteTabs()
 
         if self.LoadVideo(episodeObj.media_filename, 0, episodeObj.tape_length):    # Load the video identified in the Episode
+            # Delineate the appropriate start and end points for Video Control.  (Required to prevent Waveform Visualization problems)
+            self.SetVideoSelection(0, 0)
 
             # Force the Visualization to load here.  This ensures that the Episode visualization is shown
             # rather than the Clip visualization when Locating a Clip
@@ -194,11 +196,11 @@ class ControlObject(object):
 
             # When an Episode is first loaded, we don't know how long it is.  
             # Deal with missing episode length.
-            if episodeObj.tape_length == 0:
+            if episodeObj.tape_length <= 0:
                 # The video has been loaded in the Media Player now, so this should work.
                 episodeObj.tape_length = self.GetMediaLength()
                 # If we now know the Media Length...
-                if episodeObj.tape_length != 0:
+                if episodeObj.tape_length > 0:
                     # Let's try to save the Episode Object, since we've added information
                     try:
                         episodeObj.lock_record()
@@ -206,6 +208,7 @@ class ControlObject(object):
                         episodeObj.unlock_record()
                     except:
                         pass
+
         else:
             # Create a File Management Window
             fileManager = FileManagement.FileManagement(self.MenuWindow, -1, _("Transana File Management"))
@@ -276,7 +279,6 @@ class ControlObject(object):
 
             return False
 
-
     def ClearAllWindows(self):
         """ Clears all windows and resets all objects """
         # Prompt for save if transcript modifications exist
@@ -316,6 +318,10 @@ class ControlObject(object):
         """ Close the old database and open a new one. """
         # Clear all existing Data
         self.ClearAllWindows()
+        # If we're in multi-user ...
+        if not TransanaConstants.singleUserVersion:
+            # ... stop the Connection Timer so it won't fire while the Database is closed
+            TransanaGlobal.connectionTimer.Stop()
         # Close the existing database connection
         DBInterface.close_db()
         # Reset the global encoding to UTF-8 if the Database supports it
@@ -327,6 +333,12 @@ class ControlObject(object):
         # If we're in Chinese, change the encoding to the appropriate Chinese encoding
         elif TransanaGlobal.configData.language == 'zh':
             TransanaGlobal.encoding = TransanaConstants.chineseEncoding
+        # If we're in East Europe Encoding, change the encoding to 'iso8859_2'
+        elif TransanaGlobal.configData.language == 'easteurope':
+            TransanaGlobal.encoding = 'iso8859_2'
+        # If we're in Greek, change the encoding to 'iso8859_7'
+        elif TransanaGlobal.configData.language == 'el':
+            TransanaGlobal.encoding = 'iso8859_7'
         # If we're in Japanese, change the encoding to cp932
         elif TransanaGlobal.configData.language == 'ja':
             TransanaGlobal.encoding = 'cp932'
@@ -361,39 +373,52 @@ class ControlObject(object):
                     logonCount = 4
                 # Clean up the Dialog Box
                 dlg.Destroy()
-                
+            # If we're in multi-user and we successfully logged in ...
+            if not TransanaConstants.singleUserVersion and loggedOn:
+                # ... start the Connection Timer.  This attempts to prevent the "Connection to Database Lost" error by
+                # running a very small query every 10 minutes.  See Transana.py.
+                TransanaGlobal.connectionTimer.Start(600000)
         # If the Database Connection fails ...
         if not loggedOn:
             # ... Close Transana
             self.MenuWindow.OnFileExit(None)
 
     def ShowDataTab(self, tabValue):
+        """ Changes the visible tab in the notebook in the Data Window """
         if self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL):
             # Display the Keywords Tab
             self.DataWindow.nb.SetSelection(tabValue)
 
     def InsertTimecodeIntoTranscript(self):
+        """ Insert a Timecode into the Transcript """
         self.TranscriptWindow.InsertTimeCode()
 
     def InsertSelectionTimecodesIntoTranscript(self, startPos, endPos):
+        """ Insert a timed pause into the Transcript """
         self.TranscriptWindow.InsertSelectionTimeCode(startPos, endPos)
 
     def SetTranscriptEditOptions(self, enable):
+        """ Change the Transcript's Edit Mode """
         self.MenuWindow.SetTranscriptEditOptions(enable)
 
     def TranscriptUndo(self, event):
+        """ Send an Undo command to the Transcript """
         self.TranscriptWindow.TranscriptUndo(event)
 
     def TranscriptCut(self):
+        """ Send a Cut command to the Transcript """
         self.TranscriptWindow.TranscriptCut()
 
     def TranscriptCopy(self):
+        """ Send a Copy command to the Transcript """
         self.TranscriptWindow.TranscriptCopy()
 
     def TranscriptPaste(self):
+        """ Send a Paste command to the Transcript """
         self.TranscriptWindow.TranscriptPaste()
 
     def TranscriptCallFontDialog(self):
+        """ Tell the TranscriptWindow to open the Font Dialog """
         self.TranscriptWindow.CallFontDialog()
 
     def Help(self, helpContext):
@@ -409,8 +434,6 @@ class ControlObject(object):
             path = path + os.sep
 
         programName = os.path.join(path, 'Help.py')
-        
-        # print "ControlObject.help(): '%s' '%s' '%s'" % (path, fn, programName)
 
         if "__WXMAC__" in wx.PlatformInfo:
             # NOTE:  If we just call Help.Help(), you can't actually do the Tutorial because
@@ -426,11 +449,22 @@ class ControlObject(object):
             #        have the Help file read it that way.  If the user leave Help open, it won't get
             #        updated on subsequent calls, but for now that's okay by me.
             
-            file = open('/Applications/Transana 2/TransanaHelpContext.txt', 'w')
-            pickle.dump(helpContext, file)
-            file.flush()
-            file.close()            
-            
+            helpfile = open(os.getenv("HOME") + '/TransanaHelpContext.txt', 'w')
+            pickle.dump(helpContext, helpfile)
+            helpfile.flush()
+            helpfile.close()
+
+            # On OS X 10.4, when Transana is packed with py2app, the Help call stopped working.
+            # It seems we have to remove certain environment variables to get it to work properly!
+            # Let's investigate environment variables here!
+            envirVars = os.environ
+            if 'PYTHONHOME' in envirVars.keys():
+                del(os.environ['PYTHONHOME'])
+            if 'PYTHONPATH' in envirVars.keys():
+                del(os.environ['PYTHONPATH'])
+            if 'PYTHONEXECUTABLE' in envirVars.keys():
+                del(os.environ['PYTHONEXECUTABLE'])
+
             os.system('open -a TransanaHelp.app')
 
         else:
@@ -447,7 +481,7 @@ class ControlObject(object):
             # Make the Help call differently from Python and the stand-alone executable.
             if fn.lower() == 'transana.py':
                 # for within Python, we call python, then the Help code and the context
-                os.spawnv(os.P_NOWAIT, 'python', [programName, helpContext])
+                os.spawnv(os.P_NOWAIT, 'python.bat', [programName, helpContext])
             else:
                 # The Standalone requires a "dummy" parameter here (Help), as sys.argv differs between the two versions.
                 os.spawnv(os.P_NOWAIT, path + 'Help', ['Help', helpContext])
@@ -488,23 +522,36 @@ class ControlObject(object):
         return success
 
     def ClearVisualizationSelection(self):
+        """ Clear the current selection from the Visualization Window """
         self.VisualizationWindow.ClearVisualizationSelection()
+
+    def ChangeVisualization(self):
+        """ Triggers a complete refresh of the Visualization Window.  Needed for changing Visualization Style. """
+        # Capture the Transcript Window's cursor position
+        self.TranscriptWindow.dlg.editor.cursorPosition = (self.TranscriptWindow.dlg.editor.GetCurrentPos(), self.TranscriptWindow.dlg.editor.GetSelection())
+        # Update the Visualization Window
+        self.VisualizationWindow.Refresh()
+        # Restore the Transcript Window's cursor
+        self.TranscriptWindow.dlg.editor.RestoreCursor()
+
+    def UpdateKeywordVisualization(self):
+        """ If the Keyword Visualization is displayed, update it based on something that could change the keywords
+            in the display area. """
+        self.VisualizationWindow.UpdateKeywordVisualization()
 
     def Play(self, setback=False):
         """ This method starts video playback from the current video position. """
         # If we do not already have a cursor position saved, save it
         if self.TranscriptWindow.dlg.editor.cursorPosition == 0:
             self.TranscriptWindow.dlg.editor.cursorPosition = (self.TranscriptWindow.dlg.editor.GetCurrentPos(), self.TranscriptWindow.dlg.editor.GetSelection())
-
         # If Setback is requested (Transcription Ctrl-S)
         if setback:
             # Get the current Video position
             videoPos = self.VideoWindow.GetCurrentVideoPosition()
-
             if type(self.currentObj).__name__ == 'Episode':
                 videoStart = 0
             elif type(self.currentObj).__name__ == 'Clip':
-                videoStart = self.currentObj.clipStart
+                videoStart = self.currentObj.clip_start
             else:
                 # Get the current Video marker
                 videoStart = self.VideoWindow.GetVideoStartPoint()
@@ -520,16 +567,13 @@ class ControlObject(object):
                 # ... jump to the beginning of the video marker
                 self.VideoWindow.SetCurrentVideoPosition(videoStart)
 
-        # Because of differences in the Media Player technologies on Windows and the Mac, we need
-        # to explicitly set the Clip Endpoint if we're on a Mac
-        if ("__WXMAC__" in wx.PlatformInfo) and (self.VideoEndPoint == -1):
+        # We need to explicitly set the Clip Endpoint, if it's not known.
+        if self.VideoEndPoint == -1:
             if type(self.currentObj).__name__ == 'Episode':
                 videoEnd = self.currentObj.tape_length
             elif type(self.currentObj).__name__ == 'Clip':
                 videoEnd = self.currentObj.clip_stop
-                
             self.SetVideoEndPoint(videoEnd)
-
         # Play the Video
         self.VideoWindow.Play()
 
@@ -574,6 +618,7 @@ class ControlObject(object):
         return self.VideoWindow.IsLoading()
 
     def GetVideoStartPoint(self):
+        """ Return the current Video Starting Point """
         return self.VideoStartPoint
     
     def SetVideoStartPoint(self, TimeCode):
@@ -586,6 +631,7 @@ class ControlObject(object):
         self.VideoStartPoint = TimeCode
 
     def GetVideoEndPoint(self):
+        """ Return the current Video Ending Point """
         if self.VideoEndPoint > 0:
             return self.VideoEndPoint
         else:
@@ -597,6 +643,7 @@ class ControlObject(object):
         self.VideoEndPoint = TimeCode
 
     def GetVideoSelection(self):
+        """ Return the current video starting and ending points """
         return (self.VideoStartPoint, self.VideoEndPoint)
 
     def SetVideoSelection(self, StartTimeCode, EndTimeCode):
@@ -631,7 +678,7 @@ class ControlObject(object):
             if DEBUG:
                 print "ControlObjectClass.SetVideoSelection(): editor position after select_find() =", self.TranscriptWindow.dlg.editor.GetCurrentPos(), self.TranscriptWindow.dlg.editor.GetSelection()
                 
-        if EndTimeCode == 0:
+        if EndTimeCode <= 0:
             if type(self.currentObj).__name__ == 'Episode':
                 EndTimeCode = self.VideoWindow.GetMediaLength()
             elif type(self.currentObj).__name__ == 'Clip':
@@ -649,10 +696,6 @@ class ControlObject(object):
     def UpdatePlayState(self, playState):
         """ When the Video Player's Play State Changes, we may need to adjust the Screen Layout
             depending on the Presentation Mode settings. """
-
-        # print "ControlObject.UpdatePlayState():", playState, TransanaConstants.MEDIA_PLAYSTATE_STOP, TransanaConstants.MEDIA_PLAYSTATE_PLAY, TransanaConstants.MEDIA_PLAYSTATE_PAUSE
-
-        # print "ControlObject.UpdatePlayState(): PlayAllClipsWindow =", self.PlayAllClipsWindow
         
         # If the video is STOPPED, return all windows to normal Transana layout
         if (playState == TransanaConstants.MEDIA_PLAYSTATE_STOP) and (self.PlayAllClipsWindow == None):
@@ -688,7 +731,6 @@ class ControlObject(object):
             if (type(self.MenuWindow.FindFocus()) != type(self.TranscriptWindow.dlg.editor)) and \
                ((self.MenuWindow.FindFocus()) != (self.VisualizationWindow.waveform)):
                 self.TranscriptWindow.dlg.editor.cursorPosition = (self.TranscriptWindow.dlg.editor.GetCurrentPos(), self.TranscriptWindow.dlg.editor.GetSelection())
-
             # See if Presentation Mode is NOT set to "All Windows" and do all changes common to the other Presentation Modes
             if self.MenuWindow.menuBar.optionsmenu.IsChecked(MenuSetup.MENU_OPTIONS_PRESENT_ALL) == False:
                 # See if we have already noted the Window Positions.
@@ -782,9 +824,11 @@ class ControlObject(object):
         return (originalTranscriptNum, startTime, endTime, text)
 
     def GetDatabaseTreeTabObjectNodeType(self):
+        """ Get the Node Type of the currently selected object in the Database Tree in the Data Window """
         return self.DataWindow.DBTab.tree.GetObjectNodeType()
 
     def SetDatabaseTreeTabCursor(self, cursor):
+        """ Change the shape of the cursor for the database tree in the data window """
         self.DataWindow.DBTab.tree.SetCursor(wx.StockCursor(cursor))
 
     def GetVideoPosition(self):
@@ -798,7 +842,6 @@ class ControlObject(object):
            (self.TranscriptWindow.dlg.editor.GetCurrentPos() != 0) and \
            (self.TranscriptWindow.dlg.editor.GetSelection() != (0, 0)):
             self.TranscriptWindow.dlg.editor.cursorPosition = (self.TranscriptWindow.dlg.editor.GetCurrentPos(), self.TranscriptWindow.dlg.editor.GetSelection())
-
         if self.VideoEndPoint > 0:
             mediaLength = self.VideoEndPoint - self.VideoStartPoint
         else:
@@ -812,13 +855,32 @@ class ControlObject(object):
             if self.DataWindow.SelectedEpisodeClipsTab != None:
                 self.DataWindow.SelectedEpisodeClipsTab.Refresh(currentPosition)
 
-        
     def GetMediaLength(self, entire = False):
         """ This method returns the length of the entire video/media segment """
         try:
             if not(entire): # Return segment length
-                if self.VideoEndPoint == 0:
-                    mediaLength = self.VideoWindow.GetMediaLength() - self.VideoStartPoint
+                if self.VideoEndPoint <= 0:
+                    videoLength = self.VideoWindow.GetMediaLength()
+                    mediaLength = videoLength - self.VideoStartPoint
+
+                    # Sometimes video files don't know their own length because it hasn't been available before.
+                    # This may be a good place to detect and correct that problem before it starts to cause problems,
+                    # such as in the Keyword Map.
+
+                    # First, let's see if we have a chance to detect and correct the problem by seeing if an episode is
+                    # currently loaded that doesn't have a proper length.
+                    if (type(self.currentObj).__name__ == 'Episode') and \
+                       (self.currentObj.media_filename == self.VideoFilename) and \
+                       (self.currentObj.tape_length <= 0) and \
+                       (videoLength > 0):
+                            try:
+                                self.currentObj.lock_record()
+                                self.currentObj.tape_length = videoLength
+                                self.currentObj.db_save()
+                                self.currentObj.unlock_record()
+                            except:
+                                pass
+
                 else:
                     if self.VideoEndPoint - self.VideoStartPoint > 0:
                         mediaLength = self.VideoEndPoint - self.VideoStartPoint
@@ -978,14 +1040,22 @@ class ControlObject(object):
         """ Update all screen components to reflect change in the selected program language """
         self.ClearAllWindows()
 
-        # Let's look at the issue of database encoding.  If it's UTF-8, don't change anything.
-        if TransanaGlobal.encoding != 'utf8':
+        # Let's look at the issue of database encoding.  We only need to do something if the encoding is NOT UTF-8
+        # or if we're on Windows single-user version.
+        if (TransanaGlobal.encoding != 'utf8') or \
+           (('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion)):
             # If it's not UTF-*, then if it is Russian, use KOI8r
             if TransanaGlobal.configData.language == 'ru':
                 newEncoding = 'koi8_r'
             # If it's Chinese, use the appropriate Chinese encoding
             elif TransanaGlobal.configData.language == 'zh':
                 newEncoding = TransanaConstants.chineseEncoding
+            # If it's Eastern European Encoding, use 'iso8859_2'
+            elif TransanaGlobal.configData.language == 'easteurope':
+                newEncoding = 'iso8859_2'
+            # If it's Greek, use 'iso8859_7'
+            elif TransanaGlobal.configData.language == 'el':
+                newEncoding = 'iso8859_7'
             # If it's Japanese, use cp932
             elif TransanaGlobal.configData.language == 'ja':
                 newEncoding = 'cp932'
@@ -995,6 +1065,7 @@ class ControlObject(object):
             # Otherwise, fall back to Latin-1
             else:
                 newEncoding = 'latin1'
+            
             # If we're changing encodings, we need to do a little work here!
             if newEncoding != TransanaGlobal.encoding:
                 msg = _('Database encoding is changing.  To avoid potential data corruption, \nTransana must close your database before proceeding.')
@@ -1020,6 +1091,6 @@ class ControlObject(object):
         self.TranscriptWindow.AdjustIndexes(adjustmentAmount)
 
     def __repr__(self):
+        """ Return a string representation of information about the ControlObject """
         tempstr = "Control Object contents:\nVideoFilename = %s\nVideoStartPoint = %s\nVideoEndPoint = %s"
         return tempstr % (self.VideoFilename, self.VideoStartPoint, self.VideoEndPoint)
-

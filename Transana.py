@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -22,27 +22,32 @@ __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 import sys                          # import Python's sys module
 # You can't use wxversion if you've used py2exe.  Test for that first!Also, there are problems with this
 # on the Mac when we build an app bundle.
-if (sys.platform != 'darwin') and (not hasattr(sys, 'frozen')):
-    # The first thing we need to do is select either the unicode version of wxPython or the ansi version.
-    # We try several versions to ensure that one will load on all development machines.
+if (__name__ == '__main__') and (sys.platform == 'win32') and (not hasattr(sys, 'frozen')):
+    # The first thing we need to do is confirm the proper wxPython version.
     import wxversion
 
-    # Only 1 of the following lines should be enabled at one time.
-    # wxversion.select(["2.5.3.1-ansi", "2.6.1.0-ansi"])  # Enable this line for ANSI wxPython
-    wxversion.select(["2.5.3.1-unicode", "2.6.1.0-unicode"])  # Enable this line for UNICODE wxPython
+    # At the moment, different platforms require different wxPythons!
+    if sys.platform == 'win32':
+        wxversion.select(["2.7.2.0-unicode", "2.8.1.1-unicode"])  # Enable this line for UNICODE wxPython
+    else:
+        wxversion.select(["2.6.3-unicode", "2.8.1.1-unicode"])  # Enable this line for UNICODE wxPython
 
 import wx                           # import wxPython's wxWindows implementation
 from TransanaExceptions import *    # import all exception classes
 import os
 import gettext                      # localization module
-# Define the "_" method, pointing it to wxPython's GetTranslation method
-__builtins__._ = wx.GetTranslation
+if __name__ == '__main__':
+    # Define the "_" method, pointing it to wxPython's GetTranslation method
+    __builtins__._ = wx.GetTranslation
 import Dialogs                      # import Transana Error Dialog
 import TransanaConstants            # import the Transana Constants
 import TransanaGlobal               # import Transana's Global Variables
 from ControlObjectClass import ControlObject   # import the Transana Control Object
 if "__WXMAC__" in wx.PlatformInfo:
     import MacOS
+
+import DBInterface                  # import the Database Interface module
+import time                         # import the time module (Python)
 
 DEBUG = False
 if DEBUG:
@@ -117,9 +122,6 @@ class Transana(wx.App):
 
         # Let's trap the situation where the database folder is not available.
         try:
-            # Import modules
-            import DBInterface                     # import the Database Interface module
-
             # Start MySQL if using the embedded version
             if TransanaConstants.singleUserVersion:
                 DBInterface.InitializeSingleUserDatabase()
@@ -140,7 +142,6 @@ class Transana(wx.App):
             import TranscriptionUI                 # import Transcript Window Object
             import VisualizationWindow             # import Visualization Window Object
             import exceptions                      # import exception handler (Python)
-            import time                            # import the time module (Python)
             # if we're running the multi-user version of Transana ...
             if not TransanaConstants.singleUserVersion:
                 # ... import the Transana ChatWindow module
@@ -226,7 +227,19 @@ class Transana(wx.App):
                 if TransanaGlobal.socketConnection == None:
                     # ... signal that Transana should NOT start up!
                     loggedOn = False
+                else:
+                    # If Transana MU sits idle too long (30 - 60 minutes), people would sometimes get a
+                    # "Connection to Database Lost" error message even though MySQL was set to maintain the
+                    # connection for 8 hours.  To try to address this, we will set up a Timer that will run
+                    # a simple query every 10 minutes to maintain the connection to the database.
 
+                    # Create the Connection Timer
+                    TransanaGlobal.connectionTimer = wx.Timer(self)
+                    # Bind the timer to its event
+                    self.Bind(wx.EVT_TIMER, self.OnTimer)
+                    # Tell the timer to fire every 10 minutes.
+                    # NOTE:  If changing this value, it also needs to be changed in the ControlObjectClass.GetNewDatabase() method.
+                    TransanaGlobal.connectionTimer.Start(600000)
         else:
             loggedOn = False
             dlg = wx.MessageDialog(TransanaGlobal.menuWindow, msg, _('Transana Database Connection'), wx.YES_NO | wx.ICON_ERROR)
@@ -237,6 +250,19 @@ class Transana(wx.App):
             dlg.Destroy()
         return loggedOn
 
+
+    def OnTimer(self, event):
+        """ To prevent a "Lost Database" message, we periocially run a very simple query to maintain our
+            connection to the database. """
+        # Get the database connection
+        db = DBInterface.get_db()
+        if db != None:
+            # Get a DB Cursor
+            dbCursor = db.cursor()
+            # This is the simplest query I can think of
+            query = "SHOW TABLES like 'Series%'"
+            # Execute the query
+            dbCursor.execute(query)
 
 
 def transana_excepthook(type, value, trace):
@@ -269,6 +295,7 @@ def transana_excepthook(type, value, trace):
     dlg.Destroy()
 
 
-# Main Application definition and execution call (wxPython)
-app = Transana(0)      # This parameter:  0 causes stdout to be sent to the console.
-app.MainLoop()    
+if __name__ == "__main__":
+    # Main Application definition and execution call (wxPython)
+    app = Transana(0)      # This parameter:  0 causes stdout to be sent to the console.
+    app.MainLoop()    

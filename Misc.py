@@ -1,4 +1,4 @@
-# Copyright (C) 2002 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2002 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -71,6 +71,28 @@ def time_in_ms_to_str(time_in_ms):
     str = "%d:%02d:%02d.%d" % (hours, minutes, seconds, tenthsofasecond)
     return str
 
+
+def TimeMsToStr(TimeVal):
+    """ Converts Time in Milliseconds to a formatted string """
+    # Convert from milliseconds to seconds
+    seconds = int(TimeVal) / 1000
+    # Determine how many whole hours there are in this number of seconds
+    hours = seconds / (60 * 60)
+    # Remove the hours from the total number of seconds
+    seconds = seconds % (60 * 60)
+    # Determine the number of minutes in the remaining seconds
+    minutes = seconds / 60
+    # Remove the minutes from the seconds, and round to the nearest second.
+    seconds = round(seconds % 60)
+    # Initialize a String
+    TempStr = ''
+    # Convert to string
+    if hours > 0:
+        TempStr = '%s:%02d:%02d' % (hours, minutes, seconds)
+    else:
+        TempStr = '%s:%02d' % (minutes, seconds)
+    # Return the string representation to the calling function
+    return TempStr
 
 def time_in_str_to_ms(time_in_str):
     """ Returns the number of milliseconds represented by a string in H:M:S.s format,

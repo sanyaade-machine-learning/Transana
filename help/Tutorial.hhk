@@ -116,6 +116,11 @@
            <param name="Local" value="WorkWithCollections.htm">
        </object>
   <li> <object type="text/sitemap">
+           <param name="Name" value="Transana's Reports">
+           <param name="ID" value=205>
+           <param name="Local" value="Reports.htm">
+       </object>
+  <li> <object type="text/sitemap">
            <param name="Name" value="Searching for Keywords">
            <param name="ID" value=210>
            <param name="Local" value="SearchforKeywords.htm">

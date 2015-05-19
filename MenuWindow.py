@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -63,7 +63,7 @@ import RecordLock
 ENGLISH_LABEL = 'English'
 DANISH_LABEL = 'Dansk'
 GERMAN_LABEL = 'Deutsch'
-GREEK_LABEL = 'Greek'
+GREEK_LABEL = 'English prompts, Greek data'
 if 'unicode' in wx.PlatformInfo:
     SPANISH_LABEL = u'Espa\u00f1ol'
 else:
@@ -88,6 +88,7 @@ else:
     RUSSIAN_LABEL = 'Russian'
 SWEDISH_LABEL = 'Svenska'
 CHINESE_LABEL = 'English prompts, Chinese data'
+EASTEUROPE_LABEL = _("English prompts, Eastern European data (ISO-8859-2 encoding)")
 JAPANESE_LABEL = 'English prompts, Japanese data'
 KOREAN_LABEL = 'English prompts, Korean data'
 
@@ -122,6 +123,15 @@ class MenuWindow(wx.Frame):
             self.height = 1
             winstyle = wx.FRAME_TOOL_WINDOW
 
+        # Linux and who knows what else
+        else:
+            screenDims = wx.ClientDisplayRect()
+            self.left = screenDims[0]
+            self.top = screenDims[1]
+            self.width = screenDims[2] - 2
+            self.height = screenDims[3] - 2
+            winstyle = wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION      # | wx.MAXIMIZE
+
         # Now create the Frame for the Menu Bar
         wx.Frame.__init__(self, parent, -1, title, style=winstyle,
                     size=(self.width, self.height), pos=(self.left, self.top))
@@ -139,8 +149,8 @@ class MenuWindow(wx.Frame):
                 TransanaGlobal.configData.language = 'da'
             elif initialLanguage == GERMAN_LABEL:
                 TransanaGlobal.configData.language = 'de'
-            elif initialLanguage == GREEK_LABEL:
-                TransanaGlobal.configData.language = 'el'
+#            elif initialLanguage == GREEK_LABEL:
+#                TransanaGlobal.configData.language = 'el'
             elif initialLanguage == SPANISH_LABEL:
                 TransanaGlobal.configData.language = 'es'
             elif initialLanguage == FINNISH_LABEL:
@@ -177,6 +187,14 @@ class MenuWindow(wx.Frame):
                 TransanaGlobal.configData.language = 'zh'
                 if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
                     TransanaGlobal.encoding = TransanaConstants.chineseEncoding
+            elif initialLanguage == EASTEUROPE_LABEL:
+                TransanaGlobal.configData.language = 'easteurope'
+                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+                    TransanaGlobal.encoding = 'iso8859_2'
+            elif initialLanguage == GREEK_LABEL:
+                TransanaGlobal.configData.language = 'el'
+                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+                    TransanaGlobal.encoding = 'iso8859_7'
             elif initialLanguage == JAPANESE_LABEL:
                 TransanaGlobal.configData.language = 'ja'
                 if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
@@ -219,9 +237,9 @@ class MenuWindow(wx.Frame):
         if os.path.exists(dir):
             self.presLan_de = gettext.translation('Transana', 'locale', languages=['de']) # German
         # Greek
-        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'el', 'LC_MESSAGES', 'Transana.mo')
-        if os.path.exists(dir):
-            self.presLan_el = gettext.translation('Transana', 'locale', languages=['el']) # Greek
+#        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'el', 'LC_MESSAGES', 'Transana.mo')
+#        if os.path.exists(dir):
+#            self.presLan_el = gettext.translation('Transana', 'locale', languages=['el']) # Greek
         # Spanish
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'es', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -264,8 +282,8 @@ class MenuWindow(wx.Frame):
             self.presLan_sv = gettext.translation('Transana', 'locale', languages=['sv']) # Swedish
 
         # Install English as the initial language if no language has been specified
-        # NOTE:  Japanese, Korean, and Chinese will use English prompts
-        if (TransanaGlobal.configData.language in ['', 'en', 'ja', 'ko', 'zh']) :
+        # NOTE:  Eastern European Encoding, Greek, Japanese, Korean, and Chinese will use English prompts
+        if (TransanaGlobal.configData.language in ['', 'en', 'easteurope', 'el', 'ja', 'ko', 'zh']) :
             lang = wx.LANGUAGE_ENGLISH
             self.presLan_en.install()
 
@@ -280,9 +298,9 @@ class MenuWindow(wx.Frame):
             self.presLan_de.install()
 
         # Greek
-        elif (TransanaGlobal.configData.language == 'el'):
-            lang = wx.LANGUAGE_GREEK     # Greek spec causes an error message on my computer
-            self.presLan_el.install()
+#        elif (TransanaGlobal.configData.language == 'el'):
+#            lang = wx.LANGUAGE_GREEK     # Greek spec causes an error message on my computer
+#            self.presLan_el.install()
 
         # Spanish
         elif (TransanaGlobal.configData.language == 'es'):
@@ -349,7 +367,7 @@ class MenuWindow(wx.Frame):
         #        "gettext" rather than wxPython's "wx.Locale".
         self.locale.AddCatalog("Transana")
 
-        transanaIcon = wx.Icon("images/transana.ico", wx.BITMAP_TYPE_ICO)
+        transanaIcon = wx.Icon("images/Transana.ico", wx.BITMAP_TYPE_ICO)
         self.SetIcon(transanaIcon)
 
         # Build the Menu System using the MenuSetup Object
@@ -416,13 +434,16 @@ class MenuWindow(wx.Frame):
         # Define handler for Options > Language changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_LANGUAGE_EN, MenuSetup.MENU_OPTIONS_LANGUAGE_ZH, self.OnOptionsLanguage)
         # Define handler for Options > Quick Clip Mode
-        wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_SIMPLE_CLIPS, self.OnOptionsQuickClipMode)
+        if 'wxMSW' in wx.PlatformInfo:
+            wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_QUICK_CLIPS, self.OnOptionsQuickClipMode)
         # Define handler for Options > Auto Word-tracking
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_WORDTRACK, self.OnOptionsWordTrack)
         # Define handler for Options > Auto-Arrange
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_AUTOARRANGE, self.OnOptionsAutoArrange)
         # Define handler for Sound > Waveform Quick-load
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_WAVEFORMQUICKLOAD, self.OnOptionsWaveformQuickload)
+        # Define handler for Options > Visualization Style changes
+        wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_VISUALIZATION_WAVEFORM, MenuSetup.MENU_OPTIONS_VISUALIZATION_HYBRID, self.OnOptionsVisualizationStyle)
         # Define handler for Options > Video Size changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_VIDEOSIZE_50, MenuSetup.MENU_OPTIONS_VIDEOSIZE_200, self.OnOptionsVideoSize)
 
@@ -451,7 +472,7 @@ class MenuWindow(wx.Frame):
         self.ClearMenus()
 
         # We need to know the actual menu height on Windows, as XP has the funky header option that makes the height an unknown.
-        if not('__WXMAC__' in wx.PlatformInfo):
+        if 'wxMSW' in wx.PlatformInfo:
             # The difference between the actual window size and the Client Size is (surprise!) the height of the
             # Header Bar and the Menu.  This is exactly what we need to know.
             TransanaGlobal.menuHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
@@ -488,6 +509,10 @@ class MenuWindow(wx.Frame):
             # Close the connection to the Database, if one is open
             if DBInterface.is_db_open():
                 DBInterface.close_db()
+            # If we have the multi-user version ...
+            if not TransanaConstants.singleUserVersion:
+                # ... stop the Connection Timer.
+                TransanaGlobal.connectionTimer.Stop()
             # Save Configuration Data
             TransanaGlobal.configData.SaveConfiguration()
             # We need to force the Video Window to close along with all of the other windows.
@@ -723,7 +748,8 @@ class MenuWindow(wx.Frame):
     def OnImportDatabase(self, event):
         """ Import Database """
         temp = XMLImport.XMLImport(self, -1, _('Transana XML Import'))
-        if temp.get_input():
+        result = temp.get_input()
+        if (result != None) and (result[_("XML Filename")] != ''):
             temp.Import()
             # If MU, we need to signal other copies that we've imported a database!
             # First, test to see if we're in the Multi-user version.
@@ -738,7 +764,8 @@ class MenuWindow(wx.Frame):
     def OnExportDatabase(self, event):
         """ Export Database """
         temp = XMLExport.XMLExport(self, -1, _('Transana XML Export'))
-        if temp.get_input():
+        result = temp.get_input()
+        if (result != None) and (result[_("XML Filename")] != ''):
             temp.Export()
         temp.Close()
 
@@ -755,6 +782,10 @@ class MenuWindow(wx.Frame):
 
     def OnRecordLock(self, event):
         """ Record Lock Utility Window """
+        # If a Control Object has been defined ...
+        if self.ControlObject != None:
+            # ... it should know how to clear all the Windows!
+            self.ControlObject.ClearAllWindows()
         # Create a Record Lock Utility window
         recordLockWindow = RecordLock.RecordLock(self, -1, _("Transana Record Lock Utility"))
         recordLockWindow.ShowModal()
@@ -765,6 +796,7 @@ class MenuWindow(wx.Frame):
         temp = BatchWaveformGenerator.BatchWaveformGenerator(self)
         temp.get_input()
         temp.Close()
+        temp.Destroy()
 
     def OnOptionsSettings(self, event):
         """ Handler for Options > Settings """
@@ -809,9 +841,9 @@ class MenuWindow(wx.Frame):
             self.presLan_de.install()
 
         # Greek
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
-            TransanaGlobal.configData.language = 'el'
-            self.presLan_el.install()
+#        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
+#            TransanaGlobal.configData.language = 'el'
+#            self.presLan_el.install()
 
         # Spanish
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ES:
@@ -868,6 +900,16 @@ class MenuWindow(wx.Frame):
             TransanaGlobal.configData.language = 'zh'
             self.presLan_en.install()
 
+        # Eastern Europe Encoding (English prompts)
+        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EASTEUROPE:
+            TransanaGlobal.configData.language = 'easteurope'
+            self.presLan_en.install()
+
+        # Greek (English prompts)
+        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
+            TransanaGlobal.configData.language = 'el'
+            self.presLan_en.install()
+
         # Japanese (English prompts)
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_JA:
             TransanaGlobal.configData.language = 'ja'
@@ -909,6 +951,17 @@ class MenuWindow(wx.Frame):
     def OnOptionsWaveformQuickload(self, event):
         """ Handler for Options > Waveform Quick-load menu command """
         TransanaGlobal.configData.waveformQuickLoad = event.IsChecked()
+
+    def OnOptionsVisualizationStyle(self, event):
+        """ Handler for Options > Visualization Style menu """
+        if event.GetId() == MenuSetup.MENU_OPTIONS_VISUALIZATION_WAVEFORM:
+            TransanaGlobal.configData.visualizationStyle = 'Waveform'
+        elif event.GetId() == MenuSetup.MENU_OPTIONS_VISUALIZATION_KEYWORD:
+            TransanaGlobal.configData.visualizationStyle = 'Keyword'
+        if event.GetId() == MenuSetup.MENU_OPTIONS_VISUALIZATION_HYBRID:
+            TransanaGlobal.configData.visualizationStyle = 'Hybrid'
+        # Change the Visualization to match the new selection
+        self.ControlObject.ChangeVisualization()
 
     def OnOptionsVideoSize(self, event):
         # TODO:  Macintosh needs other options to be explicitly "unchecked" when something here is selected,
@@ -1002,8 +1055,8 @@ class MenuWindow(wx.Frame):
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_DA, _("&Danish"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_DE) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_DE, _("&German"))
-        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_EL) != None:
-            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_EL, _("Gree&k"))
+#        if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_EL) != None:
+#            self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_EL, _("Gree&k"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_ES) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_ES, _("&Spanish"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_FI) != None:
@@ -1024,10 +1077,15 @@ class MenuWindow(wx.Frame):
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_RU, _("&Russian"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_SV) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_SV, _("S&wedish"))
-        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_SIMPLE_CLIPS, _("Quick Clip Mode"))
+        if 'wxMSW' in wx.PlatformInfo:
+            self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_QUICK_CLIPS, _("&Quick Clip Mode"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_WORDTRACK, _("Auto &Word-tracking"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_WAVEFORMQUICKLOAD, _("&Waveform Quick-load"))
+        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION, _("Vi&sualization Style"))
+        self.menuBar.optionsvisualizationmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION_WAVEFORM, _("&Waveform"))
+        self.menuBar.optionsvisualizationmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION_KEYWORD, _("&Keyword"))
+        self.menuBar.optionsvisualizationmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION_HYBRID, _("&Hybrid"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_VIDEOSIZE, _("&Video Size"))
         self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_ALL, _("&All Windows"))
         self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_VIDEO, _("&Video Only"))
@@ -1057,9 +1115,9 @@ class MenuWindow(wx.Frame):
         if os.path.exists(dir):
             languages.append(GERMAN_LABEL)
         # Greek
-        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'el', 'LC_MESSAGES', 'Transana.mo')
-        if os.path.exists(dir):
-            languages.append(GREEK_LABEL)
+#        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'el', 'LC_MESSAGES', 'Transana.mo')
+#        if os.path.exists(dir):
+#            languages.append(GREEK_LABEL)
         # Spanish
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'es', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -1100,9 +1158,11 @@ class MenuWindow(wx.Frame):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'sv', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             languages.append(SWEDISH_LABEL)
-        # Japanese, Korean, and Chinese
+        # Easern Europe encoding, Greek, Japanese, Korean, and Chinese
         if ('wxMSW' in wx.PlatformInfo) and TransanaConstants.singleUserVersion:
             languages.append(CHINESE_LABEL)
+            languages.append(EASTEUROPE_LABEL)
+            languages.append(GREEK_LABEL)
             languages.append(JAPANESE_LABEL)
             # Korean support must be removed due to a bug in wxSTC on Windows.
             # languages.append(KOREAN_LABEL)
@@ -1121,4 +1181,3 @@ class MenuWindow(wx.Frame):
             dlg.Destroy()
         
             return result
-

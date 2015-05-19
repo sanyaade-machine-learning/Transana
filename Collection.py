@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -203,6 +203,10 @@ class Collection(DataObject):
             (db, c) = self._db_start_delete(use_transactions)
             if (db == None):
                 return      # Abort delete
+
+            # Delete all Collection-based Filter Configurations
+            #   Delete Collection Clip Data Export records
+            DBInterface.delete_filter_records(4, self.number)
 
             # Detect, Load, and Delete all Collection Notes
             notes = self.get_note_nums()

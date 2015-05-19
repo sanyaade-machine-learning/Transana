@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -187,6 +187,9 @@ class Clip(DataObject):
             # raise SaveError, "No Transcript number"
         elif self.media_filename == "":
             raise SaveError, _("Media Filename is required.")
+        # If a user Adjusts Indexes, it's possible to have a clip that starts BEFORE the media file.
+        elif self.clip_start < 0.0:
+            raise SaveError, _("Clip cannot start before media file begins.")
         else:
             # videoPath probably has the OS.sep character, but we need the generic "/" character here.
             videoPath = TransanaGlobal.configData.videoPath.replace('\\', '/')
@@ -518,6 +521,21 @@ class Clip(DataObject):
         # Signal whether the delete was successful
         return delResult
 
+    def has_keyword(self, kwg, kw):
+        """ Determines if the Episode has a given keyword assigned """
+        # Assume the result will be false
+        res = False
+        # Iterate through the keyword list
+        for keyword in self.keyword_list:
+            # See if the text passed in matches the strings in the keyword objects in the keyword list
+            if (kwg == keyword.keywordGroup) and (kw == keyword.keyword):
+                # If so, signal that it HAS been found
+                res = True
+                # If found, we don't need to look any more!
+                break
+        # Return the results
+        return res
+
     
 # Private methods    
 
@@ -651,11 +669,13 @@ class Clip(DataObject):
     # Clips only know originating Episode Number, which can be used to find the Series ID and Episode ID.
     # For the sake of efficiency, whichever is called first loads both values.
     def _get_series_id(self):
-        # TODO:  Confirm graceful handling if originating Series/Episode has been deleted
         if self._series_id == "":
-            tempEpisode = Episode.Episode(self.episode_num)
-            self._series_id = tempEpisode.series_id
-            self._episode_id = tempEpisode.id
+            try:
+                tempEpisode = Episode.Episode(self.episode_num)
+                self._series_id = tempEpisode.series_id
+                self._episode_id = tempEpisode.id
+            except:
+                pass
             return self._series_id
         else:
             return self._series_id
@@ -663,11 +683,13 @@ class Clip(DataObject):
     # Clips only know originating Episode Number, which can be used to find the Series ID and Episode ID.
     # For the sake of efficiency, whichever is called first loads both values.
     def _get_episode_id(self):
-        # TODO:  Confirm graceful handling if originating Series/Episode has been deleted
         if self._episode_id == "":
-            tempEpisode = Episode.Episode(self.episode_num)
-            self._series_id = tempEpisode.series_id
-            self._episode_id = tempEpisode.id
+            try:
+                tempEpisode = Episode.Episode(self.episode_num)
+                self._series_id = tempEpisode.series_id
+                self._episode_id = tempEpisode.id
+            except:
+                pass
             return self._episode_id
         else:
             return self._episode_id

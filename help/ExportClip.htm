@@ -1,0 +1,76 @@
+<HTML>
+<HEAD>
+<TITLE>Clip Data Export</TITLE>
+</HEAD>
+
+<BODY    >
+
+<H1>Clip Data Export<HR ></H1><P>
+Transana's Clip Data Export routine creates a tab-delimited text file that allows you to look at information about Clips you've created in Transana with other programs such as SPSS and Excel.<P>
+
+If the Clip Data Export routine is called from an Episode, a listing of all Clips created from that Episode (regardless of what Collections those Clips are placed in,) is sent to the <A HREF="FilterDialog.htm">Filter Dialog</A>, along with a list of all Keywords applied to that set of Clips.  If the Clip Data Export routine is called from a Collection, a list of all Clips gathered together in that Collection (regardless of what Episodes they are from,) is sent to the <A HREF="FilterDialog.htm">Filter Dialog</A>, along with a list of all Keywords applied to that set of Clips.<P>
+
+The first line of this text file is made up of column headings or variable names.  Each subsequent line represents an individual Clip.<P>
+
+The first column of this text file is the name of the Collection where the Clip is stored.  Nesting information for that collection is not provided due to lack of space.)  The second column is the Clip Name, and the third column is the name of the media file used by the Clip.   The fourth and fifth columns are the Clip Start and Clip Stop times in H:MM:SS.s format and the sixth column is the Clip length in seconds, accurate to the frame and listed in thousandths of a second.  Subsequent columns are the coding data for the clips, with the Keyword Group and Keyword indicated in the first row of the column, and with a 0 indicating that the specified keyword was not applied to the specified clip and a 1 indicating that the keyword was applied to the clip.<P>
+
+A sample file (put into table format to make it easier to read) might look something like this:<P>
+
+<TABLE BORDER="1" CELLPADDING="5">
+  <TR>
+    <TD>Collection Name</TD>
+    <TD>Clip Name</TD>
+    <TD>Media File</TD>
+    <TD>Clip Start</TD>
+    <TD>Clip End</TD>
+    <TD>Clip Length (seconds)</TD>
+    <TD>Demo : Flip</TD>
+    <TD>Demo : Symmetrical</TD>
+  </TR>
+  <TR>
+    <TD>Symmetry</TD>
+    <TD>Carpet</TD>
+    <TD>E:/Video/Demo/Demo.mpg</TD>
+    <TD>0:03:53.0</TD>
+    <TD>0:04:08.8</TD>
+    <TD>15.7280</TD>
+    <TD>0</TD>
+    <TD>1</TD>
+  </TR>
+  <TR>
+    <TD>Symmetry</TD>
+    <TD>Flip Up, Flip Down</TD>
+    <TD>E:/Video/Demo/Demo.mpg</TD>
+    <TD>0:00:00.0</TD>
+    <TD>0:00:20.7</TD>
+    <TD>20.6540</TD>
+    <TD>1</TD>
+    <TD>0</TD>
+  </TR>
+  <TR>
+    <TD>Symmetry</TD>
+    <TD>House</TD>
+    <TD>E:/Video/Demo/Demo.mpg</TD>
+    <TD>0:03:34.4</TD>
+    <TD>0:03:53.0</TD>
+    <TD>18.6350</TD>
+    <TD>0</TD>
+    <TD>1</TD>
+  </TR>
+  <TR>
+    <TD>Symmetry</TD>
+    <TD>Up Down Flip</TD>
+    <TD>E:/Video/Demo/Demo.mpg</TD>
+    <TD>0:00:31.1</TD>
+    <TD>0:01:05.5</TD>
+    <TD>34.4240</TD>
+    <TD>1</TD>
+    <TD>0</TD>
+  </TR>
+</TABLE>
+<P>
+
+<A HREF="SeriesMap.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A><A HREF="FilterDialog.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

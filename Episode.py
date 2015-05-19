@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -266,7 +266,17 @@ class Episode(DataObject):
         try:
             # Initialize delete operation, begin transaction if necessary
             (db, c) = self._db_start_delete(use_transactions)
-            
+
+            # Delete all Episode-based Filter Configurations
+            #   Delete Keyword Map records
+            DBInterface.delete_filter_records(1, self.number)
+            #   Delete Keyword Visualization records
+            DBInterface.delete_filter_records(2, self.number)
+            #   Delete Episode Clip Data Export records
+            DBInterface.delete_filter_records(3, self.number)
+            #   Delete Episode Clip Data Coder Reliability Export records (Kathleen Liston's code)
+            DBInterface.delete_filter_records(8, self.number)
+
             # Detect, Load, and Delete all Clip Notes.
             notes = self.get_note_nums()
             for note_num in notes:
@@ -368,7 +378,22 @@ class Episode(DataObject):
                 delResult = True
                 break
         return delResult
-            
+
+    def has_keyword(self, kwg, kw):
+        """ Determines if the Episode has a given keyword assigned """
+        # Assume the result will be false
+        res = False
+        # Iterate through the keyword list
+        for keyword in self.keyword_list:
+            # See if the text passed in matches the strings in the keyword objects in the keyword list
+            if (kwg == keyword.keywordGroup) and (kw == keyword.keyword):
+                # If so, signal that it HAS been found
+                res = True
+                # If found, we don't need to look any more!
+                break
+        # Return the results
+        return res
+
     def tape_length_str(self):
         """Return a string representation (HH:MM:SS) of tape length."""
         secs = int(round(self._tl / 1000.0))    # total # seconds

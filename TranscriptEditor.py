@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -15,8 +15,7 @@
 #
 
 """This module implements the TranscriptEditor class as part of the Editors
-component.
-"""
+component.  """
 
 __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>, Jonathan Beavers <jonathan.beavers@gmail.com>'
 
@@ -152,17 +151,22 @@ class TranscriptEditor(RichTextEditCtrl):
                     self.STYLE_HIDDEN = self.GetStyleAccessor("hidden")
                     self.STYLE_TIMECODE = self.GetStyleAccessor("timecode")
                     self.StyleSetVisible(self.STYLE_HIDDEN, False)
-                    self.StyleSetSpec(self.STYLE_TIMECODE, "size:" + str(TransanaGlobal.configData.defaultFontSize) + ",face:" + TransanaGlobal.configData.defaultFontFace + ",fore:#FF0000,back:#ffffff")
+                    self.StyleSetSpec(self.STYLE_TIMECODE, "size:%s,face:%s,fore:#FF0000,back:#ffffff" % (str(TransanaGlobal.configData.defaultFontSize), TransanaGlobal.configData.defaultFontFace))
 
                     # So the data has been pickled, and we are running on OSX. 
                     # Since the pickled data is *always* saved with the Windows 
                     # timecode characters, we must now search for and replace
                     # all Windows special characters with their OSX equivalents.
                     if 'wxMac' in wx.PlatformInfo:
+# With wxPython 2.8.0.1, wxSTC's Unicode handling is improved. Thus, these values have to change.
+#			sequenceList = {
+#			    '\xc2\xa4':'\xc2\xa7', 
+#			    '\xc2\xad':'\xe2\x89\xa0', 
+#			    '\xc2\xaf':'\xc3\x98' 
+#			}
 			sequenceList = {
-			    '\xc2\xa4':'\xc2\xa7', 
-			    '\xc2\xad':'\xe2\x89\xa0', 
-			    '\xc2\xaf':'\xc3\x98' 
+			    '\xc2\xad':'\xe2\x86\x91', 
+			    '\xc2\xaf':'\xe2\x86\x93' 
 			}
 			todo = {}
 			inSeq = False
@@ -307,7 +311,6 @@ class TranscriptEditor(RichTextEditCtrl):
         """Save the transcript to the database."""
         # Let's try to remember the cursor position
         self.cursorPosition = (self.GetCurrentPos(), self.GetSelection())
-        
         # We can't save with Time Codes showing!  Remember the initial status, and hide them
         # if they are showing.
         initCodesVis = self.codes_vis
@@ -437,7 +440,6 @@ class TranscriptEditor(RichTextEditCtrl):
             self.show_all_hidden()
         else:
             wereHidden = False
-
         # Let's find each time code mark and update it with the new style.  
         for loop in range(0, len(self.timecodes)):
             # Find the Timecode
@@ -447,7 +449,6 @@ class TranscriptEditor(RichTextEditCtrl):
             # Adjust cursor position for unicode characters so that the time code symbols are hidden correctly
             if ('unicode' in wx.PlatformInfo) and (curpos > 0):
                 curpos -= 1
-                
             # Start Styling from the Cursor Position
             self.StartStyling(curpos, 255)
             # If the TimeCodes should be hidden ...
@@ -465,18 +466,16 @@ class TranscriptEditor(RichTextEditCtrl):
         # We better hide all the hidden text for the time codes again
         if wereHidden:
             self.hide_all_hidden()
-            
         # now reset the position of the document
         self.ScrollToLine(topLine)
-
-        if DEBUG:
-            print "TranscriptEditor.ScrollToLine(%s) 1" % topLine
-
         # Okay, this might not work because of changes we've made to the transcript, but let's
         # try restoring the Cursor Position when all is said and done.
         self.RestoreCursor()
-        self.Update()
-
+        try:
+            self.Update()
+        except wx._core.PyAssertionError, x:
+            pass
+        
         # This event should NOT cause the Style Change indicator to suggest the document has been changed.
         self.stylechange = initStyleChange
 
@@ -491,8 +490,47 @@ class TranscriptEditor(RichTextEditCtrl):
             self.StyleSetVisible(self.STYLE_HIDDEN, False)
         self.codes_vis = 0
 
-    def find_text(self, text, matchcase, wraparound):
+    def find_text(self, txt, direction, flags=0):
         """Find text in document."""
+        # note the current text selection.  If the search fails, we'll restore this.
+        curSel = self.GetSelection()
+        # STC's SearchNext starts at the start of the current selection.  So if you do repeat searches, it will
+        # just find the same text over and over again!
+        # Here, we see if our selection equals our search text and we're looking forward, in which case we probably
+        # just did a search and want to repeat it.
+        if (self.GetSelectedText().upper() == txt.upper()) and (direction == 'next'):
+            # Determine the current position ...
+            pos = self.GetCurrentPos()
+            # ... and move the cursor by one character.  Then we'll find the NEXT instance rather than the same one.
+            self.GotoPos(pos + 1)
+        # Mark the current position for the Search function
+        self.SearchAnchor()
+        # If we're searching forward ...
+        if direction == 'next':
+            # ... then search for the next instance (with flags if we want whole word,
+            # case-sensitive, or regular expression searches.)
+            newPos = self.SearchNext(flags, txt)
+        # if we're searching backwards ...
+        elif direction == 'back':
+            # ... then search for the previous instance (with flags if we want whole word,
+            # case-sensitive, or regular expression searches.)
+            newPos = self.SearchPrev(flags, txt)
+        # If we found something ...
+        if (newPos > -1):
+            # We need to determine the Document line from our search result (which is a position).  Then we need to
+            # translate the document line into a visible line.  (Document lines don't take word wrap into account.)
+            line = self.VisibleFromDocLine(self.LineFromPosition(newPos))
+            # If the visible line is not currently shown on the screen ...
+            if ( (line < self.GetFirstVisibleLine()) or (line > self.GetFirstVisibleLine() + self.LinesOnScreen()) ):
+                # ... then scroll to that line so it will be shown.
+                self.ScrollToLine(line)
+        # If we didn't find a next/previous instance ...
+        else:
+            # then restore the original cursor selection.  This just looks better.
+#            self.SetSelection(curSel[0], curSel[1])
+            self.SetCurrentPos(curSel[0])
+            self.SetAnchor(curSel[1])
+
     def insert_text(self, text):
         """Insert text at current cursor position."""
    
@@ -651,7 +689,10 @@ class TranscriptEditor(RichTextEditCtrl):
             # If using Unicode, we need to move one position to the right.
             if 'unicode' in wx.PlatformInfo:
                 pos += 1
-            self.GotoPos(pos)
+            try:
+                self.GotoPos(pos)
+            except wx._core.PyAssertionError, x:
+                pass
         else:
             # Try searching in reverse
             pos = self.FindText(self.GetCurrentPos(), 0, text)
@@ -760,20 +801,20 @@ class TranscriptEditor(RichTextEditCtrl):
             self.ScrollToLine(startline - 2)
 
             if DEBUG:
-                print "Scrolling 2 to", startline - 2
+                print "ScrollToLine(%s)" % (startline - 2)
             
         if endline + 1 > self.GetFirstVisibleLine() + self.LinesOnScreen():
             self.ScrollToLine(endline - self.LinesOnScreen() + 2)
 
             if DEBUG:
-                print "Scrolling 3 to", endline - self.LinesOnScreen() + 2
+                print "ScrollToLine(%s)" % (endline - self.LinesOnScreen() + 2)
 
         if DEBUG:
             print "TranscriptEditor.select_find():  Position Info:", \
                   self.LineFromPosition(curpos), self.LineFromPosition(endpos), \
                   startline, endline, self.GetFirstVisibleLine(), \
                   self.GetFirstVisibleLine() + self.LinesOnScreen()
-        
+
     def spell_check(self):
         """Interactively spell-check document."""
     
@@ -799,14 +840,11 @@ class TranscriptEditor(RichTextEditCtrl):
         return self.GetReadOnly()
 
     def find_timecode_before_cursor(self, pos):
-        """Return the position of the first timecode before the given
-        cursor position."""
+        """Return the position of the first timecode before the given cursor position."""
         return self.FindText(pos, 0, "%s<" % TIMECODE_CHAR)
         
     def get_selected_time_range(self):
-        """Get the time range of the currently selected text.  Return a tuple
-        with the start and end times in milliseconds."""
-        
+        """Get the time range of the currently selected text.  Return a tuple with the start and end times in milliseconds."""
         # Default start/end time is 0
         start_timecode = 0
         end_timecode = 0
@@ -819,7 +857,6 @@ class TranscriptEditor(RichTextEditCtrl):
             temp = selstart
             selstart = selend
             selend = temp
-
         # Setup for searching transcript for timecodes
         timestr = ''
 
@@ -840,6 +877,8 @@ class TranscriptEditor(RichTextEditCtrl):
             self.SearchAnchor()
             endi = self.SearchNext(0, '>')
             self.SetSelection(pos + offset, endi)
+#            self.SetCurrentPos(pos + offset)
+#            self.SetAnchor(endi)
             timestr = self.GetSelectedText()
             try:
                 start_timecode = int(timestr)
@@ -859,6 +898,8 @@ class TranscriptEditor(RichTextEditCtrl):
             # Now let's look for the next ">" character, which MUST be the end of the time code data.
             endi = self.SearchNext(0, '>')
             self.SetSelection(pos + offset, endi)
+#            self.SetCurrentPos(pos + offset)
+#            self.SetAnchor(endi)
             timestr = self.GetSelectedText()
             try:
                 end_timecode = int(timestr)
@@ -869,7 +910,8 @@ class TranscriptEditor(RichTextEditCtrl):
             end_timecode = -1
         # Now we need to reset the selection to where it used to be.
         self.SetSelection(selstart, selend)
-
+#        self.SetCurrentPos(selstart)
+#        self.SetAnchor(selend)
         return (start_timecode, end_timecode)
 
     def ClearDoc(self):
@@ -1038,8 +1080,9 @@ class TranscriptEditor(RichTextEditCtrl):
                     else:
                         # The selection must be made in this order, or the cursor is moved to the END rather than being
                         # left at the beginning of the selection where it belongs!
-                        self.SetSelection(cursel[1], curpos)
-                    
+#                        self.SetSelection(cursel[1], curpos)
+                        self.SetCurrentPos(cursel[1])
+                        self.SetAnchor(curpos)
             # If the are moving to the RIGHT with the cursor ...
             elif (c == wx.WXK_RIGHT):
                 # ... and we come to a TIMECODE Character ...
@@ -1070,8 +1113,9 @@ class TranscriptEditor(RichTextEditCtrl):
                         # Position the cursor after the hidden timecode data
                         self.GotoPos(curpos)
                     else:
-                        self.SetSelection(cursel[0], curpos)
-                    
+#                        self.SetSelection(cursel[0], curpos)
+                        self.SetCurrentPos(cursel[0])
+                        self.SetAnchor(curpos)
             # DELETE KEY pressed
             elif (c == wx.WXK_DELETE):
                 # First, we need to determine if we are deleting a single character or a selection in the transcript.
@@ -1410,10 +1454,6 @@ class TranscriptEditor(RichTextEditCtrl):
                 selChanged = True
                 # Let's find the position of the end of the Time Code
                 while chr(self.GetCharAt(selStart - 1)) != '>':
-
-                    if DEBUG:
-                        print "shifting (1) ...", chr(self.GetCharAt(selStart + 1)), selStart + 1
-
                     selStart += 1
 
             # Let's see if the end of the selection falls between a Time Code and its data
@@ -1483,8 +1523,10 @@ class TranscriptEditor(RichTextEditCtrl):
 
         if selChanged:
             self.SetSelection(selStart, selEnd)
+#            self.SetCurrentPos(selStart)
+#            self.SetAnchor(selEnd)
 
-    def OnStartDrag(self, event):
+    def OnStartDrag(self, event, copyToClipboard=False):
         """Called on the initiation of a Drag within the Transcript."""
         if not self.TranscriptObj:
             # No transcript loaded, abort
@@ -1493,12 +1535,24 @@ class TranscriptEditor(RichTextEditCtrl):
         # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
         # can happen.  Preventing this is the sole function of this section of this method.
         self.CheckTimeCodesAtSelectionBoundaries()
-        
+
+        # Let's get the time code boundaries.  This will return a start_time of 0 if there's not initial time code,
+        # and an end_time of -1 if there's no ending time code.
         (start_time, end_time) = self.get_selected_time_range()
 
+        # We may need to make some minor adjustments to the clips start and stop times.  First, let's
+        # see if we're in an Episode Transcript or a Clip Transcript.
+        if self.TranscriptObj.clip_num != 0:
+            # We're in an Clip Transcript.  If we don't have a starting time code ...
+            if start_time == 0:
+                # ... we need to use the CLIP's start as the sub-clip's start time, not the start of the video (0:00:00.0)!
+                start_time = self.parent.ControlObject.GetVideoStartPoint()
+        # If we don't have an end Time Code ...
         if end_time == -1:
+            # We need the VideoEndPoint.  This is accurate for either Episode Transcripts or Clip Transcripts.
             end_time = self.parent.ControlObject.GetVideoEndPoint()
 
+        # Let's get the selected Transcript text in RTF format
         rtfText = self.GetRTFBuffer(select_only=1)
 
         if DEBUG:
@@ -1511,15 +1565,20 @@ class TranscriptEditor(RichTextEditCtrl):
                 print ord(x)
             print
             
+        # Create a ClipDragDropData object with all the data we need to create a Clip
         data = DragAndDropObjects.ClipDragDropData(self.TranscriptObj.number, self.TranscriptObj.episode_num, \
                 start_time, end_time, rtfText)
 
+        # let's convert that object into a portable string using cPickle. (cPickle is faster than Pickle.)
         pdata = cPickle.dumps(data, 1)
+        # Create a CustomDataObject with the format of the ClipDragDropData Object
         cdo = wx.CustomDataObject(wx.CustomDataFormat("ClipDragDropData"))
         # Put the pickled data object in the wxCustomDataObject
         cdo.SetData(pdata)
-        
-        if event.GetId() == self.parent.toolbar.CMD_CLIP_ID:
+
+        # If we are supposed to copy the data to the Clip Board ...
+        if copyToClipboard:
+            # ... then copy the data to the clipboard!
             wx.TheClipboard.SetData(cdo)
         else:
             # Put the data in the DropSource object
@@ -1545,15 +1604,24 @@ class TranscriptEditor(RichTextEditCtrl):
         self.parent.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
     def PositionAfter(self):
+
+        if DEBUG:
+            print "PositionAfter", self.pos
+
         self.ScrollToLine(self.FVL)
         self.GotoPos(self.pos)
 
     def SetSelectionAfter(self):
-        self.SetSelection(self.selection[0], self.selection[1])
+
+        if DEBUG:
+            print "SetSelectionAfter", self.selection
+
+#        self.SetSelection(self.selection[0], self.selection[1])
+        self.SetCurrentPos(self.selection[0])
+        self.SetAnchor(self.selection[1])
 
     def OnLeftUp(self, event):
         """ Left Mouse Button Up event """
-
         # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
         # can happen.
         self.CheckTimeCodesAtSelectionBoundaries()
@@ -1561,12 +1629,12 @@ class TranscriptEditor(RichTextEditCtrl):
         # Save the original Cursor Position / Selection so it can be restored later.  Otherwise, we occasionally can't
         # make a new selection.
         self.cursorPosition = (self.GetCurrentPos(), self.GetSelection())
-
         # Note the current Position of if PositionAfter needs to be called
         self.pos = self.GetCurrentPos()
+        # Set the selection in case SetSelectionAfter gets called later
+        self.selection = self.GetSelection()
         # Remember the first visible line
         self.FVL = self.GetFirstVisibleLine()
-
         # Get the Start and End times from the time codes on either side of the cursor
         (segmentStartTime, segmentEndTime) = self.get_selected_time_range()
         # The code that is now indented was causing an error if you tried to edit the Transcript from the
@@ -1594,8 +1662,9 @@ class TranscriptEditor(RichTextEditCtrl):
                 wx.CallAfter(self.PositionAfter)
             else:
                 self.ScrollToLine(self.FVL)
-                self.SetSelection(self.cursorPosition[1][0], self.cursorPosition[1][1])
+                wx.CallAfter(self.SetSelectionAfter)
 
+                
         # Okay, now let the RichTextEditCtrl have the LeftUp event
         event.Skip()
 
@@ -1603,13 +1672,7 @@ class TranscriptEditor(RichTextEditCtrl):
         """ Right-clicking should handle Video Play Control rather than providing the
             traditional right-click editing control menu """
         # If we do not already have a cursor position saved, save it
-        if self.cursorPosition == 0:
-            self.cursorPosition = (self.GetCurrentPos(), self.GetSelection())
-        else:
-            if self.cursorPosition[1][0] == self.cursorPosition[1][1]:
-                self.GotoPos(self.cursorPosition[0])
-            else:
-                self.SetSelection(self.cursorPosition[1][0], self.cursorPosition[1][1])
+        self.cursorPosition = (self.GetCurrentPos(), self.GetSelection())
 
         # Get the Start and End times from the time codes on either side of the cursor
         (segmentStartTime, segmentEndTime) = self.get_selected_time_range()
@@ -1643,7 +1706,7 @@ class TranscriptEditor(RichTextEditCtrl):
         if ('__WXMAC__' in wx.PlatformInfo) and event.MetaDown():
             # Setting End Time to 0 instructs the video player to play to the end of the video!
             segmentEndTime = 0
-            
+
         # If the video is not currently playing ...
         if not self.parent.ControlObject.IsPlaying():
             # First, clear the current selection in the visualization window, if there is one.
@@ -1662,17 +1725,18 @@ class TranscriptEditor(RichTextEditCtrl):
     def RestoreCursor(self):
         """ Restore the Cursor position following right-click play control operation """
         # If we have a stored Cursor Position ...
-        if self.cursorPosition != 0:
+        if (self.cursorPosition != 0):
             # Reset the Cursor Position
             self.SetCurrentPos(self.cursorPosition[0])
             # And reset the Selection, if there was one.
-            self.SetSelection(self.cursorPosition[1][0], self.cursorPosition[1][1])
-            # now scroll so that the selection start is shown.
-            self.ScrollToLine(max(self.VisibleFromDocLine(self.LineFromPosition(self.cursorPosition[1][0]) - 2), 0))
+#            self.SetSelection(self.cursorPosition[1][0], self.cursorPosition[1][1])
+            self.SetCurrentPos(self.cursorPosition[1][0])
+            self.SetAnchor(self.cursorPosition[1][1])
 
-            if DEBUG:
-                print "TranscriptEditor.RestoreCursor()", self.cursorPosition
-            
+            #  Only scroll if we're not in Edit Mode.
+            if self.get_read_only():
+                # now scroll so that the selection start is shown.
+                self.ScrollToLine(max(self.VisibleFromDocLine(self.LineFromPosition(self.cursorPosition[1][0])), 0))
             # Once the cursor position has been reset, we need to clear out the Cursor Position Data
             self.cursorPosition = 0
 
@@ -1776,56 +1840,68 @@ class TranscriptEditorDropTarget(wx.PyDropTarget):
     def OnData(self, x, y, d):
         # copy the data from the drag source to our data object
         if (self.editor.TranscriptObj != None) and self.GetData():
+
             # Extract actual data passed by DataTreeDropSource
             sourceData = cPickle.loads(self.data.GetData())
 
-            # See if we're creating a QuickClip
-            if TransanaGlobal.configData.quickClipMode:
-                (startTime, endTime) = self.editor.get_selected_time_range()
-                # Determine whether we're creating a Clip from an Episode Transcript
-                if self.editor.TranscriptObj.clip_num == 0:
-                    transcriptNum = self.editor.TranscriptObj.number
-                    episodeNum = self.editor.TranscriptObj.episode_num
-                else:
-                    tempClip = Clip.Clip(self.editor.TranscriptObj.clip_num)
-                    transcriptNum = tempClip.transcript_num
-                    episodeNum = tempClip.episode_num
-                    if startTime == 0:
-                        startTime = tempClip.clip_start
-                    if endTime <= 0:
-                        endTime = tempClip.clip_stop
-                # If the text selection is blank, we need to send a blank rather than RTF for nothing
-                (startPos, endPos) = self.editor.GetSelection()
-                if startPos == endPos:
-                    text = ''
-                else:
-                    text = self.editor.GetRTFBuffer(select_only=1)
+            # If a Keyword Node is dropped ...
+            if sourceData.nodetype == 'KeywordNode':
 
-                clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text)
-                # I'm sure this is horrible form, but I don't know how else to do this from here!
-                dbTree = self.editor.parent.ControlObject.DataWindow.DBTab.tree
-                DragAndDropObjects.CreateQuickClip(clipData, sourceData.parent, sourceData.text, dbTree)
-            else:
-            
-                # Now you can do sourceData.recNum, sourceData.text,
-                # sourceData.nodetype should be 'KeywordNode'
-                # Determine where the Transcript was loaded from
-                if self.editor.TranscriptObj:
-                    if self.editor.TranscriptObj.clip_num != 0:
-                        targetType = 'Clip'
-                        targetRecNum = self.editor.TranscriptObj.clip_num
-                        clipObj = Clip.Clip(targetRecNum)
-                        targetName = clipObj.id
+                # See if we're creating a QuickClip
+                if ('wxMSW' not in wx.PlatformInfo) or TransanaGlobal.configData.quickClipMode:
+                    (startTime, endTime) = self.editor.get_selected_time_range()
+                    # Determine whether we're creating a Clip from an Episode Transcript
+                    if self.editor.TranscriptObj.clip_num == 0:
+                        transcriptNum = self.editor.TranscriptObj.number
+                        episodeNum = self.editor.TranscriptObj.episode_num
+                        if endTime <= 0:
+                            endTime = self.editor.parent.ControlObject.currentObj.tape_length
                     else:
-                        targetType = 'Episode'
-                        targetRecNum = self.editor.TranscriptObj.episode_num
-                        epObj = Episode.Episode(targetRecNum)
-                        targetName = epObj.id
-                    DragAndDropObjects.DropKeyword(self.editor, sourceData, \
-                        targetType, targetName, targetRecNum, 0)
+                        tempClip = Clip.Clip(self.editor.TranscriptObj.clip_num)
+                        transcriptNum = tempClip.transcript_num
+                        episodeNum = tempClip.episode_num
+                        if startTime == 0:
+                            startTime = tempClip.clip_start
+                        if endTime <= 0:
+                            endTime = tempClip.clip_stop
+                    # If the text selection is blank, we need to send a blank rather than RTF for nothing
+                    (startPos, endPos) = self.editor.GetSelection()
+                    if startPos == endPos:
+                        text = ''
+                    else:
+                        text = self.editor.GetRTFBuffer(select_only=1)
+
+                    clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text)
+                    # I'm sure this is horrible form, but I don't know how else to do this from here!
+                    dbTree = self.editor.parent.ControlObject.DataWindow.DBTab.tree
+                    # Create the Quick Clip
+                    DragAndDropObjects.CreateQuickClip(clipData, sourceData.parent, sourceData.text, dbTree)
                 else:
-                    # No transcript Object loaded, do nothing
-                    pass
+                
+                    # Now you can do sourceData.recNum, sourceData.text,
+                    # sourceData.nodetype should be 'KeywordNode'
+                    # Determine where the Transcript was loaded from
+                    if self.editor.TranscriptObj:
+                        if self.editor.TranscriptObj.clip_num != 0:
+                            targetType = 'Clip'
+                            targetRecNum = self.editor.TranscriptObj.clip_num
+                            clipObj = Clip.Clip(targetRecNum)
+                            targetName = clipObj.id
+                        else:
+                            targetType = 'Episode'
+                            targetRecNum = self.editor.TranscriptObj.episode_num
+                            epObj = Episode.Episode(targetRecNum)
+                            targetName = epObj.id
+                        DragAndDropObjects.DropKeyword(self.editor, sourceData, \
+                            targetType, targetName, targetRecNum, 0)
+                    else:
+                        # No transcript Object loaded, do nothing
+                        pass
+
+#            We could create a regular clip here if a Collection were dropped!  (Maybe later.)                    
+#            else:
+#                print "something other than a Keyword node was dropped"
+                
         return d  # what is returned signals the source what to do
                   # with the original data (move, copy, etc.)  In this
                   # case we just return the suggested value given to us.
@@ -1918,8 +1994,10 @@ class TranscriptDropSource(wx.DropSource):
                    elif last:
                       self.parent.ControlObject.DataWindow.DBTab.tree.EnsureVisible(last)
 
+            # Regular Clips are dropped on Collections or Clips.  Quick Clips are dropped on Keywords.
             if (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'CollectionNode') or \
-               (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'ClipNode'):
+               (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'ClipNode') or \
+               (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'KeywordNode'):
                 # Make sure the cursor reflects an acceptable drop.  (This resets it if it was previously changed
                 # to indicate a bad drop.)
                 self.parent.ControlObject.SetDatabaseTreeTabCursor(wx.CURSOR_ARROW)

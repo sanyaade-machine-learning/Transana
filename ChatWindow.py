@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -252,7 +252,7 @@ class ChatWindow(wx.Frame):
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
         # Set the Chat Window Icon
-        transanaIcon = wx.Icon(TransanaGlobal.programDir + os.sep + "images/transana.ico", wx.BITMAP_TYPE_ICO)
+        transanaIcon = wx.Icon(TransanaGlobal.programDir + os.sep + "images/Transana.ico", wx.BITMAP_TYPE_ICO)
         self.SetIcon(transanaIcon)
 
         # Create a Sizer for the form
@@ -377,11 +377,28 @@ class ChatWindow(wx.Frame):
             db = TransanaGlobal.configData.database.encode('utf8')
             
             if DEBUG:
-                print 'C %s %s %s 212 ||| ' % (userName, host, db)
+                print 'C %s %s %s 220 ||| ' % (userName, host, db)
+
+            # If we are running the Transana Client on the same computer as the MySQL server, we MUST refer to it as localhost.
+            # In this circumstance, this copy of the Transana Client will not be recognized by the Transana Message Server
+            # as being connected to the same database as other computers connecting to it.  To get around this, we need to
+            # get the correct Server name from the user.
+
+            # Detect the use of "localhost" 
+            if host.lower() == 'localhost':
+                # Create a Text Entry Dialog to get the proper server name from the user.
+                dlg = wx.TextEntryDialog(self, _('What is the Host / Server name other computers use to connect to this MySQL Server?'),
+                                         _('Transana Message Server connection'), 'localhost')
+                # Show the Text Entry.  See if the user selects "OK".
+                if dlg.ShowModal() == wx.ID_OK:
+                    # If so, update the host name to pass to the Transana Message Server
+                    host = dlg.GetValue()
+                # Destroy the Text Entry Dialog.
+                dlg.Destroy()
             
-            self.socketObj.send('C %s %s %s 212 ||| ' % (userName, host, db))
+            self.socketObj.send('C %s %s %s 220 ||| ' % (userName, host, db))
         else:
-            self.socketObj.send('C %s %s %s 212 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
+            self.socketObj.send('C %s %s %s 220 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
 
         # Create a Timer to check for Message Server validation.
         # Initialize to unvalidated state
@@ -767,7 +784,33 @@ class ChatWindow(wx.Frame):
                                     self.ControlObject.DataWindow.KeywordsTab.Refresh()
                                     # ... and refresh the keyword list
                                     self.ControlObject.currentObj.refresh_keywords()
-                            
+
+                        # Update Keyword Visualization
+                        elif messageHeader == 'UKV':
+                            # Parse the message at the space into object type, object number, and possible Episode Number (if Clip)
+                            msgData = message.split(' ')
+                            # If no Object Type ...
+                            if msgData[0] == 'None':
+                                # ... we need to update the keyword visualization no matter what.
+                                self.ControlObject.UpdateKeywordVisualization()
+                            # if Object Type is Episode ...
+                            elif msgData[0] == 'Episode':
+                                # See if the currently loaded episode matches the episode number sent from the Message Server
+                                if isinstance(self.ControlObject.currentObj, Episode.Episode) and \
+                                   self.ControlObject.currentObj.number == int(msgData[1]):
+                                    # ... we need to update the keyword visualization no matter what.
+                                    self.ControlObject.UpdateKeywordVisualization()
+                            # if Object Type is Clip ...
+                            elif msgData[0] == 'Clip':
+                                # See if the currently loaded episode matches the episode number sent from the Message Server
+                                # or the currently loaded Clip matches the Clip Number sent from the Message Server
+                                if (isinstance(self.ControlObject.currentObj, Episode.Episode) and \
+                                   self.ControlObject.currentObj.number == int(msgData[2])) or \
+                                   (isinstance(self.ControlObject.currentObj, Clip.Clip) and \
+                                   self.ControlObject.currentObj.number == int(msgData[1])):
+                                    # ... we need to update the keyword visualization.
+                                    self.ControlObject.UpdateKeywordVisualization()
+                                    
                         else:
                             if DEBUG:
                                 print "Unprocessed Message: ", event.data
@@ -783,8 +826,10 @@ class ChatWindow(wx.Frame):
                         if DEBUG:
                             print "ChatWindow has NO CONTROLOBJECT *********************************************"
 
-                    # Now that we're done, we should re-select the originally-selected tree item
-                    self.ControlObject.DataWindow.DBTab.tree.SelectItem(currentSelection)
+                    # Unless we've just deleted it ...
+                    if messageHeader != 'DN':
+                        # ... now that we're done, we should re-select the originally-selected tree item
+                        self.ControlObject.DataWindow.DBTab.tree.SelectItem(currentSelection)
                 else:
                     if DEBUG:
                         print "We DON'T need to add an object, as we created it in the first place."
@@ -997,4 +1042,3 @@ if __name__ == '__main__':
         print sys.exc_info()[0], sys.exc_info()[1]
         import traceback
         print traceback.print_exc(file=sys.stdout)
-        

@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -47,6 +47,10 @@ class ConfigData(object):
         self.autoArrange = True
         # Waveform Quickload is enabled by default
         self.waveformQuickLoad = True
+
+        # Set default values for Dialog Size values which are not saved as part of the configuration file
+        self.clipPropertiesSize = (600, 470)
+        self.keywordListEditSize = (600, 385)
     
     def __repr__(self):
         """ String Representation of the data in this object. """
@@ -58,16 +62,33 @@ class ConfigData(object):
         str = str + 'transcriptionSetback = %s\n' % self.transcriptionSetback
         str = str + 'videoSpeed = %s\n' % self.videoSpeed
         str = str + 'videoSize = %s\n' % self.videoSize
-        str = str + 'quickClipMode = %s\n' % self.quickClipMode
+        if 'wxMSW' in wx.PlatformInfo:
+            str = str + 'quickClipMode = %s\n' % self.quickClipMode
         str = str + 'wordTracking = %s\n' % self.wordTracking
         str = str + 'autoArrange = %s\n' % self.autoArrange
         str = str + 'QuickLoad = %s\n' % self.waveformQuickLoad
+        str = str + 'Visualization style = %s\n' % self.visualizationStyle
         str = str + 'messageServer = %s\n' % self.messageServer
         str = str + 'messageServerPort = %s\n' % self.messageServerPort
         str = str + 'language = %s\n\n' % self.language
         str = str + 'databaseList = %s\n\n' % self.databaseList
         str = str + 'defaultFontFace = %s\n\n' % self.defaultFontFace
         str = str + 'defaultFontSize = %s\n\n' % self.defaultFontSize
+        str = str + 'keywordMapBarHeight = %s\n\n' % self.keywordMapBarHeight
+        str = str + 'keywordMapWhitespace = %s\n\n' % self.keywordMapWhitespace
+        str = str + 'keywordVisualizationBarHeight = %s\n\n' % self.keywordVisualizationBarHeight
+        str = str + 'keywordVisualizationWhitespace = %s\n\n' % self.keywordVisualizationWhitespace
+        str = str + 'seriesMapBarHeight = %s\n\n' % self.seriesMapBarHeight
+        str = str + 'seriesMapWhitespace = %s\n\n' % self.seriesMapWhitespace
+        str = str + 'keywordMapHorizontalGridLines = %s\n\n' % self.keywordMapHorizontalGridLines
+        str = str + 'keywordMapVerticalGridLines = %s\n\n' % self.keywordMapVerticalGridLines
+        str = str + 'keywordVisualizationHorizontalGridLines = %s\n\n' % self.keywordVisualizationHorizontalGridLines
+        str = str + 'keywordVisualizationVerticalGridLines = %s\n\n' % self.keywordVisualizationVerticalGridLines
+        str = str + 'seriesMapHorizontalGridLines = %s\n\n' % self.seriesMapHorizontalGridLines
+        str = str + 'seriesMapVerticalGridLines = %s\n\n' % self.seriesMapVerticalGridLines
+        str = str + 'singleLineDisplay = %s\n\n' % self.singleLineDisplay
+        str = str + 'showLegend = %s\n\n' % self.showLegend
+        str = str + 'colorOutput = %s\n\n' % self.colorOutput
         return str
 
     def LoadConfiguration(self):
@@ -133,8 +154,11 @@ class ConfigData(object):
             self.transcriptionSetback = config.ReadInt('/2.0/TranscriptionSetback', 2)
             # Load Video Size setting
             self.videoSize = config.ReadInt('/2.0/VideoSize', 100)
+            # Load the Visualization Style
+            self.visualizationStyle = config.Read('/2.0/visualizationStyle', 'Waveform')
             # Load Quick Clip Mode setting
-            self.quickClipMode = config.ReadInt('/2.0/QuickClipMode', False)
+            if 'wxMSW' in wx.PlatformInfo:
+                self.quickClipMode = config.ReadInt('/2.0/QuickClipMode', True)
             # Load Auto Word-Tracking setting
             self.wordTracking = config.ReadInt('/2.0/WordTracking', True)
             # Load Message Server Host Setting
@@ -147,6 +171,32 @@ class ConfigData(object):
             self.defaultFontFace = config.Read('/2.0/FontFace', self.defaultFontFace)
             # Load Default Font Size Setting
             self.defaultFontSize = config.ReadInt('/2.0/FontSize', self.defaultFontSize)
+            # Load Keyword Map Bar Height Setting
+            self.keywordMapBarHeight = config.ReadInt('/2.0/KeywordMapBarHeight', 8)
+            # Load Keyword Map Whitespace Height Setting
+            self.keywordMapWhitespace = config.ReadInt('/2.0/KeywordMapWhitespace', 2)
+            # Load Keyword Visualization Bar Height Setting
+            self.keywordVisualizationBarHeight = config.ReadInt('/2.0/KeywordVisualizationBarHeight', 5)
+            # Load Keyword Visualization Whitespace Height Setting
+            self.keywordVisualizationWhitespace = config.ReadInt('/2.0/KeywordVisualizationWhitespace', 2)
+            # Load Series Map Bar Height Setting
+            self.seriesMapBarHeight = config.ReadInt('/2.0/SeriesMapBarHeight', 8)
+            # Load Series Map Whitespace Height Setting
+            self.seriesMapWhitespace = config.ReadInt('/2.0/SeriesMapWhitespace', 2)
+            # Load Keyword Map Horizontal Grid Lines Setting
+            self.keywordMapHorizontalGridLines = config.ReadInt('/2.0/KeywordMapHorizontalGridLines', False)
+            # Load Keyword Map Vertical Grid Lines Setting
+            self.keywordMapVerticalGridLines = config.ReadInt('/2.0/KeywordMapVerticalGridLines', False)
+            # Load Keyword Visualization Horizontal Grid Lines Setting
+            self.keywordVisualizationHorizontalGridLines = config.ReadInt('/2.0/KeywordVisualizationHorizontalGridLines', False)
+            # Load Keyword Visualization Vertical Grid Lines Setting
+            self.keywordVisualizationVerticalGridLines = config.ReadInt('/2.0/KeywordVisualizationVerticalGridLines', False)
+            # Load Series Map Horizontal Grid Lines Setting
+            self.seriesMapHorizontalGridLines = config.ReadInt('/2.0/SeriesMapHorizontalGridLines', False)
+            # Load Series Map Vertical Grid Lines Setting
+            self.seriesMapVerticalGridLines = config.ReadInt('/2.0/SeriesMapVerticalGridLines', False)
+            # Load the Series Map Sequence Map Single Line Setting
+            self.singleLineDisplay = config.ReadInt('/2.0/SeriesMapSequenceMapSingleLine', False)
 
         # If no version 2.0 Config File exists, ...
         else:
@@ -183,12 +233,46 @@ class ConfigData(object):
             self.transcriptionSetback = 2
             # Default Video Size is 100%
             self.videoSize = 100
+            # Default Visualization Style is Waveform
+            self.visualizationStyle = 'Waveform'
             # Quick Clip Mode should be disabled by default
-            self.quickClipMode = False
+            if 'wxMSW' in wx.PlatformInfo:
+                self.quickClipMode = True
             # Auto Word Tracking is enabled by default
             self.wordTracking = True
             # Language setting
             self.language = ''
+            # Load Keyword Map Bar Height Setting
+            self.keywordMapBarHeight = 8
+            # Load Keyword Map Whitespace Height Setting
+            self.keywordMapWhitespace = 2
+            # Load Keyword Visualization Bar Height Setting
+            self.keywordVisualizationBarHeight = 5
+            # Load Keyword Visualization Whitespace Height Setting
+            self.keywordVisualizationWhitespace = 2
+            # Load Series Map Bar Height Setting
+            self.seriesMapBarHeight = 8
+            # Load Series Map Whitespace Height Setting
+            self.seriesMapWhitespace = 2
+            # Load Keyword Map Horizontal Grid Lines Setting
+            self.keywordMapHorizontalGridLines = False
+            # Load Keyword Map Vertical Grid Lines Setting
+            self.keywordMapVerticalGridLines = False
+            # Load Keyword Visualization Horizontal Grid Lines Setting
+            self.keywordVisualizationHorizontalGridLines = False
+            # Load Keyword Visualization Vertical Grid Lines Setting
+            self.keywordVisualizationVerticalGridLines = False
+            # Load Series Map Horizontal Grid Lines Setting
+            self.seriesMapHorizontalGridLines = False
+            # Load Series Map Vertical Grid Lines Setting
+            self.seriesMapVerticalGridLines = False
+            # Load the Series Map Sequence Map Single Line Setting
+            self.singleLineDisplay = False
+
+        # Initialize the Show Legend setting
+        self.showLegend = True
+        # Initialize Color Output Setting
+        self.colorOutput = True
 
         # Load the databaseList, if it exists
         # NOTE:  if using Unicode, this MUST be a String object!
@@ -276,8 +360,11 @@ class ConfigData(object):
         config.WriteInt('/2.0/TranscriptionSetback', self.transcriptionSetback)
         # Save the Video Size setting
         config.WriteInt('/2.0/VideoSize', self.videoSize)
+        # Save the Visualization Style
+        config.Write('/2.0/visualizationStyle', self.visualizationStyle)
         # Save the Quick Clip Mode setting
-        config.WriteInt('/2.0/QuickClipMode', self.quickClipMode)
+        if 'wxMSW' in wx.PlatformInfo:
+            config.WriteInt('/2.0/QuickClipMode', self.quickClipMode)
         # Save the Auto Word Tracking setting
         config.WriteInt('/2.0/WordTracking', self.wordTracking)
         # Save the Message Server Host
@@ -309,6 +396,32 @@ class ConfigData(object):
         config.Write('/2.0/FontFace', self.defaultFontFace)
         # Save Default Font Size Setting
         config.WriteInt('/2.0/FontSize', self.defaultFontSize)
+        # Save Keyword Map Bar Height Setting
+        config.WriteInt('/2.0/KeywordMapBarHeight', self.keywordMapBarHeight)
+        # Save Keyword Map Whitespace Setting
+        config.WriteInt('/2.0/KeywordMapWhitespace', self.keywordMapWhitespace)
+        # Save Keyword Visualization Bar Height Setting
+        config.WriteInt('/2.0/KeywordVisualizationBarHeight', self.keywordVisualizationBarHeight)
+        # Save Keyword Visualization Whitespace Setting
+        config.WriteInt('/2.0/KeywordVisualizationWhitespace', self.keywordVisualizationWhitespace)
+        # Save Series Map Bar Height Setting
+        config.WriteInt('/2.0/SeriesMapBarHeight', self.seriesMapBarHeight)
+        # Save Series Map Whitespace Setting
+        config.WriteInt('/2.0/SeriesMapWhitespace', self.seriesMapWhitespace)
+        # Save Keyword Map Horizontal Grid Lines Setting
+        config.WriteInt('/2.0/KeywordMapHorizontalGridLines', self.keywordMapHorizontalGridLines)
+        # Save Keyword Map Vertical Grid Lines Setting
+        config.WriteInt('/2.0/KeywordMapVerticalGridLines', self.keywordMapVerticalGridLines)
+        # Save Keyword Visualization Horizontal Grid Lines Setting
+        config.WriteInt('/2.0/KeywordVisualizationHorizontalGridLines', self.keywordVisualizationHorizontalGridLines)
+        # Save Keyword Visualization Vertical Grid Lines Setting
+        config.WriteInt('/2.0/KeywordVisualizationVerticalGridLines', self.keywordVisualizationVerticalGridLines)
+        # Save Series Map Horizontal Grid Lines Setting
+        config.WriteInt('/2.0/SeriesMapHorizontalGridLines', self.seriesMapHorizontalGridLines)
+        # Save Series Map Vertical Grid Lines Setting
+        config.WriteInt('/2.0/SeriesMapVerticalGridLines', self.seriesMapVerticalGridLines)
+        # Save the Series Map Sequence Map Single Line Setting
+        config.WriteInt('/2.0/SeriesMapSequenceMapSingleLine', self.singleLineDisplay)
 
 
     def GetDefaultProfilePath(self):

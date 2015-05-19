@@ -1,4 +1,4 @@
-#Copyright (C) 2003-2006  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2007  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -39,6 +39,8 @@
       SetFontSize(size)                  Sets Font Size
       AddLines(newlines)                 Adds lines to drawing.  Newlines are a list of 4-integer tuples, each specifying (startx, starty, endx, endy).
                                          Thus, [(300, 300, 300, 700), (300, 700, 700, 700), (700, 700, 700, 300), (700, 300, 300, 300)] draws a square.
+      AddLines2(newlines)                Adds lines to drawing in a second layer.  Newlines are a list of 4-integer tuples, each specifying (startx, starty, endx, endy).
+                                         This second layer can be used for temporary data that could be deleted without affecting the first layer.
       AddText(text, x, y)                Adds Text at position (x, y)
       AddTextCentered(text, x, y)        Adds Text centered on position (x, y)
       Clear()                            Clears the graphic
@@ -96,6 +98,8 @@ class GraphicsControl(wx.ScrolledWindow):
         self.fontweight = wx.NORMAL
         # Initialize "lines" to an empty list
         self.lines = []
+        # Let's create a second layer of lines that can be manipulated (and deleted) separately.  
+        self.lines2 = []
 
         # Initialize  "text" to an empty list
         self.text = []
@@ -162,8 +166,9 @@ class GraphicsControl(wx.ScrolledWindow):
 
     def Clear(self):
         """ Clear the Graphic Control """
-        # Remove all lines
+        # Remove all lines in both layers
         self.lines = []
+        self.lines2 = []
         # Clear the Cursor Position
         self.cursorPosition = None
         # Remove all text
@@ -176,8 +181,8 @@ class GraphicsControl(wx.ScrolledWindow):
 
     def ClearTransanaSelection(self):
         """ Clears the Waveform Selection (highlight) set up by Transana """
-        # Remove all lines (the Selection and the Cursor)
-        self.lines = []
+        # Remove all SELECTION lines, which are stored in the second layer of lines
+        self.lines2 = []
 
         # Clear the Cursor Position
         self.cursorPosition = None
@@ -211,6 +216,11 @@ class GraphicsControl(wx.ScrolledWindow):
     def AddLines(self, newlines):
         """ Adds new lines (send as a list) to the drawing """
         self.lines.append((self.colour, self.thickness, newlines))
+        self.reInitBuffer = True
+
+    def AddLines2(self, newlines):
+        """ Adds new lines (send as a list) to the second layer of the drawing """
+        self.lines2.append((self.colour, self.thickness, newlines))
         self.reInitBuffer = True
 
     def AddText(self, text, x, y):
@@ -255,7 +265,20 @@ class GraphicsControl(wx.ScrolledWindow):
             # Set the Brush and Background colors to the Background Color
             dc.SetBackground(wx.Brush(self.GetBackgroundColour()))
             # Clear the drawing
-            dc.Clear()  
+            dc.Clear()
+            # If we have a backgroundImage but not a backgroundGraphicName, we need to blit the image onto the Device Context!
+            # We do this WITHOUT rescaling the image.
+            if self.backgroundImage != None:
+                # Create a Memory Device Context 
+                dc2 = wx.MemoryDC()
+                # Load the Waveform image into the memory DC
+                dc2.SelectObject(self.backgroundImage.ConvertToBitmap())
+                # Copy the MemoryDC image onto the visualization window image's Device Context
+                dc.Blit(0, 0, self.backgroundImage.GetWidth(), self.backgroundImage.GetHeight(), dc2, 0, 0, wx.COPY, False)
+                # Now create a pen to draw a line between the image and the rest of the graphic.
+                dc.SetPen(wx.Pen(wx.LIGHT_GREY, 1, wx.SOLID))
+                # Draw the line here.
+                dc.DrawLine(0, self.backgroundImage.GetHeight()-1, self.backgroundImage.GetWidth()-1, self.backgroundImage.GetHeight()-1)
 
         # Set the Pen to the defined Color, thickness, and pattern
         self.pen = wx.Pen(self.colourDef, self.thickness, self.linepattern)
@@ -303,6 +326,42 @@ class GraphicsControl(wx.ScrolledWindow):
             # Draw the lines in the line list
             # dc.DrawLine(**dict(line)) #TODO: This would work if points were (x,y)
             for coords in line:
+                # dc.DrawLine produces a line with rounded ends if it's too thick.  It doesn't look
+                # very good.  So if we're drawing a thick line, let's use DrawRectangle instead.
+                if thickness > 2:
+                    # For lines that are thick enough ...
+                    if thickness > 3:
+                        # ... let's draw a black border
+                        penCol = wx.Colour(0, 0, 0)
+                    # For lines that are too thin ...
+                    else:
+                        # We'll just have the border match the bar color
+                        penCol = self.colourDef
+                    # Create a pen for the rectangle outline.
+                    pen = wx.Pen(penCol, 1, wx.SOLID)
+                    # Set the pen for the DC
+                    dc.SetPen(pen)
+                    # Create a brush, which paint the interior of the rectangle.  Set it to our bar color.
+                    brush = wx.Brush(self.colourDef, wx.SOLID)
+                    # Set the brush to the DC
+                    dc.SetBrush(brush)
+                    # Draw a rectangle based on the line coordinates and specified thickness.
+                    dc.DrawRectangle(coords[0], coords[1]-int(thickness/2), coords[2]-coords[0], thickness)
+                # For "thin" lines ...
+                else:
+                    # ...DC's DrawLine will be adequate.
+                    dc.DrawLine(*coords)
+
+        # For each line in lines2, determine the color, line thickness, and line list
+        for colour, thickness, line in self.lines2:
+            # Create a Pen
+            self.SetColour(colour)
+            pen = wx.Pen(self.colourDef, thickness, self.linepattern)
+            # Set the Pen for the Device Context
+            dc.SetPen(pen)
+            # Draw the lines in the line list
+            # dc.DrawLine(**dict(line)) #TODO: This would work if points were (x,y)
+            for coords in line:
                 # apply(dc.DrawLine, coords)
                 dc.DrawLine(*coords)
 
@@ -328,7 +387,10 @@ class GraphicsControl(wx.ScrolledWindow):
         dc.EndDrawing()
 
     def SetSelection(self, dc):
-        """ Add lines to the lines[] structure based on startTime, endTime, canvassize """
+        """ Add lines to the lines2[] structure based on startTime, endTime, canvassize """
+        # The Selection should be added to the temporary lines2[] structure so it can be removed without affecting
+        # the original drawing stored in the lines[] structure.
+        
         # Add lines to create a new selection only if
         #   resetSelection is True which occurs after a resize or a new selection
         if self.transanaMode and self.reSetSelection:
@@ -354,12 +416,15 @@ class GraphicsControl(wx.ScrolledWindow):
                         bottom = y
                         break
                     # Add the lines to the abstract data structure so they will be included when the window is redrawn.
-                self.AddLines([(int(x), 0, int(x), int(top)), (int(x), int(bottom), int(x), int(self.canvassize[1]))])
+                # Put the selection lines in the temporary lines2[] structure
+                self.AddLines2([(int(x), 0, int(x), int(top)), (int(x), int(bottom), int(x), int(self.canvassize[1]))])
             # Draw black rectangle around the selection
             self.colour = "BLACK"
-            self.AddLines([(int(startX),0,int(endX),0),(int(startX),int(self.canvassize[1]),int(endX),int(self.canvassize[1]))])
-            self.AddLines([(int(startX),int(self.canvassize[1]-1),int(endX),int(self.canvassize[1]-1))]) # ,(startX,1,endX,1)
-            self.AddLines([(int(startX),0,int(startX),int(self.canvassize[1])), (int(endX),0,int(endX),int(self.canvassize[1]))])
+            # Put the selection lines in the temporary lines2[] structure
+            self.AddLines2([(int(startX),0,int(endX),0),(int(startX),int(self.canvassize[1]),int(endX),int(self.canvassize[1]))])
+            self.AddLines2([(int(startX),int(self.canvassize[1]-1),int(endX),int(self.canvassize[1]-1))])
+            self.AddLines2([(int(startX),0,int(startX),int(self.canvassize[1])), (int(endX),0,int(endX),int(self.canvassize[1]))])
+            # Reset the color to the original color value
             self.colour = oldColour
             self.reSetSelection = False
 
@@ -413,8 +478,8 @@ class GraphicsControl(wx.ScrolledWindow):
 
         # To make Shift-Left-Click selection work properly, we do NOTHING on LeftDown if Shift is pressed.
         if not event.ShiftDown():
-            # Clear any existing Selection and Cursor
-            self.lines = []
+            # Clear any existing Selection and Cursor from the temporary (lines2[]) layer
+            self.lines2 = []
             # That wiped out the cursor too, which is okay, but let's remember that.
             self.cursorPosition = None
             # Put the focus on the Graphic
@@ -504,10 +569,11 @@ class GraphicsControl(wx.ScrolledWindow):
             self.parent.OnLeftUp(event)
     
     def SetStartMarker(self, x):
-        """ Add a grey line in lines[] at x """
+        """ Add a grey line in lines2[] at x """
         oldColour = self.colour
         self.colour = "GREY"
-        self.AddLines([(int(x), 0, int(x), int(self.canvassize[1]))])
+        # Put the start marker in the temporary lines2[] structure
+        self.AddLines2([(int(x), 0, int(x), int(self.canvassize[1]))])
         self.colour = oldColour
 
     def TransanaOnMotion(self, event):
@@ -556,7 +622,6 @@ class GraphicsControl(wx.ScrolledWindow):
             #   Draw vertical tracking line
             dc.SetPen(wx.Pen("BLACK",1))
             dc.DrawLine(int(self.x), 0, int(self.x), int(self.canvassize[1]))
-            
             # Remember the X position we last drew to.
             self.lastX = self.x
 
@@ -572,7 +637,7 @@ class GraphicsControl(wx.ScrolledWindow):
 
     def OnSize(self, event):
         """" Resize event for the GraphicsControlClass Widget """
-        # Clear the lines[] structure
+        # Clear the temporary lines2[] structure
         self.ClearTransanaSelection()
         if self.transanaMode:
             # Find x position and add grey marker to lines[]
@@ -635,7 +700,7 @@ class GraphicsControl(wx.ScrolledWindow):
             # Load the Bitmap into the temporary Image
             # self.backgroundImage.LoadFile(filename, wx.BITMAP_TYPE_BMP)
             self.backgroundImage.LoadFile(filename, wx.BITMAP_TYPE_PNG)
-            
+
             # Resize the Bitmap to the size of the Graphic Control
             self.backgroundImage.Rescale(self.canvassize[0], self.canvassize[1])
             # Convert the wxImage to a wxBitmap
@@ -650,8 +715,6 @@ class GraphicsControl(wx.ScrolledWindow):
     def SaveAs(self):
         dlg = wx.FileDialog(self, _("Save File"), wildcard=_("JPEG Files|*.jpg"), style=wx.SAVE|wx.OVERWRITE_PROMPT|wx.CHANGE_DIR)
         if dlg.ShowModal() == wx.ID_OK:
-            # Add Image Handler that allows JPEG
-            wx.Image_AddHandler(wx.JPEGHandler())
             # File Extension is not automatically appended on Mac.  Let's ensure it's there.
             filename = dlg.GetPath()
             (fn, ext) = os.path.splitext(filename)
@@ -679,13 +742,19 @@ class GraphicsControl(wx.ScrolledWindow):
     def DrawCursor(self, currentPosition):
         (width, height) = self.GetSizeTuple()
         y = int(currentPosition * self.canvassize[0] + 1)
-        # If there is an existing cursor, eliminate it
+        # If there is an existing cursor, eliminate it.  (It would be in the temporary (lines2[]) layer
         if self.cursorPosition != None:
-            del(self.lines[self.cursorPosition])
-        # Draw the new cursor
-        self.AddLines([(int(y), 0, int(y), int(height-6))])
+            del(self.lines2[self.cursorPosition])
+        # Remember the original color
+        oldColour = self.colour
+        # Change the color to grey for the cursor
+        self.colour = "GREY"
+        # Draw the new cursor to the temporary (lines2[]) layer
+        self.AddLines2([(int(y), 0, int(y), int(height-6))])
+        # Restore the original color
+        self.colour = oldColour
         # Remember the cursor position in the "lines" structure so that it can be removed
-        self.cursorPosition = len(self.lines) - 1
+        self.cursorPosition = len(self.lines2) - 1
         
         self.reInitBuffer = True
  

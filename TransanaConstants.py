@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -21,9 +21,6 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
 # import wxPython
 import wx
 
-# Use the New Video Player on Mac, but not on Windows yet.
-NEWVIDEOPLAYER = ('wxMac' in wx.PlatformInfo)
-
 # import the Python string module
 import string
 
@@ -35,23 +32,28 @@ import string
 singleUserVersion = True
 
 # Program Version Number
-versionNumber = '2.12'
+versionNumber = '2.20'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
 # Add testing version information if appropriate.  (Set to "''" if not!)
 # NOTE:  This will differ by Platform for a little while.
 if '__WXMAC__' in wx.PlatformInfo:
-    versionNumber = versionNumber +  '-Mac Alpha 1.16'
-else:
+    versionNumber = versionNumber +  '-Mac'
+elif 'wxMSW' in wx.PlatformInfo:
     versionNumber = versionNumber + '-Win'
+elif 'wxGTK' in wx.PlatformInfo:
+    versionNumber += '-Linux Alpha 1.0'
+else:
+    versionNumber += '-Unknown Platform Alpha 1.0'
 
 # Define the Timecode Character
 if 'unicode' in wx.PlatformInfo:
-    if 'wxMac' in wx.PlatformInfo:
-        TIMECODE_CHAR = unicode('\xc2\xa7', 'utf-8')
-    else:
-        TIMECODE_CHAR = unicode('\xc2\xa4', 'utf-8')
+# It appears that with wxPython 2.8, the Mac finally can display the proper Timecode character!!
+#    if 'wxMac' in wx.PlatformInfo:
+#        TIMECODE_CHAR = unicode('\xc2\xa7', 'utf-8')
+#    else:
+    TIMECODE_CHAR = unicode('\xc2\xa4', 'utf-8')
 else:
     TIMECODE_CHAR = '\xa4'
 
@@ -74,40 +76,41 @@ CONTROL_READYTOPLAY             = wx.NewId()    # This identifies a timer used i
 CONTROL_POSITIONAFTERLOADING    = wx.NewId()    # This identifies a timer used in the Windows-specific Video unit
 CONTROL_PROGRESSNOTIFICATION    = wx.NewId()    # This identifies a timer used in the Windows-specific Video unit
 
-
 # Define Media Constants needed for inter-object communication
 # NOTE:  These constants are different for different media players.
-if NEWVIDEOPLAYER:
-    import wx.media
-    MEDIA_PLAYSTATE_NONE               =  None
-    MEDIA_PLAYSTATE_STOP               =  wx.media.MEDIASTATE_STOPPED
-    MEDIA_PLAYSTATE_PAUSE              =  wx.media.MEDIASTATE_PAUSED
-    MEDIA_PLAYSTATE_PLAY               =  wx.media.MEDIASTATE_PLAYING
-elif "__WXMSW__" in wx.PlatformInfo:
-    MEDIA_PLAYSTATE_NONE               = -1
-    MEDIA_PLAYSTATE_STOP               =  0
-    MEDIA_PLAYSTATE_PAUSE              =  1
-    MEDIA_PLAYSTATE_PLAY               =  2
-elif "__WXMAC__" in wx.PlatformInfo:
-    MEDIA_PLAYSTATE_NONE               = -1
-    MEDIA_PLAYSTATE_STOP               =  1
-    MEDIA_PLAYSTATE_PAUSE              =  2
-    MEDIA_PLAYSTATE_PLAY               =  0
+import wx.media
+MEDIA_PLAYSTATE_NONE               =  None
+MEDIA_PLAYSTATE_STOP               =  wx.media.MEDIASTATE_STOPPED
+MEDIA_PLAYSTATE_PAUSE              =  wx.media.MEDIASTATE_PAUSED
+MEDIA_PLAYSTATE_PLAY               =  wx.media.MEDIASTATE_PLAYING
+#elif "__WXMSW__" in wx.PlatformInfo:
+#    MEDIA_PLAYSTATE_NONE               = -1
+#    MEDIA_PLAYSTATE_STOP               =  0
+#    MEDIA_PLAYSTATE_PAUSE              =  1
+#    MEDIA_PLAYSTATE_PLAY               =  2
+#elif "__WXMAC__" in wx.PlatformInfo:
+#    MEDIA_PLAYSTATE_NONE               = -1
+#    MEDIA_PLAYSTATE_STOP               =  1
+#    MEDIA_PLAYSTATE_PAUSE              =  2
+#    MEDIA_PLAYSTATE_PLAY               =  0
 
-
-fileTypesString = _("""All files (*.*)|*.*|All video files (*.mpg, *.avi)|*.mpg;*.mpeg;*.avi|All audio files (*.mp3, *.wav, *.au, *.snd)|*.mp3;*.wav;*.au;*.snd|MPEG files (*.mpg)|*.mpg;*.mpeg|AVI files (*.avi)|*.avi|MP3 files (*.mp3)|*.mp3|WAV files (*.wav)|*.wav""")
+fileTypesString = _("""All files (*.*)|*.*|All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.wmv, *.mp3, *.wav, *.wma)|*.mpg;*.avi;*.mov;*.mp4;*.wmv;*.mp3;*.wav;*.wma|All video files (*.mpg, *.avi, *.mov, *.mp4, *.wmv)|*.mpg;*.mpeg;*.avi;*.mov;*.mp4;*.wmv|All audio files (*.mp3, *.wav, *.wma, *.au, *.snd)|*.mp3;*.wav;*.wma;*.au;*.snd|MPEG files (*.mpg)|*.mpg;*.mpeg|AVI files (*.avi)|*.avi|QuickTime files (*.mov, *.mp4)|*.mov;*.mp4|Windows Media Video (*.wmv)|*wmv|MP3 files (*.mp3)|*.mp3|WAV files (*.wav)|*.wav|Windows Media Audio (*.wma)|*.wma""")
 
 fileTypesList = [_("All files (*.*)"),
-                 _("All video files (*.mpg, *.avi)"),
-                 _("All audio files (*.mp3, *.wav, *.au, *.snd)"),
-                 _("BMP, PNG, and WAV files (*.bmp, *.png, *.wav)"),
-                 _("RTF files (*.rtf)"),
-                 _("BMP and PNG files (*.bmp, *.png)"),
-                 _("WAV files (*.wav)"),
+                 _("All supported media files (*.mpg, *.avi, *.mov, *.mp4, *.wmv, *.mp3, *.wav, *.wma)"),
+                 _("All video files (*.mpg, *.avi, *.mov, *.mp4, *.wmv)"),
+                 _("All audio files (*.mp3, *.wav, *.wma, *.au, *.snd)"),
                  _("MPEG files (*.mpg, *.mpeg)"),
                  _("AVI files (*.avi)"),
-                 _("MOV files (*.mov)"),
-                 _("MP3 files (*.mp3)")]
+                 _("QuickTime files (*.mov, *.mp4)"),
+                 _("Windows Media Video files (*.wmv)"),
+                 _("MP3 files (*.mp3)"),
+                 _("WAV files (*.wav)"),
+                 _("Windows Media Audio files (*.wma)"),
+                 _("Rich Text Format files (*.rtf)"),
+                 _("BMP, PNG, and WAV files (*.bmp, *.png, *.wav)")]
+
+mediaFileTypes = ['mpg', 'mpeg', 'avi', 'mov', 'mp4', 'wmv', 'mp3', 'wav', 'wma']
                  
 legalFilenameCharacters = string.ascii_letters + string.digits + ":. -_$&@!%(){}[]~'#^+=/" 
 if "__WXMSW__" in wx.PlatformInfo:
@@ -118,42 +121,102 @@ chineseEncoding = 'gbk'
 # We want enough colors, but not too many.  This list seems about right to me.  I doubt my color names are standard.
 # But then, I'm often perplexed by the colors that are included and excluded by most programs.  (Excel for example.)
 # Each entry is made up of a color name and a tuple of the RGB values for the color.
-transana_colorList = [('Black',       (  0,   0,   0)),
-                      ('Dark Blue',   (  0,   0, 128)),
-                      ('Blue',        (  0,   0, 255)),
-                      ('Light Blue',  (  0, 128, 255)),
-                      ('Cyan',        (  0, 255, 255)),
-                      ('Light Aqua',  (128, 255, 255)),
-                      ('Blue Green',  (  0, 128, 128)),
-                      ('Dark Green',  (  0, 128,   0)),
-                      ('Green Blue',  (  0, 255, 128)),
-                      ('Green',       (  0, 255,   0)),
-                      ('Chartreuse',  (128, 255,   0)),
-                      ('Light Green', (128, 255, 128)),
-                      ('Olive',       (128, 128,   0)),
-                      ('Gray',        (128, 128, 128)),
-                      ('Lavendar',    (128, 128, 255)),
-                      ('Purple',      (128,   0, 255)),
-                      ('Dark Purple', (128,   0, 128)),
-                      ('Maroon',      (128,   0,   0)),
-                      ('Magenta',     (255,   0, 255)),
-                      ('Light Fuscia',(255, 128, 255)),
-                      ('Rose',        (255,   0, 128)),
-                      ('Red',         (255,   0,   0)),
-                      ('Salmon',      (255, 128, 128)),
-                      ('Orange',      (255, 128,   0)),
-                      ('Yellow',      (255, 255,   0)),  
-                      ('Light Yellow',(255, 255, 128)),  
-                      ('White',       (255, 255, 255))]
+transana_colorList = [('Black',             (  0,   0,   0)),
+                      ('Dark Blue',         (  0,   0, 128)),
+                      ('Blue',              (  0,   0, 255)),
+                      ('Light Blue',        (  0, 128, 255)),
+                      ('Lavender',          (128, 128, 255)),
+                      ('Cyan',              (  0, 255, 255)),
+                      ('Light Aqua',        (128, 255, 255)),
+                      ('Blue Green',        (  0, 128, 128)),
+                      ('Dark Slate Gray',   ( 47,  79,  79)),
+                      ('Dark Green',        (  0, 128,   0)),
+                      ('Green Blue',        (  0, 255, 128)),
+                      ('Green',             (  0, 255,   0)),
+                      ('Chartreuse',        (128, 255,   0)),
+                      ('Light Green',       (128, 255, 128)),
+                      ('Olive',             (128, 128,   0)),
+                      ('Sienna',            (142, 107,  35)),
+                      ('Gray',               (128, 128, 128)),
+                      ('Purple',            (128,   0, 255)),
+                      ('Light Purple',     (176,  0, 255)),
+                      ('Dark Purple',       (128,   0, 128)),
+                      ('Maroon',            (128,   0,   0)),
+                      ('Indian Red',        ( 79,  47,  47)),
+                      ('Violet Red',        (204,  50, 153)),
+                      ('Magenta',           (255,   0, 255)),
+                      ('Light Fuscia',      (255, 128, 255)),
+                      ('Rose',              (255,   0, 128)),
+                      ('Red',               (255,   0,   0)),
+                      ('Red Orange',        (204,  50,  50)),
+                      ('Salmon',            (255, 128, 128)),
+                      ('Orange',            (255, 128,   0)),
+                      ('Yellow',            (255, 255,   0)),  
+                      ('Light Yellow',      (255, 255, 128)),  
+                      ('Goldenrod',         (219, 219, 112)),
+                      ('White',             (255, 255, 255))]
 # The following exists only to ensure that the color names are available for translation.
 # (I had to take the translation code out of the above data structure, as color names were only showing up in
 #  the initial language.)
 tmpColorList = (_('Black'), _('Dark Blue'), _('Blue'), _('Light Blue'), _('Cyan'), _('Light Aqua'), _('Green Blue'),
                  _('Dark Green'), _('Blue Green'),_('Green'), _('Chartreuse'), _('Light Green'), _('Olive'), _('Gray'),
-                _('Lavendar'), _('Purple'), _('Dark Purple'), _('Maroon'), _('Magenta'), _('Light Fuscia'), _('Rose'),
-                _('Red'), _('Salmon'), _('Orange'), _('Yellow'), _('Light Yellow'), _('White'))
+                _('Lavender'), _('Purple'), _('Dark Purple'), _('Maroon'), _('Magenta'), _('Light Fuscia'), _('Rose'),
+                _('Red'), _('Salmon'), _('Orange'), _('Yellow'), _('Light Yellow'), _('White'),
+                _('Violet Red'), _('Sienna'), _('Indian Red'), _('Goldenrod'), _('Dark Slate Gray'), _('Red Orange'),
+                _('Light Purple'))
 transana_colorNameList = []
 transana_colorLookup = {}
 for (colorName, colorDef) in transana_colorList:
     transana_colorNameList.append(colorName)
     transana_colorLookup[colorName] = colorDef
+
+# Get the legal colors for bars in the Keyword Map.  These colors are taken from the TransanaConstants.transana_colorList
+# but are put in a different order for the Keyword Map.
+# ('Green' in line 3 wasn't distinct enough from 'Green Blue' and 'Chartreuse', so I removed it and moved 'Olive' up from line 6.
+#  Other colors have been rearranged as well.)
+# Added "new" colors, removed Light Green and Light Aqua
+keywordMapColourSet = ['Dark Blue',
+                       'Green Blue',
+                       'Gray',
+                       'Lavender',
+                       'Light Fuscia',
+                       'Cyan',
+                       'Indian Red',
+                       'Rose',
+                       'Olive',
+                       'Purple',
+                       'Chartreuse',
+                       'Salmon',
+                       'Blue', 
+                       'Maroon', 
+                       'Magenta',
+                       'Yellow',
+                       'Light Blue', 
+                       'Violet Red',
+                       'Dark Green',
+                       'Red',
+                       'Dark Purple',
+                       'Sienna',
+                       'Blue Green',
+                       'Orange',
+                       'Light Purple',
+                       'Goldenrod',
+                       'Dark Slate Gray',
+                       'Red Orange']
+
+# We want enough shades of gray for black and white printing, but not too many.  This list seems about right to me.
+# Each entry is made up of a color name and a tuple of the RGB values for the color.
+transana_grayList = [('Black',             (  0,   0,   0)),
+                     ('Dark Gray',         ( 79,  79,  79)),
+                     ('Gray',              (158, 158, 158)),
+                     ('Light Gray',        (237, 237, 237)),
+                     ('White',             (255, 255, 255))]
+
+# Get the legal shades of gray for bars in the Keyword Map.  These shades are taken from the TransanaConstants.transana_grayList
+keywordMapGraySet = ['Black',
+                     'Gray',
+                     'Dark Gray',
+                     'Light Gray']
+transana_grayLookup = {}
+for (colorName, colorDef) in transana_grayList:
+    transana_grayLookup[colorName] = colorDef

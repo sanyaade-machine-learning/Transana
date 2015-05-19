@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -90,6 +90,7 @@ class TranscriptionUI(object):
         self.dlg.editor.ClearDoc()
         self.dlg.toolbar.ClearToolbar()
         self.dlg.toolbar.Enable(0)
+        self.dlg.EnableSearch(False)
         
     def LoadTranscript(self, transcriptObj):
         """Load a transcript object."""
@@ -130,6 +131,7 @@ class TranscriptionUI(object):
                 self.dlg.editor.load_transcript(transcriptObj, 'pickle')
 
         self.dlg.toolbar.Enable(1)
+        self.dlg.EnableSearch(True)
 
     def GetCurrentTranscriptObject(self):
         """ Return the current Transcript Object, with the edited text even if it hasn't been saved. """
@@ -472,6 +474,7 @@ class TranscriptionUI(object):
     def ChangeLanguages(self):
         """ Change all on-screen prompts to the new language. """
         self.dlg.toolbar.ChangeLanguages()
+        self.dlg.ChangeLanguages()
         
 
 # Private methods    
@@ -501,20 +504,44 @@ class _TranscriptDialog(wx.Dialog):
         # add the widgets to the panel
         sizer = wx.BoxSizer(wx.VERTICAL)
 
+        hsizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.toolbar = TranscriptToolbar(self)
+        hsizer.Add(self.toolbar, 0, wx.ALIGN_TOP, 10)
+
+        # Add Quick Search tools
+        self.CMD_SEARCH_BACK_ID = wx.NewId()
+        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
+        self.searchBack = wx.BitmapButton(self, self.CMD_SEARCH_BACK_ID, bmp, style=wx.NO_BORDER)
+        hsizer.Add(self.searchBack, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
+        wx.EVT_BUTTON(self, self.CMD_SEARCH_BACK_ID, self.OnSearch)
+        hsizer.Add((10, 1))
+        self.searchBackToolTip = wx.ToolTip(_("Search backwards"))
+        self.searchBack.SetToolTip(self.searchBackToolTip)
+
+        self.searchText = wx.TextCtrl(self, -1, size=(100, 20), style=wx.TE_PROCESS_ENTER)
+        hsizer.Add(self.searchText, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
+        self.Bind(wx.EVT_TEXT_ENTER, self.OnSearch, self.searchText)
+        hsizer.Add((10, 1))
+        
+        self.CMD_SEARCH_NEXT_ID = wx.NewId()
+        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
+        self.searchNext = wx.BitmapButton(self, self.CMD_SEARCH_NEXT_ID, bmp, style=wx.NO_BORDER)
+        hsizer.Add(self.searchNext, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
+        wx.EVT_BUTTON(self, self.CMD_SEARCH_NEXT_ID, self.OnSearch)
+        self.searchNextToolTip = wx.ToolTip(_("Search forwards"))
+        self.searchNext.SetToolTip(self.searchNextToolTip)
+
+        self.EnableSearch(False)
+
         if ALLOW_UNICODE_ENTRY:
-            hsizer = wx.BoxSizer(wx.HORIZONTAL)
-            self.toolbar = TranscriptToolbar(self)
-            hsizer.Add(self.toolbar, 0, wx.ALIGN_TOP, 10)
             self.UnicodeEntry = wx.TextCtrl(self, -1, size=(40, 16), style=wx.TE_PROCESS_ENTER)
             self.UnicodeEntry.SetMaxLength(4)
             hsizer.Add((10,1), 0, wx.ALIGN_CENTER | wx.GROW)
             hsizer.Add(self.UnicodeEntry, 0, wx.ALIGN_RIGHT | wx.TOP | wx.RIGHT, 8)
             self.UnicodeEntry.Bind(wx.EVT_TEXT, self.OnUnicodeText)
             self.UnicodeEntry.Bind(wx.EVT_TEXT_ENTER, self.OnUnicodeEnter)
-            sizer.Add(hsizer, 0, wx.ALIGN_TOP, 10)
-        else:
-            self.toolbar = TranscriptToolbar(self)
-            sizer.Add(self.toolbar, 0, wx.ALIGN_TOP, 10)
+            
+        sizer.Add(hsizer, 0, wx.ALIGN_TOP, 10)
             
         self.toolbar.Realize()
         
@@ -550,6 +577,33 @@ class _TranscriptDialog(wx.Dialog):
         # take line wrapping into account, and a visible line, which does.)
         self.editor.ScrollToLine(max(self.editor.VisibleFromDocLine(self.editor.LineFromPosition(start) - 2), 0))
 
+    def OnSearch(self, event):
+        """ Implement the Toolbar's QuickSearch """
+        # Get the text for the search
+        txt = self.searchText.GetValue()
+        # If there is text ...
+        if txt != '':
+            # Determine whether we're searching forward or backward
+            if event.GetId() == self.CMD_SEARCH_BACK_ID:
+                direction = "back"
+            # Either CMD_SEARCH_FORWARD_ID or ENTER in the text box indicate forward!
+            else:
+                direction = "next"
+            # Perform the search in the Editor
+            self.editor.find_text(txt, direction)
+            # Set the focus back on the editor component, rather than the button, so Paste or typing work.
+            self.editor.SetFocus()
+
+    def EnableSearch(self, enable):
+        """ Change the "Enabled" status of the Search controls """
+        self.searchBack.Enable(enable)
+        self.searchText.Enable(enable)
+        self.searchNext.Enable(enable)
+
+    def ClearSearch(self):
+        """ Clear the Search Box """
+        self.searchText.SetValue('')
+        
     def OnUnicodeText(self, event):
         s = event.GetString()
         if len(s) > 0:
@@ -572,6 +626,11 @@ class _TranscriptDialog(wx.Dialog):
             self.editor.SetFocus()
         except:
             pass
+
+    def ChangeLanguages(self):
+        """ Change Languages """
+        self.searchBackToolTip.SetTip(_("Search backwards"))
+        self.searchNextToolTip.SetTip(_("Search forwards"))
 
     def __size(self):
         """Determine the default size for the Transcript frame."""
@@ -606,6 +665,7 @@ class TranscriptionTestApp(wx.App):
         self.transcriptWindow.dlg.editor.load_transcript("SampleTranscript.rtf")
         self.transcriptWindow.dlg.editor.set_read_only()
         self.transcriptWindow.dlg.toolbar.Enable(True)
+        self.transcriptWindow.dlg.EnableSearch(True)
         self.transcriptWindow.Show()
         self.transcriptWindow.dlg.editor.SaveRTFDocument('test.rtf')
         return True

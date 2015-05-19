@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -237,4 +237,3 @@ class DataWindow(wx.Dialog):
         # rect[1] compensates if the Start menu is on the Top
         y = rect[1] + rect[3] - height - 3
         return wx.Point(x, y)
-

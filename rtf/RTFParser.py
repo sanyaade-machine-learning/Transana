@@ -1,4 +1,4 @@
-# Copyright (C) 2002-2006 The Board of Regents of the University of Wisconsin System
+# Copyright (C) 2002-2007 The Board of Regents of the University of Wisconsin System
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -137,7 +137,7 @@ class RTFParser:
         self.update_func(self.update_value)
         
     def check_header(self):
-        if (not self.buf.startswith("{\\rtf1\\ansi")) and (not self.buf.startswith("{\\rtf1\\mac\\ansi")):
+        if not self.buf.startswith("{\\rtf1"):
             if DEBUG:
                 print "RTFParser.check_header(): This is not an RTF Doc!!"
             raise RTFParseError, "Not a RTF document"
@@ -255,16 +255,17 @@ class RTFParser:
 		    position = intList.index(194)
 		    
 		    # test for timecode
-		    if intList[position+1] == 164:
+# It appears that with wxPython 2.8.0.1, the Mac can now handle the proper timecode character!
+#		    if intList[position+1] == 164:
 			
-			if DEBUG:
-			    print "RTFParser.process_text():  Mac Unicode Substitution - Time Code."
+#			if DEBUG:
+#			    print "RTFParser.process_text():  Mac Unicode Substitution - Time Code."
 
-			newString = txt[0:position] + unicode('\xc2\xa7', 'utf8')
-			txt = newString
+#			newString = txt[0:position] + unicode('\xc2\xa7', 'utf8')
+#			txt = newString
 		    # Test for up intonation
-		    elif intList[position+1] == 173:
-
+#		    elif intList[position+1] == 173:
+		    if intList[position+1] == 173:
 			if DEBUG:
 			    print "RTFParser.process_text(): Mac Unicode Substitution - Up Arrow."
 
@@ -298,7 +299,7 @@ class RTFParser:
 	    do = DocObject()
             do.text = txt
 
-            if DEBUG:
+            if DEBUG and False:
                 print "RTFParser.process_text()", txt, do.text, do
                 
             self.stream.append(do)
@@ -354,16 +355,18 @@ class RTFParser:
 
                         if DEBUG:
                             print "after:", self.buf[self.index - 10:self.index + 10]
-                    elif (val == 164) and ('wxMac' in wx.PlatformInfo):
 
-                        if DEBUG:
-                            print "OLD STYLE TIME CODE detected.  before:", self.buf[self.index - 10:self.index + 10],
+# It appears with wxPython 2.8.0.1 that the time code translation is no longer needed!
+#                    elif (val == 164) and ('wxMac' in wx.PlatformInfo):
+
+#                        if DEBUG:
+#                            print "OLD STYLE TIME CODE detected.  before:", self.buf[self.index - 10:self.index + 10],
                             
                         # We need to replace them in the self.buf text.  
-                        self.buf = self.buf[:self.index+2] + 'a7' + self.buf[self.index+4:]
+#                        self.buf = self.buf[:self.index+2] + 'a7' + self.buf[self.index+4:]
                         
-                        if DEBUG:
-                            print "OLD STYLE TIME CODE detected.  after:", self.buf[self.index - 10:self.index + 10],
+#                        if DEBUG:
+#                            print "OLD STYLE TIME CODE detected.  after:", self.buf[self.index - 10:self.index + 10],
 
                     s = unicode(chr(val), 'latin1')
                     # s = u'%s' % self.buf[self.index:self.index+4]
@@ -533,10 +536,17 @@ class RTFParser:
                         # Try a straight conversion to UTF-8, the DefaultPyEncoding
                         try:
                             
-                            tempChar = unichr(value)
-                            # I'm not sure why passing through latin-1 is needed, but it appears to be necessary.
-                            # tempChar = unicode(chr(value), 'latin-1')
-                            self.process_text(tempChar.encode(TransanaGlobal.encoding))
+                            if value == 201:
+                                
+                                if DEBUG:
+                                    print "Elipsis substitution"
+                                    
+                                self.process_text('...')
+                            else:
+                                tempChar = unichr(value)
+                                # I'm not sure why passing through latin-1 is needed, but it appears to be necessary.
+                                # tempChar = unicode(chr(value), 'latin-1')
+                                self.process_text(tempChar.encode(TransanaGlobal.encoding))
                             
                         except UnicodeEncodeError:
                             # If we get a UnicodeEncodeError, as we do for Time Codes, let's try going through
@@ -562,21 +572,42 @@ class RTFParser:
 
             if cw == 'u':   # Unicode Character Processing added by DKW
 
-                if DEBUG:
+                if DEBUG and num not in [164, 8232]:
                     print "Processing Unicode Character Code %d" % num
 
                 try:
                     tempChar = unichr(num)
-                    # We don't use the global encoding, but UTF-8 here, as Python, and therefore the wxSTC, are using
-                    # UTF-8 regardless of what the database is using.
-                    self.process_text(tempChar)  # .encode('utf8')  (TransanaGlobal.encoding)
+                    
+                    if num == 8232:
+                        
+                        if DEBUG:
+                            print "\line substitution"
+                            
+                        self.process_text("\n")
+#                        self.index += 6   # self.buf.find(' ', self.index)  # Skip past the unicode character digits
+                    elif num == 164:
+                        
+                        if DEBUG:
+                            print "Time Code Substitution"
+                            
+                        if 'wxMac' in wx.PlatformInfo:
+                            val = 167
+                        else:
+                            val = 164
+                        tempChar = unichr(val)
+                        self.process_text(tempChar.encode(TransanaGlobal.encoding))
+#                        self.index += 6   # self.buf.find(' ', self.index)  # Skip past the unicode character digits
+                    else:
+                        # We don't use the global encoding, but UTF-8 here, as Python, and therefore the wxSTC, are using
+                        # UTF-8 regardless of what the database is using.
+                        self.process_text(tempChar)  # .encode('utf8')  (TransanaGlobal.encoding)
+                        self.index += 4   # self.buf.find(' ', self.index)  # Skip past the unicode character digits
 
-                    if DEBUG:
+                    if DEBUG and num not in [164, 8232]:
                         print "Now we need to deal with the alternate character specification, usually \'f3"
 
                         print self.index, self.buf[self.index:self.index + 20], self.buf.find(' ', self.index)
                         
-                    self.index += 4   # self.buf.find(' ', self.index)  # Skip past the unicode character digits
                 except ValueError:
                     if DEBUG:
                         print "ValueError in RTF Processing for Unicode.  Control Word 'u', num =", num

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -15,7 +15,7 @@
 
 """This module implements the DatabaseTreeTab class for the Data Display Objects."""
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 
 DEBUG = False
 if DEBUG:
@@ -49,9 +49,11 @@ import os
 import sys
 import string
 import CollectionSummaryReport
+import SeriesMap
 import KeywordMapClass
 import KeywordUsageReport
 import KeywordSummaryReport
+import ClipDataExport
 import PlayAllClips
 import DragAndDropObjects           # Implements Drag and Drop logic and objects
 import cPickle                      # Used in Drag and Drop
@@ -1246,51 +1248,55 @@ class DatabaseTreeTab(wx.Panel):
                 try:
                     # Display the Keyword Properties Dialog Box and get the data from the user
                     if dlg.get_input() != None:
-                        # Try to save the Keyword Data
-                        self.save_keyword(kw)
+                        # Try to save the Keyword Data.  If this method returns True, we need to update the Database Tree to the new value.
+                        if self.save_keyword(kw):
+                            # See if the Keyword Group or Keyword has been changed.  If it has, update the tree.
+                            if kw.keywordGroup != self.tree.GetItemText(self.tree.GetItemParent(self.tree.GetSelection())):
+                                # If the Keyword Group has changed, delete the Keyword Node, insert the new
+                                # keyword group node if necessary, and insert the keyword in the right keyword
+                                # group node
+                                # Remove the old Keyword from the Tree
+                                self.tree.delete_Node((_('Keywords'), self.tree.GetItemText(self.tree.GetItemParent(self.tree.GetSelection())), self.tree.GetItemText(self.tree.GetSelection())), 'KeywordNode')
+                                # Add the new Keyword to the tree
+                                self.tree.add_Node('KeywordNode', (_('Keywords'), kw.keywordGroup, kw.keyword), 0, kw.keywordGroup)
 
-                        # See if the Keyword Group or Keyword has been changed.  If it has, update the tree.
-                        if kw.keywordGroup != self.tree.GetItemText(self.tree.GetItemParent(self.tree.GetSelection())):
-                            # If the Keyword Group has changed, delete the Keyword Node, insert the new
-                            # keyword group node if necessary, and insert the keyword in the right keyword
-                            # group node
-                            # Remove the old Keyword from the Tree
-                            self.tree.delete_Node((_('Keywords'), self.tree.GetItemText(self.tree.GetItemParent(self.tree.GetSelection())), self.tree.GetItemText(self.tree.GetSelection())), 'KeywordNode')
-                            # Add the new Keyword to the tree
-                            self.tree.add_Node('KeywordNode', (_('Keywords'), kw.keywordGroup, kw.keyword), 0, kw.keywordGroup)
+                                # Now let's communicate with other Transana instances if we're in Multi-user mode
+                                if not TransanaConstants.singleUserVersion:
+                                    if DEBUG:
+                                        print 'Message to send = "AK %s >|< %s"' % (kw.keywordGroup, kw.keyword)
+                                    if TransanaGlobal.chatWindow != None:
+                                        TransanaGlobal.chatWindow.SendMessage("AK %s >|< %s" % (kw.keywordGroup, kw.keyword))
 
-                            # Now let's communicate with other Transana instances if we're in Multi-user mode
-                            if not TransanaConstants.singleUserVersion:
-                                if DEBUG:
-                                    print 'Message to send = "AK %s >|< %s"' % (kw.keywordGroup, kw.keyword)
-                                if TransanaGlobal.chatWindow != None:
-                                    TransanaGlobal.chatWindow.SendMessage("AK %s >|< %s" % (kw.keywordGroup, kw.keyword))
-
-                        elif kw.keyword != self.tree.GetItemText(self.tree.GetSelection()):
+                            elif kw.keyword != self.tree.GetItemText(self.tree.GetSelection()):
+                                sel = self.tree.GetSelection()
+                                originalName = self.tree.GetItemText(sel)
+                                # If only the Keyword has changed, simply rename the node
+                                self.tree.SetItemText(sel, kw.keyword)
+                                # If we're in the Multi-User mode, we need to send a message about the change
+                                if not TransanaConstants.singleUserVersion:
+                                    # Begin constructing the message with the old and new names for the node
+                                    msg = " >|< %s >|< %s" % (originalName, kw.keyword)
+                                    # Get the full Node Branch by climbing it to two levels above the root
+                                    while (self.tree.GetItemParent(self.tree.GetItemParent(sel)) != self.tree.GetRootItem()):
+                                        # Update the selected node indicator
+                                        sel = self.tree.GetItemParent(sel)
+                                        # Prepend the new Node's name on the Message with the appropriate seperator
+                                        msg = ' >|< ' + self.tree.GetItemText(sel) + msg
+                                    # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                    # This must be untranslated to avoid problems in mixed-language environments.
+                                    # Prepend these on the Messsage
+                                    msg = "KeywordNode >|< Keywords" + msg
+                                    if DEBUG:
+                                        print 'Message to send = "RN %s"' % msg
+                                    # Send the Rename Node message
+                                    if TransanaGlobal.chatWindow != None:
+                                        TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+                        # If the keyword save returns False, that signals a keyword merge, so we need to delete the tree node!
+                        else:
                             sel = self.tree.GetSelection()
-                            originalName = self.tree.GetItemText(sel)
-                            # If only the Keyword has changed, simply rename the node
-                            self.tree.SetItemText(sel, kw.keyword)
-                            # If we're in the Multi-User mode, we need to send a message about the change
-                            if not TransanaConstants.singleUserVersion:
-                                # Begin constructing the message with the old and new names for the node
-                                msg = " >|< %s >|< %s" % (originalName, kw.keyword)
-                                # Get the full Node Branch by climbing it to two levels above the root
-                                while (self.tree.GetItemParent(self.tree.GetItemParent(sel)) != self.tree.GetRootItem()):
-                                    # Update the selected node indicator
-                                    sel = self.tree.GetItemParent(sel)
-                                    # Prepend the new Node's name on the Message with the appropriate seperator
-                                    msg = ' >|< ' + self.tree.GetItemText(sel) + msg
-                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
-                                # This must be untranslated to avoid problems in mixed-language environments.
-                                # Prepend these on the Messsage
-                                msg = "KeywordNode >|< Keywords" + msg
-                                if DEBUG:
-                                    print 'Message to send = "RN %s"' % msg
-                                # Send the Rename Node message
-                                if TransanaGlobal.chatWindow != None:
-                                    TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
-
+                            keywordGroup = self.tree.GetItemText(self.tree.GetItemParent(sel))
+                            keyword = self.tree.GetItemText(sel)
+                            self.tree.delete_Node((_('Keywords'), keywordGroup, keyword), 'KeywordNode')
                         # If we do all this, we don't need to continue any more.
                         contin = False
                     # If the user pressed Cancel ...
@@ -1325,7 +1331,8 @@ class DatabaseTreeTab(wx.Panel):
         """Save/Update the Keyword object."""
         # FIXME: Graceful exception handling
         if kw != None:
-            kw.db_save()
+            # We need to pass the keyword's DB_SAVE function result back to the calling routine.
+            return kw.db_save()
  
 
     def handle_locked_record(self, e, rtype, id):
@@ -1334,11 +1341,15 @@ class DatabaseTreeTab(wx.Panel):
 
 
 class MenuIDError(exceptions.Exception):
+    """ Exception class for handling Menu ID Errors """
     def __init__(self, id=-1, menu=""):
+        """ Initialize the MenuIDError Exception """
+        # Create the appropriate error message
         if id > -1:
             self.msg = "Unable to handle selection menu ID %d for '%s' menu" % (id, menu)
         else:
             self.msg = "Unable to handle menu ID selection"
+        # Assign the error message to the exception's arguments.
         self.args = self.msg
 
 
@@ -1349,6 +1360,7 @@ class _NodeData:
     #        used interchangably.  If you alter one, please also alter the other.
    
     def __init__(self, nodetype='Unknown', recNum=0, parent=0):
+        """ Initialize the NodeData Object """
         self.nodetype = nodetype    # nodetype indicates what sort of node we have.  Options include:
                                     # Root, SeriesRootNode, SeriesNode, EpisodeNode, TranscriptNode,
                                     # CollectionsRootNode, CollectionNode, ClipNode,
@@ -1368,6 +1380,7 @@ class _NodeData:
 class _DBTreeCtrl(wx.TreeCtrl):
     """Private class that implements the details of the tree widget."""
     def __init__(self, parent, id, pos, size, style):
+        """ Initialize the Database Tree """
         wx.TreeCtrl.__init__(self, parent, id, pos, size, style)
         
         self.cmd_id = TransanaConstants.DATA_MENU_CMD_OFSET
@@ -1855,6 +1868,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         self.Refresh()
 
     def create_search_node(self):
+        """ Create the root Search node """
         self.searches = []
         # The "Search" node itself is always item 0 in the node list
         search_root = self.AppendItem(self.root, _("Search"))
@@ -1913,6 +1927,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         return expectedNodeType
 
     def Evaluate(self, node, nodeType, child, childData):
+        """ The logic for traversing tree nodes gets complicated.  This boolean function encapsulates the decision logic. """
         allNoteNodeTypes = ['NoteNode', 'SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', 'ClipNoteNode']
 
         # We continue moving down the list of nodes if...
@@ -2497,13 +2512,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # Series Menu
         self.create_menu("series",
                         (_("Paste"),
-                         _("Add Episode"), _("Add Series Note"), _("Delete Series"), _("Keyword Usage Report"), _("Series Properties")),
+                         _("Add Episode"), _("Add Series Note"), _("Delete Series"), _("Keyword Usage Report"),
+                         _("Series Keyword Sequence Map"), _("Series Keyword Bar Graph"), _("Series Keyword Percentage Graph"),
+                         _("Series Properties")),
                         self.OnSeriesCommand)
 
         # Episode Menu
         self.create_menu("episode",
                         (_("Paste"),
-                         _("Add Transcript"), _("Add Episode Note"), _("Delete Episode"), _("Keyword Map"), _("Keyword Usage Report"), _("Episode Properties")),
+                         _("Add Transcript"), _("Add Episode Note"), _("Delete Episode"),
+                         _("Keyword Map"), _("Keyword Usage Report"), _("Clip Data Export"),
+                         _("Episode Properties")),
                         self.OnEpisodeCommand)
 
         # Transcript Menu
@@ -2521,13 +2540,14 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         (_("Cut"), _("Copy"), _("Paste"),
                          _("Add Clip"), _("Add Nested Collection"), _("Add Collection Note"),
                          _("Collection Summary Report"), _("Delete Collection"),
-                         _("Keyword Usage Report"), _("Play All Clips"), _("Collection Properties")),
+                         _("Keyword Usage Report"), _("Clip Data Export"), _("Play All Clips"),
+                         _("Collection Properties")),
                         self.OnCollectionCommand)
 
         # Clip Menu
         self.create_menu("clip",
                         (_("Cut"), _("Copy"), _("Paste"),
-                         _("Open"), _("Add Clip Note"), _("Delete Clip"),
+                         _("Open"), _("Add Clip"), _("Add Clip Note"), _("Delete Clip"),
                          _("Locate Clip in Episode"), _("Clip Properties")),
                         self.OnClipCommand)
 
@@ -2594,7 +2614,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # The Search Clip Node Menu
         self.create_menu("searchclip",
                         (_("Cut"), _("Copy"), _("Paste"),
-                         _("Open"), _("Drop for Search Result"), _("Locate Clip in Episode"), _("Rename")),
+                         _("Open"), _("Drop from Search Result"), _("Locate Clip in Episode"), _("Rename")),
                         self.OnSearchClipCommand)
 
 
@@ -2724,8 +2744,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 
         elif n == 4:    # Keyword Usage Report
             KeywordUsageReport.KeywordUsageReport(seriesName = series_name)
+
+        elif n == 5:    # Series Map -- Sequence Mode
+            SeriesMap.SeriesMap(self, _("Series Keyword Sequence Map"), selData.recNum, series_name, 1)
             
-        elif n == 5:    # Properties
+        elif n == 6:    # Series Map -- Bar Graph Mode
+            SeriesMap.SeriesMap(self, _("Series Keyword Bar Graph"), selData.recNum, series_name, 2)
+            
+        elif n == 7:    # Series Map -- Percentage Mode
+            SeriesMap.SeriesMap(self, _("Series Keyword Percentage Graph"), selData.recNum, series_name, 3)
+            
+        elif n == 8:    # Properties
             series = Series.Series()
             # FIXME: Gracefully handle when we can't load the series.
             # (yes, this can happen.  for example if another user changes
@@ -2833,7 +2862,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
         elif n == 5:    # Keyword Usage Report
             KeywordUsageReport.KeywordUsageReport(seriesName = series_name, episodeName = episode_name)
 
-        elif n == 6:    # Properties
+        elif n == 6:    # Clip Data Export
+            self.ClipDataExport(episodeNum = selData.recNum)
+
+        elif n == 7:    # Properties
             series_name = self.GetItemText(self.GetItemParent(sel))
             episode = Episode.Episode()
             # FIXME: Gracefully handle when we can't load the Episode.
@@ -3005,6 +3037,13 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
 
         elif n == 3:    # Add Clip
+            # Get the Transcript Selection information from the ControlObject.
+            (transcriptNum, startTime, endTime, text) = self.parent.ControlObject.GetTranscriptSelectionInfo()
+            # If there's a selection in the text ...
+            if text != '':
+                # ... copy it to the clipboard by faking a Drag event!
+                self.parent.ControlObject.TranscriptWindow.dlg.editor.OnStartDrag(evt, copyToClipboard=True)
+            # Add the Clip.
             self.parent.add_clip(coll_name)
 
         elif n == 4:    # Add Nested Collection
@@ -3059,6 +3098,20 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             # print nodeList
                         # Call the DB Tree's delete_Node method.
                         self.delete_Node(nodeList, 'CollectionNode')
+                        # Check to see if we need to update the keyword Visualization.  (We don't know if any clips
+                        # were in the current episode, so all we can check is that an episode is loaded!)
+                        if (isinstance(self.parent.ControlObject.currentObj, Episode.Episode)):
+                            self.parent.ControlObject.UpdateKeywordVisualization()
+                        # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                        if not TransanaConstants.singleUserVersion:
+                            # When a collection gets deleted, clips from anywhere could go with it.  It's safest
+                            # to update the Keyword Visualization no matter what.
+                            if DEBUG:
+                                print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
+                                
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
+                        
                 except RecordLockedError, e:
                     # Display the Exception Message, allow "continue" flag to remain true
                     if 'unicode' in wx.PlatformInfo:
@@ -3084,7 +3137,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             coll = Collection.Collection(coll_name, parent_num)
             KeywordUsageReport.KeywordUsageReport(collection = coll)
 
-        elif n == 9:    # Play All Clips
+        elif n == 9:    # Clip Data Export
+            self.ClipDataExport(collectionNum = selData.recNum)
+
+        elif n == 10:    # Play All Clips
             coll = Collection.Collection(coll_name, parent_num)
             # Play All Clips takes the current Collection and the ControlObject as parameters.
             # (The ControlObject is owned not by the _DBTreeCtrl but by its parent)
@@ -3096,7 +3152,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Let's clear all the Windows, since we don't want to stay in the last Clip played.
             self.parent.ControlObject.ClearAllWindows()
 
-        elif n == 10:    # Properties
+        elif n == 11:    # Properties
             # FIXME: Gracefully handle when we can't load the Collection.
             coll = Collection.Collection(coll_name, parent_num)
             self.parent.edit_collection(coll)
@@ -3181,12 +3237,26 @@ class _DBTreeCtrl(wx.TreeCtrl):
         elif n == 3:    # Open
             self.OnItemActivated(evt)                            # Use the code for double-clicking the Clip
 
-        elif n == 4:    # Add Note
+        elif n == 4:    # Add Clip
+            # Get the Transcript Selection information from the ControlObject.
+            (transcriptNum, startTime, endTime, text) = self.parent.ControlObject.GetTranscriptSelectionInfo()
+            # If a selection has been made ...
+            if text != '':
+                # ... copy that to the Clipboard by faking a Drag event!
+                self.parent.ControlObject.TranscriptWindow.dlg.editor.OnStartDrag(evt, copyToClipboard=True)
+            # Add the Clip
+            self.parent.add_clip(coll_name)
+
+        elif n == 5:    # Add Note
             self.parent.add_note(clipNum=selData.recNum)
 
-        elif n == 5:    # Delete
+        elif n == 6:    # Delete
             # Load the Selected Clip
             clip = Clip.Clip(selData.recNum)
+            # Remember the Clip Number, to use after the clip has been deleted
+            clipNum = clip.number
+            # Remember the original clip's Episode Number for use later, after the clip has been deleted
+            clipEpisodeNum = clip.episode_num
             # Get user confirmation of the Clip Delete request
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -3231,6 +3301,22 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                         # Call the DB Tree's delete_Node method.
                         self.delete_Node(nodeList, 'ClipNode')
+                        # If this clip is from the episode which is currently being displayed ...
+
+                        # If the current main object is an Episode and it's the episode that contains the
+                        # deleted Clip, we need to update the Keyword Visualization!
+                        if (isinstance(self.parent.ControlObject.currentObj, Episode.Episode)) and \
+                           (clipEpisodeNum == self.parent.ControlObject.currentObj.number):
+                            self.parent.ControlObject.UpdateKeywordVisualization()
+                        # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                        if not TransanaConstants.singleUserVersion:
+                            # We need to pass the type of the current object, the deleted Clip's record number, and
+                            # the deleted Clip's Episode number.
+                            if DEBUG:
+                                print 'Message to send = "UKV %s %s %s"' % ('Clip', clipNum, clipEpisodeNum)
+                                
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', clipNum, clipEpisodeNum))
                 except RecordLockedError, e:
                     # Display the Exception Message, allow "continue" flag to remain true
                     if 'unicode' in wx.PlatformInfo:
@@ -3256,7 +3342,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     errordlg.ShowModal()
                     errordlg.Destroy()
 
-        elif n == 6:    # Locate Clip in Episode
+        elif n == 7:    # Locate Clip in Episode
             # Load the Clip
             clip = Clip.Clip(clip_name, coll_name, coll_parent_num)
 
@@ -3280,8 +3366,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             raise RecordNotFoundError ('Transcript', 0)
 
                 if self.parent.ControlObject != None:
+                    # Load the source Transcript
                     self.parent.ControlObject.LoadTranscript(episode.series_id, episode.id, transcript.id)
+                    # We need to signal that the Visualization needs to be re-drawn.
+                    self.parent.ControlObject.ChangeVisualization()
+                    # Mark the Clip as the current selection
                     self.parent.ControlObject.SetVideoSelection(clip.clip_start, clip.clip_stop)
+                    # On the Mac, we don't get the correct highlight in the Transcript.  That's because there's a call
+                    # that restores the Transcript Cursor on the Mac only.  Well, the Transcript Cursor data record 
+                    # isn't correct at this point, so let's capture what it should be!
+                    # (This isn't good form, object-wise, but I can't find another logical place to do this.)
+                    self.parent.ControlObject.TranscriptWindow.dlg.editor.cursorPosition = (self.parent.ControlObject.TranscriptWindow.dlg.editor.GetCurrentPos(), self.parent.ControlObject.TranscriptWindow.dlg.editor.GetSelection())
             except:
                 
                 if DEBUG:
@@ -3298,9 +3393,23 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 
             
 
-        elif n == 7:    # Properties
+        elif n == 8:    # Properties
             clip = Clip.Clip(clip_name, coll_name, coll_parent_num)
             self.parent.edit_clip(clip)
+            # If the current main object is an Episode and it's the episode that contains the
+            # deleted Clip, we need to update the Keyword Visualization!
+            if (isinstance(self.parent.ControlObject.currentObj, Episode.Episode)) and \
+               (clip.episode_num == self.parent.ControlObject.currentObj.number):
+                self.parent.ControlObject.UpdateKeywordVisualization()
+            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+            if not TransanaConstants.singleUserVersion:
+                # We need to pass the type of the current object, the Clip's record number, and
+                # the Clip's Episode number.
+                if DEBUG:
+                    print 'Message to send = "UKV %s %s %s"' % ('Clip', clip.number, clip.episode_num)
+                    
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', clip.number, clip.episode_num))
 
         else:
             raise MenuIDError
@@ -3383,10 +3492,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             raise MenuIDError
 
     def updateKWGroupsData(self):
+        """ Refresh internal data about keyword groups """
         # Since we've just inserted a new Keyword Group, we need to rebuild the self.kwgroups data structure.
         # This data structure is used to ensure that empty keyword groups still show up in the Keyword Properties dialog.
         # Initialize keyword groups to an empty list
-
         self.kwgroups = []
         # The "Keywords" node itself is always item 0 in the node list
         kwg_root = self.select_Node((_("Keywords"),), 'KeywordRootNode')
@@ -3431,6 +3540,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             KWManager.KWManager(self)
             # Refresh the Keywords Node to show the changes that were made
             self.refresh_kwgroups_node()
+            # We need to update the Keyword Visualization! (Well, maybe not, but I don't know how to tell!)
+            self.parent.ControlObject.UpdateKeywordVisualization()
 
         elif n == 2:    # Keyword Summary Report
             if self.ItemHasChildren(sel):
@@ -3478,8 +3589,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
             id = wx.MessageDialog(self, msg % kwg_name, _("Transana Confirmation"), \
                         wx.YES | wx.NO | wx.CENTRE | wx.ICON_QUESTION).ShowModal()
             if id == wx.ID_YES:
-                # Start by clearing all current objects
-                self.parent.ControlObject.ClearAllWindows()
                 try:
                     # Delete the Keyword group
                     DBInterface.delete_keyword_group(kwg_name)
@@ -3495,6 +3604,16 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     # this list as well
                     # NOTE: "self.kwgroups.remove(sel)" doesn't work if we've been messing with KWG capitalization ("Test : 1" and "test : 2" appear in the same KWG.)
                     self.updateKWGroupsData()
+                    # We need to update the Keyword Visualization!  (Well, maybe not, but I don't know how to tell!)
+                    self.parent.ControlObject.UpdateKeywordVisualization()
+                    # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                    if not TransanaConstants.singleUserVersion:
+                        # We need to update the Keyword Visualization no matter what here, when deleting a keyword group
+                        if DEBUG:
+                            print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
+                            
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
                 except RecordLockedError, e:
                     # Display the Exception Message, allow "continue" flag to remain true
                     if 'unicode' in wx.PlatformInfo:
@@ -3581,8 +3700,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
             id = wx.MessageDialog(self, msg % (kw_group, kw_name), _("Transana Confirmation"), \
                         wx.YES | wx.NO | wx.CENTRE | wx.ICON_QUESTION).ShowModal()
             if id == wx.ID_YES:
-                # Start by clearing all current objects
-                self.parent.ControlObject.ClearAllWindows()
                 try:
                     # Delete the Keyword
                     DBInterface.delete_keyword(kw_group, kw_name)
@@ -3593,6 +3710,16 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         nodeList = (self.GetItemText(sel),) + nodeList
                     # Call the DB Tree's delete_Node method.
                     self.delete_Node(nodeList, 'KeywordNode')
+                    # We need to update the Keyword Visualization! (Well, maybe not, but I don't know how to tell!)
+                    self.parent.ControlObject.UpdateKeywordVisualization()
+                    # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                    if not TransanaConstants.singleUserVersion:
+                        # We need to update the Keyword Visualization no matter what here, when deleting a keyword
+                        if DEBUG:
+                            print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
+                            
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
                 # Handle exceptions
                 except:
                     if DEBUG:
@@ -3619,6 +3746,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             if isinstance(self.parent.ControlObject.currentObj, Episode.Episode):
                 # ... we can just use the ControlObject's currentObj's object number
                 episodeNum = self.parent.ControlObject.currentObj.number
+                # If we are at the end of a transcript and there are no later time codes, Stop Time will be -1.
+                # This is, of course, incorrect, and we must replace it with the Episode Length.
+                if endTime <= 0:
+                    endTime = self.parent.ControlObject.currentObj.tape_length
             # If our source is a Clip ...
             elif isinstance(self.parent.ControlObject.currentObj, Clip.Clip):
                 # ... we need the ControlObject's currentObj's originating episode number
@@ -3640,11 +3771,24 @@ class _DBTreeCtrl(wx.TreeCtrl):
         elif n == 5:    # Keyword Properties
             kw = Keyword.Keyword(kw_group, kw_name)
             self.parent.edit_keyword(kw)
+            # We just need to update the Keyword Visualization.  There's no way to tell if the changed
+            # keyword appears or not from here.
+            self.parent.ControlObject.UpdateKeywordVisualization()
+            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+            if not TransanaConstants.singleUserVersion:
+                # When a collection gets deleted, clips from anywhere could go with it.  It's safest
+                # to update the Keyword Visualization no matter what.
+                if DEBUG:
+                    print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
+                    
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
 
         else:
             raise MenuIDError
 
     def OnKwExampleCommand(self, evt):
+        """ Process menu choices for Keword Example nodes """
         n = evt.GetId() - self.cmd_id_start["kw_example"]
 
         sel = self.GetSelection()
@@ -3896,8 +4040,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             raise RecordNotFoundError (_('Transcript'), 0)
 
                 if self.parent.ControlObject != None:
+                    # Load the appropriate Episode Transcript
                     self.parent.ControlObject.LoadTranscript(episode.series_id, episode.id, transcript.id)
+                    # We need to signal that the Visualization needs to be re-drawn.
+                    self.parent.ControlObject.ChangeVisualization()
+                    # Mark the Clip as the current selection
                     self.parent.ControlObject.SetVideoSelection(clip.clip_start, clip.clip_stop)
+                    # On the Mac, we don't get the correct highlight in the Transcript.  That's because there's a call
+                    # that restores the Transcript Cursor on the Mac only.  Well, the Transcript Cursor data record 
+                    # isn't correct at this point, so let's capture what it should be!
+                    # (This isn't good form, object-wise, but I can't find another logical place to do this.)
+                    self.parent.ControlObject.TranscriptWindow.dlg.editor.cursorPosition = (self.parent.ControlObject.TranscriptWindow.dlg.editor.GetCurrentPos(), self.parent.ControlObject.TranscriptWindow.dlg.editor.GetSelection())
 
             except:
                 (type, value, traceback) = sys.exc_info()
@@ -3912,6 +4065,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             raise MenuIDError
 
     def DropSearchResult(self, selection):
+        """ Remove a Search Result node from the database tree """
         # Get the full Node Branch by climbing it to one level above the root
         nodeList = (self.GetItemText(selection),)
         originalNodeType = self.GetPyData(selection).nodetype
@@ -3927,27 +4081,22 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # is interacting with the data tree so that the Paste function can be enabled or disabled.
         # First, let's collect that information to be used later.
         
-        # On the Mac, we need to explicitly select the Tree Node that's right-clicked on.
-        if "__WXMAC__" in wx.PlatformInfo:
-            # Items in the tree are not automatically selected with a right click.
-            # We must select the item that is initially clicked manually!!
-            # We do this by looking at the screen point clicked and applying the tree's
-            # HitTest method to determine the current item, then actually selecting the item
+        # Items in the tree are not automatically selected with a right click.
+        # We must select the item that is initially clicked manually!!
+        # We do this by looking at the screen point clicked and applying the tree's
+        # HitTest method to determine the current item, then actually selecting the item
 
-            # This line works on Windows, but not on Mac or Linux using wxPython 2.4.1.2  due to a problem with event.GetPoint().
-            # pt = event.GetPoint()
-            # therfore, this alternate method is used.
-            # Get the Mouse Position on the Screen in a more generic way to avoid the problem above
-            (windowx, windowy) = wx.GetMousePosition()
-            # Translate the Mouse's Screen Position to the Mouse's Control Position
-            pt = self.ScreenToClientXY(windowx, windowy)
-            # use HitTest to determine the tree item as the screen point indicated.
-            sel_item, flags = self.HitTest(pt)
-            # Select the appropriate item in the TreeCtrl
-            self.SelectItem(sel_item)
-        else:
-            # Let's note what element in the tree was clicked.
-            sel_item = self.GetSelection()
+        # This line works on Windows, but not on Mac or Linux using wxPython 2.4.1.2  due to a problem with event.GetPoint().
+        # pt = event.GetPoint()
+        # therfore, this alternate method is used.
+        # Get the Mouse Position on the Screen in a more generic way to avoid the problem above
+        (windowx, windowy) = wx.GetMousePosition()
+        # Translate the Mouse's Screen Position to the Mouse's Control Position
+        pt = self.ScreenToClientXY(windowx, windowy)
+        # use HitTest to determine the tree item as the screen point indicated.
+        sel_item, flags = self.HitTest(pt)
+        # Select the appropriate item in the TreeCtrl
+        self.SelectItem(sel_item)
             
         # If you click off the tree in the Data Tab, you get an ugly wxPython Assertion Error.  Let's trap that.
         try:
@@ -4067,8 +4216,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 else:
                     menu.Enable(menu.FindItem(_('Paste')), False)
                 # Determine if the Create Quick Clip item should be enabled
-                if (self.parent.ControlObject.currentObj != None) and \
-                   TransanaGlobal.configData.quickClipMode:
+                if (self.parent.ControlObject.currentObj != None):
                     menu.Enable(menu.FindItem(_('Create Quick Clip')), True)
                 else:
                     menu.Enable(menu.FindItem(_('Create Quick Clip')), False)
@@ -4287,6 +4435,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 elif sel_item_data.nodetype == 'KeywordNode':
                     # Load the Keyword
                     tempObject = Keyword.Keyword(sel_item_data.parent, self.GetItemText(sel_item))
+                    # Let's remember the keyword group name.  We may need it later.
+                    keywordGroup = self.GetItemText(self.GetItemParent(sel_item))
 
                 # If we are renaming a SearchCollection or a SearchClip ...
                 elif sel_item_data.nodetype == 'SearchResultsNode' or \
@@ -4327,7 +4477,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             tempObject.id = event.GetLabel().strip()
                             
                         # Save the Object
-                        tempObject.db_save()
+                        result = tempObject.db_save()
                         # Unlock the Object
                         tempObject.unlock_record()
 
@@ -4375,8 +4525,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             msg = nodetype + " >|< " + rootNodeType + msg
                             if DEBUG:
                                 print 'Message to send = "RN %s"' % msg
-                            # Send the Rename Node message
-                            if TransanaGlobal.chatWindow != None:
+                            # Send the Rename Node message UNLESS WE ARE DOING KEYWORD MERGE
+                            if (TransanaGlobal.chatWindow != None) and ((sel_item_data.nodetype != 'KeywordNode') or (result)):
                                 TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
                             # If we've just renamed a Clip, check for Keyword Examples that need to be renamed
                             if nodetype == 'ClipNode':
@@ -4404,7 +4554,28 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                         if TransanaGlobal.chatWindow != None:
                                             TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
 
+                        # If weve changed a Keyword AND "result" if False, we merged keywords, and therefore need to remove the keyword node!
+                        if (sel_item_data.nodetype == 'KeywordNode'):
+                            if not result:
+                                self.delete_Node((_('Keywords'), keywordGroup, originalName), 'KeywordNode')
+                            # We need to update the Keyword Visualization.  There's no way to tell if the changed
+                            # keyword appears or not from here.
+                            self.parent.ControlObject.UpdateKeywordVisualization()
+                            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                            if not TransanaConstants.singleUserVersion:
+                                # We need to update the Keyword Visualization no matter what here, when deleting a keyword group
+                                if DEBUG:
+                                    print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
+                                    
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
             self.Refresh()
+
+        # Handle SaveError exceptions (probably raised by Keyword Rename that was cancelled by user when asked about merging.)
+        except SaveError:
+            # If we encounter a SaveError, the error message will have been handled elsewhere.
+            # We just need to cancel the Rename event, so the label in the tree will revert to its original value.
+            event.Veto()
 
         except:
             if DEBUG:
@@ -4427,8 +4598,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
     def KeywordMapReport(self, episodeNum, seriesName, episodeName):
         """ Produce a Keyword Map Report for the specified Series & Episode """
-        # Create a Keyword Map
-        frame = KeywordMapClass.KeywordMap(self, -1, _("Transana Keyword Map Report"))
+        # Create a Keyword Map Report (not embedded)
+        frame = KeywordMapClass.KeywordMap(self, -1, _("Transana Keyword Map Report"), embedded=False)
         # Now set it up, passing in the Series and Episode to be displayed
         frame.Setup(episodeNum = episodeNum, seriesName = seriesName, episodeName = episodeName)
 
@@ -4452,6 +4623,58 @@ class _DBTreeCtrl(wx.TreeCtrl):
         nodeList = [_('Collections')] + collectionList + [tempClip.id]
         # Now signal the DB Tree to select / display the selected Clip
         self.select_Node(nodeList, 'ClipNode')
+
+    def ClipDataExport(self, episodeNum = 0, collectionNum = 0):
+        """ Implements the Clip Data Export routine """
+        # Create the Clip Data Export dialog box, passing the appropriate parameter
+        if episodeNum > 0:
+            clipExport = ClipDataExport.ClipDataExport(self, -1, episodeNum = episodeNum)
+        else:
+            clipExport = ClipDataExport.ClipDataExport(self, -1, collectionNum = collectionNum)
+        # Set up the confirmation loop signal variable
+        repeat = True
+        # While we are in the confirmation loop ...
+        while repeat:
+            # ... assume we will want to exit the confirmation loop by default
+            repeat = False
+            # Get the Clip Data Export input from the user
+            result = clipExport.get_input()
+            # Check to see if the selected filename already exists.
+            if (result != None):
+                if result[_('Export Filename')] == '':
+                    # If so, create a prompt to inform the user and ask to overwrite the file.
+                    prompt = unicode(_('A file name is required'), 'utf8')
+                    dlg2 = Dialogs.ErrorDialog(self, prompt)
+                    dlg2.ShowModal()
+                    dlg2.Destroy()
+                    result = None
+                    repeat = True
+                elif (os.path.exists(result[_('Export Filename')])):
+                    # If so, create a prompt to inform the user and ask to overwrite the file.
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('A file named "%s" already exists.  Do you want to replace it?'), 'utf8')
+                    else:
+                        prompt = _('A file named "%s" already exists.  Do you want to replace it?')
+                    # Create the dialog for the prompt for the user
+                    dlg2 = wx.MessageDialog(None, prompt % result[_('Export Filename')],
+                                            _('Transana Confirmation'), style = wx.YES_NO | wx.ICON_QUESTION | wx.STAY_ON_TOP)
+                    # Center the confirmation dialog on screen
+                    dlg2.CentreOnScreen()
+                    # Show the confirmation dialog and get the user response.  If the user DOES NOT say to overwrite the file, ...
+                    if dlg2.ShowModal() != wx.ID_YES:
+                        # ... nullify the results of the Clip Data Export dialog so the file won't be overwritten ...
+                        result = None
+                        # ... and signal that the user should be re-prompted.
+                        repeat = True
+                    # Destroy the confirmation dialog
+                    dlg2.Destroy()                    
+            # If the user didn't press Cancel or decline to overwrite an existing file ...
+            if result != None:
+                # ... continue with the Clip Data Export process.
+                clipExport.Export()
+        # Destroy the Clip Data Export dialog
+        clipExport.Destroy()
 
     def ConvertSearchToCollection(self, sel, selData):
         """ Converts all the Collections and Clips in a Search Result node to a Collection. """
@@ -4606,6 +4829,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         return contin
 
     def GetObjectNodeType(self):
+        """ Get the Node Type of the node under the cursor """
         # Get the Mouse Position on the Screen
         (windowx, windowy) = wx.GetMousePosition()
         # Translate the Mouse's Screen Position to the Mouse's Control Position
@@ -4623,4 +4847,3 @@ class _DBTreeCtrl(wx.TreeCtrl):
             return destData
         except:
             return 'None'
-

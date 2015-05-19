@@ -61,7 +61,7 @@
 #   Added support for borderWidth and borderColor attributes of paragraph
 #   style
 #
-# Modified 2004-2006 by Nate Case and David Woods
+# Modified 2004-2007 by Nate Case and David Woods
 #
 #   Made minor changes to make this compatible with Transana
 #   and to fix Unicode support

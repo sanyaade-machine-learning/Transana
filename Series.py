@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -192,6 +192,14 @@ class Series(DataObject):
             (db, c) = self._db_start_delete(use_transactions)
             if (db == None):
                 return      # Abort delete without even trying
+
+            # Delete all Series-based Filter Configurations
+            #   Delete Series Keyword Sequence Map records
+            DBInterface.delete_filter_records(5, self.number)
+            #   Delete Series Keyword Bar Graph records
+            DBInterface.delete_filter_records(6, self.number)
+            #   Delete Series Keyword Percentage Map records
+            DBInterface.delete_filter_records(7, self.number)
 
             # Detect, Load, and Delete all Series Notes.
             notes = self.get_note_nums()

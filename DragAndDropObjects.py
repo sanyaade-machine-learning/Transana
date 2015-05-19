@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -102,12 +102,13 @@ def DragDropEvaluation(source, destination):
        (source.nodetype == 'SearchClipNode'       and destination.nodetype == 'SearchClipNode')) and \
       ((source.recNum != destination.recNum) or (source.nodetype != destination.nodetype)):
        return True
-   # If we have a Clip (type == ClipDragDropData), then we can drop it on a Collection or a Clip only.
+   # If we have a Clip (type == ClipDragDropData), then we can drop it on a Collection or a Clip or a Keyword only.
    elif (source != None) and \
         (destination != None) and \
         (type(source) == type(ClipDragDropData())) and \
 	((destination.nodetype == 'CollectionNode') or \
-	 (destination.nodetype == 'ClipNode')):
+	 (destination.nodetype == 'ClipNode') or \
+         (destination.nodetype == 'KeywordNode')):
        return True
    else:
        return False
@@ -158,9 +159,6 @@ class DataTreeDropSource(wx.DropSource):
       (transLeft, transTop, transWidth, transHeight) = self.tree.parent.ControlObject.GetTranscriptDims()
       transRight = transLeft + transWidth
       transBot = transTop + transHeight
-#      print "window (x,y) = (%d,%d)" % (windowx, windowy)
-#      print "(Left=%d, Right=%d, Top=%d, Bot=%d" % (transLeft, transRight, transTop, transBot)
-
       return (windowx >= transLeft and windowx <= transRight and windowy >= transTop and windowy <= transBot)
 
    # I want to provide the user with feedback about whether their drop will work or not.
@@ -198,8 +196,6 @@ class DataTreeDropSource(wx.DropSource):
           # See if we need to scroll the database tree up or down here.  (DatabaseTreeTab.OnMotion used to handle this, but
           # that method no longer gets called during a Drag.)
           (w, h) = self.tree.GetClientSizeTuple()
-
-          # print "DataTreeDropSource.GiveFeedback: (%s, %s), (%s, %s)" % (x, y, w, h)
 
           # If we are dragging at the top of the window, scroll down
           if y < 8:
@@ -353,8 +349,6 @@ class DataTreeDropTarget(wx.PyDropTarget):
 
    def OnDrop(self, x, y):
       # Process the "Drop" event
-      
-      # print "Drop:  x=%s, y=%s" % (x, y)
 
       # If you drop off the Database Tree, you get an exception here
       try:
@@ -362,9 +356,6 @@ class DataTreeDropTarget(wx.PyDropTarget):
           (self.dropNode, flag) = self.tree.HitTest((x, y))
           # Remember the Drop Location for later Processing (in OnData())
           self.dropData = self.tree.GetPyData(self.dropNode)
-
-          # print "Dropped on %s." % self.dropData
-
           # We don't yet have enough information to veto the drop, so return TRUE to indicate
           # that we should proceed to the OnData method
           return True
@@ -374,8 +365,6 @@ class DataTreeDropTarget(wx.PyDropTarget):
 
    def OnData(self, x, y, dragResult):
       # once OnDrop returns TRUE, this method is automatically called.
-      
-      # print "OnData %s, %s, %s" % (x, y, dragResult)
 
       # Let's get the data being dropped so we can do some processing logic
       if self.GetData():
@@ -386,17 +375,6 @@ class DataTreeDropTarget(wx.PyDropTarget):
              # will raise an exception.  If there is a good Tree Node Data Object being dragged, or if
              # one from a previous drag has been Cleared, this will be successful.
              sourceData = cPickle.loads(self.sourceNodeData.GetData())
-
-             # print "Drop Data = '%s' dropped onto %s" % (sourceData, self.dropData)
-             # print "sourceData is of type ", type(sourceData)
-
-             # if type(sourceData) == type(DataTreeDragDropData()):
-             #     print "type is DataTreeDragDropData"
-             # elif type(sourceData) == type(ClipDragDropData()):
-             #     print "type is ClipDragDropData"
-             # else:
-             #     print 'type is unknown'
-
 
              # If a previous drag of a Tree Node Data Object has been cleared, the sourceData.nodetype
              # will be "Unknown", which indicated that the current Drag is NOT a node from the Database
@@ -441,30 +419,7 @@ class DataTreeDropTarget(wx.PyDropTarget):
              else:
                  clipData = cPickle.loads(self.clipData.GetData())
 
-             # print "self.clipData =\n", clipData
-             # print "clipData is of type ", type(clipData)
-
-             # if type(clipData) == type(DataTreeDragDropData()):
-             #     print "type 2 is DataTreeDragDropData"
-             # elif type(clipData) == type(ClipDragDropData()):
-             #     print "type 2 is ClipDragDropData"
-             # else:
-             #     print 'type 2 is unknown'
-
-             # if '__WXMAC__' in wx.PlatformInfo:
-             #     print "Second Node Check skipped for Mac"
-             # else:
-             #     if sourceData.nodetype == 'Unknown':
-             #        print "Drop is NOT a Node"
-             #     else:
-             #        print "Drop is a Node"
-             # if clipData.transcriptNum == 0:
-             #    print "Drop is NOT a Clip"
-             # else:
-             #    print "Drop is a Clip"
-
-             # print
-
+             # Dropping Transcript Text onto a Collection or Clip creates a Regular Clip.
              # See if the Drop Target is the correct Node Type.  The type comparison was added to get this working on the Mac.
              if (type(clipData) == type(ClipDragDropData())) and \
                 ((self.dropData.nodetype == 'CollectionNode') or \
@@ -474,14 +429,27 @@ class DataTreeDropTarget(wx.PyDropTarget):
                  # will be "0", which indicated that the current Drag is NOT a Clip Creation Data Object, 
                  # and therefore should be processed elsewhere.  If it is NOT "0", we should process it here.
                  if clipData.transcriptNum != 0:
-                     
                      CreateClip(clipData, self.dropData, self.tree, self.dropNode)
-                     
-                         # Once the drop is done or rejected, we must clear the Clip Creation data out of the DropTarget.
-                         # If we don't, this data will still be there if a Tree Node drag occurs, and there is no way in that
-                         # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
+                     # Once the drop is done or rejected, we must clear the Clip Creation data out of the DropTarget.
+                     # If we don't, this data will still be there if a Tree Node drag occurs, and there is no way in that
+                     # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
                      self.ClearClipData()
-                     
+
+             # Dropping Transcript Text onto a Keyword creates a Quick Clip.
+             elif (type(clipData) == type(ClipDragDropData())) and \
+                  (self.dropData.nodetype == 'KeywordNode'):
+                 # If a previous drag of a Clip Creation Data Object has been cleared, the clipData.transcriptNum
+                 # will be "0", which indicated that the current Drag is NOT a Clip Creation Data Object, 
+                 # and therefore should be processed elsewhere.  If it is NOT "0", we should process it here.
+                 if clipData.transcriptNum != 0:
+                     # Pass the accumulated data to the CreateQuickClip method, which is in the DragAndDropObjects module
+                     # because drag and drop is an alternate way to create a Quick Clip.
+                     CreateQuickClip(clipData, self.dropData.parent, self.tree.GetItemText(self.dropNode), self.tree)
+                     # Once the drop is done, we must clear the Clip Creation data out of the DropTarget.
+                     # If we don't, this data will still be there if a Tree Node drag occurs, and there is no way in that
+                     # circumstance to know which of the dragged objects to process!  Clearing avoids that problem.
+                     self.ClearClipData()
+
              else:
                 # If the Drop target is not valid, we prevent the drop process by altering the wxDropResult (dragResult)
                 dragResult = wx.DragNone
@@ -528,9 +496,11 @@ class ClipDragDropData(object):
       str = str + 'text = %s\n\n' % self.text
       return str
 
-      
+
 def CreateClip(clipData, dropData, tree, dropNode):
     """ This method handles the creation of a Clip Object in the Transana Database """
+    # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
+    contin = True
     # Create a new Clip Object
     tempClip = Clip.Clip()
     # We need to know if the Clip is coming from an Episode or another Clip.
@@ -550,8 +520,37 @@ def CreateClip(clipData, dropData, tree, dropNode):
         tempClip.transcript_num = sourceClip.transcript_num
     # Get the Clip Start Time from the clipData Object
     tempClip.clip_start = clipData.clipStart
+
+    # Check to see if the clip starts before the media file starts (due to Adjust Indexes)
+    if tempClip.clip_start < 0.0:
+        prompt = _('The starting point for a Clip cannot be before the start of the media file.')
+        errordlg = Dialogs.ErrorDialog(None, prompt)
+        errordlg.ShowModal()
+        errordlg.Destroy()
+        # If so, cancel the clip creation
+        return
+
+    # Check to see if the clip starts after the media file ends (due to Adjust Indexes)
+    if tempClip.clip_start >= TransanaGlobal.menuWindow.ControlObject.VideoWindow.GetMediaLength():
+        prompt = _('The starting point for a Clip cannot be after the end of the media file.')
+        errordlg = Dialogs.ErrorDialog(None, prompt)
+        errordlg.ShowModal()
+        errordlg.Destroy()
+        # If so, cancel the Clip creation
+        return
+
     # Get the Clip Stop Time from the clipData Object
     tempClip.clip_stop = clipData.clipStop
+
+    # Check to see if the clip ends after the media file ends (due to Adjust Indexes)
+    if tempClip.clip_stop >= TransanaGlobal.menuWindow.ControlObject.VideoWindow.GetMediaLength():
+        prompt = _('The ending point for this Clip is after the end of the media file.  This clip may not end where you expect.')
+        errordlg = Dialogs.ErrorDialog(None, prompt)
+        errordlg.ShowModal()
+        errordlg.Destroy()
+        # We don't cancel clip creation, but we do adjust the end of the clip.
+        tempClip.clip_stop = TransanaGlobal.menuWindow.ControlObject.VideoWindow.GetMediaLength()
+
     # Get the Clip Transcript from the clipData Object
     tempClip.text = clipData.text
 
@@ -589,8 +588,6 @@ def CreateClip(clipData, dropData, tree, dropNode):
         collectionLocked = False
     # Create the Clip Properties Dialog Box to Add a Clip
     dlg = ClipPropertiesForm.AddClipDialog(None, -1, tempClip)
-    # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
-    contin = True
     # While the "continue" flag is True ...
     while contin:
         # Display the Clip Properties Dialog Box and get the data from the user
@@ -649,7 +646,24 @@ def CreateClip(clipData, dropData, tree, dropNode):
                     if dropData.nodetype == 'ClipNode':
                         # ... and if so, change the Sort Order of the clips
                         ChangeClipOrder(tree, dropNode, tempClip, tempCollection)
+                        # When we dropped Transcript text on a Clip, the screen wouldn't update until we touched the Mouse!
+                        # This fixes that.
+                        try:
+                            wx.YieldIfNeeded()
+                        except:
+                            pass
 
+                    # See if the Keyword visualization needs to be updated.
+                    tree.parent.ControlObject.UpdateKeywordVisualization()
+                    # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                    if not TransanaConstants.singleUserVersion:
+                        # We need to update the Episode Keyword Visualization
+                        if DEBUG:
+                            print 'Message to send = "UKV %s %s %s"' % ('Episode', tempEpisode.number, 0)
+                            
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', tempEpisode.number, 0))
+                    
                     # Unlock the parent collection
                     if collectionLocked:
                         tempCollection.unlock_record()
@@ -705,7 +719,7 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
         if result == wx.ID_NO:
             return
         # If confirmed, copy the Keyword to all Episodes in the Series
-        # print "Keyword %s:%s to be dropped on Series %s" % (sourceData.parent, sourceData.text, treeCtrl.GetItemText(destNode))
+
         # First, let's load the Series Record
         tempSeries = Series.Series(targetRecNum)
         try:
@@ -753,7 +767,7 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
         if result == wx.ID_NO:
             return
         # If confirmed, copy the Keyword to the Episodes
-        # print "Keyword %s:%s to be dropped on Episode %s" % (sourceData.parent, sourceData.text, treeCtrl.GetItemText(destNode))
+
         # Load the Episode Record
         tempEpisode = Episode.Episode(num=targetRecNum)
         try:
@@ -790,7 +804,9 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
         if result == wx.ID_NO:
             return
         # If confirmed, copy the Keyword to all Clips in the Collection
-        # print "Keyword %s:%s to be dropped on Collection %s" % (sourceData.parent, sourceData.text, treeCtrl.GetItemText(destNode))
+
+        # We need a flag indicating if we need to update the Keyword Visualization
+        updateKeywordVisualization = False
         # First, load the Collection
         tempCollection = Collection.Collection(targetRecNum, targetParent)
         try:
@@ -807,6 +823,18 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
                     tempClip.add_keyword(sourceData.parent, sourceData.text)
                     # Save the Clip
                     tempClip.db_save()
+                    # If the affected clip is for the current Episode, we need to update the
+                    # Keyword Visualization
+                    if (isinstance(parent.parent.ControlObject.currentObj, Episode.Episode)) and \
+                       (tempClip.episode_num == parent.parent.ControlObject.currentObj.number):
+                        # Signal that the Keyword Visualization needs to be updated
+                        updateKeywordVisualization = True
+                    # If the affected clip is the current Clip, we need to update the
+                    # Keyword Visualization
+                    if (isinstance(parent.parent.ControlObject.currentObj, Clip.Clip)) and \
+                       (tempClip.number == parent.parent.ControlObject.currentObj.number):
+                        # Signal that the Keyword Visualization needs to be updated
+                        updateKeywordVisualization = True
                     # Now let's communicate with other Transana instances if we're in Multi-user mode
                     if not TransanaConstants.singleUserVersion:
                         msg = 'Clip %d' % tempClip.number
@@ -822,6 +850,18 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
                     TransanaExceptions.ReportRecordLockedException(_("Clip"), tempClip.id, e)
             # Unlock the Collection Record
             tempCollection.unlock_record()
+            # If we need to update the Keyword Visualization, do so
+            if updateKeywordVisualization:
+                # See if the Keyword visualization needs to be updated.
+                parent.parent.ControlObject.UpdateKeywordVisualization()
+                # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                if not TransanaConstants.singleUserVersion:
+                    # We need to update the Keyword Visualization no matter what here, when adding a keyword to a Collection
+                    if DEBUG:
+                        print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
+                        
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
         # Handle "RecordLockedError" exception
         except TransanaExceptions.RecordLockedError, e:
             TransanaExceptions.ReportRecordLockedException(_("Collection"), tempCollection.id, e)
@@ -859,6 +899,27 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
                     TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
             # Unlock the Clip Record
             tempClip.unlock_record()
+            # If the affected clip is for the current Episode, we need to update the
+            # Keyword Visualization
+            if (isinstance(parent.parent.ControlObject.currentObj, Episode.Episode)) and \
+               (tempClip.episode_num == parent.parent.ControlObject.currentObj.number):
+                # See if the Keyword visualization needs to be updated.
+                parent.parent.ControlObject.UpdateKeywordVisualization()
+            # If the affected clip is the current Clip, we need to update the
+            # Keyword Visualization
+            if (isinstance(parent.parent.ControlObject.currentObj, Clip.Clip)) and \
+               (tempClip.number == parent.parent.ControlObject.currentObj.number):
+                # See if the Keyword visualization needs to be updated.
+                parent.parent.ControlObject.UpdateKeywordVisualization()
+            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+            if not TransanaConstants.singleUserVersion:
+                # We need to update the Clip Keyword Visualization when adding a keyword to a clip
+                if DEBUG:
+                    print 'Message to send = "UKV %s %s %s"' % ('Clip', tempClip.number, tempClip.episode_num)
+                    
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', tempClip.number, tempClip.episode_num))
+
         except TransanaExceptions.RecordLockedError, e:
             TransanaExceptions.ReportRecordLockedException(_("Clip"), tempClip.id, e)
         # Handle "SaveError" exception
@@ -926,6 +987,16 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
             tempClip = Clip.Clip(id_or_num=clip[0])
             # Copy or Move the Clip to the Destination Collection
             CopyMoveClip(treeCtrl, destNode, tempClip, sourceCollection, destCollection, action)
+         # See if the Keyword visualization needs to be updated.
+         treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+         # Even if this computer doesn't need to update the keyword visualization others, might need to.
+         if not TransanaConstants.singleUserVersion:
+             # We need to update the Episode Keyword Visualization
+             if DEBUG:
+                 print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
+                
+             if TransanaGlobal.chatWindow != None:
+                 TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
                
    # Drop a Clip on a Collection (Copy or Move a Clip)
    elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'CollectionNode'):
@@ -948,6 +1019,16 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
       if result == wx.ID_YES:
          # Copy or Move the Clip to the Destination Collection
          CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollection, action)
+         # See if the Keyword visualization needs to be updated.
+         treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+         # Even if this computer doesn't need to update the keyword visualization others, might need to.
+         if not TransanaConstants.singleUserVersion:
+             # We need to update the Episode Keyword Visualization
+             if DEBUG:
+                 print 'Message to send = "UKV %s %s %s"' % ('Clip', sourceClip.number, sourceClip.episode_num)
+                
+             if TransanaGlobal.chatWindow != None:
+                 TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', sourceClip.number, sourceClip.episode_num))
                
    # Drop a Clip on a Clip (Alter SortOrder, Copy or Move a Clip to a particular place in the SortOrder)
    elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'ClipNode'):
@@ -989,6 +1070,16 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
             if tempClip != None:
                 # Now change the order of the clips
                 ChangeClipOrder(treeCtrl, destNode, tempClip, destCollection)
+            # See if the Keyword visualization needs to be updated.
+            treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+            if not TransanaConstants.singleUserVersion:
+                # We need to update the Episode Keyword Visualization
+                if DEBUG:
+                    print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
+                    
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
 
    # Drop a Clip on a Keyword (Create Keyword Example)
    elif (sourceData.nodetype == 'ClipNode' and destNodeData.nodetype == 'KeywordNode'):
@@ -1024,6 +1115,29 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
             if TransanaGlobal.chatWindow != None:
                TransanaGlobal.chatWindow.SendMessage("AKE %d >|< %s >|< %s >|< %s" % (sourceData.recNum, kwg, kw, sourceData.text))
                TransanaGlobal.chatWindow.SendMessage("UKL Clip %d" % sourceData.recNum)
+
+         # Load the Clip
+         tempClip = Clip.Clip(sourceData.recNum)
+         # If the affected clip is for the current Episode, we need to update the
+         # Keyword Visualization
+         if (isinstance(treeCtrl.parent.ControlObject.currentObj, Episode.Episode)) and \
+            (tempClip.episode_num == treeCtrl.parent.ControlObject.currentObj.number):
+             # See if the Keyword visualization needs to be updated.
+             treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+         # If the affected clip is the current Clip, we need to update the
+         # Keyword Visualization
+         if (isinstance(treeCtrl.parent.ControlObject.currentObj, Clip.Clip)) and \
+            (sourceData.recNum == treeCtrl.parent.ControlObject.currentObj.number):
+             # See if the Keyword visualization needs to be updated.
+             treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+         # Even if this computer doesn't need to update the keyword visualization others, might need to.
+         if not TransanaConstants.singleUserVersion:
+             # We need to update the Clip Keyword Visualization when adding a keyword to a clip
+             if DEBUG:
+                 print 'Message to send = "UKV %s %s %s"' % ('Clip', tempClip.number, tempClip.episode_num)
+                
+             if TransanaGlobal.chatWindow != None:
+                 TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', tempClip.number, tempClip.episode_num))
 
    # Drop a Keyword on a Series
    elif (sourceData.nodetype == 'KeywordNode' and destNodeData.nodetype == 'SeriesNode'):
@@ -1140,6 +1254,20 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action):
                            
                         if TransanaGlobal.chatWindow != None:
                            TransanaGlobal.chatWindow.SendMessage("AKE %d >|< %s >|< %s >|< %s" % (nodeData.recNum, treeCtrl.GetItemText(destNode), sourceData.text, nodeName))
+
+             # If it's a Move, we need to update the Keyword Visualization too!
+             if (action == 'Move'):
+                    # See if the Keyword visualization needs to be updated.
+                    treeCtrl.parent.ControlObject.UpdateKeywordVisualization()
+                    # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                    if not TransanaConstants.singleUserVersion:
+                        # We need to update the Keyword Visualization
+                        if DEBUG:
+                            print 'Message to send = "UKV %s %s %s"' % ('None', 0, 0)
+                            
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('None', 0, 0))
+                 
          except TransanaExceptions.SaveError:
              # Display the Error Message, allow "continue" flag to remain true
              errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
@@ -1795,7 +1923,37 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
         errorDlg.ShowModal()
         errorDlg.Destroy()
     else:
-        # First, let's check to see if there's an appropriate Collection for the Quick Clips
+        # Load the Episode that is the source of the current selection.
+        sourceEpisode = Episode.Episode(clipData.episodeNum)
+
+        # Check to see if the clip starts before the media file starts (due to Adjust Indexes)
+        if clipData.clipStart < 0.0:
+            prompt = _('The starting point for a Clip cannot be before the start of the media file.')
+            errordlg = Dialogs.ErrorDialog(None, prompt)
+            errordlg.ShowModal()
+            errordlg.Destroy()
+            # If so, cancel the clip creation
+            return
+
+        # Check to see if the clip starts after the media file ends (due to Adjust Indexes)
+        if clipData.clipStart >= sourceEpisode.tape_length:
+            prompt = _('The starting point for a Clip cannot be after the end of the media file.')
+            errordlg = Dialogs.ErrorDialog(None, prompt)
+            errordlg.ShowModal()
+            errordlg.Destroy()
+            # If so, cancel the Clip creation
+            return
+
+        # Check to see if the clip ends after the media file ends (due to Adjust Indexes)
+        if clipData.clipStop >= sourceEpisode.tape_length:
+            prompt = _('The ending point for this Clip is after the end of the media file.  This clip may not end where you expect.')
+            errordlg = Dialogs.ErrorDialog(None, prompt)
+            errordlg.ShowModal()
+            errordlg.Destroy()
+            # We don't cancel clip creation, but we do adjust the end of the clip.
+            clipData.clipStop = sourceEpisode.tape_length
+
+        # Let's check to see if there's an appropriate Collection for the Quick Clips
         (collectNum, collectName, newCollection) = DBInterface.locate_quick_clips_collection()
         # If a new collection was created, ...
         if newCollection:
@@ -1811,8 +1969,6 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
                 if TransanaGlobal.chatWindow != None:
                     TransanaGlobal.chatWindow.SendMessage(msg % collectName)
 
-        # Load the Episode that is the source of the current selection.
-        sourceEpisode = Episode.Episode(clipData.episodeNum)
         # Check to see if a Quick Clip for this selection in this Transcript in this Episode has already been created.
         dupClipNum = DBInterface.CheckForDuplicateQuickClip(collectNum, clipData.episodeNum, clipData.transcriptNum, clipData.clipStart, clipData.clipStop)
         # -1 indicates no duplicate Quick Clip.  If there IS a duplicate ...
@@ -1843,6 +1999,18 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
                     if TransanaGlobal.chatWindow != None:
                         # Send the "Update Keyword List" message
                         TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+
+                # See if the Keyword visualization needs to be updated.
+                dbTree.parent.ControlObject.UpdateKeywordVisualization()
+                # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                if not TransanaConstants.singleUserVersion:
+                    # We need to update the Episode Keyword Visualization
+                    if DEBUG:
+                        print 'Message to send = "UKV %s %s %s"' % ('Clip', quickClip.number, quickClip.episode_num)
+                        
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', quickClip.number, quickClip.episode_num))
+
                 # Unlock the record
                 quickClip.unlock_record()
             # Handle "RecordLockedError" exception
@@ -1936,3 +2104,14 @@ def CreateQuickClip(clipData, kwg, kw, dbTree):
                 msg = "ACl %s >|< %s"
                 if TransanaGlobal.chatWindow != None:
                     TransanaGlobal.chatWindow.SendMessage(msg % (collectName, quickClip.id))
+
+            # See if the Keyword visualization needs to be updated.
+            dbTree.parent.ControlObject.UpdateKeywordVisualization()
+            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+            if not TransanaConstants.singleUserVersion:
+                # We need to update the Episode Keyword Visualization
+                if DEBUG:
+                    print 'Message to send = "UKV %s %s %s"' % ('Clip', quickClip.number, quickClip.episode_num)
+                    
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', quickClip.number, quickClip.episode_num))

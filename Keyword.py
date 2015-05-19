@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -123,6 +123,52 @@ class Keyword(object):
             return (RecordCount, LockName)
         else:
             return (RecordCount, None)
+        
+    def removeDuplicatesForMerge(self):
+        """  When merging keywords, we need to remove instances of the OLD keyword that already exist in
+             Episodes or Clips that also contain the NEW keyword.  (Doing it this way reduces overhead.) """
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
+            # variables for the data.  We don't want to change the underlying object values.  Also, this way,
+            # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
+            originalKeywordGroup = self.originalKeywordGroup.encode(TransanaGlobal.encoding)
+            originalKeyword = self.originalKeyword.encode(TransanaGlobal.encoding)
+            keywordGroup = self.keywordGroup.encode(TransanaGlobal.encoding)
+            keyword = self.keyword.encode(TransanaGlobal.encoding)
+        else:
+            originalKeywordGroup = self.originalKeywordGroup
+            originalKeyword = self.originalKeyword
+            keywordGroup = self.keywordGroup
+            keyword = self.keyword
+
+        # Look for Episodes and Clips that have BOTH the original and the merge keywords
+        query = """SELECT * FROM ClipKeywords2 a, ClipKeywords2 b
+                     WHERE a.KeywordGroup = %s AND
+                           a.Keyword = %s AND
+                           b.KeywordGroup = %s AND
+                           b.Keyword = %s AND
+                           a.EpisodeNum = b.EpisodeNum AND
+                           a.ClipNum = b.ClipNum """
+        values = (originalKeywordGroup, originalKeyword, keywordGroup, keyword)
+        c = DBInterface.get_db().cursor()
+        c.execute(query, values)
+        # Remember the list of what would become duplicate entries
+        result = c.fetchall()
+
+        # Prepare a query for deleting the duplicate
+        query = """ DELETE FROM ClipKeywords2
+                      WHERE EpisodeNum = %s AND
+                            ClipNum = %s AND
+                            KeywordGroup = %s AND
+                            Keyword = %s"""
+        # Go through the list of duplicates ...
+        for line in result:
+            # ... and delete the original keyword listing, leaving the other (merge) record untouched.
+            values = (line[0], line[1], line[2], line[3])
+            c.execute(query, values)
+            
+        c.close()
         
 
     def lock_record(self):
@@ -259,19 +305,41 @@ class Keyword(object):
             c = DBInterface.get_db().cursor()
             c.execute(query, values)
             c.close()
+            # When inserting, we're not merging keywords!
+            mergeKeywords = False
         else:
             # check for dupes, which are not allowed if either the Keyword Group or Keyword have been changed.
             if (DBInterface.record_match_count("Keywords2", \
                             ("KeywordGroup", "Keyword"), \
                             (keywordGroup, keyword) ) > 0) and \
                ((originalKeywordGroup != keywordGroup) or \
-                (originalKeyword != keyword)):
+                (originalKeyword.lower() != keyword.lower())):
+                # If duplication is found, ask the user if we should MERGE the keywords.
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_('A Keyword named "%s : %s" already exists.'), 'utf8') % (self.keywordGroup, self.keyword)
+                    prompt = unicode(_('A Keyword named "%s : %s" already exists.  Do you want to merge\n"%s : %s" with "%s : %s"?'), 'utf8') % (self.keywordGroup, self.keyword, originalKeywordGroup, originalKeyword, self.keywordGroup, self.keyword)
                 else:
-                    prompt = _('A Keyword named "%s : %s" already exists.') % (self.keywordGroup, self.keyword)
-                raise SaveError, prompt
+                    prompt = _('A Keyword named "%s : %s" already exists.  Do you want to merge\n"%s : %s" with "%s : %s"?') % (self.keywordGroup, self.keyword, originalKeywordGroup, originalKeyword, self.keywordGroup, self.keyword)
+                dlg = wx.MessageDialog(None,  prompt, _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+                # If the user wants to merge ...
+                if dlg.ShowModal() == wx.ID_YES:
+                    # .. then signal the user's desire to merge.
+                    mergeKeywords = True
+                # If the user does NOT want to merge keywords ...
+                else:
+                    # ... then signal the user's desire NOT to merge (though this no longer matters!)
+                    mergeKeywords = False
+                    # ... and raise the duplicate keyword error exception
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('A Keyword named "%s : %s" already exists.'), 'utf8') % (self.keywordGroup, self.keyword)
+                    else:
+                        prompt = _('A Keyword named "%s : %s" already exists.') % (self.keywordGroup, self.keyword)
+                    raise SaveError, prompt
+            # If there are NO duplicate keywords ...
+            else:
+                # ... then signal that there is NO need to merge!
+                mergeKeywords = False
 
             # NOTE:  This is a special instance.  Keywords behave differently than other DataObjects here!
             # Before we can save, we have to check to see if someone locked an Episode or a Clip that
@@ -297,19 +365,27 @@ currently locked by %s.  Please try again later.""")
                 dlg.Destroy()
             
             else:
-                # update the record
-                query = """
-                UPDATE Keywords2
-                    SET KeywordGroup = %s,
-                        Keyword = %s,
-                        Definition = %s
-                    WHERE KeywordGroup = %s AND
-                          Keyword = %s
-                """
-                values = values + (originalKeywordGroup, originalKeyword)
                 c = DBInterface.get_db().cursor()
-                c.execute(query, values)
-                c.close()
+                # If we're merging keywords ...
+                if mergeKeywords:
+                    # We'd better do this as a Transaction!
+                    query = 'BEGIN'
+                    c.execute(query)
+                    # ... then we remove duplicate keywords and we DON'T rename the keyword
+                    self.removeDuplicatesForMerge()
+                # If we're NOT merging keywords ...
+                else:
+                    # update the record record with new values
+                    query = """
+                    UPDATE Keywords2
+                        SET KeywordGroup = %s,
+                            Keyword = %s,
+                            Definition = %s
+                        WHERE KeywordGroup = %s AND
+                              Keyword = %s
+                    """
+                    values = values + (originalKeywordGroup, originalKeyword)
+                    c.execute(query, values)
 
                 # If the Keyword Group or Keyword has changed, we need to update all ClipKeyword records too.
                 if ((originalKeywordGroup != keywordGroup) or \
@@ -322,13 +398,26 @@ currently locked by %s.  Please try again later.""")
                               Keyword = %s
                     """
                     values = (keywordGroup, keyword, originalKeywordGroup, originalKeyword)
-                    c = DBInterface.get_db().cursor()
                     c.execute(query, values)
-                    c.close()
+
+                # If we're merging Keywords, we need to DELETE the original keyword and end the transaction
+                if mergeKeywords:
+                    # Since we've already taken care of the Clip Keywords, we can just delete the keyword!
+                    query = """ DELETE FROM Keywords2
+                                  WHERE KeywordGroup = %s AND
+                                        Keyword = %s"""
+                    values = (originalKeywordGroup, originalKeyword)
+                    c.execute(query, values)
+                    # If we make it this far, we can commit the transaction, 'cause we're done.
+                    query = 'COMMIT'
+                    c.execute(query)
+                c.close()
                 # If the save is successful, we need to update the "original" values to reflect the new record key.
                 # Otherwise, we can't unlock the proper record, among other things.
                 self.originalKeywordGroup = self.keywordGroup
                 self.originalKeyword = self.keyword
+        # We need to signal if the we need to update (or delete) the keyword listing in the database tree.
+        return not mergeKeywords
 
     def db_delete(self, use_transactions=1):
         """Delete this object record from the database.  Raises

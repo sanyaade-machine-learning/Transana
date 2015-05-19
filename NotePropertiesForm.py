@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -191,5 +191,3 @@ class EditNoteDialog(NotePropertiesForm):
 
     def __init__(self, parent, id, note_object):
         NotePropertiesForm.__init__(self, parent, id, _("Note Properties"), note_object)
-
-

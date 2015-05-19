@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -105,7 +105,7 @@ class XMLImport(Dialogs.GenForm):
    def Import(self):
        # use the LONGEST title here to set the width of the dialog box!
        progress = wx.ProgressDialog(_('Transana XML Import'), _('Importing Transcript records (This may be slow because of the size of Transcript records.)'), style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
-       XMLVersionNumber = 0.0
+       self.XMLVersionNumber = 0.0
        recNumbers = {}
        recNumbers['Series'] = {0:0}
        recNumbers['Episode'] = {0:0}
@@ -170,10 +170,10 @@ class XMLImport(Dialogs.GenForm):
                    # importEncoding reflects the encoding used to create the Transana XML file now being imported.
                    # Version 1.0 -- Original Transana XML for Transana 2.0 release
                    # Version 1.1 -- Unicode encoding added to Transana XML for Transana 2.1 release
-                   # Version 1.2 -- Filter Table added to Transaan XML for Transaan 2.11 release
-                   if XMLVersionNumber == '1.0':
+                   # Version 1.2 -- Filter Table added to Transana XML for Transana 2.11 release
+                   if self.XMLVersionNumber == '1.0':
                        self.importEncoding = 'latin-1'
-                   elif XMLVersionNumber in ['1.1', '1.2']:
+                   elif self.XMLVersionNumber in ['1.1', '1.2']:
                        self.importEncoding = 'utf8'
                    else: 
                        msg = _('The Database you are trying to import was created with a later version\nof Transana.  Please upgrade your copy of Transana and try again.')
@@ -279,7 +279,7 @@ class XMLImport(Dialogs.GenForm):
 #                               tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
 #                               tmpdlg.ShowModal()
 #                               tmpdlg.Destroy()
-                               
+
                            currentObj.db_save()
                            # Let's keep a record of the old and new object numbers for each object saved.
                            recNumbers[objectType][oldNumber] = currentObj.number
@@ -842,10 +842,21 @@ class XMLImport(Dialogs.GenForm):
                     dataType = None
 
                elif dataType == 'ReportScope':
-                    if self.FilterReportType == '1':
+                    if self.FilterReportType in ['5', '6', '7']:
+                        self.FilterScope = recNumbers['Series'][int(line)]
+                    elif self.FilterReportType in ['1', '2', '3']:
                         self.FilterScope = recNumbers['Episode'][int(line)]
+                    elif self.FilterReportType in ['4']:
+                        self.FilterScope = recNumbers['Collection'][int(line)]
                     else:
-                        print "XMLImport.Import():  Unknown Filter Report Type.  Cannot interpret Filter Scope!"
+                       if 'unicode' in wx.PlatformInfo:
+                           # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                           prompt = unicode(_('An error occurred during Database Import.\nThere is an unsupported Filter Report Type (%s) in the Filter table. \nYou may wish to upgrade Tranana and try again.'), 'utf8')
+                       else:
+                           prompt = _('An error occurred during Database Import.\nThere is an unsupported Filter Report Type (%s) in the Filter table. \nYou may wish to upgrade Tranana and try again.')
+                       errordlg = Dialogs.ErrorDialog(self, prompt % (self.FilterReportType))
+                       errordlg.ShowModal()
+                       errordlg.Destroy()
                     dataType = None
 
                elif dataType == 'ConfigName': 
@@ -868,7 +879,7 @@ class XMLImport(Dialogs.GenForm):
                    # dataType = None
 
                elif dataType == 'XMLVersionNumber':
-                   XMLVersionNumber = line
+                   self.XMLVersionNumber = line
 
                # If we're not continuing, stop processing! 
                if not contin:
@@ -922,7 +933,10 @@ class XMLImport(Dialogs.GenForm):
            dbCursor.execute(SQLText)
            dbCursor.close()
 
-       f.close()
+       try:
+           f.close()
+       except:
+           pass
 
        TransanaGlobal.menuWindow.ControlObject.DataWindow.DBTab.tree.refresh_tree()
 
@@ -938,12 +952,14 @@ class XMLImport(Dialogs.GenForm):
    def ProcessLine(self, txt):
        """ Process most lines read from the XML file to apply the proper encoding, if needed. """
        if 'unicode' in wx.PlatformInfo:
-           # If we're not reading a file encoded with UTF-8 encoding, we need to ...
-           if self.importEncoding != 'utf8':
+           # If we've got a String instead of a Unicode object ...
+           if type(txt) == str:
                # ... convert the string to Unicode using the import encoding
-               unicodeTxt = unicode(txt, self.importEncoding)
+               txt = unicode(txt, self.importEncoding)
+           # If we're not reading a file encoded with UTF-8 encoding, we need to ...
+           if (self.importEncoding != 'utf8'):
                # ... and then convert it to UTF-8
-               txt = unicodeTxt.encode('utf8')
+               txt = txt.encode('utf8')
            # Now perform the UTF-8 encoding needed for the database.
            txt = DBInterface.ProcessDBDataForUTF8Encoding(txt)
        # Return the encoded text to the calling method

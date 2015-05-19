@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -1634,7 +1634,7 @@ class FileManagement(wx.Dialog):
             #        have the Help file read it that way.  If the user leave Help open, it won't get
             #        updated on subsequent calls, but for now that's okay by me.
             
-            file = open('/Applications/Transana 2/TransanaHelpContext.txt', 'w')
+            file = open(os.getenv("HOME") + '/TransanaHelpContext.txt', 'w')
             pickle.dump(helpContext, file)
             file.flush()
             file.close()            

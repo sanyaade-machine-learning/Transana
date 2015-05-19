@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -125,10 +125,16 @@ def SetTableType(hasInnoDB, query):
     #        a German Transana XML database someone sent to me, and switching databases was the only way I could find to
     #        fix the problem.  Therefore, the BDB tables will probably never be used, as I think they're always present
     #        if the BDB tables are.
-    if hasInnoDB:
-        query = query + 'TYPE=InnoDB'
+    if TransanaGlobal.DBVersion >= u'5.0':
+        if hasInnoDB:
+            query = query + 'ENGINE=InnoDB'
+        else:
+            query = query + 'ENGINE=BDB'
     else:
-        query = query + 'TYPE=BDB'
+        if hasInnoDB:
+            query = query + 'TYPE=InnoDB'
+        else:
+            query = query + 'TYPE=BDB'
 
     if TransanaGlobal.DBVersion >= u'4.1':
         # Add the Character Set specification
@@ -471,7 +477,7 @@ def get_db():
                     import traceback
                     traceback.print_exc(file=sys.stdout)
 
-                    _dbref = None
+                _dbref = None
 
             # Okay, this is a little weird.
             # By default, MySQL limits the size of a record to 1 MB.  This has started causing some problems with large transcripts.
@@ -481,44 +487,50 @@ def get_db():
 
             # Initialize a value, as I suppose it's possible it won't be found.
             max_allowed_packet = 0
-            # Let's find out the current setting of max_allowed_packets
-            # Query the DB for the current value
-            query = "SHOW VARIABLES LIKE 'max_allowed_packe%'"
-            dbCursor = _dbref.cursor()
-            # Execute the Query
-            dbCursor.execute(query)
-            # Look at the Results Set
-            for pair in dbCursor.fetchall():
-                # Find the max_allowed_packet variable
-                if pair[0] == 'max_allowed_packet':
-                    # Its value comes in different forms depending on what version of MySQL and MySQL for Python we're using.
-                    if type(pair[1]) == array.array:
-                        max_allowed_packet = pair[1].tostring()
-                    else:
-                        max_allowed_packet = pair[1]
-                    
-            # We need to increase the size of the maximum allowed "packet" from 1MB (default) to 8MB.  
-            if int(max_allowed_packet) < 8388608:
-                dbCursor.execute('SET GLOBAL max_allowed_packet=8388608')
-                # If we had to change this, we need to shut down our connection and re-establish it for the change to "take".
-                close_db()
-                # Re-establish a connection to the Database Server.
-                if TransanaConstants.singleUserVersion:
-                    if 'unicode' in wx.PlatformInfo:
-                        # The single-user version requires no parameters
-                        _dbref = MySQLdb.connect(use_unicode=True)
-                    else:
-                        # The single-user version requires no parameters
-                        _dbref = MySQLdb.connect()
-                else:
-                    if 'unicode' in wx.PlatformInfo:
-                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, use_unicode=True)
-                    else:
-                        # The multi-user version requires all information to connect to the database server
-                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password)
-
-            # We need to know the MySQL version we're dealing with to know if UTF-8 is supported.
+            
+            # If we were able to make a connection to the database...
             if _dbref != None:
+                # Let's find out the current setting of max_allowed_packets
+                # Query the DB for the current value
+                query = "SHOW VARIABLES LIKE 'max_allowed_packe%'"
+                dbCursor = _dbref.cursor()
+                # Execute the Query
+                dbCursor.execute(query)
+                # Look at the Results Set
+                for pair in dbCursor.fetchall():
+                    # Find the max_allowed_packet variable
+                    if pair[0] == 'max_allowed_packet':
+                        # Its value comes in different forms depending on what version of MySQL and MySQL for Python we're using.
+                        if type(pair[1]) == array.array:
+                            max_allowed_packet = pair[1].tostring()
+                        else:
+                            max_allowed_packet = pair[1]
+                        
+                # We need to increase the size of the maximum allowed "packet" from 1MB (default) to 8MB.
+
+                if DEBUG:
+                    print "DBInterface.get_db():  max_allowed_packet:", int(max_allowed_packet), '<', 8388608, '=', (int(max_allowed_packet) < 8388608)
+                
+                if int(max_allowed_packet) < 8388608:
+                    dbCursor.execute('SET GLOBAL max_allowed_packet=8388608')
+                    # If we had to change this, we need to shut down our connection and re-establish it for the change to "take".
+                    close_db()
+                    # Re-establish a connection to the Database Server.
+                    if TransanaConstants.singleUserVersion:
+                        if 'unicode' in wx.PlatformInfo:
+                            # The single-user version requires no parameters
+                            _dbref = MySQLdb.connect(use_unicode=True)
+                        else:
+                            # The single-user version requires no parameters
+                            _dbref = MySQLdb.connect()
+                    else:
+                        if 'unicode' in wx.PlatformInfo:
+                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, use_unicode=True)
+                        else:
+                            # The multi-user version requires all information to connect to the database server
+                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password)
+
+                # We need to know the MySQL version we're dealing with to know if UTF-8 is supported.
                 # Get a Database Cursor
                 dbCursor = _dbref.cursor()
                 # Query the Database about what Database Names have been defined
@@ -557,15 +569,21 @@ def get_db():
                         # If we're in Chinese, change the encoding to the appropriate Chinese encoding
                         elif TransanaGlobal.configData.language == 'zh':
                             TransanaGlobal.encoding = TransanaConstants.chineseEncoding
+                        # If we're in Eastern Europe Encoding, change the encoding to 'iso8859_2'
+                        elif TransanaGlobal.configData.language == 'easteurope':
+                            TransanaGlobal.encoding = 'iso8859_2'
+                        # If we're in Greek, change the encoding to 'iso8859_7'
+                        elif TransanaGlobal.configData.language == 'el':
+                            TransanaGlobal.encoding = 'iso8859_7'
                         # If we're in Japanese, change the encoding to cp932
                         elif TransanaGlobal.configData.language == 'ja':
                             TransanaGlobal.encoding = 'cp932'
                         # If we're in Korean, change the encoding to cp949
                         elif TransanaGlobal.configData.language == 'ko':
                             TransanaGlobal.encoding = 'cp949'
-                        # Otherwise, fall back to Latin-1
+                        # Otherwise, fall back to utf8??
                         else:
-                            TransanaGlobal.encoding = 'latin1'
+                            TransanaGlobal.encoding = 'utf8'  # 'latin1'
 
 
                         dbCursor.execute('USE %s' % databaseName.encode(TransanaGlobal.encoding))
@@ -669,7 +687,7 @@ def get_db():
 
                 # ... The only time I've seen an error here has to do with encoding failures.
                 # Create an error message Dialog
-                dlg = Dialogs.ErrorDialog(None, _("MySQL Error opening the database.\nTry entering a database name in English."))
+                dlg = Dialogs.ErrorDialog(None, _("MySQL Error opening the database.\nTry again with a simple database name (with no punctuation or spaces.)\nAlso try entering a database name in English."))
                 # Display the Error Message.
                 dlg.ShowModal()
                 # Clean up the Error Message
@@ -1007,7 +1025,7 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
     l = []
     if TimeCode == None:
         query = """
-                  SELECT a.ClipNum, a.ClipID, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum FROM Clips2 a, Collections2 b
+                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum FROM Clips2 a, Collections2 b
                     WHERE a.CollectNum = b.CollectNum AND
                           a.EpisodeNum = %s
                     ORDER BY a.ClipStart, b.CollectID, a.ClipID
@@ -1015,7 +1033,7 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
         args = (EpisodeNum)
     else:
         query = """
-                  SELECT a.ClipNum, a.ClipID, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum FROM Clips2 a, Collections2 b
+                  SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum FROM Clips2 a, Collections2 b
                     WHERE a.CollectNum = b.CollectNum AND
                           a.EpisodeNum = %s AND 
                           ClipStart <= %s AND 
@@ -1034,7 +1052,7 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
             ClipID = ProcessDBDataForUTF8Encoding(ClipID)
             CollectID = ProcessDBDataForUTF8Encoding(CollectID)
         # Add a dictionary object to the results list that spells out the clip data
-        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'ParentCollectNum' : row['ParentCollectNum']})
+        l.append({'ClipNum' : ClipNum, 'ClipID' : ClipID, 'ClipStart' : row['ClipStart'], 'ClipStop' : row['ClipStop'], 'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum']})
 
     DBCursor.close()
     return l
@@ -1857,6 +1875,17 @@ def delete_keyword(group, kw_name):
         raise Exception, msg
     DBCursor.close()
 
+def delete_filter_records(reportType, reportScope):
+    """ Delete Filter Configuration records of a given reportType with a given reportScope """
+    # Get a Database cursor
+    DBCursor = get_db().cursor()
+    # Define a query to delete the appropriate records
+    query = "DELETE FROM Filters2 WHERE ReportType = %s AND ReportScope = %s"
+    # Execute the query
+    DBCursor.execute(query, (reportType, reportScope))
+    # Close the Database Cursor
+    DBCursor.close()
+
 def record_match_count(table, field_names, field_values):
     """Find number of records in the given table where the given fields
     contain the given values.  If the field name begins with the `!'
@@ -1947,6 +1976,12 @@ def ProcessDBDataForUTF8Encoding(text):
             # If we're in Chinese, change the encoding to the appropriate Chinese encoding
             elif TransanaGlobal.configData.language == 'zh':
                 TransanaGlobal.encoding = TransanaConstants.chineseEncoding
+            # If we're in Eastern European Encoding, change the encoding to 'iso8859_2'
+            elif TransanaGlobal.configData.language == 'easteurope':
+                TransanaGlobal.encoding = 'iso8859_2'
+            # If we're in Greek, change the encoding to 'iso8859_7'
+            elif TransanaGlobal.configData.language == 'el':
+                TransanaGlobal.encoding = 'iso8859_7'
             # If we're in Japanese, change the encoding to cp932
             elif TransanaGlobal.configData.language == 'ja':
                 TransanaGlobal.encoding = 'cp932'
@@ -2692,4 +2727,4 @@ def ServerDateTime():
     # Close the Database Cursor
     DBCursor.close()
     # Return the value retrieved from the server
-    return serverDateTime    
+    return serverDateTime

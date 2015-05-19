@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2006  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2007  The Board of Regents of the University of Wisconsin System
 #
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -58,9 +58,7 @@ class UsernameandPassword(wx.Dialog):
             # Dialog Size
             dlgSize=(350, 40)
             # Instructions Text
-            instructions = _("Please enter the name of the database you wish to use.  To create a new database, type in a new database name.")
-            # Initial size of the instructions text
-            instSize = wx.Size(200, 30)
+            instructions = _("Please enter the name of the database you wish to use.\nTo create a new database, type in a new database name.\n(Database names may contain only letters and numbers in a single word.)")
             # Sizer Proportion for the instructions
             instProportion = 4
         else:
@@ -69,9 +67,7 @@ class UsernameandPassword(wx.Dialog):
             # Dialog Size
             dlgSize=(350, 250)
             # Instructions Text
-            instructions = _("Please enter your MySQL username and password, as well as the names of the server and database you wish to use.  To create a new database, type in a new database name (assuming you have appropriate permissions.)")
-            # Initial size of the instructions text
-            instSize = wx.Size(200, 60)
+            instructions = _("Please enter your MySQL username and password, as well \nas the names of the server and database you wish to use.\nTo create a new database, type in a new database name\n(if you have appropriate permissions.)\n(Database names may contain only letters and numbers in\na single word.)")
             # Sizer Proportion for the instructions
             instProportion = 5
 
@@ -90,7 +86,7 @@ class UsernameandPassword(wx.Dialog):
         panel = wx.Panel(self, -1, name='UserNamePanel')
 
         # Instructions Text
-        lblIntro = wx.StaticText(panel, -1, instructions, size=instSize)
+        lblIntro = wx.StaticText(panel, -1, instructions)
         # Add the Instructions to the Main Sizer
         box.Add(lblIntro, instProportion, wx.EXPAND | wx.ALL, 10)
 
@@ -231,9 +227,9 @@ class UsernameandPassword(wx.Dialog):
         # Define the "OK" button
         btnOK = wx.Button(panel, wx.ID_OK, _("OK"))
 
-        # Define the Default Button for the Panel.  This allows the "ENTER" key
+        # Define the Default Button for the dialog.  This allows the "ENTER" key
         # to fire the OK button regardless of which widget has focus on the form.
-        panel.SetDefaultItem(btnOK)
+        self.SetDefaultItem(btnOK)
         
         # Define the Cancel Button
         btnCancel = wx.Button(panel, wx.ID_CANCEL, _("Cancel"))

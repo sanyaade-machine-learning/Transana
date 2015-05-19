@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -71,7 +71,7 @@ class AboutBox(wx.Dialog):
         version.SetConstraints(lay)
 
         # Create a label for the Program Copyright
-        str = _("Copyright 2002-2006\nThe Board of Regents of the University of Wisconsin System")
+        str = _("Copyright 2002-2007\nThe Board of Regents of the University of Wisconsin System")
         lay = wx.LayoutConstraints()
         lay.top.Below(version, 10)
         lay.centreX.SameAs(dlg, wx.CentreX)

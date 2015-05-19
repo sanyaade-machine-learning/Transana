@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -478,7 +478,10 @@ class XMLExport(Dialogs.GenForm):
                         f.write('        %s\n' % TranscriptID.encode(EXPORT_ENCODING))
 
                         if DEBUG:
-                            print "Transcript ", TranscriptID
+                            try:
+                                print "Transcript ID ", TranscriptID
+                            except:
+                                print "Transcript Number ", TranscriptNum
                             
                         f.write('      </ID>\n')
                     if EpisodeNum != '':
@@ -670,7 +673,10 @@ class XMLExport(Dialogs.GenForm):
                             else:
                                 NoteText = NoteText.tostring()
                                 if ('unicode' in wx.PlatformInfo):
-                                    NoteText = unicode(NoteText, EXPORT_ENCODING)
+                                    try:
+                                        NoteText = unicode(NoteText, EXPORT_ENCODING)
+                                    except UnicodeDecodeError, e:
+                                        NoteText = unicode(NoteText.decode(TransanaGlobal.encoding))
                         f.write('      <NoteText>\n')
                         f.write('        %s\n' % NoteText.encode(EXPORT_ENCODING))
                         f.write('      </NoteText>\n')
@@ -762,4 +768,3 @@ class EditBoxFileDropTarget(wx.FileDropTarget):
     def OnDropFiles(self, x, y, files):
         """Called when a file is dragged onto the edit box."""
         self.editbox.SetValue(files[0])
-

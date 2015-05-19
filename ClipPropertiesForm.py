@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2007 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -37,7 +37,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
     def __init__(self, parent, id, title, clip_object):
         # Make the Keyword Edit List resizable by passing wx.RESIZE_BORDER style
-        Dialogs.GenForm.__init__(self, parent, id, title, size=(600, 470), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Clip Properties')
+        Dialogs.GenForm.__init__(self, parent, id, title, size=TransanaGlobal.configData.clipPropertiesSize, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Clip Properties')
         # Define the minimum size for this dialog as the initial size
         self.SetSizeHints(600, 470)
         # Remember the Parent Window
@@ -304,6 +304,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
         # ID error here.  Therefore, we need to override the EVT_BUTTON for the OK Button.
         # Since we don't have an object for the OK Button, we use FindWindowById to find it based on its ID.
         self.Bind(wx.EVT_BUTTON, self.OnOK, self.FindWindowById(wx.ID_OK))
+        # We also need to intercept the Cancel button.
+        self.Bind(wx.EVT_BUTTON, self.OnCancel, self.FindWindowById(wx.ID_CANCEL))
 
         self.Layout()
         self.SetAutoLayout(True)
@@ -312,6 +314,9 @@ class ClipPropertiesForm(Dialogs.GenForm):
         self.id_edit.SetFocus()
 
     def OnOK(self, event):
+        """ Intercept the OK button click and process it """
+        # Remember the SIZE of the dialog box for next time.
+        TransanaGlobal.configData.clipPropertiesSize = self.GetSize()
         # Because of the way Clips are created (with Drag&Drop / Cut&Paste functions), we have to trap the missing
         # ID error here.  Duplicate ID Error is handled elsewhere.
         if self.id_edit.GetValue().strip() == '':
@@ -325,7 +330,13 @@ class ClipPropertiesForm(Dialogs.GenForm):
             # Continue on with the form's regular Button event
             event.Skip(True)
         
-
+    def OnCancel(self, event):
+        """ Intercept the Cancel button click and process it """
+        # Remember the SIZE of the dialog box for next time.
+        TransanaGlobal.configData.clipPropertiesSize = self.GetSize()
+        # Now process the event normally, as if it hadn't been intercepted
+        event.Skip(True)
+                
     def refresh_keyword_groups(self):
         """Refresh the keyword groups listbox."""
         self.kw_groups = DBInterface.list_of_keyword_groups()
@@ -429,9 +440,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
             self.obj = None
         
         return self.obj
-        
-
-
+    
 
 # This simple derived class let's the user drop files onto an edit box
 class EditBoxFileDropTarget(wx.FileDropTarget):
@@ -458,5 +467,3 @@ class EditClipDialog(ClipPropertiesForm):
 
     def __init__(self, parent, id, clip_object):
         ClipPropertiesForm.__init__(self, parent, id, _("Clip Properties"), clip_object)
-
-

@@ -27,62 +27,62 @@ if (len(sys.argv) > 2) and (sys.argv[2] == 'MU'):
     del(sys.argv[2])
 else:
     MULTI_USER = False
+if (len(sys.argv) > 2) and (sys.argv[2] == 'PPC'):
+    PPC = True
+    del(sys.argv[2])
+else:
+    PPC = False
 
 # Some globals
-wxPythonLib = '/usr/local/lib/wxPython-unicode-2.6.3.2/lib/'
+wxPythonLib = '/usr/local/lib/wxPython-unicode-2.8.1.1/lib/'
 resourceDir = 'Contents/Resources'
 
-# Add all dylibs not added automatically
-alldylibs = glob.glob('*.dylib')
-for x in alldylibs[:]:
-    alldylibs.remove(x)
-    alldylibs.append( (x, os.path.join(resourceDir, x)) )
-
+# Select the audio extraction and SRB connection files we need for the version we're building
+if PPC:
+    allfiles = [('./audioextract PPC', os.path.join(resourceDir, 'audioextract'))]
+    alldylibs = [('./srbClient-3.3.1-PPC.dylib', os.path.join(resourceDir, 'srbClient.dylib'))]
+else:
+    allfiles = [('./audioextract Universal', os.path.join(resourceDir, 'audioextract'))]
+    alldylibs = [('./srbClient-3.3.1-Universal.dylib', os.path.join(resourceDir, 'srbClient.dylib'))]
+    
 # Create basic list of files
-allfiles = [('locale/en/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/en/LC_MESSAGES/Transana.mo')),
-            ('locale/da/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/da/LC_MESSAGES/Transana.mo')),
-            ('locale/de/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/de/LC_MESSAGES/Transana.mo')),
-            ('locale/es/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/es/LC_MESSAGES/Transana.mo')),
-            ('locale/fr/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/fr/LC_MESSAGES/Transana.mo')),
-            ('locale/it/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/it/LC_MESSAGES/Transana.mo')),
-            ('locale/nb/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/nb/LC_MESSAGES/Transana.mo')),
-            ('locale/nn/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/nn/LC_MESSAGES/Transana.mo')),
-            ('locale/nl/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/nl/LC_MESSAGES/Transana.mo')),
-            ('locale/sv/LC_MESSAGES/Transana.mo', os.path.join(resourceDir, 'locale/sv/LC_MESSAGES/Transana.mo')) ]
+allfiles = allfiles + \
+           [('locale/en/LC_MESSAGES', os.path.join(resourceDir, 'locale/en/LC_MESSAGES')),
+            ('locale/da/LC_MESSAGES', os.path.join(resourceDir, 'locale/da/LC_MESSAGES')),
+            ('locale/de/LC_MESSAGES', os.path.join(resourceDir, 'locale/de/LC_MESSAGES')),
+            ('locale/es/LC_MESSAGES', os.path.join(resourceDir, 'locale/es/LC_MESSAGES')),
+            ('locale/fr/LC_MESSAGES', os.path.join(resourceDir, 'locale/fr/LC_MESSAGES')),
+            ('locale/it/LC_MESSAGES', os.path.join(resourceDir, 'locale/it/LC_MESSAGES')),
+            ('locale/nb/LC_MESSAGES', os.path.join(resourceDir, 'locale/nb/LC_MESSAGES')),
+            ('locale/nn/LC_MESSAGES', os.path.join(resourceDir, 'locale/nn/LC_MESSAGES')),
+            ('locale/nl/LC_MESSAGES', os.path.join(resourceDir, 'locale/nl/LC_MESSAGES')),
+            ('locale/ru/LC_MESSAGES', os.path.join(resourceDir, 'locale/ru/LC_MESSAGES')),
+            ('locale/sv/LC_MESSAGES', os.path.join(resourceDir, 'locale/sv/LC_MESSAGES')) ]
 allfiles = allfiles + \
           alldylibs + \
           [('share', os.path.join(resourceDir, 'share') )] + \
           [('images', os.path.join(resourceDir, 'images') )]
 
 if MULTI_USER:
-    appname = 'Transana-MU.app'
+    appname = 'Transana-MU'
 else:
-    appname = 'Transana.app'
+    appname = 'Transana'
+if PPC:
+   appname += '-PPC.app'
+else:
+    appname += '-Intel.app' 
 buildapp (
     name = appname,
     mainprogram = 'Transana.py',
     standalone = 1,
     libs = [
-#            wxPythonLib + 'libwx_macd_core-2.5.1.dylib',
-            wxPythonLib + 'libwx_macud-2.6.0.dylib',
-            wxPythonLib + 'libwx_macud-2.6.0.3.1.dylib',
-#            wxPythonLib + 'libwx_macd_adv-2.5.1.dylib',
-#            wxPythonLib + 'libwx_macd_gizmos-2.5.1.dylib',
-            wxPythonLib + 'libwx_macud_gizmos-2.6.0.dylib',
-            wxPythonLib + 'libwx_macud_gizmos-2.6.0.3.1.dylib',
-#            wxPythonLib + 'libwx_macd_gl-2.5.1.dylib',
-#            wxPythonLib + 'libwx_macd_html-2.5.1.dylib',
-#            wxPythonLib + 'libwx_macd_ogl-2.5.1.dylib',
-#            wxPythonLib + 'libwx_macd_stc-2.5.1.dylib',
-            wxPythonLib + 'libwx_macud_stc-2.6.0.dylib',
-            wxPythonLib + 'libwx_macud_stc-2.6.0.3.1.dylib',
-#            wxPythonLib + 'libwx_macd_xrc-2.5.1.dylib',
-#            wxPythonLib + 'libwx_macd-2.5.1.rsrc',
-#            wxPythonLib + 'libwx_macd-2.5.3.rsrc'
-#            wxPythonLib + 'libwx_base_carbond-2.5.1.dylib',
-#            wxPythonLib + 'libwx_base_carbond_net-2.5.1.dylib',
-#            wxPythonLib + 'libwx_base_carbond_xml-2.5.1.dylib',
-            ],
+            wxPythonLib + 'libwx_macud-2.8.0.dylib',
+#            wxPythonLib + 'libwx_macud-2.8.0.0.0.dylib',
+            wxPythonLib + 'libwx_macud_gizmos-2.8.0.dylib',
+#            wxPythonLib + 'libwx_macud_gizmos-2.8.0.0.0.dylib',
+            wxPythonLib + 'libwx_macud_stc-2.8.0.dylib',
+#            wxPythonLib + 'libwx_macud_stc-2.8.0.0.0.dylib',
+           ],
     includePackages = ['encodings'],
     iconfile = 'images/Transana.icns',
     files = allfiles,
@@ -93,26 +93,13 @@ buildapp (
     mainprogram = 'Help.py',
     standalone = 1,
     libs = [
-#            wxPythonLib + 'libwx_macd_core-2.5.1.dylib',
-            wxPythonLib + 'libwx_macud-2.6.0.dylib',
-            wxPythonLib + 'libwx_macud-2.6.0.3.1.dylib',
-#            wxPythonLib + 'libwx_macd_adv-2.5.1.dylib',
-#            wxPythonLib + 'libwx_macd_gizmos-2.5.1.dylib',
-            wxPythonLib + 'libwx_macud_gizmos-2.6.0.dylib',
-            wxPythonLib + 'libwx_macud_gizmos-2.6.0.3.1.dylib',
-#            wxPythonLib + 'libwx_macd_gl-2.5.1.dylib',
-#            wxPythonLib + 'libwx_macd_html-2.5.1.dylib',
-#            wxPythonLib + 'libwx_macd_ogl-2.5.1.dylib',
-#            wxPythonLib + 'libwx_macd_stc-2.5.1.dylib',
-            wxPythonLib + 'libwx_macud_stc-2.6.0.dylib',
-            wxPythonLib + 'libwx_macud_stc-2.6.0.3.1.dylib',
-#            wxPythonLib + 'libwx_macd_xrc-2.5.1.dylib',
-#            wxPythonLib + 'libwx_macd-2.5.1.rsrc',
-#            wxPythonLib + 'libwx_macd-2.5.3.rsrc'
-#            wxPythonLib + 'libwx_base_carbond-2.5.1.dylib',
-#            wxPythonLib + 'libwx_base_carbond_net-2.5.1.dylib',
-#            wxPythonLib + 'libwx_base_carbond_xml-2.5.1.dylib',
-            ],
+            wxPythonLib + 'libwx_macud-2.8.0.dylib',
+#            wxPythonLib + 'libwx_macud-2.8.0.0.0.dylib',
+            wxPythonLib + 'libwx_macud_gizmos-2.8.0.dylib',
+#            wxPythonLib + 'libwx_macud_gizmos-2.8.0.0.0.dylib',
+            wxPythonLib + 'libwx_macud_stc-2.8.0.dylib',
+#            wxPythonLib + 'libwx_macud_stc-2.8.0.0.0.dylib',
+           ],
     includePackages = ['encodings'],
     iconfile = 'images/TransanaHelp.icns',
     files=[('help', os.path.join(resourceDir, 'help'))]
