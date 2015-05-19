@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -238,7 +238,12 @@ class KeywordListEditForm(Dialogs.GenForm):
                 # Look for the entry to be deleted
                 if (self.keywords[index].keywordGroup == kwg) and (self.keywords[index].keyword == kw):
                     if self.keywords[index].example == 1:
-                        dlg = wx.MessageDialog(self, _('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?') % (self.obj.id, kwg, kw, self.obj.id, kwg, kw), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?'), 'utf8')
+                        else:
+                            prompt = _('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?')
+                        dlg = wx.MessageDialog(self, prompt % (self.obj.id, kwg, kw, self.obj.id, kwg, kw), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
                         result = dlg.ShowModal()
                         dlg.Destroy()
                         if result == wx.ID_YES:

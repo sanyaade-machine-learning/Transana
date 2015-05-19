@@ -1,4 +1,4 @@
-# Copyright (C) 2004 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2006  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -26,6 +26,7 @@ import sys
 import ctypes
 import time
 import FileManagement
+import TransanaGlobal
 
 # Define Transfer Direction constants
 srb_UPLOAD   = wx.NewId()
@@ -57,7 +58,12 @@ class SRBFileTransfer(wx.Dialog):
         lay.left.SameAs(self, wx.Left, 10)
         lay.height.AsIs()
         lay.right.SameAs(self, wx.Right, 10)
-        self.lblFile = wx.StaticText(self, -1, _("File: %s") % fileName, style=wx.ST_NO_AUTORESIZE)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("File: %s"), 'utf8')
+        else:
+            prompt = _("File: %s")
+        self.lblFile = wx.StaticText(self, -1, prompt % fileName, style=wx.ST_NO_AUTORESIZE)
         self.lblFile.SetConstraints(lay)
 
         # Progress Bar
@@ -75,7 +81,12 @@ class SRBFileTransfer(wx.Dialog):
         lay.left.SameAs(self, wx.Left, 10)
         lay.height.AsIs()
         lay.width.PercentOf(self.progressBar, wx.Width, 70)
-        self.lblBytes = wx.StaticText(self, -1, _("%d bytes of %d transferred") % (0, 0), style=wx.ST_NO_AUTORESIZE)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("%d bytes of %d transferred"), 'utf8')
+        else:
+            prompt = _("%d bytes of %d transferred")
+        self.lblBytes = wx.StaticText(self, -1, prompt % (0, 0), style=wx.ST_NO_AUTORESIZE)
         self.lblBytes.SetConstraints(lay)
 
         # Percent Transferred label
@@ -93,7 +104,12 @@ class SRBFileTransfer(wx.Dialog):
         lay.left.SameAs(self, wx.Left, 10)
         lay.height.AsIs()
         lay.width.PercentOf(self.progressBar, wx.Width, 50)
-        self.lblElapsedTime = wx.StaticText(self, -1, _("Elapsed Time: %d:%02d:%02d") % (0, 0, 0), style=wx.ST_NO_AUTORESIZE)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("Elapsed Time: %d:%02d:%02d"), 'utf8')
+        else:
+            prompt = _("Elapsed Time: %d:%02d:%02d")
+        self.lblElapsedTime = wx.StaticText(self, -1, prompt % (0, 0, 0), style=wx.ST_NO_AUTORESIZE)
         self.lblElapsedTime.SetConstraints(lay)
 
         # Remaining Time label
@@ -102,7 +118,12 @@ class SRBFileTransfer(wx.Dialog):
         lay.right.SameAs(self, wx.Right, 10)
         lay.height.AsIs()
         lay.width.PercentOf(self.progressBar, wx.Width, 50)
-        self.lblTimeRemaining = wx.StaticText(self, -1, _("Time Remaining: %d:%02d:%02d") % (0, 0, 0), style=wx.ST_NO_AUTORESIZE | wx.ALIGN_RIGHT)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("Time Remaining: %d:%02d:%02d"), 'utf8')
+        else:
+            prompt = _("Time Remaining: %d:%02d:%02d")
+        self.lblTimeRemaining = wx.StaticText(self, -1, prompt % (0, 0, 0), style=wx.ST_NO_AUTORESIZE | wx.ALIGN_RIGHT)
         self.lblTimeRemaining.SetConstraints(lay)
 
         # Transfer Speed label
@@ -111,7 +132,12 @@ class SRBFileTransfer(wx.Dialog):
         lay.left.SameAs(self, wx.Left, 10)
         lay.height.AsIs()
         lay.right.SameAs(self, wx.Right, 10)
-        self.lblTransferSpeed = wx.StaticText(self, -1, _("Transfer Speed: %d k/sec") % 0, style=wx.ST_NO_AUTORESIZE)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("Transfer Speed: %d k/sec"), 'utf8')
+        else:
+            prompt = _("Transfer Speed: %d k/sec")
+        self.lblTransferSpeed = wx.StaticText(self, -1, prompt % 0, style=wx.ST_NO_AUTORESIZE)
         self.lblTransferSpeed.SetConstraints(lay)
 
         # Cancel Button
@@ -129,6 +155,8 @@ class SRBFileTransfer(wx.Dialog):
         self.Layout()
         # Turn Auto Layout on
         self.SetAutoLayout(True)
+        # Center on the Screen
+        self.CenterOnScreen()
 
         self.Show()
         
@@ -157,8 +185,12 @@ class SRBFileTransfer(wx.Dialog):
         if direction == srb_DOWNLOAD:
             self.SetTitle(_('Downloading . . .'))
 
+            if 'unicode' in wx.PlatformInfo:
+                tmpCollectionName = collectionName.encode(TransanaGlobal.encoding)
+                tmpFileName = fileName.encode(TransanaGlobal.encoding)
+                
             # Open the proper File Object on the SRB
-            FileResult = srb.srbDaiObjOpen(connectionID, collectionName, fileName, 0)
+            FileResult = srb.srbDaiObjOpen(connectionID, tmpCollectionName, tmpFileName, 0)
 
             # Make sure the object opened correctly
             if FileResult < 0:
@@ -170,16 +202,8 @@ class SRBFileTransfer(wx.Dialog):
 
                 # While there is data, read it from the SRB and write it to the local file system.
                 # ("while 1" tells the program to just keep looping until a "break" command is triggered.)
-                while 1:
-                    # If there is more data left than MAX_BUFSIZE, use the Max Buffer Size.  Otherwise, use
-                    # a buffer just big enough for the rest of the data.
-#                    if fileSize - BytesRead >= MAX_BUFSIZE:
-#                        BufSize = MAX_BUFSIZE
-#                    else:
-#                        BufSize = fileSize - BytesRead
-
+                while True:
                     BufSize = MAX_BUFSIZE
-
                     # Initialize the buffer to empty spaces to prepare for the SRB Call
                     Buf = ' ' * BufSize
                     # Get a block of data from the SRB and put it in the Buffer
@@ -237,7 +261,16 @@ class SRBFileTransfer(wx.Dialog):
                 fs = ctypes.c_int(fileSize)
             else:
                 fs = ctypes.c_longlong(fileSize)
-            FileResult = srb.srbDaiObjCreate(connectionID, 0, fileName, fileType, self.parent.srbResource, collectionName, fs)
+
+            # Make Unicode conversions.
+            if 'unicode' in wx.PlatformInfo:
+                fileName = fileName.encode(TransanaGlobal.encoding)
+                tmpResource = self.parent.tmpResource
+                collectionName = collectionName.encode(TransanaGlobal.encoding)
+            else:
+                tmpResource = self.parent.srbResource
+                
+            FileResult = srb.srbDaiObjCreate(connectionID, 0, fileName, fileType, tmpResource, collectionName, fs)
 
             # See if the SRB File Object was successfully created
             if FileResult < 0:
@@ -296,9 +329,11 @@ class SRBFileTransfer(wx.Dialog):
                 delResult = srb.srbDaiRemoveObj(connectionID, fileName, collectionName, 0)
                 if delResult < 0:
                     self.srbErrorMessage(delResult)
-                
-        # Return the cursor to the normal Arrow
-#        self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
+                    
+    def TransferSuccessful(self):
+        # This class needs to return whether the transfer succeeded so that the delete portion of
+        # a cancelled Move can be skipped.
+        return not self.cancelled
 
     def HoursMinutesSeconds(self, time):
         if time > 3600:
@@ -316,7 +351,12 @@ class SRBFileTransfer(wx.Dialog):
     def UpdateDisplay(self, bytesTransferred):
         """ Update the Transfer Dialog Box labels and progress bar """
         # Display Number of Bytes tranferred
-        self.lblBytes.SetLabel(_("%d bytes of %d transferred") % (bytesTransferred, self.fileSize))
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("%d bytes of %d transferred"), 'utf8')
+        else:
+            prompt = _("%d bytes of %d transferred")
+        self.lblBytes.SetLabel(prompt % (bytesTransferred, self.fileSize))
         # Display % of total bytes transferred
         self.lblPercent.SetLabel("%5.1f %%" % (float(bytesTransferred) / float(self.fileSize) * 100))
         # Update the Progress Bar
@@ -325,7 +365,12 @@ class SRBFileTransfer(wx.Dialog):
         elapsedTime = time.time() - self.StartTime
 
         (hours, mins, secs) = self.HoursMinutesSeconds(elapsedTime)
-        self.lblElapsedTime.SetLabel(_("Elapsed Time: %d:%02d:%02d") % (hours, mins, secs))
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("Elapsed Time: %d:%02d:%02d"), 'utf8')
+        else:
+            prompt = _("Elapsed Time: %d:%02d:%02d")
+        self.lblElapsedTime.SetLabel(prompt % (hours, mins, secs))
         if elapsedTime > 0:
             # Calculate the Transfer Speed.  (Dividing by 1024 gives k/sec rather than bytes/sec).
             # (kilobytes transferred divided by elapsed time = rate of transfer in k/sec)
@@ -336,8 +381,18 @@ class SRBFileTransfer(wx.Dialog):
             # Display the results of these calculations
 
             (hours, mins, secs) = self.HoursMinutesSeconds(timeRemaining)
-            self.lblTimeRemaining.SetLabel(_("Time Remaining: %d:%02d:%02d") % (hours, mins, secs))
-            self.lblTransferSpeed.SetLabel(_("Transfer Speed: %6.1f k/sec") % speed)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Time Remaining: %d:%02d:%02d"), 'utf8')
+            else:
+                prompt = _("Time Remaining: %d:%02d:%02d")
+            self.lblTimeRemaining.SetLabel(prompt % (hours, mins, secs))
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Transfer Speed: %6.1f k/sec"), 'utf8')
+            else:
+                prompt = _("Transfer Speed: %6.1f k/sec")
+            self.lblTransferSpeed.SetLabel(prompt % speed)
         # Allow the screen to update and accept User Input (Cancel Button press, for example).
         # (wxYield allows Windows to process Windows Messages)
         wx.Yield()

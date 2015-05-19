@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,6 +16,10 @@
 """This module implements the DatabaseTreeTab class for the Data Display Objects."""
 
 __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
+
+DEBUG = False
+if DEBUG:
+    print "DatabaseTreeTab DEBUG is ON!!"
 
 import wx
 import TransanaConstants
@@ -103,36 +107,50 @@ class DatabaseTreeTab(wx.Panel):
         contin = True
         # While the "continue" flag is True ...
         while contin:
-            # Display the Series Properties Dialog Box and get the data from the user
-            series = dlg.get_input()
-            # If the user pressed OK ...
-            if series != None:
-                # Use "try", as exceptions could occur
-                try:
+            # Use "try", as exceptions could occur
+            try:
+                # Display the Series Properties Dialog Box and get the data from the user
+                series = dlg.get_input()
+                # If the user pressed OK ...
+                if series != None:
                     # Try to save the data from the form
                     self.save_series(series)
                     nodeData = (_('Series'), series.id)
                     self.tree.add_Node('SeriesNode', nodeData, series.number, 0)
 
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        if DEBUG:
+                            print 'Message to send = "AS %s"' % nodeData[-1]
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage("AS %s" % nodeData[-1])
+
                     # If we do all this, we don't need to continue any more.
                     contin = False
-                # Handle "SaveError" exception
-                except SaveError:
-                    # Display the Error Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-                # Handle other exceptions
-                except:
-                    # Display the Exception Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, "%s" % (sys.exc_info()[:2]))
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-                                        
-            # If the user pressed Cancel ...
-            else:
-                # ... then we don't need to continue any more.
-                contin = False
+                # If the user pressed Cancel ...
+                else:
+                    # ... then we don't need to continue any more.
+                    contin = False
+            # Handle "SaveError" exception
+            except SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+            # Handle other exceptions
+            except:
+                if DEBUG:
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+                # Display the Exception Message, allow "continue" flag to remain true
+                prompt = "%s : %s"
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(prompt, 'utf8')
+                errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                                    
         
     def edit_series(self, series):
         """User interface for editing a series."""
@@ -151,34 +169,61 @@ class DatabaseTreeTab(wx.Panel):
             contin = True
             # While the "continue" flag is True ...
             while contin:
-                # Display the Series Properties Dialog Box and get the data from the user
-                if dlg.get_input() != None:
-                    # if the user pressed "OK" ...
-                    try:
+                # if the user pressed "OK" ...
+                try:
+                    # Display the Series Properties Dialog Box and get the data from the user
+                    if dlg.get_input() != None:
+                        # Save the Series
                         self.save_series(series)
+                        # Note the current tree node
+                        sel = self.tree.GetSelection()
+                        # remember the node's original name
+                        originalName = self.tree.GetItemText(sel)
                         # See if the Series ID has been changed.  If it has, update the tree.
-                        if series.id != self.tree.GetItemText(self.tree.GetSelection()):
-                            self.tree.SetItemText(self.tree.GetSelection(), series.id)
+                        if series.id != originalName:
+                            # Change the name of the current tree node
+                            self.tree.SetItemText(sel, series.id)
+                            # If we're in Multi-user mode, we need to send a message about the change.
+                            if not TransanaConstants.singleUserVersion:
+                                # Build the message.  The first element is the node type, the second element is
+                                # the UNTRANSLATED Root Node name in order to avoid problems in mixed-language environents.
+                                # the last element is the new name.
+                                msg = "%s >|< %s >|< %s >|< %s" % ('SeriesNode', 'Series', originalName, series.id)
+                                if DEBUG:
+                                    if 'unicode' in wx.PlatformInfo:
+                                        print 'Message to send = "RN %s"' % msg.encode('utf_8')
+                                    else:
+                                        print 'Message to send = "RN %s"' % msg
+                                # Send the message.
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
                         # If we do all this, we don't need to continue any more.
                         contin = False
-                    # Handle "SaveError" exception
-                    except SaveError:
-                        # Display the Error Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                    # Handle other exceptions
-                    except:
+                    # If the user pressed Cancel ...
+                    else:
+                        # ... then we don't need to continue any more.
+                        contin = False
+                # Handle "SaveError" exception
+                except SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    if DEBUG:
                         import traceback
                         traceback.print_exc(file=sys.stdout)
-                        # Display the Exception Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, "Exception %s: %s" % (sys.exc_info()[0], sys.exc_info()[1]))
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                # If the user pressed Cancel ...
-                else:
-                    # ... then we don't need to continue any more.
-                    contin = False
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Exception %s : %s"), 'utf8')
+                    else:
+                        prompt = _("Exception %s : %s")
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
             # Unlock the record regardless of what happens
             series.unlock_record()
 
@@ -192,45 +237,79 @@ class DatabaseTreeTab(wx.Panel):
         """User interface for adding a new episode."""
         # Load the Series which contains the Episode
         series = Series.Series(series_name)
+        try:
+            # Lock the Series, to prevent it from being deleted out from under the add.
+            series.lock_record()
+            seriesLocked = True
+        # Handle the exception if the record is already locked by someone else
+        except RecordLockedError, s:
+            # If we can't get a lock on the Series, it's really not that big a deal.  We only try to get it
+            # to prevent someone from deleting it out from under us, which is pretty unlikely.  But we should 
+            # still be able to add Episodes even if someone else is editing the Series properties.
+            seriesLocked = False
         # Create the Episode Properties Dialog Box to Add an Episode
         dlg = EpisodePropertiesForm.AddEpisodeDialog(self, -1, series)
         # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
         contin = True
         # While the "continue" flag is True ...
         while contin:
-            # Display the Episode Properties Dialog Box and get the data from the user
-            episode = dlg.get_input()
-            # If the user pressed OK ...
-            if episode != None:
-                # Use "try", as exceptions could occur
-                try:
+            # Use "try", as exceptions could occur
+            try:
+                # Display the Episode Properties Dialog Box and get the data from the user
+                episode = dlg.get_input()
+                # If the user pressed OK ...
+                if episode != None:
                     # Try to save the data from the form
                     self.save_episode(episode)
                     nodeData = (_('Series'), series.id, episode.id)
                     self.tree.add_Node('EpisodeNode', nodeData, episode.number, series.number)
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        if DEBUG:
+                            print 'Message to send = "AE %s >|< %s"' % (nodeData[-2], nodeData[-1])
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage("AE %s >|< %s" % (nodeData[-2], nodeData[-1]))
 
                     # If we do all this, we don't need to continue any more.
                     contin = False
+                    # Unlock the Series, if we locked it.
+                    if seriesLocked:
+                        series.unlock_record()
                     # Return the Episode Name so that the Transcript can be added to the proper Episode
                     return episode.id
-                # Handle "SaveError" exception
-                except SaveError:
-                    # Display the Error Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-                # Handle other exceptions
-                except:
-                    # Display the Exception Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, "%s" % sys.exc_info()[:2])
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-            # If the user pressed Cancel ...
-            else:
-                # ... then we don't need to continue any more.
-                contin = False
-                # If no Episode is created, indicate this so that no Transcript will be created.
-                return None
+                # If the user pressed Cancel ...
+                else:
+                    # ... then we don't need to continue any more.
+                    contin = False
+                    # Unlock the Series, if we locked it.
+                    if seriesLocked:
+                        series.unlock_record()
+                    # If no Episode is created, indicate this so that no Transcript will be created.
+                    return None
+            # Handle "SaveError" exception
+            except SaveError:
+                if DEBUG:
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+                    
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+            # Handle other exceptions
+            except:
+                if DEBUG:
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+                    
+                # Display the Exception Message, allow "continue" flag to remain true
+                prompt = "%s : %s"
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(prompt, 'utf8')
+                errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                errordlg.ShowModal()
+                errordlg.Destroy()
         
     def edit_episode(self, episode):
         """User interface for editing an episode."""
@@ -238,7 +317,7 @@ class DatabaseTreeTab(wx.Panel):
         try:
             # Try to get a Record Lock
             episode.lock_record()
-        # Handle the exception if the record is locked
+        # Handle the exception if the record is already locked by someone else
         except RecordLockedError, e:
             self.handle_locked_record(e, _("Episode"), episode.id)
         # If the record is not locked, keep going.
@@ -249,35 +328,66 @@ class DatabaseTreeTab(wx.Panel):
             contin = True
             # While the "continue" flag is True ...
             while contin:
-                # Display the Episode Properties Dialog Box and get the data from the user
-                if dlg.get_input() != None:
-                    # if the user pressed "OK" ...
-                    try:
+                # if the user pressed "OK" ...
+                try:
+                    # Display the Episode Properties Dialog Box and get the data from the user
+                    if dlg.get_input() != None:
                         # Try to save the Episode
                         self.save_episode(episode)
+                        # Note the original Tree Selection
+                        sel = self.tree.GetSelection()
+                        # Note the original name of the tree node
+                        originalName = self.tree.GetItemText(sel)
                         # See if the Episode ID has been changed.  If it has, update the tree.
-                        if episode.id != self.tree.GetItemText(self.tree.GetSelection()):
-                            self.tree.SetItemText(self.tree.GetSelection(), episode.id)
+                        if episode.id != originalName:
+                            # Rename the Tree node
+                            self.tree.SetItemText(sel, episode.id)
+                            # If we're in the Multi-User mode, we need to send a message about the change
+                            if not TransanaConstants.singleUserVersion:
+                                # Begin constructing the message with the old and new names for the node
+                                msg = " >|< %s >|< %s" % (originalName, episode.id)
+                                # Get the full Node Branch by climbing it to two levels above the root
+                                while (self.tree.GetItemParent(self.tree.GetItemParent(sel)) != self.tree.GetRootItem()):
+                                    # Update the selected node indicator
+                                    sel = self.tree.GetItemParent(sel)
+                                    # Prepend the new Node's name on the Message with the appropriate seperator
+                                    msg = ' >|< ' + self.tree.GetItemText(sel) + msg
+                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                # This must be untranslated to avoid problems in mixed-language environments.
+                                # Prepend these on the Messsage
+                                msg = "EpisodeNode >|< Series" + msg
+                                if DEBUG:
+                                    print 'Message to send = "RN %s"' % msg
+                                # Send the Rename Node message
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
                         # If we do all this, we don't need to continue any more.
                         contin = False
-                    # Handle "SaveError" exception
-                    except SaveError:
-                        # Display the Error Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                    # Handle other exceptions
-                    except:
+                    # If the user pressed Cancel ...
+                    else:
+                        # ... then we don't need to continue any more.
+                        contin = False
+                # Handle "SaveError" exception
+                except SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    if DEBUG:
                         import traceback
                         traceback.print_exc(file=sys.stdout)
-                        # Display the Exception Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, "Exception %s: %s" % (sys.exc_info()[0], sys.exc_info()[1]))
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                # If the user pressed Cancel ...
-                else:
-                    # ... then we don't need to continue any more.
-                    contin = False
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Exception %s: %s"), 'utf8')
+                    else:
+                        prompt = _("Exception %s: %s")
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
             # Unlock the record regardless of what happens
             episode.unlock_record()
 
@@ -291,44 +401,72 @@ class DatabaseTreeTab(wx.Panel):
         """User interface for adding a new transcript."""
         # Load the Episode Object that parents the Transcript
         episode = Episode.Episode(series=series_name, episode=episode_name)
+        try:
+            # Lock the Episode, to prevent it from being deleted out from under the add.
+            episode.lock_record()
+            episodeLocked = True
+        # Handle the exception if the record is already locked by someone else
+        except RecordLockedError, e:
+            # If we can't get a lock on the Episode, it's really not that big a deal.  We only try to get it
+            # to prevent someone from deleting it out from under us, which is pretty unlikely.  But we should 
+            # still be able to add Transcripts even if someone else is editing the Episode properties.
+            episodeLocked = False
         # Create the Transcript Properties Dialog Box to Add a Trancript
         dlg = TranscriptPropertiesForm.AddTranscriptDialog(self, -1, episode)
         # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
         contin = True
         # While the "continue" flag is True ...
         while contin:
-            # Display the Transcript Properties Dialog Box and get the data from the user
-            transcript = dlg.get_input()
-            # If the user pressed OK ...
-            if transcript != None:
-                # Use "try", as exceptions could occur
-                try:
+            # Use "try", as exceptions could occur
+            try:
+                # Display the Transcript Properties Dialog Box and get the data from the user
+                transcript = dlg.get_input()
+                # If the user pressed OK ...
+                if transcript != None:
                     # Try to save the data from the form
                     self.save_transcript(transcript)
                     nodeData = (_('Series'), series_name, episode_name, transcript.id)
                     self.tree.add_Node('TranscriptNode', nodeData, transcript.number, episode.number)
+
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        if DEBUG:
+                            print 'Message to send = "AT %s >|< %s >|< %s"' % (nodeData[-3], nodeData[-2], nodeData[-1])
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage("AT %s >|< %s >|< %s" % (nodeData[-3], nodeData[-2], nodeData[-1]))
+
                     # If we do all this, we don't need to continue any more.
                     contin = False
+                    # Unlock the record
+                    if episodeLocked:
+                        episode.unlock_record()
                     # return the Transcript ID so that it can be loaded
                     return transcript.id
-                # Handle "SaveError" exception
-                except SaveError:
-                    # Display the Error Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-                # Handle other exceptions
-                except:
-                    # Display the Exception Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, "%s" % sys.exc_info()[:2])
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-            # If the user pressed Cancel ...
-            else:
-                # ... then we don't need to continue any more.
-                contin = False
-                # Returning None signals that the user cancelled, so no Transcript can be loaded.
-                return None
+                # If the user pressed Cancel ...
+                else:
+                    # ... then we don't need to continue any more.
+                    contin = False
+                    # Unlock the record
+                    if episodeLocked:
+                        episode.unlock_record()
+                    # Returning None signals that the user cancelled, so no Transcript can be loaded.
+                    return None
+            # Handle "SaveError" exception
+            except SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+            # Handle other exceptions
+            except:
+                # Display the Exception Message, allow "continue" flag to remain true
+                prompt = "%s\n%s"
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(prompt, 'utf8')
+                errordlg = Dialogs.ErrorDialog(None, prompt % sys.exc_info()[:2])
+                errordlg.ShowModal()
+                errordlg.Destroy()
 
     def edit_transcript(self, transcript):
         """User interface for editing a transcript."""
@@ -349,10 +487,10 @@ class DatabaseTreeTab(wx.Panel):
             contin = True
             # While the "continue" flag is True ...
             while contin:
-                # Display the Transcript Properties Dialog Box and get the data from the user
-                if dlg.get_input() != None:
-                    # if the user pressed "OK" ...
-                    try:
+                # if the user pressed "OK" ...
+                try:
+                    # Display the Transcript Properties Dialog Box and get the data from the user
+                    if dlg.get_input() != None:
                         self.save_transcript(transcript)
                         # See if this affects the currently loaded
                         # Transcript, in which case we have to re-load the
@@ -360,29 +498,60 @@ class DatabaseTreeTab(wx.Panel):
                         if transcript.number == self.ControlObject.TranscriptNum:
                             self.ControlObject.LoadTranscript(transcript.series_id, transcript.episode_id, transcript.number)
 
+                        # Note the original Tree Selection
+                        sel = self.tree.GetSelection()
+                        # Note the original name of the tree node
+                        originalName = self.tree.GetItemText(sel)
                         # See if the Transcript ID has been changed.  If it has, update the tree.
-                        if transcript.id != self.tree.GetItemText(self.tree.GetSelection()):
-                            self.tree.SetItemText(self.tree.GetSelection(), transcript.id)
+                        if transcript.id != originalName:
+                            # Rename the Tree node
+                            self.tree.SetItemText(sel, transcript.id)
+                            # If we're in the Multi-User mode, we need to send a message about the change
+                            if not TransanaConstants.singleUserVersion:
+                                # Begin constructing the message with the old and new names for the node
+                                msg = " >|< %s >|< %s" % (originalName, transcript.id)
+                                # Get the full Node Branch by climbing it to two levels above the root
+                                while (self.tree.GetItemParent(self.tree.GetItemParent(sel)) != self.tree.GetRootItem()):
+                                    # Update the selected node indicator
+                                    sel = self.tree.GetItemParent(sel)
+                                    # Prepend the new Node's name on the Message with the appropriate seperator
+                                    msg = ' >|< ' + self.tree.GetItemText(sel) + msg
+                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                # This must be untranslated to avoid problems in mixed-language environments.
+                                # Prepend these on the Messsage
+                                msg = "TranscriptNode >|< Series" + msg
+                                if DEBUG:
+                                    print 'Message to send = "RN %s"' % msg
+                                # Send the Rename Node message
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
                         # If we do all this, we don't need to continue any more.
                         contin = False
-                    # Handle "SaveError" exception
-                    except SaveError:
-                        # Display the Error Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                    # Handle other exceptions
-                    except:
+                    # If the user pressed Cancel ...
+                    else:
+                        # ... then we don't need to continue any more.
+                        contin = False
+                # Handle "SaveError" exception
+                except SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    if DEBUG:
                         import traceback
                         traceback.print_exc(file=sys.stdout)
-                        # Display the Exception Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, "Exception %s: %s" % (sys.exc_info()[0], sys.exc_info()[1]))
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                # If the user pressed Cancel ...
-                else:
-                    # ... then we don't need to continue any more.
-                    contin = False
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Exception %s: %s"), 'utf8')
+                    else:
+                        prompt = _("Exception %s: %s")
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
             # Unlock the record regardless of what happens
             transcript.unlock_record()
         # Handle the exception if the record is locked
@@ -397,47 +566,97 @@ class DatabaseTreeTab(wx.Panel):
        
     def add_collection(self, ParentNum):
         """User interface for adding a new collection."""
+        # If we're adding a nested Collection, we should lock the parent Collection
+        if ParentNum > 0:
+            # Get the Parent Collection
+            collection = Collection.Collection(ParentNum)
+            try:
+                # Lock the Collectoin, to prevent it from being deleted out from under the add.
+                collection.lock_record()
+                collectionLocked = True
+            # Handle the exception if the record is already locked by someone else
+            except RecordLockedError, c:
+                # If we can't get a lock on the Collection, it's really not that big a deal.  We only try to get it
+                # to prevent someone from deleting it out from under us, which is pretty unlikely.  But we should 
+                # still be able to add Nested Collections even if someone else is editing the Collection properties.
+                collectionLocked = False
+        else:
+            collectionLocked = False
         # Create the Collection Properties Dialog Box to Add a Collection
         dlg = CollectionPropertiesForm.AddCollectionDialog(self, -1, ParentNum)
         # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
         contin = True
         # While the "continue" flag is True ...
         while contin:
-            # Display the Collection Properties Dialog Box and get the data from the user
-            coll = dlg.get_input()
-            # If the user pressed OK ...
-            if coll != None:
-                # Use "try", as exceptions could occur
-                try:
+            # Use "try", as exceptions could occur
+            try:
+                # Display the Collection Properties Dialog Box and get the data from the user
+                coll = dlg.get_input()
+                # If the user pressed OK ...
+                if coll != None:
                     # Try to save the data from the form
                     self.save_collection(coll)
                     nodeData = (_('Collections'),) + coll.GetNodeData()
                     # Add the new Collection to the data tree
                     self.tree.add_Node('CollectionNode', nodeData, coll.number, coll.parent)
+
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        msg = "AC %s"
+                        data = (nodeData[1],)
+                        for nd in nodeData[2:]:
+                            msg += " >|< %s"
+                            data += (nd, )
+                        if DEBUG:
+                            print 'Message to send =', msg % data
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage(msg % data)
+                    # Unlock the parent collection
+                    if collectionLocked:
+                        collection.unlock_record()
                     # If we do all this, we don't need to continue any more.
                     contin = False
-                # Handle "SaveError" exception
-                except SaveError:
-                    # Display the Error Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-                # Handle other exceptions
-                except:
-                    # Display the Exception Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, "%s" % sys.exc_info()[:2])
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-            # If the user pressed Cancel ...
-            else:
-                # ... then we don't need to continue any more.
-                contin = False
-
+                # If the user pressed Cancel ...
+                else:
+                    # Unlock the parent collection
+                    if collectionLocked:
+                        collection.unlock_record()
+                    # ... then we don't need to continue any more.
+                    contin = False
+            # Handle "SaveError" exception
+            except SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+            # Handle other exceptions
+            except:
+                if DEBUG:
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+                    
+                # Display the Exception Message, allow "continue" flag to remain true
+                prompt = "%s : %s"
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(prompt, 'utf8')
+                errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                errordlg.ShowModal()
+                errordlg.Destroy()
        
     def edit_collection(self, coll):
         """User interface for editing a collection."""
         # Assume failure unless proven otherwise
         success = False
+        # Okay, when we're converting a Search Result to a Collection, we create a Collection named after the Search Results
+        # and then use this routine.  That works well, except if there's a duplicate Collection ID in the Multi-user version,
+        # the other client's collection will get renamed rather than the new collection being added.  Therefore, we need to
+        # detect that this is what's going on and avoid that problem.  The following line detects that, as the Search Results
+        # collection hasn't actually been saved yet.
+        if coll.number == 0:
+            fakeEdit = True
+        else:
+            fakeEdit = False
         # use "try", as exceptions could occur
         try:
             # Try to get a Record Lock
@@ -453,37 +672,69 @@ class DatabaseTreeTab(wx.Panel):
             contin = True
             # While the "continue" flag is True ...
             while contin:
-                # Display the Collection Properties Dialog Box and get the data from the user
-                if dlg.get_input() != None:
-                    # if the user pressed "OK" ...
-                    try:
+                # if the user pressed "OK" ...
+                try:
+                    # Display the Collection Properties Dialog Box and get the data from the user
+                    if dlg.get_input() != None:
                         # try to save the Collection
                         self.save_collection(coll)
+                        # Note the original Tree Selection
+                        sel = self.tree.GetSelection()
+                        # Note the original name of the tree node
+                        originalName = self.tree.GetItemText(sel)
                         # See if the Collection ID has been changed.  If it has, update the tree.
-                        if coll.id != self.tree.GetItemText(self.tree.GetSelection()):
-                            self.tree.SetItemText(self.tree.GetSelection(), coll.id)
+                        # That is, unless this is a Search Result conversion, as signalled by fakeEdit.
+                        if (coll.id != originalName) and (not fakeEdit):
+                            # Rename the Tree node
+                            self.tree.SetItemText(sel, coll.id)
+                            # If we're in the Multi-User mode, we need to send a message about the change
+                            if not TransanaConstants.singleUserVersion:
+                                # Begin constructing the message with the old and new names for the node
+                                msg = " >|< %s >|< %s" % (originalName, coll.id)
+                                # Get the full Node Branch by climbing it to two levels above the root
+                                while (self.tree.GetItemParent(self.tree.GetItemParent(sel)) != self.tree.GetRootItem()):
+                                    # Update the selected node indicator
+                                    sel = self.tree.GetItemParent(sel)
+                                    # Prepend the new Node's name on the Message with the appropriate seperator
+                                    msg = ' >|< ' + self.tree.GetItemText(sel) + msg
+                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                # This must be untranslated to avoid problems in mixed-language environments.
+                                # Prepend these on the Messsage
+                                msg = "CollectionNode >|< Collections" + msg
+                                if DEBUG:
+                                    print 'Message to send = "RN %s"' % msg
+                                # Send the Rename Node message
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
                         # If we get here, the save worked!
                         success = True
                         # If we do all this, we don't need to continue any more.
                         contin = False
-                    # Handle "SaveError" exception
-                    except SaveError:
-                        # Display the Error Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                    # Handle other exceptions
-                    except:
+                    # If the user pressed Cancel ...
+                    else:
+                        # ... then we don't need to continue any more.
+                        contin = False
+                # Handle "SaveError" exception
+                except SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    if DEBUG:
                         import traceback
                         traceback.print_exc(file=sys.stdout)
-                        # Display the Exception Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, "Exception %s: %s" % (sys.exc_info()[0], sys.exc_info()[1]))
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                # If the user pressed Cancel ...
-                else:
-                    # ... then we don't need to continue any more.
-                    contin = False
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Exception %s: %s"), 'utf8')
+                    else:
+                        prompt = _("Exception %s: %s")
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
             # Unlock the record regardless of what happens
             coll.unlock_record()
         # Return the "success" indicator to the calling routine
@@ -571,10 +822,10 @@ class DatabaseTreeTab(wx.Panel):
             contin = True
             # While the "continue" flag is True ...
             while contin:
-                # Display the Clip Properties Dialog Box and get the data from the user
-                if dlg.get_input() != None:
-                    # if the user pressed "OK" ...
-                    try:
+                # if the user pressed "OK" ...
+                try:
+                    # Display the Clip Properties Dialog Box and get the data from the user
+                    if dlg.get_input() != None:
                         # Try to save the Clip Data
                         self.save_clip(clip)
                         # If any keywords that served as Keyword Examples that got removed from the Clip,
@@ -586,34 +837,84 @@ class DatabaseTreeTab(wx.Panel):
                             nodeList = (_('Keywords'), keywordGroup, keyword, originalClipID)
                             # Call the DB Tree's delete_Node method.  Include the Clip Record Number so the correct Clip entry will be removed.
                             self.tree.delete_Node(nodeList, 'KeywordExampleNode', tempClip.number)
+                        # Note the original Tree Selection
+                        sel = self.tree.GetSelection()
+                        # Note the original name of the tree node
+                        originalName = self.tree.GetItemText(sel)
                         # See if the Clip ID has been changed.  If it has, update the tree.
-                        if clip.id != self.tree.GetItemText(self.tree.GetSelection()):
-                            clipNode = self.tree.GetSelection()
+                        if clip.id != originalName:
                             for (kwg, kw, clipNumber, clipID) in DBInterface.list_all_keyword_examples_for_a_clip(clip.number):
-                                nodeList = (_('Keywords'), kwg, kw, self.tree.GetItemText(clipNode))
+                                nodeList = (_('Keywords'), kwg, kw, self.tree.GetItemText(sel))
                                 exampleNode = self.tree.select_Node(nodeList, 'KeywordExampleNode')
                                 self.tree.SetItemText(exampleNode, clip.id)
-                            self.tree.SetItemText(clipNode, clip.id)
+                                # If we're in the Multi-User mode, we need to send a message about the change
+                                if not TransanaConstants.singleUserVersion:
+                                    # Begin constructing the message with the old and new names for the node
+                                    msg = " >|< %s >|< %s" % (originalName, clip.id)
+                                    # Get the full Node Branch by climbing it to two levels above the root
+                                    while (self.tree.GetItemParent(self.tree.GetItemParent(exampleNode)) != self.tree.GetRootItem()):
+                                        # Update the selected node indicator
+                                        exampleNode = self.tree.GetItemParent(exampleNode)
+                                        # Prepend the new Node's name on the Message with the appropriate seperator
+                                        msg = ' >|< ' + self.tree.GetItemText(exampleNode) + msg
+                                    # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                    # This must be untranslated to avoid problems in mixed-language environments.
+                                    # Prepend these on the Messsage
+                                    msg = "KeywordExampleNode >|< Keywords" + msg
+                                    if DEBUG:
+                                        print 'Message to send = "RN %s"' % msg
+                                    # Send the Rename Node message
+                                    if TransanaGlobal.chatWindow != None:
+                                        TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+                                        
+                            # Rename the Tree node
+                            self.tree.SetItemText(sel, clip.id)
+                            # If we're in the Multi-User mode, we need to send a message about the change
+                            if not TransanaConstants.singleUserVersion:
+                                # Begin constructing the message with the old and new names for the node
+                                msg = " >|< %s >|< %s" % (originalName, clip.id)
+                                # Get the full Node Branch by climbing it to two levels above the root
+                                while (self.tree.GetItemParent(self.tree.GetItemParent(sel)) != self.tree.GetRootItem()):
+                                    # Update the selected node indicator
+                                    sel = self.tree.GetItemParent(sel)
+                                    # Prepend the new Node's name on the Message with the appropriate seperator
+                                    msg = ' >|< ' + self.tree.GetItemText(sel) + msg
+                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                # This must be untranslated to avoid problems in mixed-language environments.
+                                # Prepend these on the Messsage
+                                msg = "ClipNode >|< Collections" + msg
+                                if DEBUG:
+                                    print 'Message to send = "RN %s"' % msg
+                                # Send the Rename Node message
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
                         # If we do all this, we don't need to continue any more.
                         contin = False
-                    # Handle "SaveError" exception
-                    except SaveError:
-                        # Display the Error Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                    # Handle other exceptions
-                    except:
+                    # If the user pressed Cancel ...
+                    else:
+                        # ... then we don't need to continue any more.
+                        contin = False
+                # Handle "SaveError" exception
+                except SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    if DEBUG:
                         import traceback
                         traceback.print_exc(file=sys.stdout)
-                        # Display the Exception Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, "Exception %s: %s" % (sys.exc_info()[0], sys.exc_info()[1]))
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                # If the user pressed Cancel ...
-                else:
-                    # ... then we don't need to continue any more.
-                    contin = False
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Exception %s: %s"), 'utf8')
+                    else:
+                        prompt = _("Exception %s: %s")
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
             # Unlock the record regardless of what happens
             clip.unlock_record()
 
@@ -625,52 +926,85 @@ class DatabaseTreeTab(wx.Panel):
 
     def add_note(self, seriesNum=0, episodeNum=0, transcriptNum=0, collectionNum=0, clipNum=0):
         """User interface method for adding a Note to an object."""
+        # We should lock the parent object when adding a note.
+        # First, get the appropriate parent object
+        if seriesNum > 0:
+            parentObj = Series.Series(seriesNum)
+        elif episodeNum > 0:
+            parentObj = Episode.Episode(episodeNum)
+        elif transcriptNum > 0:
+            parentObj = Transcript.Transcript(transcriptNum)
+        elif collectionNum > 0:
+            parentObj = Collection.Collection(collectionNum)
+        elif clipNum > 0:
+            parentObj = Clip.Clip(clipNum)
+        try:
+            # Lock the parent object, to prevent it from being deleted out from under the add.
+            parentObj.lock_record()
+            parentObjLocked = True
+        # Handle the exception if the record is already locked by someone else
+        except RecordLockedError, o:
+            # If we can't get a lock on the parentObj, it's really not that big a deal.  We only try to get it
+            # to prevent someone from deleting it out from under us, which is pretty unlikely.  But we should 
+            # still be able to add Notes even if someone else is editing the parentObj properties.
+            parentObjLocked = False
+
         # Create the Note Properties Dialog Box to Add a Note
         dlg = NotePropertiesForm.AddNoteDialog(self, -1, seriesNum, episodeNum, transcriptNum, collectionNum, clipNum)
         # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
         contin = True
         # While the "continue" flag is True ...
         while contin:
-            # Display the Note Properties Dialog Box and get the data from the user
-            note = dlg.get_input()
-            # If the user pressed OK ...
-            if note != None:
-                # Create the Note Editing Form
-                noteedit = NoteEditor.NoteEditor(self, note.text)
-                # Display the Node Editing Form and get the user's input
-                note.text = noteedit.get_text()
-                # Use "try", as exceptions could occur
-                try:
+            # Use "try", as exceptions could occur
+            try:
+                # Display the Note Properties Dialog Box and get the data from the user
+                note = dlg.get_input()
+                # If the user pressed OK ...
+                if note != None:
+                    # Create the Note Editing Form
+                    noteedit = NoteEditor.NoteEditor(self, note.text)
+                    # Display the Node Editing Form and get the user's input
+                    note.text = noteedit.get_text()
                     # Try to save the data from the forms
                     self.save_note(note)
 
                     if seriesNum != 0:
                         nodeType = 'SeriesNoteNode'
-                        series = Series.Series(seriesNum)
+                        series = parentObj
                         nodeData = (_('Series'), series.id, note.id)
                         parentNum = series.number
+                        msgType = 'ASN'
+                        nodeDataRoot = 'Series'
                     elif episodeNum != 0:
                         nodeType = 'EpisodeNoteNode'
-                        episode = Episode.Episode(num = episodeNum)
+                        episode = parentObj
                         nodeData = (_('Series'), episode.series_id, episode.id, note.id)
                         parentNum = episode.number
+                        msgType = 'AEN'
+                        nodeDataRoot = 'Series'
                     elif transcriptNum != 0:
                         nodeType = 'TranscriptNoteNode'
-                        transcript = Transcript.Transcript(transcriptNum)
+                        transcript = parentObj
                         episode = Episode.Episode(num = transcript.episode_num)
                         nodeData = (_('Series'), episode.series_id, episode.id, transcript.id, note.id)
                         parentNum = transcript.number
+                        msgType = 'ATN'
+                        nodeDataRoot = 'Series'
                     elif collectionNum != 0:
                         nodeType = 'CollectionNoteNode'
-                        collection = Collection.Collection(collectionNum)
+                        collection = parentObj
                         nodeData = (_('Collections'),) + collection.GetNodeData() + (note.id,)
                         parentNum = collection.number  # This is the NOTE's parent, not the Collection's parent!!
+                        msgType = 'ACN'
+                        nodeDataRoot = 'Collections'
                     elif clipNum != 0:
                         nodeType = 'ClipNoteNode'
-                        clip = Clip.Clip(clipNum)
+                        clip = parentObj
                         collection = Collection.Collection(clip.collection_num)
                         nodeData = (_('Collections'),) + collection.GetNodeData() + (clip.id, note.id)
                         parentNum = clip.number
+                        msgType = 'AClN'
+                        nodeDataRoot = 'Collections'
                     else:
                         errordlg = Dialogs.ErrorDialog(None, 'Not Yet Implemented in DatabaseTreeTab.add_note()')
                         errordlg.ShowModal()
@@ -678,24 +1012,47 @@ class DatabaseTreeTab(wx.Panel):
                         
                     self.tree.add_Node(nodeType, nodeData, note.number, parentNum)
                     
-                    # If we do all this, we don't need to continue any more.
-                    contin = False
-                # Handle "SaveError" exception
-                except SaveError:
-                    # Display the Error Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-                # Handle other exceptions
-                except:
-                    # Display the Exception Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, "%s" % sys.exc_info()[:2])
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-            # If the user pressed Cancel ...
-            else:
-                # ... then we don't need to continue any more.
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        # Construct the message and data to be passed
+                        msg = msgType + " %s"
+                        # To avoid problems in mixed-language environments, we need the UNTRANSLATED string here!
+                        data = (nodeDataRoot,)
+                        for nd in nodeData[1:]:
+                            msg += " >|< %s"
+                            data += (nd, )
+                            
+                        if DEBUG:
+                            print 'Message to send =', msg % data
+                            
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+                # Unlock the parent Object
+                if parentObjLocked:
+                    parentObj.unlock_record()
+                # If we do all this, we don't need to continue any more.
                 contin = False
+            # Handle "SaveError" exception
+            except SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+            # Handle other exceptions
+            except:
+                if DEBUG:
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+                    
+                # Display the Exception Message, allow "continue" flag to remain true
+                prompt = "%s : %s"
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(prompt, 'utf8')
+                errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                errordlg.ShowModal()
+                errordlg.Destroy()
 
     def edit_note(self, note):
         """User interface for editing a note."""
@@ -714,35 +1071,78 @@ class DatabaseTreeTab(wx.Panel):
             contin = True
             # While the "continue" flag is True ...
             while contin:
-                # Display the Note Properties Dialog Box and get the data from the user
-                if dlg.get_input() != None:
-                    # if the user pressed "OK" ...
-                    try:
+                # if the user pressed "OK" ...
+                try:
+                    # Display the Note Properties Dialog Box and get the data from the user
+                    if dlg.get_input() != None:
                         # Try to save the Note Data
                         self.save_note(note)
+                        # Note the original Tree Selection
+                        sel = self.tree.GetSelection()
+                        # Note the original name of the tree node
+                        originalName = self.tree.GetItemText(sel)                        
                         # See if the Note ID has been changed.  If it has, update the tree.
-                        if note.id != self.tree.GetItemText(self.tree.GetSelection()):
-                            self.tree.SetItemText(self.tree.GetSelection(), note.id)
+                        if note.id != originalName:
+                            self.tree.SetItemText(sel, note.id)
+                            # If we're in the Multi-User mode, we need to send a message about the change
+                            if not TransanaConstants.singleUserVersion:
+                                # Begin constructing the message with the old and new names for the node
+                                msg = " >|< %s >|< %s" % (originalName, note.id)
+                                # Get the full Node Branch by climbing it to two levels above the root
+                                while (self.tree.GetItemParent(self.tree.GetItemParent(sel)) != self.tree.GetRootItem()):
+                                    # Update the selected node indicator
+                                    sel = self.tree.GetItemParent(sel)
+                                    # Prepend the new Node's name on the Message with the appropriate seperator
+                                    msg = ' >|< ' + self.tree.GetItemText(sel) + msg
+                                # For Notes, we need to know which root to climb, but we need the UNTRANSLATED root.
+                                if 'unicode' in wx.PlatformInfo:
+                                    seriesPrompt = unicode(_('Series'), 'utf8')
+                                    collectionsPrompt = unicode(_('Collections'), 'utf8')
+                                else:
+                                    # We need the nodeType as the first element.  Then, 
+                                    # we need the UNTRANSLATED label for the root node to avoid problems in mixed-language environments.
+                                    seriesPrompt = _('Series')
+                                    collectionsPrompt = _('Collections')
+                                if self.tree.GetItemText(self.tree.GetItemParent(sel)) == seriesPrompt:
+                                    rootNodeType = 'Series'
+                                elif self.tree.GetItemText(self.tree.GetItemParent(sel)) == collectionsPrompt:
+                                    rootNodeType = 'Collections'
+                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                # This must be untranslated to avoid problems in mixed-language environments.
+                                # Prepend these on the Messsage
+                                msg = note.notetype + "NoteNode >|< " + rootNodeType + msg
+                                if DEBUG:
+                                    print 'Message to send = "RN %s"' % msg
+                                # Send the Rename Node message
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
                         # If we do all this, we don't need to continue any more.
                         contin = False
-                    # Handle "SaveError" exception
-                    except SaveError:
-                        # Display the Error Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                    # Handle other exceptions
-                    except:
+                    # If the user pressed Cancel ...
+                    else:
+                        # ... then we don't need to continue any more.
+                        contin = False
+                # Handle "SaveError" exception
+                except SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    if DEBUG:
                         import traceback
                         traceback.print_exc(file=sys.stdout)
-                        # Display the Exception Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, "Exception %s: %s" % (sys.exc_info()[0], sys.exc_info()[1]))
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                # If the user pressed Cancel ...
-                else:
-                    # ... then we don't need to continue any more.
-                    contin = False
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Exception %s: %s"), 'utf8')
+                    else:
+                        prompt = _("Exception %s: %s")
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
             # Unlock the record regardless of what happens
             note.unlock_record()
 
@@ -760,34 +1160,50 @@ class DatabaseTreeTab(wx.Panel):
         contin = True
         # While the "continue" flag is True ...
         while contin:
-            # Display the Keyword Properties Dialog Box and get the data from the user
-            kw = dlg.get_input()
-            # If the user pressed OK ...
-            if kw != None:
-                # Use "try", as exceptions could occur
-                try:
+            # Use "try", as exceptions could occur
+            try:
+                # Display the Keyword Properties Dialog Box and get the data from the user
+                kw = dlg.get_input()
+                # If the user pressed OK ...
+                if kw != None:
                     # Try to save the data from the form
                     self.save_keyword(kw)
                     # Add the new Keyword to the tree
                     self.tree.add_Node('KeywordNode', (_('Keywords'), kw.keywordGroup, kw.keyword), 0, kw.keywordGroup)
+
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        if DEBUG:
+                            print 'Message to send = "AK %s >|< %s"' % (kw.keywordGroup, kw.keyword)
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage("AK %s >|< %s" % (kw.keywordGroup, kw.keyword))
+
                     # If we do all this, we don't need to continue any more.
                     contin = False
-                # Handle "SaveError" exception
-                except SaveError:
-                    # Display the Error Message, allow "continue" flag to remain true
-                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-                # Handle other exceptions
-                except:
-                    # Display the Exception Message, allow "continue" flag to remain true
-                    errordlg= Dialogs.ErrorDialog(None, "%s" % sys.exc_info()[:2])
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-            # If the user pressed Cancel ...
-            else:
-                # ... then we don't need to continue any more.
-                contin = False
+                # If the user pressed Cancel ...
+                else:
+                    # ... then we don't need to continue any more.
+                    contin = False
+            # Handle "SaveError" exception
+            except SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+            # Handle other exceptions
+            except:
+                if DEBUG:
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+                    
+                # Display the Exception Message, allow "continue" flag to remain true
+                prompt = "%s : %s"
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(prompt, 'utf8')
+                errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                errordlg.ShowModal()
+                errordlg.Destroy()
         
     def edit_keyword(self, kw):
         """User interface for editing a keyword."""
@@ -806,10 +1222,10 @@ class DatabaseTreeTab(wx.Panel):
             contin = True
             # While the "continue" flag is True ...
             while contin:
-                # Display the Keyword Properties Dialog Box and get the data from the user
-                if dlg.get_input() != None:
-                    # if the user pressed "OK" ...
-                    try:
+                # if the user pressed "OK" ...
+                try:
+                    # Display the Keyword Properties Dialog Box and get the data from the user
+                    if dlg.get_input() != None:
                         # Try to save the Keyword Data
                         self.save_keyword(kw)
 
@@ -822,29 +1238,65 @@ class DatabaseTreeTab(wx.Panel):
                             self.tree.delete_Node((_('Keywords'), self.tree.GetItemText(self.tree.GetItemParent(self.tree.GetSelection())), self.tree.GetItemText(self.tree.GetSelection())), 'KeywordNode')
                             # Add the new Keyword to the tree
                             self.tree.add_Node('KeywordNode', (_('Keywords'), kw.keywordGroup, kw.keyword), 0, kw.keywordGroup)
+
+                            # Now let's communicate with other Transana instances if we're in Multi-user mode
+                            if not TransanaConstants.singleUserVersion:
+                                if DEBUG:
+                                    print 'Message to send = "AK %s >|< %s"' % (kw.keywordGroup, kw.keyword)
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("AK %s >|< %s" % (kw.keywordGroup, kw.keyword))
+
                         elif kw.keyword != self.tree.GetItemText(self.tree.GetSelection()):
+                            sel = self.tree.GetSelection()
+                            originalName = self.tree.GetItemText(sel)
                             # If only the Keyword has changed, simply rename the node
-                            self.tree.SetItemText(self.tree.GetSelection(), kw.keyword)
+                            self.tree.SetItemText(sel, kw.keyword)
+                            # If we're in the Multi-User mode, we need to send a message about the change
+                            if not TransanaConstants.singleUserVersion:
+                                # Begin constructing the message with the old and new names for the node
+                                msg = " >|< %s >|< %s" % (originalName, kw.keyword)
+                                # Get the full Node Branch by climbing it to two levels above the root
+                                while (self.tree.GetItemParent(self.tree.GetItemParent(sel)) != self.tree.GetRootItem()):
+                                    # Update the selected node indicator
+                                    sel = self.tree.GetItemParent(sel)
+                                    # Prepend the new Node's name on the Message with the appropriate seperator
+                                    msg = ' >|< ' + self.tree.GetItemText(sel) + msg
+                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                # This must be untranslated to avoid problems in mixed-language environments.
+                                # Prepend these on the Messsage
+                                msg = "KeywordNode >|< Keywords" + msg
+                                if DEBUG:
+                                    print 'Message to send = "RN %s"' % msg
+                                # Send the Rename Node message
+                                if TransanaGlobal.chatWindow != None:
+                                    TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
                         # If we do all this, we don't need to continue any more.
                         contin = False
-                    # Handle "SaveError" exception
-                    except SaveError:
-                        # Display the Error Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                    # Handle other exceptions
-                    except:
+                    # If the user pressed Cancel ...
+                    else:
+                        # ... then we don't need to continue any more.
+                        contin = False
+                # Handle "SaveError" exception
+                except SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    if DEBUG:
                         import traceback
                         traceback.print_exc(file=sys.stdout)
-                        # Display the Exception Message, allow "continue" flag to remain true
-                        errordlg = Dialogs.ErrorDialog(None, "Exception %s: %s" % (sys.exc_info()[0], sys.exc_info()[1]))
-                        errordlg.ShowModal()
-                        errordlg.Destroy()
-                # If the user pressed Cancel ...
-                else:
-                    # ... then we don't need to continue any more.
-                    contin = False
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Exception %s: %s"), 'utf8')
+                    else:
+                        prompt = _("Exception %s: %s")
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
             # Unlock the record regardless of what happens
             kw.unlock_record()
 
@@ -858,22 +1310,26 @@ class DatabaseTreeTab(wx.Panel):
 
     def handle_locked_record(self, e, rtype, id):
         """Handle the RecordLockedError exception."""
-        msg = \
-        _('You cannot proceed because you cannot obtain a lock on %s "%s"' + \
-          '.\nThe record is currently locked by %s.\nPlease try again later.') \
-                % (rtype, id, e.user)
-        wx.MessageDialog(self, msg).ShowModal()
-
+        msg = _('You cannot proceed because you cannot obtain a lock on %s "%s"' + \
+                '.\nThe record is currently locked by %s.\nPlease try again later.')
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            msg = unicode(msg, 'utf8')
+            if isinstance(rtype, str):
+                rtype = unicode(rtype, 'utf8')
+            if isinstance(id, str):
+                id = unicode(id, 'utf8')
+        dlg = Dialogs.ErrorDialog(self.parent, msg % (rtype, id, e.user))
+        dlg.ShowModal()
+        dlg.Destroy()
 
 
 class MenuIDError(exceptions.Exception):
     def __init__(self, id=-1, menu=""):
         if id > -1:
-            self.msg = \
-                _("Unable to handle selection menu ID %d for '%s' menu") \
-                %  (id, menu)
+            self.msg = "Unable to handle selection menu ID %d for '%s' menu" % (id, menu)
         else:
-            self.msg = _("Unable to handle menu ID selection")
+            self.msg = "Unable to handle menu ID selection"
         self.args = self.msg
 
 
@@ -887,7 +1343,7 @@ class _NodeData:
         self.nodetype = nodetype    # nodetype indicates what sort of node we have.  Options include:
                                     # Root, SeriesRootNode, SeriesNode, EpisodeNode, TranscriptNode,
                                     # CollectionsRootNode, CollectionNode, ClipNode,
-                                    # KeywordsRootNode, KeywordGroupNode, KeywordNode,
+                                    # KeywordsRootNode, KeywordGroupNode, KeywordNode, KeywordExampleNode
                                     # NotesGroupNode, NoteNode,
                                     # SearchRootNode, SearchResultsNode, SearchSeriesNode, SearchEpisodeNode,
                                     # SearchTranscriptNode, SearchCollectionNode, SearchClipNode
@@ -899,8 +1355,6 @@ class _NodeData:
         str = 'nodetype = %s, recNum = %s, parent = %s' % (self.nodetype, self.recNum, self.parent)
         return str
 
-
-        
 
 class _DBTreeCtrl(wx.TreeCtrl):
     """Private class that implements the details of the tree widget."""
@@ -1117,16 +1571,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # We do the actual processing in the DropTarget object, as we have access to the Dragged Data and the
             # Drop Target's information there but not here.
 
-            # TODO:  In Transana, this is unnecessary and should be deleted.
-            # Report the result of the final drop when everything else is completed by the other objects.
-#            if dragResult == wx.DragCopy:
-#               print "_DBTreeCtrl OnBeginDrag Result indicated successful copy"
-#           elif dragResult == wx.DragMove:
-#               print "_DBTreeCtrl OnBeginDrag Result indicated successful move"
-#            else:
-#               print "_DBTreeCtrl OnBeginDrag Result indicated failed drop"
-#               print
-
             # Because the DropSource GiveFeedback Method can change the cursor, I find that I
             # need to reset it to "normal" here or it can get stuck as a "No_Entry" cursor if
             # a Drop is abandoned.
@@ -1135,7 +1579,14 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
     def create_root_node(self):
         # Include the Database Name as part of the Database Root
-        self.root = self.AddRoot(_('Database: %s') % TransanaGlobal.configData.database)
+        prompt = _('Database: %s')
+        # Note:  French was having trouble with UTF-8 prompts without the following line.
+        #        We use 'utf8' rather than TransanaGlobal.encoding because it's NOT the database's encoding
+        #        but the prompt encoding (always utf-8) that we need here!
+        if ('unicode' in wx.PlatformInfo) and (type(prompt).__name__ == 'str'):
+            prompt = unicode(prompt, 'utf8')  # TransanaGlobal.encoding)
+        prompt = prompt % TransanaGlobal.configData.database
+        self.root = self.AddRoot(prompt)
         self.set_image(self.root, "db")
         nodedata = _NodeData(nodetype='Root')                    # Identify this as the Root node
         self.SetPyData(self.root, nodedata)                      # Associate this data with the node
@@ -1146,10 +1597,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 noteitem = self.AppendItem(item, n)
                 self.set_image(noteitem, "Note16")
                 self.notes.append(noteitem)
-                n = Note.Note(n, **parent_num)
-                nodedata = _NodeData(nodetype='NoteNode', recNum=n.number)  # Identify this as a Note node
+                note = Note.Note(n, **parent_num)
+                nodedata = _NodeData(nodetype='NoteNode', recNum=note.number)  # Identify this as a Note node
                 self.SetPyData(noteitem, nodedata)                          # Associate this data with the node
-                del n
+                del note
 
     def create_series_node(self):
         self.series = []
@@ -1315,12 +1766,18 @@ class _DBTreeCtrl(wx.TreeCtrl):
         #        as I imagine Keyword Examples are probably fairly rare.  This method of calling up all the
         #        Keyword Examples at once and inserting nodes in the tree should be more efficient and cause
         #        MANY fewer database calls on startup.
+        #        Since this is called on Program Startup, no MU Messaging is required.
 
         # Get a list of all Keyword Examples from the Database
         keywordExamples = DBInterface.list_of_keyword_examples()
 
         # Iterate through the examples
         for rowData in keywordExamples:
+
+            if DEBUG:
+                print "DatabaseTreeTab.AddKeywordExamples:", rowData
+                print
+            
             # Load the indicated clip
             exampleClip = Clip.Clip(rowData[1])
             # Determine where it should be displayed in the Node Structure.
@@ -1425,15 +1882,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         return result
         
-    def add_Node(self, nodeType, nodeData, nodeRecNum, nodeParent, expandNode = True, insertPos = None):
+    def add_Node(self, nodeType, nodeData, nodeRecNum, nodeParent, expandNode = True, insertPos = None, avoidRecursiveYields = False):
         """ This method is used to add nodes to the tree after it has been built.
             nodeType is the type of node to be added, and nodeData is a list that gives the tree structure
             that describes where the node should be added. """
         currentNode = self.GetRootItem()
 
-        # print "Root node = %s" % self.GetItemText(currentNode)
-        # print "nodeData =", nodeData
-        # print 'nodeType =', nodeType
+        if DEBUG:
+            print "DatabaseTreeTab.add_Node():"
+            print "Root node = %s" % self.GetItemText(currentNode)
+            print "nodeData =", nodeData
+            print 'nodeType =', nodeType
 
         # Having nodes and subnodes with the same name causes a variety of problems.  We need to track how far
         # down the tree branches we are to keep track of what object NodeTypes we should be working with.
@@ -1449,44 +1908,64 @@ class _DBTreeCtrl(wx.TreeCtrl):
         elif nodeType in ['SearchRootNode', 'SearchResultsNode', 'SearchSeriesNode', 'SearchEpisodeNode', 'SearchTranscriptNode', 'SearchCollectionNode', 'SearchClipNode']:
             expectedNodeType = 'SearchRootNode'
 
-        # print 'expectedNodeType =', expectedNodeType
-        # print 'nodeData = ', nodeData
+        if DEBUG:
+            print 'expectedNodeType =', expectedNodeType
+            print 'nodeData = ', nodeData
 
         for node in nodeData:
 
             node = node.strip()
 
-            # print "Looking for '%s'" % node
-            # print "Current nodeListPos = %d, expectedNodeType = %s" % (nodeListPos, expectedNodeType)
+            if DEBUG:
+                print "Looking for '%s'  (%s)" % (node, type(node))
+                print "Current nodeListPos = %d, expectedNodeType = %s" % (nodeListPos, expectedNodeType)
 
             notDone = True
+
+            if DEBUG:
+                print "Getting children for ", self.GetItemText(currentNode)
+                
             (childNode, cookieItem) = self.GetFirstChild(currentNode)
+
+            if DEBUG:
+                print "GetFirstChild call complete"
 
             while notDone:
 
 		if childNode.IsOk():
+
+                    if DEBUG:
+                        print "childNode is OK"
+                        
                     itemText = self.GetItemText(childNode).strip()
                     
-                    # print "Looking in %s at %s for %s." % (self.GetItemText(currentNode), itemText, node)
+                    if DEBUG:
+                        print "Looking in %s at %s for %s." % (self.GetItemText(currentNode), itemText, node)
 
                     # Let's get the child Node's Data
                     childNodeData = self.GetPyData(childNode)
                 else:
+
+                    if DEBUG:
+                        print "childNode is NOT OK"
+                        
                     itemText = ''
                     childNodeData = None
                     
-                # print nodeType, childNode.IsOk()
+                if DEBUG:
+                    print nodeType, childNode.IsOk()
 
                 # To accept a node and climb on, the node text must match the text of the node being sought.
                 # If the node being added is a Keyword Example Node, we also need to make sure that the node being
                 # sought's Record Number matches the node being added's Record Number.  This is because it IS possible
                 # to have two clips with the same name in different collections applied as examples of the same Keyword.
 
-                # print 'NodeTypes:', nodeType, 
-                # if childNode.IsOk():
-                #     print childNodeData.nodetype
-                # else:
-                #     print 'childNode is not Ok.'
+                if DEBUG:
+                    print 'NodeTypes:', nodeType, 
+                    if childNode.IsOk():
+                        print childNodeData.nodetype
+                    else:
+                        print 'childNode is not Ok.'
 
                 # If this is a SearchResultsNode and there is at least one child, place the new entry above that first child.
                 # This has the effect of putting Search Results nodes in Reverse Chronological Order.
@@ -1498,16 +1977,32 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 #  2) does the child node's text match the next node in the nodelist?
                 #  3) are the NodeTypes from compatible branches in the DB Tree?
                 #  4) Is it a Keyword Example OR the correct record number
+
+                # We're having a problem here going to Danish with UTF-8 translation files.  This is an attempt
+                # to correct that problem.
+                if ('unicode' in wx.PlatformInfo) and (type(node).__name__ == 'str'):
+                    tmpNode = unicode(node, 'utf8')
+                else:
+                    tmpNode = node
+
+                if DEBUG:
+                    print "DatabaseTreeTab.add_Node(1)", childNode.IsOk()
+                    print "DatabaseTreeTab.add_Node(2)", itemText, node, itemText == node
+                    if childNodeData != None:
+                        print "DatabaseTreeTab.add_Node(3)", childNodeData.nodetype, expectedNodeType
+                        print "DatabaseTreeTab.add_Node(4)", childNodeData.recNum, nodeRecNum
+                
                 if  (childNode.IsOk()) and \
                     \
-                    (itemText == node) and \
+                    (itemText == tmpNode) and \
                     \
                     (childNodeData.nodetype in expectedNodeType) and \
                     \
                     ((childNodeData.nodetype != 'KeywordExampleNode') or (childNodeData.recNum == nodeRecNum)):
 
-                    # print "In '%s', '%s' = '%s'.  Climbing on." % (self.GetItemText(currentNode), itemText, node)
-                    # print
+                    if DEBUG:
+                        print "In '%s', '%s' = '%s'.  Climbing on." % (self.GetItemText(currentNode), itemText, node)
+                        print
 
                     # We've found the next node.  Increment the nodeListPos counter.
                     nodeListPos += 1
@@ -1516,18 +2011,21 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     currentNode = childNode
                     notDone = False
                 elif (not childNode.IsOk()) or (childNode == self.GetLastChild(currentNode)) or \
-                     ((expectedNodeType == 'SearchResultsNode') and childNode.IsOk()):
+                     ((expectedNodeType == 'SearchResultsNode') and (nodeType == 'SearchResultsNode') and childNode.IsOk()):
 
-                    # print "Adding in '%s' to '%s'." % (node, self.GetItemText(currentNode))
+                    if DEBUG:
+                        print "Adding in '%s' to '%s'." % (node, self.GetItemText(currentNode))
 
                     if nodeListPos < len(nodeData) - 1:
                         
-                        # print "This is not the last Node.  It is node %s of %s" % (node, nodeData)
+                        if DEBUG:
+                            print "This is not the last Node.  It is node %s of %s" % (node, nodeData)
 
                         # Let's get the current Node's Data
                         currentNodeData = self.GetPyData(currentNode)
 
-                        # print "currentNode = %s, %s" % (self.GetItemText(currentNode), currentNodeData),
+                        if DEBUG:
+                            print "currentNode = %s, %s" % (self.GetItemText(currentNode), currentNodeData),
 
                         # We know what type of node is expected next, so we know what kind of node to add
 
@@ -1562,8 +2060,11 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                         # If the expected node is a Keyword...
                         elif expectedNodeType == 'KeywordNode':
+                            currentRecNum = 0
 
-                            print "ExpectedNodeType == 'KeywordNode'.  This has not been coded!"
+                        # if the expected node is a Keyword Example...
+
+                            print "ExpectedNodeType == 'KeywordExampleNode'.  This has not been coded!"
 
                         # If the expected node is a SearchSeries...
                         elif expectedNodeType == 'SearchSeriesNode':
@@ -1596,13 +2097,15 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     # If we ARE at the end of the Node List, we can use the values passed in by the calling routine
                     else:
 
-                        # print "end of the Node List"
+                        if DEBUG:
+                            print "end of the Node List"
                         
                         expectedNodeType = nodeType
                         currentRecNum = nodeRecNum
                         currentParent = nodeParent
 
-                    # print "Positioning in Tree...", insertPos, childNode.IsOk()
+                    if DEBUG:
+                        print "Positioning in Tree...", insertPos, childNode.IsOk()
 
                     # We need to position new nodes in the proper place alphabetically and by nodetype.
                     # We can do this by setting the insertPos.  Note that we don't need to do this if
@@ -1612,8 +2115,9 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         # Let's get the current Node's Data
                         currentNodeData = self.GetPyData(currentNode)
 
-                        # print "nodetype = ", currentNodeData.nodetype, 'expectedNodeType = ', expectedNodeType
-                        # print
+                        if DEBUG:
+                            print "nodetype = ", currentNodeData.nodetype, 'expectedNodeType = ', expectedNodeType
+                            print
 
                         # Get the first Child Node of the Current Node
                         (child, cookieVal) = self.GetFirstChild(currentNode)
@@ -1626,7 +2130,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             else:
                                 nt = nodeType
                             
-                            # print "Evaluate(%s, %s, %s, %s)" % (node, nt, self.GetItemText(child), childData)
+                            if DEBUG:
+                                print "Evaluate(%s, %s, %s, %s)" % (node, nt, self.GetItemText(child), childData)
 
                             while self.Evaluate(node, nt, child, childData):
 
@@ -1705,7 +2210,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     notDone = False
 
                 (childNode, cookieItem) = self.GetNextChild(currentNode, cookieItem)
-        wx.Yield()
+        self.Refresh()
+        # Calls from the MessagePost method of the Chat Window have caused exceptions.  This attempts to prevent that.
+        if not avoidRecursiveYields:
+            wx.Yield()
 
     def select_Node(self, nodeData, nodeType):
         """ This method is used to select nodes in the tree.
@@ -1761,9 +2269,24 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 #    d) Search Results Series, Episode, or Transcript
                 #    e) Search Results Collection or Clip
                 #  4) Is it a Keyword Example OR the correct record number
+
+                # We're having a problem here going to Danish (and a couple other languages) with UTF-8 translation files.  
+                # the following few lines were added to correct that problem.
+                if ('unicode' in wx.PlatformInfo) and (type(node).__name__ == 'str'):
+                    tmpNode = unicode(node, 'utf8')
+                else:
+                    tmpNode = node
+
+                if DEBUG:
+                    print "DatabaseTreeTab.add_Node(1)", childNode.IsOk()
+                    # Can't print itemText or tmpNode, can't compare node!
+                    print "DatabaseTreeTab.add_Node(2)", itemText.encode('utf8'), tmpNode.encode('utf8'), type(itemText), type(tmpNode), itemText == tmpNode
+                    if childNodeData != None:
+                        print "DatabaseTreeTab.add_Node(3)", childNodeData.nodetype, expectedNodeType
+
                 if  (childNode.IsOk()) and \
                     \
-                    (itemText == node) and \
+                    (itemText == tmpNode) and \
                     \
                     (childNodeData.nodetype in expectedNodeType):    # and \
 #                    \
@@ -1795,8 +2318,15 @@ class _DBTreeCtrl(wx.TreeCtrl):
             self.EnsureVisible(currentNode)
         return currentNode
 
+    def rename_Node(self, nodeData, nodeType, newName):
+        """ This method is used to rename Nodes.  The single-user version of Transana was complete before
+            the need for this method was discovered, so it may only be used by the Multi-user version. """
+        # Select the appropriate Tree Node
+        sel = self.select_Node(nodeData, nodeType)
+        # Change the Name of the Tree Node
+        self.SetItemText(sel, newName)
 
-    def delete_Node(self, nodeData, nodeType, exampleClipNum=0):
+    def delete_Node(self, nodeData, nodeType, exampleClipNum=0, sendMessage=True):
         """ This method is used to delete nodes to the tree after it has been built.
             nodeData is a list that gives the tree structure that describes where the node should be deleted. """
         currentNode = self.GetRootItem()
@@ -1818,27 +2348,39 @@ class _DBTreeCtrl(wx.TreeCtrl):
         elif nodeType in ['SearchRootNode', 'SearchResultsNode', 'SearchSeriesNode', 'SearchEpisodeNode', 'SearchTranscriptNode', 'SearchCollectionNode', 'SearchClipNode']:
             expectedNodeType = 'SearchRootNode'
 
+        msgData = ''
+
         for node in nodeData:
 
             node = node.strip()
 
-            # print "Looking for %s" % node
-            
+            if not TransanaConstants.singleUserVersion and sendMessage:
+                if msgData != '':
+                    msgData += ' >|< %s' % node
+                else:
+                    if 'unicode' in wx.PlatformInfo:
+                        seriesPrompt = unicode(_('Series'), 'utf8')
+                        collectionsPrompt = unicode(_('Collections'), 'utf8')
+                        keywordsPrompt = unicode(_('Keywords'), 'utf8')
+                    else:
+                        # We need the nodeType as the first element.  Then, 
+                        # we need the UNTRANSLATED label for the root node to avoid problems in mixed-language environments.
+                        seriesPrompt = _('Series')
+                        collectionsPrompt = _('Collections')
+                        keywordsPrompt = _('Keywords')
+                    if node == seriesPrompt: # _('Series'):
+                        msgData = nodeType + ' >|< Series'
+                    elif node == collectionsPrompt:
+                        msgData = nodeType + ' >|< Collections'
+                    elif node == keywordsPrompt:
+                        msgData = nodeType + ' >|< Keywords'
+
             notDone = True
             (childNode, cookieItem) = self.GetFirstChild(currentNode)
 
             while notDone and (currentNode != None):
                 itemText = self.GetItemText(childNode).strip()
-
-                # print "Looking in '%s' at '%s' for '%s'." % (self.GetItemText(currentNode), itemText, node)
-
                 childNodeData = self.GetPyData(childNode)
-
-                # print 'NodeTypes:', nodeType, 
-                # if childNode.IsOk():
-                #     print childNodeData.nodetype, expectedNodeType
-                # else:
-                #     print 'childNode is not Ok.'
 
                 # To accept a node and climb on, the node text must match the text of the node being sought.
                 # If the node being added is a Keyword Example Node, we also need to make sure that the node being
@@ -1885,6 +2427,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
             self.Delete(currentNode)
                     
+            # Now let's communicate with other Transana instances if we're in Multi-user mode
+            if not TransanaConstants.singleUserVersion and sendMessage and (msgData != ''):
+                if DEBUG:
+                    print 'Message to send = "DN %s"' % msgData
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage("DN %s" % msgData)
                     
     def create_menus(self):
         """Create all the menu objects used in the tree control."""
@@ -2076,25 +2624,57 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Load the Selected Series
             series = Series.Series(selData.recNum)
             # Get user confirmation of the Series Delete request
-            dlg = wx.MessageDialog(self, _('Are you sure you want to delete Series "%s" and all related Episodes, Transcripts and Notes?') % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Are you sure you want to delete Series "%s" and all related Episodes, Transcripts and Notes?'), 'utf8')
+            else:
+                prompt = _('Are you sure you want to delete Series "%s" and all related Episodes, Transcripts and Notes?')
+            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
             result = dlg.ShowModal()
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
-                # Start by clearing all current objects
-                self.parent.ControlObject.ClearAllWindows()
-                # Try to delete the Series, initiating a Transaction
-                delResult = series.db_delete(1)
-                # If successful, remove the Series Node from the Database Tree
-                if delResult:
-                    # Get the full Node Branch by climbing it to one level above the root
-                    nodeList = (self.GetItemText(sel),)
-                    while (self.GetItemParent(sel) != self.GetRootItem()):
-                        sel = self.GetItemParent(sel)
-                        nodeList = (self.GetItemText(sel),) + nodeList
-                        # print nodeList
-                    # Call the DB Tree's delete_Node method.
-                    self.delete_Node(nodeList, 'SeriesNode')
+                # if current object is an Episode ...
+                if isinstance(self.parent.ControlObject.currentObj, Episode.Episode):
+                    # ... Start by clearing all current objects
+                    self.parent.ControlObject.ClearAllWindows()
+                try:
+                    # Try to delete the Series, initiating a Transaction
+                    delResult = series.db_delete(1)
+                    # If successful, remove the Series Node from the Database Tree
+                    if delResult:
+                        # Get the full Node Branch by climbing it to one level above the root
+                        nodeList = (self.GetItemText(sel),)
+                        while (self.GetItemParent(sel) != self.GetRootItem()):
+                            sel = self.GetItemParent(sel)
+                            nodeList = (self.GetItemText(sel),) + nodeList
+                            # print nodeList
+                        # Call the DB Tree's delete_Node method.
+                        self.delete_Node(nodeList, 'SeriesNode')
+                except RecordLockedError, e:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('You cannot delete Series "%s".\n%s'), 'utf8')
+                    else:
+                        prompt = _('You cannot delete Series "%s".\n%s')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (series.id, e.args))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    if DEBUG:
+                        print "DatabaseTreeTab.OnSeriesCommand():  Delete Series"
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    prompt = "%s : %s"
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
                 
         elif n == 4:    # Keyword Usage Report
             KeywordUsageReport.KeywordUsageReport(seriesName = series_name)
@@ -2153,25 +2733,53 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Load the Selected Episode
             episode = Episode.Episode(selData.recNum)
             # Get user confirmation of the Episode Delete request
-            dlg = wx.MessageDialog(self, _('Are you sure you want to delete Episode "%s" and all related Transcripts and Notes?\n(Please note that the video file associated with this Episode will not be deleted.)') % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Are you sure you want to delete Episode "%s" and all related Transcripts and Notes?\n(Please note that the video file associated with this Episode will not be deleted.)'), 'utf8')
+            else:
+                prompt = _('Are you sure you want to delete Episode "%s" and all related Transcripts and Notes?\n(Please note that the video file associated with this Episode will not be deleted.)')
+            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
             result = dlg.ShowModal()
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
-                # Start by clearing all current objects
-                self.parent.ControlObject.ClearAllWindows()
-                # Try to delete the Episode, initiating a Transaction
-                delResult = episode.db_delete(1)
-                # If successful, remove the Episode Node from the Database Tree
-                if delResult:
-                    # Get the full Node Branch by climbing it to one level above the root
-                    nodeList = (self.GetItemText(sel),)
-                    while (self.GetItemParent(sel) != self.GetRootItem()):
-                        sel = self.GetItemParent(sel)
-                        nodeList = (self.GetItemText(sel),) + nodeList
-                        # print nodeList
-                    # Call the DB Tree's delete_Node method.
-                    self.delete_Node(nodeList, 'EpisodeNode')
+                # if current object is THIS Episode ...
+                if (isinstance(self.parent.ControlObject.currentObj, Episode.Episode)) and (self.parent.ControlObject.currentObj.number == episode.number):
+                    # Start by clearing all current objects
+                    self.parent.ControlObject.ClearAllWindows()
+                try:
+                    # Try to delete the Episode, initiating a Transaction
+                    delResult = episode.db_delete(1)
+                    # If successful, remove the Episode Node from the Database Tree
+                    if delResult:
+                        # Get the full Node Branch by climbing it to one level above the root
+                        nodeList = (self.GetItemText(sel),)
+                        while (self.GetItemParent(sel) != self.GetRootItem()):
+                            sel = self.GetItemParent(sel)
+                            nodeList = (self.GetItemText(sel),) + nodeList
+                            # print nodeList
+                        # Call the DB Tree's delete_Node method.
+                        self.delete_Node(nodeList, 'EpisodeNode')
+                except RecordLockedError, e:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('You cannot delete Episode "%s".\n%s'), 'utf8')
+                    else:
+                        prompt = _('You cannot delete Episode "%s".\n%s')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (episode.id, e.args))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    prompt = "%s : %s"
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
                 
         elif n == 4:    # Keyword Map Report
             self.KeywordMapReport(series_name, episode_name)
@@ -2207,25 +2815,53 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Load the Selected Transcript
             transcript = Transcript.Transcript(selData.recNum)
             # Get user confirmation of the Transcript Delete request
-            dlg = wx.MessageDialog(self, _('Are you sure you want to delete Transcript "%s" and all related Notes?') % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Are you sure you want to delete Transcript "%s" and all related Notes?'), 'utf8')
+            else:
+                prompt = _('Are you sure you want to delete Transcript "%s" and all related Notes?')
+            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
             result = dlg.ShowModal()
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
-                # Start by clearing all current objects
-                self.parent.ControlObject.ClearAllWindows()
-                # Try to delete the Transcript, initiating a Transaction
-                delResult = transcript.db_delete(1)
-                # If successful, remove the Transcript Node from the Database Tree
-                if delResult:
-                    # Get the full Node Branch by climbing it to one level above the root
-                    nodeList = (self.GetItemText(sel),)
-                    while (self.GetItemParent(sel) != self.GetRootItem()):
-                        sel = self.GetItemParent(sel)
-                        nodeList = (self.GetItemText(sel),) + nodeList
-                        # print nodeList
-                    # Call the DB Tree's delete_Node method.
-                    self.delete_Node(nodeList, 'TranscriptNode')
+                # if current object is a Transcript in the current Episode ...
+                if (isinstance(self.parent.ControlObject.currentObj, Episode.Episode)) and (self.parent.ControlObject.currentObj.number == transcript.episode_num):
+                    # Start by clearing all current objects
+                    self.parent.ControlObject.ClearAllWindows()
+                try:
+                    # Try to delete the Transcript, initiating a Transaction
+                    delResult = transcript.db_delete(1)
+                    # If successful, remove the Transcript Node from the Database Tree
+                    if delResult:
+                        # Get the full Node Branch by climbing it to one level above the root
+                        nodeList = (self.GetItemText(sel),)
+                        while (self.GetItemParent(sel) != self.GetRootItem()):
+                            sel = self.GetItemParent(sel)
+                            nodeList = (self.GetItemText(sel),) + nodeList
+                            # print nodeList
+                        # Call the DB Tree's delete_Node method.
+                        self.delete_Node(nodeList, 'TranscriptNode')
+                except RecordLockedError, e:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('You cannot delete Transcript "%s".\n%s'), 'utf8')
+                    else:
+                        prompt = _('You cannot delete Transcript "%s".\n%s')
+                    errordlg = Dialogs.ErrorDialog(None, _('You cannot delete Transcript "%s".\n%s') % (transcript.id, e.args))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    prompt = "%s : %s"
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
 
         elif n == 3:    # Properties
             series_name = self.GetItemText(self.GetItemParent(self.GetItemParent(sel)))
@@ -2342,43 +2978,70 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Load the Selected Collection
             collection = Collection.Collection(selData.recNum)
             # Get user confirmation of the Collection Delete request
-            dlg = wx.MessageDialog(self, _('Are you sure you want to delete Collection "%s" and all related Nested Collections, Clips and Notes?') % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Are you sure you want to delete Collection "%s" and all related Nested Collections, Clips and Notes?'), 'utf8')
+            else:
+                prompt = _('Are you sure you want to delete Collection "%s" and all related Nested Collections, Clips and Notes?')
+            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
             result = dlg.ShowModal()
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
-                # Start by clearing all current objects
-                self.parent.ControlObject.ClearAllWindows()
+                # if current object is a Clip ...
+                if isinstance(self.parent.ControlObject.currentObj, Clip.Clip):
+                    # Start by clearing all current objects
+                    self.parent.ControlObject.ClearAllWindows()
                 # If the delete is successful, we will need to remove all Keyword Examples for all Clips that get deleted.
                 # Let's get a  list of those Keyword Examples before we do anything.
                 kwExamples = DBInterface.list_all_keyword_examples_for_all_clips_in_a_collection(selData.recNum)
-                # Try to delete the Collection, initiating a Transaction
-                delResult = collection.db_delete(1)
-                # If successful, remove the Collection Node from the Database Tree
-                if delResult:
-                    # We need to remove the Keyword Examples from the Database Tree before we remove the Collection Node.
-                    # Deleting all these ClipKeyword records needs to remove Keyword Example Nodes in the DBTree.
-                    # That needs to be done here in the User Interface rather than in the Clip Object, as that is
-                    # a user interface issue.  The Clip Record and the Clip Keywords Records get deleted, but
-                    # the user interface does not get cleaned up by deleting the Clip Object.
-                    for (kwg, kw, clipNum, clipID) in kwExamples:
-                        self.delete_Node((_("Keywords"), kwg, kw, clipID), 'KeywordExampleNode', exampleClipNum = clipNum)
-                    
-                    # Get the full Node Branch by climbing it to one level above the root
-                    nodeList = (self.GetItemText(sel),)
-                    while (self.GetItemParent(sel) != self.GetRootItem()):
-                        sel = self.GetItemParent(sel)
-                        nodeList = (self.GetItemText(sel),) + nodeList
-                        # print nodeList
-                    # Call the DB Tree's delete_Node method.
-                    self.delete_Node(nodeList, 'CollectionNode')
+                try:
+                    # Try to delete the Collection, initiating a Transaction
+                    delResult = collection.db_delete(1)
+                    # If successful, remove the Collection Node from the Database Tree
+                    if delResult:
+                        # We need to remove the Keyword Examples from the Database Tree before we remove the Collection Node.
+                        # Deleting all these ClipKeyword records needs to remove Keyword Example Nodes in the DBTree.
+                        # That needs to be done here in the User Interface rather than in the Clip Object, as that is
+                        # a user interface issue.  The Clip Record and the Clip Keywords Records get deleted, but
+                        # the user interface does not get cleaned up by deleting the Clip Object.
+                        for (kwg, kw, clipNum, clipID) in kwExamples:
+                            self.delete_Node((_("Keywords"), kwg, kw, clipID), 'KeywordExampleNode', exampleClipNum = clipNum)
+                        
+                        # Get the full Node Branch by climbing it to one level above the root
+                        nodeList = (self.GetItemText(sel),)
+                        while (self.GetItemParent(sel) != self.GetRootItem()):
+                            sel = self.GetItemParent(sel)
+                            nodeList = (self.GetItemText(sel),) + nodeList
+                            # print nodeList
+                        # Call the DB Tree's delete_Node method.
+                        self.delete_Node(nodeList, 'CollectionNode')
+                except RecordLockedError, e:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('You cannot delete Collection "%s".\n%s'), 'utf8')
+                    else:
+                        prompt = _('You cannot delete Collection "%s".\n%s')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (collection.id, e.args))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    prompt = "%s : %s"
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
 
         elif n == 8:    # Keyword Usage Report
             coll = Collection.Collection(coll_name, parent_num)
             KeywordUsageReport.KeywordUsageReport(collection = coll)
 
         elif n == 9:    # Play All Clips
-            # self.parent.ControlObject.ClearAllWindows()
             coll = Collection.Collection(coll_name, parent_num)
             # Play All Clips takes the current Collection and the ControlObject as parameters.
             # (The ControlObject is owned not by the _DBTreeCtrl but by its parent)
@@ -2482,41 +3145,73 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Load the Selected Clip
             clip = Clip.Clip(selData.recNum)
             # Get user confirmation of the Clip Delete request
-            dlg = wx.MessageDialog(self, _('Are you sure you want to delete Clip "%s" and all related Notes?') % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Are you sure you want to delete Clip "%s" and all related Notes?'), 'utf8')
+            else:
+                prompt = _('Are you sure you want to delete Clip "%s" and all related Notes?')
+            dlg = wx.MessageDialog(self, prompt % self.GetItemText(sel), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
             result = dlg.ShowModal()
             dlg.Destroy()
+
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
-                # Start by clearing all current objects
-                self.parent.ControlObject.ClearAllWindows()
+                # If THIS Clip is loaded ...
+                if isinstance(self.parent.ControlObject.currentObj, Clip.Clip) and (self.parent.ControlObject.currentObj.number == clip.number):
+                    # ... Start by clearing all current objects
+                    self.parent.ControlObject.ClearAllWindows()
 
                 # Determine what Keyword Examples exist for the specified Clip so that they can be removed from the
                 # Database Tree if the delete succeeds.  We must do that first, as the Clips themselves and the
                 # ClipKeywords Records will be deleted later!
                 kwExamples = DBInterface.list_all_keyword_examples_for_a_clip(selData.recNum)
-            
-                # Try to delete the Clip, initiating a Transaction
-                delResult = clip.db_delete(1)
-                # If successful, remove the Clip Node from the Database Tree
-                if delResult:
-                    # Get a temporary Selection Pointer
-                    tempSel = sel
-                    # Get the full Node Branch by climbing it to one level above the root
-                    nodeList = (self.GetItemText(tempSel),)
-                    while (self.GetItemParent(tempSel) != self.GetRootItem()):
-                        tempSel = self.GetItemParent(tempSel)
-                        nodeList = (self.GetItemText(tempSel),) + nodeList
-                        # print nodeList
 
-                    # Deleting all these ClipKeyword records needs to remove Keyword Example Nodes in the DBTree.
-                    # That needs to be done here in the User Interface rather than in the Clip Object, as that is
-                    # a user interface issue.  The Clip Record and the Clip Keywords Records get deleted, but
-                    # the user interface does not get cleaned up by deleting the Clip Object.
-                    for (kwg, kw, clipNum, clipID) in kwExamples:
-                        self.delete_Node((_("Keywords"), kwg, kw, clipID), 'KeywordExampleNode', exampleClipNum = clipNum)
+                try:
+                    # Try to delete the Clip, initiating a Transaction
+                    delResult = clip.db_delete(1)
+                    # If successful, remove the Clip Node from the Database Tree
+                    if delResult:
+                        # Get a temporary Selection Pointer
+                        tempSel = sel
+                        # Get the full Node Branch by climbing it to one level above the root
+                        nodeList = (self.GetItemText(tempSel),)
+                        while (self.GetItemParent(tempSel) != self.GetRootItem()):
+                            tempSel = self.GetItemParent(tempSel)
+                            nodeList = (self.GetItemText(tempSel),) + nodeList
 
-                    # Call the DB Tree's delete_Node method.
-                    self.delete_Node(nodeList, 'ClipNode')
+                        # Deleting all these ClipKeyword records needs to remove Keyword Example Nodes in the DBTree.
+                        # That needs to be done here in the User Interface rather than in the Clip Object, as that is
+                        # a user interface issue.  The Clip Record and the Clip Keywords Records get deleted, but
+                        # the user interface does not get cleaned up by deleting the Clip Object.
+                        for (kwg, kw, clipNum, clipID) in kwExamples:
+                            self.delete_Node((_("Keywords"), kwg, kw, clipID), 'KeywordExampleNode', exampleClipNum = clipNum)
+
+                        # Call the DB Tree's delete_Node method.
+                        self.delete_Node(nodeList, 'ClipNode')
+                except RecordLockedError, e:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('You cannot delete Clip "%s".\n%s'), 'utf8')
+                    else:
+                        prompt = _('You cannot delete Clip "%s".\n%s')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (clip.id, e.args))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    if DEBUG:
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    prompt = "%s : %s"
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
 
         elif n == 6:    # Locate Clip in Episode
             # Load the Clip
@@ -2545,8 +3240,15 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     self.parent.ControlObject.LoadTranscript(episode.series_id, episode.id, transcript.id)
                     self.parent.ControlObject.SetVideoSelection(clip.clip_start, clip.clip_stop)
             except:
-                (extype, value, traceback) = sys.exc_info()
-                # print "DatabaseTreeTab.OnClipCommand:  Exception raised.\nType = %s\nValue = %s\nTraceback = %s" % (extype, value, traceback)
+                
+                if DEBUG:
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+
+                    (extype, value, traceback) = sys.exc_info()
+
+                    print "DatabaseTreeTab.OnClipCommand() Exception:", extype, value
+                
                 dlg = Dialogs.ErrorDialog(self, _('The Transcript this Clip was created from cannot be loaded.\nMost likely, the transcript has been deleted.'))
                 result = dlg.ShowModal()
                 dlg.Destroy()
@@ -2575,35 +3277,60 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Load the Selected Note
             note = Note.Note(selData.recNum)
             # Get user confirmation of the Note Delete request
-            dlg = wx.MessageDialog(self, _('Are you sure you want to delete Note "%s"?') % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Are you sure you want to delete Note "%s"?'), 'utf8')
+            else:
+                prompt = _('Are you sure you want to delete Note "%s"?')
+            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel)), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
             result = dlg.ShowModal()
             dlg.Destroy()
             # If the user confirms the Delete Request...
             if result == wx.ID_YES:
-                # Try to delete the Note.  There is no need to initiate a Transaction for deleting a Note.
-                delResult = note.db_delete(0)
-                # If successful, remove the Note Node from the Database Tree
-                if delResult:
-                    # Get the full Node Branch by climbing it to one level above the root
-                    nodeList = (self.GetItemText(sel),)
-                    while (self.GetItemParent(sel) != self.GetRootItem()):
-                        sel = self.GetItemParent(sel)
-                        nodeList = (self.GetItemText(sel),) + nodeList
-                        # print nodeList
-                    # Call the DB Tree's delete_Node method.
-                    # To climb the DBTree properly, we need to provide the note's PARENT's NodeType along with the NodeNode indication
-                    noteParentNodeType = self.GetPyData(self.GetItemParent(self.GetSelection())).nodetype
-                    if noteParentNodeType == 'SeriesNode':
-                        noteNodeType = 'SeriesNoteNode'
-                    elif noteParentNodeType == 'EpisodeNode':
-                        noteNodeType = 'EpisodeNoteNode'
-                    elif noteParentNodeType == 'TranscriptNode':
-                        noteNodeType = 'TranscriptNoteNode'
-                    elif noteParentNodeType == 'CollectionNode':
-                        noteNodeType = 'CollectionNoteNode'
-                    elif noteParentNodeType == 'ClipNode':
-                        noteNodeType = 'ClipNoteNode'
-                    self.delete_Node(nodeList, noteNodeType)
+                try:
+                    # Try to delete the Note.  There is no need to initiate a Transaction for deleting a Note.
+                    delResult = note.db_delete(0)
+                    # If successful, remove the Note Node from the Database Tree
+                    if delResult:
+                        # Get the full Node Branch by climbing it to one level above the root
+                        nodeList = (self.GetItemText(sel),)
+                        while (self.GetItemParent(sel) != self.GetRootItem()):
+                            sel = self.GetItemParent(sel)
+                            nodeList = (self.GetItemText(sel),) + nodeList
+                        # Call the DB Tree's delete_Node method.
+                        # To climb the DBTree properly, we need to provide the note's PARENT's NodeType along with the NodeNode indication
+                        noteParentNodeType = self.GetPyData(self.GetItemParent(self.GetSelection())).nodetype
+                        if noteParentNodeType == 'SeriesNode':
+                            noteNodeType = 'SeriesNoteNode'
+                        elif noteParentNodeType == 'EpisodeNode':
+                            noteNodeType = 'EpisodeNoteNode'
+                        elif noteParentNodeType == 'TranscriptNode':
+                            noteNodeType = 'TranscriptNoteNode'
+                        elif noteParentNodeType == 'CollectionNode':
+                            noteNodeType = 'CollectionNoteNode'
+                        elif noteParentNodeType == 'ClipNode':
+                            noteNodeType = 'ClipNoteNode'
+                        self.delete_Node(nodeList, noteNodeType)
+                except RecordLockedError, e:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('You cannot delete Note "%s".\n%s'), 'utf8')
+                    else:
+                        prompt = _('You cannot delete Note "%s".\n%s')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (note.id, e.args))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    prompt = "%s : %s"
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0],sys.exc_info()[1]))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
 
         elif n == 2:    # Properties
             note = Note.Note(selData.recNum)
@@ -2611,6 +3338,22 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
         else:
             raise MenuIDError
+
+    def updateKWGroupsData(self):
+        # Since we've just inserted a new Keyword Group, we need to rebuild the self.kwgroups data structure.
+        # This data structure is used to ensure that empty keyword groups still show up in the Keyword Properties dialog.
+        # Initialize keyword groups to an empty list
+
+        # NOTE:  From what I can tell, this doesn't actually do ANYTHING.  DKW 6/1/2005
+        
+        self.kwgroups = []
+        # The "Keywords" node itself is always item 0 in the node list
+        kwg_root = self.select_Node((_("Keywords"),), 'KeywordRootNode')
+        self.kwgroups.append(kwg_root)
+        (child, cookieVal) = self.GetFirstChild(kwg_root)
+        while child.IsOk():
+            self.kwgroups.append(child)
+            (child, cookieVal) = self.GetNextChild(kwg_root, cookieVal)
 
     def OnKwRootCommand(self, evt):
         """Handle selections for the root Keyword group menu."""
@@ -2629,21 +3372,42 @@ class _DBTreeCtrl(wx.TreeCtrl):
      
             kwg = Dialogs.add_kw_group_ui(self, kwg_names)
             if kwg:
+                # Make sure parenthesis characters are not allowed in Keyword Group
+                if (string.find(kwg, '(') > -1) or (string.find(kwg, ')') > -1):
+                    kwg = string.replace(kwg, '(', '')
+                    kwg = string.replace(kwg, ')', '')
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".'), 'utf8')
+                    else:
+                        prompt = _('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".')
+                    dlg = Dialogs.ErrorDialog(None, prompt % kwg)
+                    dlg.ShowModal()
+                    dlg.Destroy()
                 nodeData = (_('Keywords'), kwg)
                 # Add the new Keyword Group to the data tree
                 self.add_Node('KeywordGroupNode', nodeData, 0, 0)
 
+                # Now let's communicate with other Transana instances if we're in Multi-user mode
+                if not TransanaConstants.singleUserVersion:
+                    if DEBUG:
+                        print 'Message to send = "AKG %s"' % nodeData[-1]
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("AKG %s" % nodeData[-1])
+
+                self.updateKWGroupsData()
+
                 # Since we've just inserted a new Keyword Group, we need to rebuild the self.kwgroups data structure.
                 # This data structure is used to ensure that empty keyword groups still show up in the Keyword Properties dialog.
                 # Initialize keyword groups to an empty list
-                self.kwgroups = []
+#                self.kwgroups = []
                 # The "Keywords" node itself is always item 0 in the node list
-                kwg_root = self.select_Node((_("Keywords"),), 'KeywordRootNode')
-                self.kwgroups.append(kwg_root)
-                (child, cookieVal) = self.GetFirstChild(kwg_root)
-                while child.IsOk():
-                    self.kwgroups.append(child)
-                    (child, cookieVal) = self.GetNextChild(kwg_root, cookieVal)
+#                kwg_root = self.select_Node((_("Keywords"),), 'KeywordRootNode')
+#                self.kwgroups.append(kwg_root)
+#                (child, cookieVal) = self.GetFirstChild(kwg_root)
+#                while child.IsOk():
+#                    self.kwgroups.append(child)
+#                    (child, cookieVal) = self.GetNextChild(kwg_root, cookieVal)
 
         elif n == 1:    # KW Management
             # Call up the Keyword Management dialog
@@ -2693,19 +3457,67 @@ class _DBTreeCtrl(wx.TreeCtrl):
             self.parent.add_keyword(kwg_name)
 
         elif n == 2:    # Delete this keyword group
-            msg = _('Are you sure you want to delete Keyword Group "%s", all of its keywords, and all instances of those keywords from the Clips?') % kwg_name
-            id = wx.MessageDialog(self, msg, _("Transana Confirmation"), \
+            msg = _('Are you sure you want to delete Keyword Group "%s", all of its keywords, and all instances of those keywords from the Clips?')
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                msg = unicode(msg, 'utf8')
+            id = wx.MessageDialog(self, msg % kwg_name, _("Transana Confirmation"), \
                         wx.YES | wx.NO | wx.CENTRE | wx.ICON_QUESTION).ShowModal()
             if id == wx.ID_YES:
                 # Start by clearing all current objects
                 self.parent.ControlObject.ClearAllWindows()
-                # Delete the Keyword group
-                DBInterface.delete_keyword_group(kwg_name)
-                # We maintain a list of keyword groups so that empty ones don't get lost.  We need to remove the deleted keyword group form 
-                # this list as well
-                self.kwgroups.remove(sel)
-                # Remove the Keyword Group from the tree
-                self.Delete(sel)
+                try:
+                    # Delete the Keyword group
+                    DBInterface.delete_keyword_group(kwg_name)
+                    # We maintain a list of keyword groups so that empty ones don't get lost.  We need to remove the deleted keyword group form 
+                    # this list as well
+                    self.kwgroups.remove(sel)
+                    # Remove the Keyword Group from the tree
+                    # Get the full Node Branch by climbing it to one level above the root
+                    nodeList = (self.GetItemText(sel),)
+                    while (self.GetItemParent(sel) != self.GetRootItem()):
+                        sel = self.GetItemParent(sel)
+                        nodeList = (self.GetItemText(sel),) + nodeList
+                    # Call the DB Tree's delete_Node method.
+                    self.delete_Node(nodeList, 'KeywordGroupNode')
+                except RecordLockedError, e:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('You cannot delete Keyword Group "%s".\n%s'), 'utf8')
+                    else:
+                        prompt = _('You cannot delete Keyword Group "%s".\n%s')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % (kwg_name, e.args))
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle GeneralError exceptions
+                except GeneralError, e:
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    prompt = "%s"
+                    data = e.args
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % data)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                # Handle other exceptions
+                except:
+
+                    if DEBUG:
+                        print "Exception %s: %s" % (sys.exc_info()[0], sys.exc_info()[1])
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+                        
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    prompt = "%s"
+                    data = sys.exc_info()[1]
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % data)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
 
         elif n == 3:    # Keyword Summary Report
             KeywordSummaryReport.KeywordSummaryReport(kwg_name)
@@ -2747,15 +3559,40 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
 
         elif n == 3:    # Delete this keyword
-            msg = _('Are you sure you want to delete Keyword "%s : %s" and all instances of it from the Clips?') % (kw_group, kw_name)
-            id = wx.MessageDialog(self, msg, _("Transana Confirmation"), \
+            msg = _('Are you sure you want to delete Keyword "%s : %s" and all instances of it from the Clips?')
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                msg = unicode(msg, 'utf8')
+            id = wx.MessageDialog(self, msg % (kw_group, kw_name), _("Transana Confirmation"), \
                         wx.YES | wx.NO | wx.CENTRE | wx.ICON_QUESTION).ShowModal()
             if id == wx.ID_YES:
                 # Start by clearing all current objects
                 self.parent.ControlObject.ClearAllWindows()
-                # Delete teh Keyword
-                DBInterface.delete_keyword(kw_group, kw_name)
-                self.Delete(sel)
+                try:
+                    # Delete the Keyword
+                    DBInterface.delete_keyword(kw_group, kw_name)
+                    # Get the full Node Branch by climbing it to one level above the root
+                    nodeList = (self.GetItemText(sel),)
+                    while (self.GetItemParent(sel) != self.GetRootItem()):
+                        sel = self.GetItemParent(sel)
+                        nodeList = (self.GetItemText(sel),) + nodeList
+                    # Call the DB Tree's delete_Node method.
+                    self.delete_Node(nodeList, 'KeywordNode')
+                # Handle exceptions
+                except:
+                    if DEBUG:
+                        print "Exception %s: %s" % (sys.exc_info()[0], sys.exc_info()[1])
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+                        
+                    # Display the Exception Message, allow "continue" flag to remain true
+                    prompt = "%s"
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(prompt, 'utf8')
+                    errordlg = Dialogs.ErrorDialog(None, prompt % sys.exc_info()[1])
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
 
         elif n == 4:    # Keyword Properties
             kw = Keyword.Keyword(kw_group, kw_name)
@@ -2788,7 +3625,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
             kwg = self.GetItemText(self.GetItemParent(self.GetItemParent(sel)))
             kw = self.GetItemText(self.GetItemParent(sel))
             # Get user confirmation of the Keyword Example Add request
-            dlg = wx.MessageDialog(self, _('Do you want to remove Clip "%s" as an example of Keyword "%s:%s"?') % (self.GetItemText(sel), kwg, kw), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to remove Clip "%s" as an example of Keyword "%s:%s"?'), 'utf8')
+            else:
+                prompt = _('Do you want to remove Clip "%s" as an example of Keyword "%s:%s"?')
+            dlg = wx.MessageDialog(self, prompt % (self.GetItemText(sel), kwg, kw), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
             result = dlg.ShowModal()
             dlg.Destroy()
             if result == wx.ID_YES:
@@ -3018,7 +3860,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
             except:
                 (type, value, traceback) = sys.exc_info()
-                # print "DatabaseTreeTab.OnClipCommand:  Exception raised.\nType = %s\nValue = %s\nTraceback = %s" % (type, value, traceback)
                 dlg = Dialogs.ErrorDialog(self, _('The Transcript this Clip was created from cannot be loaded.\nMost likely, the transcript has been deleted.'))
                 result = dlg.ShowModal()
                 dlg.Destroy()
@@ -3036,7 +3877,6 @@ class _DBTreeCtrl(wx.TreeCtrl):
         while (self.GetItemParent(selection) != self.GetRootItem()):
             selection = self.GetItemParent(selection)
             nodeList = (self.GetItemText(selection),) + nodeList
-            # print nodeList
         # Call the DB Tree's delete_Node method.
         self.delete_Node(nodeList, originalNodeType)
         
@@ -3211,8 +4051,18 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 menu = self.menu["searchtranscript"]
             elif sel_item_data.nodetype == 'SearchCollectionNode':
                 menu = self.menu["searchcollection"]
+                # Determine if the Paste menu item should be enabled 
+                if DragAndDropObjects.DragDropEvaluation(source_item_data, sel_item_data):
+                    menu.Enable(menu.FindItem(_('Paste')), True)
+                else:
+                    menu.Enable(menu.FindItem(_('Paste')), False)
             elif sel_item_data.nodetype == 'SearchClipNode':
                 menu = self.menu["searchclip"]
+                # Determine if the Paste menu item should be enabled 
+                if DragAndDropObjects.DragDropEvaluation(source_item_data, sel_item_data):
+                    menu.Enable(menu.FindItem(_('Paste')), True)
+                else:
+                    menu.Enable(menu.FindItem(_('Paste')), False)
             else:
                 menu = self.gen_menu
 
@@ -3271,8 +4121,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # Call the Collection Event Processor
                 self.OnCollectionCommand(event)
 
-            # If the item is a Clip, capture the Clip Name and the nested list of Collections,
-            # and then load the appropriate objects.  This includes Keyword Examples
+            # If the item is a Clip, load the appropriate object.
             elif (sel_item_data.nodetype == 'ClipNode') or (sel_item_data.nodetype == 'SearchClipNode'):
                 self.parent.ControlObject.LoadClipByNumber(sel_item_data.recNum)  # Load everything via the ControlObject
 
@@ -3306,11 +4155,15 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # We store the record number in the data for the node item
                 num = self.GetPyData(sel_item).recNum
                 n = Note.Note(num)
-                n.lock_record()
-                noteedit = NoteEditor.NoteEditor(self, n.text)
-                n.text = noteedit.get_text()
-                n.db_save()
-                n.unlock_record()
+                try:
+                    n.lock_record()
+                    noteedit = NoteEditor.NoteEditor(self, n.text)
+                    n.text = noteedit.get_text()
+                    n.db_save()
+                    n.unlock_record()
+                # Handle the exception if the record is locked
+                except RecordLockedError, e:
+                    self.parent.handle_locked_record(e, _("Note"), n.id)
 
             elif sel_item_data.nodetype == 'SearchRootNode':
                 # Process the Search Request
@@ -3349,6 +4202,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
         """ Process the completion of editing a Tree Node Label by altering the underlying Data Object. """
         # Identify the selected item
         sel_item = self.GetSelection()
+        # Remember the original name
+        originalName = self.GetItemText(sel_item)
         # Get the data associated with the selected item
         sel_item_data = self.GetPyData(sel_item)
         try:
@@ -3427,21 +4282,106 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         # If we are renaming a keyword ...
                         if sel_item_data.nodetype == 'KeywordNode':
                             # ... Change the Object's Keyword property
-                            tempObject.keyword = event.GetLabel()
+                            tempObject.keyword = event.GetLabel().strip()
                         # If we're not renaming a keyword ...
                         else:
                             # ... Change the Object Name
-                            tempObject.id = event.GetLabel()
+                            tempObject.id = event.GetLabel().strip()
                             
                         # Save the Object
                         tempObject.db_save()
                         # Unlock the Object
-                        tempObject .unlock_record()
-                        # TODO:  MU Messaging needed here!
+                        tempObject.unlock_record()
+
+                        # If there are leading spaces in the edited label, it causes problems.  The object
+                        # doesn't have the leading spaces the label does, so can't be found.  Therefore,
+                        # we need to strip() the whitespace.
+                        if event.GetLabel() != event.GetLabel().strip():
+                            # We have to use CallAfter to change the label we're already in the middle of editing.
+                            wx.CallAfter(self.SetItemText, sel_item, event.GetLabel().strip())
+                        
+                        # If we're in the Multi-User mode, we need to send a message about the change
+                        if not TransanaConstants.singleUserVersion:
+                            # Begin constructing the message with the old and new names for the node
+                            msg = " >|< %s >|< %s" % (originalName, event.GetLabel().strip())
+                            # Get the full Node Branch by climbing it to two levels above the root
+                            while (self.GetItemParent(self.GetItemParent(sel_item)) != self.GetRootItem()):
+                                # Update the selected node indicator
+                                sel_item = self.GetItemParent(sel_item)
+                                # Prepend the new Node's name on the Message with the appropriate seperator
+                                msg = ' >|< ' + self.GetItemText(sel_item) + msg
+                            if 'unicode' in wx.PlatformInfo:
+                                seriesPrompt = unicode(_('Series'), 'utf8')
+                                collectionsPrompt = unicode(_('Collections'), 'utf8')
+                                keywordsPrompt = unicode(_('Keywords'), 'utf8')
+                            else:
+                                # We need the nodeType as the first element.  Then, 
+                                # we need the UNTRANSLATED label for the root node to avoid problems in mixed-language environments.
+                                seriesPrompt = _('Series')
+                                collectionsPrompt = _('Collections')
+                                keywordsPrompt = _('Keywords')
+                            # For Notes, we need to know which root to climb, but we need the UNTRANSLATED root.
+                            if self.GetItemText(self.GetItemParent(sel_item)) == seriesPrompt:
+                                rootNodeType = 'Series'
+                            elif self.GetItemText(self.GetItemParent(sel_item)) == collectionsPrompt:
+                                rootNodeType = 'Collections'
+                            elif self.GetItemText(self.GetItemParent(sel_item)) == keywordsPrompt:
+                                rootNodeType = 'Keywords'
+                            # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                            # This must be untranslated to avoid problems in mixed-language environments.
+                            # Prepend these on the Messsage
+                            nodetype = sel_item_data.nodetype
+                            # If we have a Note Node, we need to know which kind of Note.
+                            if nodetype == 'NoteNode':
+                                nodetype = '%sNoteNode' % tempObject.notetype
+                            msg = nodetype + " >|< " + rootNodeType + msg
+                            if DEBUG:
+                                print 'Message to send = "RN %s"' % msg
+                            # Send the Rename Node message
+                            if TransanaGlobal.chatWindow != None:
+                                TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+                            # If we've just renamed a Clip, check for Keyword Examples that need to be renamed
+                            if nodetype == 'ClipNode':
+                                for (kwg, kw, clipNumber, clipID) in DBInterface.list_all_keyword_examples_for_a_clip(tempObject.number):
+                                    nodeList = (_('Keywords'), kwg, kw, originalName)
+                                    exampleNode = self.select_Node(nodeList, 'KeywordExampleNode')
+                                    self.SetItemText(exampleNode, tempObject.id)
+                                    # If we're in the Multi-User mode, we need to send a message about the change
+                                    if not TransanaConstants.singleUserVersion:
+                                        # Begin constructing the message with the old and new names for the node
+                                        msg = " >|< %s >|< %s" % (originalName, tempObject.id)
+                                        # Get the full Node Branch by climbing it to two levels above the root
+                                        while (self.GetItemParent(self.GetItemParent(exampleNode)) != self.GetRootItem()):
+                                            # Update the selected node indicator
+                                            exampleNode = self.GetItemParent(exampleNode)
+                                            # Prepend the new Node's name on the Message with the appropriate seperator
+                                            msg = ' >|< ' + self.GetItemText(exampleNode) + msg
+                                        # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                                        # This must be untranslated to avoid problems in mixed-language environments.
+                                        # Prepend these on the Messsage
+                                        msg = "KeywordExampleNode >|< Keywords" + msg
+                                        if DEBUG:
+                                            print 'Message to send = "RN %s"' % msg
+                                        # Send the Rename Node message
+                                        if TransanaGlobal.chatWindow != None:
+                                            TransanaGlobal.chatWindow.SendMessage("RN %s" % msg)
+
                         
             self.Refresh()
 
         except:
+            if DEBUG:
+                import traceback
+                traceback.print_exc(file=sys.stdout)
+                # Display the Exception Message, allow "continue" flag to remain true
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_("Exception %s: %s"), 'utf8')
+                else:
+                    prompt = _("Exception %s: %s")
+                errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                errordlg.ShowModal()
+                errordlg.Destroy()
             event.Veto()
             dlg = Dialogs.ErrorDialog(self.parent, _("Object Rename failed.  The Object is probably locked by another user."))
             dlg.ShowModal()
@@ -3469,6 +4409,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             tempCollection = Collection.Collection()
             # Assign the Search Results Name to the Collection
             tempCollection.id = self.GetItemText(sel)
+            # Assign the default Owner
+            tempCollection.owner = DBInterface.get_username()
             # Load the Collection Properties Form
             contin = self.parent.edit_collection(tempCollection)
             # If the user said OK (did not cancel) ,,,
@@ -3476,6 +4418,16 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # Add the new Collection for the Search Result to the DB Tree
                 nodeData = (_('Collections'), tempCollection.id)
                 self.add_Node('CollectionNode', nodeData, tempCollection.number, 0, True)
+
+                # Now let's communicate with other Transana instances if we're in Multi-user mode
+                if not TransanaConstants.singleUserVersion:
+                    msg = "AC %s"
+                    data = (nodeData[1],)
+                    if DEBUG:
+                        print 'Message to send =', msg % data
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage(msg % data)
+
                 # Now that this is a collection, let's update the Node Data to reflect the correct data
                 selData.recNum = tempCollection.number
                 selData.parent = tempCollection.parent
@@ -3520,6 +4472,19 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         
                     self.add_Node('CollectionNode', (_('Collections'),) + nodeData, newCollection.number, newCollection.parent, True)
 
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        msg = "AC %s"
+                        data = (nodeData[0],)
+                        for nd in nodeData[1:]:
+                            msg += " >|< %s"
+                            data += (nd, )
+                        if DEBUG:
+                            print 'Message to send =', msg % data
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+
                     if self.ItemHasChildren(childNode):
                         self.ConvertSearchToCollection(childNode, childData)
 
@@ -3555,6 +4520,21 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             break
 
                     self.add_Node('ClipNode', (_('Collections'),) + nodeData, newClip.number, newClip.collection_num, True)
+
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        msg = "ACl %s"
+                        data = (nodeData[0],)
+
+                        for nd in nodeData[1:]:
+                            msg += " >|< %s"
+                            data += (nd, )
+
+                        if DEBUG:
+                            print 'Message to send =', msg % data
+                            
+                        if TransanaGlobal.chatWindow != None:
+                            TransanaGlobal.chatWindow.SendMessage(msg % data)
 
                 else:
                     print "DatabaseTreeTab._DBTreeCtrl.ConvertSearchToCollection(): Unhandled Child Node:", self.GetItemText(childNode), childData

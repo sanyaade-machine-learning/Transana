@@ -1,4 +1,4 @@
-#Copyright (C) 2002  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002 - 2006 The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -15,9 +15,6 @@
 #Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 # This code is taken from the wxPython Demo file "PrintFramework.py" and
-# has been modified by David Woods
-
-# This code is derived from the wxPython Demo file "PrintFramework.py" and
 # has been modified by David Woods
 
 """ This unit creates a Print / Print Preview Framework for the Keyword Map. """

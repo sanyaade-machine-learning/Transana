@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -21,6 +21,7 @@ component.
 __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 
 import wx
+import Dialogs
 import TranscriptEditor
 import TransanaExceptions
 import Clip
@@ -119,7 +120,6 @@ class TranscriptToolbar(wx.ToolBar):
         self.CMD_KEYWORD_ID = self.GetNextId()
         self.tools.append(self.AddTool(self.CMD_KEYWORD_ID,
                         wx.Bitmap("images/KeywordRoot16.xpm", wx.BITMAP_TYPE_XPM),
-#                        isToggle=1,
                         shortHelpString=_("Edit Keywords")))
         wx.EVT_MENU(self, self.CMD_KEYWORD_ID, self.OnEditKeywords)
          
@@ -140,7 +140,7 @@ class TranscriptToolbar(wx.ToolBar):
                     self.CMD_RISING_INT_ID, self.CMD_FALLING_INT_ID, \
                     self.CMD_AUDIBLE_BREATH_ID, self.CMD_WHISPERED_SPEECH_ID):
             self.EnableTool(x, False)
-            
+        
         #bmp = wx.ArtProvider_GetBitmap(wx.ART_NORMAL_FILE, wx.ART_TOOLBAR, (16,16))
         #self.tools.append(self.AddTool(3, bmp,
         #                shortHelpString=""))
@@ -157,7 +157,6 @@ class TranscriptToolbar(wx.ToolBar):
         
     def ClearToolbar(self):
         """Clear buttons to default state."""
-        # print "ClearToolbar()"
         # Reset toggle buttons to OFF.  This does not cause any events
         # to be emitted (only affects GUI state)
         self.ToggleTool(self.CMD_BOLD_ID, False)
@@ -198,24 +197,19 @@ class TranscriptToolbar(wx.ToolBar):
         id = evt.GetId()
         c = ""
         if id == self.CMD_RISING_INT_ID:
-            # Up arrow is Unicode 2191
-            #c = u'\u2191'
-            # Symbol code 0xAD
-            c = '\xAD'
+            # Ctrl-Cursor-Up inserts the Up Arrow / Rising Intonation symbol
+            self.parent.editor.InsertRisingIntonation()
         elif id == self.CMD_FALLING_INT_ID:
-            # Down arrow is Unicode 2193
-            #c = u'\u2193'
-            # Symbol code 0xAF
-            c = '\xAF'
+            # Ctrl-Cursor-Down inserts the Down Arrow / Falling Intonation symbol
+            self.parent.editor.InsertFallingIntonation()
         elif id == self.CMD_AUDIBLE_BREATH_ID:
-            #c = u'\u2022'
-            c = '\xB7'
+            # Ctrl-H inserts the High Dot / Inbreath symbol
+            self.parent.editor.InsertInBreath()
         elif id == self.CMD_WHISPERED_SPEECH_ID:
-            c = chr(176)
+            # Ctrl-O inserts the Open Dot / Whispered Speech symbol
+            self.parent.editor.InsertWhisper()
         else:
             return
-        # Insert the Symbol
-        self.parent.editor.InsertSymbol(c)
         
     def OnShowHideCodes(self, evt):
         show_codes = self.GetToolState(self.CMD_SHOWHIDE_ID)
@@ -226,27 +220,92 @@ class TranscriptToolbar(wx.ToolBar):
 
     def OnReadOnlySelect(self, evt):
         can_edit = self.GetToolState(self.CMD_READONLY_ID)
-        # print "OnReadOnlySelect()"
-        
+       
         # If leaving edit mode, prompt for save if necessary.
         if not can_edit:
             if not self.parent.ControlObject.SaveTranscript(1):
                 # Reset the Toolbar
                 self.ClearToolbar()
                 # User chose to not save, revert back to database version
+                
                 tobj = self.parent.editor.TranscriptObj
+                
                 # Set to None so that it doesn't ask us to save twice, since
                 # normally when we load a Transcript with one already loaded,
                 # it prompts to save for changes.
                 self.parent.editor.TranscriptObj = None
+                
                 if tobj:
-                    # print "NAC: Re-loading Transcript, set TranscriptObj = None"
-                    self.parent.editor.load_transcript(tobj)
-                # else:
-                    # print "NAC: Skipped load since TranscriptObj == None"
- 
-        self.parent.editor.set_read_only(not can_edit)
-        self.UpdateEditingButtons()
+                    # The Transcript will always have been pickled in this circumstance.
+                    self.parent.editor.load_transcript(tobj, dataType='pickle')
+
+            self.parent.editor.TranscriptObj.unlock_record()
+            self.parent.editor.set_read_only(not can_edit)
+            self.UpdateEditingButtons()
+        else:
+            try:
+                oldLastSaveTime = self.parent.editor.TranscriptObj.lastsavetime
+                self.parent.editor.TranscriptObj.lock_record()
+                # If the Transcript Object was updated during the Record Lock (do to having been
+                # edited in the interim by another user) we need to refresh the editor!
+                # Check the new LastSaveTime with the original one.
+                if oldLastSaveTime != self.parent.editor.TranscriptObj.lastsavetime:
+                    msg = 'This Transcript has been updated since you originally loaded it!\nYour copy of the record will be refreshed to reflect the changes.'
+                    dlg = Dialogs.InfoDialog(self.parent, msg)
+                    dlg.ShowModal()
+                    dlg.Destroy()
+                    # The Transcript will always have been pickled in this circumstance.
+                    self.parent.editor.load_transcript(self.parent.editor.TranscriptObj, dataType='pickle')
+                    # reloading the Transcript unfortunately unlocks the record.  I can't figure out
+                    # a clever way to avoid this, so let's just re-lock the record.
+                    self.parent.editor.TranscriptObj.lock_record()
+                    # We also need to update the window title.
+                    episode = Episode.Episode(self.parent.editor.TranscriptObj.episode_num)
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('Transcript "%s" for Series "%s", Episode "%s"'), 'utf8')
+                    else:
+                        prompt = _('Transcript "%s" for Series "%s", Episode "%s"')
+                    self.parent.SetTitle(prompt % (self.parent.editor.TranscriptObj.id, episode.series_id, episode.id))
+                
+                self.parent.editor.set_read_only(not can_edit)
+                self.UpdateEditingButtons()
+            except TransanaExceptions.RecordLockedError, e:
+                self.parent.editor.TranscriptObj.lastsavetime = oldLastSaveTime
+                self.ToggleTool(self.CMD_READONLY_ID, not self.GetToolState(self.CMD_READONLY_ID))
+                if self.parent.editor.TranscriptObj.id != '':
+                    msg = _('You cannot proceed because you cannot obtain a lock on %s "%s"' + \
+                            '.\nThe record is currently locked by %s.\nPlease try again later.')
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        msg = unicode(msg, 'utf8') % (_('Transcript'), self.parent.editor.TranscriptObj.id, e.user)
+                else:
+                    msg = _('You cannot proceed because you cannot obtain a lock on the Clip Transcript.\n' + \
+                            'The record is currently locked by %s.\nPlease try again later.') 
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        msg = unicode(msg, 'utf8') % (e.user)
+                dlg = Dialogs.ErrorDialog(self.parent, msg)
+                dlg.ShowModal()
+                dlg.Destroy()
+            except TransanaExceptions.RecordNotFoundError, e:
+                self.ToggleTool(self.CMD_READONLY_ID, not self.GetToolState(self.CMD_READONLY_ID))
+                if self.parent.editor.TranscriptObj.id != '':
+                    msg = _('You cannot proceed because %s "%s" cannot be found.' + \
+                            '\nIt may have been deleted by another user.')
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        msg = unicode(msg, 'utf8') % (_('Transcript'), self.parent.editor.TranscriptObj.id)
+                else:
+                    msg = _('You cannot proceed because the Clip Transcript cannot be found.\n' + \
+                            'It may have been deleted by another user.')
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        msg = unicode(msg, 'utf8')
+                dlg = Dialogs.ErrorDialog(self.parent, msg)
+                dlg.ShowModal()
+                dlg.Destroy()
+
 
     def UpdateEditingButtons(self):
         # Enable/Disable editing buttons
@@ -270,7 +329,12 @@ class TranscriptToolbar(wx.ToolBar):
             # Lock the data record
             obj.lock_record()
             # Determine the title for the KeywordListEditForm Dialog Box
-            dlgTitle = _("Keywords for %s") % obj.id
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Keywords for %s"), 'utf8')
+            else:
+                prompt = _("Keywords for %s")
+            dlgTitle = prompt % obj.id
             # Extract the keyword List from the Data object
             kwlist = []
             for kw in obj.keyword_list:
@@ -304,7 +368,7 @@ class TranscriptToolbar(wx.ToolBar):
 
     def OnSave(self, evt):
         self.parent.ControlObject.SaveTranscript()
-        
+            	
     def OnClipSelect(self, event):
         self.parent.editor.OnStartDrag(event)
 

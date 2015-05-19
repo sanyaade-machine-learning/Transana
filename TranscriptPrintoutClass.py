@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2005  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2006  The Board of Regents of the University of Wisconsin System
 #
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -90,6 +90,8 @@ RTFModulePath = "rtf"
 if sys.path.count(RTFModulePath) == 0:
     sys.path.append(RTFModulePath)  # Add to path if not already there
 import RTFParser
+# Import Transana's Globals
+import TransanaGlobal
 
 # For pages to be sized and proportioned correctly, we need different DPI scaling factors on different platforms.
 if "__WXMAC__" in wx.PlatformInfo:
@@ -226,10 +228,15 @@ def ProcessTranscript(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines
                 print "Line Break inside the line, not at the beginning"
 
             # Break the line into words at whitespace breaks
+            if ('unicode' in wx.PlatformInfo) and (type(text).__name__ == 'str'):
+                words = []
+                words.append(unicode(text, TransanaGlobal.encoding))
+            else:
 
-            # This "text.split()" call, necessary for line breaks, causes loss of whitespace.
-            # We have to do some head stands to avoid it.
-            words = text.split()
+                # This "text.split()" call, necessary for line breaks, causes loss of whitespace.
+                # We have to do some head stands to avoid it.
+                words = text.split()
+                
             # We need to retain leading whitespace
             if (len(text) > 0) and (text[0] == ' ') and (len(words) > 0):
                 # This syntax captures all leading whitespace.
@@ -241,7 +248,7 @@ def ProcessTranscript(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines
             if (len(text) > 0) and (len(words) == 0):
                 words = []
                 words.append(text)
-                
+
             # Iterate through the words
             for word in words:
                 text = text[len(word):]
@@ -256,9 +263,6 @@ def ProcessTranscript(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines
                 if lineHeight > yInc:
                     yInc = lineHeight
 
-                # print "(%3d, %3d), %3d, (%3d, %3d): '%s' + '%s'" % (xPos, yPos, xPos + lineWidth, lineWidth, lineHeight, tempLine, word)
-                # print "%3d + %3d <? %3d - %3d): '%s' + '%s'" % (xPos, lineWidth, sizeX, xMargin, tempLine, word)
-                
                 # If the line is still within our margins, add the word and a space to the temporary line 
                 if xPos + lineWidth < sizeX - xMargin:
                     tempLine = tempLine + word
@@ -270,8 +274,6 @@ def ProcessTranscript(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines
 
                     thisPageData.append(datLines)
 
-                    # print yInc, yPos, fontSpec[0].GetFaceName(), fontSpec[0].GetPointSize(), tempLine
-
                     # Initialize a new line
                     datLines = ()
                     
@@ -280,13 +282,9 @@ def ProcessTranscript(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines
                     # Reset yInc
                     yInc = 0
 
-    #                print 'linebreak:', xPos + lineWidth, '>=', sizeX - xMargin
-
                     # Check to see if we've reached the bottom of the page, with a one inch margin and one line's height
                     if yPos >= sizeY - titleHeight - int(yMargin):
 
-                        # print 'Page Break 1: ', yPos, '>=', sizeY - titleHeight - int(yMargin)
-                        
                         # Add the page to the final document data structure
                         pageData.append(thisPageData)
                         # Initialize a new page
@@ -302,15 +300,11 @@ def ProcessTranscript(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines
             # When done looking at words, add the final part to the line we're building for this page
             datLines = datLines + ((fontSpec, tempLine),)
 
-            # print yInc, yPos, fontSpec[0].GetFaceName(), fontSpec[0].GetPointSize(), tempLine
-
             # Add the line we're building to the Page, but don't add a blank line to the top of a page
             if (thisPageData != []) or ((len(datLines) != 1) or (datLines[0][1] != '')):
                 thisPageData.append(datLines)
 
                 xPos = xPos + lineWidth
-
-                # print yInc, yPos, tempLine
 
                 datLines = ()
                 tempLine = ''
@@ -320,8 +314,6 @@ def ProcessTranscript(dc, sizeX, sizeY, inText, pageData, thisPageData, datLines
             #                  height of the boxed entry on the Collection Summary Report, while it is 0 for
             #                  printing a Transcript.  TODO:  Make this more precise.
             if yPos >= sizeY - titleHeight - int(yMargin):
-
-                # print 'Page Break 2: ', yPos, '>=', sizeY - titleHeight - int(yMargin)
 
                 # Add the page to the final document data structure
                 pageData.append(thisPageData)
@@ -508,8 +500,12 @@ def PrepareData(printData, transcriptObj=None, collectionTree=None, collectionNo
 
         for (clipNum, clipName, parentCollectionNum) in clipList:
             tempClip = Clip.Clip(clipNum)
-
-            datLines = ((defaultFont, '\n'), (defaultFont, '\n'), (drawBoxFont, _('Clip: %s') % clipName), (defaultFont, '\n'))
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Clip: %s'), 'utf8')
+            else:
+                prompt = _('Clip: %s')
+            datLines = ((defaultFont, '\n'), (defaultFont, '\n'), (drawBoxFont, prompt % clipName), (defaultFont, '\n'))
             # Add the current datLines structure to the page
             thisPageData.append(datLines)
             
@@ -517,15 +513,25 @@ def PrepareData(printData, transcriptObj=None, collectionTree=None, collectionNo
             dc.SetFont(defaultFont[0])
             # Some file names won't fit in the alloted space.  If it won't fit, truncate from the left.
             filename = tempClip.media_filename
-            (lineWidth, lineHeight) = dc.GetTextExtent(_('File: %s') % filename)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('File: %s'), 'utf8')
+            else:
+                prompt = _('File: %s')
+            (lineWidth, lineHeight) = dc.GetTextExtent(prompt % filename)
             while lineWidth > sizeX - (2.2 * DPI):
                 filename = '...' + filename[4:]
-                (lineWidth, lineHeight) = dc.GetTextExtent(_('File: %s') % filename)
+                (lineWidth, lineHeight) = dc.GetTextExtent(prompt % filename)
 
-            datLines = ((defaultFont, _('File: %s') % filename), (defaultFont, '\n'))
+            datLines = ((defaultFont, prompt % filename), (defaultFont, '\n'))
             # Add the current datLines structure to the page
             thisPageData.append(datLines)
-            datLines = ((defaultFont, _('Start: %s          Stop: %s          (Length: %s)') % (Misc.time_in_ms_to_str(tempClip.clip_start), Misc.time_in_ms_to_str(tempClip.clip_stop), Misc.time_in_ms_to_str(tempClip.clip_stop - tempClip.clip_start))), (defaultFont, '\n'), (defaultFont, '\n'))
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Start: %s          Stop: %s          (Length: %s)'), 'utf8')
+            else:
+                prompt = _('Start: %s          Stop: %s          (Length: %s)')
+            datLines = ((defaultFont, prompt % (Misc.time_in_ms_to_str(tempClip.clip_start), Misc.time_in_ms_to_str(tempClip.clip_stop), Misc.time_in_ms_to_str(tempClip.clip_stop - tempClip.clip_start))), (defaultFont, '\n'), (defaultFont, '\n'))
             # Add the current datLines structure to the page
             thisPageData.append(datLines)
             # Determine the height of these lines and add it to the position counter
@@ -656,7 +662,11 @@ class MyPrintout(wx.Printout):
         defaultFont = GetDefaultFont()
         dc.SetFont(defaultFont[0])
         dc.SetTextForeground(wx.ColourRGB(defaultFont[1]))
-        txt = _("Page: %d") % page
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            txt = unicode(_("Page: %d"), 'utf8') % page
+        else:
+            txt = _("Page: %d") % page
         (lineWidth, lineHeight) = dc.GetTextExtent(txt)
         # Position and draw the text
         dc.DrawText(txt, graphicX - lineWidth - 40, graphicY - lineHeight - 40)
@@ -715,9 +725,6 @@ class MyPrintout(wx.Printout):
                         dc.SetBrush(brush)
 
                     if xPos + lineWidth > graphicX - int(xMargin / 2):
-
-#                        print xPos + lineWidth, '>', graphicX  - int(xMargin / 2)
-                        
                         xPos = xMargin
                         # Increment the vertical position indicator
                         yPos = yPos + yInc
@@ -731,8 +738,6 @@ class MyPrintout(wx.Printout):
                         # For now we left-align everything (it's all the transcripts support, anyway)
                         dc.DrawText(line, xPos, yPos)
 
-#                    print "(%3d, %3d) '%s'" % (xPos, yPos, line)
-                    
                     # Align and position the text, then add it to the Printout
                     #if self.styles[style]['align'] == mstyLEFT:
                     #    dc.DrawText(line, DPI + xindent, yPos)

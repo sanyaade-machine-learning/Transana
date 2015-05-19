@@ -1,4 +1,4 @@
-# Copyright (C) 2002-2005 The Board of Regents of the University of Wisconsin System
+# Copyright (C) 2002-2006 The Board of Regents of the University of Wisconsin System
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,8 +16,13 @@
 
 """This module implements a primitive RTF parser."""
 
-__author__ = 'Nathaniel Case, David K. Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'Nathaniel Case, David K. Woods <dwoods@wcer.wisc.edu>, Jonathan Beavers <jonathan.beavers@gmail.com>'
 
+# Okay, poor form, but I have to have the Global Encoding here.
+# import Transana's Globals
+import TransanaGlobal
+import array
+import wx
 import exceptions
 import string
 import copy
@@ -208,18 +213,94 @@ class RTFParser:
             print "End block, Appending docstream object: '%s'" % str(do)
    
     def process_text(self, txt):
-        """Process a plain text string."""
-        if len(txt) > 0:
-            # Got \par control word so next text is on new line
-            if self.new_para:
-                # There might have been more than one \par so we insert
-                # newlines for however many we counted
-                txt = ("\n" * self.new_para) + txt
-                self.new_para = 0
-            if DEBUG:
-                print "txt = '%s'" % txt
-            do = DocObject()
+	"""Process a plain text string."""
+	if len(txt) > 0:
+	    # Got \par control word so next text is on new line
+	    if self.new_para:
+		# There might have been more than one \par so we insert
+		# newlines for however many we counted
+		txt = ("\n" * self.new_para) + txt
+		self.new_para = 0
+
+	    # Since timecode, and up/down intonation symbols are different between
+	    # OSX and windows, we need to perform substitution while loading a document.
+	    if ('unicode' in wx.PlatformInfo) and ('wxMac' in wx.PlatformInfo):
+
+                if DEBUG:
+                    print "RTFParser.process_text(): '%s' .. " % txt,
+                    for x in txt:
+                        print ord(x),
+                    print
+                
+		# This (array.array('B', txt).tolist()) is supposed to be the most efficient way 
+		# of converting a string to a list of integers.  JB
+		# Unfortunately, it requires a string, not a Unicode object.  We'll need a less
+		# efficient alternative for Unicode.  DKW
+
+                # Check the type of the txt object.  If it's a string ...
+		if isinstance(txt, str):
+                    # ... convert it efficiently to a list of integers
+                    intList = array.array('B', txt).tolist()
+                # If txt is Unicode ...
+                else:
+                    # ... create an empty list ...
+                    intList = []
+                    # ... iterate through the characters in the Unicode string ...
+                    for x in txt:
+                        # ... and add the integer value for each character to the integer list
+                        intList.append(ord(x))
+		
+		try:
+		    # all the windows special characters begin with \xc2 (#194)
+		    position = intList.index(194)
+		    
+		    # test for timecode
+		    if intList[position+1] == 164:
+			
+			if DEBUG:
+			    print "RTFParser.process_text():  Mac Unicode Substitution - Time Code."
+
+			newString = txt[0:position] + unicode('\xc2\xa7', 'utf8')
+			txt = newString
+		    # Test for up intonation
+		    elif intList[position+1] == 173:
+
+			if DEBUG:
+			    print "RTFParser.process_text(): Mac Unicode Substitution - Up Arrow."
+
+			newString = txt[0:position] + unicode('\xe2\x89\xa0', 'utf8')
+			txt = newString
+		    # Test for down intonation
+		    elif intList[position+1] == 175:
+			
+			if DEBUG:
+			    print "RTFParser.process_text(): Mac Unicode Substitution - Down Arrow."
+
+			newString = txt[0:position] + unicode('\xc3\x98', 'utf8')
+			txt = newString
+		    # Test for closed dot (hi dot)  (194 149 is 1.24 encoding, 194 183 is 2.05 encoding)
+		    # but the 2.05 encoding doesn't work here because we don't want the text to be in Symbol font.
+		    # That is handled in RichTextEditCtrl.py's __ParseRTFText() method.
+		    elif (intList[position+1] == 149):
+			
+			if DEBUG:
+			    print "RTFParser.process_text(): Mac Unicode Substitution - closed dot."
+
+			newString = unicode('\xe2\x80\xa2', 'utf8')  # txt[0:position] + unicode('\xe2\x80\xa2', 'utf8')
+			txt = newString
+		    # DON'T Test for open dot (whisper)  (194 176 is 2.05 encoding)
+		    # but the 2.05 encoding doesn't work here because we don't want the text to be in Symbol font.
+		    # That is handled in RichTextEditCtrl.py's __ParseRTFText() method.
+
+		except ValueError:
+		    i = 1
+	
+	    do = DocObject()
             do.text = txt
+
+            if DEBUG:
+                print "RTFParser.process_text()", txt, do.text, do
+                
             self.stream.append(do)
         
     def process_doc(self):
@@ -234,10 +315,11 @@ class RTFParser:
         
         while self.index < len(self.buf):
             c = self.buf[self.index]
-            if "{}\\".count(c) > 0:
 
-                if DEBUG:
-                    print "***** '%s'" % self.buf[self.index : self.index+2]
+            if DEBUG:
+                print "RTFParser.process_doc() processing:", c
+                
+            if "{}\\".count(c) > 0:
 
                 # DKW  We need to process "escaped" brace characters and the backslash character
                 if self.buf[self.index : self.index+2] in ['\{', '\}', '\\\\']:
@@ -249,7 +331,56 @@ class RTFParser:
                     txt += self.buf[self.index+1]
                     # Increment the index to point to after the escaped character
                     self.index += 2
+
+                # DKW We also need to process unicode characters
+                elif (self.buf[self.index : self.index+2] in ["\\'", "\\\'"]) and ('unicode' in wx.PlatformInfo):
+
+                    if DEBUG:
+                        print "RTFParser.process_doc(): Processing a Unicode Character",
+
+                    val = int(self.buf[self.index+2:self.index+4], 16)
                     
+                    # Word Smart Quotes could cause problem.  These come across as "\'93" and "\'94"
+                    #(hex for 147 and 148) and need to be replaced with a normal quote character.
+                    if (val in [147, 148]):
+
+                        if DEBUG:
+                            print "Smart Quotes detected:  before:", self.buf[self.index - 10:self.index + 10],
+                            
+                        # 22 is the HEX value for chr 34, the quote character.
+                        val = 34
+                        # We need to replace them in the self.buf text.  
+                        self.buf = self.buf[:self.index+2] + '22' + self.buf[self.index+4:]
+
+                        if DEBUG:
+                            print "after:", self.buf[self.index - 10:self.index + 10]
+                        
+                    s = unicode(chr(val), 'latin1')
+                    # s = u'%s' % self.buf[self.index:self.index+4]
+
+                    if DEBUG:
+                        print "%d" % (val)
+
+                    # If there's text in the buffer ...
+                    if txt != '':
+                        # ... process that text first
+                        self.process_text(txt)
+
+                    # replace the text in the buffer
+                    txt = s.encode(TransanaGlobal.encoding)
+
+                    if DEBUG:
+                        print "Calling process_control_word()"
+                        
+                    # process the unicode character as a Control Word
+                    self.process_control_word()
+
+                    if DEBUG:
+                        print "AFTER process_control_word call"
+
+                    # Clear the text buffer
+                    txt = ''
+
                 # If we're not dealing with an escaped character, continue normal processing
                 else:
                     
@@ -272,9 +403,9 @@ class RTFParser:
                         self.fontTable[self.fontNumber] = self.fontName
                     else:
 
-                        if (DEBUG or DEBUG2) and (txt.strip() != ''):
+                        if DEBUG and (txt.strip() != ''):
                             print "Processing text '%s'" % txt
-                            
+
                         self.process_text(txt)
 
                         if DEBUG:
@@ -344,8 +475,8 @@ class RTFParser:
 
             # Now index is at the first 'delimiter' character (c)
             if DEBUG:
-                print "Found control word '%s' (first delim is %s)" % (cw, c)
-       
+                print "Found control word '%s' (first delim is %s)  " % (cw, c),
+
             # Check for numeric parameters
             if (string.digits.count(c) > 0 or (c == '-')):
                 # Control word contains a numeric parameter
@@ -384,12 +515,64 @@ class RTFParser:
                 self.index += 1
                 try:
                     value = int(self.buf[self.index:self.index+2], 16)
-                    self.process_text(chr(value))
+
+                    if DEBUG:
+                        print "RTFParser.process_control_word()", self.buf[self.index:self.index+2], "value =", value
+
+                    if ('unicode' in wx.PlatformInfo):
+                        # Try a straight conversion to UTF-8, the DefaultPyEncoding
+                        try:
+                            
+                            tempChar = unichr(value)
+                            # I'm not sure why passing through latin-1 is needed, but it appears to be necessary.
+                            # tempChar = unicode(chr(value), 'latin-1')
+                            self.process_text(tempChar.encode(TransanaGlobal.encoding))
+                            
+                        except UnicodeEncodeError:
+                            # If we get a UnicodeEncodeError, as we do for Time Codes, let's try going through
+                            # Latin-1 encoding to translate the single-byte character into a 2-byte character.
+                            # The default encoding for RTF is Transana at least if ansicpg1252, which I think 
+                            # is equivalent to Latin-1
+                            tempc = unicode(chr(value), 'latin1')
+
+                            if DEBUG:
+                                print "Passing through Latin-1"
+
+                            self.process_text(tempc.encode(TransanaGlobal.encoding))
+
+                            if DEBUG:
+                                print "Should now be encoded as %s" % TransanaGlobal.encoding
+                                
+                    else:
+                        self.process_text(chr(value))
+
                 finally:
                     self.index += 2
                 return 
-               
-            if cw == "fonttbl":
+
+            if cw == 'u':   # Unicode Character Processing added by DKW
+
+                if DEBUG:
+                    print "Processing Unicode Character Code %d" % num
+
+                try:
+                    tempChar = unichr(num)
+                    # We don't use the global encoding, but UTF-8 here, as Python, and therefore the wxSTC, are using
+                    # UTF-8 regardless of what the database is using.
+                    self.process_text(tempChar)  # .encode('utf8')  (TransanaGlobal.encoding)
+
+                    if DEBUG:
+                        print "Now we need to deal with the alternate character specification, usually \'f3"
+
+                        print self.index, self.buf[self.index:self.index + 20], self.buf.find(' ', self.index)
+                        
+                    self.index += 4   # self.buf.find(' ', self.index)  # Skip past the unicode character digits
+                except ValueError:
+                    if DEBUG:
+                        print "ValueError in RTF Processing for Unicode.  Control Word 'u', num =", num
+                    pass
+            
+            elif cw == "fonttbl":
                 self.in_font_table = 1
             elif cw == "rtf":
                 if DEBUG:
@@ -506,14 +689,20 @@ class RTFParser:
                     do.attr.italic = val
                 elif cw == "plain":
                     do.attr.bold = do.attr.italic = do.attr.underline = 0
-    
+
                 if DEBUG:
                     print "Attr change, Appending docstream object: '%s'" % str(do)
        
                 self.stream.append(do)
                 self.curattr = copy.deepcopy(do.attr)
+            # Sometimes, the closed dot is encodes as a "bullet" in RTF.
+            elif cw.lower() == 'bullet':
+                # We're using Unicode Character 183
+                tempChar = unichr(183)
+                # And we need to process it at Text
+                self.process_text(tempChar.encode(TransanaGlobal.encoding))
             else:
-                if DEBUG:    
+                if DEBUG:
                     numstr = ''
                     if num:
                         numstr = '(' + str(num) + ')'

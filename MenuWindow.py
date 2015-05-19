@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -18,25 +18,14 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case, Rajas Sambhare'
 
-ENGLISH_LABEL = 'English'
-DANISH_LABEL = 'Dansk'
-GERMAN_LABEL = 'Deutsch'
-GREEK_LABEL = 'Greek'
-SPANISH_LABEL = 'Espanol'
-FINNISH_LABEL = 'Finnish'
-FRENCH_LABEL = 'Francais'
-ITALIAN_LABEL = 'Italiano'
-DUTCH_LABEL = 'Nederlands'
-POLISH_LABEL = 'Polish'
-RUSSIAN_LABEL = 'Russian'
-SWEDISH_LABEL = 'Svenska'
-
 # Import Python os module
 import os
 # Import Python sys module
 import sys
 # Import Python's gettext module
 import gettext
+# import python's webbrowser module
+import webbrowser
 # import wxPython
 import wx
 # Import Transana About Box
@@ -63,6 +52,38 @@ import TransanaConstants
 import TransanaGlobal
 # Import the Transcript Printing Module
 import TranscriptPrintoutClass
+# ONLY if we're using the Multi-user version ...
+if not TransanaConstants.singleUserVersion:
+    # ... import Transana's ChatWindow
+    import ChatWindow
+# import Transana Record Lock Utility
+import RecordLock
+
+# Language-specific labels for the different languages.  
+ENGLISH_LABEL = 'English'
+DANISH_LABEL = 'Dansk'
+GERMAN_LABEL = 'Deutsch'
+GREEK_LABEL = 'Greek'
+if 'unicode' in wx.PlatformInfo:
+    SPANISH_LABEL = u'Espa\u00f1ol'
+else:
+    SPANISH_LABEL = 'Espanol'
+FINNISH_LABEL = 'Finnish'
+if 'unicode' in wx.PlatformInfo:
+    FRENCH_LABEL = u'Fran\u00e7ais'
+else:
+    FRENCH_LABEL = 'Francais'
+ITALIAN_LABEL = 'Italiano'
+DUTCH_LABEL = 'Nederlands'
+POLISH_LABEL = 'Polish'
+if 'unicode' in wx.PlatformInfo:
+    RUSSIAN_LABEL = u'\u0420\u0443\u0441\u0441\u043a\u0438\u0439'
+else:
+    RUSSIAN_LABEL = 'Russian'
+SWEDISH_LABEL = 'Svenska'
+CHINESE_LABEL = 'English prompts, Chinese data'
+JAPANESE_LABEL = 'English prompts, Japanese data'
+KOREAN_LABEL = 'English prompts, Korean data'
 
 class MenuWindow(wx.Frame):
     """This class contains the frame object for the Transana Menu Bar window."""
@@ -80,9 +101,9 @@ class MenuWindow(wx.Frame):
             screenDims = wx.ClientDisplayRect()
             self.left = screenDims[0]
             self.top = screenDims[1]
-            self.width = screenDims[2]
-            self.height = screenDims[3]
-            winstyle = wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION | wx.MAXIMIZE
+            self.width = screenDims[2] - 2
+            self.height = screenDims[3] - 2
+            winstyle = wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION      # | wx.MAXIMIZE
             
         # on Mac OS-X ...
         elif '__WXMAC__' in wx.Platform:
@@ -102,7 +123,7 @@ class MenuWindow(wx.Frame):
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
 
-                    # If no language has been specified, request an initial language
+        # If no language has been specified, request an initial language
         if TransanaGlobal.configData.language == '':
             initialLanguage = self.GetLanguage(self)
 
@@ -128,8 +149,32 @@ class MenuWindow(wx.Frame):
                 TransanaGlobal.configData.language = 'pl'
             elif initialLanguage == RUSSIAN_LABEL:
                 TransanaGlobal.configData.language = 'ru'
+                # The single-user version on Windows needs to set the proper encoding for Russian.
+                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+                    TransanaGlobal.encoding = 'koi8_r'
             elif initialLanguage == SWEDISH_LABEL:
                 TransanaGlobal.configData.language = 'sv'
+
+            # Chinese, Japanese, and Korean are a special circumstance.  We don't have
+            # translations for these languages, but want to be able to allow users to
+            # work in these languages.  It's not possible on the Mac for now, and it
+            # already works on the Windows MU version.  The Windows single-user version
+            # should work if we just add the proper encodings!
+            #
+            # NOTE:  There are multiple possible encodings for these languages.  I've picked
+            #        these at random.
+            elif initialLanguage == CHINESE_LABEL:
+                TransanaGlobal.configData.language = 'zh'
+                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+                    TransanaGlobal.encoding = TransanaConstants.chineseEncoding
+            elif initialLanguage == JAPANESE_LABEL:
+                TransanaGlobal.configData.language = 'ja'
+                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+                    TransanaGlobal.encoding = 'cp932'
+            elif initialLanguage == KOREAN_LABEL:
+                TransanaGlobal.configData.language = 'ko'
+                if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+                    TransanaGlobal.encoding = 'cp949'
 
         # Okay, a few notes on Internationalization (i18n) are called for here.  It gets a little complicated.
         #
@@ -152,7 +197,7 @@ class MenuWindow(wx.Frame):
         # don't know what any of these prompts that a user would actually see might be.
 
         # Install gettext.  Once this is done, all strings enclosed in "_()" will automatically be translated.
-        gettext.install('Transana', 'locale', False)
+        # gettext.install('Transana', 'locale', False)
         # Define supported languages for Transana
         self.presLan_en = gettext.translation('Transana', 'locale', languages=['en']) # English
         # Danish
@@ -201,7 +246,8 @@ class MenuWindow(wx.Frame):
             self.presLan_sv = gettext.translation('Transana', 'locale', languages=['sv']) # Swedish
 
         # Install English as the initial language if no language has been specified
-        if (TransanaGlobal.configData.language == '') or (TransanaGlobal.configData.language == 'en'):
+        # NOTE:  Japanese, Korean, and Chinese will use English prompts
+        if (TransanaGlobal.configData.language in ['', 'en', 'ja', 'ko', 'zh']) :
             lang = wx.LANGUAGE_ENGLISH
             self.presLan_en.install()
 
@@ -273,7 +319,7 @@ class MenuWindow(wx.Frame):
         
         # NOTE:  I've commented out the next line as Transana's i18n will be implemented using Python's
         #        "gettext" rather than wxPython's "wx.Locale".
-        # self.locale.AddCatalog("Transana")
+        self.locale.AddCatalog("Transana")
 
         transanaIcon = wx.Icon("images/transana.ico", wx.BITMAP_TYPE_ICO)
         self.SetIcon(transanaIcon)
@@ -332,11 +378,15 @@ class MenuWindow(wx.Frame):
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_EXPORT_DATABASE, self.OnExportDatabase)
         # Define handler for Tools > Batch Waveform Generator
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_BATCHWAVEFORM, self.OnBatchWaveformGenerator)
+        # Define handler for Tools > Chat Window
+        wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_CHAT, self.OnChat)
+        # Define handler for Tools > Record Lock Utility
+        wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_RECORDLOCK, self.OnRecordLock)
 
         # Define handler for Options > Settings
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_SETTINGS, self.OnOptionsSettings)
         # Define handler for Options > Language changes
-        wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_LANGUAGE_EN, MenuSetup.MENU_OPTIONS_LANGUAGE_SV, self.OnOptionsLanguage)
+        wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_LANGUAGE_EN, MenuSetup.MENU_OPTIONS_LANGUAGE_ZH, self.OnOptionsLanguage)
         # Define handler for Options > Auto Word-tracking
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_WORDTRACK, self.OnOptionsWordTrack)
         # Define handler for Options > Auto-Arrange
@@ -352,9 +402,13 @@ class MenuWindow(wx.Frame):
         wx.EVT_MENU(self, MenuSetup.MENU_HELP_TUTORIAL, self.OnHelpTutorial)
         # Define handler for Help > Transcript Notation
         wx.EVT_MENU(self, MenuSetup.MENU_HELP_NOTATION, self.OnHelpNotation)
+        # Define handler for Help > www.transana.org
+        wx.EVT_MENU(self, MenuSetup.MENU_HELP_WEBSITE, self.OnHelpWebsite)
+        # Define handler for Help > Fund Transana
+        wx.EVT_MENU(self, MenuSetup.MENU_HELP_FUND, self.OnHelpFund)
+        self.SetMenuBar(self.menuBar)
         # Define handler for Help > About
         wx.EVT_MENU(self, MenuSetup.MENU_HELP_ABOUT, self.OnHelpAbout)
-        self.SetMenuBar(self.menuBar)
 
         # We need to block moving the Menu Bar.  This should allow that.
         wx.EVT_MOVE(self, self.OnMove)
@@ -396,6 +450,11 @@ class MenuWindow(wx.Frame):
             result = wx.ID_YES
         # If the user wants to exit (or if there are no Search Results) ...
         if result == wx.ID_YES:
+            # unlock the Transcript Record, if it is locked
+            if (self.ControlObject.TranscriptWindow != None) and \
+               (self.ControlObject.TranscriptWindow.dlg.editor.TranscriptObj != None) and \
+               (self.ControlObject.TranscriptWindow.dlg.editor.TranscriptObj.isLocked):
+                self.ControlObject.TranscriptWindow.dlg.editor.TranscriptObj.unlock_record()
             # Close the connection to the Database, if one is open
             if DBInterface.is_db_open():
                 DBInterface.close_db()
@@ -410,6 +469,19 @@ class MenuWindow(wx.Frame):
             # (This is slow, so should be done as late as possible, preferably after windows are closed.)
             if TransanaConstants.singleUserVersion:
                 DBInterface.EndSingleUserDatabase()
+            # Alternately, if we're in the Multi-user version, we need to close the Chat Window, which
+            # ends the socket connection to the Transana MessageServer.
+            else:
+                # If a Chat Window exists ...
+                if TransanaGlobal.chatWindow != None:
+                    # Closing the form will cause an expected Socket Loss, which should not be reported.
+                    TransanaGlobal.chatWindow.reportSocketLoss = False
+                    # ... close it ...
+                    TransanaGlobal.chatWindow.OnFormClose(event)
+                    # ... and destroy the form so Transana won't hang on closing
+                    TransanaGlobal.chatWindow.Destroy()
+                    # ... and set the pointer to None
+                    TransanaGlobal.chatWindow = None
             # Destroy the Menu Window
             self.Destroy()
         # If the user reconsiders exiting...
@@ -432,10 +504,6 @@ class MenuWindow(wx.Frame):
         # is loaded
         self.SetTranscriptOptions(False)
         self.SetTranscriptEditOptions(False)
-
-        # Tools Menu items that have not been defined yet should be disabled.
-        if not TransanaConstants.singleUserVersion:
-            self.menuBar.toolsmenu.Enable(MenuSetup.MENU_TOOLS_CHAT, False)
 
     def SetTranscriptOptions(self, enable):
         """Enable or disable the menu options that depend on whether or not
@@ -468,10 +536,27 @@ class MenuWindow(wx.Frame):
 
     def OnFileNewDatabase(self, event):
         """ Implements File > New Database menu command """
-        # If a Control Object has been defined ...
-        if self.ControlObject != None:
+        # Check to see if there are Search Results Nodes
+        if self.ControlObject.DataWindowHasSearchNodes():
+            # If so, prompt the user about if they really want to exit.
+            # Define the Message Dialog
+            dlg = wx.MessageDialog(self, _('You have unsaved Search Results.  Are you sure you want to close this database without converting them to Collections?'), _('Transana Confirmation'), wx.YES_NO)
+            # Display the Message Dialog and capture the response
+            result = dlg.ShowModal()
+            # Destroy the Message Dialog
+            dlg.Destroy()
+        else:
+            # If no Search Results exist, it's the same as if the user says "Yes"
+            result = wx.ID_YES
+        # If the user wants to exit (or if there are no Search Results) ...
+        if result == wx.ID_YES:
             # ... tell it to load a new database
             self.ControlObject.GetNewDatabase()
+            # if using MU and we're successfully connected to the database, re-connect to the MessageServer.  
+            # This is necessary because you've changed databases, so need to share messages with a different user group.  
+            if (DBInterface.is_db_open()) and ((not TransanaConstants.singleUserVersion) and (not ChatWindow.ConnectToMessageServer())):
+                # If no connection is made, close Transana!
+                self.OnCloseWindow(event)
 
     def OnFileManagement(self, event):
         """ Implements the FileManagement Menu command """
@@ -592,7 +677,14 @@ class MenuWindow(wx.Frame):
                 adjustValue = float(dlg.GetValue())
                 self.ControlObject.AdjustIndexes(adjustValue)
             except:
-                errordlg = Dialogs.ErrorDialog(self, _('Error in Adjust Indexes.\n%s\n%s') % (sys.exc_info()[0], sys.exc_info()[1]))
+                import traceback
+                traceback.print_exc(file=sys.stdout)
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Error in Adjust Indexes.\n%s\n%s'), 'utf8')
+                else:
+                    prompt = _('Error in Adjust Indexes.\n%s\n%s')
+                errordlg = Dialogs.ErrorDialog(self, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
                 errordlg.ShowModal()
                 errordlg.Destroy()
             
@@ -603,6 +695,14 @@ class MenuWindow(wx.Frame):
         temp = XMLImport.XMLImport(self, -1, _('Transana XML Import'))
         if temp.get_input():
             temp.Import()
+            # If MU, we need to signal other copies that we've imported a database!
+            # First, test to see if we're in the Multi-user version.
+            if not TransanaConstants.singleUserVersion:
+                # Now make sure a Chat Window has been defined
+                if TransanaGlobal.chatWindow != None:
+                    # Now send the "Import" message
+                    TransanaGlobal.chatWindow.SendMessage("I ")
+                
         temp.Close()
 
     def OnExportDatabase(self, event):
@@ -612,6 +712,24 @@ class MenuWindow(wx.Frame):
             temp.Export()
         temp.Close()
 
+    def OnChat(self, event):
+        """ Chat Window """
+        # If a Chat Window has been defined ...
+        if TransanaGlobal.chatWindow != None:
+            # ... show it!
+            TransanaGlobal.chatWindow.Show()
+        else:
+            dlg = Dialogs.ErrorDialog(None, _("Your connection to the Message Server has been lost.\nYou may have lost your connection to the network, or there may be a problem with the Server.\nPlease quit Transana immediately and resolve the problem."))
+            dlg.ShowModal()
+            dlg.Destroy()
+
+    def OnRecordLock(self, event):
+        """ Record Lock Utility Window """
+        # Create a Record Lock Utility window
+        recordLockWindow = RecordLock.RecordLock(self, -1, _("Transana Record Lock Utility"))
+        recordLockWindow.ShowModal()
+        recordLockWindow.Destroy()
+
     def OnBatchWaveformGenerator(self, event):
         """ Batch Waveform Generator """
         temp = BatchWaveformGenerator.BatchWaveformGenerator(self)
@@ -620,10 +738,26 @@ class MenuWindow(wx.Frame):
 
     def OnOptionsSettings(self, event):
         """ Handler for Options > Settings """
+        # If MU, change Message Servers if necessary.  To do so, let's note what
+        # the settings are before the Program Options screen is shown.
+        if not TransanaConstants.singleUserVersion:
+            messageServer = TransanaGlobal.configData.messageServer
+            messageServerPort = TransanaGlobal.configData.messageServerPort
         # Open the Options Settings Dialog Box
         OptionsSettings.OptionsSettings(self)
         # Change video speed here
         self.ControlObject.VideoWindow.SetPlayBackSpeed(TransanaGlobal.configData.videoSpeed)
+        # If MU, if Message Server or Message Server Port is changed, we need to
+        # reset the Message Server.
+        if not TransanaConstants.singleUserVersion:
+            if (messageServer != TransanaGlobal.configData.messageServer) or \
+               (messageServerPort != TransanaGlobal.configData.messageServerPort):
+                # Attempt to connect to the new MessageServer                    
+                if not ChatWindow.ConnectToMessageServer():
+                    self.OnCloseWindow(event)
+                else:
+                    # Now update the Data Window, in case there were changes while we were away.
+                    self.ControlObject.DataWindow.DBTab.tree.refresh_tree()
 
     def OnOptionsLanguage(self, event):
         """ Handler for Options > Language menu selections """
@@ -686,6 +820,21 @@ class MenuWindow(wx.Frame):
         elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_SV:
             TransanaGlobal.configData.language = 'sv'
             self.presLan_sv.install()
+
+        # Chinese (English prompts)
+        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ZH:
+            TransanaGlobal.configData.language = 'zh'
+            self.presLan_en.install()
+
+        # Japanese (English prompts)
+        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_JA:
+            TransanaGlobal.configData.language = 'ja'
+            self.presLan_en.install()
+
+        # Korean (English prompts)
+        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_KO:
+            TransanaGlobal.configData.language = 'ko'
+            self.presLan_en.install()
 
         else:
             wx.MessageDialog(None, "Unknown Language", "Unknown Language").ShowModal()
@@ -750,6 +899,16 @@ class MenuWindow(wx.Frame):
         # Display the About Box
         About.AboutBox()
 
+    def OnHelpWebsite(self, evt):
+        """ Handler for Help > www.transana.org menu command """
+        # Open the user's browser and display the web site
+        webbrowser.open('http://www.transana.org/', new=True)
+
+    def OnHelpFund(self, evt):
+        """ Handler for Help > Fund Transana menu command """
+        # Open the user's browser and display the funding page
+        webbrowser.open('http://www.transana.org/about/funding.htm', new=True)
+
     def ChangeLanguages(self):
         """ Reset all Menu Labels to reflect a change in selected Language """
         self.menuBar.SetLabelTop(0, _("&File"))
@@ -785,6 +944,7 @@ class MenuWindow(wx.Frame):
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_BATCHWAVEFORM, _("&Batch Waveform Generator"))
         if not TransanaConstants.singleUserVersion:
             self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_CHAT, _("&Chat Window"))
+            self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_RECORDLOCK, _("&Record Lock Utility"))
 
         self.menuBar.SetLabelTop(3, _("&Options"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_SETTINGS, _("Program &Settings"))
@@ -827,6 +987,8 @@ class MenuWindow(wx.Frame):
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_TUTORIAL, _("&Tutorial"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_NOTATION, _("Transcript &Notation"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_ABOUT, _("&About"))
+        self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_WEBSITE, _("&www.transana.org"))
+        self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_FUND, _("&Fund Transana"))
 
         # print "Menu Language Changed (%s)" % _("&File")
 
@@ -878,6 +1040,12 @@ class MenuWindow(wx.Frame):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'sv', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             languages.append(SWEDISH_LABEL)
+        # Japanese, Korean, and Chinese
+        if ('wxMSW' in wx.PlatformInfo) and TransanaConstants.singleUserVersion:
+            languages.append(CHINESE_LABEL)
+            languages.append(JAPANESE_LABEL)
+            # Korean support must be removed due to a bug in wxSTC on Windows.
+            # languages.append(KOREAN_LABEL)
 
         if len(languages) == 1:
             return languages[0]

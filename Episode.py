@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -18,8 +18,17 @@
 
 __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 
+DEBUG = False
+if DEBUG:
+    print "Episode DEBUG is ON!"
+
 # import wxPython
 import wx
+# import MySQLdb (for Date Formatting)
+import MySQLdb
+# import Python's sys module
+import sys
+import types
 from DataObject import DataObject
 import DBInterface
 import ClipKeywordObject
@@ -64,6 +73,10 @@ class Episode(DataObject):
 
     def db_load_by_name(self, series, episode):
         """Load a record by ID / Name."""
+        # If we're in Unicode mode, we need to encode the parameters so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            series = series.encode(TransanaGlobal.encoding)
+            episode = episode.encode(TransanaGlobal.encoding)
         db = DBInterface.get_db()
         query = """SELECT * FROM Episodes2 a, Series2 b
             WHERE   EpisodeID = %s AND
@@ -118,14 +131,46 @@ class Episode(DataObject):
         elif self.media_filename == "":
             raise SaveError, _("Media Filename is required.")
         else:
-            # Create a string of legal characters for the file names
-            allowedChars = TransanaConstants.legalFilenameCharacters
-            # check each character in the file name string
-            for char in self.media_filename:
-                # If the character is illegal ...
-                if allowedChars.find(char) == -1:
-                    msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, which Transana does not allow at this time.\nPlease rename your folders and files so that they do not include characters that are not part of US English.\nWe apologize for this inconvenience.') % (self.media_filename, char)
-                    raise SaveError, msg
+
+
+            # videoPath probably has the OS.sep character, but we need the generic "/" character here.
+            videoPath = TransanaGlobal.configData.videoPath.replace('\\', '/')
+            # Substitute the generic OS seperator "/" for the Windows "\".
+            self.media_filename = self.media_filename.replace('\\', '/')
+            # If we are using the ANSI version of wxPython OR
+            # (if we're on the Mac AND are in the Single-User version of Transana)
+            # then we need to block Unicode characters from media filenames.
+            # Unicode characters still cause problems on the Mac for the Multi-User version of Transana,
+            # but can be made to work if shared waveforming is done on a Windows computer.
+            if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
+                # Create a string of legal characters for the file names
+                allowedChars = TransanaConstants.legalFilenameCharacters
+                # check each character in the file name string
+                for char in self.media_filename:
+                    # If the character is illegal ...
+                    if allowedChars.find(char) == -1:
+                        msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.')
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            msg = unicode(msg, 'utf8')
+                        raise SaveError, msg % (self.media_filename, char)
+            # if we're not in Unicode mode ...
+            if 'ansi' in wx.PlatformInfo:
+                # ... we don't need to encode the string values, but we still need to copy them to our local variables.
+                id = self.id
+                media_filename = self.media_filename
+                comment = self.comment
+                series_id = self.series_id
+            # If we're in Unicode mode ...
+            else:
+                # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
+                # variables for the data.  We don't want to change the underlying object values.  Also, this way,
+                # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
+                id = self.id.encode(TransanaGlobal.encoding)
+                media_filename = self.media_filename.encode(TransanaGlobal.encoding)
+                videoPath = videoPath.encode(TransanaGlobal.encoding)
+                comment = self.comment.encode(TransanaGlobal.encoding)
+                series_id = self.series_id.encode(TransanaGlobal.encoding)
 
         self._sync_series()
 
@@ -133,20 +178,25 @@ class Episode(DataObject):
                         "TapingDate", "EpComment")
         
         # Determine if we are supposed to extract the Video Root Path from the Media Filename and extract it if appropriate
-        if self.useVideoRoot and (TransanaGlobal.configData.videoPath == self.media_filename[:len(TransanaGlobal.configData.videoPath)]):
-            tempMediaFilename = self.media_filename[len(TransanaGlobal.configData.videoPath):]
+        if self.useVideoRoot and (videoPath == media_filename[:len(videoPath)]):
+            tempMediaFilename = media_filename[len(videoPath):]
         else:
-            tempMediaFilename = self.media_filename
+            tempMediaFilename = media_filename
 
-        values = (self.id, self.series_num, tempMediaFilename, \
-                    self.tape_length, self.tape_date, self.comment)
+        values = (id, self.series_num, tempMediaFilename, \
+                    self.tape_length, self.tape_date_db, comment)
 
         if (self._db_start_save() == 0):
             # Duplicate Episode IDs within a Series are not allowed.
             if DBInterface.record_match_count("Episodes2", \
                     ("EpisodeID", "SeriesNum"),
-                    (self.id, self.series_num)) > 0:
-                raise SaveError, _('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.') % (self.id, self.series_id)
+                    (id, self.series_num)) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.'), 'utf8')
+                else:
+                    prompt = _('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.')
+                raise SaveError, prompt % (self.id, self.series_id)
 
             # insert the new record
             # Could be some issues with how TapingDate is stored (YYYY/MM/DD ?)
@@ -162,8 +212,13 @@ class Episode(DataObject):
             # check for dupes
             if DBInterface.record_match_count("Episodes2", \
                     ("EpisodeID", "SeriesNum", "!EpisodeNum"),
-                    (self.id, self.series_num, self.number) ) > 0:
-                raise SaveError, _('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.') % (self.id, self.series_id)
+                    (id, self.series_num, self.number) ) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.'), 'utf8')
+                else:
+                    prompt = _('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.')
+                raise SaveError, prompt % (self.id, self.series_id)
             
             # OK to update the episode record
             query = """UPDATE Episodes2
@@ -189,8 +244,9 @@ class Episode(DataObject):
             DBInterface.insert_clip_keyword(self.number, 0, kws.keywordGroup, kws.keyword, kws.example)
 
         if (self.number == 0):
-            # Load the auto-assigned new number record
+            # Load the auto-assigned new number record.  This record won't have the correct Episode Keywords.
             self.db_load_by_name(self.series_id, self.id)
+            # Update the ClipKeyword records for this Episode, giving them the correct Episode Number
             query = """
             UPDATE ClipKeywords2
                 SET EpisodeNum = %s
@@ -198,42 +254,72 @@ class Episode(DataObject):
                         ClipNum = 0
             """
             c.execute(query, self.number)
+            # now we have to reload the Episode so it will have the correct Episode Keywords
             self.db_load_by_name(self.series_id, self.id)
-            
-            
+
         c.close()
             
             
     def db_delete(self, use_transactions=1):
         """Delete this object record from the database."""
-        # Initialize delete operation, begin transaction if necessary
-        (db, c) = self._db_start_delete(use_transactions)
         result = 1
-        
-        # Detect, Load, and Delete all Clip Notes.
-        notes = self.get_note_nums()
-        for note_num in notes:
-            note = Note.Note(note_num)
-            result = result and note.db_delete(0)
-            del note
-        del notes
+        try:
+            # Initialize delete operation, begin transaction if necessary
+            (db, c) = self._db_start_delete(use_transactions)
+            
+            # Detect, Load, and Delete all Clip Notes.
+            notes = self.get_note_nums()
+            for note_num in notes:
+                note = Note.Note(note_num)
+                result = result and note.db_delete(0)
+                del note
+            del notes
 
-        for (transcriptNo, transcriptID, transcriptEpisodeNo) in DBInterface.list_transcripts(self.series_id, self.id):
-            trans = Transcript.Transcript(transcriptNo)
-            # if transcript delete fails, rollback clip delete
-            result = result and trans.db_delete(0)
-            del trans
+            for (transcriptNo, transcriptID, transcriptEpisodeNo) in DBInterface.list_transcripts(self.series_id, self.id):
+                trans = Transcript.Transcript(transcriptNo)
+                # if transcript delete fails, rollback clip delete
+                result = result and trans.db_delete(0)
+                del trans
 
-        # Delete all related references in the ClipKeywords table
-        if result:
-            DBInterface.delete_all_keywords_for_a_group(self.number, 0)
+            # Delete all related references in the ClipKeywords table
+            if result:
+                DBInterface.delete_all_keywords_for_a_group(self.number, 0)
 
-        # Delete the actual record.
-        self._db_do_delete(use_transactions, c, result)
+            # Delete the actual record.
+            self._db_do_delete(use_transactions, c, result)
 
-        # Cleanup
-        c.close()
-        self.clear()
+            # Cleanup
+            c.close()
+            self.clear()
+        except RecordLockedError, e:
+
+            if DEBUG:
+                print "Episode: RecordLocked Error", e
+
+
+            # if a sub-record is locked, we may need to unlock the Episode record (after rolling back the Transaction)
+            if self.isLocked:
+                # c (the database cursor) only exists if the record lock was obtained!
+                # We must roll back the transaction before we unlock the record.
+                c.execute("ROLLBACK")
+
+                if DEBUG:
+                    print "Episode: roll back Transaction"
+            
+                c.close()
+
+                self.unlock_record()
+
+                if DEBUG:
+                    print "Episode: unlocking record"
+
+            raise e    
+        except:
+
+            if DEBUG:
+                print "Episode: Exception"
+            
+            raise
 
         return result
 
@@ -306,6 +392,21 @@ class Episode(DataObject):
         self.id = r['EpisodeID']
         self.comment = r['EpComment']
         self.media_filename = r['MediaFile']
+        self.tape_length = r['EpLength']
+        self.tape_date = r['TapingDate']
+        
+        # These come from the Series record
+        self.series_id = r['SeriesID']
+        self.series_num = r['SeriesNum']
+        
+        # If we're in Unicode mode, we need to encode the data from the database appropriately.
+        # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
+        if 'unicode' in wx.PlatformInfo:
+            self.id = DBInterface.ProcessDBDataForUTF8Encoding(self.id)
+            self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
+            self.media_filename = DBInterface.ProcessDBDataForUTF8Encoding(self.media_filename)
+            self.series_id = DBInterface.ProcessDBDataForUTF8Encoding(self.series_id)
+
         # Remember whether the MediaFile uses the VideoRoot Folder or not.
         # Detection of the use of the Video Root Path is platform-dependent.
         if wx.Platform == "__WXMSW__":
@@ -317,13 +418,7 @@ class Episode(DataObject):
         # If we are using the Video Root Path, add it to the Filename
         if self.useVideoRoot:
             self.media_filename = TransanaGlobal.configData.videoPath + self.media_filename
-        self.tape_length = r['EpLength']
-        self.tape_date = r['TapingDate']
-        
-        # These come from the Series record
-        self.series_id = r['SeriesID']
-        self.series_num = r['SeriesNum']
-        
+            
 
     def _get_ser_num(self):
         return self._ser_num
@@ -341,11 +436,64 @@ class Episode(DataObject):
 
     # This is a DateTime object
     def _get_td(self):
-        return self._td
+        # Although _dc_date is a MySQLdb.DateTime object, Date will be presented as a 'MM/DD/YYYY' string!
+        if self._td == None:
+            return ''
+        else:
+            return "%02d/%02d/%s" % (self._td.month, self._td.day, self._td.year)
     def _set_td(self, td):
-        self._td = td
+        # Although _dc_date is a MySQLdb.DateTime object, Date will be presented for ingestion as a 'MM/DD/YYYY' string!
+        # A None Object or a blank string should set _dc_date to None
+        if (td == '') or (td == None) or (td == u'  /  /    '):
+            self._td = None
+        else:
+            try:
+                # A 'MM/DD/YYYY' string needs to be parsed.
+                if isinstance(td, types.StringTypes):
+                    (month, day, year) = td.split('/')
+                    # The wxMaskedTextCtrl returns '  /  /    ' if left empty.
+                    # We need to convert the Month into an Integer, setting it to 1 if empty
+                    if month.strip() == '':
+                        month = 1
+                    else:
+                        month = int(month)
+                    # We need to convert the Day into an Integer, setting it to 1 if empty
+                    if day.strip() == '':
+                        day = 1
+                    else:
+                        day = int(day)
+                    # We need to convert the Year into an Integer, setting it to 0 if empty
+                    if year.strip() == '':
+                        year = 0
+                    else:
+                        year = int(year)
+                    # if all values were empty or bogus, set _dc_date to None, but if we have SOMETHING to save,
+                    # save it.
+                    if (year != 0) or (month != 0) or (day != 0):
+                        self._td = MySQLdb.Date(int(year), int(month), int(day))
+                    else:
+                        self._td = None
+                # If we get a non-string argument, just save it.  
+                else:
+                    self._td = td
+            except:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Date Format Error.  The Date must be in the format MM/DD/YYYY.\n%s'), 'utf8')
+                else:
+                    prompt = _('Date Format Error.  The Date must be in the format MM/DD/YYYY.\n%s')
+                raise SaveError, prompt % sys.exc_info()[1]
     def _del_td(self):
         self._td = None
+        
+    def _get_td_db(self):
+        """ Read-only version of the Date in a MySQL Friendly format """
+        # Although _td is a MySQLdb.DateTime object, the database needs the Date to be
+        # presented as a 'YYYY-MM-DD' string!
+        if self._td == None:
+            return None
+        else:
+            return "%04d/%02d/%02d" % (self._td.year, self._td.month, self._td.day)
 
     def _get_tl(self):
         return self._tl
@@ -355,9 +503,9 @@ class Episode(DataObject):
         self._tl = 0
 
     def _get_fname(self):
-        return self._fname
+        return self._fname.replace('\\', '/')
     def _set_fname(self, fname):
-        self._fname = fname
+        self._fname = fname.replace('\\', '/')
     def _del_fname(self):
         self._fname = ""
 
@@ -382,5 +530,6 @@ class Episode(DataObject):
                         """The length of the file in milliseconds.""")
     tape_date = property(_get_td, _set_td, _del_td,
                         """The date the media was recorded.""")
+    tape_date_db = property(_get_td_db, None, None, 'tape_date in the format needed for the MySQL database')
     keyword_list = property(_get_kwlist, _set_kwlist, _del_kwlist,
                         """The list of keywords that have been applied to the Episode.""")

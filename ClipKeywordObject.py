@@ -1,4 +1,4 @@
-# Copyright (C) 2003 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -43,6 +43,11 @@
 
 import types
 import DBInterface
+# import Transana's Globals
+import TransanaGlobal
+
+# import wxPython only for unicode testing
+import wx
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
@@ -76,13 +81,19 @@ class ClipKeyword(object):
         # NOTE:  This routine, at present, is ONLY used by the Database Import routine.
         #        Therefore, it does no checking for duplicate records.  If you want to
         #        use it for other purposes, you probably have to make it smarter!
-        
+
+        if 'unicode' in wx.PlatformInfo:
+            keywordGroup = self.keywordGroup.encode(TransanaGlobal.encoding)
+            keyword = self.keyword.encode(TransanaGlobal.encoding)
+        else:
+            keywordGroup = self.keywordGroup
+            keyword = self.keyword
         dbCursor = DBInterface.get_db().cursor()
         SQLText = """ INSERT INTO ClipKeywords2
                         (EpisodeNum, ClipNum, KeywordGroup, Keyword, Example)
                       VALUES
                         (%s, %s, %s, %s, %s) """
-        values = (self.episodeNum, self.clipNum, self.keywordGroup, self.keyword, self.example)
+        values = (self.episodeNum, self.clipNum, keywordGroup, keyword, self.example)
         dbCursor.execute(SQLText, values)
         dbCursor.close()
     

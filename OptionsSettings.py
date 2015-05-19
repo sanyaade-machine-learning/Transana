@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -36,7 +36,7 @@ import TransanaGlobal
 class OptionsSettings(wx.Dialog):
     """ Options > Settings Dialog Box """
 
-    def __init__(self, parent):
+    def __init__(self, parent, tabToShow=0):
         """ Initialize the Program Options Dialog Box """
         self.parent = parent
         # Define the Dialog Box
@@ -52,7 +52,7 @@ class OptionsSettings(wx.Dialog):
         lay.left.SameAs(self, wx.Left, 0)
         lay.right.SameAs(self, wx.Right, 0)
         lay.bottom.SameAs(self, wx.Bottom, 27)
-        notebook = wx.Notebook(self, -1, size=self.GetSizeTuple())  #, style=wx.NB_FIXEDWIDTH)
+        notebook = wx.Notebook(self, -1, size=self.GetSizeTuple())
         notebook.SetConstraints(lay)
 
         # Define the Directories Tab that goes in the wxNotebook
@@ -158,6 +158,13 @@ class OptionsSettings(wx.Dialog):
         self.btnDatabaseBrowse.SetConstraints(lay)
         wx.EVT_BUTTON(self, self.btnDatabaseBrowse.GetId(), self.OnBrowse)
         
+        # The Database Directory should not be visible for the Multi-user version of the program.
+        # Let's just hide it so that the program doesn't crash for being unable to populate the control.
+        if not TransanaConstants.singleUserVersion:
+            lblDatabaseDirectory.Show(False)
+            self.databaseDirectory.Show(False)
+            self.btnDatabaseBrowse.Show(False)
+
         # Tell the Directories Panel to lay out now and do AutoLayout
         panelDirectories.SetAutoLayout(True)
         panelDirectories.Layout()
@@ -421,6 +428,13 @@ class OptionsSettings(wx.Dialog):
         if not TransanaConstants.singleUserVersion:
             notebook.AddPage(panelMessageServer, _("MU Message Server"), False)
 
+        # the tabToShow parameter is the NUMBER of the tab which should be shown initially.
+        #   0 = Directories tab
+        #   1 = Transcriber Settings tab
+        #   2 = Message Server tab, if MU
+        if tabToShow != notebook.GetSelection():
+            notebook.SetSelection(tabToShow)
+
         # Define the buttons on the bottom of the form
         # Define the "OK" Button
         lay = wx.LayoutConstraints()
@@ -492,19 +506,26 @@ class OptionsSettings(wx.Dialog):
             # If there are records to update ...
             if episodeCount > 0 or clipCount > 0:
                 # Build a Dialog to prompt the user about updating the records
-                msg = _("%d Episode Records and %s Clip Records will be updated.") % (episodeCount, clipCount)
+                msg = _("%d Episode Records and %s Clip Records will be updated.")
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    msg = unicode(msg, 'utf8')
                 # Can't use Dialogs.InfoDialog because Cancel is an option
-                dlg = wx.MessageDialog(TransanaGlobal.menuWindow, msg, _("Transana Confirmation"), wx.OK | wx.CANCEL | wx.ICON_INFORMATION)
+                dlg = wx.MessageDialog(TransanaGlobal.menuWindow, msg % (episodeCount, clipCount), _("Transana Confirmation"), wx.OK | wx.CANCEL | wx.ICON_INFORMATION)
                 # Display the Dialog
                 result = dlg.ShowModal()
                 # Destroy the Dialog
                 dlg.Destroy
                 # if the User says OK ...
                 if result == wx.ID_OK:
+                    # Set the cursor to the Wait Cursor
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
                     # Actually UPDATE the paths by adding the update=True parameter
                     DBInterface.VideoFilePaths(tempVideoPath, True)
                     # Add the new Path to the Configuration Data  (This won't get updated if the user says "NO"!)
                     TransanaGlobal.configData.videoPath = tempVideoPath
+                    # Set the cursor to the arrow again.
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
             # If there are no records that would require updating...
             else:
                 # Add the new Path to the Configuration Data

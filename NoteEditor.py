@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -18,7 +18,7 @@
 component.
 """
 
-__author__ = 'Nathaniel Case <nacase@wisc.edu>, David K. Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'Nathaniel Case, David K. Woods <dwoods@wcer.wisc.edu>'
 
 
 import wx
@@ -46,8 +46,8 @@ class _NoteDialog(wx.Dialog):
         # SetSelection requests), we need to track to see if we have done the initial SetSelection.  We haven't.
         self.initialized = False
         rect = wx.ClientDisplayRect()
-        self.width = rect[2] * .28
-        self.height = rect[3] * .33
+        self.width = rect[2] * .60
+        self.height = rect[3] * .60
         wx.Dialog.__init__(self, parent, id, _("Note"), wx.DefaultPosition,
                             wx.Size(self.width, self.height), wx.CAPTION | wx.CLOSE_BOX | wx.SYSTEM_MENU | wx.RESIZE_BORDER)
 

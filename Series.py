@@ -1,4 +1,4 @@
-# Copyright (C) 2003 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,14 +16,21 @@
 
 """This module implements the Series class as part of the Data Objects."""
 
-__author__ = 'Nathaniel Case <nacase@wisc.edu>, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 
 # Based on code/ideas/logic from USeriesObject Delphi unit by DKW
 
+DEBUG = False
+if DEBUG:
+    print "Series DEBUG is ON!"
+
+import wx
 from DataObject import DataObject
 from Note import Note
 from Episode import Episode
 from TransanaExceptions import *
+# import Transana's Globals
+import TransanaGlobal
 import DBInterface
 import types
 # import Transana Dialogs
@@ -59,6 +66,9 @@ class Series(DataObject):
     def db_load_by_name(self, name):
         """Load a record by ID / Name.  Raise a RecordNotFound exception
         if record is not found in database."""
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            name = name.encode(TransanaGlobal.encoding)
         db = DBInterface.get_db()
         query = """
         SELECT * FROM Series2
@@ -103,13 +113,35 @@ class Series(DataObject):
         if self.id == "":
             raise SaveError, _("Series ID is required.")
 
-        values = (self.id, self.comment, self.owner, self.keyword_group)
+        # If we're in Unicode mode, ...
+        if 'unicode' in wx.PlatformInfo:
+            # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
+            # variables for the data.  We don't want to change the underlying object values.  Also, this way,
+            # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
+            id = self.id.encode(TransanaGlobal.encoding)
+            comment = self.comment.encode(TransanaGlobal.encoding)
+            owner = self.owner.encode(TransanaGlobal.encoding)
+            keyword_group = self.keyword_group.encode(TransanaGlobal.encoding)
+        else:
+            # If we don't need to encode the string values, we still need to copy them to our local variables.
+            id = self.id
+            comment = self.comment
+            owner = self.owner
+            keyword_group = self.keyword_group
+        
+        values = (id, comment, owner, keyword_group)
         if (self._db_start_save() == 0):
+
             # duplicate Series IDs are not allowed
             if DBInterface.record_match_count("Series2", \
                             ("SeriesID",), \
-                            (self.id,) ) > 0:
-                raise SaveError, _('A Series named "%s" already exists.\nPlease enter a different Series ID.') % self.id
+                            (id,) ) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Series named "%s" already exists.\nPlease enter a different Series ID.'), 'utf8')
+                else:
+                    prompt = _('A Series named "%s" already exists.\nPlease enter a different Series ID.')
+                raise SaveError, prompt % self.id
 
             # insert the new series
             query = """
@@ -122,8 +154,13 @@ class Series(DataObject):
             # check for dupes
             if DBInterface.record_match_count("Series2", \
                             ("SeriesID", "!SeriesNum"), \
-                            (self.id, self.number) ) > 0:
-                raise SaveError, _('A Series named "%s" already exists.\nPlease enter a different Series ID.') % self.id
+                            (id, self.number) ) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Series named "%s" already exists.\nPlease enter a different Series ID.'), 'utf8')
+                else:
+                    prompt = _('A Series named "%s" already exists.\nPlease enter a different Series ID.')
+                raise SaveError, prompt % self.id
 
             # update the record
             query = """
@@ -143,48 +180,71 @@ class Series(DataObject):
         # 'local' data is out of date.  re-sync
         if (self.number == 0):
             self.db_load_by_name(self.id)
-            # Delphi version unlocked the record here.  I'm tentatively
-            # deciding to do that outside this function since this method
-            # didn't grab a lock.  May change my mind later.
-            # Personally I can't figure out why it didn't get a lock in the
-            # first place
 
     def db_delete(self, use_transactions=1):
         """Delete this object record from the database.  Raises
         RecordLockedError exception if record is locked and unable to be
         deleted."""
 
-        # Initialize delete operation, begin transaction if necessary.
-        (db, c) = self._db_start_delete(use_transactions)
-        if (db == None):
-            return      # Abort delete without even trying
-       
         result = 1
-        
-        # Detect, Load, and Delete all Series Notes.
-        notes = self.get_note_nums()
-        for note_num in notes:
-            note = Note(note_num)
-            result = result and note.db_delete(0)
-            del note
-        del notes
+        try:
+            # Initialize delete operation, begin transaction if necessary.
+            (db, c) = self._db_start_delete(use_transactions)
+            if (db == None):
+                return      # Abort delete without even trying
 
-        # Deletes Episodes, which in turn will delete Episode Transcripts,
-        # Episode Notes, and Episode Keywords
-        episodes = self.get_episode_nums()
-        for episode_num in episodes:
-            episode = Episode(episode_num)
-            # Store the result so we can rollback the transaction on failure
-            result = result and episode.db_delete(0)
-            del episode
-        del episodes
+            # Detect, Load, and Delete all Series Notes.
+            notes = self.get_note_nums()
+            for note_num in notes:
+                note = Note(note_num)
+                result = result and note.db_delete(0)
+                del note
+            del notes
 
-        # Delete the actual record.
-        self._db_do_delete(use_transactions, c, result)
+            # Deletes Episodes, which in turn will delete Episode Transcripts,
+            # Episode Notes, and Episode Keywords
+            episodes = self.get_episode_nums()
+            for episode_num in episodes:
+                episode = Episode(episode_num)
+                # Store the result so we can rollback the transaction on failure
+                result = result and episode.db_delete(0)
+                del episode
+            del episodes
 
-        # Cleanup
-        c.close()
-        self.clear()
+            # Delete the actual record.
+            self._db_do_delete(use_transactions, c, result)
+
+            # Cleanup
+            c.close()
+            self.clear()
+        except RecordLockedError, e:
+
+            if DEBUG:
+                print "Series: RecordLocked Error", e
+
+            # if a sub-record is locked, we may need to unlock the Series record (after rolling back the Transaction)
+            if self.isLocked:
+                # c (the database cursor) only exists if the record lock was obtained!
+                # We must roll back the transaction before we unlock the record.
+                c.execute("ROLLBACK")
+
+                if DEBUG:
+                    print "Series: roll back Transaction"
+            
+                c.close()
+
+                self.unlock_record()
+
+                if DEBUG:
+                    print "Series: unlocking record"
+
+            raise e    
+        except:
+
+            if DEBUG:
+                print "Series: Exception"
+            
+            raise
         return result
 
 
@@ -196,8 +256,13 @@ class Series(DataObject):
         self.comment = r['SeriesComment']
         self.owner = r['SeriesOwner']
         self.keyword_group = r['DefaultKeywordGroup']
-        # FIXME: Old Transana would ensure "DefaultKeywordGroup" field
-        # exists and add it to the table if necessary
+        # If we're in Unicode mode, we need to encode the data from the database appropriately.
+        # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
+        if 'unicode' in wx.PlatformInfo:
+            self.id = DBInterface.ProcessDBDataForUTF8Encoding(self.id)
+            self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
+            self.owner = DBInterface.ProcessDBDataForUTF8Encoding(self.owner)
+            self.keyword_group = DBInterface.ProcessDBDataForUTF8Encoding(self.keyword_group)
 
     def _get_owner(self):
         return self._owner

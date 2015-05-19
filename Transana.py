@@ -1,4 +1,4 @@
-# Copyright (C) 2004 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -17,17 +17,26 @@
 """This file implements the Transana class, which is the main Transana application
 definition."""
 
-__author__ = 'Nathaniel Case <nacase@wisc.edu>, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 
-
-import wx             # import wxPython's wxWindows implementation
-from TransanaExceptions import *    # import all exception classes
 import sys                          # import Python's sys module
+# You can't use wxversion if you've used py2exe.  Test for that first!Also, there are problems with this
+# on the Mac when we build an app bundle.
+if (sys.platform != 'darwin') and (not hasattr(sys, 'frozen')):
+    # The first thing we need to do is select either the unicode version of wxPython or the ansi version.
+    # We try several versions to ensure that one will load on all development machines.
+    import wxversion
+
+    # Only 1 of the following lines should be enabled at one time.
+    # wxversion.select(["2.5.3.1-ansi", "2.6.1.0-ansi"])  # Enable this line for ANSI wxPython
+    wxversion.select(["2.5.3.1-unicode", "2.6.1.0-unicode"])  # Enable this line for UNICODE wxPython
+
+import wx                           # import wxPython's wxWindows implementation
+from TransanaExceptions import *    # import all exception classes
 import os
 import gettext                      # localization module
 # Define the "_" method, pointing it to wxPython's GetTranslation method
 __builtins__._ = wx.GetTranslation
-
 import Dialogs                      # import Transana Error Dialog
 import TransanaConstants            # import the Transana Constants
 import TransanaGlobal               # import Transana's Global Variables
@@ -35,12 +44,28 @@ from ControlObjectClass import ControlObject   # import the Transana Control Obj
 if "__WXMAC__" in wx.PlatformInfo:
     import MacOS
 
+DEBUG = False
+if DEBUG:
+    print "Transana DEBUG is ON!!"
+    print
+    print "wxPython version loaded: ", wx.VERSION_STRING,
+    if 'unicode' in wx.PlatformInfo:
+        print "- unicode"
+    else:
+        print "- ansi"
+    print
+
 
 class Transana(wx.App):
     """This class contains the main Transana application definition and the 
     logic that instantiates all other objects."""
     
     def OnInit(self):
+        # Use UTF-8 Encoding throughout Transana to allow maximum internationalization
+
+        if ('unicode' in wx.PlatformInfo) and (wx.VERSION_STRING >= '2.6'):
+            wx.SetDefaultPyEncoding('utf_8')
+
         # On OS/X, change the working directory to the directory the script is 
         # running from, this is necessary for running from a bundle.
         if "__WXMAC__" in wx.PlatformInfo:
@@ -101,7 +126,16 @@ class Transana(wx.App):
 
             connectionEstablished = True
         except:
-            msg = _('Transana is unable to access any Database at "%s".\nPlease check to see if this path is available.\nWould you like to restore the default Database path?') % TransanaGlobal.configData.databaseDir
+            if DEBUG:
+                import traceback
+                print sys.exc_info()[:2]
+                traceback.print_exc(file=sys.stdout)
+                
+            msg = _('Transana is unable to access any Database at "%s".\nPlease check to see if this path is available.\nWould you like to restore the default Database path?')
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                msg = unicode(msg, 'utf8')
+            msg = msg % TransanaGlobal.configData.databaseDir
 
         if connectionEstablished:
             import DataWindow                      # import Data Window Object
@@ -110,11 +144,21 @@ class Transana(wx.App):
             import VisualizationWindow             # import Visualization Window Object
             import exceptions                      # import exception handler (Python)
             import time                            # import the time module (Python)
+            # if we're running the multi-user version of Transana ...
+            if not TransanaConstants.singleUserVersion:
+                # ... import the Transana ChatWindow module
+                import ChatWindow
             
             # Initialize all main application Window Objects
 
+            # First, determine the program name that should be displayed, single or multi-user
+            if TransanaConstants.singleUserVersion:
+                programTitle = "Transana"
+            else:
+                programTitle = "Transana-MU"
+
             # Create the Menu Window
-            TransanaGlobal.menuWindow = MenuWindow.MenuWindow(None, -1, "Transana")
+            TransanaGlobal.menuWindow = MenuWindow.MenuWindow(None, -1, programTitle)
 
             # If a new database login fails three times, we need to close the program.
             # Initialize a counter to track that.
@@ -177,6 +221,15 @@ class Transana(wx.App):
                     # Clean up the Dialog Box
                     dlg.Destroy()
 
+            # if we're running the multi-user version of Transana and successfully connected to a database ...
+            if not TransanaConstants.singleUserVersion and loggedOn:
+                # ... connect to the Message Server Here
+                TransanaGlobal.socketConnection = ChatWindow.ConnectToMessageServer()
+                # If the connections fails ...
+                if TransanaGlobal.socketConnection == None:
+                    # ... signal that Transana should NOT start up!
+                    loggedOn = False
+
         else:
             loggedOn = False
             dlg = wx.MessageDialog(TransanaGlobal.menuWindow, msg, _('Transana Database Connection'), wx.YES_NO | wx.ICON_ERROR)
@@ -208,6 +261,9 @@ def transana_excepthook(type, value, trace):
     sys.__excepthook__(type, value, trace)
     # Now accomodate for the GUI
     msg = _("An unhandled %s exception occured")
+    if 'unicode' in wx.PlatformInfo:
+        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+        msg = unicode(msg, 'utf8')
     try:
         msg = msg + ": " + str(value)
     except exceptions.AttributeError, e:

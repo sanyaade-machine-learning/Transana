@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2005  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2006  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -13,9 +13,6 @@
 #You should have received a copy of the GNU General Public License
 #along with this program; if not, write to the Free Software
 #Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
-
-# This code is taken from the wxPython Demo file "PrintFramework.py" and
-# has been modified by David Woods
 
 """This module implements a map of keywords that have been applied to the selected Episode"""
 
@@ -35,6 +32,8 @@ import DBInterface
 import Dialogs
 # Import Transana's Constants
 import TransanaConstants
+# import Transana's Globals
+import TransanaGlobal
 
 # Declare Control IDs
 # Menu Item and Toolbar Item for File > Save As
@@ -75,8 +74,12 @@ def TimeMsToStr(TimeVal):
 class KeywordMap(wx.Frame):
     """ This is the Main Window for the Keyword Map application """
     def __init__(self, parent, ID, title):
+        # Determine the screen size for setting the initial dialog size
+        rect = wx.ClientDisplayRect()
+        width = rect[2] * .80
+        height = rect[3] * .80
         # Create the basic Frame structure with a white background
-        self.frame = wx.Frame.__init__(self, parent, ID, title, pos=(10, 10), size=(780, 560), style=wx.DEFAULT_FRAME_STYLE | wx.TAB_TRAVERSAL | wx.NO_FULL_REPAINT_ON_RESIZE)
+        self.frame = wx.Frame.__init__(self, parent, ID, title, pos=(10, 10), size=wx.Size(width, height), style=wx.DEFAULT_FRAME_STYLE | wx.TAB_TRAVERSAL | wx.NO_FULL_REPAINT_ON_RESIZE)
         self.SetBackgroundColour(wx.WHITE)
         # Set the icon
         transanaIcon = wx.Icon("images/transana.ico", wx.BITMAP_TYPE_ICO)
@@ -183,6 +186,8 @@ class KeywordMap(wx.Frame):
         self.printData = wx.PrintData()
         self.printData.SetPaperId(wx.PAPER_LETTER)
 
+        # Center on the screen
+        self.CenterOnScreen()
         # Show the Frame
         self.Show(True)
 
@@ -268,7 +273,12 @@ class KeywordMap(wx.Frame):
             self.EpisodeList.Show(True)
 
             self.seriesName = event.GetString()
-            self.SetStatusText(_('Series %s selected.') % self.seriesName)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Series %s selected.'), 'utf8')
+            else:
+                prompt = _('Series %s selected.')
+            self.SetStatusText(prompt % self.seriesName)
             self.KWList = ()
             self.MediaFile = ''
             self.MediaLength = 0
@@ -287,7 +297,12 @@ class KeywordMap(wx.Frame):
     def EpisodeSelect(self, event):
         if event.GetString() != ' ':
             self.episodeName = event.GetString()
-            self.SetStatusText(_('Episode %s selected.') % self.episodeName)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Episode %s selected.'), 'utf8')
+            else:
+                prompt = _('Episode %s selected.')
+            self.SetStatusText(prompt % self.episodeName)
             # Clear the drawing
             self.KWList = ()
             # Populate the drawing
@@ -405,7 +420,13 @@ class KeywordMap(wx.Frame):
                        WHERE s.SeriesID = %s AND
                              s.SeriesNum = e.SeriesNum AND
                              e.EpisodeID = %s"""
-        self.DBCursor.execute(SQLText, (self.seriesName, self.episodeName))
+        if 'unicode' in wx.PlatformInfo:
+            querySeriesName = self.seriesName.encode(TransanaGlobal.encoding)
+            queryEpisodeName = self.episodeName.encode(TransanaGlobal.encoding)
+        else:
+            querySeriesName = self.seriesName
+            queryEpisodeName = self.episodeName
+        self.DBCursor.execute(SQLText, (querySeriesName, queryEpisodeName))
         if self.DBCursor.rowcount == 1:
             (EpisodeNum, SeriesNum, MediaFile, EpisodeLength) = self.DBCursor.fetchone()
             # Capture Media File Name and Length for use in the Graph
@@ -439,12 +460,30 @@ class KeywordMap(wx.Frame):
 
         self.graphic.SetFontColour("BLACK")
         self.graphic.SetFontSize(10)
-        self.graphic.AddText(_('Series:%s') % self.seriesName, 2, 2)
-        self.graphic.AddTextCentered(_("Episode: %s") % self.episodeName, (self.Bounds[2] - self.Bounds[0]) / 2, 2)
-        self.graphic.AddTextRight(_('File:%s') % self.MediaFile, self.Bounds[2] - self.Bounds[1], 2)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Series: %s'), 'utf8')
+        else:
+            prompt = _('Series: %s')
+        self.graphic.AddText(prompt % self.seriesName, 2, 2)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("Episode: %s"), 'utf8')
+        else:
+            prompt = _("Episode: %s")
+        self.graphic.AddTextCentered(prompt % self.episodeName, (self.Bounds[2] - self.Bounds[0]) / 2, 2)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('File: %s'), 'utf8')
+        else:
+            prompt = _('File: %s')
+        self.graphic.AddTextRight(prompt % DBInterface.ProcessDBDataForUTF8Encoding(self.MediaFile), self.Bounds[2] - self.Bounds[1], 2)
+
         Count = 2
         for KWG, KW in self.KWList:
-            self.graphic.AddText("%s:%s" % (KWG, KW), 10, self.CalcY(Count) - 7)
+            KWG = DBInterface.ProcessDBDataForUTF8Encoding(KWG)
+            KW = DBInterface.ProcessDBDataForUTF8Encoding(KW)
+            self.graphic.AddText("%s : %s" % (KWG, KW), 10, self.CalcY(Count) - 7)
             Count = Count + 1
             
         self.graphicindent = self.graphic.GetMaxWidth(start=3)
@@ -504,13 +543,23 @@ if __name__ == '__main__':
                 frame.Setup()
                 self.SetTopWindow(frame)
             except MySQLdb.MySQLError, value:
-                dlg = Dialogs.ErrorDialog(frame, _('The following MySQL database error has occurred:\n%s') % value)
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('The following MySQL database error has occurred:\n%s'), 'utf8')
+                else:
+                    prompt = _('The following MySQL database error has occurred:\n%s')
+                dlg = Dialogs.ErrorDialog(frame, prompt % value)
                 dlg.ShowModal()
                 dlg.Destroy()
                 frame.Close()
                 return True
             except:
-                dlg = Dialogs.ErrorDialog(frame, _('The following error has occurred:\n%s\n%s') % (sys.exc_type, sys.exc_value))
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('The following error has occurred:\n%s\n%s'), 'utf8')
+                else:
+                    prompt = _('The following error has occurred:\n%s\n%s')
+                dlg = Dialogs.ErrorDialog(frame, prompt % (sys.exc_type, sys.exc_value))
                 dlg.ShowModal()
                 dlg.Destroy()
                 frame.Close()

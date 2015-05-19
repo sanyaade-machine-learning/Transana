@@ -1,4 +1,4 @@
-# Copyright (C) 2004 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -14,6 +14,10 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
+DEBUG = False
+if DEBUG:
+    print "DataObject DEBUG is ON!"
+
 """This module implements the DataObject class as part of the Data Objects.  This is the
    base class for Series, Episode, CoreData, Transcript, Collection, Clip, and Note Objects.
    It provides the following public methods:
@@ -25,14 +29,14 @@
     get_note_nums()
 """
 
-__author__ = 'Nathaniel Case <nacase@wisc.edu>, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 
 import DBInterface
 import inspect
 import copy
-from MySQLdb import * 
-from mx.DateTime import *
+from MySQLdb import *
 from TransanaExceptions import *
+import TransanaGlobal
 
 """Concerning MySQL literal values:
 
@@ -70,7 +74,6 @@ SELECT * From Clips2 a, Collections2 b
         b.CollectID = 'some collection ID'
 """
 
-
 class DataObject(object):
     """This class defines the features common among all classes in the
     Data Objects component group.  The Data Object classes will inherit
@@ -79,6 +82,8 @@ class DataObject(object):
     def __init__(self):
         """Initialize an DataObject object."""
         self.clear()
+        # In Transana-MU, we need to track whether an object is locked or not.
+        self._isLocked = False
         
 
 # Public methods
@@ -117,20 +122,24 @@ class DataObject(object):
         db = DBInterface.get_db()
         c = db.cursor()
         lq = self._get_db_fields(('RecordLock', 'LockTime'), c)
-        # dtd = now() - lq[1]     # datetime difference
-        
-        if (lq[1] == None) or (lq[0] == "") or ((now() - lq[1]).days > 1):
+        if (lq[1] == None) or (lq[0] == "") or ((DBInterface.ServerDateTime() - lq[1]).days > 1):
             # Lock the record
             self._set_db_fields(    ('RecordLock', 'LockTime'),
                                     (DBInterface.get_username(),
-                                    str(now())[:-3]), c)
+                                    str(DBInterface.ServerDateTime())[:-3]), c)
             c.close()
+            # Indicate that the object was successfully locked
+            self.isLocked = True
+
+            if DEBUG:
+                print "DataObject.lock_record(): Record '%s' locked by '%s'" % (self.id, lq[0])
         else:
             # We just raise an exception here since GUI code isn't appropriate.
             c.close()
 
-            print tablename, numname, self.number, self.id, lq[0]
-            
+            if DEBUG:
+                print "DataObject.lock_record(): Record %s locked by %s raises exception" % (self.id, lq[0])
+                
             raise RecordLockedError, lq[0]  # Pass name of person
 
         
@@ -139,6 +148,8 @@ class DataObject(object):
 
         self._set_db_fields(    ('RecordLock', 'LockTime'),
                                 ('', None), None)
+        # Indicate that the object was successfully unlocked
+        self.isLocked = False
 
 
     def get_note_nums(self):
@@ -190,8 +201,13 @@ class DataObject(object):
             ORDER BY EpisodeID
         """ % (table, t, t, t)
 
+        if type(self.id).__name__ == 'unicode':
+            id = self.id.encode(TransanaGlobal.encoding)
+        else:
+            id = self.id
+
         c = DBInterface.get_db().cursor()
-        c.execute(query, (self.id,))
+        c.execute(query, (id,))
         r = c.fetchall()    # return array of tuples with results
         for tup in r:
             notelist.append(tup[0])
@@ -290,7 +306,7 @@ class DataObject(object):
         fv = fv[:-4]
         
         query = "UPDATE " + tablename + "\n  SET " + fv + "\n  WHERE " + numname + " = %s\n"
-                
+
         c.execute(query, values + (self.number,))
         if (close_c):
             c.close()
@@ -300,14 +316,19 @@ class DataObject(object):
         tname = type(self).__name__
         # You can save a Clip Transcript with a blank Transcript ID!
         if (self.id == "") and (tname != 'Transcript'):
-            raise SaveError, _("Cannot save a %s with a blank %s ID") % (tname, tname)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Cannot save a %s with a blank %s ID"), 'utf8')
+            else:
+                prompt = _("Cannot save a %s with a blank %s ID")
+            raise SaveError, prompt % (tname, tname)
         else:
             # Verify record lock is still good
             db = DBInterface.get_db()
             
             if (self.number == 0) or \
                 ((self.record_lock == DBInterface.get_username()) and
-                ((now() - self.lock_time).days <= 1)):
+                ((DBInterface.ServerDateTime() - self.lock_time).days <= 1)):
                 c = db.cursor()
                 # If record num is 0, this is a NEW record and needs to be
                 # INSERTed.  Otherwise, it is an existing record to be UPDATEd.
@@ -325,14 +346,21 @@ class DataObject(object):
         if (self.number == 0):
             self.clear()
             raise DeleteError, _("Invalid record number (0)")
+
         self.lock_record()
+
+        if DEBUG:
+            print "Record '%s' locked" % self.id
 
         db = DBInterface.get_db()
         c = db.cursor()
  
         if use_transactions:
-            query = "Begin\n"   # Begin a transaction
+            query = "BEGIN"   # Begin a transaction
             c.execute(query)
+
+            if DEBUG:
+                print "Begin Delete Transaction"
 
         return (db, c)
 
@@ -350,12 +378,23 @@ class DataObject(object):
         if (use_transactions):
             # Commit the transaction
             if (result):
-                c.execute("COMMIT\n")
+                c.execute("COMMIT")
+
+                if DEBUG:
+                    print "Transaction committed"
+                    
             else:
                 # Rollback transaction because some part failed
-                c.execute("ROLLBACK\n")
+                c.execute("ROLLBACK")
+
+                if DEBUG:
+                    print "Transaction rolled back"
+                    
                 if (self.number != 0):
                     self.unlock_record()
+                    
+                    if DEBUG:
+                        print "Record '%s' unlocked" % self.id
         
         return
 
@@ -386,6 +425,13 @@ class DataObject(object):
     def _get_lt(self):
         return self._get_db_fields(('LockTime',))[0]
 
+    def _get_isLocked(self):
+        return self._isLocked
+    def _set_isLocked(self, lock):
+        self._isLocked = lock
+    def _del_isLocked(self):
+        self._isLocked = False
+
 # Public properties
     number = property(_get_number, _set_number, _del_number,
                         """Record number (auto-incremented database field).""")
@@ -398,3 +444,5 @@ class DataObject(object):
                         (Read only).""")
     lock_time = property(_get_lt, None, None,
                         """Time of the last record lock (Read only).""")
+    isLocked = property(_get_isLocked, _set_isLocked, _del_isLocked,
+                        """Object Is Locked?""")

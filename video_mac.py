@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -94,6 +94,7 @@ class VideoFrame(wx.Frame):
 
         self.FileName = filename
         self.movie.LoadMovie(filename)
+
         # Set the number of units per second to 1000
         self.movie.SetTimeUnit(1000)
 
@@ -192,9 +193,16 @@ class VideoFrame(wx.Frame):
 
     def OnProgressNotification(self, event):
         # Detect Play State Change and notify the VideoWindow.
+        # See if the playState has changed.
         if self.playState != self.movie.GetState():
+            # If it has, communicate that to the VideoWindow.  The Mac doesn't seem to differentiate between
+            # Stop and Pause the say Windows does, so pass "Stopped" for either Stop or Pause.
             if self.movie.GetState() != wx.qtmovie.wxMEDIA_STATE_PLAYING:
                 self.parentVideoWindow.UpdatePlayState(wx.qtmovie.wxMEDIA_STATE_STOPPED)
+            # Pass "Play" for play.
+            else:
+                self.parentVideoWindow.UpdatePlayState(wx.qtmovie.wxMEDIA_STATE_PLAYING)
+            # Update the local playState variable
             self.playState = self.movie.GetState()
 
         # If playing, check to see if the current segment has ended.
@@ -227,7 +235,7 @@ class VideoFrame(wx.Frame):
             bounds = self.movie.GetDefaultMovieSize()
     
             #  Establish the minimum width of the media player control (if media is audio-only, for example)
-            minWidth = max(bounds.x, 200)
+            minWidth = max(bounds.x, 350)
 
             # use Movie Height
             minHeight = max(bounds.y, 14)

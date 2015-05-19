@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -117,7 +117,7 @@ class EpisodeClipsTab(wx.Panel):
             self.gridClips.SetCellValue(loop, 2, clipData[loop]['CollectID'])
             self.gridClips.SetCellValue(loop, 3, clipData[loop]['ClipID'])
             # Convert value to a string
-            self.gridClips.SetCellValue(loop, 4, "%s" % clipData[loop]['ParentCollectNum'])
+            self.gridClips.SetCellValue(loop, 4, "%s" % clipData[loop]['ClipNum'])
 
     def Refresh(self, TimeCode=None):
         """ Redraw the contents of this tab to reflect possible changes in the data since the tab was created. """
@@ -127,7 +127,7 @@ class EpisodeClipsTab(wx.Panel):
 
     def OnCellLeftDClick(self, event):
         if self.ControlObject != None:
-            self.ControlObject.LoadClip2(self.gridClips.GetCellValue(event.GetRow(), 2), self.gridClips.GetCellValue(event.GetRow(), 4), self.gridClips.GetCellValue(event.GetRow(), 3))
+            self.ControlObject.LoadClipByNumber(int(self.gridClips.GetCellValue(event.GetRow(), 4)))
 
     def Register(self, ControlObject=None):
         """ Register a ControlObject """

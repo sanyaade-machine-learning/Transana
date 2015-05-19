@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -27,6 +27,7 @@ import ReportPrintoutClass
 import Episode
 import Clip
 import Keyword
+import Dialogs
 
 class KeywordUsageReport(wx.Object):
     """ This class creates and displays the Keyword Usage Report """
@@ -38,7 +39,12 @@ class KeywordUsageReport(wx.Object):
         # If a Collection Name is passed in ...
         if collection != None:
             # ...  add a subtitle and ...
-            self.subtitle = _("Collection: %s") % collection.id
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Collection: %s"), 'utf8')
+            else:
+                prompt = _("Collection: %s")
+            self.subtitle = prompt % collection.id
             majorLabel = _('Clip:')
             # ... use the Clips in the Collection for the majorList.
             majorList = DBInterface.list_of_clips_by_collection(collection.id, collection.parent)
@@ -49,7 +55,12 @@ class KeywordUsageReport(wx.Object):
         # If an Episode Name is passed in ...
         elif episodeName != None:
             # ...  add a subtitle and ...
-            self.subtitle = _("Episode: %s") % episodeName
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Episode: %s"), 'utf8')
+            else:
+                prompt = _("Episode: %s")
+            self.subtitle = prompt % episodeName
             # ... use the Clips from the Episode for the majorList
             epObj = Episode.Episode(series = seriesName, episode = episodeName)
             majorList = DBInterface.list_of_clips_by_episode(epObj.number)
@@ -61,7 +72,12 @@ class KeywordUsageReport(wx.Object):
         # If a Series Name is passed in ...            
         elif seriesName != None:
             # ...  add a subtitle and ...
-            self.subtitle = _("Series: %s") % seriesName
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Series: %s"), 'utf8')
+            else:
+                prompt = _("Series: %s")
+            self.subtitle = prompt % seriesName
             majorLabel = _('Episode:')
             # ... use the Episodes from the Series for the majorList
             majorList = DBInterface.list_of_episodes_for_series(seriesName)
@@ -79,17 +95,20 @@ class KeywordUsageReport(wx.Object):
                 tempData = treeCtrl.GetPyData(searchResultNode)
                 if tempData.nodetype == 'SearchResultsNode':
                     break
-            self.subtitle = _("Search Result: %s  Series: %s") % (treeCtrl.GetItemText(searchResultNode), treeCtrl.GetItemText(searchSeries))
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Search Result: %s  Series: %s"), 'utf8')
+            else:
+                prompt = _("Search Result: %s  Series: %s")
+            self.subtitle = prompt % (treeCtrl.GetItemText(searchResultNode), treeCtrl.GetItemText(searchSeries))
             # The majorLabel is for Episodes in this case
             majorLabel = _('Episode:')
             # Initialize the majorList to an empty list
             majorList = []
-            # Extracting data from the treeCtrl requires a "cookie" value, which is initialized to 0
-            cookie = 0
             # Get the first Child node from the searchColl collection
             (item, cookie) = treeCtrl.GetFirstChild(searchSeries)
-            # Process all children in the searchSeries Seroes
-            while 1:
+            # Process all children in the searchSeries Series.  (IsOk() fails when all children are processed.)
+            while item.IsOk():
                 # Get the item's Name
                 itemText = treeCtrl.GetItemText(item)
                 # Get the item's Node Data
@@ -98,12 +117,8 @@ class KeywordUsageReport(wx.Object):
                 if itemData.nodetype == 'SearchEpisodeNode':
                     # If it's an Episode, add the Episode's Node Data to the majorList
                     majorList.append((itemData.recNum, itemText, itemData.parent))
-                # When we get to the last Child Item, stop looping
-                if item == treeCtrl.GetLastChild(searchSeries):
-                    break
-                # If we're not at the Last Child Item, get the next Child Item and continue the loop
-                else:
-                    (item, cookie) = treeCtrl.GetNextChild(item, cookie)
+                # Get the next Child Item and continue the loop
+                (item, cookie) = treeCtrl.GetNextChild(searchSeries, cookie)
             # Once we have the Episodes in the majorList, we can gather their keywords into the minorList
             for (EpNo, epName, epParentNo) in majorList:
                 epObj = Episode.Episode(series = treeCtrl.GetItemText(searchSeries), episode = epName)
@@ -118,7 +133,12 @@ class KeywordUsageReport(wx.Object):
                 tempData = treeCtrl.GetPyData(searchResultNode)
                 if tempData.nodetype == 'SearchResultsNode':
                     break
-            self.subtitle = _("Search Result: %s  Collection: %s") % (treeCtrl.GetItemText(searchResultNode), treeCtrl.GetItemText(searchColl))
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Search Result: %s  Collection: %s"), 'utf8')
+            else:
+                prompt = _("Search Result: %s  Collection: %s")
+            self.subtitle = prompt % (treeCtrl.GetItemText(searchResultNode), treeCtrl.GetItemText(searchColl))
             # The majorLabel is for Clips in this case
             majorLabel = _('Clip:')
             # Initialize the majorList to an empty list
@@ -156,6 +176,9 @@ class KeywordUsageReport(wx.Object):
         # The majorList and minorList are constructed differently for the Episode version of the report,
         # and so the report must be built differently here too!
         if episodeName == None:
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                majorLabel = unicode(majorLabel, 'utf8')
             # Iterate through the major list
             for (groupNo, group, parentCollNo) in majorList:
                 # Use the group name as a Heading
@@ -175,7 +198,12 @@ class KeywordUsageReport(wx.Object):
             # Iterate through the major list
             for clipRecord in majorList:
                 # Use the group name as a Heading
-                self.data.append((('Subheading', 'Collection: %s, Clip: %s' % (clipRecord['CollectID'], clipRecord['ClipID'])), ('NormalRight', '(%s - %s)' % (Misc.time_in_ms_to_str(clipRecord['ClipStart']), Misc.time_in_ms_to_str(clipRecord['ClipStop'])))))  
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Collection: %s, Clip: %s'), 'utf8')
+                else:
+                    prompt = _('Collection: %s, Clip: %s')
+                self.data.append((('Subheading', prompt % (clipRecord['CollectID'], clipRecord['ClipID'])), ('NormalRight', '(%s - %s)' % (Misc.time_in_ms_to_str(clipRecord['ClipStart']), Misc.time_in_ms_to_str(clipRecord['ClipStop'])))))  
                 # Iterate through the list of Keywords for the group
                 for (keywordGroup, keyword, example) in minorList[(clipRecord['ClipID'], clipRecord['CollectID'], clipRecord['ParentCollectNum'])]:
                     # Use the Keyword name as a Subheading
@@ -214,7 +242,9 @@ class KeywordUsageReport(wx.Object):
             self.preview = wx.PrintPreview(printout, printout2, TransanaGlobal.printData)
             # Check for errors during Print preview construction
             if not self.preview.Ok():
-                self.SetStatusText(_("Print Preview Problem"))
+                dlg = Dialogs.ErrorDialog(None, _("Print Preview Problem"))
+                dlg.ShowModal()
+                dlg.Destroy()
                 return
             # Create the Frame for the Print Preview
             theWidth = max(wx.ClientDisplayRect()[2] - 180, 760)
@@ -229,7 +259,12 @@ class KeywordUsageReport(wx.Object):
         # If there's NO data in the majorList ...
         else:
             # If there are no clips to report, display an error message.
-            dlg = wx.MessageDialog(None, _('%s has no data for the Keyword Usage Report.') % self.subtitle, style = wx.OK | wx.ICON_EXCLAMATION)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('%s has no data for the Keyword Usage Report.'), 'utf8')
+            else:
+                prompt = _('%s has no data for the Keyword Usage Report.')
+            dlg = wx.MessageDialog(None, prompt % self.subtitle, style = wx.OK | wx.ICON_EXCLAMATION)
             dlg.ShowModal()
             dlg.Destroy()
             

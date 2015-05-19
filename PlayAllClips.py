@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -23,10 +23,14 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 import wx
 # Import the Transana Collection Object
 import Collection
+# import Transana's Dialogs
+import Dialogs
 # Import the DBInterface
 import DBInterface
 # Import Menu Constants
 import MenuSetup
+# import Transana's Exceptions
+import TransanaExceptions
 
 # Declare GUI Constants for the Play All Clips Dialog
 ID_PLAYALLCLIPSTIMER = wx.NewId()
@@ -146,7 +150,12 @@ class PlayAllClips(wx.Dialog):
             lay.top.SameAs(self, wx.Top, 6)
         lay.width.AsIs()
         lay.height.AsIs()
-        self.lblCollection = wx.StaticText(self, -1, _("Collection: %s") % self.collection.id)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("Collection: %s"), 'utf8')
+        else:
+            prompt = _("Collection: %s")
+        self.lblCollection = wx.StaticText(self, -1, prompt % self.collection.id)
         self.lblCollection.SetConstraints(lay)
 
         # Add a label that identifies the Clip
@@ -160,7 +169,12 @@ class PlayAllClips(wx.Dialog):
             lay.top.SameAs(self, wx.Top, 6)
             lay.width.AsIs()
         lay.height.AsIs()
-        self.lblClip = wx.StaticText(self, -1, _("Clip: %s   (%s of %s)") % (' ', 0, len(self.clipList)))
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("Clip: %s   (%s of %s)"), 'utf8')
+        else:
+            prompt = _("Clip: %s   (%s of %s)")
+        self.lblClip = wx.StaticText(self, -1, prompt % (' ', 0, len(self.clipList)))
         self.lblClip.SetConstraints(lay)
 
         # Add a button for Pause/Play functioning
@@ -250,54 +264,61 @@ class PlayAllClips(wx.Dialog):
 
         # Check to see if the video is NOT playing and NOT paused ...
         if (not self.ControlObject.IsPlaying()) and (not self.ControlObject.IsPaused()):
-            
-            print "PlayAllClips.OnTimer(1)"
-            
             # If it is neither playing nor paused, see if we have reached the end of the list 
             if self.clipNowPlaying >= len(self.clipList):
-            
-                print "PlayAllClips.OnTimer(2)"
-            
-                # If we're at the end of the list, stop the timer and close the Dialog Box
-                self.playAllClipsTimer.Stop()
-                # Un-Register with the ControlObject
-                self.ControlObject.Register(PlayAllClips = None)
-                self.Close()
+                # If so, close the PlayAllClips window.
+                self.OnClose(event)
             elif (not self.ControlObject.IsLoading()) and (self.HasStartedPlaying):
-            
-                print "PlayAllClips.OnTimer(3)"
-            
                 # If we are neither paused nor playing, nor are we out of clips, then
                 # we need to load the next clip!!
                 # First, update the label to tell what clip is up
-                self.lblClip.SetLabel(_("Clip: %s   (%s of %s)") % (self.clipList[self.clipNowPlaying][1], self.clipNowPlaying + 1, len(self.clipList)))
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_("Clip: %s   (%s of %s)"), 'utf8')
+                else:
+                    prompt = _("Clip: %s   (%s of %s)")
+                self.lblClip.SetLabel(prompt % (self.clipList[self.clipNowPlaying][1], self.clipNowPlaying + 1, len(self.clipList)))
 
                 # Stop the timer long enough to load the Clip.  That way, if the MediaFile is bad, we don't
                 # get repeated attempts to load the clip.
                 self.playAllClipsTimer.Stop()
 
-                # Try to Load the next clip into the ControlObject
-                if not self.ControlObject.LoadClipByNumber(self.clipList[self.clipNowPlaying][0], clipName=self.clipList[self.clipNowPlaying][1]):
-                    # If the Media File has been moved, this failed.  Try one more time.
-                    if not self.ControlObject.LoadClipByNumber(self.clipList[self.clipNowPlaying][0], clipName=self.clipList[self.clipNowPlaying][1]):
-                        # if it fails a second time, signal that Play All Clips should be stopped
-                        # by setting the Clip List Pointer to the end of the list
-                        self.clipNowPlaying = len(self.clipList)
+                # In MU, it's possible a clip in the Play All Clips list could get deleted by another user.
+                # Therefore, we need to be prepared to catch the exception that is raised by failing to be
+                # able to load the Clip.
+                try:
+                    # Try to Load the next clip into the ControlObject
+                    if not self.ControlObject.LoadClipByNumber(self.clipList[self.clipNowPlaying][0]):
+                        # If the Media File has been moved, this failed.  Try one more time.
+                        if not self.ControlObject.LoadClipByNumber(self.clipList[self.clipNowPlaying][0]):
+                            # if it fails a second time, signal that Play All Clips should be stopped
+                            # by setting the Clip List Pointer to the end of the list
+                            self.clipNowPlaying = len(self.clipList)
+                    # Clip loaded.  Restart the timer.
+                    self.playAllClipsTimer.Start(500)
 
-                # Clip loaded.  Restart the timer.
-                self.playAllClipsTimer.Start(500)
+                    # Play the next clip
+                    self.ControlObject.Play()
+                    # Increment the pointer to the next clip
+                    self.clipNowPlaying = self.clipNowPlaying + 1
+                    
+                    self.HasStartedPlaying = False
+                # If a Clip cannot be found ...  (This should only happen in MU if a clip is deleted by another user.)
+                except TransanaExceptions.RecordNotFoundError:
+                    # Build an error message
+                    msg = 'Clip "%s" could not be found.\nPerhaps it was deleted by another user.\nPlay All Clips cannot continue.'
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        msg = unicode(msg, 'utf8')
+                    # Display the error message
+                    dlg = Dialogs.ErrorDialog(self, msg % self.clipList[self.clipNowPlaying][1])
+                    dlg.ShowModal()
+                    dlg.Destroy()
+                    # Get out of Play All Clips.
+                    self.OnClose(event)
 
-                # Play the next clip
-                self.ControlObject.Play()
-                # Increment the pointer to the next clip
-                self.clipNowPlaying = self.clipNowPlaying + 1
-                
-                self.HasStartedPlaying = False
         # If a video has not yet been flagged as playing but it HAS started playing, flag it as having started.
         elif (not self.HasStartedPlaying) and (self.ControlObject.IsPlaying()):
-            
-            print "PlayAllClips.OnTimer(4)"
-            
             # Let's display the Keywords Tab during PlayAllClips
             self.ControlObject.ShowDataTab(1)
             self.HasStartedPlaying = True

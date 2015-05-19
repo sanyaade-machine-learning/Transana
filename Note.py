@@ -1,4 +1,4 @@
-# Copyright (C) 2004 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,10 +16,12 @@
 
 """This module implements the Note class as part of the Data Objects."""
 
-__author__ = 'Nathaniel Case <nacase@wisc.edu>, David K. Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'Nathaniel Case, David K. Woods <dwoods@wcer.wisc.edu>'
 
+import wx
 from DataObject import DataObject
 from TransanaExceptions import *
+import TransanaGlobal
 import DBInterface
 import types
 
@@ -39,6 +41,7 @@ class Note(DataObject):
         str = "Note Object:\n"
         str = str + "number = %s\n" % self.number
         str = str + 'id = %s\n' % self.id
+        str = str + 'notetype = %s\n' % self.notetype
         str = str + 'comment = %s\n' % self.comment
         str = str + "series_num = %s\n" % self.series_num
         str = str + "episode_num = %s\n" % self.episode_num
@@ -77,6 +80,9 @@ class Note(DataObject):
 
         Example: db_load_by_name("My note", Collection=1)
         """
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            note_id = note_id.encode(TransanaGlobal.encoding)
         db = DBInterface.get_db()
         if kwargs.has_key("Series"):
             q = "SeriesNum"
@@ -120,17 +126,36 @@ class Note(DataObject):
            ((self.collection_num == 0) or (self.collection_num == None)) and \
            ((self.clip_num == 0) or (self.clip_num == None)) and \
            ((self.transcript_num == 0) or (self.transcript_num == None)):
-            raise SaveError, _("Note %s is not assigned to any object.") % self.id
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Note %s is not assigned to any object."), 'utf8')
+            else:
+                prompt = _("Note %s is not assigned to any object.")
+            raise SaveError, prompt % self.id
 
-        values = (self.id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, \
-                  self.author, self.text)
+        # If we're in Unicode mode, ...
+        if 'unicode' in wx.PlatformInfo:
+            # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
+            # variables for the data.  We don't want to change the underlying object values.  Also, this way,
+            # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
+            id = self.id.encode(TransanaGlobal.encoding)
+            author = self.author.encode(TransanaGlobal.encoding)
+            text = self.text.encode(TransanaGlobal.encoding)
+        else:
+            # If we don't need to encode the string values, we still need to copy them to our local variables.
+            id = self.id
+            author = self.author
+            text = self.text
+
+        values = (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, \
+                  author, text)
 
         # Determine if we are creating a new record or saving an existing one
         if (self._db_start_save() == 0):  # Creating new record
             # Check to see that no identical record exists
             if DBInterface.record_match_count("Notes2", \
                                               ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum"), \
-                                              (self.id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num) ) > 0:
+                                              (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num) ) > 0:
                 targetObject = _('object')
                 if (self.series_num != 0) and (self.series_num != None):
                     targetObject = _('Series')
@@ -142,7 +167,13 @@ class Note(DataObject):
                     targetObject = _('Collection')
                 elif (self.clip_num != 0) and (self.clip_num != None):
                     targetObject = _('Clip')
-                raise SaveError, _('A Note named "%s" already exists for this %s.') % (self.id, targetObject)
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Note named "%s" already exists for this %s.'), 'utf8')
+                    targetObject = unicode(targetObject, 'utf8')
+                else:
+                    prompt = _('A Note named "%s" already exists for this %s.')
+                raise SaveError, prompt % (self.id, targetObject)
 
             # insert a new record
             query = """ INSERT INTO Notes2
@@ -155,7 +186,7 @@ class Note(DataObject):
             # Check to see that no identical record with a different number exists (!NoteNum specifies "Not same note number")
             if DBInterface.record_match_count("Notes2", \
                                               ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum", "!NoteNum"), \
-                                              (self.id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, self.number) ) > 0:
+                                              (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, self.number) ) > 0:
                 targetObject = _('object')
                 if (self.series_num != 0) and (self.series_num != None):
                     targetObject = _('Series')
@@ -167,7 +198,13 @@ class Note(DataObject):
                     targetObject = _('Collection')
                 elif (self.clip_num != 0) and (self.clip_num != None):
                     targetObject = _('Clip')
-                raise SaveError, _('A Note named "%s" already exists for this %s.') % (self.id, targetObject)
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Note named "%s" already exists for this %s.'), 'utf8')
+                    targetObject = unicode(targetObject, 'utf8')
+                else:
+                    prompt = _('A Note named "%s" already exists for this %s.')                    
+                raise SaveError, prompt % (self.id, targetObject)
 
             # Update the existing record
             query = """ UPDATE Notes2
@@ -197,7 +234,7 @@ class Note(DataObject):
                                 ClipNum = %s AND
                                 TranscriptNum = %s """
             tempDBCursor = DBInterface.get_db().cursor()
-            tempDBCursor.execute(query, (self.id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num))
+            tempDBCursor.execute(query, (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num))
             if tempDBCursor.rowcount == 1:
                 self.number = tempDBCursor.fetchone()[0]
             else:
@@ -235,8 +272,27 @@ class Note(DataObject):
         self.clip_num = r['ClipNum']
         self.transcript_num = r['TranscriptNum']
         self.author = r['NoteTaker']
-        self.text = r['NoteText']
 
+        # self.text = r['NoteText']
+        # Okay, this isn't so straight-forward any more.
+        # With MySQL for Python 0.9.x, r['NoteText'] is of type str.
+        # With MySQL for Python 1.2.0, r['NoteText'] is of type array.  It could then either be a
+        # character string (typecode == 'c') or a unicode string (typecode == 'u'), which then
+        # need to be interpreted differently.
+        if type(r['NoteText']).__name__ == 'array':
+            if r['NoteText'].typecode == 'u':
+                self.text = r['NoteText'].tounicode()
+            else:
+                self.text = r['NoteText'].tostring()
+        else:
+            self.text = r['NoteText']
+        # If we're in Unicode mode, we need to encode the data from the database appropriately.
+        # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
+        if 'unicode' in wx.PlatformInfo:
+            self.id = DBInterface.ProcessDBDataForUTF8Encoding(self.id)
+            self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
+            self.author = DBInterface.ProcessDBDataForUTF8Encoding(self.author)
+            self.text = DBInterface.ProcessDBDataForUTF8Encoding(self.text)
 
     def _set_series(self, num):
         self._series = num
@@ -274,6 +330,20 @@ class Note(DataObject):
     def _del_transcript(self):
         self._transcript = 0
 
+    def _get_notetype(self):
+        notetype = None
+        if self.transcript_num > 0:
+            notetype = 'Transcript'
+        elif self.episode_num > 0:
+            notetype = 'Episode'
+        elif self.series_num > 0:
+            notetype = 'Series'
+        elif self.clip_num > 0:
+            notetype = 'Clip'
+        elif self.collection_num > 0:
+            notetype = 'Collection'
+        return notetype
+
     def _set_author(self, name):
         self._author = name
     def _get_author(self):
@@ -286,7 +356,10 @@ class Note(DataObject):
     def _get_text(self):
         return self._text
     def _del_text(self):
-        self._text = ""
+        if 'unicode' in wx.PlatformInfo:
+            self._text = u""
+        else:
+            self._text = ""
 
 
 # Public properties
@@ -300,6 +373,7 @@ class Note(DataObject):
                         """Clip number attached to (if applicable)""")
     transcript_num = property(_get_transcript, _set_transcript, _del_transcript,
                         """Number of the transcript from which this Note was taken.""")
+    notetype = property(_get_notetype, doc=""" Type of Note (read-only) """)
     author = property(_get_author, _set_author, _del_author,
                         """Person responsible for creating the Note.""")
     text = property(_get_text, _set_text, _del_text,

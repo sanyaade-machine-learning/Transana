@@ -1,4 +1,4 @@
-# Copyright (C) 2004 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2006  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -22,6 +22,7 @@ import string
 import wx
 import TransanaGlobal
 import DBInterface
+import Dialogs
 import ReportPrintoutClass
 import Keyword
 
@@ -32,7 +33,12 @@ class KeywordSummaryReport(wx.Object):
         self.title = _("Keyword Summary Report")
         # If a Keyword Group Name is passed in, add a subtitle and use it as the Report's keywordGroupList.
         if keywordGroupName != None:
-            self.subtitle = _("Keyword Group: %s") % keywordGroupName
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Keyword Group: %s"), 'utf8')
+            else:
+                prompt = _("Keyword Group: %s")
+            self.subtitle = prompt % keywordGroupName
             keywordGroupList = [keywordGroupName]
         # If no Keyword Group Name is passed in, get a list of all Keyword Groups as the Report's keywordGroupList.
         else:
@@ -78,7 +84,9 @@ class KeywordSummaryReport(wx.Object):
         self.preview = wx.PrintPreview(printout, printout2, TransanaGlobal.printData)
         # Check for errors during Print preview construction
         if not self.preview.Ok():
-            self.SetStatusText(_("Print Preview Problem"))
+            dlg = Dialogs.ErrorDialog(None, _("Print Preview Problem"))
+            dlg.ShowModal()
+            dlg.Destroy()
             return
         # Create the Frame for the Print Preview
         theWidth = max(wx.ClientDisplayRect()[2] - 180, 760)

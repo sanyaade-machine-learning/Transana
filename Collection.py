@@ -1,4 +1,4 @@
-# Copyright (C) 2003 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,15 +16,20 @@
 
 """This module implements the Collection class as part of the Data Objects."""
 
-__author__ = 'Nathaniel Case <nacase@wisc.edu>, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 # Based on code/ideas/logic from UCollectionObject Delphi unit by DKW
 
+DEBUG = False
+if DEBUG:
+    print "Collection DEBUG is ON!"
 
+import wx
 from DataObject import DataObject
 import DBInterface
 import Clip
 import Note
 from TransanaExceptions import *
+import TransanaGlobal
 import types
 
 class Collection(DataObject):
@@ -57,6 +62,9 @@ class Collection(DataObject):
     def db_load_by_name(self, name, parent_num=0):
         """Load a record by ID / Name.  Raise a RecordNotFound exception
         if record is not found in database."""
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            name = name.encode(TransanaGlobal.encoding)
         db = DBInterface.get_db()
 
         c = db.cursor()
@@ -117,16 +125,36 @@ class Collection(DataObject):
         if self.id == "":
             raise SaveError, _("Collection ID is required.")
         
+        # If we're in Unicode mode, ...
+        if 'unicode' in wx.PlatformInfo:
+            # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
+            # variables for the data.  We don't want to change the underlying object values.  Also, this way,
+            # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
+            id = self.id.encode(TransanaGlobal.encoding)
+            comment = self.comment.encode(TransanaGlobal.encoding)
+            owner = self.owner.encode(TransanaGlobal.encoding)
+            keyword_group = self.keyword_group.encode(TransanaGlobal.encoding)
+        else:
+            # If we don't need to encode the string values, we still need to copy them to our local variables.
+            id = self.id
+            comment = self.comment
+            owner = self.owner
+            keyword_group = self.keyword_group
+        
         fields = ("CollectID", "ParentCollectNum", "CollectComment",
                     "CollectOwner", "DefaultKeywordGroup")
-        values = (self.id, self.parent, self.comment, self.owner,
-                    self.keyword_group)
+        values = (id, self.parent, comment, owner, keyword_group)
         if (self._db_start_save() == 0):        # Add new collection
             # Duplicate Collection IDs are not allowed within a collection
             if DBInterface.record_match_count("Collections2", \
                             ("CollectID", "ParentCollectNum"),
-                            (self.id, self.parent) ) > 0:
-                raise SaveError, _('A Collection named "%s" already exists.\nPlease enter a different Collection ID.') % self.id
+                            (id, self.parent) ) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Collection named "%s" already exists.\nPlease enter a different Collection ID.'), 'utf8')
+                else:
+                    prompt = _('A Collection named "%s" already exists.\nPlease enter a different Collection ID.')
+                raise SaveError, prompt % self.id
 
             # insert the new collection
             query = """
@@ -140,8 +168,13 @@ class Collection(DataObject):
             # check for dupes
             if DBInterface.record_match_count("Collections2", \
                             ("CollectID", "ParentCollectNum", "!CollectNum"),
-                            (self.id, self.parent, self.number) ) > 0:
-                raise SaveError, _('A Collection named "%s" already exists.\nPlease enter a different Collection ID.') % self.id
+                            (id, self.parent, self.number) ) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Collection named "%s" already exists.\nPlease enter a different Collection ID.'), 'utf8')
+                else:
+                    prompt = _('A Collection named "%s" already exists.\nPlease enter a different Collection ID.')
+                raise SaveError, prompt % self.id
             # update the record
             query = """
             UPDATE Collections2
@@ -155,7 +188,7 @@ class Collection(DataObject):
         c = DBInterface.get_db().cursor()
         c.execute(query, values)
         c.close()
-        # if new collection, NUm was auto assigned, so resync.
+        # if new collection, Number was auto assigned, so resync.
         if (self.number == 0):
             self.db_load_by_name(self.id, self.parent)
         
@@ -164,41 +197,72 @@ class Collection(DataObject):
         """Delete this object record from the database.  Raises
         RecordLockedError exception if the record is locked and unable to
         be deleted."""
-        # Initialize delete operation, begin transaction if necessary
-        (db, c) = self._db_start_delete(use_transactions)
-        if (db == None):
-            return      # Abort delete
-
         result = 1
+        try:
+            # Initialize delete operation, begin transaction if necessary
+            (db, c) = self._db_start_delete(use_transactions)
+            if (db == None):
+                return      # Abort delete
 
-        # Detect, Load, and Delete all Collection Notes
-        notes = self.get_note_nums()
-        for note_num in notes:
-            note = Note.Note(note_num)
-            result = result and note.db_delete(0)
-            del note
-        del notes
+            # Detect, Load, and Delete all Collection Notes
+            notes = self.get_note_nums()
+            for note_num in notes:
+                note = Note.Note(note_num)
+                result = result and note.db_delete(0)
+                del note
+            del notes
 
-        # Delete Clips, which in turn will delete Clip transcripts/notes/kws
-        clips = DBInterface.list_of_clips_by_collection(self.id, self.parent)
-        for (clipNo, clip_id, collNo) in clips:
-            clip = Clip.Clip(clipNo)
-            result = result and clip.db_delete(0)
-            del clip
-        del clips
+            # Delete Clips, which in turn will delete Clip transcripts/notes/kws
+            clips = DBInterface.list_of_clips_by_collection(self.id, self.parent)
+            for (clipNo, clip_id, collNo) in clips:
+                clip = Clip.Clip(clipNo)
+                result = result and clip.db_delete(0)
+                del clip
+            del clips
 
-        # Delete all Nested Collections
-        for (collNo, collID, parentCollNo) in DBInterface.list_of_collections(self.number):
-            tempCollection = Collection(collNo)
-            result = result and tempCollection.db_delete(0)
-            del tempCollection
+            # Delete all Nested Collections
+            for (collNo, collID, parentCollNo) in DBInterface.list_of_collections(self.number):
+                tempCollection = Collection(collNo)
+                result = result and tempCollection.db_delete(0)
+                del tempCollection
 
-        # Delete the actual record
-        self._db_do_delete(use_transactions, c, result)
-        
-        # Cleanup
-        c.close()
-        self.clear()
+            # Delete the actual record
+            self._db_do_delete(use_transactions, c, result)
+            
+            # Cleanup
+            c.close()
+            self.clear()
+        except RecordLockedError, e:
+
+            if DEBUG:
+                print "Collection: RecordLocked Error", e
+
+            # if a sub-record is locked, we may need to unlock the Collection record (after rolling back the Transaction)
+            if self.isLocked:
+                # c (the database cursor) only exists if the record lock was obtained!
+                # We must roll back the transaction before we unlock the record.
+                c.execute("ROLLBACK")
+
+                if DEBUG:
+                    print "Collection: roll back Transaction"
+            
+                c.close()
+
+                self.unlock_record()
+
+                if DEBUG:
+                    print "Collection: unlocking record"
+
+            raise e    
+        except:
+
+            if DEBUG:
+                print "Collection: Exception"
+            
+            raise
+
+        if DEBUG:
+            print
         return result
 
     def GetNodeData(self):
@@ -231,6 +295,13 @@ class Collection(DataObject):
         self.owner = r['CollectOwner']
         if r.has_key('DefaultKeywordGroup'):
             self.keyword_group = r['DefaultKeywordGroup']
+        # If we're in Unicode mode, we need to encode the data from the database appropriately.
+        # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
+        if 'unicode' in wx.PlatformInfo:
+            self.id = DBInterface.ProcessDBDataForUTF8Encoding(self.id)
+            self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
+            self.owner = DBInterface.ProcessDBDataForUTF8Encoding(self.owner)
+            self.keyword_group = DBInterface.ProcessDBDataForUTF8Encoding(self.keyword_group)
 
     def _get_parent(self):
         return self._parent

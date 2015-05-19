@@ -1,4 +1,4 @@
-# Copyright (C) 2003 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -14,8 +14,6 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-# Code Review and Documentation completed by DKW on 11/5/2003
-
 """This module implements the CoreData class as part of the Data Objects."""
 
 __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>'
@@ -23,6 +21,8 @@ __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>'
 # Import Python's Internationalization Module
 import gettext
 
+# import wxPython
+import wx
 # Import the DataObject class the CoreData descends from
 import DataObject
 # Import the Transana Database Interface
@@ -31,7 +31,10 @@ import DBInterface
 import MySQLdb
 # Import the Transana Exceptions
 from TransanaExceptions import *
+import TransanaGlobal
 import types
+# import Python's sys module
+import sys
 
 class CoreData(DataObject.DataObject):
     """This class defines the structure for the Core Data object.  This
@@ -98,6 +101,9 @@ class CoreData(DataObject.DataObject):
 
     def db_load(self, name):
         """Load a record by Name."""
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            name = name.encode(TransanaGlobal.encoding)
         # Define the SQL that loads a Core Data record
         query = """ SELECT * FROM CoreData2
                       WHERE Identifier = %s """
@@ -133,23 +139,64 @@ class CoreData(DataObject.DataObject):
         if self.id == "":
             raise SaveError, _("Blank Identifier in CoreData Record")
 
+        # If we're in Unicode mode, ...
+        if 'unicode' in wx.PlatformInfo:
+            # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
+            # variables for the data.  We don't want to change the underlying object values.  Also, this way,
+            # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
+            id = self.id.encode(TransanaGlobal.encoding)
+            title = self.title.encode(TransanaGlobal.encoding)
+            creator = self.creator.encode(TransanaGlobal.encoding)
+            subject = self.subject.encode(TransanaGlobal.encoding)
+            description = self.description.encode(TransanaGlobal.encoding)
+            publisher = self.publisher.encode(TransanaGlobal.encoding)
+            contributor = self.contributor.encode(TransanaGlobal.encoding)
+            dc_type = self.dc_type.encode(TransanaGlobal.encoding)
+            format = self.format.encode(TransanaGlobal.encoding)
+            source = self.source.encode(TransanaGlobal.encoding)
+            language = self.language.encode(TransanaGlobal.encoding)
+            relation = self.relation.encode(TransanaGlobal.encoding)
+            coverage = self.coverage.encode(TransanaGlobal.encoding)
+            rights = self.rights.encode(TransanaGlobal.encoding)
+        else:
+            # If we don't need to encode the string values, we still need to copy them to our local variables.
+            id = self.id
+            title = self.title
+            creator = self.creator
+            subject = self.subject
+            description = self.description
+            publisher = self.publisher
+            contributor = self.contributor
+            dc_type = self.dc_type
+            format = self.format
+            source = self.source
+            language = self.language
+            relation = self.relation
+            coverage = self.coverage
+            rights = self.rights
+        
         # Identify the Fields for a CoreData Database Record
         fields = ('Identifier', 'Title', 'Creator', 'Subject', 'Description', \
                   'Publisher', 'Contributor', 'DCDate', 'DCType', \
                   'Format', 'Source', 'Language', 'Relation', \
                   'Coverage', 'Rights')
         # Arrange the Data Values for the Core Data Record to match the fields variable above
-        values = (self.id, self.title, self.creator, self.subject, self.description, \
-                  self.publisher, self.contributor, self.dc_date_db, self.dc_type, \
-                  self.format, self.source, self.language, self.relation, \
-                  self.coverage, self.rights)
+        values = (id, title, creator, subject, description, \
+                  publisher, contributor, self.dc_date_db, dc_type, \
+                  format, source, language, relation, \
+                  coverage, rights)
 
         # Determine if we have a new record (_db_start_save() == 0) or an existing record (inherited from DataObject)
         if (self._db_start_save() == 0):
             # Duplicate Identifiers are not allowed.
-            if DBInterface.record_match_count("CoreData2", ("Identifier",), (self.id,)) > 0:
+            if DBInterface.record_match_count("CoreData2", ("Identifier",), (id,)) > 0:
                 # If a duplicate is found, interrupt the Save by raising an exception
-                raise SaveError, _('A Core Data record named "%s" already exists.') % self.id
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Core Data record named "%s" already exists.'), 'utf8')
+                else:
+                    prompt = _('A Core Data record named "%s" already exists.')
+                raise SaveError, prompt % self.id
 
             # Insert the new record into the table.
             # First, build the appropriate SQL Statment, starting with Insert
@@ -168,7 +215,7 @@ class CoreData(DataObject.DataObject):
             query = query[:-1] + ')'
         else:
             # check for duplicate records.  (This should not be possible!)
-            if DBInterface.record_match_count("CoreData2", ("Identifier", "!CoreDataNum"), (self.id, self.number) ) > 0:
+            if DBInterface.record_match_count("CoreData2", ("Identifier", "!CoreDataNum"), (id, self.number) ) > 0:
                 # If a duplicate is found, interrupt the Save by raising an exception
                 raise SaveError, _("A Core Data Record with that ID already exists.")
             
@@ -247,6 +294,23 @@ class CoreData(DataObject.DataObject):
         self.relation = row['Relation']
         self.coverage = row['Coverage']
         self.rights = row['Rights']
+        # If we're in Unicode mode, we need to encode the data from the database appropriately.
+        # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
+        if 'unicode' in wx.PlatformInfo:
+            self.id = DBInterface.ProcessDBDataForUTF8Encoding(self.id)
+            self.title = DBInterface.ProcessDBDataForUTF8Encoding(self.title)
+            self.creator = DBInterface.ProcessDBDataForUTF8Encoding(self.creator)
+            self.subject = DBInterface.ProcessDBDataForUTF8Encoding(self.subject)
+            self.description = DBInterface.ProcessDBDataForUTF8Encoding(self.description)
+            self.publisher = DBInterface.ProcessDBDataForUTF8Encoding(self.publisher)
+            self.contributor = DBInterface.ProcessDBDataForUTF8Encoding(self.contributor)
+            self.dc_type = DBInterface.ProcessDBDataForUTF8Encoding(self.dc_type)
+            self.format = DBInterface.ProcessDBDataForUTF8Encoding(self.format)
+            self.source = DBInterface.ProcessDBDataForUTF8Encoding(self.source)
+            self.language = DBInterface.ProcessDBDataForUTF8Encoding(self.language)
+            self.relation = DBInterface.ProcessDBDataForUTF8Encoding(self.relation)
+            self.coverage = DBInterface.ProcessDBDataForUTF8Encoding(self.coverage)
+            self.rights = DBInterface.ProcessDBDataForUTF8Encoding(self.rights)
 
     # Property Getters and Setters
     # (NOTE:  Number, Id, and Comment are provided by DataObject)
@@ -310,37 +374,45 @@ class CoreData(DataObject.DataObject):
     def _set_dc_date(self, dc_date):
         # Although _dc_date is a MySQLdb.DateTime object, Date will be presented for ingestion as a 'MM/DD/YYYY' string!
         # A None Object or a blank string should set _dc_date to None
-        if (dc_date == '') or (dc_date == None):
+        if (dc_date == '') or (dc_date == None) or (dc_date == u'  /  /    '):
             self._dc_date = None
         else:
-            # A 'MM/DD/YYYY' string needs to be parsed.
-            if isinstance(dc_date, types.StringTypes):
-                (month, day, year) = dc_date.split('/')
-                # The wxMaskedTextCtrl returns '  /  /    ' if left empty.
-                # We need to convert the Month into an Integer, setting it to 1 if empty
-                if month.strip() == '':
-                    month = 1
+            try:
+                # A 'MM/DD/YYYY' string needs to be parsed.
+                if isinstance(dc_date, types.StringTypes):
+                    (month, day, year) = dc_date.split('/')
+                    # The wxMaskedTextCtrl returns '  /  /    ' if left empty.
+                    # We need to convert the Month into an Integer, setting it to 1 if empty
+                    if month.strip() == '':
+                        month = 1
+                    else:
+                        month = int(month)
+                    # We need to convert the Day into an Integer, setting it to 1 if empty
+                    if day.strip() == '':
+                        day = 1
+                    else:
+                        day = int(day)
+                    # We need to convert the Year into an Integer, setting it to 0 if empty
+                    if year.strip() == '':
+                        year = 0
+                    else:
+                        year = int(year)
+                    # if all values were empty or bogus, set _dc_date to None, but if we have SOMETHING to save,
+                    # save it.
+                    if (year != 0) or (month != 0) or (day != 0):
+                        self._dc_date = MySQLdb.Date(int(year), int(month), int(day))
+                    else:
+                        self._dc_date = None
+                # If we get a non-string argument, just save it.  
                 else:
-                    month = int(month)
-                # We need to convert the Day into an Integer, setting it to 1 if empty
-                if day.strip() == '':
-                    day = 1
+                    self._dc_date = dc_date
+            except:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Date Format Error.  The Date must be in the format MM/DD/YYYY.\n%s'), 'utf8')
                 else:
-                    day = int(day)
-                # We need to convert the Year into an Integer, setting it to 0 if empty
-                if year.strip() == '':
-                    year = 0
-                else:
-                    year = int(year)
-                # if all values were empty or bogus, set _dc_date to None, but if we have SOMETHING to save,
-                # save it.
-                if (year != 0) or (month != 0) or (day != 0):
-                    self._dc_date = MySQLdb.Date(int(year), int(month), int(day))
-                else:
-                    self._dc_date = None
-            # If we get a non-string argument, just save it.  
-            else:
-                self._dc_date = dc_date
+                    prompt = _('Date Format Error.  The Date must be in the format MM/DD/YYYY.\n%s')
+                raise SaveError, prompt % sys.exc_info()[1]
     def _del_dc_date(self):
         self._dc_date = None
 

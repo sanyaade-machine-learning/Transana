@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,10 +16,15 @@
 
 """This module implements the Transcript class as part of the Data Objects."""
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>, Jonathan Beavers <jonathan.beavers@gmail.com>'
+
+
+DEBUG = False
+if DEBUG:
+    print "Transcript DEBUG is ON!"
 
 import wx
-from mx.DateTime import *
+import TransanaConstants
 import TransanaGlobal
 from DataObject import DataObject
 import DBInterface
@@ -58,6 +63,7 @@ class Transcript(DataObject):
         str = str + "Clip Number = %s\n" % self.clip_num
         str = str + "Transcriber = %s\n" % self.transcriber
         str = str + "Comment = %s\n" % self.comment
+        str = str + "LastSaveTime = %s\n" % self.lastsavetime
         if len(self.text) > 250:
             str = str + "text not displayed due to length.\n\n"
         else:
@@ -90,6 +96,9 @@ class Transcript(DataObject):
 
     def db_load_by_name(self, name, episode):
         """Load a record by ID / Name."""
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            name = name.encode(TransanaGlobal.encoding)
         db = DBInterface.get_db()
         query = """SELECT a.*, b.EpisodeID, c.SeriesID FROM Transcripts2 a, Episodes2 b, Series2 c
             WHERE   TranscriptID = %s AND
@@ -154,18 +163,40 @@ class Transcript(DataObject):
         # Sanity checks
         if (self.id == "") and (self.clip_num == 0):
             raise SaveError, _("Transcript ID is required.")
+
+        if DEBUG:
+            print "Transcript.db_save():  %s\n%s" % (self.text, type(self.text))
         
+        # If we're in Unicode mode, ...
+        if 'unicode' in wx.PlatformInfo:
+            # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
+            # variables for the data.  We don't want to change the underlying object values.  Also, this way,
+            # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
+            id = self.id.encode(TransanaGlobal.encoding)
+            transcriber = self.transcriber.encode(TransanaGlobal.encoding)
+            comment = self.comment.encode(TransanaGlobal.encoding)
+        else:
+            # If we don't need to encode the string values, we still need to copy them to our local variables.
+            id = self.id
+            transcriber = self.transcriber
+            comment = self.comment
+
         fields = ("TranscriptID", "EpisodeNum", "ClipNum", "Transcriber", \
                         "RTFText", "Comment", "LastSaveTime")
-        values = (self.id, self.episode_num, self.clip_num, self.transcriber, \
-                    self.text, self.comment, str(now())[:-3])
+        values = (id, self.episode_num, self.clip_num, transcriber, \
+                    self.text, comment)
 
         if (self._db_start_save() == 0):
             # Duplicate Transcript IDs within an Episode are not allowed.
             if DBInterface.record_match_count("Transcripts2", \
                     ("TranscriptID", "EpisodeNum", "ClipNum"),
-                    (self.id, self.episode_num, self.clip_num)) > 0:
-                raise SaveError, _('A Transcript named "%s" already exists in this Episode.\nPlease enter a different Transcript ID.') % self.id
+                    (id, self.episode_num, self.clip_num)) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Transcript named "%s" already exists in this Episode.\nPlease enter a different Transcript ID.'), 'utf8')
+                else:
+                    prompt = _('A Transcript named "%s" already exists in this Episode.\nPlease enter a different Transcript ID.')
+                raise SaveError, prompt % self.id
 
             # insert the new record
             query = "INSERT INTO Transcripts2\n("
@@ -175,13 +206,20 @@ class Transcript(DataObject):
             query = "%s\nVALUES\n(" % query
             for value in values:
                 query = "%s%%s," % query
-            query = query[:-1] + ')'
+            # The last data value should be the SERVER's time stamp because we don't know if the clients are synchronized.
+            # Even a couple minutes difference can cause problems, but with time zones, the different could be hours!
+            query += 'CURRENT_TIMESTAMP)'
         else:
             # Duplicate Transcript IDs within an Episode are not allowed.
             if DBInterface.record_match_count("Transcripts2", \
                     ("TranscriptID", "!TranscriptNum", "EpisodeNum", "ClipNum"),
-                    (self.id, self.number, self.episode_num, self.clip_num)) > 0:
-                raise SaveError, _('A Transcript named "%s" already exists in this Episode.\nPlease enter a different Transcript ID.') % self.id
+                    (id, self.number, self.episode_num, self.clip_num)) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Transcript named "%s" already exists in this Episode.\nPlease enter a different Transcript ID.'), 'utf8')
+                else:
+                    prompt = _('A Transcript named "%s" already exists in this Episode.\nPlease enter a different Transcript ID.')
+                raise SaveError, prompt % self.id
             
             # OK to update the episode record
             query = """UPDATE Transcripts2
@@ -191,59 +229,101 @@ class Transcript(DataObject):
                     Transcriber = %s,
                     RTFText = %s,
                     Comment = %s,
-                    LastSaveTime = %s
+                    LastSaveTime = CURRENT_TIMESTAMP
                 WHERE TranscriptNum = %s
             """
             values = values + (self.number,)
 
+        if DEBUG:
+            import Dialogs
+            msg = query % values
+            dlg = Dialogs.InfoDialog(None, msg)
+            dlg.ShowModal()
+            dlg.Destroy()
+
         c = DBInterface.get_db().cursor()
         c.execute(query, values)
                               
-        if (self.number == 0):
-            # Load the auto-assigned new number record
-            # This method is no good.  Clip Transcripts don't have an id and the episode num is not good enough.
-            # self.db_load_by_name(self.id, self.episode_num)
-
-            # If we are dealing with a brand new Transcript, it does not yet know its
-            # record number.  It HAS a record number, but it is not known yet.
-            # The following query should produce the correct record number for both
-            # Episode and Clip Transcripts.
-            query = """
-                      SELECT TranscriptNum FROM Transcripts2
-                      WHERE TranscriptID = %s AND
-                            EpisodeNum = %s AND
-                            ClipNum = %s
-                    """
-            tempDBCursor = DBInterface.get_db().cursor()
-            tempDBCursor.execute(query, (self.id, self.episode_num, self.clip_num))
-            if tempDBCursor.rowcount == 1:
-                self.number = tempDBCursor.fetchone()[0]
-            else:
-                raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
-            tempDBCursor.close()
+        # Load the auto-assigned new number record if necessary and the saved time.
+        query = """
+                  SELECT TranscriptNum, LastSaveTime FROM Transcripts2
+                  WHERE TranscriptID = %s AND
+                        EpisodeNum = %s AND
+                        ClipNum = %s
+                """
+        tempDBCursor = DBInterface.get_db().cursor()
+        tempDBCursor.execute(query, (id, self.episode_num, self.clip_num))
+        if tempDBCursor.rowcount == 1:
+            recs = tempDBCursor.fetchone()
+            if (self.number == 0):
+                self.number = recs[0]
+            self.lastsavetime = recs[1]
+        else:
+            raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
+        tempDBCursor.close()
 
     def db_delete(self, use_transactions=1):
         """Delete this object record from the database."""
-        # Initialize delete operation, begin transaction if necessary
-        (db, c) = self._db_start_delete(use_transactions)
         result = 1
-        
-        # Detect, Load, and Delete all Transcript Notes.
-        notes = self.get_note_nums()
-        for note_num in notes:
-            note = Note.Note(note_num)
-            result = result and note.db_delete(0)
-            del note
-        del notes
+        try:
+            # Initialize delete operation, begin transaction if necessary
+            (db, c) = self._db_start_delete(use_transactions)
+            
+            # Detect, Load, and Delete all Transcript Notes.
+            notes = self.get_note_nums()
+            for note_num in notes:
+                note = Note.Note(note_num)
+                result = result and note.db_delete(0)
+                del note
+            del notes
 
-        # Delete the actual record.
-        self._db_do_delete(use_transactions, c, result)
+            # Delete the actual record.
+            self._db_do_delete(use_transactions, c, result)
 
-        # Cleanup
-        c.close()
-        self.clear()
+            # Cleanup
+            c.close()
+            self.clear()
+        except RecordLockedError, e:
+            # if a sub-record is locked, we may need to unlock the Transcript record (after rolling back the Transaction)
+            if self.isLocked:
+                # c (the database cursor) only exists if the record lock was obtained!
+                # We must roll back the transaction before we unlock the record.
+                c.execute("ROLLBACK")
+                c.close()
+                self.unlock_record()
+            raise e    
+        except:
+            raise
 
         return result
+
+    def lock_record(self):
+        """ Override the DataObject Lock Method """
+        # If we're using the single-user version of Transana, we just need to ...
+        if not TransanaConstants.singleUserVersion:
+            # ... confirm that the transcript has not been altered by another user since it was loaded.
+            # To do this, first pull the LastSaveTime for this record from the database.
+            query = """
+                      SELECT LastSaveTime FROM Transcripts2
+                      WHERE TranscriptNum = %s
+                    """
+            tempDBCursor = DBInterface.get_db().cursor()
+            tempDBCursor.execute(query % self.number)
+            if tempDBCursor.rowcount == 1:
+                newLastSaveTime = tempDBCursor.fetchone()[0]
+            else:
+                raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
+            tempDBCursor.close()
+            if newLastSaveTime != self.lastsavetime:
+                self.db_load_by_num(self.number)
+        
+        # ... lock the Transcript Record
+        DataObject.lock_record(self)
+            
+    def unlock_record(self):
+        """ Override the DataObject Unlock Method """
+        # Unlock the Transcript Record
+        DataObject.unlock_record(self)
 
 
 # Private methods
@@ -287,6 +367,14 @@ class Transcript(DataObject):
     def _del_changed(self):
         self._has_changed = False
 
+    # Implementation for LastSaveTime Property
+    def _get_lastsavetime(self):
+        return self._lastsavetime
+    def _set_lastsavetime(self, lst):
+        self._lastsavetime = lst
+    def _del_lastsavetime(self):
+        self._lastsavetime = None
+
 # Public properties
     episode_num = property(_get_ep_num, _set_ep_num, _del_ep_num,
                         """The Episode number, if associated with one.""")
@@ -300,23 +388,78 @@ class Transcript(DataObject):
                         """Determines if this instance owns the Transcript lock.""")
     has_changed = property(_get_changed, _set_changed, _del_changed,
                         """Indicates whether the Transcript has been modified.""")
-    last_save_time = property(None, None, None,
+    lastsavetime = property(_get_lastsavetime, _set_lastsavetime, _del_lastsavetime,
                         """The timestamp of the last save (MU only).""")
-    
-    
-    def _load_row(self, r):
-        self.number = r['TranscriptNum']
-        self.id = r['TranscriptID']
-        self.episode_num = r['EpisodeNum']
-        self.clip_num = r['ClipNum']
-        self.transcriber = r['Transcriber']
-        self.text = r['RTFText']
-        self.comment = r['Comment']
+        
+    def _load_row(self, row):
+    	self.number = row['TranscriptNum']
+        self.id = row['TranscriptID']
+        self.episode_num = row['EpisodeNum']
+        self.clip_num = row['ClipNum']
+        self.transcriber = row['Transcriber']
+
+        # Can I get away with assuming Unicode?
+        # Here's the plan:
+        #   test for rtf in here, if you find rtf, process normally
+        #   if you don't find it, pass data off to some weirdo method in TranscriptEditor.py
+
+        # 1 - Determine encoding, adjust if needed
+        # 2 - enact the plan above
+
+        # determine encoding, fix if needed
+        if type(row['RTFText']).__name__ == 'array':
+
+            if DEBUG:
+                print "Transcript._load_row(): 2", row['RTFText'].typecode
+            
+            if row['RTFText'].typecode == 'u':
+                self.text = row['RTFText'].tounicode()
+            else:
+                self.text = row['RTFText'].tostring()
+        else:
+            self.text = row['RTFText']
+
+        if 'unicode' in wx.PlatformInfo:
+            if DEBUG:
+                print "debug here"
+		
+            if type(self.text).__name__ == 'str':
+                temp = self.text[2:5]
+
+                # check to see if we're working with RTF
+                try:
+                    if temp == u'rtf':
+                        # convert the data to unicode just to be safe.
+                        self.text = unicode(self.text, 'utf-8')
+                
+                except UnicodeDecodeError:
+                    # This would sometimes get called while I was using cPickle instead of Pickle.
+                    # You could probably remove the exception handling stuff and be okay, but it's
+                    # not hurting anything like it is.
+                    self.dlg.editor.load_transcript(transcriptObj, 'pickle')
+
+        # self.text gets set to be our data
+        # then load_transcript is called, from transcriptionui.LoadTranscript()
+
+        self.comment = row['Comment']
+        self.lastsavetime = row['LastSaveTime']
         self.changed = False
 
         # These values come from the Series and Episode tables for Episode Transcripts, but do not exist for
         # Clip Transcripts.
-        if r.has_key('SeriesID'):
-            self.series_id = r['SeriesID']
-        if r.has_key('EpisodeID'):
-            self.episode_id = r['EpisodeID']
+        if row.has_key('SeriesID'):
+            self.series_id = row['SeriesID']
+        if row.has_key('EpisodeID'):
+            self.episode_id = row['EpisodeID']
+
+        # If we're in Unicode mode, we need to encode the data from the database appropriately.
+        # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
+        if 'unicode' in wx.PlatformInfo:
+            self.id = DBInterface.ProcessDBDataForUTF8Encoding(self.id)
+            self.transcriber = DBInterface.ProcessDBDataForUTF8Encoding(self.transcriber)
+            self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
+            if row.has_key('SeriesID'):
+                self.series_id = DBInterface.ProcessDBDataForUTF8Encoding(self.series_id)
+            if row.has_key('EpisodeID'):
+                self.episode_id = DBInterface.ProcessDBDataForUTF8Encoding(self.episode_id)
+

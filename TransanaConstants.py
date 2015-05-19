@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -31,16 +31,25 @@ import string
 singleUserVersion = True
 
 # Program Version Number
-versionNumber = '2.05'
+versionNumber = '2.10'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
 # Add testing version information if appropriate.  (Set to "''" if not!)
 # NOTE:  This will differ by Platform for a little while.
 if '__WXMAC__' in wx.PlatformInfo:
-    versionNumber = versionNumber +  '-Mac Alpha 1.02'
+    versionNumber = versionNumber +  '-Mac Alpha 1.12'
 else:
     versionNumber = versionNumber + '-Win'
+
+# Define the Timecode Character
+if 'unicode' in wx.PlatformInfo:
+    if 'wxMac' in wx.PlatformInfo:
+        TIMECODE_CHAR = unicode('\xc2\xa7', 'utf-8')
+    else:
+        TIMECODE_CHAR = unicode('\xc2\xa4', 'utf-8')
+else:
+    TIMECODE_CHAR = '\xa4'
 
 # IDs for the Visualization Window
 VISUAL_BUTTON_ZOOMIN            =  wx.NewId()
@@ -90,8 +99,8 @@ fileTypesList = [_("All files (*.*)"),
                  _("MOV files (*.mov)"),
                  _("MP3 files (*.mp3)")]
                  
-legalFilenameCharacters = string.ascii_letters + string.digits + ":. -_$&@!%(){}[]~'#^+=" 
-if "__WXMAC__" in wx.PlatformInfo:
-    legalFilenameCharacters += '/'
-else:
+legalFilenameCharacters = string.ascii_letters + string.digits + ":. -_$&@!%(){}[]~'#^+=/" 
+if "__WXMSW__" in wx.PlatformInfo:
     legalFilenameCharacters += '\\'
+
+chineseEncoding = 'gbk'

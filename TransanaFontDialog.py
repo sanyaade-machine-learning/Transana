@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -24,6 +24,11 @@ DEBUG = False
 if DEBUG:
     print "TransanaFontDialog DEBUG is ON"
 
+# For testing purposes, this module can run stand-alone.
+if __name__ == '__main__':
+    import wxversion
+    wxversion.select(['2.6-unicode'])
+
 # import wxPython
 import wx
 
@@ -44,31 +49,36 @@ tfd_AMBIGUOUS = 2     # The "ambiguous" (mixed unselected and selected) state fo
 # We want enough colors, but not too many.  This list seems about right to me.  I doubt my color names are standard.
 # But then, I'm often perplexed by the colors that are included and excluded by most programs.  (Excel for example.)
 # Each entry is made up of a color name and a tuple of the RGB values for the color.
-tfd_colorList = [(_('Black'),       (  0,   0,   0)),
-                 (_('Dark Blue'),   (  0,   0, 128)),
-                 (_('Blue'),        (  0,   0, 255)),
-                 (_('Light Blue'),  (  0, 128, 255)),
-                 (_('Cyan'),        (  0, 255, 255)),
-                 (_('Green Blue'),  (  0, 255, 128)),
-                 (_('Blue Green'),  (  0, 128, 128)),
-                 (_('Dark Green'),  (  0, 128,   0)),
-                 (_('Green'),       (  0, 255,   0)),
-                 (_('Light Green'), (128, 255,   0)),
-                 (_('Olive'),       (128, 128,   0)),
-                 (_('Gray'),        (128, 128, 128)),
-                 (_('Maroon'),      (128,   0,   0)),
-                 (_('Dark Purple'), (128,   0, 128)),
-                 (_('Purple'),      (128,   0, 255)),
-                 (_('Magenta'),     (255,   0, 255)),
-                 (_('Rose'),        (255,   0, 128)),
-                 (_('Red'),         (255,   0,   0)),
-                 (_('Orange'),      (255, 128,   0)),
-                 (_('Yellow'),      (255, 255,   0)),
-                 (_('White'),       (255, 255, 255))]
-# We also need a list of just the Color Names.  We auto-create that here.
+tfd_colorList = [('Black',       (  0,   0,   0)),
+                 ('Dark Blue',   (  0,   0, 128)),
+                 ('Blue',        (  0,   0, 255)),
+                 ('Light Blue',  (  0, 128, 255)),
+                 ('Cyan',        (  0, 255, 255)),
+                 ('Green Blue',  (  0, 255, 128)),
+                 ('Blue Green',  (  0, 128, 128)),
+                 ('Dark Green',  (  0, 128,   0)),
+                 ('Green',       (  0, 255,   0)),
+                 ('Light Green', (128, 255,   0)),
+                 ('Olive',       (128, 128,   0)),
+                 ('Gray',        (128, 128, 128)),
+                 ('Maroon',      (128,   0,   0)),
+                 ('Dark Purple', (128,   0, 128)),
+                 ('Purple',      (128,   0, 255)),
+                 ('Magenta',     (255,   0, 255)),
+                 ('Rose',        (255,   0, 128)),
+                 ('Red',         (255,   0,   0)),
+                 ('Orange',      (255, 128,   0)),
+                 ('Yellow',      (255, 255,   0)),
+                 ('White',       (255, 255, 255))]
 tfd_colorNameList = []
 for (colorName, colorDef) in tfd_colorList:
     tfd_colorNameList.append(colorName)
+# The following exists only to ensure that the color names are available for translation.
+# (I had to take the translation code out of the above data structure, as color names were only showing up in
+#  the initial language.)
+tmpColorList = (_('Black'), _('Dark Blue'), _('Blue'), _('Light Blue'), _('Cyan'), _('Green Blue'), _('Blue Green'),
+                _('Dark Green'), _('Green'), _('Light Green'), _('Olive'), _('Gray'), _('Maroon'), _('Dark Purple'),
+                _('Purple'), _('Magenta'), _('Rose'), _('Red'), _('Orange'), _('Yellow'), _('White'))
 
 
 class TransanaFontDef(object):
@@ -477,11 +487,11 @@ class TransanaFontDialog(wx.Dialog):
         # Iterate through the list of colors ...
         for (color, colDef) in self.colorList:
             # ... adding each color name to the list of what should be displayed ...
-            choiceList.append(color)
+            choiceList.append(_(color))
             # ... and checking to see if the color in the list matches the initial color sent to the dialog.
             if colDef == self.font.fontColorDef:
                 # If the current color matches a color in the list, remember it's name.
-                initialColor = color
+                initialColor = _(color)
 
         # Now create a Choice box listing all the colors in the color list
         self.cbColor = wx.Choice(self, -1, choices=choiceList)
@@ -525,6 +535,7 @@ class TransanaFontDialog(wx.Dialog):
 
         # Create a Cancel button
         btnCancel = wx.Button(self, wx.ID_CANCEL, _("Cancel"))
+        btnCancel.Bind(wx.EVT_BUTTON, self.OnCancel)
         boxButtons.Add(btnCancel, 0, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM)
 
         # Add the boxButtons sizer to the main box sizer
@@ -542,6 +553,10 @@ class TransanaFontDialog(wx.Dialog):
 
         # We need an Size event for the form for a little mainenance when the form size is changed
         self.Bind(wx.EVT_SIZE, self.OnSize)
+        
+        # Under wxPython 2.6.1.0-unicode, this form is throwing a segment fault when the color gets changed.
+        # The following variable prevents that!
+        self.closing = False
 
         # Position the form in the center of the screen
         self.CentreOnScreen()
@@ -557,7 +572,18 @@ class TransanaFontDialog(wx.Dialog):
         self.fontData.SetColour(self.currentColor)
         # If the user presses OK, they want the ALTERED self.font, not the unchanged self.originalFont
         self.originalFont = self.font.copy()
+        # indicate that we are closing the form
+        self.closing = True
         # Allow the form's OK event to fire to close the form
+        event.Skip()
+        
+    def OnCancel(self, event):
+        """ Cancel Button Press """
+        # If you hit Cancel on the Mac, you get a Segment Fault!!  This is an attempt to fix that.
+
+        # indicate that we are closing the form
+        self.closing = True
+        # Allow the form's Cancel event to fire to close the form
         event.Skip()
         
     def GetFontData(self):
@@ -576,7 +602,6 @@ class TransanaFontDialog(wx.Dialog):
         """ Update the Sample Text to reflect the dialog's current selections """
         # To get a truly accurate font sample, we need to create a graphic object, paint the
         # font sample on it, and place that on the screen.
-
         # Get the size of the sample area
         (bmpWidth, bmpHeight) = self.txtSample.GetSize()
         # Create a BitMap that is the right size
@@ -588,7 +613,10 @@ class TransanaFontDialog(wx.Dialog):
         # Link the Control Device Context and the BitMap as a BufferedDC
         dc = wx.BufferedDC(cdc, bmp)
         # If we are displaying white text, let's change the Device Context's background color to make it show up.
-        if self.cbColor.GetStringSelection() == _("White"):
+        colorPrompt = _("White")
+        if 'unicode' in wx.PlatformInfo:
+            colorPrompt = unicode(colorPrompt, 'utf8')
+        if self.cbColor.GetStringSelection() == colorPrompt:
             dc.SetBackground(wx.Brush(wx.Colour(128, 128, 128)))
         # Otherwise, the Device Context's background should be white.
         else:
@@ -635,7 +663,7 @@ class TransanaFontDialog(wx.Dialog):
         # If the user leaves the txtFont widget, we need to make sure it has a valid value.
         # Check to see if the current value is a legal Font Face name by comparing it to the Font Face
         # List Box values.  If it's not a legal value ...
-        if self.txtFont.GetValue() != self.lbFont.GetStringSelection():
+        if (not self.closing) and (self.txtFont.GetValue() != self.lbFont.GetStringSelection()):
             # ... revert the text to the last selected font face name.
             self.txtFont.SetValue(self.lbFont.GetStringSelection())
         
@@ -840,6 +868,10 @@ class TransanaFontDialog(wx.Dialog):
         # Iterate through the color list ...
         for (color, colDef) in self.colorList:
             # ... and find the color that matches the choice box selection.
+            if 'unicode' in wx.PlatformInfo:
+                color = unicode(_(color), 'utf8')
+            else:
+                color = _(color)
             if color == self.cbColor.GetStringSelection():
                 if DEBUG:
                     print "Color set to:", color, colDef
@@ -882,6 +914,8 @@ if __name__ == '__main__':
 
     # Create a simple app for testing.
     app = wx.PySimpleApp()
+    
+    print wx.PlatformInfo
 
     # The TransanaFontDialog can work based on a wxFontData Object if everything is known, or based
     # on a TransanaFontDef Object if there is some ambiguity in the Font Specification.
@@ -925,14 +959,14 @@ if __name__ == '__main__':
         print
         tfd = TransanaFontDef()
         # Alter the font as needed for testing
-        tfd.fontFace = 'Impact'  # 'Times New Roman'
-        tfd.fontSize = 16
-        tfd.fontWeight = tfd_BOLD
-        tfd.fontStyle = tfd_ITALIC
-        tfd.fontUnderline = tfd_UNDERLINE
+        tfd.fontFace = 'Courier New'  # 'Impact'  # 'Times New Roman'
+        tfd.fontSize = 12
+        tfd.fontWeight = tfd_OFF     # tfd_BOLD
+        tfd.fontStyle = tfd_OFF      # tfd_ITALIC
+        tfd.fontUnderline = tfd_OFF  # tfd_UNDERLINE
         # Font Color can be set either by giving it a Name or by giving it a Color Definition.
         # We only need one of the following:
-        tfd.fontColorName = _('Blue')
+        tfd.fontColorName = _('Black')
         # tfd.fontColorDef = wx.NamedColour('red')
 
         # Create Ambiguous States as needed for testing

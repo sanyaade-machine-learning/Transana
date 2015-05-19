@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2005  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2006  The Board of Regents of the University of Wisconsin System
 #
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -99,6 +99,8 @@ import wx
 import string
 # import Transana Error Dialog
 import Dialogs
+# import Transana's Globals
+import TransanaGlobal
 
 
 # For pages to be sized and proportioned correctly, we need different DPI scaling factors on different platforms.
@@ -106,6 +108,11 @@ if "__WXMAC__" in wx.PlatformInfo:
     DPI = 80
 else:
     DPI = 96
+
+# There are a couple of prompts for the wx PrintFramework that don't get included in the *.po files for translating.
+# Therefore, let's throw them in here so they'll maybe be translated.
+PRINT_PROMPT = _('Print...')
+GOTO_PROMPT = _('Goto...')
 
 #----------------------------------------------------------------------
 
@@ -294,7 +301,11 @@ def PrepareData(printData, title, data, subtitle=''):
             # subtract the indent value once.  (This implements left-indentation only)
             if lineWidth > sizeX - (DPI * 2) - styles[style]['indent']:
                 # Break the line into words at whitespace breaks
-                words = string.split(line)
+                if ('unicode' in wx.PlatformInfo) and (type(line).__name__ == 'str'):
+                    words = []
+                    words.append(unicode(line, TransanaGlobal.encoding))
+                else:
+                    words = line.split()
                 # Initialize a string so we can build new lines
                 tempLine = ''
                 # Iterate through the words
@@ -461,6 +472,9 @@ class MyPrintout(wx.Printout):
         # Place the Page Number in the lower right corner of the page
         dc.SetFont(self.styles['Normal']['font'])
         txt = _("Page: %d") % page
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            txt = unicode(txt, 'utf8')
         (lineWidth, lineHeight) = dc.GetTextExtent(txt)
         # Position and draw the text
         dc.DrawText(txt, graphicX - lineWidth - 40, graphicY - lineHeight - 40)

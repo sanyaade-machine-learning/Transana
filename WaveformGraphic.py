@@ -1,4 +1,4 @@
-# Copyright (C) 2004 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -17,6 +17,9 @@
 
 __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>'
 
+DEBUG = False
+if DEBUG:
+    print "WaveformGraphic DEBUG is ON."
 
 import wx          # Import wxWindows
 import Dialogs
@@ -25,16 +28,21 @@ import sys                       # Import Python's sys module
 
 def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLength, graphicSize, saveFile=False):
     try:
-        # Open the Wave File (convert to str() in case it's Unicode)
-        waveFile = wave.open(str(waveFilename), 'r')
+
+        if DEBUG:
+            print "WaveformGraphicCreate() filename = '%s'" % waveFilename.encode('utf8')
+            
+        # Open the Wave File  (NOTE:  Python 2.4.2 can take a Unicode filename here.  Python 2.3.5 can't.)
+        waveFile = wave.open(waveFilename, 'r')            
           
-        # Print the information from the Wave Header
-        # print '\n\nStart = ', startPoint, ', length = ', mediaLength
-        # print "Sampling Rate = %s" % waveFile.getframerate()
-        # print "Bytes per Sample = %s" % waveFile.getsampwidth()
-        # print "Channels = %s" % waveFile.getnchannels()
-        # print "total Frames = %s" % waveFile.getnframes()
-        # print "Compression Type = %s (%s)\n" % (waveFile.getcomptype(), waveFile.getcompname())
+        if DEBUG:
+            # Print the information from the Wave Header
+            print '\n\nStart = ', startPoint, ', length = ', mediaLength
+            print "Sampling Rate = %s" % waveFile.getframerate()
+            print "Bytes per Sample = %s" % waveFile.getsampwidth()
+            print "Channels = %s" % waveFile.getnchannels()
+            print "total Frames = %s" % waveFile.getnframes()
+            print "Compression Type = %s (%s)\n" % (waveFile.getcomptype(), waveFile.getcompname())
 
         # Added for Batch Waveform Generation, when we don't know the media file length
         if mediaLength == 0:
@@ -62,7 +70,9 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
         #print "read to ",float(startPoint) / 1000.0 * waveFile.getframerate(),"frames"
         frames = waveFile.readframes(float(startPoint) / 1000.0 * waveFile.getframerate())
 
-        #print "read ",float(mediaLength)/1000.0 * waveFile.getframerate(),"frames"
+        if DEBUG:
+            print "read ",float(mediaLength)/1000.0 * waveFile.getframerate()
+            
         totalFramesToRead = float(mediaLength)/1000.0 * waveFile.getframerate()
 
         # Calculate the number of WAVE data chunks to be read per line displayed in the graphic,
@@ -72,14 +82,20 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
         if totalFramesToRead / graphicSize[0] < 1:
             print "\n\nTODO:  Zoomed in so that Number of Lines is less than Graphic Width!!\n\n"
 
-        # print 'Chunksize = ', ChunkSize
+        if DEBUG:
+            print 'Chunksize = ', ChunkSize, '  (', totalFramesToRead, '/', graphicSize[0], ')', waveFile.getnframes()
+            totalFramesRead = 0
         
         # Draw the actual WaveForm
         # for each pixel position in the graphic's width ...
         for loop in range(0, graphicSize[0]-1):
             # Read the appropriate number of chunks from the wave file
             frames = waveFile.readframes(ChunkSize)
-           
+
+            if DEBUG and (loop % 10 == 0):
+                totalFramesRead += ChunkSize * 10  # * 10 because we're only reporting every 10th read!
+                print "loop:  %d  totalFramesRead = %d  totalFrames = %d" % (loop, totalFramesRead, waveFile.getnframes())
+
             # Don't break all of Transana if we couldn't extract the wave
             if len(frames) == 0:
                 break
@@ -133,7 +149,13 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
             # to find all the changes.
             theBitmap.SaveFile(waveformFilename[:-3]+'png', wx.BITMAP_TYPE_PNG)
 
+        return True
+
     except:
-        errordlg = Dialogs.ErrorDialog(None, _("Problem creating Waveform Graphic:\n%s\n%s") % (sys.exc_info()[0],sys.exc_info()[1]))
-        errordlg.ShowModal()
-        errordlg.Destroy()
+        if DEBUG:
+            import traceback
+            traceback.print_exc(file=sys.stdout)
+
+        # We need to just pass the exception on up.  This routine is called from an IDLE event, and that event needs to know
+        # to stop trying to create this file!!
+        raise

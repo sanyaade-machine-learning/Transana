@@ -1,4 +1,4 @@
-# Copyright (C) 2004 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -20,6 +20,7 @@ __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>'
 
 import wx
 import DBInterface
+import Dialogs
 import TransanaGlobal
 import TranscriptPrintoutClass
 
@@ -37,7 +38,12 @@ class CollectionSummaryReport(wx.Object):
                 reportType = _('Search Result Collection')
             else:
                 reportType = _('Collection')
-            subtitle = '%s: %s' % (reportType, dbTree.GetItemText(sel))
+            prompt = '%s: %s'
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                reportType = unicode(reportType, 'utf8')
+                prompt = unicode(prompt, 'utf8')
+            subtitle = prompt % (reportType, dbTree.GetItemText(sel))
             
             # Prepare the Transcript for printing
             (graphic, pageData) = TranscriptPrintoutClass.PrepareData(TransanaGlobal.printData, collectionTree=dbTree, collectionNode=sel, title=title, subtitle=subtitle)
@@ -54,7 +60,7 @@ class CollectionSummaryReport(wx.Object):
                 
                 # Check for errors during Print preview construction
                 if not printPreview.Ok():
-                    dlg = Dialogs.ErrorDialog(self, _("Print Preview Problem"))
+                    dlg = Dialogs.ErrorDialog(None, _("Print Preview Problem"))
                     dlg.ShowModal()
                     dlg.Destroy()
                 else:
@@ -74,7 +80,12 @@ class CollectionSummaryReport(wx.Object):
                 # Restore Cursor to Arrow
                 TransanaGlobal.menuWindow.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
                 # If there are no clips to report, display an error message.
-                dlg = wx.MessageDialog(None, _('Collection "%s" has no Clips for the Collection Summary Report.') % dbTree.GetItemText(sel), style = wx.OK | wx.ICON_EXCLAMATION)
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Collection "%s" has no Clips for the Collection Summary Report.'), 'utf8')
+                else:
+                    prompt = _('Collection "%s" has no Clips for the Collection Summary Report.')
+                dlg = wx.MessageDialog(None, prompt % dbTree.GetItemText(sel), style = wx.OK | wx.ICON_EXCLAMATION)
                 dlg.ShowModal()
                 dlg.Destroy()
 

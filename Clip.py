@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -17,6 +17,10 @@
 """This module implements the Clip class as part of the Data Objects."""
 
 __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
+
+DEBUG = False
+if DEBUG:
+    print "Clip DEBUG is ON!"
 
 import wx
 from DataObject import *
@@ -102,8 +106,6 @@ class Clip(DataObject):
                 break
             timeCodeEnd = newText.find('>', timeCodeStart)
 
-            # print newText[timeCodeStart:timeCodeEnd+1]
-            
             newText = newText[:timeCodeStart] + newText[timeCodeEnd + 1:]
 
         # We should also replace TAB characters with spaces        
@@ -117,6 +119,10 @@ class Clip(DataObject):
 
     def db_load_by_name(self, clip_name, collection_name, collection_parent=0):
         """Load a record by ID / Name."""
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            clip_name = clip_name.encode(TransanaGlobal.encoding)
+            collection_name = collection_name.encode(TransanaGlobal.encoding)
         db = DBInterface.get_db()
         query = """
         SELECT a.*, b.*, c.TranscriptNum ClipTranscriptNum, c.RTFText
@@ -170,7 +176,6 @@ class Clip(DataObject):
     def db_save(self):
         """Save the record to the database using Insert or Update as
         appropriate."""
-
         # Sanity checks
         if self.id == "":
             raise SaveError, _("Clip ID is required.")
@@ -183,32 +188,65 @@ class Clip(DataObject):
         elif self.media_filename == "":
             raise SaveError, _("Media Filename is required.")
         else:
-            # Create a string of legal characters for the file names
-            allowedChars = TransanaConstants.legalFilenameCharacters
-            # check each character in the file name string
-            for char in self.media_filename:
-                # If the character is illegal ...
-                if allowedChars.find(char) == -1:
-                    msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, which Transana does not allow at this time.\nPlease rename your folders and files so that they do not include characters that are not part of US English.\nWe apologize for this inconvenience.') % (self.media_filename, char)
-                    raise SaveError, msg
+            # videoPath probably has the OS.sep character, but we need the generic "/" character here.
+            videoPath = TransanaGlobal.configData.videoPath.replace('\\', '/')
+            # Determine if we are supposed to extract the Video Root Path from the Media Filename and extract it if appropriate
+            if self.useVideoRoot and (videoPath == self.media_filename[:len(videoPath)]):
+                tempMediaFilename = self.media_filename[len(videoPath):]
+            else:
+                tempMediaFilename = self.media_filename
+
+            # Substitute the generic OS seperator "/" for the Windows "\".
+            self.media_filename = self.media_filename.replace('\\', '/')
+            # If we are using the ANSI version of wxPython OR
+            # (if we're on the Mac AND are in the Single-User version of Transana)
+            # then we need to block Unicode characters from media filenames.
+            # Unicode characters still cause problems on the Mac for the Multi-User version of Transana,
+            # but can be made to work if shared waveforming is done on a Windows computer.
+            if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
+                # Create a string of legal characters for the file names
+                allowedChars = TransanaConstants.legalFilenameCharacters
+                # check each character in the file name string
+                for char in self.media_filename:
+                    # If the character is illegal ...
+                    if allowedChars.find(char) == -1:
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            msg = unicode(_('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.'), 'utf8') % (self.media_filename, char)
+                        else:
+                            msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.') % (self.media_filename, char)
+                        raise SaveError, msg
+            # If we're not in Unicode mode ...
+            if 'ansi' in wx.PlatformInfo:
+                # ... we don't need to encode the string values, but we still need to copy them to our local variables.
+                id = self.id
+                comment = self.comment
+            # If we're in Unicode mode ...
+            else:
+                # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
+                # variables for the data.  We don't want to change the underlying object values.  Also, this way,
+                # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
+                id = self.id.encode(TransanaGlobal.encoding)
+                tempMediaFilename = tempMediaFilename.encode(TransanaGlobal.encoding)
+                videoPath = videoPath.encode(TransanaGlobal.encoding)
+                comment = self.comment.encode(TransanaGlobal.encoding)
 
         self._sync_collection()
 
-        # Determine if we are supposed to extract the Video Root Path from the Media Filename and extract it if appropriate
-        if self.useVideoRoot and (TransanaGlobal.configData.videoPath == self.media_filename[:len(TransanaGlobal.configData.videoPath)]):
-            tempMediaFilename = self.media_filename[len(TransanaGlobal.configData.videoPath):]
-        else:
-            tempMediaFilename = self.media_filename
-
-        values = (self.id, self.collection_num, self.episode_num, \
+        values = (id, self.collection_num, self.episode_num, \
                       self.transcript_num, tempMediaFilename, \
-                      self.clip_start, self.clip_stop, self.comment, \
+                      self.clip_start, self.clip_stop, comment, \
                       self.sort_order)
         if (self._db_start_save() == 0):
             if DBInterface.record_match_count("Clips2", \
                                 ("ClipID", "CollectNum"), \
-                                (self.id, self.collection_num) ) > 0:
-                raise SaveError, _('A Clip named "%s" already exists in this Collection.\nPlease enter a different Clip ID.') % self.id
+                                (id, self.collection_num) ) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Clip named "%s" already exists in this Collection.\nPlease enter a different Clip ID.'), 'utf8') % self.id
+                else:
+                    prompt = _('A Clip named "%s" already exists in this Collection.\nPlease enter a different Clip ID.') % self.id
+                raise SaveError, prompt
             # insert the new record
             query = """
             INSERT INTO Clips2
@@ -221,8 +259,13 @@ class Clip(DataObject):
         else:
             if DBInterface.record_match_count("Clips2", \
                             ("ClipID", "CollectNum", "!ClipNum"), \
-                            (self.id, self.collection_num, self.number)) > 0:
-                raise SaveError, _('A Clip named "%s" already exists in this Collection.\nPlease enter a different Clip ID.') % self.id
+                            (id, self.collection_num, self.number)) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Clip named "%s" already exists in this Collection.\nPlease enter a different Clip ID.'), 'utf8') % self.id
+                else:
+                    prompt = _('A Clip named "%s" already exists in this Collection.\nPlease enter a different Clip ID.') % self.id
+                raise SaveError, prompt
 
             # update the record
             query = """
@@ -252,7 +295,7 @@ class Clip(DataObject):
                             CollectNum = %s
                     """
             tempDBCursor = DBInterface.get_db().cursor()
-            tempDBCursor.execute(query, (self.id, self.collection_num))
+            tempDBCursor.execute(query, (id, self.collection_num))
             if tempDBCursor.rowcount == 1:
                 self.number = tempDBCursor.fetchone()[0]
             else:
@@ -283,14 +326,10 @@ class Clip(DataObject):
         elif self.clip_transcript_num > 0:
             # Load the existing Transcript Record
             tempTranscript = Transcript.Transcript(clip=self.number)
-            # Lock the Transcript record
-            tempTranscript.lock_record()
             # Update the Transcript Data
             tempTranscript.text = self.text
             # Save the new Transcript record
             tempTranscript.db_save()
-            # unlock the Transcript Record
-            tempTranscript.unlock_record()
         # Add the Episode keywords back
         for kws in self._kwlist:
             DBInterface.insert_clip_keyword(0, self.number, kws.keywordGroup, kws.keyword, kws.example)
@@ -298,55 +337,102 @@ class Clip(DataObject):
 
     def db_delete(self, use_transactions=1):
         """Delete this object record from the database."""
-        # Initialize delete operation, begin transaction if necessary
-        (db, c) = self._db_start_delete(use_transactions)
         result = 1
+        try:
+            # Initialize delete operation, begin transaction if necessary
+            (db, c) = self._db_start_delete(use_transactions)
+            # If this clip serves as a Keyword Example, we should prompt the user about
+            # whether it should really be deleted
+            kwExampleList = DBInterface.list_all_keyword_examples_for_a_clip(self.number)
+            if len(kwExampleList) > 0:
+                if len(kwExampleList) == 1:
+                    prompt = _('Clip "%s" has been defined as a Keyword Example for Keyword "%s : %s".')
+                    data = (self.id, kwExampleList[0][0], kwExampleList[0][1])
+                else:
+                    prompt = _('Clip "%s" has been defined as a Keyword Example for multiple Keywords.')
+                    data = self.id
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(prompt, 'utf8') % data
+                else:
+                    prompt = prompt % data
+                prompt = prompt + _('\nAre you sure you want to delete it?')
+                dlg = wx.MessageDialog(None, prompt, _('Delete Clip'), wx.YES_NO | wx.CENTRE | wx.ICON_QUESTION | wx.STAY_ON_TOP)
+                if dlg.ShowModal() == wx.ID_NO:
+                    dlg.Destroy()
+                    # A Transcaction was started and the record was locked in _db_start_delete().  Unlock it here if the
+                    # user cancels the delete (after rolling back the Transaction)!
+                    if self.isLocked:
+                        # c (the database cursor) only exists if the record lock was obtained!
+                        # We must roll back the transaction before we unlock the record.
+                        c.execute("ROLLBACK")
+                        c.close()
+                        self.unlock_record()
+                    return 0
+                else:
+                    dlg.Destroy()
 
-        # If this clip serves as a Keyword Example, we should prompt the user about
-        # whether it should really be deleted
-        kwExampleList = DBInterface.list_all_keyword_examples_for_a_clip(self.number)
-        if len(kwExampleList) > 0:
-            if len(kwExampleList) == 1:
-                prompt = _('Clip "%s" has been defined as a Keyword Example for Keyword "%s : %s".') % (self.id, kwExampleList[0][0], kwExampleList[0][1])
-            else:
-                prompt = _('Clip "%s" has been defined as a Keyword Example for multiple Keywords.') % self.id
-            prompt = prompt + '\nAre you sure you want to delete it?'
-            dlg = wx.MessageDialog(None, prompt, _('Delete Clip'), wx.YES_NO | wx.CENTRE | wx.ICON_QUESTION | wx.STAY_ON_TOP)
-            if dlg.ShowModal() == wx.ID_NO:
-                dlg.Destroy()
-                return 0
-            else:
-                dlg.Destroy()
-        
-        # Detect, Load, and Delete all Clip Notes.
-        notes = self.get_note_nums()
-        for note_num in notes:
-            note = Note.Note(note_num)
-            result = result and note.db_delete(0)
-            del note
-        del notes
+            # Detect, Load, and Delete all Clip Notes.
+            notes = self.get_note_nums()
+            for note_num in notes:
+                note = Note.Note(note_num)
+                result = result and note.db_delete(0)
+                del note
+            del notes
 
-        trans = Transcript.Transcript(clip=self.number)
-        # if transcript delete fails, rollback clip delete
-        result = result and trans.db_delete(0)
-        del trans
+            # Okay, theoretically we have a lock on this clip's Transcript, self.trans.  However, that lock
+            # prevents us from deleting it!!  Oops.  Therefore, IF we have a legit lock on it, unlock it for
+            # the delete.
+            if self.isLocked and self.trans.isLocked:
+                self.trans.unlock_record()
+            # if transcript delete fails, rollback clip delete
+            result = result and self.trans.db_delete(0)
 
-        # NOTE:  It is important for the calling routine to delete references to the Keyword Examples
-        #        from the screen.  However, that code does not belong in the Clip Object, but in the
-        #        user interface.  That is why it is not included here as part of the result.
+            # NOTE:  It is important for the calling routine to delete references to the Keyword Examples
+            #        from the screen.  However, that code does not belong in the Clip Object, but in the
+            #        user interface.  That is why it is not included here as part of the result.
 
-        # Delete all related references in the ClipKeywords table
-        if result:
-            DBInterface.delete_all_keywords_for_a_group(0, self.number)
+            # Delete all related references in the ClipKeywords table
+            if result:
+                DBInterface.delete_all_keywords_for_a_group(0, self.number)
 
-        # Delete the actual record.
-        self._db_do_delete(use_transactions, c, result)
+            # Delete the actual record.
+            self._db_do_delete(use_transactions, c, result)
 
-        # Cleanup
-        c.close()
-        self.clear()
-
+            # Cleanup
+            c.close()
+            self.clear()
+        except RecordLockedError, e:
+            # if a sub-record is locked, we may need to unlock the Clip record (after rolling back the Transaction)
+            if self.isLocked:
+                # c (the database cursor) only exists if the record lock was obtained!
+                # We must roll back the transaction before we unlock the record.
+                c.execute("ROLLBACK")
+                c.close()
+                self.unlock_record()
+            raise e
+        except:
+            raise
         return result
+
+    def lock_record(self):
+        """ Override the DataObject Lock Method """
+        # Also lock the Clip Transcript record
+        self.trans = Transcript.Transcript(clip=self.number)
+        self.trans.lock_record()
+        
+        # Lock the Clip Record.  Call this second so the Clip is not identified as locked if the
+        # Clip Transcript record lock fails.
+        DataObject.lock_record(self)
+            
+
+    def unlock_record(self):
+        """ Override the DataObject Unlock Method """
+        # Unlock the Clip Record
+        DataObject.unlock_record(self)
+        # Also unlock the Clip Transcript record
+        self.trans.unlock_record()
+        self.trans = None
 
     def duplicate(self):
         # Inherit duplicate method
@@ -410,7 +496,12 @@ class Clip(DataObject):
             if (self._kwlist[index].keywordGroup == kwg) and (self._kwlist[index].keyword == kw):
 
                 if self._kwlist[index].example == 1:
-                    dlg = wx.MessageDialog(TransanaGlobal.menuWindow, _('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?') % (self.id, kwg, kw, self.id, kwg, kw), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?'), 'utf8')
+                    else:
+                        prompt = _('Clip "%s" has been designated as an example of Keyword "%s : %s".\nRemoving this Keyword from the Clip will also remove the Clip as a Keyword Example.\n\nDo you want to remove Clip "%s" as an example of Keyword "%s : %s"?')
+                    dlg = wx.MessageDialog(TransanaGlobal.menuWindow, prompt % (self.id, kwg, kw, self.id, kwg, kw), _("Transana Confirmation"), style=wx.YES_NO | wx.ICON_QUESTION)
                     result = dlg.ShowModal()
                     dlg.Destroy()
                     if result == wx.ID_YES:
@@ -426,9 +517,6 @@ class Clip(DataObject):
             
         # Signal whether the delete was successful
         return delResult
-            
-#        if self._kwlist.count(kw) > 0:
-#            self._kwlist.remove(kw)
 
     
 # Private methods    
@@ -444,6 +532,36 @@ class Clip(DataObject):
         self.transcript_num = r['TranscriptNum']
         self.clip_transcript_num = r['ClipTranscriptNum']
         self.media_filename = r['MediaFile']
+        self.clip_start = r['ClipStart']
+        self.clip_stop = r['ClipStop']
+        self.sort_order = r['SortOrder']
+
+        # Okay, this isn't so straight-forward any more.
+        # With MySQL for Python 0.9.x, r['RTFText'] is of type str.
+        # With MySQL for Python 1.2.0, r['RTFText'] is of type array.  It could then either be a
+        # character string (typecode == 'c') or a unicode string (typecode == 'u'), which then
+        # need to be interpreted differently.
+
+        if type(r['RTFText']).__name__ == 'array':
+            if r['RTFText'].typecode == 'u':
+                self.text = r['RTFText'].tounicode()
+            else:
+                self.text = r['RTFText'].tostring()
+        else:
+            self.text = r['RTFText']
+
+        # We need to make sure the text is in the appropriate encoding
+        if 'unicode' in wx.PlatformInfo:
+            if type(self.text).__name__ == 'str':
+                self.text = unicode(self.text, TransanaGlobal.encoding)
+        # If we're in Unicode mode, we need to encode the data from the database appropriately.
+        # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
+        if 'unicode' in wx.PlatformInfo:
+            self.id = DBInterface.ProcessDBDataForUTF8Encoding(self.id)
+            self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
+            self.collection_id = DBInterface.ProcessDBDataForUTF8Encoding(self.collection_id)
+            self.media_filename = DBInterface.ProcessDBDataForUTF8Encoding(self.media_filename)
+
         # Remember whether the MediaFile uses the VideoRoot Folder or not.
         # Detection of the use of the Video Root Path is platform-dependent.
         if wx.Platform == "__WXMSW__":
@@ -455,11 +573,8 @@ class Clip(DataObject):
         # If we are using the Video Root Path, add it to the Filename
         if self.useVideoRoot:
             self.media_filename = TransanaGlobal.configData.videoPath + self.media_filename
-        self.clip_start = r['ClipStart']
-        self.clip_stop = r['ClipStop']
-        self.sort_order = r['SortOrder']
-        self.text = r['RTFText']
-    
+
+
     def _sync_collection(self):
         """Synchronize the Collection ID property to reflect the current state
         of the Collection Number property."""
@@ -499,7 +614,7 @@ class Clip(DataObject):
         self._clip_transcript_num = 0
 
     def _get_fname(self):
-        return self._fname
+        return self._fname.replace('\\', '/')
     def _set_fname(self, fname):
         self._fname = fname
     def _del_fname(self):

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -140,13 +140,36 @@ class KeywordsTab(wx.Panel):
         self.lbKeywordsList.InsertStringItem(0, _('Keywords for:'))
 
         if self.seriesObj != None:
-            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + _('Series: "%s"') % self.seriesObj.id)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Series: "%s"'), 'utf8')
+            else:
+                prompt = _('Series: "%s"')
+            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % self.seriesObj.id)
+            
         if self.episodeObj != None:
-            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + _('Episode: "%s"') % self.episodeObj.id)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Episode: "%s"'), 'utf8')
+            else:
+                prompt = _('Episode: "%s"')
+            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % self.episodeObj.id)
+
         if self.collectionObj != None:
-            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + _('Collection: "%s"') % self.collectionObj.id)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Collection: "%s"'), 'utf8')
+            else:
+                prompt = _('Collection: "%s"')
+            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % self.collectionObj.id)
+
         if self.clipObj != None:
-            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + _('Clip: "%s"') % self.clipObj.id)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Clip: "%s"'), 'utf8')
+            else:
+                prompt = _('Clip: "%s"')
+            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % self.clipObj.id)
 
         self.lbKeywordsList.InsertStringItem(sys.maxint, '')
 

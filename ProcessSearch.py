@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2004 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -31,6 +31,8 @@ import Collection
 import DBInterface
 # Import the Transana Search Dialog Box
 import SearchDialog
+# Import Transana's Globals
+import TransanaGlobal
 
 # Import the Python String module
 import string
@@ -66,7 +68,12 @@ class ProcessSearch(object):
             searchName = dlg.searchName.GetValue().strip()
 
             while (searchName in namedSearches):
-                dlg2 = wx.TextEntryDialog(dlg, _('You already have a Search Result named "%s".\nPlease enter a new Search Name.') % searchName, _('Transana Error'), searchName)
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('You already have a Search Result named "%s".\nPlease enter a new Search Name.'), 'utf8')
+                else:
+                    prompt = _('You already have a Search Result named "%s".\nPlease enter a new Search Name.')
+                dlg2 = wx.TextEntryDialog(dlg, prompt % searchName, _('Transana Error'), searchName)
                 if dlg2.ShowModal() == wx.ID_OK:
                     searchName = dlg2.GetValue().strip()
                 else:
@@ -127,9 +134,14 @@ class ProcessSearch(object):
                        tempCollection = Collection.Collection(tempCollection.parent)
                        # Add this Collection's name to the FRONT of the Node List
                        nodeList = (tempCollection.id,) + nodeList
+                    # Get the DB Values
+                    tempID = line['ClipID']
+                    # If we're in Unicode mode, format the strings appropriately
+                    if 'unicode' in wx.PlatformInfo:
+                        tempID = DBInterface.ProcessDBDataForUTF8Encoding(tempID)
                     # Now add the Search Root Node and the Search Name to the front of the Node List and the
                     # Clip Name to the back of the Node List
-                    nodeList = (_('Search'), searchName) + nodeList + (line['ClipID'], )
+                    nodeList = (_('Search'), searchName) + nodeList + (tempID, )
 
                     # Add the Node to the Tree
                     self.dbTree.add_Node('SearchClipNode', nodeList, line['ClipNum'], line['CollectNum'])
@@ -248,9 +260,15 @@ class ProcessSearch(object):
                 # Add a line to the SQL "COUNT" statements to indicate the presence or absence of a Keyword Group : Keyword pair
                 countStrings.append("COUNT(CASE WHEN ((CK1.KeywordGroup = %s) AND (CK1.Keyword = %s)) THEN 1 ELSE NULL END) V%s")
                 # Add the Keyword Group to the Parameters
-                params.append(tempStr[:tempStr.find(':')])
+                kwg = tempStr[:tempStr.find(':')]
+                if 'unicode' in wx.PlatformInfo:
+                    kwg = kwg.encode(TransanaGlobal.encoding)
+                params.append(kwg)
                 # Add the Keyword to the Parameters
-                params.append(tempStr[tempStr.find(':') + 1:])
+                kw = tempStr[tempStr.find(':') + 1:]
+                if 'unicode' in wx.PlatformInfo:
+                    kw = kw.encode(TransanaGlobal.encoding)
+                params.append(kw)
                 # Add the Temporary Variable Number that corresponds to this Keyword Group : Keyword pair to the Parameters
                 params.append(tempVarNum)
 

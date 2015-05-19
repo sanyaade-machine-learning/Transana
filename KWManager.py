@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -18,13 +18,14 @@
 
 __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 
-import wx             # import wxPython
+import wx                           # import wxPython
 import sys                          # import Python's sys module
 from TransanaExceptions import *    # import Transana's exceptions
 import Keyword                      # import Transana's Keyword Object definition
 import KeywordPropertiesForm        # import Transana's Keyword Properties form
 import DBInterface                  # import Transana's Database Interface
 import Dialogs                      # import Transana's Dialog boxes
+import TransanaConstants            # import Transana's Constants module
 import TransanaGlobal               # import Transana's Global module
 
 class KWManager(wx.Dialog):
@@ -250,6 +251,10 @@ class KWManager(wx.Dialog):
                          # ... and select it.
                         self.kw_group.SetStringSelection(kw.keywordGroup)
                         self.refresh_keywords()
+                    if not TransanaConstants.singleUserVersion:
+                        if TransanaGlobal.chatWindow != None:
+                            msgData = "%s >|< %s" % (kw.keywordGroup, kw.keyword)
+                            TransanaGlobal.chatWindow.SendMessage("AK %s" % msgData)
                     # If we do all this, we don't need to continue any more.
                     contin = False
                 # Handle "SaveError" exception
@@ -285,13 +290,20 @@ class KWManager(wx.Dialog):
         if kw_name == "":
             return
         sel = self.kw_lb.GetSelection()
-        msg = _('Are you sure you want to delete Keyword "%s" and all instances of it from the Clips?') % kw_name
-        id = wx.MessageDialog(self, msg, _("Confirmation"), \
-                        wx.YES | wx.NO | wx.CENTRE | wx.ICON_QUESTION).ShowModal()
+        msg = _('Are you sure you want to delete Keyword "%s" and all instances of it from the Clips?')
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            msg = unicode(msg, 'utf8')
+        id = wx.MessageDialog(self, msg % kw_name, _("Confirmation"), wx.YES | wx.NO | wx.CENTRE | wx.ICON_QUESTION).ShowModal()
         if id == wx.ID_YES:
             DBInterface.delete_keyword(self.kw_group.GetStringSelection(), kw_name)
             self.kw_lb.Delete(sel)
             self.definition.SetValue('')
+            if not TransanaConstants.singleUserVersion:
+                if TransanaGlobal.chatWindow != None:
+                    # We need the UNTRANSLATED Root Node here
+                    msgData = "%s >|< %s >|< %s >|< %s" % ('KeywordNode', 'Keywords', self.kw_group.GetStringSelection(), kw_name)
+                    TransanaGlobal.chatWindow.SendMessage("DN %s" % msgData)
 
     def OnKeywordSelect(self, evt):
         """Invoked when a keyword is selected in the listbox."""
@@ -304,7 +316,9 @@ class KWManager(wx.Dialog):
         """Double-clicking a keyword calls the Edit Properties screen!"""
         # Load the selected keyword into a Keyword Object
         kw = Keyword.Keyword(self.kw_group.GetStringSelection(), self.kw_lb.GetStringSelection())
-        self.EditKeyword(kw)
+        # Double-clicking should only work if Editing is enabled!!
+        if self.edit_kw.IsEnabled():
+            self.EditKeyword(kw)
 
     def EditKeyword(self, kw):
         # use "try", as exceptions could occur
@@ -313,9 +327,11 @@ class KWManager(wx.Dialog):
             kw.lock_record()
         # Handle the exception if the record is locked
         except RecordLockedError, e:
-            msg = _('You cannot proceed because you cannot obtain a lock on Keyword "%s".\nThe record is currently locked by %s.\nPlease try again later.') \
-                   % (kw.keywordGroup + ':' + kw.keyword, e.user)
-            wx.MessageDialog(self, msg).ShowModal()
+            msg = _('You cannot proceed because you cannot obtain a lock on Keyword "%s".\nThe record is currently locked by %s.\nPlease try again later.')
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                msg = unicode(msg, 'utf8')
+            wx.MessageDialog(self, msg % (kw.keywordGroup + ':' + kw.keyword, e.user)).ShowModal()
         # If the record is not locked, keep going.
         else:
             if self.deleteEnabled:
@@ -333,22 +349,37 @@ class KWManager(wx.Dialog):
                             kw.db_save()
                             # See if the Keyword Group has been changed.  If it has, update the form.
                             if kw.keywordGroup != self.kw_group.GetStringSelection():
+                                originalKeyword = self.kw_lb.GetStringSelection()
+                                originalKeywordGroup = self.kw_group.GetStringSelection()
                                 # See if the new Keyword Group exists, and if not, create it
                                 if self.kw_group.FindString(kw.keywordGroup) == -1:
                                     self.kw_group.Append(kw.keywordGroup)
                                 # Remove the keyword from the current list
                                 self.kw_lb.Delete(self.kw_lb.GetSelection())
+                                if not TransanaConstants.singleUserVersion:
+                                    if TransanaGlobal.chatWindow != None:
+                                        # We need the UNTRANSLATED Root Node here
+                                        msgData = "%s >|< %s >|< %s >|< %s" % ('KeywordNode', 'Keywords', originalKeywordGroup, originalKeyword)
+                                        TransanaGlobal.chatWindow.SendMessage("DN %s" % msgData)
+                                        msgData = "%s >|< %s" % (kw.keywordGroup, kw.keyword)
+                                        TransanaGlobal.chatWindow.SendMessage("AK %s" % msgData)
                                 # If we've changed KW Groups, we need to disable the buttons.
                                 self.edit_kw.Enable(False)
                                 self.del_kw.Enable(False)
                                 # Clear the Definition field
                                 self.definition.SetValue('')
                             else:
+                                originalKeyword = self.kw_lb.GetStringSelection()
                                 # If the Keyword has been changed, update it on the form.
-                                if kw.keyword != self.kw_lb.GetStringSelection():
+                                if kw.keyword != originalKeyword:
                                     self.kw_lb.SetString(self.kw_lb.GetSelection(), kw.keyword)
                                 # Update the Definition on the Form
                                 self.definition.SetValue(kw.definition)
+                                if not TransanaConstants.singleUserVersion:
+                                    if TransanaGlobal.chatWindow != None:
+                                        # We need the UNTRANSLATED Root Node here
+                                        msgData = "%s >|< %s >|< %s >|< %s >|< %s" % ('KeywordNode', 'Keywords', kw.keywordGroup, originalKeyword, kw.keyword)
+                                        TransanaGlobal.chatWindow.SendMessage("RN %s" % msgData)
                             # If we do all this, we don't need to continue any more.
                             contin = False
                         # Handle "SaveError" exception
@@ -362,7 +393,12 @@ class KWManager(wx.Dialog):
                             import traceback
                             traceback.print_exc(file=sys.stdout)
                             # Display the Exception Message, allow "continue" flag to remain true
-                            errordlg = Dialogs.ErrorDialog(None, "Exception %s: %s" % (sys.exc_info()[0], sys.exc_info()[1]))
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_("Exception %s: %s"), 'utf8')
+                            else:
+                                prompt = _("Exception %s: %s")
+                            errordlg = Dialogs.ErrorDialog(None, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
                             errordlg.ShowModal()
                             errordlg.Destroy()
                     # If the user pressed Cancel ...

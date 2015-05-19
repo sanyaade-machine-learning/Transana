@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -18,6 +18,10 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
 
+DEBUG = False
+if DEBUG:
+    print "ConfigData DEBUG is ON!      NOTE:  THIS MUST BE RUN THROUGH IDLE for Unicode support."
+
 # Import wxPython
 import wx
 # import Python os module
@@ -28,8 +32,6 @@ import TransanaConstants
 import TransanaGlobal
 # import Python's pickle module
 import pickle
-# import Python's cPickle module
-import cPickle
 
 class ConfigData(object):
     """ This module handles Transana Configuration Data, including loading and saving this data. """
@@ -45,9 +47,6 @@ class ConfigData(object):
         self.autoArrange = True
         # Waveform Quickload is enabled by default
         self.waveformQuickLoad = True
-            
-        # Return the ConfigData Object
-        return self
     
     def __repr__(self):
         """ String Representation of the data in this object. """
@@ -76,6 +75,28 @@ class ConfigData(object):
         defaultVisualizationPath = os.path.join(self.GetDefaultProfilePath(), 'waveforms')
         # Define the default DatabasePath as the Transana Data Path's 'databases' subfolder
         defaultDatabaseDir = os.path.join(self.GetDefaultProfilePath(), 'databases')
+        # Embedded MySQL can only work with Latin-1 compatible paths.  The following
+        # code checks to make sure the path will work, and tries a couple of
+        # substitutions if necessary.
+        try:
+            # First, let's see if the Database Dir is Latin-1 compatible
+            temp = defaultDatabaseDir.encode('latin1')
+        except UnicodeError:
+            # If not, try the Program Dir + 'database'
+            defaultDatabaseDir = os.path.join(TransanaGlobal.programDir, 'database')
+            # Unfortunately, the Program Dir might not be Latin-1 compatible.  Check that.
+            try:
+                # See if the new Database Dir is Latin-1 compatible
+                temp = defaultDatabaseDir.encode('latin1')
+            except UnicodeError:
+                # If we're still in trouble, let's build the path from scratch
+                if 'wxMSW' in wx.PlatformInfo:
+                    defaultDatabaseDir = os.path.join('C:', 'Transana 2', 'database')
+                else:
+                    # Actually, I have no idea if this will work.  I'd bet permissions issues will prevent it.
+                    # But I have no way to pursue the issue further for the Mac until I find a user who's willing to help.
+                    defaultDatabaseDir = os.path.join('Transana 2', 'database')
+
         # Define the Default Database Host
         if TransanaConstants.singleUserVersion:
             defaultHost = 'localhost'
@@ -92,7 +113,10 @@ class ConfigData(object):
         # See if a version 2.0 Configuration exists, and use it if so
         if config.Exists('/2.0'):
             # Load Host
-            self.host = config.Read('/2.0/host', defaultHost)
+            if TransanaConstants.singleUserVersion:
+                self.host = config.Read('/2.0/host', defaultHost)
+            else:
+                self.host = config.Read('/2.0/hostMU', defaultHost)
             # Load Database and Database Directory(single user version only)
             if TransanaConstants.singleUserVersion:
                 self.database = config.Read('/2.0/database', '')
@@ -162,10 +186,14 @@ class ConfigData(object):
             self.language = ''
 
         # Load the databaseList, if it exists
+        # NOTE:  if using Unicode, this MUST be a String object!
         if TransanaConstants.singleUserVersion:
-            dbList = config.Read('/2.0/DatabaseListSU', '')
+            dbList = str(config.Read('/2.0/DatabaseListSU', ''))
         else:
-            dbList = config.Read('/2.0/DatabaseListMU', '')
+            dbList = str(config.Read('/2.0/DatabaseListMU', ''))
+
+        if DEBUG:
+            print "ConfigData.LoadConfiguration():  dbList = '%s'" % dbList
 
         # The early versions (Alpha and Beta releases) used a different system.  Check to see
         # if we need to get the data from there!
@@ -190,7 +218,7 @@ class ConfigData(object):
                  # If so, try to open it 
                  file = open(dbFile, 'r')
                  # Load the Databases structure from the pickle file
-                 self.databaseList = cPickle.load(file)
+                 self.databaseList = pickle.load(file)
                except:
                    print "Exception in ConfigData loading Databases."
                    self.Databases = {}
@@ -199,6 +227,24 @@ class ConfigData(object):
         else:
             self.databaseList = pickle.loads(dbList)
 
+        if DEBUG:
+            print "ConfigData.LoadConfiguration():  self.databaseList ="
+            for h in self.databaseList.keys():
+                for d in self.databaseList[h]:
+                    print h, d
+
+        # Embedded MySQL can only work with Latin-1 compatible paths.  The following
+        # code checks to make sure the path will work.  This final check handles the situation where
+        # an improper path is saved in the configuration file, which is entirely possible, as the selection
+        # browser does no tests.
+        try:
+            # First, let's see if the Database Dir is Latin-1 compatible
+            temp = self.databaseDir.encode('latin1')
+        except UnicodeError:
+            # NOTE:  Can't use the Dialogs.ErrorDialog here.  The wxApp object hasn't been created yet.
+            msg = _("Illegal Database Directory specification.\nCurrent Directory replaced with\n%s.") % (defaultDatabaseDir)
+            print msg
+            self.databaseDir = defaultDatabaseDir
 
     def SaveConfiguration(self):
         """ Save Configuration Data to the Registry or a Config File. """
@@ -206,7 +252,10 @@ class ConfigData(object):
         # Program Name is Transana, Vendor Name is Verception to remain compatible with Transana 1.0.
         config = wx.Config('Transana', 'Verception')
         # Save the Host
-        config.Write('/2.0/host', self.host)
+        if TransanaConstants.singleUserVersion:
+            config.Write('/2.0/host', self.host)
+        else:
+            config.Write('/2.0/hostMU', self.host)
         # Save the Database
         if TransanaConstants.singleUserVersion:
             config.Write('/2.0/database', self.database)
@@ -233,11 +282,22 @@ class ConfigData(object):
         # NOTE:  Video Speed, Auto-Arrange, and Waveform Quickload are NOT saved to the config file.
         #        We decided it was better to have them reset to default values when the program is restarted.
 
+        if DEBUG:
+            print "ConfigData.SaveConfiguration():  self.databaseList ="
+            for h in self.databaseList.keys():
+                for d in self.databaseList[h]:
+                    print h, d, type(h), type(d)
+
         # Save the list of Databases this user has used as a string by pickling it
+        tmpDbList = pickle.dumps(self.databaseList)
+
+        if DEBUG:
+            print "ConfigData.SaveConfiguration():  tmpDbList = '%s'" % tmpDbList
+
         if TransanaConstants.singleUserVersion:
-            config.Write('/2.0/DatabaseListSU', pickle.dumps(self.databaseList))
+            config.Write('/2.0/DatabaseListSU', tmpDbList)
         else:
-            config.Write('/2.0/DatabaseListMU', pickle.dumps(self.databaseList))
+            config.Write('/2.0/DatabaseListMU', tmpDbList)
         # Save Default Font Face Setting
         config.Write('/2.0/FontFace', self.defaultFontFace)
         # Save Default Font Size Setting
@@ -259,6 +319,9 @@ class ConfigData(object):
             defaultProfilePath = os.getenv("HOME")
         else: # Assuming that getenv("HOME") returns something useful
             defaultProfilePath = os.getenv("HOME")
+
+        # defaultProfilePath = u'E:\\Video\\\u4eb2\u4eb3\u4eb2'
+        # print "ConfigData.GetDefaultProfilePath() overridden"
 
         # I think the above fails for Windows 98 and Windows Me.  So if we don't get
         # something from the above, let's fall back to using the Program Directory here.

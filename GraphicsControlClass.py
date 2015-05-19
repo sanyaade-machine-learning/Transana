@@ -1,4 +1,4 @@
-#Copyright (C) 2003-2005  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003-2006  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -14,8 +14,6 @@
 #along with this program; if not, write to the Free Software
 #Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
-# This code is taken from the wxPython Demo file "PrintFramework.py" and
-# has been modified by David Woods
 
 """ A class for implementing a scrollable Graphics Control.
     This control should expose it's Device Context for external
@@ -309,7 +307,7 @@ class GraphicsControl(wx.ScrolledWindow):
             if alignment == 'CENTER':
                 x = x - w / 2
             elif alignment == 'RIGHT':
-                x = x - w + 1
+                x = x - w - 30
             # Place the text on the Device Context
             dc.DrawText(text, int(x), int(y))
         # Let the Device Context know we are done drawing

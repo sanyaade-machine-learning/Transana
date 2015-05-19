@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -23,11 +23,15 @@ each other.
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
 
+DEBUG = False
+if DEBUG:
+    print "ControlObjectClass DEBUG is ON!"
+
 # Import wxPython
 import wx
 
 # import Transana's Constants
-from TransanaConstants import *
+import TransanaConstants
 # Import the Menu Constants
 import MenuSetup
 # Import Transana's Global Values
@@ -72,6 +76,7 @@ class ControlObject(object):
         self.VisualizationWindow = None
         self.DataWindow = None
         self.PlayAllClipsWindow = None
+        self.ChatWindow = None
 
         # Initialize variables
         self.VideoFilename = ''         # Video File Name
@@ -81,47 +86,7 @@ class ControlObject(object):
         self.TranscriptNum = -1         # Transcript record # loaded
         self.currentObj = None          # Currently loaded Object (Episode or Clip)
         
-#        if "__WXMAC__" in wx.PlatformInfo:
-            # On the Mac, we need a dictionary to translate between the Help Context strings and the HTML file names.
-#            self.helpTranslate = {'Welcome' : 'MainPage.htm',
-#                             "Introduction and Overview" : "Introduction.htm",
-#                             'Transana Main Screen' : 'MainScreen.htm',
-#                             'Organizational Structure' : 'Organization.htm',
-#                             'Data Window' : 'DataWindow.htm',
-#                             'Series Properties' : 'AddSeries.htm',
-#                             'Episode Properties' : 'AddEpisode.htm',
-#                             'Core Data Properties' : 'CoreData.htm',
-#                             'Transcript Properties' : 'AddTranscript.htm',
-#                             'Collection Properties' : 'AddCollection.htm',
-#                             'Clip Properties' : 'AddClip.htm',
-#                             'Keyword Management' : 'KeywordManagement.htm',
-#                             'Keyword Properties' : 'AddKeyword.htm',
-#                             'Edit Keywords' : 'EditKeywords.htm',
-#                             'Video Window' : 'VideoWindow.htm',
-#                             'Transcript Window' : 'TranscriptWindow.htm',
-#                             'Time Codes' : 'TimeCodes.htm',
-#                             'Visualization Window' : 'SoundWindow.htm',
-#                             'Notes' : 'Notes.htm',
-#                             'Keyword Summary Report' : 'KeywordSummaryReport.htm',
-#                             'Keyword Usage Report' : 'KeywordUsageReport.htm',
-#                             'Collection Summary Report' : 'CollectionSummaryReport.htm',
-#                             'Keyword Map' : 'KeywordMap.htm',
-#                             'Search' : 'Search.htm',
-#                             'Converting a Search Result to a Collection' : 'Convert.htm',
-#                             'File Management' : 'FileManagement.htm',
-#                             'Program Settings' : 'ProgramOptionsMU.htm',
-#                             'Export Database' : 'Export.htm',
-#                             'Import Database' : 'Import.htm',
-#                             'Batch Waveform Generator' : 'BatchWaveform.htm',
-#                             'Other Functions' : 'Other.htm',
-#                             'Contact Us' : 'ContactUs.htm',
-#                             'License Agreement' : 'License.htm',
-#                             'Quick Reference' : 'QuickReference.htm',
-#                             'Welcome to the Transana Tutorial' : 'Tutorial.htm',
-#                             'File Management Utility' : 'FileManagementHelp.htm',
-#                             'Jeffersonian Transcript Notation' : 'TranscriptNotation.htm'}
-
-    def Register(self, Menu='', Video='', Transcript='', Data='', Visualization='', PlayAllClips=''):
+    def Register(self, Menu='', Video='', Transcript='', Data='', Visualization='', PlayAllClips='', Chat=''):
         """ The ControlObject can extert control only over those objects it knows about.  This method
             provides a way to let the ControlObject know about other objects.  This infrastructure allows
             for objects to be swapped in and out.  For example, if you need a different video window
@@ -143,6 +108,8 @@ class ControlObject(object):
             self.VisualizationWindow = Visualization     # Define the Visualization Window Object
         if PlayAllClips != '':
             self.PlayAllClipsWindow = PlayAllClips       # Define the Play All Clips Window Object
+        if Chat != '':
+            self.ChatWindow = Chat                       # Define the Chat Window Object
 
     def CloseAll(self):
         """ This method closes all application windows and cleans up objects when the user
@@ -161,6 +128,8 @@ class ControlObject(object):
         # Before we do anything else, let's save the current transcript if it's been modified.
         if self.TranscriptWindow.TranscriptModified():
             self.SaveTranscript(1, cleardoc=1)
+        # Clear all Windows
+        self.ClearAllWindows()
         # Because transcript names can be identical for different episodes in different series, all parameters are mandatory.
         # They are:
         #   series      -  the Series associated with the desired Transcript
@@ -170,7 +139,8 @@ class ControlObject(object):
         episodeObj = Episode.Episode(series=seriesObj.id, episode=episode)   # Load the Episode in the Series that owns the Transcript
         # Set the current object to the loaded Episode
         self.currentObj = episodeObj
-        transcriptObj = Transcript.Transcript(transcript, ep=episodeObj.number) 
+        transcriptObj = Transcript.Transcript(transcript, ep=episodeObj.number)
+
         # Load the Transcript in the Episode in the Series
         # reset the video start and end points
         self.VideoStartPoint = 0                                     # Set the Video Start Point to the beginning of the video
@@ -187,13 +157,21 @@ class ControlObject(object):
             self.VisualizationWindow.OnIdle(None)
             
             # Identify the loaded Object
-            str = _('Transcript "%s" for Series "%s", Episode "%s"') % (transcriptObj.id, seriesObj.id, episodeObj.id)
-            self.TranscriptWindow.dlg.SetTitle(str)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Transcript "%s" for Series "%s", Episode "%s"'), 'utf8')
+            else:
+                prompt = _('Transcript "%s" for Series "%s", Episode "%s"')
+            self.TranscriptWindow.dlg.SetTitle(prompt % (transcriptObj.id, seriesObj.id, episodeObj.id))
             # Identify the loaded media file
-            str = _('Video Media File: "%s"') % episodeObj.media_filename
-            self.VideoWindow.frame.SetTitle(str)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Video Media File: "%s"'), 'utf8')
+            else:
+                prompt = _('Video Media File: "%s"')
+            self.VideoWindow.frame.SetTitle(prompt % episodeObj.media_filename)
             # Open Transcript in Transcript Window
-            self.TranscriptWindow.LoadTranscript(transcriptObj)
+            self.TranscriptWindow.LoadTranscript(transcriptObj) #flies off to transcriptionui.py
 
             self.TranscriptNum = transcriptObj.number
             
@@ -216,9 +194,6 @@ class ControlObject(object):
                 episodeObj.tape_length = self.GetMediaLength()
                 # If we now know the Media Length...
                 if episodeObj.tape_length != 0:
-                    # Reload the Visualization Window, as it will not have the proper time scale, since the
-                    # media length was unknown.
-                    self.VisualizationWindow.load_image(episodeObj.media_filename, 0, episodeObj.tape_length)
                     # Let's try to save the Episode Object, since we've added information
                     try:
                         episodeObj.lock_record()
@@ -232,96 +207,12 @@ class ControlObject(object):
             # Set up, display, and process the File Management Window
             fileManager.Setup(showModal=True)
 
-
-    def LoadClip(self, collectionlist, clip):
+    def LoadClipByNumber(self, clipNum):
         """ When a Clip is identified to trigger systematic loading of all related information,
             this method should be called so that all Transana Objects are set appropriately. """
         # Before we do anything else, let's save the current transcript if it's been modified.
         if self.TranscriptWindow.TranscriptModified():
             self.SaveTranscript(1, cleardoc=1)
-        # Because clip names can be identical in different collections, all parameters are mandatory.
-        # They are:
-        # collectionlist  -  a List Object containing the names of all nested Collections necessary to load the correct Clip
-        # clip            -  the name of the Clip to be loaded
-        collectionParent = 0                                          # Initialize Collection Parent to zero.  (The list starts with the root collection, which has a parent of 0)
-        for loop in collectionlist:                                   # load each Collection in the collectionlist in order to get to the Collection that holds the clip
-            collectionObj = Collection.Collection(loop, collectionParent)        # Load the collection specified in the list 
-            collectionParent = collectionObj.number                   # If there is another entry in the collectionlist, this collection will be its parent
-        clipObj = Clip.Clip(clip, collectionObj.id, collectionObj.parent)  # Now that we've identified the appropriate Collection, load the Clip
-        # Set the current object to the loaded Episode
-        self.currentObj = clipObj
-        # Load the Clip Transcript
-        transcriptObj = Transcript.Transcript(clip=clipObj.number)    # Load the Clip Transcript
-        # set the video start and end points to the start and stop points defined in the clip
-        self.VideoStartPoint = clipObj.clip_start                     # Set the Video Start Point to the Clip beginning
-        self.VideoEndPoint = clipObj.clip_stop                        # Set the Video End Point to the Clip end
-        
-        # Identify the loaded Object
-        str = _('Transcript for Collection "%s", Clip "%s"') % (collectionObj.id, clipObj.id)
-        self.TranscriptWindow.dlg.SetTitle(str)
-        # Identify the loaded media file
-        str = _('Video Media File: "%s"') % clipObj.media_filename
-        self.VideoWindow.frame.SetTitle(str)
-
-        # Remove any tabs in the Data Window beyond the Database Tab
-        self.DataWindow.DeleteTabs()
-
-        self.LoadVideo(clipObj.media_filename, clipObj.clip_start, clipObj.clip_stop - clipObj.clip_start)   # Load the video identified in the Clip
-        self.SetVideoSelection(self.VideoStartPoint, self.VideoEndPoint)  # Delineate the appropriate start and end points for Video Control
-        # Open the Clip Transcript in Transcript Window
-        self.TranscriptWindow.LoadTranscript(transcriptObj)
-
-        # Add the Keyword Tab to the DataWindow
-        self.DataWindow.AddKeywordsTab(collectionObj=collectionObj, clipObj=clipObj)
-
-    def LoadClip2(self, collectionName, collectionParent, clip):
-        """ When a Clip is identified to trigger systematic loading of all related information,
-            this method should be called so that all Transana Objects are set appropriately. """
-        # Before we do anything else, let's save the current transcript if it's been modified.
-        if self.TranscriptWindow.TranscriptModified():
-            self.SaveTranscript(1, cleardoc=1)
-        # Because clip names can be identical in different collections, all parameters are mandatory.
-        # They are:
-        # collectionName   -  The name of the Collection which contains the correct Clip
-        # collectionParent -  The Collection Number of the Parent of the named collection (0 if it is a root collection)
-        # clip             -  the name of the Clip to be loaded
-        collectionObj = Collection.Collection(collectionName, collectionParent)        # Load the collection specified in the list
-        clipObj = Clip.Clip(clip, collectionObj.id, collectionObj.parent)  # Now that we've identified the appropriate Collection, load the Clip
-        # Set the current object to the loaded Episode
-        self.currentObj = clipObj
-        # Load the Clip Transcript
-        transcriptObj = Transcript.Transcript(clip=clipObj.number)    # Load the Clip Transcript
-        # set the video start and end points to the start and stop points defined in the clip
-        self.VideoStartPoint = clipObj.clip_start                     # Set the Video Start Point to the Clip beginning
-        self.VideoEndPoint = clipObj.clip_stop                        # Set the Video End Point to the Clip end
-        
-        # Identify the loaded Object
-        str = _('Transcript for Collection "%s", Clip "%s"') % (collectionObj.id, clipObj.id)
-        self.TranscriptWindow.dlg.SetTitle(str)
-        # Identify the loaded media file
-        str = _('Video Media File: "%s"') % clipObj.media_filename
-        self.VideoWindow.frame.SetTitle(str)
-
-        # Remove any tabs in the Data Window beyond the Database Tab
-        self.DataWindow.DeleteTabs()
-
-        self.LoadVideo(clipObj.media_filename, clipObj.clip_start, clipObj.clip_stop - clipObj.clip_start)   # Load the video identified in the Clip
-        self.SetVideoSelection(self.VideoStartPoint, self.VideoEndPoint)  # Delineate the appropriate start and end points for Video Control
-        # Open the Clip Transcript in Transcript Window
-        self.TranscriptWindow.LoadTranscript(transcriptObj)
-
-        # Add the Keyword Tab to the DataWindow
-        self.DataWindow.AddKeywordsTab(collectionObj=collectionObj, clipObj=clipObj)
-
-    def LoadClipByNumber(self, clipNum, clipName=''):
-        """ When a Clip is identified to trigger systematic loading of all related information,
-            this method should be called so that all Transana Objects are set appropriately. """
-        # Before we do anything else, let's save the current transcript if it's been modified.
-        if self.TranscriptWindow.TranscriptModified():
-            self.SaveTranscript(1, cleardoc=1)
-
-        # TODO:  Replace all LoadClip and LoadClip2 references with LoadClipByNumber!
-
         # Load the Clip based on the ClipNumber
         clipObj = Clip.Clip(clipNum)
         # Set the current object to the loaded Episode
@@ -334,39 +225,45 @@ class ControlObject(object):
         self.VideoStartPoint = clipObj.clip_start                     # Set the Video Start Point to the Clip beginning
         self.VideoEndPoint = clipObj.clip_stop                        # Set the Video End Point to the Clip end
         
-        # Remove any tabs in the Data Window beyond the Database Tab
-        self.DataWindow.DeleteTabs()
-
         # Load the video identified in the Clip
         if self.LoadVideo(clipObj.media_filename, clipObj.clip_start, clipObj.clip_stop - clipObj.clip_start):
-
-            # clipName should be determined from the DBTree UNLESS IT IS EXPLICITYLY PASSED IN.
-            # The "PlayAllClips" routine passes it in explicity because the tree points to the Collection in this case!
-            if clipName == '':
-                # Search Result Clip and Collection Names may have been changed.  Therefore, we must pull this information
-                # from the Database Tree rather than from the data objects themselves.
-                collectionName = self.DataWindow.DBTab.tree.GetItemText(self.DataWindow.DBTab.tree.GetItemParent(self.DataWindow.DBTab.tree.GetSelection()))
-                clipName = self.DataWindow.DBTab.tree.GetItemText(self.DataWindow.DBTab.tree.GetSelection())
-            else:
-                # If ClipName is passed in, we know the tree is pointed to a Collection.
-                collectionName = self.DataWindow.DBTab.tree.GetItemText(self.DataWindow.DBTab.tree.GetSelection())
-
             # Identify the loaded Object
-            str = _('Transcript for Collection "%s", Clip "%s"') % (collectionName, clipName)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                str = unicode(_('Transcript for Collection "%s", Clip "%s"'), 'utf8') % (collectionObj.id, clipObj.id)
+            else:
+                str = _('Transcript for Collection "%s", Clip "%s"') % (collectionObj.id, clipObj.id)
+            # The Mac doesn't clean up around frame titles!
+            # (The Mac centers titles, while Windows left-justifies them and should not get the leading spaces!)
+            if 'wxMac' in wx.PlatformInfo:
+                str = "               " + str + "               "
             self.TranscriptWindow.dlg.SetTitle(str)
             # Identify the loaded media file
-            str = _('Video Media File: "%s"') % clipObj.media_filename
-            self.VideoWindow.frame.SetTitle(str)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                str = unicode(_('Video Media File: "%s"'), 'utf8')
+            else:
+                str = _('Video Media File: "%s"')
+            self.VideoWindow.frame.SetTitle(str % clipObj.media_filename)
             # Delineate the appropriate start and end points for Video Control
             self.SetVideoSelection(self.VideoStartPoint, self.VideoEndPoint)
             # Open the Clip Transcript in Transcript Window
             self.TranscriptWindow.LoadTranscript(transcriptObj)
 
+            # Remove any tabs in the Data Window beyond the Database Tab.  (This was moved down to late in the
+            # process due to problems on the Mac documented in the DataWindow object.)
+            self.DataWindow.DeleteTabs()
+
             # Add the Keyword Tab to the DataWindow
             self.DataWindow.AddKeywordsTab(collectionObj=collectionObj, clipObj=clipObj)
+            # Enable the transcript menu item options
+            self.MenuWindow.SetTranscriptOptions(True)
 
             return True
         else:
+            # Remove any tabs in the Data Window beyond the Database Tab
+            self.DataWindow.DeleteTabs()
+
             # Create a File Management Window
             fileManager = FileManagement.FileManagement(self.MenuWindow, -1, _("Transana File Management"))
             # Set up, display, and process the File Management Window
@@ -406,10 +303,29 @@ class ControlObject(object):
         wx.Yield()
 
     def GetNewDatabase(self):
+        """ Close the old database and open a new one. """
         # Clear all existing Data
         self.ClearAllWindows()
         # Close the existing database connection
         DBInterface.close_db()
+        # Reset the global encoding to UTF-8 if the Database supports it
+        if TransanaGlobal.DBVersion >= u'4.1':
+            TransanaGlobal.encoding = 'utf8'
+        # Otherwise, if we're in Russian, change the encoding to KOI8r
+        elif TransanaGlobal.configData.language == 'ru':
+            TransanaGlobal.encoding = 'koi8_r'
+        # If we're in Chinese, change the encoding to the appropriate Chinese encoding
+        elif TransanaGlobal.configData.language == 'zh':
+            TransanaGlobal.encoding = TransanaConstants.chineseEncoding
+        # If we're in Japanese, change the encoding to cp932
+        elif TransanaGlobal.configData.language == 'ja':
+            TransanaGlobal.encoding = 'cp932'
+        # If we're in Korean, change the encoding to cp949
+        elif TransanaGlobal.configData.language == 'ko':
+            TransanaGlobal.encoding = 'cp949'
+        # Otherwise, fall back to Latin-1
+        else:
+            TransanaGlobal.encoding = 'latin1'
         # If a new database login fails three times, we need to close the program.
         # Initialize a counter to track that.
         logonCount = 1
@@ -537,7 +453,12 @@ class ControlObject(object):
         # Check for the existence of the Media File
         if not os.path.exists(Filename):
             # If it does not exist, display an error message Dialog
-            dlg = Dialogs.ErrorDialog(self.MenuWindow, _('Media File "%s" cannot be found.\nPlease locate this media file and press the "Update Database" button.\nThen reload the Transcript or Clip that failed.') % Filename)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Media File "%s" cannot be found.\nPlease locate this media file and press the "Update Database" button.\nThen reload the Transcript or Clip that failed.'), 'utf8')
+            else:
+                prompt = _('Media File "%s" cannot be found.\nPlease locate this media file and press the "Update Database" button.\nThen reload the Transcript or Clip that failed.')
+            dlg = Dialogs.ErrorDialog(self.MenuWindow, prompt % Filename)
             dlg.ShowModal()
             dlg.Destroy()
             # Indicate that LoadVideo failed.
@@ -671,11 +592,35 @@ class ControlObject(object):
     def SetVideoSelection(self, StartTimeCode, EndTimeCode):
         """ Set the Starting and Stopping Points for video segment definition.  TimeCodes are in milliseconds from the beginning. """
         if self.TranscriptWindow.dlg.editor.get_read_only():
-            # highlight the full text of the video selection
-            self.TranscriptWindow.dlg.editor.scroll_to_time(StartTimeCode)
+
+            if DEBUG:
+                print "ControlObjectClass.SetVideoSelection(): editor position before =", self.TranscriptWindow.dlg.editor.GetCurrentPos(), self.TranscriptWindow.dlg.editor.GetSelection()
+
+            # Sometime the cursor is positioned at the end of the selection rather than the beginning, which can cause
+            # problems with the highlight.  Let's fix that if needed.
+            if self.TranscriptWindow.dlg.editor.GetCurrentPos() != self.TranscriptWindow.dlg.editor.GetSelection()[0]:
+
+                if DEBUG:
+                    print "ControlObjectClass.SetVideoSelection() Correction!!"
+
+                (start, end) = self.TranscriptWindow.dlg.editor.GetSelection()
+                self.TranscriptWindow.dlg.editor.SetCurrentPos(start)
+                self.TranscriptWindow.dlg.editor.SetAnchor(end)
+                
+            # If Word Tracking is ON ...
+            if TransanaGlobal.configData.wordTracking:
+                # ... highlight the full text of the video selection
+                self.TranscriptWindow.dlg.editor.scroll_to_time(StartTimeCode)
+
+            if DEBUG:
+                print "ControlObjectClass.SetVideoSelection(): editor position after scroll_to_time() =", self.TranscriptWindow.dlg.editor.GetCurrentPos(), self.TranscriptWindow.dlg.editor.GetSelection()
+                
             if EndTimeCode > 0:
                 self.TranscriptWindow.dlg.editor.select_find(str(EndTimeCode))
 
+            if DEBUG:
+                print "ControlObjectClass.SetVideoSelection(): editor position after select_find() =", self.TranscriptWindow.dlg.editor.GetCurrentPos(), self.TranscriptWindow.dlg.editor.GetSelection()
+                
         if EndTimeCode == 0:
             if type(self.currentObj).__name__ == 'Episode':
                 EndTimeCode = self.VideoWindow.GetMediaLength()
@@ -695,12 +640,12 @@ class ControlObject(object):
         """ When the Video Player's Play State Changes, we may need to adjust the Screen Layout
             depending on the Presentation Mode settings. """
 
-        # print "ControlObject.UpdatePlayState():", playState, MEDIA_PLAYSTATE_STOP, MEDIA_PLAYSTATE_PLAY, MEDIA_PLAYSTATE_PAUSE
+        # print "ControlObject.UpdatePlayState():", playState, TransanaConstants.MEDIA_PLAYSTATE_STOP, TransanaConstants.MEDIA_PLAYSTATE_PLAY, TransanaConstants.MEDIA_PLAYSTATE_PAUSE
 
         # print "ControlObject.UpdatePlayState(): PlayAllClipsWindow =", self.PlayAllClipsWindow
         
         # If the video is STOPPED, return all windows to normal Transana layout
-        if (playState == MEDIA_PLAYSTATE_STOP) and (self.PlayAllClipsWindow == None):
+        if (playState == TransanaConstants.MEDIA_PLAYSTATE_STOP) and (self.PlayAllClipsWindow == None):
             # When Play is intiated (below), the positions of windows gets saved if they are altered by Presentation Mode.
             # If this has happened, we need to put the screen back to how it was before when Play is stopped.
             if len(self.WindowPositions) != 0:
@@ -725,7 +670,7 @@ class ControlObject(object):
                 
         # If the video is PLAYED, adjust windows to the desired screen layout,
         # as indicated by the Presentation Mode selection
-        elif playState == MEDIA_PLAYSTATE_PLAY:
+        elif playState == TransanaConstants.MEDIA_PLAYSTATE_PLAY:
             # If we are starting up from the Video Window, save the Transcript Cursor.
             # Detecting that the Video Window has focus is hard, as there are different video window implementations on
             # different platforms.  Therefore, let's see if it's NOT the Transcript or the Waveform, which are easier to
@@ -858,11 +803,7 @@ class ControlObject(object):
             (wleft, wtop, wwidth, wheight) = self.VisualizationWindow.GetDimensions()
             self.VisualizationWindow.SetDims(wleft, wtop, left - wleft - 4, wheight)
 
-# NOTE:  We only need to trigger Visualization and Data windows' SetDims method to resize everything!
-
-            # Transcript Window adjusts WIDTH only to match shift in video window
-#            (wleft, wtop, wwidth, wheight) = self.TranscriptWindow.GetDimensions()
-#            self.TranscriptWindow.SetDims(wleft, wtop, left - wleft - 4, wheight)
+            # NOTE:  We only need to trigger Visualization and Data windows' SetDims method to resize everything!
 
             # Data Window matches Video Window's width and shifts top and height to accommodate shift in video window
             (wleft, wtop, wwidth, wheight) = self.DataWindow.GetDimensions()
@@ -891,7 +832,7 @@ class ControlObject(object):
             if YLower == -1:
                 (wleft, wtop, wwidth, wheight) = self.VideoWindow.GetDimensions()
                 YLower = wheight + wtop
-
+                
             if sender != 'Visualization':
                 # Adjust Visualization Window
                 (wleft, wtop, wwidth, wheight) = self.VisualizationWindow.GetDimensions()
@@ -949,7 +890,12 @@ class ControlObject(object):
         if dlg.ShowModal() == wx.ID_OK:
             fname = dlg.GetPath()
             if os.path.exists(fname):
-                dlg2 = wx.MessageDialog(None, _('A file named "%s" already exists.  Do you want to replace it?') % fname,
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A file named "%s" already exists.  Do you want to replace it?'), 'utf8')
+                else:
+                    prompt = _('A file named "%s" already exists.  Do you want to replace it?')
+                dlg2 = wx.MessageDialog(None, prompt % fname,
                                         _('Transana Confirmation'), style = wx.YES_NO | wx.ICON_QUESTION | wx.STAY_ON_TOP)
                 dlg2.CentreOnScreen()
                 if dlg2.ShowModal() == wx.ID_YES:
@@ -958,6 +904,12 @@ class ControlObject(object):
             else:
                 self.TranscriptWindow.SaveTranscriptAs(fname)
         dlg.Destroy()
+
+    def UpdateDataWindow(self):
+        """ Update the Data Window, as when the "Update Database Window" command is issued """
+        # NOTE:  This is called in MU when one user imports a database while another user is connected.
+        # Tell the Data Window's Database Tree Tab's Tree to refresh itself
+        self.DataWindow.DBTab.tree.refresh_tree()
 
     def DataWindowHasSearchNodes(self):
         """ Returns the number of Search Nodes in the DataWindow's Database Tree """
@@ -984,6 +936,34 @@ class ControlObject(object):
     def ChangeLanguages(self):
         """ Update all screen components to reflect change in the selected program language """
         self.ClearAllWindows()
+
+        # Let's look at the issue of database encoding.  If it's UTF-8, don't change anything.
+        if TransanaGlobal.encoding != 'utf8':
+            # If it's not UTF-*, then if it is Russian, use KOI8r
+            if TransanaGlobal.configData.language == 'ru':
+                newEncoding = 'koi8_r'
+            # If it's Chinese, use the appropriate Chinese encoding
+            elif TransanaGlobal.configData.language == 'zh':
+                newEncoding = TransanaConstants.chineseEncoding
+            # If it's Japanese, use cp932
+            elif TransanaGlobal.configData.language == 'ja':
+                newEncoding = 'cp932'
+            # If it's Korean, use cp949
+            elif TransanaGlobal.configData.language == 'ko':
+                newEncoding = 'cp949'
+            # Otherwise, fall back to Latin-1
+            else:
+                newEncoding = 'latin1'
+            # If we're changing encodings, we need to do a little work here!
+            if newEncoding != TransanaGlobal.encoding:
+                msg = _('Database encoding is changing.  To avoid potential data corruption, \nTransana must close your database before proceeding.')
+                tmpDlg = Dialogs.InfoDialog(None, msg)
+                tmpDlg.ShowModal()
+                tmpDlg.Destroy()
+
+                # We should get a new database.  This call will actually update our encoding if needed!
+                self.GetNewDatabase()
+                
         self.MenuWindow.ChangeLanguages()
         self.VisualizationWindow.ChangeLanguages()
         self.DataWindow.ChangeLanguages()

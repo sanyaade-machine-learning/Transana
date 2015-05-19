@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -17,6 +17,10 @@
 """This file handles the Transana Help System.  """
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
+
+DEBUG = False
+if DEBUG:
+    print "Help.py DEBUG is ON!!"
 
 # import wxPython
 import wx
@@ -49,12 +53,23 @@ class Help(object):
             self.help.GetFrame().SetPosition(wx.Point(left, top))
             self.help.GetFrame().SetSize(wx.Size(width, height))
 
-        # We need to know what directory the program is running from.  We use this in several
-        # places in the program to be able to find things like images and help files.
-        programDir, programName = os.path.split(sys.argv[0])
-        if programDir == '':
-            programDir = os.getcwd()
-        
+        # This has emerged as the "preferred" method on the wxPython-users list.
+        programDir = os.path.abspath(sys.path[0])
+        # Okay, that doesn't work with wxversion, which adds to the path.  Here's the fix, I hope.
+        # This should over-ride the programDir with the first value that contains Transana in the path.
+        for path in sys.path:
+            if 'transana' in path.lower():
+                programDir = path
+                break
+        if os.path.isfile(programDir):
+            programDir = os.path.dirname(programDir)
+
+        if DEBUG:
+            msg = "Help.__init__():  programDir = %s" % programDir
+            tmpDlg = wx.MessageDialog(None, msg)
+            tmpDlg.ShowModal()
+            tmpDlg.Destroy()
+
         self.help.AddBook(os.path.join(programDir, 'help', 'Manual.hhp'))
         self.help.AddBook(os.path.join(programDir, 'help', 'Tutorial.hhp'))
         self.help.AddBook(os.path.join(programDir, 'help', 'TranscriptNotation.hhp'))

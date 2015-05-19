@@ -1,4 +1,4 @@
-# Copyright (C) 2004 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -23,15 +23,15 @@
 #        have (or at this time need) this field.  The following code is
 #        obviously heavily based on DataObject.   DKW
 
-__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case <nacase@wisc.edu>'
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 # Based on code/ideas/logic from UKeywordObject Delphi unit by DKW
 
 import wx
 from TransanaExceptions import *
 import DBInterface
 import Dialogs
+import TransanaGlobal
 import inspect
-import mx.DateTime
 # import Python String module
 import string
 import types
@@ -74,6 +74,13 @@ class Keyword(object):
 
     def checkEpisodesAndClipsForLocks(self):
         """ Checks Episodes and Clips to see if a Keyword record is free of related locks """
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            originalKeywordGroup = self.originalKeywordGroup.encode(TransanaGlobal.encoding)
+            originalKeyword = self.originalKeyword.encode(TransanaGlobal.encoding)
+        else:
+            originalKeywordGroup = self.originalKeywordGroup
+            originalKeyword = self.originalKeyword
 
         # query the lock status for Episodes that contain the Keyword 
         query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Episodes2 c
@@ -85,7 +92,7 @@ class Keyword(object):
                            b.EpisodeNum = c.EpisodeNum AND
                            (c.RecordLock <> '' AND
                             c.RecordLock IS NOT NULL)"""
-        values = (self.originalKeywordGroup, self.originalKeyword)
+        values = (originalKeywordGroup, originalKeyword)
         c = DBInterface.get_db().cursor()
         c.execute(query, values)
         result = c.fetchall()
@@ -104,7 +111,7 @@ class Keyword(object):
                                b.ClipNum = c.ClipNum AND
                                (c.RecordLock <> '' AND
                                 c.RecordLock IS NOT NULL)"""
-            values = (self.originalKeywordGroup, self.originalKeyword)
+            values = (originalKeywordGroup, originalKeyword)
             c = DBInterface.get_db().cursor()
             c.execute(query, values)
             result = c.fetchall()
@@ -126,20 +133,20 @@ class Keyword(object):
         if (self.originalKeywordGroup == None) or \
            (self.originalKeyword == None):           # no record loaded?
             return
-            
+
         tablename = self._table()
         
         db = DBInterface.get_db()
         c = db.cursor()
 
         lq = self._get_db_fields(('RecordLock', 'LockTime'), c)
-        if (lq[1] == None) or (lq[0] == "") or ((mx.DateTime.now() - lq[1]).days > 1):
+        if (lq[1] == None) or (lq[0] == "") or ((DBInterface.ServerDateTime() - lq[1]).days > 1):
             (EpisodeClipLockCount, LockName) = self.checkEpisodesAndClipsForLocks()
             if EpisodeClipLockCount == 0:
                 # Lock the record
                 self._set_db_fields(    ('RecordLock', 'LockTime'),
                                         (DBInterface.get_username(),
-                                        str(mx.DateTime.now())[:-3]), c)
+                                        str(DBInterface.ServerDateTime())[:-3]), c)
                 c.close()
             else:
                 c.close()
@@ -159,6 +166,11 @@ class Keyword(object):
     def db_load_by_name(self, keywordGroup, keyword):
         """Load a record.  Raise a RecordNotFound exception
         if record is not found in database."""
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            keywordGroup = keywordGroup.encode(TransanaGlobal.encoding)
+            keyword = keyword.encode(TransanaGlobal.encoding)
+
         db = DBInterface.get_db()
         query = """
         SELECT * FROM Keywords2
@@ -192,15 +204,50 @@ class Keyword(object):
             raise SaveError, _('Keyword Group is required.')
         elif (self.keyword == ''):
             raise SaveError, _('Keyword is required.')
-        
-        values = (self.keywordGroup, self.keyword, self.definition)
+
+        # If we're in Unicode mode, ...
+        if 'unicode' in wx.PlatformInfo:
+            # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
+            # variables for the data.  We don't want to change the underlying object values.  Also, this way,
+            # we can continue to use the Unicode objects where we need the non-encoded version. (error messages.)
+            keywordGroup = self.keywordGroup.encode(TransanaGlobal.encoding)
+            keyword = self.keyword.encode(TransanaGlobal.encoding)
+            if self.originalKeywordGroup != None:
+                originalKeywordGroup = self.originalKeywordGroup.encode(TransanaGlobal.encoding)
+            else:
+                originalKeywordGroup = None
+            if self.originalKeyword != None:
+                originalKeyword = self.originalKeyword.encode(TransanaGlobal.encoding)
+            else:
+                originalKeyword = None
+            definition = self.definition.encode(TransanaGlobal.encoding)
+        else:
+            # If we don't need to encode the string values, we still need to copy them to our local variables.
+            keywordGroup = self.keywordGroup
+            keyword = self.keyword
+            if self.originalKeywordGroup != None:
+                originalKeywordGroup = self.originalKeywordGroup
+            else:
+                originalKeywordGroup = None
+            if self.originalKeyword != None:
+                originalKeyword = self.originalKeyword
+            else:
+                originalKeyword = None
+            definition = self.definition
+
+        values = (keywordGroup, keyword, definition)
 
         if (self._db_start_save() == 0):
-            # duplicate Keywordss are not allowed
+            # duplicate Keywords are not allowed
             if DBInterface.record_match_count("Keywords2", \
                             ("KeywordGroup", "Keyword"), \
-                            (self.keywordGroup, self.keyword) ) > 0:
-                raise SaveError, _('A Keyword named "%s : %s" already exists.') % (self.keywordGroup, self.keyword)
+                            (keywordGroup, keyword) ) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Keyword named "%s : %s" already exists.'), 'utf8') % (self.keywordGroup, self.keyword)
+                else:
+                    prompt = _('A Keyword named "%s : %s" already exists.') % (self.keywordGroup, self.keyword)
+                raise SaveError, prompt
 
             # insert the new Keyword
             query = """
@@ -216,10 +263,15 @@ class Keyword(object):
             # check for dupes, which are not allowed if either the Keyword Group or Keyword have been changed.
             if (DBInterface.record_match_count("Keywords2", \
                             ("KeywordGroup", "Keyword"), \
-                            (self.keywordGroup, self.keyword) ) > 0) and \
-               ((self.originalKeywordGroup != self.keywordGroup) or \
-                (self.originalKeyword != self.keyword)):
-                raise SaveError, _('A Keyword named "%s : %s" already exists.') % (self.keywordGroup, self.keyword)
+                            (keywordGroup, keyword) ) > 0) and \
+               ((originalKeywordGroup != keywordGroup) or \
+                (originalKeyword != keyword)):
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Keyword named "%s : %s" already exists.'), 'utf8') % (self.keywordGroup, self.keyword)
+                else:
+                    prompt = _('A Keyword named "%s : %s" already exists.') % (self.keywordGroup, self.keyword)
+                raise SaveError, prompt
 
             # NOTE:  This is a special instance.  Keywords behave differently than other DataObjects here!
             # Before we can save, we have to check to see if someone locked an Episode or a Clip that
@@ -232,12 +284,14 @@ class Keyword(object):
             # this to be extraordinarily rare.
             (EpisodeClipLockCount, LockName) = self.checkEpisodesAndClipsForLocks()
             if EpisodeClipLockCount != 0 and \
-               ((self.originalKeywordGroup != self.keywordGroup) or \
-                (self.originalKeyword != self.keyword)):
-                import TransanaGlobal
+               ((originalKeywordGroup != keywordGroup) or \
+                (originalKeyword != keyword)):
                 tempstr = _("""You cannot proceed because another user has recently started editing an Episode or a Clip that uses\n
 Keyword "%s:%s".  If you change the Keyword now, that would corrupt the record that is \n
 currently locked by %s.  Please try again later.""")
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    tempstr = unicode(tempstr, 'utf8')
                 dlg = Dialogs.ErrorDialog(TransanaGlobal.menuWindow, tempstr  % (self.originalKeywordGroup, self.originalKeyword, LockName))
                 dlg.ShowModal()
                 dlg.Destroy()
@@ -252,14 +306,14 @@ currently locked by %s.  Please try again later.""")
                     WHERE KeywordGroup = %s AND
                           Keyword = %s
                 """
-                values = values + (self.originalKeywordGroup, self.originalKeyword)
+                values = values + (originalKeywordGroup, originalKeyword)
                 c = DBInterface.get_db().cursor()
                 c.execute(query, values)
                 c.close()
 
                 # If the Keyword Group or Keyword has changed, we need to update all ClipKeyword records too.
-                if ((self.originalKeywordGroup != self.keywordGroup) or \
-                    (self.originalKeyword != self.keyword)):
+                if ((originalKeywordGroup != keywordGroup) or \
+                    (originalKeyword != keyword)):
                     query = """
                     UPDATE ClipKeywords2
                         SET KeywordGroup = %s,
@@ -267,7 +321,7 @@ currently locked by %s.  Please try again later.""")
                         WHERE KeywordGroup = %s AND
                               Keyword = %s
                     """
-                    values = (self.keywordGroup, self.keyword, self.originalKeywordGroup, self.originalKeyword)
+                    values = (keywordGroup, keyword, originalKeywordGroup, originalKeyword)
                     c = DBInterface.get_db().cursor()
                     c.execute(query, values)
                     c.close()
@@ -280,7 +334,6 @@ currently locked by %s.  Please try again later.""")
         """Delete this object record from the database.  Raises
         RecordLockedError exception if record is locked and unable to be
         deleted."""
-        import TransanaGlobal
         tempstr = "Delete Keyword object has not been implemented."
         dlg = wx.MessageDialog(TransanaGlobal.menuWindow, tempstr, "Keyword Object", wx.OK | wx.ICON_EXCLAMATION)
         dlg.ShowModal()
@@ -304,6 +357,14 @@ currently locked by %s.  Please try again later.""")
            (self.originalKeyword == None):           # no record loaded?
             return ()
         
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            originalKeywordGroup = self.originalKeywordGroup.encode(TransanaGlobal.encoding)
+            originalKeyword = self.originalKeyword.encode(TransanaGlobal.encoding)
+        else:
+            originalKeywordGroup = self.originalKeywordGroup
+            originalKeyword = self.originalKeyword
+
         tablename = self._table()
         
         close_c = 0
@@ -320,7 +381,7 @@ currently locked by %s.  Please try again later.""")
         query = "SELECT " + fields + " FROM " + tablename + "\n" + \
                 "  WHERE KeywordGroup = %s AND\n" + \
                 "        Keyword = %s\n"
-        c.execute(query, (self.originalKeywordGroup, self.originalKeyword))
+        c.execute(query, (originalKeywordGroup, originalKeyword))
 
         qr = c.fetchone()       # get query row results
         if (close_c):
@@ -336,6 +397,14 @@ currently locked by %s.  Please try again later.""")
            (self.originalKeyword == None):           # no record loaded?
             return
  
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            originalKeywordGroup = self.originalKeywordGroup.encode(TransanaGlobal.encoding)
+            originalKeyword = self.originalKeyword.encode(TransanaGlobal.encoding)
+        else:
+            originalKeywordGroup = self.originalKeywordGroup
+            originalKeyword = self.originalKeyword
+
         tablename = self._table()
 
         close_c = 0
@@ -354,7 +423,7 @@ currently locked by %s.  Please try again later.""")
                 "  WHERE KeywordGroup = %s AND\n" + \
                 "        Keyword = %s\n"
                 
-        c.execute(query, values + (self.originalKeywordGroup, self.originalKeyword))
+        c.execute(query, values + (originalKeywordGroup, originalKeyword))
         
         if (close_c):
             c.close()
@@ -363,9 +432,19 @@ currently locked by %s.  Please try again later.""")
         """Return 0 if creating new record, 1 if updating an existing one."""
         tname = type(self).__name__
         if (self.keywordGroup == ""):
-            raise SaveError, _("Cannot save a %s with a blank Keyword Group.") % tname
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Cannot save a %s with a blank Keyword Group."), 'utf8') % tname
+            else:
+                prompt = _("Cannot save a %s with a blank Keyword Group.") % tname
+            raise SaveError, prompt
         elif (self.keyword == ""):
-            raise SaveError, _("Cannot save a %s with a blank Keyword.") % tname
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_("Cannot save a %s with a blank Keyword."), 'utf8') % tname
+            else:
+                prompt = _("Cannot save a %s with a blank Keyword.") % tname
+            raise SaveError, prompt
         else:
             # Verify record lock is still good
             db = DBInterface.get_db()
@@ -373,7 +452,7 @@ currently locked by %s.  Please try again later.""")
             if ((self.originalKeywordGroup == None) and \
                 (self.originalKeyword == None)) or \
                ((self.record_lock == DBInterface.get_username()) and
-               ((mx.DateTime.now() - self.lock_time).days <= 1)):
+               ((DBInterface.ServerDateTime() - self.lock_time).days <= 1)):
                 c = db.cursor()
                 # If record num is 0, this is a NEW record and needs to be
                 # INSERTed.  Otherwise, it is an existing record to be UPDATEd.
@@ -408,13 +487,21 @@ currently locked by %s.  Please try again later.""")
     def _db_do_delete(self, use_transactions, c, result):
         """Do the actual record delete and handle the transaction as needed.
         This is a helper method intended for sub-class db_delete() methods."""
+        # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
+        if 'unicode' in wx.PlatformInfo:
+            originalKeywordGroup = self.originalKeywordGroup.encode(TransanaGlobal.encoding)
+            originalKeyword = self.originalKeyword.encode(TransanaGlobal.encoding)
+        else:
+            originalKeywordGroup = self.originalKeywordGroup
+            originalKeyword = self.originalKeyword
+
         tablename = self._table()
 
         query = "DELETE FROM " + tablename + "\n" + \
                 "  WHERE KeywordGroup = %s AND\n" + \
                 "        Keyword = %s\n"
                 
-        c.execute(query, values + (self.originalKeywordGroup, self.originalKeyword))
+        c.execute(query, values + (originalKeywordGroup, originalKeyword))
 
         if (use_transactions):
             # Commit the transaction
@@ -435,6 +522,12 @@ currently locked by %s.  Please try again later.""")
         self.definition = r['Definition']
         if self.definition == None:
             self.definition = ''
+        # If we're in Unicode mode, we need to encode the data from the database appropriately.
+        # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
+        if 'unicode' in wx.PlatformInfo:
+            self.keywordGroup = DBInterface.ProcessDBDataForUTF8Encoding(self.keywordGroup)
+            self.keyword = DBInterface.ProcessDBDataForUTF8Encoding(self.keyword)
+            self.definition = DBInterface.ProcessDBDataForUTF8Encoding(self.definition)
 
     def _get_keywordGroup(self):
         return self._keywordGroup
@@ -443,7 +536,12 @@ currently locked by %s.  Please try again later.""")
         if (string.find(keywordGroup, '(') > -1) or (string.find(keywordGroup, ')') > -1):
             keywordGroup = string.replace(keywordGroup, '(', '')
             keywordGroup = string.replace(keywordGroup, ')', '')
-            dlg = Dialogs.ErrorDialog(None, _('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".') % keywordGroup)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".'), 'utf8') % keywordGroup
+            else:
+                prompt = _('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".') % keywordGroup
+            dlg = Dialogs.ErrorDialog(None, prompt)
             dlg.ShowModal()
             dlg.Destroy()
         self._keywordGroup = keywordGroup.strip()
@@ -457,7 +555,12 @@ currently locked by %s.  Please try again later.""")
         if (string.find(keyword, '(') > -1) or (string.find(keyword, ')') > -1):
             keyword = string.replace(keyword, '(', '')
             keyword = string.replace(keyword, ')', '')
-            dlg = Dialogs.ErrorDialog(None, _('Keywords cannot contain parenthesis characters.\nYour Keyword has been renamed to "%s".') % keyword)
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Keywords cannot contain parenthesis characters.\nYour Keyword has been renamed to "%s".'), 'utf8') % keyword
+            else:
+                prompt = _('Keywords cannot contain parenthesis characters.\nYour Keyword has been renamed to "%s".') % keyword
+            dlg = Dialogs.ErrorDialog(None, prompt)
             dlg.ShowModal()
             dlg.Destroy()
         self._keyword = keyword.strip()

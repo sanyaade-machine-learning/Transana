@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -253,9 +253,12 @@ class GenForm(wx.Dialog):
         if val == wx.ID_OK:
             data = {}
             for edit in self.edits:
-                # Convert to string in case it's Unicode, since we use
-                # some modules that aren't Unicode-aware
-                data[edit[0]] = str(edit[1].GetValue())
+                if 'ansi' in wx.PlatformInfo:
+                    # Convert to string in case it's Unicode, since we use
+                    # some modules that aren't Unicode-aware
+                    data[edit[0]] = str(edit[1].GetValue())
+                else:
+                    data[edit[0]] = edit[1].GetValue()
 
             for choice in self.choices:
                 data[choice[0]] = choice[1].GetSelection()

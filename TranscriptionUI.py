@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -14,14 +14,33 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-"""This module implements the TranscriptionUI class as part of the Editors
-component.
-"""
+""" This module implements the TranscriptionUI class as part of the Editors
+component. """
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>, Jonathan Beavers <jonathan.beavers@gmail.com>'
 
+DEBUG = False
+if DEBUG:
+    print "TranscriptionUI DEBUG is ON!!"
+
+# For testing purposes, there can be a small input box that allows the entry of Unicode codes
+# for characters.
+ALLOW_UNICODE_ENTRY = False
+if ALLOW_UNICODE_ENTRY:
+    print "TranscriptionUI ALLOW_UNICODE_ENTRY is ON!"
+
+if __name__ == '__main__':
+    import wxversion
+    wxversion.select('2.6-unicode')
+    
 import wx
+
+if __name__ == '__main__':
+    __builtins__._ = wx.GetTranslation
+    wx.SetDefaultPyEncoding('utf_8')
+
 import gettext
+import pickle
 from TranscriptToolbar import TranscriptToolbar
 from TranscriptEditor import TranscriptEditor
 import Dialogs
@@ -38,7 +57,9 @@ class TranscriptionUI(object):
     def __init__(self, parent):
         """Initialize an TranscriptionUI object."""
         self.dlg = _TranscriptDialog(parent, -1)
+        
         self.dlg.toolbar.Enable(0)
+
         # We need to adjust the screen position on the Mac.  I don't know why.
         if "__WXMAC__" in wx.PlatformInfo:
             pos = self.dlg.GetPosition()
@@ -74,7 +95,40 @@ class TranscriptionUI(object):
         """Load a transcript object."""
         self.dlg.editor.set_read_only(True)
         self.dlg.toolbar.ClearToolbar()
-        self.dlg.editor.load_transcript(transcriptObj)
+        
+        # let's figure out what format the desired transcript was saved as
+        if transcriptObj.text != None:
+            temp = transcriptObj.text[2:5]
+            
+            if DEBUG:
+                print "TranscriptionUI.LoadTranscript():  temp == 'rtf'?? ", temp
+                
+            try:
+                # was it RTF?
+                if temp != u'rtf':
+                    
+                    if DEBUG:
+                        print "TranscriptionUI.LoadTranscript():  loading with pickle"
+                        
+                    self.dlg.editor.load_transcript(transcriptObj, 'pickle')
+                # or was it pickled?
+                else:
+                    
+                    if DEBUG:
+                        print "TranscriptionUI.LoadTranscript():  loading without pickle"
+                        
+                    self.dlg.editor.load_transcript(transcriptObj) # flies off to transcripteditor.py
+            except UnicodeDecodeError:
+                if DEBUG:
+                    import sys, traceback
+                    print sys.exc_info()[0], sys.exc_info()[1]
+                    traceback.print_exc()
+
+                # any unicode decoding errors are likely coming from attempting
+                # to decode pickled data, so the transcript is most probably
+                # pickled.
+                self.dlg.editor.load_transcript(transcriptObj, 'pickle')
+
         self.dlg.toolbar.Enable(1)
 
     def GetCurrentTranscriptObject(self):
@@ -89,6 +143,9 @@ class TranscriptionUI(object):
     def GetDimensions(self):
         (left, top) = self.dlg.GetPositionTuple()
         (width, height) = self.dlg.GetSizeTuple()
+        # For some reason, the Mac started displaying the Transcript window at -20 by default.
+        if left < 0:
+            left = 0
         return (left, top, width, height)
 
     def GetTranscriptDims(self):
@@ -138,6 +195,7 @@ class TranscriptionUI(object):
         self.dlg.editor.export_transcript(rtf_fname)
         if "__WXMAC__" in wx.PlatformInfo:
             msg = _('If you load this RTF file into Word on the Macintosh, you need to select "Format" > "AutoFormat...",\nmake sure the "AutoFormat now" option is selected, and press "OK".  Otherwise you will\nlose some Font formatting information from the file when you save it.\n(Courier New font will be changed to Times font anyway.)')
+            msg = msg + '\n\n' + _('Also, Word on the Macintosh appears to handle the Whisper (Open Dot) Character for Jeffersonian \nNotation improperly.  You will need to convert this character to Symbol font within Word, but \nconvert it back to Courier New font prior to re-import into Transana.')
             dlg = Dialogs.InfoDialog(self.dlg, msg)
             dlg.ShowModal()
             dlg.Destroy()
@@ -211,7 +269,9 @@ class TranscriptionUI(object):
             
         # If we DO have a selection, we need to check, for mixed font specs in the selection
         else:
-        
+            # Set the Wait cursor (This doesn't appear to show up.)
+            self.dlg.editor.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
+            
             # First, get the initial values for the Font Dialog.  This will match the
             # formatting of the LAST character in the selection.
             fontData = TransanaFontDialog.TransanaFontDef()
@@ -268,19 +328,21 @@ class TranscriptionUI(object):
                     rgbValue = (color.Red() << 16) | (color.Green() << 8) | color.Blue()
                     if (fontData.fontColorDef != None) and (fontData.fontColorDef != wx.ColourRGB(rgbValue)):
                         del(fontData.fontColorDef)
+            # Set the cursor back to normal
+            self.dlg.editor.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
         # Create the TransanaFontDialog.
         # Note:  We used to use the wx.FontDialog, but this proved inadequate for a number of reasons.
         #        It offered very few font choices on the Mac, and it couldn't handle font ambiguity.
-        dlg = TransanaFontDialog.TransanaFontDialog(self.dlg, fontData)  # wx.FontDialog(self.dlg, fontData)
+        fontDialog = TransanaFontDialog.TransanaFontDialog(self.dlg, fontData)
         # Display the FontDialog and get the user feedback
-        if dlg.ShowModal() == wx.ID_OK:
+        if fontDialog.ShowModal() == wx.ID_OK:
             # If we don't have a text selection, we can just update the current font settings.
             if self.dlg.editor.GetSelection()[0] == self.dlg.editor.GetSelection()[1]:
                 # OLD MODEL -- All characters formatted with all attributes -- no ambiguity allowed.
                 # This still applies if there is no selection!
                 # Get the wxFontData from the Font Dialog
-                newFontData = dlg.GetFontData()
+                newFontData = fontDialog.GetFontData()
                 # Extract the Font and Font Color from the FontData
                 newFont = newFontData.GetChosenFont()
                 newColor = newFontData.GetColour()
@@ -304,10 +366,12 @@ class TranscriptionUI(object):
                 self.dlg.editor.set_font(newFont.GetFaceName(), newFont.GetPointSize(), rgbValue, 0xffffff)
 
             else:
+                # Set the Wait cursor
+                self.dlg.editor.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
                 # NEW MODEL -- Only update those attributes not flagged as ambiguous.  This is necessary
                 # when processing a selection
                 # Get the TransanaFontDef data from the Font Dialog.
-                newFontData = dlg.GetFontDef()
+                newFontData = fontDialog.GetFontDef()
                 
                 # print
                 # print "newFontData =", newFontData
@@ -383,9 +447,11 @@ class TranscriptionUI(object):
                             rgbValue = (color.Blue() << 16) | (color.Green() << 8) | color.Red()
                         # Now apply the font settings for the current character
                         self.dlg.editor.set_font(fontFace, fontSize, rgbValue, 0xffffff)
+                # Set the cursor back to normal
+                self.dlg.editor.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
 
         # Destroy the Font Dialog Box, now that we're done with it.
-        dlg.Destroy()
+        fontDialog.Destroy()
         # Let's try restoring the Cursor Position when all is said and done.
         self.dlg.editor.RestoreCursor()
         # We've probably taken the focus from the editor.  Let's return it.
@@ -435,8 +501,21 @@ class _TranscriptDialog(wx.Dialog):
         # add the widgets to the panel
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        self.toolbar = TranscriptToolbar(self)
-        sizer.Add(self.toolbar, 0, wx.ALIGN_TOP, 10)
+        if ALLOW_UNICODE_ENTRY:
+            hsizer = wx.BoxSizer(wx.HORIZONTAL)
+            self.toolbar = TranscriptToolbar(self)
+            hsizer.Add(self.toolbar, 0, wx.ALIGN_TOP, 10)
+            self.UnicodeEntry = wx.TextCtrl(self, -1, size=(40, 16), style=wx.TE_PROCESS_ENTER)
+            self.UnicodeEntry.SetMaxLength(4)
+            hsizer.Add((10,1), 0, wx.ALIGN_CENTER | wx.GROW)
+            hsizer.Add(self.UnicodeEntry, 0, wx.ALIGN_RIGHT | wx.TOP | wx.RIGHT, 8)
+            self.UnicodeEntry.Bind(wx.EVT_TEXT, self.OnUnicodeText)
+            self.UnicodeEntry.Bind(wx.EVT_TEXT_ENTER, self.OnUnicodeEnter)
+            sizer.Add(hsizer, 0, wx.ALIGN_TOP, 10)
+        else:
+            self.toolbar = TranscriptToolbar(self)
+            sizer.Add(self.toolbar, 0, wx.ALIGN_TOP, 10)
+            
         self.toolbar.Realize()
         
         self.editor = TranscriptEditor(self, id, self.toolbar.OnStyleChange)
@@ -463,8 +542,36 @@ class _TranscriptDialog(wx.Dialog):
         (width, height) = self.GetSize()
         self.ControlObject.UpdateWindowPositions('Transcript', width + left, YUpper = top - 4)
         self.Layout()
-        startline = self.editor.VisibleFromDocLine(self.editor.LineFromPosition(self.editor.GetCurrentPos()))
-        self.editor.ScrollToLine(startline)
+        # We may need to scroll to keep the current selection in the visible part of the window.
+        # Find the start of the selection.
+        start = self.editor.GetSelectionStart()
+        # Determine the visible line from the starting position's document line, and scroll so that the highlight
+        # is 2 lines down, if possible.  (In wxSTC, the position in a document has a Document line, which does not
+        # take line wrapping into account, and a visible line, which does.)
+        self.editor.ScrollToLine(max(self.editor.VisibleFromDocLine(self.editor.LineFromPosition(start) - 2), 0))
+
+    def OnUnicodeText(self, event):
+        s = event.GetString()
+        if len(s) > 0:
+            if not s[len(s)-1].upper() in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F']:
+                self.UnicodeEntry.SetValue(s[:-1])
+                self.UnicodeEntry.SetInsertionPoint(len(s)-1)
+
+    def OnUnicodeEnter(self, event):
+        try:
+            c = unichr(int(self.UnicodeEntry.GetValue(), 16))
+            c = c.encode('utf8')  # (TransanaGlobal.encoding)
+            curpos = self.editor.GetCurrentPos()
+            len = self.editor.GetTextLength()
+            self.editor.InsertText(curpos, c)
+            len = self.editor.GetTextLength() - len
+            self.editor.StartStyling(curpos, 0x7f)
+            self.editor.SetStyling(len, self.editor.style)
+            self.editor.GotoPos(curpos + len)
+            self.UnicodeEntry.SetValue('')
+            self.editor.SetFocus()
+        except:
+            pass
 
     def __size(self):
         """Determine the default size for the Transcript frame."""
@@ -497,17 +604,17 @@ class TranscriptionTestApp(wx.App):
         self.transcriptWindow = TranscriptionUI(None)
         self.SetTopWindow(self.transcriptWindow.dlg)
         self.transcriptWindow.dlg.editor.load_transcript("SampleTranscript.rtf")
+        self.transcriptWindow.dlg.editor.set_read_only()
+        self.transcriptWindow.dlg.toolbar.Enable(True)
         self.transcriptWindow.Show()
-        #self.transcriptWindow.dlg.editor.set_read_only()
-        #self.transcriptWindow.dlg.editor.Disable()
-        #self.transcriptWindow.dlg.editor.Enable(0)
+        self.transcriptWindow.dlg.editor.SaveRTFDocument('test.rtf')
         return True
         
 def main():
     """Stand-alone test for Transcription UI.  Does not require database
     connection or other Transana components."""
     
-    app = TranscriptionTestApp()
+    app = TranscriptionTestApp(0)
     app.MainLoop()
     
 if __name__ == '__main__':

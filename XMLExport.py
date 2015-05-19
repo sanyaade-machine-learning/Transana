@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,13 +16,19 @@
 
 """This module implements the Data Export for Transana based on the Transana XML schema."""
 
-__author__ = 'David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Jonathan Beavers <jonathan.beavers@gmail.com>'
+
+DEBUG = False
+if DEBUG:
+    print "XMLExport DEBUG is ON!!"
 
 import wx
 
 import Dialogs
 import DBInterface
 import TransanaGlobal
+from RichTextEditCtrl import RichTextEditCtrl
+import pickle
 import os
 import sys
 
@@ -32,6 +38,13 @@ class XMLExport(Dialogs.GenForm):
         Dialogs.GenForm.__init__(self, parent, id, title, (550,150), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER, HelpContext='Export Database')
         # Define the minimum size for this dialog as the initial size
         self.SetSizeHints(550, 150)
+
+	# Create an invisible instance of RichTextEditCtrl. This allows us to
+	# get away with converting fastsaved documents to RTF behind the scenes.
+	# Then we can simply pull the RTF data out of this object and write it
+	# to the desired file.
+	self.invisibleSTC = RichTextEditCtrl(self)
+	self.invisibleSTC.Show(False)
 
         # Emport Message Layout
         lay = wx.LayoutConstraints()
@@ -70,16 +83,13 @@ class XMLExport(Dialogs.GenForm):
         self.XMLFile.SetFocus()
 
     def Export(self):
+        # Set the encoding for export.
+        # Use UTF-8 regardless of the current encoding for consistency in the Transana XML files
+        EXPORT_ENCODING = 'utf8'
         # use the LONGEST title here!  That determines the size of the Dialog Box.
-        progress = wx.ProgressDialog(_('Transana XML Export'), _('Exporting Transcript records (This may be slow because of the size of Transcript records.)'), style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
+        progress = wx.ProgressDialog(_('Transana XML Export'), _('Exporting Transcript records (This may be slow because of the size of Transcript records.)') + '\nConverting', style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
 
         db = DBInterface.get_db()
-        if db != None:
-            # Begin Database Transaction 
-            dbCursor = db.cursor()
-            SQLText = 'BEGIN'
-            dbCursor.execute(SQLText)
-            dbCursor.close()
        
         try:
             fs = self.XMLFile.GetValue()
@@ -97,7 +107,7 @@ class XMLExport(Dialogs.GenForm):
                     fs = os.getenv("HOME") + os.sep + fs
             f = file(fs, 'w')
             progress.Update(0, _('Writing Headers'))
-            f.write('<?xml version="1.0"?>\n');
+            f.write('<?xml version="1.0" encoding="UTF-8"?>\n');
             f.write('<!DOCTYPE TransanaData [\n');
             f.write('  <!ELEMENT TransanaXMLVersion (#PCDATA)>\n');
             f.write('  <!ELEMENT SeriesFile (Series)*>\n');
@@ -189,7 +199,9 @@ class XMLExport(Dialogs.GenForm):
             f.write('\n');
             f.write('<Transana>\n');
             f.write('  <TransanaXMLVersion>\n');
-            f.write('    1.0\n');
+            # Version 1.0 -- Original Transana XML for Transana 2.0 release
+            # Version 1.1 -- Unicode encoding added to Transana XML for Transana 2.1 release
+            f.write('    1.1\n');
             f.write('  </TransanaXMLVersion>\n');
 
             progress.Update(10, _('Writing Series Records'))
@@ -205,19 +217,19 @@ class XMLExport(Dialogs.GenForm):
                     f.write('        %s\n' % SeriesNum)
                     f.write('      </Num>\n')
                     f.write('      <ID>\n')
-                    f.write('        %s\n' % SeriesID)
+                    f.write('        %s\n' % SeriesID.encode(EXPORT_ENCODING))
                     f.write('      </ID>\n')
                     if SeriesComment != '':
                         f.write('      <Comment>\n')
-                        f.write('        %s\n' % SeriesComment)
+                        f.write('        %s\n' % SeriesComment.encode(EXPORT_ENCODING))
                         f.write('      </Comment>\n')
                     if SeriesOwner != '':
                         f.write('      <Owner>\n')
-                        f.write('        %s\n' % SeriesOwner)
+                        f.write('        %s\n' % SeriesOwner.encode(EXPORT_ENCODING))
                         f.write('      </Owner>\n')
                     if DefaultKeywordGroup != '':
                         f.write('      <DefaultKeywordGroup>\n')
-                        f.write('        %s\n' % DefaultKeywordGroup)
+                        f.write('        %s\n' % DefaultKeywordGroup.encode(EXPORT_ENCODING))
                         f.write('      </DefaultKeywordGroup>\n')
                     f.write('    </Series>\n')
                 if dbCursor.rowcount > 0:
@@ -237,7 +249,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('        %s\n' % EpisodeNum)
                     f.write('      </Num>\n')
                     f.write('      <ID>\n')
-                    f.write('        %s\n' % EpisodeID)
+                    f.write('        %s\n' % EpisodeID.encode(EXPORT_ENCODING))
                     f.write('      </ID>\n')
                     f.write('      <SeriesNum>\n')
                     f.write('        %s\n' % SeriesNum)
@@ -247,7 +259,7 @@ class XMLExport(Dialogs.GenForm):
                         f.write('        %s\n' % TapingDate)
                         f.write('      </Date>\n')
                     f.write('      <MediaFile>\n')
-                    f.write('        %s\n' % MediaFile)
+                    f.write('        %s\n' % MediaFile.encode(EXPORT_ENCODING))
                     f.write('      </MediaFile>\n')
                     if EpLength != '':
                         f.write('      <Length>\n')
@@ -255,7 +267,7 @@ class XMLExport(Dialogs.GenForm):
                         f.write('      </Length>\n')
                     if EpComment != '':
                         f.write('      <Comment>\n')
-                        f.write('        %s\n' % EpComment)
+                        f.write('        %s\n' % EpComment.encode(EXPORT_ENCODING))
                         f.write('      </Comment>\n')
                     f.write('    </Episode>\n')
                 if dbCursor.rowcount > 0:
@@ -278,31 +290,31 @@ class XMLExport(Dialogs.GenForm):
                     f.write('        %s\n' % CoreDataNum)
                     f.write('      </Num>\n')
                     f.write('      <ID>\n')
-                    f.write('        %s\n' % Identifier)
+                    f.write('        %s\n' % Identifier.encode(EXPORT_ENCODING))
                     f.write('      </ID>\n')
                     if Title != '':
                         f.write('      <Title>\n')
-                        f.write('        %s\n' % Title)
+                        f.write('        %s\n' % Title.encode(EXPORT_ENCODING))
                         f.write('      </Title>\n')
                     if Creator != '':
                         f.write('      <Creator>\n')
-                        f.write('        %s\n' % Creator)
+                        f.write('        %s\n' % Creator.encode(EXPORT_ENCODING))
                         f.write('      </Creator>\n')
                     if Subject != '':
                         f.write('      <Subject>\n')
-                        f.write('        %s\n' % Subject)
+                        f.write('        %s\n' % Subject.encode(EXPORT_ENCODING))
                         f.write('      </Subject>\n')
                     if Description != '':
                         f.write('      <Description>\n')
-                        f.write('        %s\n' % Description)
+                        f.write('        %s\n' % Description.encode(EXPORT_ENCODING))
                         f.write('      </Description>\n')
                     if Publisher != '':
                         f.write('      <Publisher>\n')
-                        f.write('        %s\n' % Publisher)
+                        f.write('        %s\n' % Publisher.encode(EXPORT_ENCODING))
                         f.write('      </Publisher>\n')
                     if Contributor != '':
                         f.write('      <Contributor>\n')
-                        f.write('        %s\n' % Contributor)
+                        f.write('        %s\n' % Contributor.encode(EXPORT_ENCODING))
                         f.write('      </Contributor>\n')
                     if DCDate != None:
                         f.write('      <Date>\n')
@@ -310,31 +322,31 @@ class XMLExport(Dialogs.GenForm):
                         f.write('      </Date>\n')
                     if DCType != '':
                         f.write('      <Type>\n')
-                        f.write('        %s\n' % DCType)
+                        f.write('        %s\n' % DCType.encode(EXPORT_ENCODING))
                         f.write('      </Type>\n')
                     if Format != '':
                         f.write('      <Format>\n')
-                        f.write('        %s\n' % Format)
+                        f.write('        %s\n' % Format.encode(EXPORT_ENCODING))
                         f.write('      </Format>\n')
                     if Source != '':
                         f.write('      <Source>\n')
-                        f.write('        %s\n' % Source)
+                        f.write('        %s\n' % Source.encode(EXPORT_ENCODING))
                         f.write('      </Source>\n')
                     if Language != '':
                         f.write('      <Language>\n')
-                        f.write('        %s\n' % Language)
+                        f.write('        %s\n' % Language.encode(EXPORT_ENCODING))
                         f.write('      </Language>\n')
                     if Relation != '':
                         f.write('      <Relation>\n')
-                        f.write('        %s\n' % Relation)
+                        f.write('        %s\n' % Relation.encode(EXPORT_ENCODING))
                         f.write('      </Relation>\n')
                     if Coverage != '':
                         f.write('      <Coverage>\n')
-                        f.write('        %s\n' % Coverage)
+                        f.write('        %s\n' % Coverage.encode(EXPORT_ENCODING))
                         f.write('      </Coverage>\n')
                     if Rights != '':
                         f.write('      <Rights>\n')
-                        f.write('        %s\n' % Rights)
+                        f.write('        %s\n' % Rights.encode(EXPORT_ENCODING))
                         f.write('      </Rights>\n')
                     f.write('    </CoreData>\n')
                 if dbCursor.rowcount > 0:
@@ -354,7 +366,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('        %s\n' % CollectNum)
                     f.write('      </Num>\n')
                     f.write('      <ID>\n')
-                    f.write('        %s\n' % CollectID)
+                    f.write('        %s\n' % CollectID.encode(EXPORT_ENCODING))
                     f.write('      </ID>\n')
                     if ParentCollectNum != '':
                         f.write('      <ParentCollectNum>\n')
@@ -362,15 +374,15 @@ class XMLExport(Dialogs.GenForm):
                         f.write('      </ParentCollectNum>\n')
                     if CollectComment != '':
                         f.write('      <Comment>\n')
-                        f.write('        %s\n' % CollectComment)
+                        f.write('        %s\n' % CollectComment.encode(EXPORT_ENCODING))
                         f.write('      </Comment>\n')
                     if CollectOwner != '':
                         f.write('      <Owner>\n')
-                        f.write('        %s\n' % CollectOwner)
+                        f.write('        %s\n' % CollectOwner.encode(EXPORT_ENCODING))
                         f.write('      </Owner>\n')
                     if DefaultKeywordGroup != '':
                         f.write('      <DefaultKeywordGroup>\n')
-                        f.write('        %s\n' % DefaultKeywordGroup)
+                        f.write('        %s\n' % DefaultKeywordGroup.encode(EXPORT_ENCODING))
                         f.write('      </DefaultKeywordGroup>\n')
                     f.write('    </Collection>\n')
                 if dbCursor.rowcount > 0:
@@ -390,7 +402,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('        %s\n' % ClipNum)
                     f.write('      </Num>\n')
                     f.write('      <ID>\n')
-                    f.write('        %s\n' % ClipID)
+                    f.write('        %s\n' % ClipID.encode(EXPORT_ENCODING))
                     f.write('      </ID>\n')
                     if CollectNum != None:
                         f.write('      <CollectNum>\n')
@@ -405,7 +417,7 @@ class XMLExport(Dialogs.GenForm):
                         f.write('        %s\n' % TranscriptNum)
                         f.write('      </TranscriptNum>\n')
                     f.write('      <MediaFile>\n')
-                    f.write('        %s\n' % MediaFile)
+                    f.write('        %s\n' % MediaFile.encode(EXPORT_ENCODING))
                     f.write('      </MediaFile>\n')
                     f.write('      <ClipStart>\n')
                     f.write('        %s\n' % ClipStart)
@@ -415,7 +427,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('      </ClipStop>\n')
                     if ClipComment != '':
                         f.write('      <Comment>\n')
-                        f.write('        %s\n' % ClipComment)
+                        f.write('        %s\n' % ClipComment.encode(EXPORT_ENCODING))
                         f.write('      </Comment>\n')
                     if SortOrder != '':
                         f.write('      <SortOrder>\n')
@@ -438,9 +450,10 @@ class XMLExport(Dialogs.GenForm):
                     f.write('      <Num>\n')
                     f.write('        %s\n' % TranscriptNum)
                     f.write('      </Num>\n')
-                    f.write('      <ID>\n')
-                    f.write('        %s\n' % TranscriptID)
-                    f.write('      </ID>\n')
+                    if TranscriptID != '':
+                        f.write('      <ID>\n')
+                        f.write('        %s\n' % TranscriptID.encode(EXPORT_ENCODING))
+                        f.write('      </ID>\n')
                     if EpisodeNum != '':
                         f.write('      <EpisodeNum>\n')
                         f.write('        %s\n' % EpisodeNum)
@@ -451,19 +464,65 @@ class XMLExport(Dialogs.GenForm):
                         f.write('      </ClipNum>\n')
                     if Transcriber != '':
                         f.write('      <Transcriber>\n')
-                        f.write('        %s\n' % Transcriber)
+                        f.write('        %s\n' % Transcriber.encode(EXPORT_ENCODING))
                         f.write('      </Transcriber>\n')
                     if Comment != '':
                         f.write('      <Comment>\n')
-                        f.write('        %s\n' % Comment)
+                        f.write('        %s\n' % Comment.encode(EXPORT_ENCODING))
                         f.write('      </Comment>\n')
                     if RTFText != '':
+                        # Extract the RTF Text from the DB's array structure, if needed
+                        # Okay, this isn't so straight-forward any more.
+                        # With MySQL for Python 0.9.x, RTFText is of type str.
+                        # With MySQL for Python 1.2.0, RTFText is of type array.  It could then either be a
+                        # character string (typecode == 'c') or a unicode string (typecode == 'u'), which then
+                        # need to be interpreted differently.
+                        if type(RTFText).__name__ == 'array':
+                            if RTFText.typecode == 'u':
+                                RTFText = RTFText.tounicode()
+                            else:
+                                RTFText = RTFText.tostring()
                         f.write('      <RTFText>\n')
+                        # Determine if we have RTF Text or a pickled wxSTC Object
+                        if (len(RTFText) > 6) and (RTFText[:6].upper() != '{\\RTF1'):
 
-#                        f.write('        %s\n' % RTFText)
-                        for line in RTFText:
-                            f.write('%s' % line)
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_('\nConverting %s'), 'utf8')
+                            else:
+                                prompt = _('\nConverting %s')
+                            progress.Update(60, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)') + prompt % TranscriptID)
 
+                            # unpickle the text and style info
+                            (bufferContents, specs, attrs) = pickle.loads(RTFText)
+                            # Clear the invisible STC
+                            self.invisibleSTC.ClearDoc()
+
+                            # DKW  Although these all are called in ClearDoc(), it appears necessary to repeat them
+                            #      here.  That's because ClearDoc() actually populates a few styles, and they interfere
+                            #      with the ones being brought in from the pickled RTFText.  Otherwise, Transcripts are 
+                            #      subtly changed on XML Export.  In particular, the Jeffersonian Symbols don't survive.
+                            self.invisibleSTC.StyleClearAll()
+                            self.invisibleSTC.style_specs = []
+                            self.invisibleSTC.style_attrs = []
+                            self.invisibleSTC.num_styles = 0
+
+                            # you have to apply the styles of the document in order
+                            # for the document to load properly.
+                            for x in specs:
+                                self.invisibleSTC.GetStyleAccessor(x)
+
+                            # feed the data info invisibleSTC.
+                            self.invisibleSTC.AddStyledText(bufferContents)
+                            # extract the data as RTF.
+                            rtfData = self.invisibleSTC.GetRTFBuffer()
+
+                            progress.Update(60, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
+                            
+                        else:
+                            rtfData = RTFText
+			# now simply write the RTF data to the file.  (This does NOT need to be encoded, as the RTF already is!)
+			f.write('%s' % rtfData)
                         f.write('      </RTFText>\n')
                     f.write('    </Transcript>\n')
                 if dbCursor.rowcount > 0:
@@ -480,14 +539,14 @@ class XMLExport(Dialogs.GenForm):
                 for (KeywordGroup, Keyword, Definition) in dbCursor.fetchall():
                     f.write('    <KeywordRec>\n')
                     f.write('      <KeywordGroup>\n')
-                    f.write('        %s\n' % KeywordGroup)
+                    f.write('        %s\n' % KeywordGroup.encode(EXPORT_ENCODING))
                     f.write('      </KeywordGroup>\n')
                     f.write('      <Keyword>\n')
-                    f.write('        %s\n' % Keyword)
+                    f.write('        %s\n' % Keyword.encode(EXPORT_ENCODING))
                     f.write('      </Keyword>\n')
                     if Definition != '':
                         f.write('      <Definition>\n')
-                        f.write('        %s\n' % Definition)
+                        f.write('        %s\n' % Definition.encode(EXPORT_ENCODING))
                         f.write('      </Definition>\n')
                     f.write('    </KeywordRec>\n')
                 if dbCursor.rowcount > 0:
@@ -512,10 +571,10 @@ class XMLExport(Dialogs.GenForm):
                         f.write('        %s\n' % ClipNum)
                         f.write('      </ClipNum>\n')
                     f.write('      <KeywordGroup>\n')
-                    f.write('        %s\n' % KeywordGroup)
+                    f.write('        %s\n' % KeywordGroup.encode(EXPORT_ENCODING))
                     f.write('      </KeywordGroup>\n')
                     f.write('      <Keyword>\n')
-                    f.write('        %s\n' % Keyword)
+                    f.write('        %s\n' % Keyword.encode(EXPORT_ENCODING))
                     f.write('      </Keyword>\n')
                     if Example != '':
                         f.write('      <Example>\n')
@@ -539,7 +598,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('        %s\n' % NoteNum)
                     f.write('      </Num>\n')
                     f.write('      <ID>\n')
-                    f.write('        %s\n' % NoteID)
+                    f.write('        %s\n' % NoteID.encode(EXPORT_ENCODING))
                     f.write('      </ID>\n')
                     if SeriesNum != 0:
                         f.write('      <SeriesNum>\n')
@@ -563,13 +622,24 @@ class XMLExport(Dialogs.GenForm):
                         f.write('      </TranscriptNum>\n')
                     if NoteTaker != '':
                         f.write('      <NoteTaker>\n')
-                        f.write('        %s\n' % NoteTaker)
+                        f.write('        %s\n' % NoteTaker.encode(EXPORT_ENCODING))
                         f.write('      </NoteTaker>\n')
                     if NoteText != '':
+                        # Okay, this isn't so straight-forward any more.
+                        # With MySQL for Python 0.9.x, NoteText is of type str.
+                        # With MySQL for Python 1.2.0, NoteText is of type array.  It could then either be a
+                        # character string (typecode == 'c') or a unicode string (typecode == 'u'), which then
+                        # need to be interpreted differently.
+                        # This is because NoteText is a BLOB field in the database.
+                        if type(NoteText).__name__ == 'array':
+                            if (NoteText.typecode == 'u'):
+                                NoteText = NoteText.tounicode()
+                            else:
+                                NoteText = NoteText.tostring()
+                                if ('unicode' in wx.PlatformInfo):
+                                    NoteText = unicode(NoteText, EXPORT_ENCODING)
                         f.write('      <NoteText>\n')
-                        f.write('        %s\n' % NoteText)
-                        # for line in NoteText:
-                        #     f.write('%s\n' % line)
+                        f.write('        %s\n' % NoteText.encode(EXPORT_ENCODING))
                         f.write('      </NoteText>\n')
                     f.write('    </Note>\n')
                 if dbCursor.rowcount > 0:
@@ -580,18 +650,21 @@ class XMLExport(Dialogs.GenForm):
 
             f.flush()
 
-            dbCursor = db.cursor()
-            SQLText = 'COMMIT'
-            dbCursor.execute(SQLText)
             dbCursor.close()
             
         except:
-            errordlg = Dialogs.ErrorDialog(self, _('An error occurred during Database Export.\n%s\n%s') % (sys.exc_info()[0], sys.exc_info()[1]))
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('An error occurred during Database Export.\n%s\n%s'), 'utf8')
+            else:
+                prompt = _('An error occurred during Database Export.\n%s\n%s')
+            errordlg = Dialogs.ErrorDialog(self, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
             errordlg.ShowModal()
             errordlg.Destroy()
-            dbCursor = db.cursor()
-            SQLText = 'ROLLBACK'
-            dbCursor.execute(SQLText)
+
+            if DEBUG:
+                import traceback
+                traceback.print_exc(file=sys.stdout)
             dbCursor.close()
 
         f.close()

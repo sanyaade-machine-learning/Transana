@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -178,7 +178,7 @@ class AddNoteDialog(NotePropertiesForm):
 
     def __init__(self, parent, id, seriesNum=0, episodeNum=0, transcriptNum=0, collectionNum=0, clipNum=0):
         obj = Note.Note()
-        obj.owner = DBInterface.get_username()
+        obj.author = DBInterface.get_username()
         obj.series_num = seriesNum
         obj.episode_num = episodeNum
         obj.transcript_num = transcriptNum

@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -18,13 +18,20 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
+DEBUG = False
+if DEBUG:
+    print "BatchWaveformGenerator DEBUG is ON!!"
+
 import wx
 
 import ctypes
 import Dialogs
+# Import Transana's Miscellaneous routines
+import Misc
 import TransanaConstants
 import TransanaGlobal
 import WaveformProgress
+import locale                 # import locale so we can get the default system encoding for Unicode Waveforming
 import os
 import sys
 
@@ -81,8 +88,13 @@ class BatchWaveformGenerator(Dialogs.GenForm):
         """ Get the Input values from the Batch Waveform Generator form and process the selected files """
         val = self.ShowModal()
 
-        if val == wx.ID_OK:
-            BWGProgress = wx.ProgressDialog(_('Batch Waveform Generator'), _('Extracting %s') % self.fileList.GetString(0), style=wx.PD_AUTO_HIDE)
+        if (val == wx.ID_OK) and (not self.fileList.IsEmpty()):
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Extracting %s'), 'utf8') % self.fileList.GetString(0)
+            else:
+                prompt = _('Extracting %s') % self.fileList.GetString(0)
+            BWGProgress = wx.ProgressDialog(_('Batch Waveform Generator'), prompt, style=wx.PD_AUTO_HIDE)
             BWGProgress.CenterOnScreen()
             (xPos, yPos) = BWGProgress.GetPositionTuple()
             BWGProgress.SetPosition(wx.Point(xPos, yPos - 150))
@@ -90,11 +102,19 @@ class BatchWaveformGenerator(Dialogs.GenForm):
 
             for loop in range(0, self.fileList.GetCount()):
                 if loop > 0:
-                    BWGProgress.Update(int((float(loop) / float(self.fileList.GetCount())) * 100), _('Extracting %s') % self.fileList.GetString(loop))
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('Extracting %s'), 'utf8') % self.fileList.GetString(loop)
+                    else:
+                        prompt = _('Extracting %s') % self.fileList.GetString(loop)
+                    BWGProgress.Update(int((float(loop) / float(self.fileList.GetCount())) * 100), prompt)
                 
-                # Remember the original File Name that is passed in
-                originalFilename = self.fileList.GetString(loop)
                 filename = self.fileList.GetString(loop)
+                # Deal with Mac Filename Encoding
+                if 'wxMac' in wx.PlatformInfo:
+                    filename = Misc.convertMacFilename(filename)
+                # Remember the original File Name that is passed in
+                originalFilename = filename
                 # Separate path and filename
                 (path, filename) = os.path.split(filename)
                 # break filename into root filename and extension
@@ -115,9 +135,13 @@ class BatchWaveformGenerator(Dialogs.GenForm):
                     if not os.path.exists(TransanaGlobal.configData.visualizationPath):
                         os.makedirs(TransanaGlobal.configData.visualizationPath)
                     # Build the progress box's label
-                    label = _("Extracting %s\nfrom %s") % (self.waveFilename, originalFilename)
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_("Extracting %s\nfrom %s"), 'utf8') % (self.waveFilename, originalFilename)
+                    else:
+                        prompt = _("Extracting %s\nfrom %s") % (self.waveFilename, originalFilename)
                     # If the user accepts, create and display the Progress Dialog
-                    progressDialog = WaveformProgress.WaveformProgress(self, self.waveFilename, label)
+                    progressDialog = WaveformProgress.WaveformProgress(self, self.waveFilename, prompt)
                     progressDialog.Show()
 
                     # Set the Extraction Parameters to produce small WAV files
@@ -133,26 +157,122 @@ class BatchWaveformGenerator(Dialogs.GenForm):
                     callback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_int)
                     # Define a pointer to the callback function
                     callbackFunction = callback(Progress)
+                    
+                    # Wave Extraction doesn't work for Unicode Filenames without a little encoding help.
+                    # It appears that UTF-8 isn't a good way to interact with the DLLs, so we need to change
+                    # the encoding of the filenames to avoid an exception from the DLL.  At least on Windows,
+                    # changing to the default system encoding seems to work.
+                    if 'unicode' in wx.PlatformInfo:
+                        # Get the default system encoding, and encode the file names into that encoding.
+                        defEnc = locale.getdefaultlocale()[1]
+                        originalFilename = originalFilename.encode(defEnc)
+                        self.waveFilename = self.waveFilename.encode(defEnc)
+
                     # Call the wcerAudio DLL/Shared Library's ExtractAudio function
-                    if (os.name == "nt"):
+                    if (os.name == "nt") and (extension in ['.mpg', '.mpeg', '.wav', '.mp3']):  # '.avi', 
                         dllvalue = ctypes.cdll.wceraudio.ExtractAudio(originalFilename, self.waveFilename, bits, decimation, mono, callbackFunction)
+                    elif (os.name == "nt"):
+                        import pyMedia_audio_extract
+
+                        self.waveFilename = os.path.join(TransanaGlobal.configData.visualizationPath, filenameroot + '.wav')
+                        tempFile = pyMedia_audio_extract.ExtractWaveFile(originalFilename, self.waveFilename, progressDialog)
+                        if tempFile:
+                            pyMedia_audio_extract.DecimateWaveFile(tempFile, self.waveFilename, decimation, progressDialog)
+                            dllvalue = 0
+                        else:
+                            dllvalue = 1
+                        os.remove(tempFile)
+                    # Waveform Extraction on Mac
                     else:
                         wceraudio = ctypes.cdll.LoadLibrary("wceraudio.dylib")
-                        dllvalue = wceraudio.ExtractAudio(originalFilename, self.waveFilename, bits, decimation, mono, callbackFunction)
+                        # Let's see if we have a legal filename for waveforming on the Mac
+                        # Create a string of legal characters for the file names
+                        allowedChars = TransanaConstants.legalFilenameCharacters
+                        msg = ''
+                        # check each character in the file name string
+                        for char in originalFilename.decode(defEnc):
+                            # If the character is illegal ...
+                            if allowedChars.find(char) == -1:
+                                if TransanaConstants.singleUserVersion:
+                                    msg = _(u'There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.') % (originalFilename.decode(defEnc), char)
+                                else:
+                                    msg = _(u'There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please arrange to use waveform \nfiles created on Windows or rename your folders and files so that they \ndo not include characters that are not part of English.') % (originalFilename.decode(defEnc), char)                                    
+                                dllvalue = 0
+                                contin = False
+                                break
+                        if msg == '':
+                            dllvalue = wceraudio.ExtractAudio(originalFilename, self.waveFilename, bits, decimation, mono, callbackFunction)
+                        else:
+                            dlg = Dialogs.ErrorDialog(self, msg)
+                            dlg.ShowModal()
+                            dlg.Destroy()
+                            
 
                     if dllvalue != 0:
                         try:
                             os.remove(self.waveFilename)
                         except:
-                            dlg = Dialogs.ErrorDialog(self, _('Unable to create waveform for file "%s"\nError Code: %s') % (originalFilename, dllvalue))
+                            if DEBUG:
+                                import traceback
+                                traceback.print_exc(file=sys.stdout)
+
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_('Unable to create waveform for file "%s"\nError Code: %s'), 'utf8') % (originalFilename, dllvalue)
+                            else:
+                                prompt = _('Unable to create waveform for file "%s"\nError Code: %s') % (originalFilename, dllvalue)
+                            dlg = Dialogs.ErrorDialog(self, prompt)
                             dlg.ShowModal()
                             dlg.Destroy()
 
                     # Close the Progress Dialog when the DLL call is complete
                     progressDialog.Close()
                     
+                except UnicodeEncodeError:
+                    # If this exception is raised, the media filename contains a character that the default system
+                    # encoding can't cope with.  On Windows, let's see what pyMedia does with it.
+                    if 'wxMSW' in wx.PlatformInfo:
+                        import pyMedia_audio_extract
+
+                        self.waveFilename = os.path.join(TransanaGlobal.configData.visualizationPath, filenameroot + '.wav')
+                        tempFile = pyMedia_audio_extract.ExtractWaveFile(originalFilename, self.waveFilename, progressDialog)
+                        if tempFile:
+                            pyMedia_audio_extract.DecimateWaveFile(tempFile, self.waveFilename, decimation, progressDialog)
+                            dllvalue = 0
+                        else:
+                            dllvalue = 1
+                        os.remove(tempFile)
+                        
+                    else:
+                        if DEBUG:
+                            import traceback
+                            traceback.print_exc(file=sys.stdout)
+
+                        dllvalue = 1  # Signal that the WAV file was NOT created!
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_('Unable to create waveform for file "%s"\nError Code: %s'), 'utf8') % (originalFilename, 'UnicodeEncodeError')
+                        else:
+                            prompt = _('Unable to create waveform for file "%s"\nError Code: %s') % (originalFilename, 'UnicodeEncodeError')
+                        errordlg = Dialogs.ErrorDialog(self, prompt)
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+
+                    
+                    # Close the Progress Dialog when the DLL call is complete
+                    progressDialog.Close()
+
                 except:
-                    dlg = Dialogs.ErrorDialog(self, _('Unable to create Waveform Directory.\n%s\n%s') % (sys.exc_info()[0], sys.exc_info()[1]))
+                    if DEBUG:
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('Unable to create WaveformDirectory.\n%s\n%s'), 'utf8') % (sys.exc_info()[0], sys.exc_info()[1])
+                    else:
+                        prompt = _('Unable to create WaveformDirectory.\n%s\n%s') % (sys.exc_info()[0], sys.exc_info()[1])
+                    dlg = Dialogs.ErrorDialog(self, prompt)
                     dlg.ShowModal()
                     dlg.Destroy()
                     dllvalue = 1  # Signal that the WAV file was NOT created!                        
@@ -177,5 +297,12 @@ class BatchWaveformGenerator(Dialogs.GenForm):
         if fs != "":
             if self.fileList.FindString(fs) == wx.NOT_FOUND:
                 self.fileList.Append(fs)
+            # On the Mac with Unicode filenames, we're having file names improperly rejected.  This code tries
+            # to correct that.
+            else:
+                # Do the comparison manually
+                if self.fileList.GetString(self.fileList.FindString(fs)) != fs:
+                    # if they're not REALLY the same, add the item.
+                    self.fileList.Append(fs)
             # Remember the path of the last file selected for use next time
             (self.lastPath, filename) = os.path.split(fs)

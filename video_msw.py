@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -21,6 +21,9 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Rajas Sambhare'
 import wx
 import string
 import traceback
+
+if __name__ == '__main__':
+    __builtins__._ = wx.GetTranslation
 
 import Dialogs
 from TransanaConstants import *
@@ -122,7 +125,7 @@ class VideoFrame(wx.Dialog):
         # to reset the size of the control to the parameters passed in from 
         # VideoWindow. If you find a cleaner way of doing this, feel free to get
         # rid of these lines.
-        self.ax.filename = 'images\splash.gif'
+        self.ax.filename = 'images\\splash.gif'
         
         # Set member Rate to 1.0. Use this later right before play.
         self.Rate = 1.0
@@ -152,6 +155,11 @@ class VideoFrame(wx.Dialog):
                 self.ax.selectionend = self.ax.duration
                 self.ax.currentposition = 0.0
                 self.ax.Stop()
+            else:
+                self.ax.filename = 'images\\splash.gif'
+                self.ax.currentposition = 0.0
+                wx.CallAfter(self.ax.Stop)
+
         except TypeError:
             # Create a string of legal characters for the file names
             allowedChars = TransanaConstants.legalFilenameCharacters
@@ -159,8 +167,11 @@ class VideoFrame(wx.Dialog):
             for char in filename:
                 # If the character is illegal ...
                 if allowedChars.find(char) == -1:
-                    msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, which Transana does not allow at this time.\nPlease rename your folders and files so that they do not include characters that are not part of US English.\nWe apologize for this inconvenience.') % (filename, char)
-                    dlg = Dialogs.ErrorDialog(self, msg)
+                    msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.')
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        msg = unicode(msg, 'utf8')
+                    dlg = Dialogs.ErrorDialog(self, msg % (filename, char))
                     dlg.ShowModal()
                     dlg.Destroy()
                     break
@@ -196,10 +207,16 @@ class VideoFrame(wx.Dialog):
     def SetVideoEndPoint(self, TimeCode):
         """Set the end position in ms."""
         # As usual setting anything for a video is possible only 
-        # if the video exists, i.e. ax.FileName != ""        
+        # if the video exists, i.e. ax.FileName != ""
         if self.ax.filename != "":
-            self.ax.selectionend = TimeCode/1000.0
-
+            if TimeCode == -1:
+                if type(self.parentVideoWindow.ControlObject.currentObj).__name__ == 'Episode':
+                    self.ax.selectionend = self.ax.duration
+                elif type(self.parentVideoWindow.ControlObject.currentObj).__name__ == 'Clip':
+                    self.ax.selectionend = self.parentVideoWindow.ControlObject.currentObj.clip_stop/1000.0
+            else:
+                self.ax.selectionend = TimeCode/1000.0
+                
     def GetTimecode(self):
         """Return the current position in ms."""
         return int(self.ax.currentposition * 1000.0)
@@ -262,8 +279,6 @@ class VideoFrame(wx.Dialog):
         # Stop sending progress notification messages to VideoWindow
         self.ProgressNotification.Stop()
         self.ax.Stop()
-        #self.SetCurrentVideoPosition(self.ax.SelectionStart * 1000.0)
-
 
     def GetMediaLength(self):
         # Media Player gives time in Seconds in the Duration function
@@ -311,6 +326,17 @@ class VideoFrame(wx.Dialog):
 
     def PostPos(self):
         # Notify the parent window of the change in video position
+
+        # print "video_msw.PostPos()", self.GetTimecode() , self.parentVideoWindow.ControlObject.VideoEndPoint
+
+        # This was added by DKW for release 2.05.  While it is perhaps not necessary, my hope is that it
+        # will catch a bug that's been reported in Play All Clips, where the audio keeps playing instead of
+        # the video moving on to the next clip, that I haven't been able to reproduce.
+
+        # If the current position is greater than the desired Video End Point, stop playback.
+        # (NOTE that 0 and -1 are used in different places to indicate that no end point has been set.)
+        if (self.parentVideoWindow.ControlObject.VideoEndPoint > 0) and (self.GetTimecode() > self.parentVideoWindow.ControlObject.VideoEndPoint):
+            self.Stop()
         self.parentVideoWindow.UpdateVideoPosition(self.GetTimecode())
 
     def OnCloseWindow(self, event):
@@ -399,7 +425,7 @@ class VideoFrame(wx.Dialog):
         # use Movie Height
         minHeight = self.ax.imagesourceheight
         # Adjust Video Size, unless you are showing the Splash Screen
-        if self.ax.filename == 'images\splash.gif':
+        if self.ax.filename == 'images\\splash.gif':
             sizeAdjust = 100
         else:
             sizeAdjust = TransanaGlobal.configData.videoSize
@@ -517,7 +543,12 @@ if __name__ == '__main__':
             wildcard = fileTypesString #From TransanaConstants
             dlg = wx.FileDialog(self, "Choose a video", "v:/Demo", "demo.mpg", wildcard, wx.OPEN)
             if dlg.ShowModal() == wx.ID_OK:
-                self.SetStatusText('Opening %s.' % dlg.GetPath())
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode('Opening %s.', 'utf8')
+                else:
+                    prompt = 'Opening %s.'
+                self.SetStatusText(prompt % dlg.GetPath())
                 self.VideoWindow.SetFilename(dlg.GetPath())
                 self.VideoWindow.SetVideoStartPoint(0)
 
@@ -553,7 +584,7 @@ if __name__ == '__main__':
 
     class MyApp(wx.App):
         def OnInit(self):
-            self.frame = VideoFrame(parent = self, parentVideoWindow = None)
+            self.frame = VideoFrame(parent = None, parentVideoWindow = None)
             self.frame.Show(True)
             controller = ControlWindow(self.frame)
             self.SetTopWindow(controller)

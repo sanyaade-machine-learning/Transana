@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -19,6 +19,9 @@ component."""
 
 __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>, Nathaniel Case, Rajas Sambhare'
 
+DEBUG = False
+if DEBUG:
+    print "VisualizationWindow DEBUG is ON."
 
 import wx
 import TransanaGlobal
@@ -28,6 +31,7 @@ import WaveformGraphic
 import WaveformProgress       # Waveform Creation Progress Dialog, used in Wave Extraction Callback function
 import Dialogs
 import Misc
+import locale                 # import locale so we can get the default system encoding for Unicode Waveforming
 import os
 import sys
 import string
@@ -304,13 +308,14 @@ class VisualizationWindow(wx.Dialog):
         # Position timeline Panel
         self.timeline.SetDimensions(0, height-46-headerHeight, width-6, 24)
 
-        #print "OnSize()"
-        #print 'headerHeight = %d, graphic height - %d' % (headerHeight, height-44-headerHeight)
-        #print 'Window:', self.GetPosition(), self.GetSize(), self.GetClientSize()
-        #print 'GraphicControlClass:', (0, 1), (int(width-8), int(height-44-headerHeight)), (width-12, height-48-headerHeight)
-        #print 'timeline:', self.timeline.GetPosition(), self.timeline.GetSize()
-        #print 'toolbar:', self.toolbar.GetPosition(), self.toolbar.GetSize()
-        #print
+        if DEBUG:
+            print "VisualizationWindow.OnSize()"
+            print 'headerHeight = %d, graphic height - %d' % (headerHeight, height-44-headerHeight)
+            print 'Window:', self.GetPosition(), self.GetSize(), self.GetClientSize()
+            print 'GraphicControlClass:', (0, 1), (int(width-8), int(height-44-headerHeight)), (width-12, height-48-headerHeight)
+            print 'timeline:', self.timeline.GetPosition(), self.timeline.GetSize()
+            print 'toolbar:', self.toolbar.GetPosition(), self.toolbar.GetSize()
+            print
 
 
     def OnIdle(self, event):
@@ -320,18 +325,50 @@ class VisualizationWindow(wx.Dialog):
             # Create the appropriate Waveform Graphic
             if self.waveformFilename != '':
                 try:
-                    WaveformGraphic.WaveformGraphicCreate(self.waveFilename, self.waveformFilename, self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength(), self.waveform.canvassize, True)
-                    # Load the new graphic into the Waveform Control
-                    self.waveform.LoadFile(self.waveformFilename)
-                    # Determine NEW Frame Size
-                    (width, height) = self.GetSize()
-                    # Draw the TimeLine values
-                    self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
-                except:
-                    # NO Error Message, as it disrupt the program flow if the user chooses not to waveform
-                    # Dialogs.ErrorDialog(self, _('Waveform Graphic creation error for file:\n%s\n%s.') % (self.waveFilename, self.waveformFilename)).ShowModal()
+                    
+                    # The Mac can't handle Unicode WaveFilenames at this point.  We need to upgrade to Python 2.4 for that.
+                    # Let's temporarily take care of that.
+                    if ('wxMac' in wx.PlatformInfo) and isinstance(self.waveFilename, unicode):
+                        self.waveFilename = self.waveFilename.encode('utf8')
+                        
+                        if DEBUG:
+                            print "VisualizationWindow.OnIdle():  Mac waveFilename conversion"
+                        
+                    if WaveformGraphic.WaveformGraphicCreate(self.waveFilename, self.waveformFilename, self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength(), self.waveform.canvassize, True):
+                        # Load the new graphic into the Waveform Control
+                        self.waveform.LoadFile(self.waveformFilename)
+                        # Determine NEW Frame Size
+                        (width, height) = self.GetSize()
+                        # Draw the TimeLine values
+                        self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
+                    else:
+                        self.waveformFilename = ''
+                        self.redrawWhenIdle = False
+                # A bug in Python 2.3.5 causes a RuntimeError with some wave files if Unicode filenames are used.
+                # This should be fixed in Python 2.4.2, but we'll leave this code here to prevent ugly errors if it
+                # does occur.
+                except RuntimeError, e:
                     self.waveformFilename = ''
                     self.ClearVisualization()
+                    self.redrawWhenIdle = False
+                except:
+                    # NO Error Message, as it disrupt the program flow if the user chooses not to waveform
+                    if DEBUG and False:
+                        dlg = Dialogs.ErrorDialog(self, 'DEBUG (UNTRANSLATED) Waveform Graphic creation error for file:\n%s\n%s.' % (self.waveFilename, self.waveformFilename))
+                        dlg.ShowModal()
+                        dlg.Destroy()
+                    
+                    self.waveformFilename = ''
+                    self.ClearVisualization()
+                    self.redrawWhenIdle = False
+                    if DEBUG:
+                        wx.Yield()
+                        print sys.exc_info()[0], sys.exc_info()[1]
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+#                        dlg = Dialogs.InfoDialog(self, 'Waveform Graphic cleared.')
+#                        dlg.ShowModal()
+#                        dlg.Destroy()
                     
             # Remove old Waveform Selection and Cursor data
             self.waveform.ClearTransanaSelection()
@@ -463,7 +500,7 @@ class VisualizationWindow(wx.Dialog):
             self.ControlObject.InsertSelectionTimecodesIntoTranscript(self.startPoint, self.endPoint)
 
         
-# Public methods
+    # Public methods
     def ClearVisualization(self):
         """Clear the display."""
         # Clear zoom level information
@@ -484,6 +521,9 @@ class VisualizationWindow(wx.Dialog):
         self.lbl_Total_Time.SetLabel(Misc.time_in_ms_to_str(0))
         # Signal that things should be redrawn
         self.redrawWhenIdle = True
+        
+        if DEBUG:
+            print "VisualizationWindow.ClearVisualization()"
 
     def ClearVisualizationSelection(self):
         """ Clear the Selection Box from the Visualization Window """
@@ -491,6 +531,8 @@ class VisualizationWindow(wx.Dialog):
 
     def load_image(self, filename, mediaStart, mediaLength):
         """ Causes the proper visualization to be displayed in the Visualization Window when a Video File is loaded. """
+        # Let's clear the Visualization Window as we get started.
+        self.ClearVisualization()
         # To start with, initialize the data structure that holds information about Zooms
         self.zoomInfo = [(self.ControlObject.VideoStartPoint, self.ControlObject.VideoEndPoint)]
 
@@ -506,7 +548,10 @@ class VisualizationWindow(wx.Dialog):
         # self.waveformFilename = os.path.join(TransanaGlobal.configData.visualizationPath, filenameroot + '.bmp')
         self.waveformFilename = os.path.join(TransanaGlobal.configData.visualizationPath, filenameroot + '.png')
 
-        # print "Filename = %s, WaveFileName = %s" % (originalFilename, self.waveFilename)
+        if DEBUG:
+            print "VisualizationWindow.load_image():"
+            print "originalFilename = %s  (%s)" % (originalFilename, type(originalFilename))
+            print "self.waveFilename = %s  (%s)" % (self.waveFilename, type(self.waveFilename))
 
         # Remove old Waveform Selection and Cursor data
         self.waveform.ClearTransanaSelection()
@@ -516,15 +561,21 @@ class VisualizationWindow(wx.Dialog):
             if not(os.path.exists(self.waveFilename)):
                 # Politely ask the user to create the waveform
                 dlg = wx.MessageDialog(self, _("No wave file exists.  Would you like to create one now?"), _("Transana Wave File Creation"), wx.YES_NO | wx.ICON_QUESTION | wx.CENTRE)
+                # Mac cannot show this modal dialog when the modal Play All Clips dialog is shown, so check for that.
                 # Check the user's response to the dialog. 
-                if dlg.ShowModal() == wx.ID_YES:
+                if ((not 'wxMac' in wx.PlatformInfo) or (not self.ControlObject.PlayAllClipsWindow)) and (dlg.ShowModal() == wx.ID_YES):
                     try:
                         if not os.path.exists(TransanaGlobal.configData.visualizationPath):
                             os.makedirs(TransanaGlobal.configData.visualizationPath)
+
                         # Build the progress box's label
-                        label = _("Extracting %s\nfrom %s") % (self.waveFilename, originalFilename)
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_("Extracting %s\nfrom %s"), 'utf8')
+                        else:
+                            prompt = _("Extracting %s\nfrom %s")
                         # If the user accepts, create and display the Progress Dialog
-                        progressDialog = WaveformProgress.WaveformProgress(self, self.waveFilename, label)
+                        progressDialog = WaveformProgress.WaveformProgress(self, self.waveFilename, prompt % (self.waveFilename, originalFilename))
                         # Problems arise if this is not Modal!  Problems arise if it is!!  Hmmmm.
                         # The compromise is to add the wx.STAY_ON_TOP style, which will at least keep the progress bar
                         # on top, even if it doesn't fully prevent problematic events from being initiated in other windows.
@@ -547,29 +598,154 @@ class VisualizationWindow(wx.Dialog):
                         # Define a pointer to the callback function
                         callbackFunction = callback(Progress)
 
+                        # Wave Extraction doesn't work for Unicode Filenames without a little encoding help.
+                        # It appears that UTF-8 isn't a good way to interact with the DLLs, so we need to change
+                        # the encoding of the filenames to avoid an exception from the DLL.  At least on Windows,
+                        # changing to the default system encoding seems to work.
+                        if 'unicode' in wx.PlatformInfo:
+
+                            if DEBUG:
+                                print "VisualizationWindow.load_image():  before Unicode conversion"
+                                print "originalFilename = %s  (%s)" % (originalFilename, type(originalFilename))
+                                print "self.waveFilename = %s  (%s)" % (self.waveFilename, type(self.waveFilename))
+
+                            # Usin gthe default sustem encoding doesn't work on the Mac, essentially eliminating the waveFilename!
+                            if 'wxMac' in wx.PlatformInfo:
+                                # therefore, let's use the system encoding.  It should be okay since we limit encodings on the Mac.
+                                defEnc = TransanaGlobal.encoding
+                            else:
+                                # Get the default system encoding, and encode the file names into that encoding.
+                                defEnc = locale.getdefaultlocale()[1]
+
+                            if DEBUG:
+                                print "VisualizationWindow.load_image():", TransanaGlobal.encoding, locale.getdefaultlocale()[1], defEnc
+                                
+                            originalFilename = originalFilename.encode(defEnc)
+                            self.waveFilename = self.waveFilename.encode(defEnc)
+
+                            if DEBUG:
+                                print "VisualizationWindow.load_image():  Unicode conversion:  defEnc = ", defEnc
+                                print "originalFilename = %s  (%s)" % (originalFilename, type(originalFilename))
+                                print "self.waveFilename = %s  (%s)" % (self.waveFilename, type(self.waveFilename))
+
+                            # Check that the waveFilename hasn't been encoded out of existence
+                            if self.waveFilename == '':
+                                msg = "Encoding error.  self.waveFilename has been lost in VisualizationWindow.load_image()."
+                                tmpDlg = Dialogs.ErrorDialog(self, msg)
+                                tmpDlg.ShowModal()
+                                tmpDlg.Destroy()
+
                         # Call the wcerAudio DLL/Shared Library's ExtractAudio function
-                        if (os.name == "nt"):
+                        if (os.name == "nt") and (extension in ['.mpg', '.mpeg', '.wav', '.mp3']):  # '.avi', 
                             dllvalue = ctypes.cdll.wceraudio.ExtractAudio(originalFilename, self.waveFilename, bits, decimation, mono, callbackFunction)
+                        elif (os.name == "nt"):
+                            import pyMedia_audio_extract
+                            tempFile = pyMedia_audio_extract.ExtractWaveFile(originalFilename, self.waveFilename, progressDialog)
+                            if tempFile:
+                                pyMedia_audio_extract.DecimateWaveFile(tempFile, self.waveFilename, decimation, progressDialog)
+                                dllvalue = 0
+                            else:
+                                dllvalue = 1
+                            os.remove(tempFile)
+                        # Waveform Extraction on Mac
                         else:
                             wceraudio = ctypes.cdll.LoadLibrary("wceraudio.dylib")
-                            dllvalue = wceraudio.ExtractAudio(originalFilename, self.waveFilename, bits, decimation, mono, callbackFunction)
-
+                            # Let's see if we have a legal filename for waveforming on the Mac
+                            # Create a string of legal characters for the file names
+                            allowedChars = TransanaConstants.legalFilenameCharacters
+                            msg = ''
+                            # check each character in the file name string
+                            for char in originalFilename.decode(defEnc):
+                                # If the character is illegal ...
+                                if allowedChars.find(char) == -1:
+                                    if TransanaConstants.singleUserVersion:
+                                        msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.')
+                                    else:
+                                        msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please arrange to use waveform \nfiles created on Windows or rename your folders and files so that they \ndo not include characters that are not part of English.')
+                                    if 'unicode' in wx.PlatformInfo:
+                                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                        msg = unicode(msg, 'utf8')
+                                    dllvalue = 0
+                                    contin = False
+                                    self.ClearVisualization()
+                                    break
+                            if msg == '':
+                                
+                                if DEBUG:
+                                    print "VisualizationWindow.load_image():  About to call Mac Wave Form Extractor"
+                                    print "originalFilename = %s  (%s)" % (originalFilename, type(originalFilename))
+                                    print "self.waveFilename = %s  (%s)" % (self.waveFilename, type(self.waveFilename))
+                                
+                                dllvalue = wceraudio.ExtractAudio(originalFilename, self.waveFilename, bits, decimation, mono, callbackFunction)
+                                
+                                if DEBUG:
+                                    print "VisualizationWindow.load_image():  Mac Wave Form Extractor complete.  dllvalue =", dllvalue
+                                    
+                            else:
+                                dlg = Dialogs.ErrorDialog(self, msg % (originalFilename.decode(defEnc), char))
+                                dlg.ShowModal()
+                                dlg.Destroy()
+                                
                         if dllvalue != 0:
                             try:
                                 os.remove(self.waveFilename)
                             except:
-                                errordlg = Dialogs.ErrorDialog(self, _('Unable to create waveform for file "%s"\nError Code: %s') % (originalFilename, dllvalue))
-                                errordlg.ShowModal()
-                                errordlg.Destroy()
+                                pass
+#                                errordlg = Dialogs.ErrorDialog(self, _('Unable to create waveform for file "%s"\nError Code: %s') % (originalFilename, dllvalue))
+#                                errordlg.ShowModal()
+#                                errordlg.Destroy()
 
                         # Close the Progress Dialog when the DLL call is complete
                         progressDialog.Close()
+
+                    except UnicodeEncodeError:
+                        # If this exception is raised, the media filename contains a character that the default system
+                        # encoding can't cope with.  On Windows, let's see what pyMedia does with it.
+                        if 'wxMSW' in wx.PlatformInfo:
+                            import pyMedia_audio_extract
+
+                            self.waveFilename = os.path.join(TransanaGlobal.configData.visualizationPath, filenameroot + '.wav')
+                            tempFile = pyMedia_audio_extract.ExtractWaveFile(originalFilename, self.waveFilename, progressDialog)
+                            if tempFile:
+                                pyMedia_audio_extract.DecimateWaveFile(tempFile, self.waveFilename, decimation, progressDialog)
+                                dllvalue = 0
+                            else:
+                                dllvalue = 1
+                            os.remove(tempFile)
+                            
+                        else:
+                            if 'unicode' in wx.PlatformInfo:
+                                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                                prompt = unicode(_('Unable to create Waveform Directory.\n%s\n%s'), 'utf8')
+                            else:
+                                prompt = _('Unable to create Waveform Directory.\n%s\n%s')
+                            errordlg = Dialogs.ErrorDialog(self, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+                            dllvalue = 1  # Signal that the WAV file was NOT created!                        
+
                         
+                        # Close the Progress Dialog when the DLL call is complete
+                        progressDialog.Close()
+
                     except:
-                        errordlg = Dialogs.ErrorDialog(self, _('Unable to create Waveform Directory.\n%s\n%s') % (sys.exc_info()[0], sys.exc_info()[1]))
+                        if DEBUG:
+                            import traceback
+                            traceback.print_exc(file=sys.stdout)
+
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_('Unable to create Waveform Directory.\n%s\n%s'), 'utf8')
+                        else:
+                            prompt = _('Unable to create Waveform Directory.\n%s\n%s')
+                        errordlg = Dialogs.ErrorDialog(self, prompt % (sys.exc_info()[0], sys.exc_info()[1]))
                         errordlg.ShowModal()
                         errordlg.Destroy()
                         dllvalue = 1  # Signal that the WAV file was NOT created!                        
+
+                        # Close the Progress Dialog when the DLL call is complete
+                        progressDialog.Close()
+
                 else:
                     # User declined to create the WAV file now
                     dllvalue = 1  # Signal that the WAV file was NOT created!
@@ -600,6 +776,8 @@ class VisualizationWindow(wx.Dialog):
         # Draw the TimeLine values
         self.draw_timeline(mediaStart, mediaLength)
         
+        if DEBUG:
+            print "VisualizationWindow.load_image(): Start = %s, Length = %s" % (mediaStart, mediaLength)
 
     def draw_timeline(self, mediaStart, mediaLength):
         def GetScaleIncrements(MediaLength):
@@ -817,6 +995,10 @@ class VisualizationWindow(wx.Dialog):
     def GetDimensions(self):
         (left, top) = self.GetPositionTuple()
         (width, height) = self.GetSizeTuple()
+        # Mac was having problems with the default window position being at -20.
+        # Don't accept anything less than 0 for the left parameter.
+        if left < 0:
+            left = 0
         return (left, top, width, height)
 
     def SetDims(self, left, top, width, height):
@@ -844,6 +1026,5 @@ class VisualizationWindow(wx.Dialog):
         x = rect[0]
         # rect[1] compensated if the Start menu is at the top of the screen
         y = rect[1] + TransanaGlobal.menuHeight + 3
-        
         return wx.Point(int(x), int(y))
 

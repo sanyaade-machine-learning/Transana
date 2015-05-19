@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2005 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -72,20 +72,36 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         series_edit = self.new_edit_box(_("Series ID"), lay, self.obj.series_id)
         series_edit.Enable(0)
 
-        # Date Taped layout
+        # Dialogs.GenForm does not provide a Masked text control, so the Date
+        # Field is handled differently than other fields.
+        
+        # Date layout [label]
         lay = wx.LayoutConstraints()
         lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
         lay.left.RightOf(series_edit, 6)        # 6 right of Series ID
         lay.width.PercentOf(self.panel, wx.Width, 15)  # 15% width
         lay.height.AsIs()
-        # FIXME: Localization!
-        # TODO:  Use wxMaskedTextCtrl, as in CoreData's Date Field!
-        dt_edit = self.new_edit_box(_("Date Taped"), lay, Misc.dt_to_datestr(self.obj.tape_date))
+        date_lbl = wx.StaticText(self.panel, -1, _("Date (MM/DD/YYYY)"))
+        date_lbl.SetConstraints(lay)
+
+        # Date layout
+        lay = wx.LayoutConstraints()
+        lay.top.Below(date_lbl, 3)         # 
+        lay.left.SameAs(date_lbl, 0)        # 6 right of Series ID
+        lay.width.PercentOf(self.panel, wx.Width, 15)  # 15% width
+        lay.height.AsIs()
+        # Use the Masked Text Control (Requires wxPython 2.4.2.4 or later)
+        # TODO:  Make Date autoformat localizable
+        self.dt_edit = wx.lib.masked.TextCtrl(self.panel, -1, '', autoformat='USDATEMMDDYYYY/')
+        # If a Date is know, load it into the control
+        if (self.obj.tape_date != None) and (self.obj.tape_date != '') and (self.obj.tape_date != '01/01/0'):
+            self.dt_edit.SetValue(self.obj.tape_date)
+        self.dt_edit.SetConstraints(lay)
 
         # Length layout
         lay = wx.LayoutConstraints()
         lay.top.SameAs(self.panel, wx.Top, 10)         # 10 from top
-        lay.left.RightOf(dt_edit, 6)            # 6 right of Date Taped
+        lay.left.RightOf(self.dt_edit, 6)            # 6 right of Date Taped
         lay.right.SameAs(self.panel, wx.Right, 10)     # 10 from right
         lay.height.AsIs()
         self.len_edit = self.new_edit_box(_("Length"), lay, self.obj.tape_length_str())
@@ -278,23 +294,32 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         self.len_edit.SetValue('00:00:00')
         self.obj.tape_length = 0
 
-        # Transana can't cope with non-English characters in the path or file name for media files.  (The ActiveX
-        # control chokes on a string conversion on Windos and Python os.path.exists() can't cope on the Mac)
-        # Create a string of legal characters for the file names
-        allowedChars = TransanaConstants.legalFilenameCharacters
-        # check each character in the file name string
-        for char in self.fname_edit.GetValue():
-            # If the character is illegal ...
-            if allowedChars.find(char) == -1:
-                # ... Display an error message to the user.
-                msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, which Transana does not allow at this time.\nPlease rename your folders and files so that they do not include characters that are not part of US English.\nWe apologize for this inconvenience.') % (self.fname_edit.GetValue(), char)
-                dlg = Dialogs.ErrorDialog(self, msg)
-                dlg.ShowModal()
-                dlg.Destroy()
-                # Clear the file name field
-                self.fname_edit.SetValue('')
-                # We only need to detect the first error
-                break
+        # If we are using the ANSI version of wxPython OR
+        # (if we're on the Mac AND are in the Single-User version of Transana)
+        # then we need to block Unicode characters from media filenames.
+        # Unicode characters still cause problems on the Mac for the Multi-User version of Transana,
+        # but can be made to work if shared waveforming is done on a Windows computer.
+        if ('ansi' in wx.PlatformInfo) or (('wxMac' in wx.PlatformInfo) and TransanaConstants.singleUserVersion):
+            # Transana can't cope with non-English characters in the path or file name for media files.  (The ActiveX
+            # control chokes on a string conversion on Windos and Python os.path.exists() can't cope on the Mac)
+            # Create a string of legal characters for the file names
+            allowedChars = TransanaConstants.legalFilenameCharacters
+            # check each character in the file name string
+            for char in self.fname_edit.GetValue():
+                # If the character is illegal ...
+                if allowedChars.find(char) == -1:
+                    # ... Display an error message to the user.
+                    msg = _('There is an unsupported character in the Media File Name.\n\n"%s" includes the "%s" character, \nwhich Transana on the Mac does not support at this time.  Please rename your folders \nand files so that they do not include characters that are not part of English.')
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        msg = unicode(msg, 'utf8')
+                    dlg = Dialogs.ErrorDialog(self, msg % (self.fname_edit.GetValue(), char))
+                    dlg.ShowModal()
+                    dlg.Destroy()
+                    # Clear the file name field
+                    self.fname_edit.SetValue('')
+                    # We only need to detect the first error
+                    break
         
     def OnBrowse(self, evt):
         """Invoked when the user activates the Browse button."""
@@ -324,6 +349,11 @@ class EpisodePropertiesForm(Dialogs.GenForm):
                         wx.OPEN | wx.FILE_MUST_EXIST)
         # If user didn't cancel ..
         if fs != "":
+            # Mac Filenames use a different encoding system.  We need to adjust the string returned by the FileSelector.
+            # Surely there's an easier way, but I can't figure it out.
+            if 'wxMac' in wx.PlatformInfo:
+                fs = Misc.convertMacFilename(fs)
+
             self.obj.media_filename = fs
             self.fname_edit.SetValue(fs)
             if self.id_edit.GetValue() == '':
@@ -353,20 +383,50 @@ class EpisodePropertiesForm(Dialogs.GenForm):
                 coreData = CoreData.CoreData()
                 # Specify the path-less filename as the Identifier
                 coreData.id = filename
+            except RecordLockedError, e:
+                msg = _('You cannot proceed because you cannot obtain a lock on %s "%s"' + \
+                        '.\nThe record is currently locked by %s.\nPlease try again later.')
+                id = coreData.id
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    msg = unicode(msg, 'utf8')
+                    if isinstance(coreData.id, str):
+                        id = unicode(coreData.id, 'utf8')
+                dlg = Dialogs.ErrorDialog(self.parent, msg % (_('Core Data record'), id, e.user))
+                dlg.ShowModal()
+                dlg.Destroy()
+                # If we get a record lock error, we don't need to display the Core Data Properties form
+                return
             # If a different exception is raised, report it and pass it on.
             except:
                 (type, value, traceback) = sys.exc_info()
-                print "EpisodePropertiesForm.OnCoreDataClick:  Exception raised.\nType = %s\nValue = %s\nTraceback = %s" % (type, value, traceback)
+                # print "EpisodePropertiesForm.OnCoreDataClick:  Exception raised.\nType = %s\nValue = %s\nTraceback = %s" % (type, value, traceback)
                 raise
 
             # Load the full-path filename into the Core Data Object's Comment Field
             coreData.comment = self.fname_edit.GetValue()    # self.obj.media_filename
             # Create the Core Data Properites Form
             dlg = CoreDataPropertiesForm.EditCoreDataDialog(self, -1, coreData)
-            # Show the form and process the user input
-            if dlg.get_input() != None:
-                # Save the changes if the user presses OK
-                coreData.db_save()
+            # Set the "continue" flag to True (used to redisplay the dialog if an exception is raised)
+            contin = True
+            # While the "continue" flag is True ...
+            while contin:
+                try:
+                    # Show the form and process the user input
+                    if dlg.get_input() != None:
+                        # Save the changes if the user presses OK
+                        coreData.db_save()
+                        # If the save goes through, we don't need to continue.
+                        contin = False
+                    # If the user presses "Cancel" ...
+                    else:
+                        # ... then we don't need to continue
+                        contin = False
+                except:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
             # Unlock the Record
             coreData.unlock_record()
         else:
@@ -449,7 +509,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         if gen_input:
             self.obj.id = gen_input[_('Episode ID')]
             self.obj.media_filename = gen_input[_('Media Filename')]
-            self.obj.tape_date = Misc.datestr_to_dt(gen_input[_('Date Taped')])
+            self.obj.tape_date = self.dt_edit.GetValue()
             self.obj.comment = gen_input[_('Title/Comment')]
             # Keyword list is already updated via the OnAddKW() callback
         else:

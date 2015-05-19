@@ -1,9 +1,5 @@
 # Copyright (C) 2000  Donald N. Allingham
 #
-# Modified 2004-2005 by Nate Case and David Woods
-#
-#   Made minor changes to make this compatible with Transana
-#
 # Modified August 2002 by Gary Shao
 #
 #   Removed Gramps dependencies.
@@ -65,6 +61,11 @@
 #   Added support for borderWidth and borderColor attributes of paragraph
 #   style
 #
+# Modified 2004-2006 by Nate Case and David Woods
+#
+#   Made minor changes to make this compatible with Transana
+#   and to fix Unicode support
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
@@ -87,6 +88,7 @@
 #------------------------------------------------------------------------
 from TextDoc import *
 
+import TransanaConstants
 import sys
 import types
 
@@ -175,6 +177,10 @@ class RTFDoc(TextDoc):
                 family = 'fmodern'  # fmodern is Courier New's font family
                 charset = '1'       # Default character set
                 prq = '1'           # Fixed font pitch
+            elif face == 'Times New Roman':
+                family = 'froman'  # fmodern is Courier New's font family
+                charset = '1'       # Default character set
+                prq = '0'           # Fixed font pitch
             else:
                 family = 'fnil'   # fnil indicates unknown font family
                 charset = '1'     # Default character set
@@ -770,8 +776,10 @@ class RTFDoc(TextDoc):
     #
     # Writes text. If braces are not currently open, open them. Loop 
     # character by character (terribly inefficient, but it works). If a
-    # character is 8 bit (>127), convert it to a hex representation in 
-    # the form of \`XX. Make sure to escape braces.
+    # character is 8 bit (>127), NO NO NO --> convert it to a hex representation in 
+    # the form of \`XX. <-- NO NO NO  Let's write it to UTF-8 characters, not a
+    # single-byte character.  This supports a wider variety of languages. DKW
+    # Make sure to escape braces.
     # (escaping backslash added by DKW)
     #
     #--------------------------------------------------------------------
@@ -796,7 +804,32 @@ class RTFDoc(TextDoc):
             
         for i in text:
             if ord(i) > 127:
-                self.text = self.text + '\\\'%2x' % ord(i)
+                if type(i).__name__ == 'unicode':
+                    if DEBUG:
+                        print "RTFDoc.write_text():  ord(i) > 127:  ord(i) = %d, type(i) = %s" % (ord(i), type(i))
+                        print i.encode('utf8')
+                        print "RTF representation:  \\\'%2x   \u%04d" % (ord(i), ord(i))
+
+                    if (sys.platform == 'darwin') and (i == unicode('\xc2\xa7', 'utf8')):
+
+                        if DEBUG:
+                            print "RTFDoc.write_text():  Mac Unicode Time Code Substitution"
+                        
+                        i = unicode('\xc2\xa4', 'utf8')
+
+                    # Unicode characters need to be represented differently depending on their length.
+                    # (at least in theory)
+                    if ord(i) > 255:     # len(i.encode('utf8')) > 2:
+                        self.text = self.text + "\\u%04d\\'3f" % ord(i)
+                        if DEBUG:
+                            print "Using \\u%04d\\'3f" % ord(i)
+                    else:
+                        self.text = self.text + '\\\'%2x' % ord(i)
+                        if DEBUG:
+                            print 'Using \\\'%2x' % ord(i)
+                else:
+                    self.text = self.text + '\\\'%2x' % ord(i)
+
             elif i == '{' or i == '}' or i == '\\':
                 self.text = self.text + '\\%s' % i
 

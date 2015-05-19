@@ -1,4 +1,4 @@
-# Copyright (C) 2004 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2006 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -31,70 +31,77 @@ import os, sys
 # Define Menu ID Constants
 
 # File Menu
-MENU_FILE_NEW                   =  wx.NewId()  # 101
-MENU_FILE_NEWDATABASE           =  wx.NewId()  # 102
-MENU_FILE_FILEMANAGEMENT        =  wx.NewId()  # 103
-MENU_FILE_SAVE                  =  wx.NewId()  # 104
-MENU_FILE_SAVEAS                =  wx.NewId()  # 105
-MENU_FILE_PRINTTRANSCRIPT       =  wx.NewId()  # 106
-MENU_FILE_PRINTERSETUP          =  wx.NewId()  # 107
+MENU_FILE_NEW                   =  wx.NewId()
+MENU_FILE_NEWDATABASE           =  wx.NewId()
+MENU_FILE_FILEMANAGEMENT        =  wx.NewId()
+MENU_FILE_SAVE                  =  wx.NewId()
+MENU_FILE_SAVEAS                =  wx.NewId()
+MENU_FILE_PRINTTRANSCRIPT       =  wx.NewId()
+MENU_FILE_PRINTERSETUP          =  wx.NewId()
 MENU_FILE_EXIT                  =  wx.ID_EXIT   # Constant used to improve Mac standardization
 
 # Trasncript Menu
-MENU_TRANSCRIPT_EDIT            =  wx.NewId()  # 201
-MENU_TRANSCRIPT_EDIT_UNDO       =  wx.NewId()  # 2011
-MENU_TRANSCRIPT_EDIT_CUT        =  wx.NewId()  # 2012
-MENU_TRANSCRIPT_EDIT_COPY       =  wx.NewId()  # 2013
-MENU_TRANSCRIPT_EDIT_PASTE      =  wx.NewId()  # 2014
-MENU_TRANSCRIPT_FONT            =  wx.NewId()  # 202
-MENU_TRANSCRIPT_PRINT           =  wx.NewId()  # 203
-MENU_TRANSCRIPT_PRINTERSETUP    =  wx.NewId()  # 204
-MENU_TRANSCRIPT_CHARACTERMAP    =  wx.NewId()  # 205
-MENU_TRANSCRIPT_ADJUSTINDEXES   =  wx.NewId()  # 206
+MENU_TRANSCRIPT_EDIT            =  wx.NewId()
+MENU_TRANSCRIPT_EDIT_UNDO       =  wx.NewId()
+MENU_TRANSCRIPT_EDIT_CUT        =  wx.NewId()
+MENU_TRANSCRIPT_EDIT_COPY       =  wx.NewId()
+MENU_TRANSCRIPT_EDIT_PASTE      =  wx.NewId()
+MENU_TRANSCRIPT_FONT            =  wx.NewId()
+MENU_TRANSCRIPT_PRINT           =  wx.NewId()
+MENU_TRANSCRIPT_PRINTERSETUP    =  wx.NewId()
+MENU_TRANSCRIPT_CHARACTERMAP    =  wx.NewId()
+MENU_TRANSCRIPT_ADJUSTINDEXES   =  wx.NewId()
 
 # Tools Menu
-MENU_TOOLS_FILEMANAGEMENT       =  wx.NewId()  # 301
-MENU_TOOLS_IMPORT_DATABASE      =  wx.NewId()  # 302
-MENU_TOOLS_EXPORT_DATABASE      =  wx.NewId()  # 303
-MENU_TOOLS_CHAT                 =  wx.NewId()  # 304
-MENU_TOOLS_BATCHWAVEFORM        =  wx.NewId()  # 305
+MENU_TOOLS_FILEMANAGEMENT       =  wx.NewId()
+MENU_TOOLS_IMPORT_DATABASE      =  wx.NewId()
+MENU_TOOLS_EXPORT_DATABASE      =  wx.NewId()
+MENU_TOOLS_BATCHWAVEFORM        =  wx.NewId()
+MENU_TOOLS_CHAT                 =  wx.NewId()
+MENU_TOOLS_RECORDLOCK           =  wx.NewId()
 
 # Options Menu
-MENU_OPTIONS_SETTINGS           =  wx.NewId()  # 401
-MENU_OPTIONS_LANGUAGE           =  wx.NewId()  # 402
-MENU_OPTIONS_LANGUAGE_EN        =  wx.NewId()  # 4020
-MENU_OPTIONS_LANGUAGE_DA        =  wx.NewId()  # 4021  # Danish
-MENU_OPTIONS_LANGUAGE_DE        =  wx.NewId()  # 4022  # German
-MENU_OPTIONS_LANGUAGE_EL        =  wx.NewId()  # 4023  # Greek
-MENU_OPTIONS_LANGUAGE_ES        =  wx.NewId()  # 4024  # Spanish
-MENU_OPTIONS_LANGUAGE_FI        =  wx.NewId()  # 4025  # Finnish
-MENU_OPTIONS_LANGUAGE_FR        =  wx.NewId()  # 4026  # French
-MENU_OPTIONS_LANGUAGE_IT        =  wx.NewId()  # 4027  # Italian
-MENU_OPTIONS_LANGUAGE_NL        =  wx.NewId()  # 4028  # Dutch
-MENU_OPTIONS_LANGUAGE_PL        =  wx.NewId()  # 4029  # Polish
-MENU_OPTIONS_LANGUAGE_RU        =  wx.NewId()  # 4030  # Russian
-MENU_OPTIONS_LANGUAGE_SV        =  wx.NewId()  # 4031  # Swedish
+MENU_OPTIONS_SETTINGS           =  wx.NewId()
+MENU_OPTIONS_LANGUAGE           =  wx.NewId()
+MENU_OPTIONS_LANGUAGE_EN        =  wx.NewId()
+MENU_OPTIONS_LANGUAGE_DA        =  wx.NewId()  # Danish
+MENU_OPTIONS_LANGUAGE_DE        =  wx.NewId()  # German
+MENU_OPTIONS_LANGUAGE_EL        =  wx.NewId()  # Greek
+MENU_OPTIONS_LANGUAGE_ES        =  wx.NewId()  # Spanish
+MENU_OPTIONS_LANGUAGE_FI        =  wx.NewId()  # Finnish
+MENU_OPTIONS_LANGUAGE_FR        =  wx.NewId()  # French
+MENU_OPTIONS_LANGUAGE_IT        =  wx.NewId()  # Italian
+MENU_OPTIONS_LANGUAGE_JA        =  wx.NewId()  # Japanese
+MENU_OPTIONS_LANGUAGE_KO        =  wx.NewId()  # Korean
+MENU_OPTIONS_LANGUAGE_NL        =  wx.NewId()  # Dutch
+MENU_OPTIONS_LANGUAGE_PL        =  wx.NewId()  # Polish
+MENU_OPTIONS_LANGUAGE_RU        =  wx.NewId()  # Russian
+MENU_OPTIONS_LANGUAGE_SV        =  wx.NewId()  # Swedish
+MENU_OPTIONS_LANGUAGE_ZH        =  wx.NewId()  # Chinese
 # NOTE:  Adding languages?  Don't forget to update the EVT_MENU_RANGE settings.
 #        If you scan through MenuSetup.py and MenuWindow.py for language code and add the language for MySQL
 #        in DBInterface.InitializeSingleUserDatabase(), you should be all set.
-MENU_OPTIONS_WORDTRACK          =  wx.NewId()  # 404
-MENU_OPTIONS_AUTOARRANGE        =  wx.NewId()  # 405
-MENU_OPTIONS_WAVEFORMQUICKLOAD  =  wx.NewId()  # 406
-MENU_OPTIONS_VIDEOSIZE          =  wx.NewId()  # 407
-MENU_OPTIONS_VIDEOSIZE_50       =  wx.NewId()  # 4071
-MENU_OPTIONS_VIDEOSIZE_66       =  wx.NewId()  # 4072
-MENU_OPTIONS_VIDEOSIZE_100      =  wx.NewId()  # 4073
-MENU_OPTIONS_VIDEOSIZE_150      =  wx.NewId()  # 4074
-MENU_OPTIONS_VIDEOSIZE_200      =  wx.NewId()  # 4075
-MENU_OPTIONS_PRESENT            =  wx.NewId()  # 408
-MENU_OPTIONS_PRESENT_ALL        =  wx.NewId()  # 4081
-MENU_OPTIONS_PRESENT_VIDEO      =  wx.NewId()  # 4082
-MENU_OPTIONS_PRESENT_TRANS      =  wx.NewId()  # 4083
+
+MENU_OPTIONS_WORDTRACK          =  wx.NewId()
+MENU_OPTIONS_AUTOARRANGE        =  wx.NewId()
+MENU_OPTIONS_WAVEFORMQUICKLOAD  =  wx.NewId()
+MENU_OPTIONS_VIDEOSIZE          =  wx.NewId()
+MENU_OPTIONS_VIDEOSIZE_50       =  wx.NewId()
+MENU_OPTIONS_VIDEOSIZE_66       =  wx.NewId()
+MENU_OPTIONS_VIDEOSIZE_100      =  wx.NewId()
+MENU_OPTIONS_VIDEOSIZE_150      =  wx.NewId()
+MENU_OPTIONS_VIDEOSIZE_200      =  wx.NewId()
+MENU_OPTIONS_PRESENT            =  wx.NewId()
+MENU_OPTIONS_PRESENT_ALL        =  wx.NewId()
+MENU_OPTIONS_PRESENT_VIDEO      =  wx.NewId()
+MENU_OPTIONS_PRESENT_TRANS      =  wx.NewId()
 
 # Help Menu
-MENU_HELP_MANUAL                =  wx.NewId()  # 501
-MENU_HELP_TUTORIAL              =  wx.NewId()  # 502
-MENU_HELP_NOTATION              =  wx.NewId()  # 503
+MENU_HELP_MANUAL                =  wx.NewId()
+MENU_HELP_TUTORIAL              =  wx.NewId()
+MENU_HELP_NOTATION              =  wx.NewId()
+MENU_HELP_WEBSITE               =  wx.NewId()
+MENU_HELP_FUND                  =  wx.NewId()
 MENU_HELP_ABOUT                 =  wx.ID_ABOUT   # Constant used to improve Mac standardization
 
 
@@ -122,13 +129,6 @@ class MenuSetup(wx.MenuBar):
 
         # Build the Transcript menu
         self.transcriptmenu = wx.Menu()
-#        self.transcripteditmenu = wx.Menu()
-#        self.transcripteditmenu.Append(MENU_TRANSCRIPT_EDIT_UNDO, _("&Undo\tCtrl-Z"))
-#        self.transcripteditmenu.AppendSeparator()
-#        self.transcripteditmenu.Append(MENU_TRANSCRIPT_EDIT_CUT, _("Cu&t\tCtrl-X"))
-#        self.transcripteditmenu.Append(MENU_TRANSCRIPT_EDIT_COPY, _("&Copy\tCtrl-C"))
-#        self.transcripteditmenu.Append(MENU_TRANSCRIPT_EDIT_PASTE, _("&Paste\tCtrl-V"))
-#        self.transcriptmenu.AppendMenu(MENU_TRANSCRIPT_EDIT, _("&Edit"), self.transcripteditmenu)
         self.transcriptmenu.Append(MENU_TRANSCRIPT_EDIT_UNDO, _("&Undo\tCtrl-Z"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_EDIT_CUT, _("Cu&t\tCtrl-X"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_EDIT_COPY, _("&Copy\tCtrl-C"))
@@ -153,9 +153,10 @@ class MenuSetup(wx.MenuBar):
         self.toolsmenu.Append(MENU_TOOLS_FILEMANAGEMENT, _("&File Management"))
         self.toolsmenu.Append(MENU_TOOLS_IMPORT_DATABASE, _("&Import Database"))
         self.toolsmenu.Append(MENU_TOOLS_EXPORT_DATABASE, _("&Export Database"))
+        self.toolsmenu.Append(MENU_TOOLS_BATCHWAVEFORM, _("&Batch Waveform Generator"))
         if not TransanaConstants.singleUserVersion:
             self.toolsmenu.Append(MENU_TOOLS_CHAT, _("&Chat Window"))
-        self.toolsmenu.Append(MENU_TOOLS_BATCHWAVEFORM, _("&Batch Waveform Generator"))
+            self.toolsmenu.Append(MENU_TOOLS_RECORDLOCK, _("&Record Lock Utility"))
         self.Append(self.toolsmenu, _("Too&ls"))
         
         # Build the Options menu
@@ -209,6 +210,12 @@ class MenuSetup(wx.MenuBar):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'sv', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_SV, _("S&wedish"), kind=wx.ITEM_RADIO)
+        # Chinese, Japanese, and Korean
+        if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
+            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_ZH, _("English prompts, Chinese data"), kind=wx.ITEM_RADIO)
+            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_JA, _("English prompts, Japanese data"), kind=wx.ITEM_RADIO)
+            # Korean support must be removed due to a bug in wxSTC on Windows.
+            # self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_KO, _("English prompts, Korean data"), kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_LANGUAGE, _("&Language"), self.optionslanguagemenu)
         self.optionsmenu.AppendSeparator()
         self.optionsmenu.Append(MENU_OPTIONS_WORDTRACK, _("Auto Word-&tracking"), kind=wx.ITEM_CHECK)
@@ -252,6 +259,12 @@ class MenuSetup(wx.MenuBar):
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_RU, True)
         elif TransanaGlobal.configData.language == 'sv':
             self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_SV, True)
+        elif (TransanaGlobal.configData.language == 'zh') and (TransanaConstants.singleUserVersion):
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_ZH, True)
+        elif (TransanaGlobal.configData.language == 'ja') and (TransanaConstants.singleUserVersion):
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_JA, True)
+        elif (TransanaGlobal.configData.language == 'ko') and (TransanaConstants.singleUserVersion):
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_KO, True)
             
         # Set Options Menu items to their initial values based on Configuration Data
         self.optionsmenu.Check(MENU_OPTIONS_WORDTRACK, TransanaGlobal.configData.wordTracking)
@@ -275,7 +288,7 @@ class MenuSetup(wx.MenuBar):
         self.helpmenu.Append(MENU_HELP_MANUAL, _("&Manual"))
         self.helpmenu.Append(MENU_HELP_TUTORIAL, _("&Tutorial"))
         self.helpmenu.Append(MENU_HELP_NOTATION, _("Transcript &Notation"))
+        self.helpmenu.Append(MENU_HELP_WEBSITE, _("&www.transana.org"))
+        self.helpmenu.Append(MENU_HELP_FUND, _("&Fund Transana"))
         self.helpmenu.Append(MENU_HELP_ABOUT, _("&About"))
         self.Append(self.helpmenu, _("&Help"))
-
-        return self

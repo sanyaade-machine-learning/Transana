@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2005  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2006  The Board of Regents of the University of Wisconsin System
 #
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -116,8 +116,8 @@ class UsernameandPassword(wx.Dialog):
 
             # User Name TextCtrl
             self.txtUsername = wx.TextCtrl(panel, -1, style=wx.TE_LEFT)
-            if DBInterface._user != '':
-                self.txtUsername.SetValue(DBInterface._user)
+            if DBInterface.get_username() != '':
+                self.txtUsername.SetValue(DBInterface.get_username())
 
             # Password Label
             lblPassword = wx.StaticText(panel, -1, _("Password:"))
@@ -199,10 +199,16 @@ class UsernameandPassword(wx.Dialog):
             self.chDBName.Clear()
             # ... and populate them with the appropriate values
             for choice in choicelist:
+                if ('unicode' in wx.PlatformInfo) and (isinstance(choice, str)):
+                    choice = unicode(choice, 'utf8')  # TransanaGlobal.encoding)
                 self.chDBName.Append(choice)
 
-        # Set the value to the default value provided by the Configuration Data
-        self.chDBName.SetValue(TransanaGlobal.configData.database)
+        # if the configured database isn't in the database list, don't show it!
+        # This can happen if you have a Russian database name but change away from Russian encoding
+        # by changing languages during the session.
+        if self.chDBName.FindString(TransanaGlobal.configData.database) != wx.NOT_FOUND:
+            # Set the value to the default value provided by the Configuration Data
+            self.chDBName.SetValue(TransanaGlobal.configData.database)
 
         # Define the SetFocus and KillFocus events for the Database Combo Box
         wx.EVT_SET_FOCUS(self.chDBName, self.OnCBSetFocus)
@@ -351,14 +357,24 @@ class UsernameandPassword(wx.Dialog):
         """ KillFocus event for Database Combo Box """
         if TransanaConstants.singleUserVersion:
             DBServerName = 'localhost'
-            if not self.Databases.has_key(DBServerName):
-                self.Databases[DBServerName] = []
         else:
             DBServerName = self.chDBServer.GetValue()
+        if not self.Databases.has_key(DBServerName):
+            self.Databases[DBServerName] = []
+        if 'unicode' in wx.PlatformInfo:
+            try:
+                dbName = self.chDBName.GetValue().encode('utf8')  #(TransanaGlobal.encoding)
+            except UnicodeEncodeError:
+                # If you've changed languages in the single-user version of Transana, this COULD cause a change in encodings.
+                # In this case, you might not be able to decode dbName because it's in the wrong encoding, causing Transana to
+                # crash and burn.  This attempts to fix that problem by forgetting the un-decodable database name.
+                dbName = ''
+        else:
+            dbName = self.chDBName.GetValue()
         # See if the Database Name has not yet been used
-        if (self.chDBName.GetValue() != '') and (not self.chDBName.GetValue() in self.Databases[DBServerName]):
+        if (self.chDBName.GetValue() != '') and (not dbName in self.Databases[DBServerName]):
             # Add the new Database Name to the Databases Dictionary
-            self.Databases[DBServerName].append(self.chDBName.GetValue())
+            self.Databases[DBServerName].append(dbName)
             # Add the new value to the control's dropdown
             self.chDBName.Append(self.chDBName.GetValue())
         self.chDBName.SetInsertionPointEnd()
@@ -428,32 +444,13 @@ class UsernameandPassword(wx.Dialog):
                     server = self.chDBServer.GetValue()
                     database = self.chDBName.GetValue()
 
-                if DBInterface.DeleteDatabase(username, password, server, database):
-                    # If we've deleted the database, remove that database name from the list of existing databases
-                    self.Databases[server].remove(self.chDBName.GetValue())
-                    # Clear the database name from the screen control
-                    self.chDBName.SetValue('')
-                    # Clear out the Database name control's Choices ...
-                    self.chDBName.Clear()
-                    # ... and populate them with the appropriate values
-                    for choice in self.Databases[server]:
-                        self.chDBName.Append(choice)
-                    # Remove the Database Name from the Configuration record of existing databases
-                    TransanaGlobal.configData.databaseList = self.Databases
-                    # Remove the Database Name from the Configuration Record for the current database
-                    TransanaGlobal.configData.database = ''
-                    
-            else:
-                dlg = Dialogs.ErrorDialog(None, errormsg)
-                dlg.ShowModal()
-                dlg.Destroy()
-        else:
-            server = self.chDBServer.GetValue()
-            database = self.chDBName.GetValue()
-
-            if (server != '') and (database != ''):
+                # Get the name of the database to delete
+                if 'unicode' in wx.PlatformInfo:
+                    dbName = self.chDBName.GetValue().encode('utf8')  # TransanaGlobal.encoding)
+                else:
+                    dbName = self.chDBName.GetValue()
                 # If we've deleted the database, remove that database name from the list of existing databases
-                self.Databases[server].remove(database)
+                self.Databases[server].remove(dbName)
                 # Clear the database name from the screen control
                 self.chDBName.SetValue('')
                 # Clear out the Database name control's Choices ...
@@ -465,10 +462,47 @@ class UsernameandPassword(wx.Dialog):
                 TransanaGlobal.configData.databaseList = self.Databases
                 # Remove the Database Name from the Configuration Record for the current database
                 TransanaGlobal.configData.database = ''
+                if not DBInterface.DeleteDatabase(username, password, server, database):
+                    msg = _('Transana could not delete database "%s".\nHowever, it has been removed from the list of databases you have used.')
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        msg = unicode(msg, 'utf8')
+                    dlg = Dialogs.InfoDialog(None, msg % database)
+                    dlg.ShowModal()
+                    dlg.Destroy()
+                    
+            else:
+                dlg = Dialogs.ErrorDialog(None, errormsg)
+                dlg.ShowModal()
+                dlg.Destroy()
+        else:
+            server = self.chDBServer.GetValue()
+            database = self.chDBName.GetValue()
 
-                errormsg = _("The multi-user version of Transana does not allow users to delete databases.\nPlease ask your project's Database Administrator to delete database '%s.'") % database
-
-                dlg = Dialogs.InfoDialog(None, errormsg)
+            if (server != '') and (database != ''):
+                # Get the name of the database to delete
+                if 'unicode' in wx.PlatformInfo:
+                    dbName = database.encode('utf8')   # TransanaGlobal.encoding)
+                else:
+                    dbName = database
+                # If we've deleted the database, remove that database name from the list of existing databases
+                self.Databases[server].remove(dbName)
+                # Clear the database name from the screen control
+                self.chDBName.SetValue('')
+                # Clear out the Database name control's Choices ...
+                self.chDBName.Clear()
+                # ... and populate them with the appropriate values
+                for choice in self.Databases[server]:
+                    self.chDBName.Append(choice)
+                # Remove the Database Name from the Configuration record of existing databases
+                TransanaGlobal.configData.databaseList = self.Databases
+                # Remove the Database Name from the Configuration Record for the current database
+                TransanaGlobal.configData.database = ''
+                msg = _("The multi-user version of Transana does not allow users to delete databases.\nPlease ask your project's Database Administrator to delete database '%s'.\nHowever, it has been removed from the list of databases you have used.")
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    msg = unicode(msg, 'utf8')
+                dlg = Dialogs.InfoDialog(None, msg % database)
                 dlg.ShowModal()
                 dlg.Destroy()
 
