@@ -543,8 +543,19 @@ class _TranscriptDialog(wx.Dialog):
         (w, h) = dc.GetTextExtent(str(num))
         # Make the Device Context editable
         dc.BeginDrawing()
-        # Place the Line Number on the Device Context, right-justified
-        dc.DrawText(str(num), self.lineNum.GetSize()[0] - w - 5, yPos)
+        # Start exception handling
+        try:
+            # Place the Line Number on the Device Context, right-justified
+            dc.DrawText(str(num), self.lineNum.GetSize()[0] - w - 5, yPos)
+        # if an excepction arises ...
+        except:
+            # ... ignore it.
+            import sys
+            print "TranscriptionUI._TranscriptDialog.AddLineNum():"
+            print sys.exc_info()[0]
+            print sys.exc_info()[1]
+            print
+            pass
         # The Device Context won't be edited any more here.
         dc.EndDrawing()
 
@@ -579,8 +590,15 @@ class _TranscriptDialog(wx.Dialog):
         # For each stepSize vertical pixels in the Transcript display ...
         # (Using a START of 10 prevents overlapping first line numbers.  Using a STEP of stepSize prevents typing lag on the Mac.)
         for y in range(10, self.editor.GetSize()[1], stepSize):
-            # ... get the character position (pos) of the character at the (10, y) pixel
-            (result, pos) = self.editor.HitTest((10, y))
+            # This raises an exception sometimes on OS X.  I can't recreate it, but I have gotten a couple reports from the field.
+            try:
+                # ... get the character position (pos) of the character at the (10, y) pixel
+                (result, pos) = self.editor.HitTest((10, y))
+            # If there's an exception ...
+            except:
+                # ... we probably don't actually HAVE a transcript yet, so initial values should do
+                result = 0
+                pos = -1
             # if we have move down on screen to a new character position ...
             if pos > curPos:
                 # ... get the formatting for the current character
@@ -777,22 +795,24 @@ class _TranscriptDialog(wx.Dialog):
 
         # If we're on Linux, we may not be getting the right screen size value
         if 'wxGTK' in wx.PlatformInfo:
+            rect2 = wx.Display(0).GetGeometry()
+            width = (rect2[2] - rect[0] - 4) * .715
 
-            print "TranscriptionUI_RTC.__size():", rect, wx.ClientDisplayRect()
-            
-            width = min(rect[2], 1440) * .715
+            # Transcript Compontent should be 74% of the HEIGHT, adjusted for the menu height
+            height = (min(rect[3], rect2[3]) - max(rect[1], rect2[1]) - 6) * .74
+
         # If we're on Windows or OS X ...
         else:
             # Transcript Compontent should be 71.5% of the WIDTH
             width = rect[2] * .715
 
-        # Transcript Compontent should be 74% of the HEIGHT, adjusted for the menu height
-        height = (rect[3] - TransanaGlobal.menuHeight) * .74
+            # Transcript Compontent should be 74% of the HEIGHT, adjusted for the menu height
+            height = (rect[3] - TransanaGlobal.menuHeight) * .74
 
         # Compensate in Linux.  I'm not sure why this is necessary, but it seems to be.
         # SEE IF CHANGINGING TransanaGlobal.menuHeight fixes this.
-        if 'wxGTK' in wx.PlatformInfo:
-            height -= 60
+#        if 'wxGTK' in wx.PlatformInfo:
+#            height -= 50
 
         # Return the SIZE values
         return wx.Size(width, height)
@@ -806,7 +826,11 @@ class _TranscriptDialog(wx.Dialog):
         # rect[0] compensates if Start menu is on Left
         x = rect[0]
         # rect[1] compensates if Start menu is on Top
-        y = rect[1] + rect[3] - height - 3
+        if 'wxGTK' in wx.PlatformInfo:
+            rect2 = wx.Display(0).GetGeometry()
+            y = (min(rect[3], rect2[3]) - max(rect[1], rect2[1]) - 6) * .35 + 24
+        else:
+            y = rect[1] + rect[3] - height - 3
         # Return the POSITION values
         return (x, y)    
 

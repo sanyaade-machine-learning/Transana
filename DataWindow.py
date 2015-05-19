@@ -236,13 +236,13 @@ class DataWindow(wx.Dialog):
         """Determine default size of Data Frame."""
         rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
         if 'wxGTK' in wx.PlatformInfo:
-            width = min(rect[2], 1440) * .28
+            width = min((rect[2] - 10), (1280 - rect[0])) * .28  # min(rect[2], 1440) * .28
         else:
             width = rect[2] * .28
         height = (rect[3] - TransanaGlobal.menuHeight) * .64
         # Compensate in Linux.  I'm not sure why this is necessary, but it seems to be.
-        if 'wxGTK' in wx.PlatformInfo:
-            height -= 60
+#        if 'wxGTK' in wx.PlatformInfo:
+#            height -= 50
         return wx.Size(width, height)
 
     def __pos(self):
@@ -251,9 +251,12 @@ class DataWindow(wx.Dialog):
         (width, height) = self.__size()
         # rect[0] compensates if the Start menu is on the Left
         if 'wxGTK' in wx.PlatformInfo:
-            x = rect[0] + min(rect[2], 1440) - width - 3
+            x = rect[0] + min((rect[2] - 10), (1280 - rect[0])) - width   # min(rect[2], 1440) - width - 3
         else:
             x = rect[0] + rect[2] - width - 3
         # rect[1] compensates if the Start menu is on the Top
-        y = rect[1] + rect[3] - height - 3
+        if 'wxGTK' in wx.PlatformInfo:
+            y = rect[1] + rect[3] - height + 24
+        else:
+            y = rect[1] + rect[3] - height - 3
         return wx.Point(x, y)

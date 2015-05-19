@@ -51,7 +51,8 @@ class FormatFontPanel(wx.Panel):
     def __init__(self, parent, fontData, sampleText='AaBbCc ... XxYyZz'):
         """ Initialize the Font Dialog Box.  fontData should be a FormatDialog.FormatDef object so that some values can be
             ambiguous due to conflicting settings in the selected text.  """
-
+        
+        # Capture the Font Data
         self.font = fontData
 
         # Remember the original FormatDialog.FormatDef settings in case the user presses Cancel
@@ -72,6 +73,11 @@ class FormatFontPanel(wx.Panel):
         boxTop = wx.BoxSizer(wx.HORIZONTAL)
         # Create the boxFont sizer, which will hold the Font Face widgets
         boxFont = wx.BoxSizer(wx.VERTICAL)
+
+        # We'll use a Panel for the sample text, painting directly on its Device Context.  The TextCtrl 
+        # on the Mac can't handle all we need it to for this task.
+        # We create this here, as it may get called while creating other controls.  We'll add it to the sizers later.
+        self.txtSample = wx.Panel(self, -1, style=wx.SIMPLE_BORDER)
 
         # Add Font Face widgets.
         # Create the label
@@ -101,23 +107,24 @@ class FormatFontPanel(wx.Panel):
         self.lbFont = wx.ListBox(self, -1, choices=fontList, style=wx.LB_SINGLE | wx.LB_ALWAYS_SB | wx.LB_SORT)
         # Make sure the initial font is in the list ...
         if self.font.fontFace != None:
+            # If the font name IS found in the dropdown ...
             if self.lbFont.FindString(self.font.fontFace) != wx.NOT_FOUND:
+                # ... then select that font name.
                 self.lbFont.SetStringSelection(self.font.fontFace)
+            # If not ...
             else:
-                # If not, substitute the platform's default font.   (This is more generic than using Transana's Default Font.)
-                tmpFont = wx.Font(self.font.fontSize, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
-                # Made sure the default font is in the list.
-                if self.lbFont.FindString(tmpFont.GetFaceName()) != wx.NOT_FOUND:
-                    self.lbFont.SetStringSelection(tmpFont.GetFaceName())
+                # Try to use the Default Font instead.  If the default font IS found in the dropdown ...
+                if self.lbFont.FindString(TransanaGlobal.configData.defaultFontFace) != wx.NOT_FOUND:
+                    # ... then select that font name in the dropdown and update the text control.
+                    self.txtFont.SetValue(TransanaGlobal.configData.defaultFontFace)
+                    self.lbFont.SetStringSelection(TransanaGlobal.configData.defaultFontFace)
+                # If neither the current font nor the default font are in the list ...
                 else:
-                    # If there are items in the list ...
-                    if self.lbFont.GetCount() > 0:
-                        # If the default font's face can't be found, just pick the first one in the list.
-                        self.lbFont.SetSelection(0)
-                    else:
+                    # ... select the first font in the list in both the dropdown and in the text control.
+                    self.lbFont.SetSelection(0)
+                    self.txtFont.SetValue(self.lbFont.GetStringSelection())
 
-                        print "FormatFontPanel.__init__():  PROBLEM   PROBLEM  PROBLEM"
-                        
+        # Bind the List Box Change event
         self.lbFont.Bind(wx.EVT_LISTBOX, self.OnLbFontChange)
         boxFont.Add(self.lbFont, 3, wx.ALIGN_LEFT | wx.ALIGN_BOTTOM | wx.EXPAND | wx.GROW)
 
@@ -279,9 +286,7 @@ class FormatFontPanel(wx.Panel):
         boxSample.Add(lblSample, 0, wx.ALIGN_LEFT | wx.ALIGN_TOP)
         boxSample.Add((0, 5))  # Spacer
 
-        # We'll use a Panel for the sample text, painting directly on its Device Context.  The TextCtrl 
-        # on the Mac can't handle all we need it to for this task.
-        self.txtSample = wx.Panel(self, -1, style=wx.SIMPLE_BORDER)
+        # We added the txtSample control earlier.  Set its background color and add it to the Sizers here.
         self.txtSample.SetBackgroundColour(self.font.fontBackgroundColorDef)
         boxSample.Add(self.txtSample, 1, wx.ALIGN_RIGHT | wx.EXPAND | wx.GROW) 
 
@@ -311,64 +316,72 @@ class FormatFontPanel(wx.Panel):
 
     def SetSampleFont(self):
         """ Update the Sample Text to reflect the dialog's current selections """
-        # To get a truly accurate font sample, we need to create a graphic object, paint the
-        # font sample on it, and place that on the screen.
-        # Get the size of the sample area
-        (bmpWidth, bmpHeight) = self.txtSample.GetSize()
-        # Create a BitMap that is the right size
-        bmp = wx.EmptyBitmap(bmpWidth, bmpHeight)
-        # Get the Sample Text Control's Device Context
-        cdc = wx.ClientDC(self.txtSample)
-        # Prepare the Device Context
-        self.PrepareDC(cdc)
-        # Link the Control Device Context and the BitMap as a BufferedDC
-        dc = wx.BufferedDC(cdc, bmp)
-        # if the background color is not ambiguous ...
-        if self.font.fontBackgroundColorDef != None:
-            # Set the background Color
-            dc.SetBackground(wx.Brush(self.font.fontBackgroundColorDef))
-        # If the background color is ambiguous ...
-        else:
-            # ... just use White
-            dc.SetBackground(wx.Brush(wx.NamedColour("White")))
-        # Clear the Device Context
-        dc.Clear()
-        # Begin drawing on the Device Context
-        dc.BeginDrawing()
-        if self.font.fontSize == None:
-            tmpFontSize = TransanaGlobal.configData.defaultFontSize
-        else:
-            tmpFontSize = self.font.fontSize
-        if self.font.fontFace == None:
-            tmpFontFace = TransanaGlobal.configData.defaultFontFace
-        else:
-            tmpFontFace = self.font.fontFace
-        if self.font.fontStyle == FormatDialog.fd_ITALIC:
-            tmpStyle = wx.FONTSTYLE_ITALIC
-        else:
-            tmpStyle = wx.FONTSTYLE_NORMAL
-        if self.font.fontWeight == FormatDialog.fd_BOLD:
-            tmpWeight = wx.FONTWEIGHT_BOLD
-        else:
-            tmpWeight = wx.FONTWEIGHT_NORMAL
-        if self.font.fontUnderline != FormatDialog.fd_AMBIGUOUS:
-            tmpUnderline = self.font.fontUnderline
-        else:
-            tmpUnderline = False
-        tmpFont = wx.Font(tmpFontSize, wx.FONTFAMILY_DEFAULT, tmpStyle, tmpWeight, tmpUnderline, tmpFontFace)
-        # Set the Device Context's Font
-        dc.SetFont(tmpFont)
-        # Set the Device Context's Foreground Color
-        dc.SetTextForeground(self.font.fontColorDef)
-        # Determine how bit our Sample Text is going to be
-        (w, h) = dc.GetTextExtent(self.sampleText)
-        # Center the Sample Text horizontally and vertically
-        x = int(bmpWidth / 2) - int(w / 2)
-        y = int(bmpHeight / 2) - int(h / 2)
-        # Draw the Sample Text on the Device Context
-        dc.DrawText(self.sampleText, x, y)
-        # Signal that we're done drawing on the Device Context
-        dc.EndDrawing()
+        # The Font Sample has been having some trouble on OS X for some users, but I can't recreate it.
+        # We'll just put this whole method in a try ... except block to prevent it from causing problems.
+        try:
+            # To get a truly accurate font sample, we need to create a graphic object, paint the
+            # font sample on it, and place that on the screen.
+            # Get the size of the sample area
+            (bmpWidth, bmpHeight) = self.txtSample.GetSize()
+            # Create a BitMap that is the right size
+            bmp = wx.EmptyBitmap(bmpWidth, bmpHeight)
+            # Get the Sample Text Control's Device Context
+            cdc = wx.ClientDC(self.txtSample)
+            # Prepare the Device Context
+            self.PrepareDC(cdc)
+            # Link the Control Device Context and the BitMap as a BufferedDC
+            dc = wx.BufferedDC(cdc, bmp)
+            # if the background color is not ambiguous ...
+            if self.font.fontBackgroundColorDef != None:
+                # Set the background Color
+                dc.SetBackground(wx.Brush(self.font.fontBackgroundColorDef))
+            # If the background color is ambiguous ...
+            else:
+                # ... just use White
+                dc.SetBackground(wx.Brush(wx.NamedColour("White")))
+            # Clear the Device Context
+            dc.Clear()
+            # Begin drawing on the Device Context
+            dc.BeginDrawing()
+            if self.font.fontSize == None:
+                tmpFontSize = TransanaGlobal.configData.defaultFontSize
+            else:
+                tmpFontSize = self.font.fontSize
+            if self.font.fontFace == None:
+                tmpFontFace = TransanaGlobal.configData.defaultFontFace
+            else:
+                tmpFontFace = self.font.fontFace
+            if self.font.fontStyle == FormatDialog.fd_ITALIC:
+                tmpStyle = wx.FONTSTYLE_ITALIC
+            else:
+                tmpStyle = wx.FONTSTYLE_NORMAL
+            if self.font.fontWeight == FormatDialog.fd_BOLD:
+                tmpWeight = wx.FONTWEIGHT_BOLD
+            else:
+                tmpWeight = wx.FONTWEIGHT_NORMAL
+            if self.font.fontUnderline != FormatDialog.fd_AMBIGUOUS:
+                tmpUnderline = self.font.fontUnderline
+            else:
+                tmpUnderline = False
+            # Create the specified font
+            tmpFont = wx.Font(tmpFontSize, wx.FONTFAMILY_DEFAULT, tmpStyle, tmpWeight, tmpUnderline, tmpFontFace)
+            # If the font has been successfully created ...
+            if tmpFont.IsOk():
+                # Set the Device Context's Font
+                dc.SetFont(tmpFont)
+                # Set the Device Context's Foreground Color
+                dc.SetTextForeground(self.font.fontColorDef)
+                # Determine how bit our Sample Text is going to be
+                (w, h) = dc.GetTextExtent(self.sampleText)
+                # Center the Sample Text horizontally and vertically
+                x = int(bmpWidth / 2) - int(w / 2)
+                y = int(bmpHeight / 2) - int(h / 2)
+                # Draw the Sample Text on the Device Context
+                dc.DrawText(self.sampleText, x, y)
+            # Signal that we're done drawing on the Device Context
+            dc.EndDrawing()
+        except:
+            pass
         
     def OnTxtFontChange(self, event):
         """ txtFont Change Event.  As the user types in the Font Name, the font ListBox should try to match it. """

@@ -1366,16 +1366,17 @@ class VisualizationWindow(wx.Dialog):
 # Private methods    
 
     def __size(self):
-        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()
         if 'wxGTK' in wx.PlatformInfo:
-            width = min(rect[2], 1440) * .715
+            rect2 = wx.Display(0).GetGeometry()
+            width = (rect2[2] - rect[0] - 4) * .715
         else:
             width = rect[2] * .715
         height = (rect[3] - TransanaGlobal.menuHeight) * .25
         return wx.Size(int(width), int(height))
 
     def __pos(self):
-        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()
         # If the Start Menu is on the left side, 0 is incorrect!  Get starting position from wx.Display.
         x = rect[0]
         # rect[1] compensated if the Start menu is at the top of the screen

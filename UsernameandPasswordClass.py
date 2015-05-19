@@ -267,7 +267,8 @@ class UsernameandPassword(wx.Dialog):
 
         # Define the "OK" button
         btnOK = wx.Button(panel, wx.ID_OK, _("OK"))
-
+        # Make the OK button the default.  (This one works on Linux, while the next line doesn't!)
+        btnOK.SetDefault()
         # Define the Default Button for the dialog.  This allows the "ENTER" key
         # to fire the OK button regardless of which widget has focus on the form.
         self.SetDefaultItem(btnOK)

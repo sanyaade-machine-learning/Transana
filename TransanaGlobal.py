@@ -49,8 +49,8 @@ if 'wxMac' in wx.PlatformInfo:
     # We set it to 24 on the Mac!  It used to be 0, but seems to need to be 24 for wxPython 2.6.1.0.
     menuHeight = 24
 elif 'wxGTK' in wx.PlatformInfo:
-    # Linux, at least my Ubuntu 10.04 setup, requires space for the Linux menu and Transana's menu.
-    menuHeight = 28 + 24 # wx.Display(0).GetClientArea()[1]
+    # Ubuntu 12.04 seems to use 24 points for the menu area, then another 4 for window borders
+    menuHeight = 24 + 4  # wx.Display(0).GetClientArea()[1]
 else:
     # While we default to 44, this value actually can get altered elsewhere to reflect the height of
     # the title/header bar.  XP using Large Fonts, for example, needs a larger value.

@@ -987,6 +987,8 @@ class FileManagement(wx.Dialog):
         elif event.GetEventObject().GetId() == self.btnHelp.GetId():
             # Put the prompt in the Status Bar
             self.SetStatusText(_('View File Management Help'))
+        # Call Skip so that buttons will work on Linux!
+        event.Skip()
 
     def OnMouseExit(self, event):
         """ Clear the Status Bar when the Mouse is no longer over a Button """
@@ -2678,6 +2680,8 @@ class FileManagement(wx.Dialog):
             if not (initialCollectionName in ['.', '/']):
                 # ... note that we have changed directories
                 dirChanged = True
+                # Remember the original collection name, so we can return to it!
+                originalCollectionName = self.sFTPClient.getcwd()
                 # ... change to the appropriate directory 
                 self.sFTPClient.chdir(initialCollectionName)
                 # ... and reset the initial collection name (ready for recursive calls)
@@ -2716,8 +2720,8 @@ class FileManagement(wx.Dialog):
                 self.remoteAddChildNode(remoteDir, newTreeNode, node)
             # If we changed the directory above ...
             if dirChanged:
-                # ... change it back.
-                self.sFTPClient.chdir('..')
+                # ... change it back to the original directory.
+                self.sFTPClient.chdir(originalCollectionName)
 
     def OnConnect(self, event):
         """ Process the "Connect" button """

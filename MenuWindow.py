@@ -18,6 +18,10 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case, Rajas Sambhare'
 
+DEBUG = False
+if DEBUG:
+    print "MenuWindow DEBUG is ON!!"
+
 # import Python's cStringIO module for fast string processing
 import cStringIO
 # Import Python os module
@@ -119,6 +123,15 @@ class MenuWindow(wx.Frame):
         self.ControlObject = None
         # Initialize the height to be used for the Menu Window.
         self.height = TransanaGlobal.menuHeight
+
+        if DEBUG:
+            print "START"
+            print "MenuWindow.__init__():", wx.ClientDisplayRect(), wx.Display(0).GetClientArea()
+            print
+            print "Number of Monitors:", wx.Display.GetCount()
+            for x in range(wx.Display.GetCount()):
+                print "  ", x, wx.Display(x).IsPrimary(), wx.Display(x).GetGeometry(), wx.Display(x).GetClientArea()
+            
         # We need to handle the window differently on Windows vs. Mac.
         # First, Windows ...
         if '__WXMSW__' in wx.Platform:
@@ -143,17 +156,16 @@ class MenuWindow(wx.Frame):
         # Linux and who knows what else
         else:
             screenDims = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
-
-            print "MenuWindow.__init__():", screenDims, wx.Display.GetCount()
-            for x in range(wx.Display.GetCount()):
-                d = wx.Display(x)
-                print "Display", x, d.GetClientArea(), d.IsPrimary(), d.GetName()
-            
+            screenDims2 = wx.Display(0).GetGeometry()
             self.left = screenDims[0]
             self.top = screenDims[1]
-            self.width = min(screenDims[2], 1440)
-            self.height = screenDims[3]
+            self.width = screenDims2[2] - screenDims[0] - 4  # min(screenDims[2], 1280 - self.left)
+            self.height = min(screenDims[3], screenDims2[3]) - max(screenDims[1], screenDims2[1]) - 6
             winstyle = wx.MINIMIZE_BOX | wx.CLOSE_BOX | wx.RESIZE_BOX | wx.SYSTEM_MENU | wx.CAPTION      # | wx.MAXIMIZE
+
+            if DEBUG:
+                print "Linux:", screenDims, screenDims2, self.left, self.top, self.width, self.height
+                print
 
         # Now create the Frame for the Menu Bar
         wx.Frame.__init__(self, parent, -1, title, style=winstyle,
@@ -477,14 +489,14 @@ class MenuWindow(wx.Frame):
 
         # Due to a problem with wx.Locale on the Mac (It won't load anything but English), I'm disabling 
         # i18n functionality of the wxPython layer on the Mac.  This code accomplishes that.
-#        if "__WXMAC__" in wx.PlatformInfo:
-#            lang = wx.LANGUAGE_ENGLISH
+        if "__WXMAC__" in wx.PlatformInfo:
+            lang = wx.LANGUAGE_ENGLISH
             
 #            if (TransanaGlobal.configData.language != 'en'):
 #                print "wxPython language selection over-ridden for the Mac"
             
         # This provides localization for wxPython
-        self.locale = wx.Locale(lang, wx.LOCALE_LOAD_DEFAULT | wx.LOCALE_CONV_ENCODING)
+        self.locale = wx.Locale(lang) # , wx.LOCALE_LOAD_DEFAULT | wx.LOCALE_CONV_ENCODING)
         
         # NOTE:  I've commented out the next line as Transana's i18n will be implemented using Python's
         #        "gettext" rather than wxPython's "wx.Locale".
@@ -1288,160 +1300,176 @@ class MenuWindow(wx.Frame):
 
     def OnOptionsLanguage(self, event):
         """ Handler for Options > Language menu selections """
-        # We're starting to face the situation where not all the translations may be up-to-date.  Let's build some checks.
-        # Initialize an empty variable
-        outofdateLanguage = ''
-
-        # English
-        if event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EN:
-            TransanaGlobal.configData.language = 'en'
-            self.presLan_en.install()
-            
-        # Arabic
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_AR:
-            outofdateLanguage = 'Arabic'
-            TransanaGlobal.configData.language = 'ar'
-            self.presLan_ar.install()
-            
-        # Danish
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DA:
-            outofdateLanguage = 'Danish'
-            TransanaGlobal.configData.language = 'da'
-            self.presLan_da.install()
-            
-        # German
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DE:
-            outofdateLanguage = 'German'
-            TransanaGlobal.configData.language = 'de'
-            self.presLan_de.install()
-
-        # Greek
-#        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
-#            outofdateLanguage = 'Greek'
-#            TransanaGlobal.configData.language = 'el'
-#            self.presLan_el.install()
-
-        # Spanish
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ES:
-            outofdateLanguage = 'Spanish'
-            TransanaGlobal.configData.language = 'es'
-            self.presLan_es.install()
-
-        # Finnish
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_FI:
-            outofdateLanguage = 'Finnish'
-            TransanaGlobal.configData.language = 'fi'
-            self.presLan_fi.install()
-
-        # French
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_FR:
-            outofdateLanguage = 'French'
-            TransanaGlobal.configData.language = 'fr'
-            self.presLan_fr.install()
-
-        # Hebrew
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_HE:
-            outofdateLanguage = 'Hebrew'
-            TransanaGlobal.configData.language = 'he'
-            self.presLan_he.install()
-
-        # Italian
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_IT:
-            outofdateLanguage = 'Italian'
-            TransanaGlobal.configData.language = 'it'
-            self.presLan_it.install()
-
-        # Dutch
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NL:
-            outofdateLanguage = 'Dutch'
-            TransanaGlobal.configData.language = 'nl'
-            self.presLan_nl.install()
-
-        # Norwegian Bokmal
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NB:
-            outofdateLanguage = 'Norwegian Bokmal'
-            TransanaGlobal.configData.language = 'nb'
-            self.presLan_nb.install()
-
-        # Norwegian Ny-norsk
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NN:
-            outofdateLanguage = 'Norwegian Nynorsk'
-            TransanaGlobal.configData.language = 'nn'
-            self.presLan_nn.install()
-
-        # Polish
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_PL:
-            outofdateLanguage = 'Polish'
-            TransanaGlobal.configData.language = 'pl'
-            self.presLan_pl.install()
-
-        # Portuguese
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_PT:
-            outofdateLanguage = 'Portuguese'
-            TransanaGlobal.configData.language = 'pt'
-            self.presLan_pt.install()
-
-        # Russian
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_RU:
-            outofdateLanguage = 'Russian'
-            TransanaGlobal.configData.language = 'ru'
-            self.presLan_ru.install()
-
-        # Swedish
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_SV:
-            outofdateLanguage = 'Swedish'
-            TransanaGlobal.configData.language = 'sv'
-            self.presLan_sv.install()
-
-        # Chinese (English prompts)
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ZH:
-            outofdateLanguage = 'Chinese - Simplified'
-            TransanaGlobal.configData.language = 'zh'
-            self.presLan_zh.install()
-
-        # Eastern Europe Encoding (English prompts)
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EASTEUROPE:
-            TransanaGlobal.configData.language = 'easteurope'
-            self.presLan_en.install()
-
-        # Greek (English prompts)
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
-            TransanaGlobal.configData.language = 'el'
-            self.presLan_en.install()
-
-        # Japanese (English prompts)
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_JA:
-            TransanaGlobal.configData.language = 'ja'
-            self.presLan_en.install()
-
-        # Korean (English prompts)
-        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_KO:
-            TransanaGlobal.configData.language = 'ko'
-            self.presLan_en.install()
-
-        else:
-            wx.MessageDialog(None, "Unknown Language", "Unknown Language").ShowModal()
-
-            TransanaGlobal.configData.language = 'en'
-            self.presLan_en.install()
-
-        # Check to see if we have a translation, and if it is up-to-date.
-        
-        # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  "&Media Conversion" works for version 2.50.
-        # If you update this, also update the phrase above in the __init__ method.)
-        
-        if (outofdateLanguage != '') and ("&Media Conversion" == _("&Media Conversion")):
-            # If not, display an information message.
-            prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
-            dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
-            dlg.ShowModal()
+        # Check to see if there are Search Results Nodes
+        if self.ControlObject.DataWindowHasSearchNodes():
+            # If so, prompt the user about if they really want to exit.
+            dlg = Dialogs.QuestionDialog(self, _('You have unsaved Search Results.  Are you sure you want to change languages without converting them to Collections?'))
+            result = dlg.LocalShowModal()
+            # Destroy the Message Dialog
             dlg.Destroy()
+        else:
+            # If no Search Results exist, it's the same as if the user says "Yes"
+            result = wx.ID_YES
+        # If the user wants to exit (or if there are no Search Results) ...
+        if result == wx.ID_YES:
+            # We're starting to face the situation where not all the translations may be up-to-date.  Let's build some checks.
+            # Initialize an empty variable
+            outofdateLanguage = ''
 
-        infodlg = Dialogs.InfoDialog(None, _("Please note that some prompts cannot be set to the new language until you restart Transana, and\nthat the language of some prompts is determined by your operating system instead of Transana."))
-        infodlg.ShowModal()
-        infodlg.Destroy()
-        
-        self.ControlObject.ChangeLanguages()
+            # English
+            if event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EN:
+                TransanaGlobal.configData.language = 'en'
+                self.presLan_en.install()
+                
+            # Arabic
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_AR:
+                outofdateLanguage = 'Arabic'
+                TransanaGlobal.configData.language = 'ar'
+                self.presLan_ar.install()
+                
+            # Danish
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DA:
+                outofdateLanguage = 'Danish'
+                TransanaGlobal.configData.language = 'da'
+                self.presLan_da.install()
+                
+            # German
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_DE:
+                outofdateLanguage = 'German'
+                TransanaGlobal.configData.language = 'de'
+                self.presLan_de.install()
+
+            # Greek
+    #        elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
+    #            outofdateLanguage = 'Greek'
+    #            TransanaGlobal.configData.language = 'el'
+    #            self.presLan_el.install()
+
+            # Spanish
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ES:
+                outofdateLanguage = 'Spanish'
+                TransanaGlobal.configData.language = 'es'
+                self.presLan_es.install()
+
+            # Finnish
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_FI:
+                outofdateLanguage = 'Finnish'
+                TransanaGlobal.configData.language = 'fi'
+                self.presLan_fi.install()
+
+            # French
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_FR:
+                outofdateLanguage = 'French'
+                TransanaGlobal.configData.language = 'fr'
+                self.presLan_fr.install()
+
+            # Hebrew
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_HE:
+                outofdateLanguage = 'Hebrew'
+                TransanaGlobal.configData.language = 'he'
+                self.presLan_he.install()
+
+            # Italian
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_IT:
+                outofdateLanguage = 'Italian'
+                TransanaGlobal.configData.language = 'it'
+                self.presLan_it.install()
+
+            # Dutch
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NL:
+                outofdateLanguage = 'Dutch'
+                TransanaGlobal.configData.language = 'nl'
+                self.presLan_nl.install()
+
+            # Norwegian Bokmal
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NB:
+                outofdateLanguage = 'Norwegian Bokmal'
+                TransanaGlobal.configData.language = 'nb'
+                self.presLan_nb.install()
+
+            # Norwegian Ny-norsk
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_NN:
+                outofdateLanguage = 'Norwegian Nynorsk'
+                TransanaGlobal.configData.language = 'nn'
+                self.presLan_nn.install()
+
+            # Polish
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_PL:
+                outofdateLanguage = 'Polish'
+                TransanaGlobal.configData.language = 'pl'
+                self.presLan_pl.install()
+
+            # Portuguese
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_PT:
+                outofdateLanguage = 'Portuguese'
+                TransanaGlobal.configData.language = 'pt'
+                self.presLan_pt.install()
+
+            # Russian
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_RU:
+                outofdateLanguage = 'Russian'
+                TransanaGlobal.configData.language = 'ru'
+                self.presLan_ru.install()
+
+            # Swedish
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_SV:
+                outofdateLanguage = 'Swedish'
+                TransanaGlobal.configData.language = 'sv'
+                self.presLan_sv.install()
+
+            # Chinese (English prompts)
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_ZH:
+                outofdateLanguage = 'Chinese - Simplified'
+                TransanaGlobal.configData.language = 'zh'
+                self.presLan_zh.install()
+
+            # Eastern Europe Encoding (English prompts)
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EASTEUROPE:
+                TransanaGlobal.configData.language = 'easteurope'
+                self.presLan_en.install()
+
+            # Greek (English prompts)
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_EL:
+                TransanaGlobal.configData.language = 'el'
+                self.presLan_en.install()
+
+            # Japanese (English prompts)
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_JA:
+                TransanaGlobal.configData.language = 'ja'
+                self.presLan_en.install()
+
+            # Korean (English prompts)
+            elif  event.GetId() == MenuSetup.MENU_OPTIONS_LANGUAGE_KO:
+                TransanaGlobal.configData.language = 'ko'
+                self.presLan_en.install()
+
+            else:
+                wx.MessageDialog(None, "Unknown Language", "Unknown Language").ShowModal()
+
+                TransanaGlobal.configData.language = 'en'
+                self.presLan_en.install()
+
+            # Check to see if we have a translation, and if it is up-to-date.
+            
+            # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  "&Media Conversion" works for version 2.50.
+            # If you update this, also update the phrase above in the __init__ method.)
+            
+            if (outofdateLanguage != '') and ("&Media Conversion" == _("&Media Conversion")):
+                # If not, display an information message.
+                prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
+                dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
+                dlg.ShowModal()
+                dlg.Destroy()
+
+            infodlg = Dialogs.InfoDialog(None, _("Please note that some prompts cannot be set to the new language until you restart Transana, and\nthat the language of some prompts is determined by your operating system instead of Transana."))
+            infodlg.ShowModal()
+            infodlg.Destroy()
+            
+            self.ControlObject.ChangeLanguages()
+        # if the language change is blocked because of search results ...
+        else:
+            # ... we need to restore the proper language selection in the menus
+            self.menuBar.SetLanguageMenuCheck(TransanaGlobal.configData.language)
 
     def OnOptionsQuickClipMode(self, event):
         """ Handler for Options > Quick Clip Mode """

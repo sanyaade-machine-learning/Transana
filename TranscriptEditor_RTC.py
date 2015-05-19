@@ -2513,15 +2513,26 @@ class TranscriptEditor(RichTextEditCtrl):
             tmpStyle = self.GetStyleAt(selPos)
             tmpFont = tmpStyle.GetFont()
 
-            # We don't touch the settings for TimeCodes or Hidden TimeCode Data, so these characters can be ignored.                
-            if (not self.CompareFormatting(tmpStyle, self.txtTimeCodeAttr, fullCompare=False)) and (not self.IsStyleHiddenAt(selPos)):
+            # We don't touch the settings for TimeCodes or Hidden TimeCode Data, so these characters can be ignored.
+            # Also check that the tmpFont is valid, or we can't do the comparisons.
+            if (not self.CompareFormatting(tmpStyle, self.txtTimeCodeAttr, fullCompare=False)) and \
+               (not self.CompareFormatting(tmpStyle, self.txtHiddenAttr, fullCompare=False)) and \
+               (not self.CompareFormatting(tmpStyle, self.txtTimeCodeHRFAttr, fullCompare=False)) and \
+               tmpFont.IsOk():
+                
                 # Now look for specs that are different, and flag the TransanaFontDef object if one is found.
                 # If the the Symbol Font is used, we ignore this.  (We don't want to change the Font Face of Special Characters.)
                 if (fontData.fontFace != None) and (tmpFont.GetFaceName() != 'Symbol') and (tmpFont.GetFaceName() != fontData.fontFace):
-                    del(fontData.fontFace)
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.fontFace)
+                    fontData.fontFace = None
 
                 if (fontData.fontSize != None) and (tmpFont.GetPointSize() != fontData.fontSize):
-                    del(fontData.fontSize)
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.fontSize)
+                    fontData.fontSize = None
 
                 if (fontData.fontWeight != FormatDialog.fd_AMBIGUOUS) and \
                    ((tmpFont.GetWeight() == wx.FONTWEIGHT_BOLD) and (fontData.fontWeight == FormatDialog.fd_OFF)) or \
@@ -2539,35 +2550,58 @@ class TranscriptEditor(RichTextEditCtrl):
                     fontData.fontUnderline = FormatDialog.fd_AMBIGUOUS
 
                 if (fontData.fontColorDef != None) and (fontData.fontColorDef != tmpStyle.GetTextColour()):
-                    del(fontData.fontColorDef)
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.fontColorDef)
+                    fontData.fontColorDef = None
         
                 if (fontData.fontBackgroundColorDef != None) and (fontData.fontBackgroundColorDef != tmpStyle.GetBackgroundColour()):
-                    del(fontData.fontBackgroundColorDef)
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.fontBackgroundColorDef)
+                    fontData.fontBackgroundColorDef = None
 
                 if (fontData.paragraphAlignment != None) and (fontData.paragraphAlignment != tmpStyle.GetAlignment()):
-                    del(fontData.paragraphAlignment)
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.paragraphAlignment)
+                    fontData.paragraphAlignment = None
 
                 if (fontData.paragraphLeftIndent != None) and (fontData.paragraphLeftIndent != tmpStyle.GetLeftIndent()):
-                    del(fontData.paragraphLeftIndent)
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.paragraphLeftIndent)
+                    fontData.paragraphLeftIndent = None
 
                 if (fontData.paragraphLeftSubIndent != None) and (fontData.paragraphLeftSubIndent != tmpStyle.GetLeftSubIndent()):
-                    del(fontData.paragraphLeftSubIndent)
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.paragraphLeftSubIndent)
+                    fontData.paragraphLeftSubIndent = None
 
                 if (fontData.paragraphRightIndent != None) and (fontData.paragraphRightIndent != tmpStyle.GetRightIndent()):
-                    del(fontData.paragraphRightIndent)
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.paragraphRightIndent)
+                    fontData.paragraphRightIndent = None
 
                 if (fontData.paragraphLineSpacing != None) and (fontData.paragraphLineSpacing != tmpStyle.GetLineSpacing()):
-                    del(fontData.paragraphLineSpacing)
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.paragraphLineSpacing)
+                    fontData.paragraphLineSpacing = None
 
                 if (fontData.paragraphSpaceBefore != None) and (fontData.paragraphSpaceBefore != tmpStyle.GetParagraphSpacingBefore()):
-                    del(fontData.paragraphSpaceBefore)
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.paragraphSpaceBefore)
+                    fontData.paragraphSpaceBefore = None
 
-                # There's a bug in RTC's ParagraphSpacingBefore specification.  It adds space AFTER too.  This compensates for that if possible.
-#                if (fontData.paragraphSpaceAfter != None) and (fontData.paragraphSpaceAfter != tmpStyle.GetParagraphSpacingAfter() + tmpStyle.GetParagraphSpacingBefore()):
-#                    del(fontData.paragraphSpaceAfter)
-
-                if (fontData.tabs != None) and (fontData.tabs != tmpStyle.GetTabs()):
-                    del(fontData.tabs)
+                if (fontData.tabs != []) and (fontData.tabs != tmpStyle.GetTabs()):
+                    # These should be functionally equivalent, but apparently not!  Use the second to avoid problems
+                    # when you've imported a file with font problems
+                    # del(fontData.tabs)
+                    fontData.tabs = []
 
         # If there's no SELECTION, paragraph formatting may not work right.  This is especially true if we are on
         # a blank line.  This code attempts for fix these problems.
@@ -2673,8 +2707,13 @@ class TranscriptEditor(RichTextEditCtrl):
                     # Get the Font Attributes of the current Character
                     tmpStyle = self.GetStyleAt(selPos)
                     tmpFont = tmpStyle.GetFont()
-                    # We don't want to update the formatting of Time Codes or of hidden Time Code Data.  
-                    if (not self.CompareFormatting(tmpStyle, self.txtTimeCodeAttr, fullCompare=False)) and (not self.IsStyleHiddenAt(selPos)):
+
+                    # We don't update the formatting for TimeCodes or Hidden TimeCode Data, so these characters can be ignored.
+                    # Also check that the tmpFont is valid, or we can't do the comparisons.
+                    if (not self.CompareFormatting(tmpStyle, self.txtTimeCodeAttr, fullCompare=False)) and \
+                       (not self.CompareFormatting(tmpStyle, self.txtHiddenAttr, fullCompare=False)) and \
+                       (not self.CompareFormatting(tmpStyle, self.txtTimeCodeHRFAttr, fullCompare=False)) and \
+                       tmpFont.IsOk():
 
                         # Now alter those characteristics that are not ambiguous in the newFontData.
                         # Where the specification is ambiguous, use the old value from attrs.

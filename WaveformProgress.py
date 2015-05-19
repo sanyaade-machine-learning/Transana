@@ -19,6 +19,10 @@
 
 __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>'
 
+DEBUG = False
+if DEBUG:
+    print "WaveformProgres DEBUG is ON!!!!!"
+
 import wx      # import wxPython
 import os, sys
 # import Python's time module
@@ -259,7 +263,7 @@ class WaveformProgress(wx.Dialog):
         elif mode == 'CustomConvert':
             process = self.processCommand
 
-            if False:
+            if DEBUG:
                 print "WaveformProgress.Extract():", sys.getfilesystemencoding()
                 print process % (inputFile, outputFile)
                 print
@@ -279,7 +283,7 @@ class WaveformProgress(wx.Dialog):
         # Encode the filenames to UTF8 so that unicode files are handled properly
         process = process.encode('utf8')
 
-        if False:
+        if DEBUG:
             print "WaveformProgress.Extract():"
             st = process % (tempMediaFilename, tempWaveFilename)
             if isinstance(st, unicode):

@@ -214,10 +214,6 @@ class MenuSetup(wx.MenuBar):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'de', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_DE, _("&German"), kind=wx.ITEM_RADIO)
-        # Greek
-#        dir = os.path.join(TransanaGlobal.programDir, 'locale', 'el', 'LC_MESSAGES', 'Transana.mo')
-#        if os.path.exists(dir):
-#            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EL, _("Gree&k"), kind=wx.ITEM_RADIO)
         # Spanish
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'es', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
@@ -270,13 +266,6 @@ class MenuSetup(wx.MenuBar):
         dir = os.path.join(TransanaGlobal.programDir, 'locale', 'zh', 'LC_MESSAGES', 'Transana.mo')
         if os.path.exists(dir):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_ZH, _("&Chinese - Simplified"), kind=wx.ITEM_RADIO)
-        # Greek, Japanese, and Korean
-#        if ('wxMSW' in wx.PlatformInfo) and (TransanaConstants.singleUserVersion):
-#            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EASTEUROPE, _("English prompts, Eastern European data (ISO-8859-2 encoding)"), kind=wx.ITEM_RADIO)
-#            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_EL, _("English prompts, Greek data"), kind=wx.ITEM_RADIO)
-#            self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_JA, _("English prompts, Japanese data"), kind=wx.ITEM_RADIO)
-            # Korean support must be removed due to a bug in wxSTC on Windows.
-            # self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_KO, _("English prompts, Korean data"), kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_LANGUAGE, _("&Language"), self.optionslanguagemenu)
         self.optionsmenu.AppendSeparator()
         if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
@@ -310,47 +299,8 @@ class MenuSetup(wx.MenuBar):
         self.optionsmenu.AppendMenu(MENU_OPTIONS_PRESENT, _("&Presentation Mode"), self.optionspresentmenu)
         self.Append(self.optionsmenu, _("&Options"))
 
-        # Set Language Menu to initial value
-        if TransanaGlobal.configData.language == 'ar':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_AR, True)
-        elif TransanaGlobal.configData.language == 'da':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_DA, True)
-        elif TransanaGlobal.configData.language == 'de':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_DE, True)
-#        elif TransanaGlobal.configData.language == 'el':
-#            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EL, True)
-        elif TransanaGlobal.configData.language == 'es':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_ES, True)
-        elif TransanaGlobal.configData.language == 'fi':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_FI, True)
-        elif TransanaGlobal.configData.language == 'fr':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_FR, True)
-        elif TransanaGlobal.configData.language == 'it':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_IT, True)
-        elif TransanaGlobal.configData.language == 'nl':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_NL, True)
-        elif TransanaGlobal.configData.language == 'nb':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_NB, True)
-        elif TransanaGlobal.configData.language == 'nn':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_NN, True)
-        elif TransanaGlobal.configData.language == 'pl':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_PL, True)
-        elif TransanaGlobal.configData.language == 'pt':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_PT, True)
-        elif TransanaGlobal.configData.language == 'ru':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_RU, True)
-        elif TransanaGlobal.configData.language == 'sv':
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_SV, True)
-        elif (TransanaGlobal.configData.language == 'zh'):
-            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_ZH, True)
-#        elif (TransanaGlobal.configData.language == 'easteurope') and (TransanaConstants.singleUserVersion):
-#            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EASTEUROPE, True)
-#        elif (TransanaGlobal.configData.language == 'el') and (TransanaConstants.singleUserVersion):
-#            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EL, True)
-#        elif (TransanaGlobal.configData.language == 'ja') and (TransanaConstants.singleUserVersion):
-#            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_JA, True)
-#        elif (TransanaGlobal.configData.language == 'ko') and (TransanaConstants.singleUserVersion):
-#            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_KO, True)
+        # Place the "check" by the correct language based on Transana's configuration settings
+        self.SetLanguageMenuCheck(TransanaGlobal.configData.language)
             
         # Set Options Menu items to their initial values based on Configuration Data
         if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
@@ -394,3 +344,39 @@ class MenuSetup(wx.MenuBar):
         self.Append(self.helpmenu, _("&Help"))
 
         wx.App_SetMacHelpMenuTitleName(_("&Help"))
+
+    def SetLanguageMenuCheck(self, language):
+        """ Set the check mark in the Language menu by the selected language """
+        # Set Language Menu to appropriate value
+        if language == 'en':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_EN, True)
+        elif language == 'ar':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_AR, True)
+        elif language == 'da':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_DA, True)
+        elif language == 'de':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_DE, True)
+        elif language == 'es':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_ES, True)
+        elif language == 'fi':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_FI, True)
+        elif language == 'fr':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_FR, True)
+        elif language == 'it':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_IT, True)
+        elif language == 'nl':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_NL, True)
+        elif language == 'nb':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_NB, True)
+        elif language == 'nn':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_NN, True)
+        elif language == 'pl':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_PL, True)
+        elif language == 'pt':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_PT, True)
+        elif language == 'ru':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_RU, True)
+        elif language == 'sv':
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_SV, True)
+        elif (language == 'zh'):
+            self.optionslanguagemenu.Check(MENU_OPTIONS_LANGUAGE_ZH, True)

@@ -927,21 +927,23 @@ class VideoWindow(wx.Dialog):
 
     def __size(self):
         """Determine default size of MediaPlayer Frame."""
-        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()
         if 'wxGTK' in wx.PlatformInfo:
-            width = min(rect[2], 1440) * .28
+            rect2 = wx.Display(0).GetGeometry()
+            width = (rect2[2] - rect[0] - 4) * .28
+            height = (min(rect[3], rect2[3]) - max(rect[1], rect2[1]) - 6) * .35
         else:
             width = rect[2] * .28
-        height = (rect[3] - TransanaGlobal.menuHeight) * .35
+            height = (rect[3] - TransanaGlobal.menuHeight) * .35
         return wx.Size(width, height)
 
     def __pos(self):
         """Determine default position of MediaPlayer Frame."""
-        rect = wx.Display(0).GetClientArea()  # wx.ClientDisplayRect()
+        rect = wx.Display(0).GetClientArea()
         (width, height) = self.__size()
         # rect[0] compensates if the Start menu is on the left side of the screen.
         if 'wxGTK' in wx.PlatformInfo:
-            x = rect[0] + min(rect[2], 1440) - width - 3
+            x = rect[0] + min((rect[2] - 10), (1280 - rect[0])) - width
         else:
             x = rect[0] + rect[2] - width - 3
         # rect[1] compensates if the Start menu is on the top of the screen

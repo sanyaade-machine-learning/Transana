@@ -45,11 +45,8 @@ class ConfigData(object):
         # Set default values for parameters that are not saved
         # Video Speed of 10 is equal to normal playback speed
         self.videoSpeed = 10
-        # Auto Arrange is enabled by default, except on Linux
-        if 'wxGTK' in wx.PlatformInfo:
-            self.autoArrange = False
-        else:
-            self.autoArrange = True
+        # Auto Arrange is enabled by default
+        self.autoArrange = True
 
         # Set default values for Dialog Size values which are not saved as part of the configuration file
         self.clipPropertiesSize = (680, 550)

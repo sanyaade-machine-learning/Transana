@@ -416,6 +416,41 @@ class Transana(wx.App):
                     # NOTE:  If changing this value, it also needs to be changed in the ControlObjectClass.GetNewDatabase() method.
                     TransanaGlobal.connectionTimer.Start(600000)
 
+            # If we're on OS X ...
+            if 'wxMac' in wx.PlatformInfo:
+                # ... create a list of the FFmpeg files that should be in /usr/local/lib
+                ffmpegFileList = ['libmp4ff.a', 'libfaad.la', 'libfaad.a', 'libfaad.2.0.0.dylib', 'libmp3lame.la', 'libmp3lame.a',
+                                  'libmp3lame.0.0.0.dylib']
+                # Create a list of the Links that should be in /usr/local/lib, including what they should link to
+                ffmpegLinkList = [('libfaad.2.0.0.dylib', 'libfaad.2.dylib'),
+                                  ('libfaad.2.0.0.dylib', 'libfaad.dylib'),
+                                  ('libmp3lame.0.0.0.dylib', 'libmp3lame.0.dylib'),
+                                  ('libmp3lame.0.0.0.dylib', 'libmp3lame.dylib')]
+                # Assume the files exist
+                filesExist = True
+                # For each file that should be in /usr/local/lib ...
+                for filename in ffmpegFileList:
+                    # ... if that file does not exist ...
+                    if not os.path.exists('/usr/local/lib/%s' % filename):
+                        # ... not that NOT ALL FILES exist ...
+                        filesExist = False
+                        # ... and stop looking
+                        break
+                # See if the FFMpeg libraries are installed correctly.  If not ...
+                if not filesExist:
+                    # ... get the program directory, removing the final directory which points to Transana.py
+                    sourceDir = os.path.split(TransanaGlobal.programDir)[0]
+                    # For each file in the FFmpeg file list ...
+                    for filename in ffmpegFileList:
+                        # ... if the file is not already in /usr/local/lib ...
+                        if not os.path.exists('/usr/local/lib/%s' % filename):
+                            # ... copy the file to /usr/local/lib
+                            os.system("cp %s/Frameworks/%s /usr/local/lib/%s" % (sourceDir, filename, filename))
+                    # For each file LINK in the FFmpeg List List ...
+                    for (filename, linkname) in ffmpegLinkList:
+                        # ... create the appropriate symbolic link
+                        os.system("ln -fs /usr/local/lib/%s /usr/local/lib/%s" % (filename, linkname))
+
             # if this is the first time this user profile has used Transana ...
             if firstStartup:
                 # ... create a prompt about looking at the Tutorial

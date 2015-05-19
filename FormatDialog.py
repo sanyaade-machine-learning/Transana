@@ -151,7 +151,10 @@ class FormatDef(object):
     def _setFontSize(self, fontSize):
         # If the parameter cannot be converted to an integer, don't change the value.
         try:
-            self._fontSize = int(fontSize)
+            if fontSize == None:
+                self._fontSize = None
+            else:
+                self._fontSize = int(fontSize)
         except:
             pass
     def _delFontSize(self):

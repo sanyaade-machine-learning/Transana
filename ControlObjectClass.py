@@ -2058,8 +2058,16 @@ class ControlObject(object):
 
     def DataWindowHasSearchNodes(self):
         """ Returns the number of Search Nodes in the DataWindow's Database Tree """
+        # Find the Search Node, using the localized label
         searchNode = self.DataWindow.DBTab.tree.select_Node((_('Search'),), 'SearchRootNode')
-        return self.DataWindow.DBTab.tree.ItemHasChildren(searchNode)
+        # If there's not a problem with the node ...
+        if (searchNode != None) and searchNode.IsOk():
+            # ... return information about whether it has child nodes
+            return self.DataWindow.DBTab.tree.ItemHasChildren(searchNode)
+        # If there is a problem with the node ...
+        else:
+            # ... just return False.  (I'm not sure why this fails occasionally.)
+            return False
 
     def RemoveDataWindowKeywordExamples(self, keywordGroup, keyword, clipNum):
         """ Remove Keyword Examples from the Data Window """

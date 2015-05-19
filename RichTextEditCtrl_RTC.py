@@ -708,7 +708,22 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             XMLText = XMLText[ : startPos] + XMLText[endPos + 4 : ]
 
         return XMLText
-            
+
+    def SetDefaultStyle(self, tmpStyle):
+        """ Over-ride the RichTextEditCtrl's SetDefaultStyle() to fix problems with setting the style at the
+            end of a line / paragraph.  The font change doesn't always stick. """
+        # Attempt to apply the specified font to the document
+        richtext.RichTextCtrl.SetDefaultStyle(self, tmpStyle)
+        # Get the current default style
+        currentStyle = self.GetDefaultStyle()
+        # If the font isn't OK, the formatting didn't take!
+        if not currentStyle.GetFont().IsOk():
+            # In this case, let's add a SPACE character
+            self.WriteText(' ')
+            # Now select that space character, so it will be over-written by the next typing the user does
+            self.SetSelection(self.GetInsertionPoint() - 1, self.GetInsertionPoint())
+            # Now FORMAT that space character.
+            richtext.RichTextCtrl.SetDefaultStyle(self, tmpStyle)
 
     def SetTxtStyle(self, fontColor = None, fontBgColor = None, fontFace = None, fontSize = None,
                           fontBold = None, fontItalic = None, fontUnderline = None,
@@ -1042,6 +1057,12 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         
     def InsertTimeCode(self, timecode):
         """ Insert a time code """
+        # Get the current Style
+        tmpStyle = self.GetDefaultStyle()
+        # Check to see if tmpStyle is GOOD.
+        if not tmpStyle.GetFont().IsOk():
+            # If not, use the current font
+            tmpStyle = self.txtAttr
         # ... batch the undo
         self.BeginBatchUndo('InsertTimeCode')
         # Set the Style to TimeCode Style
@@ -1061,10 +1082,17 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         """ Insert the Rising Intonation (Up Arrow) symbol """
         # Get the current Style
         tmpStyle = self.GetDefaultStyle()
-        # Get the Font Size        
-        if tmpStyle.HasFontSize():
+        # Check to see if tmpStyle is GOOD.
+        if not tmpStyle.GetFont().IsOk():
+            # If not, use the current font
+            tmpStyle = self.txtAttr
+        # Get the Font Name and Size
+        if tmpStyle.GetFont().IsOk():
+            fontName = tmpStyle.GetFont().GetFaceName()
             fontSize = tmpStyle.GetFont().GetPointSize()
+        # If the font is still having problems, just get the defaults!
         else:
+            fontName = TransanaGlobal.configData.defaultFontFace
             fontSize = TransanaGlobal.configData.defaultFontSize
         # Change the Style to Courier New, current size + 4
         self.SetTxtStyle(fontFace='Courier New', fontSize=fontSize + 4)
@@ -1073,16 +1101,25 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # Insert the character
         self.WriteText(ch)
         # Restore the formatting
-        self.SetDefaultStyle(tmpStyle)
+        self.SetTxtStyle(fontFace=fontName, fontSize=fontSize)
+        # Add a space here (to anchor the formatting!)
+        self.WriteText(' ')
 
     def InsertFallingIntonation(self):
         """ Insert the Falling Intonation (Down Arrow) symbol """
         # Get the current Style
         tmpStyle = self.GetDefaultStyle()
-        # Get the Font Size        
-        if tmpStyle.HasFontSize():
+        # Check to see if tmpStyle is GOOD.
+        if not tmpStyle.GetFont().IsOk():
+            # If not, use the current font
+            tmpStyle = self.txtAttr
+        # Get the Font Name and Size
+        if tmpStyle.GetFont().IsOk():
+            fontName = tmpStyle.GetFont().GetFaceName()
             fontSize = tmpStyle.GetFont().GetPointSize()
+        # If the font is still having problems, just get the defaults!
         else:
+            fontName = TransanaGlobal.configData.defaultFontFace
             fontSize = TransanaGlobal.configData.defaultFontSize
         # Change the Style to Courier New, current size + 4
         self.SetTxtStyle(fontFace='Courier New', fontSize=fontSize + 4)
@@ -1091,16 +1128,25 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # Insert the character
         self.WriteText(ch)
         # Restore the formatting
-        self.SetDefaultStyle(tmpStyle)
+        self.SetTxtStyle(fontFace=fontName, fontSize=fontSize)
+        # Add a space here (to anchor the formatting!)
+        self.WriteText(' ')
 
     def InsertInBreath(self):
         """ Insert the In Breath (Closed Dot) symbol """
         # Get the current Style
         tmpStyle = self.GetDefaultStyle()
-        # Get the Font Size        
-        if tmpStyle.HasFontSize():
+        # Check to see if tmpStyle is GOOD.
+        if not tmpStyle.GetFont().IsOk():
+            # If not, use the current font
+            tmpStyle = self.txtAttr
+        # Get the Font Name and Size
+        if tmpStyle.GetFont().IsOk():
+            fontName = tmpStyle.GetFont().GetFaceName()
             fontSize = tmpStyle.GetFont().GetPointSize()
+        # If the font is still having problems, just get the defaults!
         else:
+            fontName = TransanaGlobal.configData.defaultFontFace
             fontSize = TransanaGlobal.configData.defaultFontSize
         # Change the Style to Courier New, current size + 4
         self.SetTxtStyle(fontFace='Courier New', fontSize=fontSize + 4)
@@ -1109,16 +1155,25 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # Insert the character
         self.WriteText(ch)
         # Restore the formatting
-        self.SetDefaultStyle(tmpStyle)
+        self.SetTxtStyle(fontFace=fontName, fontSize=fontSize)
+        # Add a space here (to anchor the formatting!)
+        self.WriteText(' ')
 
     def InsertWhisper(self):
         """ Insert the Whisper (Open Dot) symbol """
         # Get the current Style
         tmpStyle = self.GetDefaultStyle()
-        # Get the Font Size        
-        if tmpStyle.HasFontSize():
+        # Check to see if tmpStyle is GOOD.
+        if not tmpStyle.GetFont().IsOk():
+            # If not, use the current font
+            tmpStyle = self.txtAttr
+        # Get the Font Name and Size
+        if tmpStyle.GetFont().IsOk():
+            fontName = tmpStyle.GetFont().GetFaceName()
             fontSize = tmpStyle.GetFont().GetPointSize()
+        # If the font is still having problems, just get the defaults!
         else:
+            fontName = TransanaGlobal.configData.defaultFontFace
             fontSize = TransanaGlobal.configData.defaultFontSize
         # Change the Style to Courier New, current size + 4
         self.SetTxtStyle(fontFace='Courier New', fontSize=fontSize + 4)
@@ -1127,7 +1182,9 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # Insert the character
         self.WriteText(ch)
         # Restore the formatting
-        self.SetDefaultStyle(tmpStyle)
+        self.SetTxtStyle(fontFace=fontName, fontSize=fontSize)
+        # Add a space here (to anchor the formatting!)
+        self.WriteText(' ')
 
     def GetStyleAt(self, pos):
         """ Determine the style of the character at the given position """
