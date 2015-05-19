@@ -710,12 +710,12 @@ class XMLToRTFHandler(xml.sax.handler.ContentHandler):
                 # If the text has leading or trailing spaces, it gets enclosed in quotation marks in the XML.
                 # Otherwise, not.  We have to detect this and remove the quotes as needed.  Unicode characters
                 # make this a bit more complicated, as in " 137 e(umlaut) 137 ".
-                if ((len(data) > 2) and ((data[0] == '"') or (data[-1] == '"')) and \
-                    ((data[0] == ' ') or (data[1] == ' ') or (data[-2] == ' ') or (data[-1] == ' '))):
+                if ((data != ' "') and ((data[0] == '"') or (data[-1] == '"'))  ):
                     if data[0] == '"':
                         data = data[1:]
                     if data[-1] == '"':
                         data = data[:-1]
+                    
                 # If we're in Transana, time code data if followed by a "(space)(quotationmark)" combination from the XML.
                 # I'm not sure why, but this causes problems in the RTF.  Therefore skip this combo in Transana
                 if not (IN_TRANSANA and (data == ' "')):
@@ -1085,8 +1085,8 @@ class RTFTowxRichTextCtrlParser:
             # Handle curly brackets and backslash characters
             if "{}\\".count(c) > 0:
 
-                # Open curly bracket starts an RTF text block
-                if (c == '{'):
+                # Open curly bracket starts an RTF text block, but don't reset FONT if we have "{\*"!!
+                if (c == '{') and (self.buffer[self.index : self.index + 3] != '{\\*'):
                     # Reset Default Font.  Size MUST be hard-coded.  Otherwise, RTF from Word doesn't work right.
                     self.SetTxtStyle(fontFace = self.font['fontfacename'], fontSize = 12,
                                       fontColor = self.font['fontcolor'], fontBgColor = self.font['fontbgcolor'], 
@@ -1715,7 +1715,7 @@ class RTFTowxRichTextCtrlParser:
                 colorDef = "%06x" % self.colorTable[num]
                 # Set the Font Color based on the Color Definition by converting from Hex to Integers
                 self.SetTxtStyle(fontColor = wx.Color(int(colorDef[:2], 16), int(colorDef[2:4], 16), int(colorDef[4:6], 16)))
-                
+
             # Default font
             elif cw == "deff":
                 # Problem:  The Font Table hasn't been defined when this spec arises.

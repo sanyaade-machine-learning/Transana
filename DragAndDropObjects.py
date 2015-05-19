@@ -2859,8 +2859,20 @@ def ClearClipboard():
     cdo = wx.CustomDataObject(wx.CustomDataFormat('DataTreeDragData'))
     # Put the pickled data object in the wxCustomDataObject
     cdo.SetData(pddd)
+    # Is the clipboard open?  Assume so.
+    clipboardOpenedHere = False
+    # If the Clipboard is NOT open ...
+    if not wx.TheClipboard.IsOpened():
+        # ... open the Clipboard
+        wx.TheClipboard.Open()
+        # Remember that the Clipboard was opened HERE!
+        clipboardOpenedHere = True
     # Now put the data in the clipboard.
     wx.TheClipboard.SetData(cdo)
+    # If the clipboard was opened HERE ...
+    if clipboardOpenedHere:
+        # ... close the Clipboard
+        wx.TheClipboard.Close()
 
 def CheckForDuplicateClipName(sourceClipName, treeCtrl, destCollectionNode):
    """ Check the destCollectionNode to see if sourceClipName already exists.  If so, prompt for a name change.

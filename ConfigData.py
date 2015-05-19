@@ -78,6 +78,8 @@ class ConfigData(object):
         str += 'autoSave = %s\n' % self.autoSave
         str = str + 'defaultFontFace = %s\n' % self.defaultFontFace
         str = str + 'defaultFontSize = %s\n' % self.defaultFontSize
+        str = str + 'specialFontFace = %s\n' % self.specialFontFace
+        str = str + 'specialFontSize = %s\n' % self.specialFontSize
         str += 'formatUnits = %s\n' % self.formatUnits
         str = str + 'keywordMapBarHeight = %s\n' % self.keywordMapBarHeight
         str = str + 'keywordMapWhitespace = %s\n' % self.keywordMapWhitespace
@@ -145,6 +147,10 @@ class ConfigData(object):
         self.defaultFontFace = "Courier New"
         # Default Font Size is 10, reasoning that smaller is better
         self.defaultFontSize = 10
+        # Special Font Face is Courier New, a fixed-width font
+        self.specialFontFace = "Courier New"
+        # Special Font Size is 14, reasoning that it should be 4 points larger than normal to look right
+        self.specialFontSize = 14
         
         # Load the Config Data.  wxConfig automatically uses the Registry on Windows and the appropriate file on Mac.
         # Program Name is Transana, Vendor Name is Verception to remain compatible with Transana 1.0.
@@ -194,6 +200,10 @@ class ConfigData(object):
             self.defaultFontFace = config.Read('/2.0/FontFace', self.defaultFontFace)
             # Load Default Font Size Setting
             self.defaultFontSize = config.ReadInt('/2.0/FontSize', self.defaultFontSize)
+            # Load Special Font Face Setting
+            self.specialFontFace = config.Read('/2.0/FontFaceSpecial', self.specialFontFace)
+            # Load Special Font Size Setting
+            self.specialFontSize = config.ReadInt('/2.0/FontSizeSpecial', self.specialFontSize)
             # Load Format Units Setting
             self.formatUnits = config.Read('/2.0/FormatUnits', 'in')
             # Load Keyword Map Bar Height Setting
@@ -476,6 +486,10 @@ class ConfigData(object):
         config.Write('/2.0/FontFace', self.defaultFontFace)
         # Save Default Font Size Setting
         config.WriteInt('/2.0/FontSize', self.defaultFontSize)
+        # Save Special Font Face Setting
+        config.Write('/2.0/FontFaceSpecial', self.specialFontFace)
+        # Save Special Font Size Setting
+        config.WriteInt('/2.0/FontSizeSpecial', self.specialFontSize)
         # Save Format Units Setting
         config.Write('/2.0/FormatUnits', self.formatUnits)
         # Save Keyword Map Bar Height Setting

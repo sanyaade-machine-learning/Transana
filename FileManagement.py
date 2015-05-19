@@ -278,6 +278,8 @@ class FileManagement(wx.Dialog):
         self.dirLeft = GenericDirCtrl_MacFix(self, -1, wx.DIRCTRL_DIR_ONLY | wx.BORDER_DOUBLE)
         # Add directory listing to Sizer
         filesLeftSizer.Add(self.dirLeft, 3, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        # Set Minimum Size
+        self.dirLeft.SetSizeHints(minW = 50, minH = 50)
 
         # If we're NOT running stand-alone ...
         if __name__ != '__main__':
@@ -293,6 +295,8 @@ class FileManagement(wx.Dialog):
         self.remoteDirLeft.Show(False)
         # Add directory listing to Sizer
         filesLeftSizer.Add(self.remoteDirLeft, 3, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        # Set Minimum Size
+        self.remoteDirLeft.SetSizeHints(minW = 50, minH = 50)
 
         # NOTE:  Although it would be possible to display files as well as folders in the wxGenericDirCtrls,
         #        we chose not to so that users could select multiple files at once for manipulation
@@ -304,6 +308,8 @@ class FileManagement(wx.Dialog):
         self.fileLeft.SetColumnWidth(0, 100)
         # Add file listing to Sizer
         filesLeftSizer.Add(self.fileLeft, 5, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        # Set Minimum Size
+        self.fileLeft.SetSizeHints(minW = 50, minH = 50)
 
         # Make the File List a FileDropTarget
         dt = FMFileDropTarget(self, 'Left')
@@ -322,7 +328,8 @@ class FileManagement(wx.Dialog):
         self.filterLeft.SetSelection(0)
         # Add the file types dropdown to the Sizer
         filesLeftSizer.Add(self.filterLeft, 0, wx.EXPAND | wx.ALL, 5)
-
+        # Set Minimum Size
+        self.filterLeft.SetSizeHints(minW = 50, minH = 20)
 
         # Buttons in the middle
         buttonSizer = wx.BoxSizer(wx.VERTICAL)
@@ -525,6 +532,8 @@ class FileManagement(wx.Dialog):
         self.dirRight = GenericDirCtrl_MacFix(self, -1, wx.DIRCTRL_DIR_ONLY | wx.BORDER_DOUBLE)
         # Add directory listing to Sizer
         filesRightSizer.Add(self.dirRight, 3, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        # Set Minimum Size
+        self.dirRight.SetSizeHints(minW = 50, minH = 50)
 
         # If we're NOT running stand-alone ...
         if __name__ != '__main__':
@@ -540,6 +549,8 @@ class FileManagement(wx.Dialog):
         self.remoteDirRight.Show(False)
         # Add directory listing to Sizer
         filesRightSizer.Add(self.remoteDirRight, 3, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        # Set Minimum Size
+        self.remoteDirRight.SetSizeHints(minW = 50, minH = 50)
 
         # NOTE:  Although it would be possible to display files as well as folders in the wxGenericDirCtrls,
         #        we chose not to so that users could select multiple files at once for manipulation
@@ -551,6 +562,8 @@ class FileManagement(wx.Dialog):
         self.fileRight.SetColumnWidth(0, 100)
         # Add file listing to Sizer
         filesRightSizer.Add(self.fileRight, 5, wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT, 5)
+        # Set Minimum Size
+        self.fileRight.SetSizeHints(minW = 50, minH = 50)
 
         # Make the File List a FileDropTarget
         dt = FMFileDropTarget(self, 'Right')
@@ -569,6 +582,8 @@ class FileManagement(wx.Dialog):
         self.filterRight.SetSelection(0)
         # Add the file types dropdown to the Sizer
         filesRightSizer.Add(self.filterRight, 0, wx.EXPAND | wx.ALL, 5)
+        # Set Minimum Size
+        self.filterRight.SetSizeHints(minW = 50, minH = 20)
 
         # Add the three vertical columns to the main sizer
         mainSizer.Add(filesLeftSizer, 2, wx.EXPAND, 0)
@@ -1336,21 +1351,32 @@ class FileManagement(wx.Dialog):
 
         # If we're connected to the sFTP Server ...
         elif self.connectionType == 'sFTP':
-            # Get the list of folders/files in the current path on the sFTP server and iterate through them
-            for tempStr in self.sFTPClient.listdir(path):
-                # If the sFTP directory object isn't a hidden system file (starting with a dot) ...
-                if not (tempStr[0] in ['.', '/']):
-                    # Encode values, if needed
-                    if isinstance(path, unicode):
-                        path = path.encode('utf8')
-                    if isinstance(tempStr, unicode):
-                        tempStr = tempStr.encode('utf8')
-                    # ... get the file information for the sFTP directory object
-                    y = self.sFTPClient.stat(string.join([path, tempStr], '/'))
-                    # if the sFTP directory object is a REGULAR FILE ...
-                    if stat.S_ISREG(y.st_mode):
-                        # ... add the sFTP directory object to the File List
-                        filelist.append(tempStr)
+            # Start exception handling
+            try:
+                # Get the list of folders/files in the current path on the sFTP server and iterate through them
+                for tempStr in self.sFTPClient.listdir(path):
+                    # If the sFTP directory object isn't a hidden system file (starting with a dot) ...
+                    if not (tempStr[0] in ['.', '/']):
+                        # Encode values, if needed
+                        if isinstance(path, unicode):
+                            path = path.encode('utf8')
+                        if isinstance(tempStr, unicode):
+                            tempStr = tempStr.encode('utf8')
+                        # ... get the file information for the sFTP directory object
+                        y = self.sFTPClient.stat(string.join([path, tempStr], '/'))
+                        # if the sFTP directory object is a REGULAR FILE ...
+                        if stat.S_ISREG(y.st_mode):
+                            # ... add the sFTP directory object to the File List
+                            filelist.append(tempStr)
+            # If an IOError is raised ...
+            except exceptions.IOError, e:
+                # Convert the exception into a string
+                msg = "%s" % e
+                # Display the error message text
+                tmpDlg = Dialogs.ErrorDialog(self, msg)
+                tmpDlg.ShowModal()
+                tmpDlg.Destroy()
+            
             # Sort the File List
             filelist.sort()
 
@@ -2691,16 +2717,22 @@ class FileManagement(wx.Dialog):
                 # ... note that we have NOT changed directories
                 dirChanged = False
 
-            # For each entry in the directory's list ...
-            for tempStr in self.sFTPClient.listdir(initialCollectionName):
-                # ... if we don't have a system file, which should be ignored ...
-                if tempStr[0] != '.':
-                    # ... get the file's status
-                    fileStat = self.sFTPClient.stat(tempStr)
-                    # If the listing is a Directory ...
-                    if stat.S_ISDIR(fileStat.st_mode):
-                        # ... add the directory name to the list of nodes to add
-                        nodeList.append(tempStr)
+            # Start exception handling
+            try:
+                # For each entry in the directory's list ...
+                for tempStr in self.sFTPClient.listdir(initialCollectionName):
+                    # ... if we don't have a system file, which should be ignored ...
+                    if tempStr[0] != '.':
+                        # ... get the file's status
+                        fileStat = self.sFTPClient.stat(tempStr)
+                        # If the listing is a Directory ...
+                        if stat.S_ISDIR(fileStat.st_mode):
+                            # ... add the directory name to the list of nodes to add
+                            nodeList.append(tempStr)
+            # if an IOError exception is raised ...
+            except exceptions.IOError:
+                # ... we can safely ignore it!
+                pass
 
             # If the initial collection is the Root collection ...
             if initialCollectionName == '.':

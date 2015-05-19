@@ -88,12 +88,6 @@ class DatabaseTreeTab(wx.Panel):
         self.tree.UnselectAll()
         self.tree.SelectItem(self.tree.GetRootItem())
 
-        # For Copy and Paste to work on the Mac, we need to open the Clipboard once on application startup
-        # rather than opening and closing it repeatedly
-        wx.TheClipboard.Open()
-        # Clear the Clipboard.  (This prevents an odd Clipboard error message on the Mac.)
-        DragAndDropObjects.ClearClipboard()
-
         self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
         self.Layout()
@@ -779,10 +773,10 @@ class DatabaseTreeTab(wx.Panel):
         # Create a composite Data Object from the object types defined above
         cdo = wx.DataObjectComposite()
         cdo.Add(cdoClip)
-
+        # Open the Clipboard
+        wx.TheClipboard.Open()
         # Try to get data from the Clipboard
         success = wx.TheClipboard.GetData(cdo)
-
         # If the data in the clipboard is in an appropriate format ...
         if success:
             # ... unPickle the data so it's in a usable form
@@ -811,7 +805,9 @@ class DatabaseTreeTab(wx.Panel):
             dlg = Dialogs.InfoDialog(self, prompt)
             dlg.ShowModal()
             dlg.Destroy()
- 
+        # Close the Clipboard
+        wx.TheClipboard.Close()
+
     def edit_clip(self, clip):
         """User interface for editing a clip."""
         # If the user wants to edit the currently-loaded Clip ...
@@ -1767,8 +1763,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                  self.cmd_id_start["KeywordNode"] + 1,
                                  self.cmd_id_start["SearchCollectionNode"] + 1,
                                  self.cmd_id_start["SearchClipNode"] + 1]:
+                # Open the Clipboard
+                wx.TheClipboard.Open()
                 # ... put the data in the clipboard ...
                 wx.TheClipboard.SetData(cdo)
+                # Close the Clipboard
+                wx.TheClipboard.Close()
                 
             # If the event was triggered by a "Drag" request ...
             elif TransanaConstants.macDragDrop or (not '__WXMAC__' in wx.PlatformInfo):
@@ -3150,6 +3150,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             df = wx.CustomDataFormat('DataTreeDragData')
             # Specify the data object to accept data for this format
             cdo = wx.CustomDataObject(df)
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get the appropriate data from the Clipboard      
             success = wx.TheClipboard.GetData(cdo)
             # If we got appropriate data ...
@@ -3292,6 +3294,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
 
                 # Clear the Clipboard.  We can't paste again, since the data has been moved!
                 DragAndDropObjects.ClearClipboard()
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
         elif n == 1:    # Add Episode
             # Add an Episode
@@ -3621,6 +3625,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             df = wx.CustomDataFormat('DataTreeDragData')
             # Specify the data object to accept data for this format
             cdo = wx.CustomDataObject(df)
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get the appropriate data from the Clipboard      
             success = wx.TheClipboard.GetData(cdo)
             # If we got appropriate data ...
@@ -3753,7 +3759,9 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                 self.parent.ControlObject.PropagateEpisodeKeywords(selData.recNum, kwList)
                             # ... and paste the data
                             DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'], confirmations=confirmations)
-            
+            # Close the Clipboard
+            wx.TheClipboard.Close()
+
         elif n == 2:    # Add Transcript
             # Add the Transcript
             transcript_name = self.parent.add_transcript(series_name, episode_name)
@@ -3939,15 +3947,30 @@ class _DBTreeCtrl(wx.TreeCtrl):
             df = wx.CustomDataFormat('DataTreeDragData')
             # Specify the data object to accept data for this format
             cdo = wx.CustomDataObject(df)
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get the appropriate data from the Clipboard      
             success = wx.TheClipboard.GetData(cdo)
             # If we got appropriate data ...
             if success:
                 # ... unPickle the data so it's in a usable format
                 data = cPickle.loads(cdo.GetData())
-                DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
-                # Clear the Clipboard.  We can't paste again, since the data has been moved!
-                DragAndDropObjects.ClearClipboard()
+                # Multiple SOURCE items
+                if isinstance(data, list):
+                    # Iterate through the nodes
+                    for datum in data:
+                        # ... and paste the data
+                        DragAndDropObjects.ProcessPasteDrop(self, datum, sel, self.cutCopyInfo['action'])
+                # One SOURCE item
+                else:
+                    # Process the Paste
+                    DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
+                # If we've MOVED rather than COPIED ...
+                if self.cutCopyInfo['action'] == 'Move':
+                    # ... Clear the Clipboard.  We can't paste again, since the data has been moved!
+                    DragAndDropObjects.ClearClipboard()
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
         elif n == 1:      # Open
             self.OnItemActivated(evt)                            # Use the code for double-clicking the Transcript
@@ -4087,9 +4110,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Create a composite Data Object from the object types defined above
             cdo = wx.DataObjectComposite()
             cdo.Add(cdoNode)
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get data from the Clipboard
             success = wx.TheClipboard.GetData(cdo)
-
             # If the data in the clipboard is in an appropriate format ...
             if success:
                 # ... unPickle the data so it's in a usable form
@@ -4116,6 +4140,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     else:
                         # ... and paste the data
                         DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
         elif n == 1:      # Add Collection
             self.parent.add_collection(0)
@@ -4176,10 +4202,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Create a composite Data Object from the object types defined above
             cdo = wx.DataObjectComposite()
             cdo.Add(cdoNode)
-
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get data from the Clipboard
             success = wx.TheClipboard.GetData(cdo)
-
             # If the data in the clipboard is in an appropriate format ...
             if success:
                 # ... unPickle the data so it's in a usable form
@@ -4293,6 +4319,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         else:
                             # ... and paste the data
                             DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'], confirmations=confirmations)
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
         elif n == 3:    # Add Clip
             try:
@@ -4528,10 +4556,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             cdo = wx.DataObjectComposite()
             cdo.Add(cdoNode)
             cdo.Add(cdoClip)
-
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get data from the Clipboard
             success = wx.TheClipboard.GetData(cdo)
-
             # If the data in the clipboard is in an appropriate format ...
             if success:
                 # ... unPickle the data so it's in a usable form
@@ -4656,6 +4684,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             else:
                                 # ... and paste the data
                                 DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'], confirmations=confirmations)
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
         elif n == 3:    # Open
             self.OnItemActivated(evt)                            # Use the code for double-clicking the Clip
@@ -5529,6 +5559,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             df = wx.CustomDataFormat('DataTreeDragData')
             # Specify the data object to accept data for this format
             cdo = wx.CustomDataObject(df)
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get the appropriate data from the Clipboard      
             success = wx.TheClipboard.GetData(cdo)
             # We can't MOVE to multiple locations!
@@ -5552,6 +5584,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     for sel in selItems:
                         # ... and paste the data
                         DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
         elif n == 1:    # Add Keyword
             self.parent.add_keyword(kwg_name)
@@ -5681,6 +5715,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             df = wx.CustomDataFormat('DataTreeDragData')
             # Specify the data object to accept data for this format
             cdo = wx.CustomDataObject(df)
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get the appropriate data from the Clipboard      
             success = wx.TheClipboard.GetData(cdo)
             # If we got appropriate data ...
@@ -5688,6 +5724,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # ... unPickle the data so it's in a usable format
                 data = cPickle.loads(cdo.GetData())
                 DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
         elif n == 3:    # Delete this keyword
             # For each Keyword in the selected items ...
@@ -5986,6 +6024,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             df = wx.CustomDataFormat('DataTreeDragData')
             # Specify the data object to accept data for this format
             cdo = wx.CustomDataObject(df)
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get the appropriate data from the Clipboard      
             success = wx.TheClipboard.GetData(cdo)
             # If we got appropriate data ...
@@ -6002,6 +6042,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 else:
                     # ... and paste the data
                     DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
         elif n == 1:      # Clear
             # For each selected item ...
@@ -6157,6 +6199,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             df = wx.CustomDataFormat('DataTreeDragData')
             # Specify the data object to accept data for this format
             cdo = wx.CustomDataObject(df)
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get the appropriate data from the Clipboard      
             success = wx.TheClipboard.GetData(cdo)
             # If we got appropriate data ...
@@ -6173,6 +6217,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 else:
                     # ... and paste the data
                     DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
         elif n == 3:    # Drop for Search Results
             # For each selected item ...
@@ -6242,6 +6288,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             df = wx.CustomDataFormat('DataTreeDragData')
             # Specify the data object to accept data for this format
             cdo = wx.CustomDataObject(df)
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Try to get the appropriate data from the Clipboard      
             success = wx.TheClipboard.GetData(cdo)
             # If we got appropriate data ...
@@ -6258,6 +6306,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 else:
                     # ... and paste the data
                     DragAndDropObjects.ProcessPasteDrop(self, data, sel, self.cutCopyInfo['action'])
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
         elif n == 3:      # Open
             self.OnItemActivated(evt)                            # Use the code for double-clicking the Clip
@@ -6588,7 +6638,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # specify the data formats to accept.
             #   Our data could be a DataTreeDragData object if the source is the Database Tree
             dfNode = wx.CustomDataFormat('DataTreeDragData')
-
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # Test to see if one of the custom formats is available.  Otherwise, we get odd error messages
             # on the Mac.
             if wx.TheClipboard.IsSupported(dfNode):
@@ -6973,7 +7024,9 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     menu.Enable(menu.FindItem(_('Copy')), True)
                     # ... enable the "Drop from Search Result" menu item
                     menu.Enable(menu.FindItem(_('Drop from Search Result')), True)
-                    
+            # Close the Clipboard                    
+            wx.TheClipboard.Close()
+
             self.PopupMenu(menu, event.GetPosition())
         except:
 

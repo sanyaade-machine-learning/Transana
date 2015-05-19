@@ -983,33 +983,45 @@ class MenuWindow(wx.Frame):
         """ Handler for Transcript > Cut """
         # Determine the object with the current focus
         tmpObj = wx.Window.FindFocus()
-        # If we have an object OTHER THAN a RichTextEditCtrl ...
+        # If the current window is the RichTextEditCtrl_RTC or the MenuWindow ...
         # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
-        if isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl):
+        if (isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl) or \
+            isinstance(tmpObj, MenuWindow)):
+            # ... let Transana handle the Cut
             self.ControlObject.TranscriptCut(event)
+        # Otherwise ...
         else:
+            # ... call event.Skip() so the Cut gets processed somewhere
             event.Skip()
 
     def OnTranscriptCopy(self, event):
         """ Handler for Transcript > Copy """
         # Determine the object with the current focus
         tmpObj = wx.Window.FindFocus()
-        # If we have an object OTHER THAN a RichTextEditCtrl ...
+        # If the current window is the RichTextEditCtrl_RTC or the MenuWindow ...
         # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
-        if isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl):
+        if (isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl) or \
+            isinstance(tmpObj, MenuWindow)):
+            # ... let Transana handle the Copy
             self.ControlObject.TranscriptCopy(event)
+        # Otherwise ...
         else:
+            # ... call event.Skip() so the Copy gets processed somewhere
             event.Skip()
 
     def OnTranscriptPaste(self, event):
         """ Handler for Transcript > Paste """
         # Determine the object with the current focus
         tmpObj = wx.Window.FindFocus()
-        # If we have an object OTHER THAN a RichTextEditCtrl ...
+        # If the current window is the RichTextEditCtrl_RTC or the MenuWindow ...
         # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
-        if isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl):
+        if (isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl) or \
+            isinstance(tmpObj, MenuWindow)):
+            # ... let Transana handle the Paste
             self.ControlObject.TranscriptPaste(event)
+        # Otherwise ...
         else:
+            # ... call event.Skip() so the Paste gets processed somewhere
             event.Skip()
 
     def OnFormatFont(self, event):

@@ -49,15 +49,15 @@ class OptionsSettings(wx.Dialog):
         # if we're showing the LAB version's initial configuration, we need a bit more room.
         if 'wxMSW' in wx.PlatformInfo:
             if self.lab:
-                dlgHeight = 390
+                dlgHeight = 415
             else:
-                dlgHeight = 380
+                dlgHeight = 405
         else:
             if self.lab:
                 dlgWidth = 580
-                dlgHeight = 370
+                dlgHeight = 395
             else:
-                dlgHeight = 320
+                dlgHeight = 345
         # Define the Dialog Box
         wx.Dialog.__init__(self, parent, -1, _("Transana Settings"), wx.DefaultPosition, wx.Size(dlgWidth, dlgHeight), style=wx.CAPTION | wx.SYSTEM_MENU | wx.THICK_FRAME)
 
@@ -424,6 +424,67 @@ class OptionsSettings(wx.Dialog):
             panelTranSizer.Add(fontSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10)
 
             # Create a Row Sizer
+            fontSizer2 = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Create an Element Sizer
+            v4 = wx.BoxSizer(wx.VERTICAL)
+            # Add Special Transcript Font
+            lblSpecialFont = wx.StaticText(panelTranscriber, -1, _("Special Symbol Font"))
+            # Add the label to the element Sizer
+            v4.Add(lblSpecialFont, 0, wx.BOTTOM, 3)
+
+            # Now let's set up a list of the fonts we'd like.
+            defaultFontList = ['Arial', 'Comic Sans MS', 'Courier', 'Courier New', 'Futura', 'Geneva', 'Helvetica', 'Times', 'Times New Roman', 'Verdana']
+            # Initialize the actual font list to nothing.
+            choicelist = []
+            # Now iterate through the list of fonts we'd like...
+            for font in defaultFontList:
+                # ... and see if each font is available ...
+                if font in fontList:
+                    # ... and if so, add it to the list.
+                    choicelist.append(font)
+                    
+            # If the list is empty, let's at least put one real value in it.
+            if len(choicelist) == 0:
+                font = wx.Font(TransanaGlobal.configData.defaultFontSize, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
+                choicelist.append(font.GetFaceName())
+                   
+            # Special Font Combo Box
+            self.specialFont = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN | wx.CB_SORT)
+            # Add the element to the element Sizer
+            v4.Add(self.specialFont, 0, wx.EXPAND | wx.RIGHT, 10)
+
+            # Set the value to the default value provided by the Configuration Data
+            self.specialFont.SetValue(TransanaGlobal.configData.specialFontFace)
+
+            # Add the element Sizer to the Row Sizer
+            fontSizer2.Add(v4, 3, wx.EXPAND)
+
+            # Create an Element Sizer
+            v5 = wx.BoxSizer(wx.VERTICAL)
+            # Add Special Transcript Font Size
+            lblspecialFontSize = wx.StaticText(panelTranscriber, -1, _("Special Symbol Font Size"))
+            # Add the label to the element Sizer
+            v5.Add(lblspecialFontSize, 0, wx.BOTTOM, 3)
+
+            # Set up the list of choices
+            choicelist = ['8', '10', '11', '12', '14', '16', '18', '20', '22', '24']
+                   
+            # Special Font Size Combo Box
+            self.specialFontSize = wx.ComboBox(panelTranscriber, -1, choices=choicelist, style = wx.CB_DROPDOWN)
+            # Add the element to the element Sizer
+            v5.Add(self.specialFontSize, 0, wx.EXPAND)
+
+            # Set the value to the special value provided by the Configuration Data
+            self.specialFontSize.SetValue(str(TransanaGlobal.configData.specialFontSize))
+
+            # Add the element sizer to the Row Sizer
+            fontSizer2.Add(v5, 2, wx.EXPAND)
+
+            # Add the Row Sizer to the Panel Sizer
+            panelTranSizer.Add(fontSizer2, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10)
+
+            # Create a Row Sizer
             checkboxSizer = wx.BoxSizer(wx.HORIZONTAL)
 
             # STC needs the Word Wrap setting.  RTC does not support it.
@@ -657,6 +718,10 @@ class OptionsSettings(wx.Dialog):
             TransanaGlobal.configData.defaultFontFace = self.defaultFont.GetValue()
             # Update the Global Default Font Size
             TransanaGlobal.configData.defaultFontSize = int(self.defaultFontSize.GetValue())
+            # Update the Global Special Font
+            TransanaGlobal.configData.specialFontFace = self.specialFont.GetValue()
+            # Update the Global Special Font Size
+            TransanaGlobal.configData.specialFontSize = int(self.specialFontSize.GetValue())
 
         # Make sure the current video root and visualization path settings are saved in the configuration under the (username, server, database) key.
         TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName.encode('utf8'), TransanaGlobal.configData.host.encode('utf8'), TransanaGlobal.configData.database.encode('utf8'))] = \

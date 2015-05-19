@@ -725,7 +725,7 @@ class MediaConvert(wx.Dialog):
                     # Clear the Video Bit Rate choice box
                     self.videoBitrate.Clear()
                     # Start with a list of "default" video bit rates
-                    bitrates = [100, 150, 200, 250, 300, 350, 500, 750, 1000, 1500, 2000, 3000]
+                    bitrates = [100, 150, 200, 250, 300, 350, 500, 750, 1000, 1500, 2000, 3000, 5000]
                     # For each bit rate in the list ...
                     for bitrate in bitrates:
                         # ... if the File's Video Bit Rate is greater than the proposed bit rate setting ...
@@ -908,6 +908,14 @@ class MediaConvert(wx.Dialog):
 
                 # Add the Video Bit Rate specification
                 FFmpegCommand += ' "-vb" "%dk"' % int(self.videoBitrate.GetStringSelection())
+
+                # HD video with high frame rates (eg. 59.96 fps) don't play smoothly.
+                # Frame Rate reduction causes problems if set to "29.97" or "30", but is okay at "29"
+                if self.vidFrameRate > 30:
+                    # Let's max the Frame Rate out at 29 fps.
+                    FFmpegCommand += ' "-r" "29"'
+                    # Let's inform the user we changed their frame rate!
+                    self.memo.AppendText("\n" + _("Frame Rate reduced from %0.2f fps to 29 fps.") % self.vidFrameRate)
 
             # If we have an Audio Stream to process ...
             if self.audStream and not self.ext in ['.jpg']:

@@ -200,8 +200,12 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
                 newSt += ch
         # Save the new string in the Text Data Object
         tempDataObject.SetText(newSt)
+        # Open the Clipboard
+        wx.TheClipboard.Open()
         # Place the Text Data Object in the Clipboard
         wx.TheClipboard.SetData(tempDataObject)
+        # Close the Clipboard
+        wx.TheClipboard.Close()
 
     def Cut(self):
         if 'wxMac' in wx.PlatformInfo:
@@ -223,6 +227,8 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         newSt = ''
         # Created a TextDataObject to hold the text data from the clipboard
         tempDataObject = wx.TextDataObject()
+        # Open the Clipboard
+        wx.TheClipboard.Open()
         # Read the text data from the clipboard
         wx.TheClipboard.GetData(tempDataObject)
         # Track whether we're skipping characters or not.  Start out NOT skipping
@@ -251,9 +257,10 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
             wx.TheClipboard.Close()
         # Call the STC's Paste method to complete the paste.
         stc.StyledTextCtrl.Paste(self)
-        # If we're on the Mac, we need to re-open the clipboard after the paste.  This is not needed on Windows.
-        if 'wxMac' in wx.PlatformInfo:
-            wx.TheClipboard.Open()
+        # If the Clipboard is open ...
+        if wx.TheClipboard.IsOpened():
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
     def __ResetBuffer(self):
         """ Reset the wxSTC buffer -- that is, re-initialize the Rich Text Control's data """

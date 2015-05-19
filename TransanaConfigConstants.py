@@ -23,7 +23,7 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 # Define a Boolean to indicate Single- or Multi- user
 # NOTE:  When you change this value, you MUST change the MySQL for Python installation you are using
 #        to match.
-singleUserVersion = True
+singleUserVersion = False
 # Indicate if this is the Lab version
 labVersion = False
 # Set this flag to "True" to create the Demonstration version.  (But don't mix this with MU!)

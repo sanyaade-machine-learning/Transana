@@ -43,9 +43,15 @@ MENU_FILE_EXIT                  =  wx.ID_EXIT   # Constant used to improve Mac s
 # Trasncript Menu
 MENU_TRANSCRIPT_EDIT            =  wx.NewId()
 MENU_TRANSCRIPT_EDIT_UNDO       =  wx.NewId()
-MENU_TRANSCRIPT_EDIT_CUT        =  wx.ID_CUT
-MENU_TRANSCRIPT_EDIT_COPY       =  wx.ID_COPY
-MENU_TRANSCRIPT_EDIT_PASTE      =  wx.ID_PASTE
+# 2.51 - the Standard IDs don't work on the Mac.  Menu elements don't get enabled or disabled properly!
+if 'wxMac' in wx.PlatformInfo:
+    MENU_TRANSCRIPT_EDIT_CUT        =  wx.NewId()  # wx.ID_CUT
+    MENU_TRANSCRIPT_EDIT_COPY       =  wx.NewId()  # wx.ID_COPY
+    MENU_TRANSCRIPT_EDIT_PASTE      =  wx.NewId()  # wx.ID_PASTE
+else:
+    MENU_TRANSCRIPT_EDIT_CUT        =  wx.ID_CUT
+    MENU_TRANSCRIPT_EDIT_COPY       =  wx.ID_COPY
+    MENU_TRANSCRIPT_EDIT_PASTE      =  wx.ID_PASTE
 MENU_TRANSCRIPT_FONT            =  wx.NewId()
 MENU_TRANSCRIPT_PARAGRAPH       =  wx.NewId()
 MENU_TRANSCRIPT_TABS            =  wx.NewId()

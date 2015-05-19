@@ -2059,8 +2059,12 @@ class TranscriptEditor(RichTextEditCtrl.RichTextEditCtrl):
 
         # If we are supposed to copy the data to the Clip Board ...
         if copyToClipboard:
+            # Open the clipboard
+            wx.TheClipboard.Open()
             # ... then copy the data to the clipboard!
             wx.TheClipboard.SetData(cdo)
+            # Close the Clipboard
+            wx.TheClipboard.Close()
         else:
             # Put the data in the DropSource object
             tds = TranscriptDropSource(self.parent)

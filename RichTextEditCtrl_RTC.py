@@ -94,6 +94,16 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # Initialize a RichTextCtrl object
         richtext.RichTextCtrl.__init__(self, parent, id, pos = pos, style=wx.VSCROLL | wx.HSCROLL | wx.WANTS_CHARS)
 
+## Unfortunately, SetScale does not yet really WORK.  It displays larger, but all the rules of the textctrl break.
+## Display window boundaries are ignored.
+## You can't even click in the transcript and move around in the text with the cursor.
+## The control acts like it doesn't know the scale is changed.
+##
+##        # If OS X ...
+##        if 'wxMac' in wx.PlatformInfo:
+##            # ... Set the Scale so text looks bigger
+##            self.SetScale(1.25, 1.25)
+
         # Bind key press handlers
         self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         self.Bind(wx.EVT_CHAR, self.OnKey)
@@ -395,9 +405,12 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         txtDataObject.SetText(txtSelection)
         # Add the Plain Text Data Object to the Composite Data object
         compositeDataObject.Add(txtDataObject)
+        # Open the Clipboard
+        wx.TheClipboard.Open()
         # Place the Composite Data Object (with RTF and Plain Text) on the Clipboard
         wx.TheClipboard.SetData(compositeDataObject)
-
+        # Close the Clipboard
+        wx.TheClipboard.Close()
         # If we are CUTting (rather than COPYing) ...
         if self.IsEditable() and event.GetId() == wx.ID_CUT:
             # Reset the selection, which was mangled by the GetFormattedSelection call
@@ -409,6 +422,10 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         """ Handle Paste events, over-riding the RichTextCtrl version.
             This implementation supports Rich Text Formatted text, and at least on Windows can
             share formatted text with other programs. """
+        # If the Clipboard isn't Open ...
+        if not wx.TheClipboard.IsOpened():
+            # ... open it!
+            wx.TheClipboard.Open()
         # If the transcript is in EDIT mode ...
         if self.IsEditable():
             # Start a Batch Undo
@@ -417,6 +434,7 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             if self.GetSelection() != (-2, -2):
                 # ... delete it.
                 self.DeleteSelection()
+
             # If we're on OS X ...
             if 'wxMac' in wx.PlatformInfo:
                 # ... then RTF Format is called "public.rtf"
@@ -435,6 +453,18 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
                 if success:
                     # ... get the data from the clipboard
                     formattedText = customDataObject.GetData()
+
+                    if DEBUG:
+                        print
+                        print "RTF data:"
+                        print formattedText
+                        print
+
+                    # If the RTF Text ends with a Carriage Return (and it always does!) ...
+                    if formattedText[-6:] == '\\par\n}':
+                        # ... then remove that carriage return!
+                        formattedText = formattedText[:-6] + formattedText[-1]
+                        
                     # Prepare the control for data
                     self.Freeze()
                     # Start exception handling
@@ -465,6 +495,8 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
                 self.WriteText(textDataObject.GetText())
             # End the Batch Undo
             self.EndBatchUndo()
+            # Close the Clipboard
+            wx.TheClipboard.Close()
 
 ##    def SetSavePoint(self):
 
@@ -816,7 +848,7 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
                         # ... turn off bold
                         self.txtAttr.SetFontWeight(wx.FONTWEIGHT_NORMAL)
 
-            # If italics is specified, set or remove bold as requested
+            # If italics is specified, set or remove italics as requested
             if fontItalic != None:
                 # If Italics are being turned on ...
                 if fontItalic:
@@ -830,7 +862,7 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
                     if not tmpFont.IsOk() or (tmpFont.GetStyle() != wx.FONTSTYLE_NORMAL):
                         # ... turn off italics
                         self.txtAttr.SetFontStyle(wx.FONTSTYLE_NORMAL)
-            # If underline is specified, set or remove bold as requested
+            # If underline is specified, set or remove underline as requested
             if fontUnderline != None:
                 # If Underline is being turned on ...
                 if fontUnderline:
@@ -897,6 +929,11 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
 
     def SetBold(self, setting):
         """ Change the BOLD attribute """
+
+# This doesn't properly ignore Time Codes and Hidden Text!!
+        # Apply bold to the current selection, or toggle bold if no selection
+#        self.ApplyBoldToSelection()
+
         # If we have a text selection, not an insertion point, ...
         if self.GetSelection() != (-2, -2):
             # Begin an Undo Batch for formatting
@@ -941,6 +978,11 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
       
     def SetItalic(self, setting):
         """ Change the ITALIC attribute """
+
+# This doesn't properly ignore Time Codes and Hidden Text!!
+        # Apply italics to the current selection, or toggle italics if no selection
+#        self.ApplyItalicToSelection()
+
         # If we have a text selection, not an insertion point, ...
         if self.GetSelection() != (-2, -2):
             # Begin an Undo Batch for formatting
@@ -963,6 +1005,7 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         else:
             # Set the Style
             self.SetTxtStyle(fontItalic = setting)
+
         
     def GetItalic(self):
         """ Determine the current value of the ITALICS attribute """
@@ -984,9 +1027,41 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             return False
       
     def SetUnderline(self, setting):
-        """ Change the ITALIC attribute """
+        """ Change the UNDERLINE attribute """
+
+# This doesn't properly ignore Time Codes and Hidden Text!!
+        # Apply underline to the current selection, or toggle underline if no selection
+#        self.ApplyUnderlineToSelection()
+
         # If we have a text selection, not an insertion point, ...
         if self.GetSelection() != (-2, -2):
+
+            # There's a bug in wxWidgets on Windows and OS X such that under some circumstances, when you try to apply underlining
+            # to part of a line, the whole line gets underlined.
+
+            # If we're setting a selection to underlined on Windows or OS X ...
+            if setting:
+                # ... assume the surrounding text is NOT underlined
+                surroundingUnderline = False
+                # Find the current selection
+                selection = self.GetSelection()
+                # If there's a character to the left of the selection ...
+                if selection[0] - 1 > 0:
+                    # ... get the style of that character to the left
+                    tmpStyle = self.GetStyleAt(selection[0] - 1)
+                    # If that character IS underlined ...
+                    if tmpStyle.GetFont().GetUnderlined():
+                        # ... signal that the surroundings ARE underlined BEFORE we apply formatting
+                        surroundingUnderline = True
+                # If there's a character to the right of the selection ...
+                if selection[1] + 1 < self.GetLastPosition():
+                    # ... get the style of that character to the left
+                    tmpStyle = self.GetStyleAt(selection[1] + 1)
+                    # If that character IS underlined ...
+                    if tmpStyle.GetFont().GetUnderlined():
+                        # ... signal that the surroundings ARE underlined BEFORE we apply formatting
+                        surroundingUnderline = True
+                
             # Begin an Undo Batch for formatting
             self.BeginBatchUndo('Format')
             # For each character in the current selection ...
@@ -1001,9 +1076,60 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
                     self.SetStyle(tmpRange, tmpStyle)
             # End the Formatting Undo Batch
             self.EndBatchUndo()
+
+            # There's a bug in wxWidgets on Windows such that underlining doesn't always show up correctly.
+            # The following code changes the window size slightly so that a re-draw is forced, thus
+            # causing the underlining to show up.  Update() and Refresh() don't work.
+
+            # if we're turning Underline ON ...
+            if setting:
+                # If we're on Windows, resize the parent window to force the redraw ...
+                if ('wxMSW' in wx.PlatformInfo):
+                    # ... find the size of the parent window
+                    size = self.parent.GetSizeTuple()
+                    # Move the Insertion Point to the end of the selection (or this won't work!)
+                    self.SetInsertionPoint(selection[1])
+                    # Shrink the parent window slightly
+                    self.parent.SetSize((size[0], size[1] - 5))
+                    # Set the Parent Window back to the original size
+                    self.parent.SetSize(size)
+
+                # If there was NOT surrounding underlining BEFORE ...
+                if not surroundingUnderline:
+                    # ... note that we have not made any adjustment yet
+                    done = False
+                    # If there's a character to the left of the selection ...
+                    if selection[0] - 1 > 0:
+                        # ... get the style of that character to the left
+                        tmpStyle = self.GetStyleAt(selection[0] - 1)
+                        # If that character IS underlined, WE HAVE THE PROBLEM of the whole line having been underlined.
+                        # (This can happen on Windows or OS X!)
+                        if tmpStyle.GetFont().GetUnderlined():
+                            # Select the character before the original selection
+                            self.SetSelection(selection[0] - 1, selection[0])
+                            # Turn underlining OFF for that character.  That usually removes ALL the incorrect underlining!
+                            self.SetUnderline(False)
+                            # Signal that we've already made the underlining adjustment
+                            done = True
+
+                    # If we haven't already made the adjustment and there's a character to the right of the selection ...
+                    if not done and (selection[1] + 1 < self.GetLastPosition()):
+                        # ... get the style of that character to the left
+                        tmpStyle = self.GetStyleAt(selection[1] + 1)
+                        # If that character IS underlined ...
+                        if tmpStyle.GetFont().GetUnderlined():
+                            # Select the character after the original selection
+                            self.SetSelection(selection[1], selection[1] + 1)
+                            # Turn underlining OFF for that character.  That usually removes ALL the incorrect underlining!
+                            self.SetUnderline(False)
+
+                # After a moment (or it won't work), reset the cursor selection
+                wx.CallLater(10, self.SetSelection, selection[0], selection[1])
+                
         else:
             # Set the Style
             self.SetTxtStyle(fontUnderline = setting)
+
 
     def GetUnderline(self):
         """ Determine the current value of the UNDERLINED attribute """
@@ -1027,9 +1153,20 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
     def CompareFormatting(self, fmt1, fmt2, fullCompare=True):
         """ Compare two styles to see if they match.  If fullCompare is True, paragraph formatting and
             tabs are included in the comparison """
-        # Get the font specifications from the two formats
-        font1 = fmt1.GetFont()
-        font2 = fmt2.GetFont()
+        # if either format is None ...
+        if (fmt1 is None) or (fmt2 is None):
+            # ... we don't have a match!
+            return False
+
+        # Start Exception Handline
+        try:
+            # Get the font specifications from the two formats
+            font1 = fmt1.GetFont()
+            font2 = fmt2.GetFont()
+        # If an exception is raised ...
+        except:
+            # ... we don't have a match!
+            return False
 
         # Perform the comparison
         if (not font1.IsOk()) or \
@@ -1057,6 +1194,10 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         
     def InsertTimeCode(self, timecode):
         """ Insert a time code """
+        # If not in Edit Mode ...
+        if not self.IsEditable():
+            # ... don't edit this!
+            return
         # Get the current Style
         tmpStyle = self.GetDefaultStyle()
         # Check to see if tmpStyle is GOOD.
@@ -1077,9 +1218,15 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         self.SetDefaultStyle(self.txtAttr)
         # End the Undo batch
         self.EndBatchUndo()
+        # Let's ALWAYS leave the program focus in the Transcript after adding a time code.
+        wx.CallAfter(self.SetFocus)
 
     def InsertRisingIntonation(self):
         """ Insert the Rising Intonation (Up Arrow) symbol """
+        # If not in Edit Mode ...
+        if not self.IsEditable():
+            # ... don't edit this!
+            return
         # Get the current Style
         tmpStyle = self.GetDefaultStyle()
         # Check to see if tmpStyle is GOOD.
@@ -1094,19 +1241,23 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         else:
             fontName = TransanaGlobal.configData.defaultFontFace
             fontSize = TransanaGlobal.configData.defaultFontSize
-        # Change the Style to Courier New, current size + 4
-        self.SetTxtStyle(fontFace='Courier New', fontSize=fontSize + 4)
+        # Change the Style to Special Symbol Font Fact, and adjust the current size as configured
+        self.SetTxtStyle(fontFace=TransanaGlobal.configData.specialFontFace, fontSize=TransanaGlobal.configData.specialFontSize)
         # Define the Up Arrow character
         ch = unicode('\xe2\x86\x91', 'utf8')  # \u2191
         # Insert the character
         self.WriteText(ch)
         # Restore the formatting
         self.SetTxtStyle(fontFace=fontName, fontSize=fontSize)
-        # Add a space here (to anchor the formatting!)
-        self.WriteText(' ')
+        # Add a space here (to anchor the formatting!) and then backspace over it
+#        self.WriteText(' ' + wx.WXK_BACK)
 
     def InsertFallingIntonation(self):
         """ Insert the Falling Intonation (Down Arrow) symbol """
+        # If not in Edit Mode ...
+        if not self.IsEditable():
+            # ... don't edit this!
+            return
         # Get the current Style
         tmpStyle = self.GetDefaultStyle()
         # Check to see if tmpStyle is GOOD.
@@ -1121,19 +1272,23 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         else:
             fontName = TransanaGlobal.configData.defaultFontFace
             fontSize = TransanaGlobal.configData.defaultFontSize
-        # Change the Style to Courier New, current size + 4
-        self.SetTxtStyle(fontFace='Courier New', fontSize=fontSize + 4)
+        # Change the Style to Special Symbol Font Fact, and adjust the current size as configured
+        self.SetTxtStyle(fontFace=TransanaGlobal.configData.specialFontFace, fontSize=TransanaGlobal.configData.specialFontSize)
         # Define the Down Arrow character
         ch = unicode('\xe2\x86\x93', 'utf8')
         # Insert the character
         self.WriteText(ch)
         # Restore the formatting
         self.SetTxtStyle(fontFace=fontName, fontSize=fontSize)
-        # Add a space here (to anchor the formatting!)
-        self.WriteText(' ')
+        # Add a space here (to anchor the formatting!) and then backspace over it
+#        self.WriteText(' ' + wx.WXK_BACK)
 
     def InsertInBreath(self):
         """ Insert the In Breath (Closed Dot) symbol """
+        # If not in Edit Mode ...
+        if not self.IsEditable():
+            # ... don't edit this!
+            return
         # Get the current Style
         tmpStyle = self.GetDefaultStyle()
         # Check to see if tmpStyle is GOOD.
@@ -1148,19 +1303,23 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         else:
             fontName = TransanaGlobal.configData.defaultFontFace
             fontSize = TransanaGlobal.configData.defaultFontSize
-        # Change the Style to Courier New, current size + 4
-        self.SetTxtStyle(fontFace='Courier New', fontSize=fontSize + 4)
+        # Change the Style to Special Symbol Font Fact, and adjust the current size as configured
+        self.SetTxtStyle(fontFace=TransanaGlobal.configData.specialFontFace, fontSize=TransanaGlobal.configData.specialFontSize)
         # Define the Closed Dot character
         ch = unicode('\xe2\x80\xa2', 'utf8')
         # Insert the character
         self.WriteText(ch)
         # Restore the formatting
         self.SetTxtStyle(fontFace=fontName, fontSize=fontSize)
-        # Add a space here (to anchor the formatting!)
-        self.WriteText(' ')
+        # Add a space here (to anchor the formatting!) and then backspace over it
+#        self.WriteText(' ' + wx.WXK_BACK)
 
     def InsertWhisper(self):
         """ Insert the Whisper (Open Dot) symbol """
+        # If not in Edit Mode ...
+        if not self.IsEditable():
+            # ... don't edit this!
+            return
         # Get the current Style
         tmpStyle = self.GetDefaultStyle()
         # Check to see if tmpStyle is GOOD.
@@ -1175,16 +1334,16 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         else:
             fontName = TransanaGlobal.configData.defaultFontFace
             fontSize = TransanaGlobal.configData.defaultFontSize
-        # Change the Style to Courier New, current size + 4
-        self.SetTxtStyle(fontFace='Courier New', fontSize=fontSize + 4)
+        # Change the Style to Special Symbol Font Fact, and adjust the current size as configured
+        self.SetTxtStyle(fontFace=TransanaGlobal.configData.specialFontFace, fontSize=TransanaGlobal.configData.specialFontSize)
         # Define the Open Dot character
         ch = unicode('\xc2\xb0', 'utf8')
         # Insert the character
         self.WriteText(ch)
         # Restore the formatting
         self.SetTxtStyle(fontFace=fontName, fontSize=fontSize)
-        # Add a space here (to anchor the formatting!)
-        self.WriteText(' ')
+        # Add a space here (to anchor the formatting!) and then backspace over it
+#        self.WriteText(' ' + wx.WXK_BACK)
 
     def GetStyleAt(self, pos):
         """ Determine the style of the character at the given position """
@@ -1614,7 +1773,15 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             # Determine the start and end character numbers of the current selection
             textSelection = event.GetEventObject().GetSelection()
             # Determine the character number of the current mouse position (!)
-            mousePos = event.GetEventObject().HitTest(event.GetPosition())[1]
+#            mousePos = event.GetEventObject().HitTest(event.GetPosition())[1]
+            # If we're using wxPython 2.8.x.x ...
+            if wx.VERSION[:2] == (2, 8):
+                # ... use HitTest()
+                mousePos = event.GetEventObject().HitTest(event.GetPosition())[1]
+            # If we're using a later wxPython version ...
+            else:
+                # ... use HitTestPos()
+                mousePos = event.GetEventObject().HitTestPos(event.GetPosition())[1]
          
             # If the Mouse Character is inside the selection ...
             if (textSelection[0] <= mousePos) and (mousePos < textSelection[1]):
@@ -1699,7 +1866,14 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             # Determine the start and end character numbers of the current selection
             textSelection = event.GetEventObject().GetSelection()
             # Determine the character number of the current mouse position (!)
-            mousePos = event.GetEventObject().HitTest(event.GetPosition())[1]
+            # If we're using wxPython 2.8.x.x ...
+            if wx.VERSION[:2] == (2, 8):
+                # ... use HitTest()
+                mousePos = event.GetEventObject().HitTest(event.GetPosition())[1]
+            # If we're using a later wxPython version ...
+            else:
+                # ... use HitTestPos()
+                mousePos = event.GetEventObject().HitTestPos(event.GetPosition())[1]
             # If the Mouse Character is inside the selection ...
             if (textSelection[0] <= mousePos) and (mousePos < textSelection[1]):
                 # ... change the cursor of the PARENT object (not sure why Parent is necessary, but it is.)
@@ -1723,7 +1897,7 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             print
 
         # If self.txtAttr is not defined, there's no transcript yet.
-        if (self.txtAttr == None) or (self.GetSelection() != (-2, -2)) or self.GetReadOnly():
+        if (self.txtAttr is None) or (self.GetSelection() != (-2, -2)) or self.GetReadOnly():
 
             if DEBUG:
                 if (self.txtAttr == None):

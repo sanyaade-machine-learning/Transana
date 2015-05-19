@@ -345,7 +345,7 @@ class TranscriptEditor(RichTextEditCtrl):
         self.load_timecodes()
         # Re-enable widget
         self.Enable(True)
-        # Set the Transcritp to Read Only initially so that the highlight will scroll as the media plays
+        # Set the Transcript to Read Only initially so that the highlight will scroll as the media plays
         self.set_read_only(True)
         # If the transcript contains time codes ...
         if len(self.timecodes) > 0:
@@ -486,7 +486,7 @@ class TranscriptEditor(RichTextEditCtrl):
         # Destroy the Save Popup Dialog
         self.saveDlg.Destroy()
         # Reset Mac Formatting Counter  (Tracks formatting changes to prevent wxPython 2.8.12.1 CRASH!)
-        # NOTE:  Reset to 5000 rather than 0 because otherwise, we'll get a crash.  Later rounds have stricted limits!
+        # NOTE:  Reset to 5000 rather than 0 because otherwise, we'll get a crash.  Later rounds have stricter limits!
         self.macFormatCounter = 5000
 
     def export_transcript(self, fname):
@@ -1784,6 +1784,10 @@ class TranscriptEditor(RichTextEditCtrl):
             # ... skip to the next (parent) level event handler.
             event.Skip()
  
+        # Always check the styles to see if the Transcript Toolbar needs to be updated.  But we need to defer the call
+        # until everything else has been handled so it's always correct.
+        wx.CallAfter(self.StyleChanged, self)
+
     def OnKey(self, event):
         """Called when a character key is pressed.  Works with case-sensitive characters.  """
 
@@ -2081,8 +2085,13 @@ class TranscriptEditor(RichTextEditCtrl):
 
         # If we are supposed to copy the data to the Clip Board ...
         if copyToClipboard:
+            # Open the Clipboard
+            wx.TheClipboard.Open()
             # ... then copy the data to the clipboard!
             wx.TheClipboard.SetData(cdo)
+            # Close the Clipboard
+            wx.TheClipboard.Close()
+            
         else:
             # Put the data in the DropSource object
             tds = TranscriptDropSource(self.parent)
@@ -2135,7 +2144,15 @@ class TranscriptEditor(RichTextEditCtrl):
             # Determine the start and end character numbers of the current selection
             textSelection = event.GetEventObject().GetSelection()
             # Determine the character number of the current mouse position (!)
-            mousePos = event.GetEventObject().HitTest(event.GetPosition())[1]
+#            mousePos = event.GetEventObject().HitTest(event.GetPosition())[1]
+            # If we're using wxPython 2.8.x.x ...
+            if wx.VERSION[:2] == (2, 8):
+                # ... use HitTest()
+                mousePos = event.GetEventObject().HitTest(event.GetPosition())[1]
+            # If we're using a later wxPython version ...
+            else:
+                # ... use HitTestPos()
+                mousePos = event.GetEventObject().HitTestPos(event.GetPosition())[1]
             # If the Mouse Character is inside the selection ...
             if (textSelection[0] <= mousePos) and (mousePos < textSelection[1]):
                 self.canDrag = True
@@ -2191,7 +2208,15 @@ class TranscriptEditor(RichTextEditCtrl):
             # If a DRAG is possible ...
             if self.canDrag:
                 # ... then set the insertion point to the mouse's current position (We're IN the selection)
-                self.SetInsertionPoint(event.GetEventObject().HitTest(event.GetPosition())[1])
+#                self.SetInsertionPoint(event.GetEventObject().HitTest(event.GetPosition())[1])
+                # If we're using wxPython 2.8.x.x ...
+                if wx.VERSION[:2] == (2, 8):
+                    # ... use HitTest()
+                    self.SetInsertionPoint(event.GetEventObject().HitTest(event.GetPosition())[1])
+                # If we're using a later wxPython version ...
+                else:
+                    # ... use HitTestPos()
+                    self.SetInsertionPoint(event.GetEventObject().HitTestPos(event.GetPosition())[1])
             # If a DRAG is NOT possible ...
             else:
                 # ... then set the insertion point to the last good position
@@ -2431,7 +2456,15 @@ class TranscriptEditor(RichTextEditCtrl):
             changing the the font settingss for the current cursor position. """
         # Let's try to remember the cursor position, getting the first character of the first and last lines
         firstChar = self.GetFirstVisiblePosition()
-        lastChar = self.HitTest(wx.Point(5, self.GetSize()[1] - 10))[1]
+#        lastChar = self.HitTest(wx.Point(5, self.GetSize()[1] - 10))[1]
+        # If we're using wxPython 2.8.x.x ...
+        if wx.VERSION[:2] == (2, 8):
+            # ... use HitTest()
+            lastChar = self.HitTest(wx.Point(5, self.GetSize()[1] - 10))[1]
+        # If we're using a later wxPython version ...
+        else:
+            # ... use HitTestPos()
+            lastChar = self.HitTestPos(wx.Point(5, self.GetSize()[1] - 10))[1]
 
         # Set the Wait cursor
         self.parent.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
@@ -2675,7 +2708,7 @@ class TranscriptEditor(RichTextEditCtrl):
                 # lose their values.
 
                 # Create a Text Attribute Object
-                tmpAttr = richtext.TextAttrEx()
+                tmpAttr = richtext.RichTextAttr()
 
                 # For each character position in the current selection ...
                 for selPos in range(currentSelection[0], currentSelection[1]):
