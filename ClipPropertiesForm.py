@@ -305,7 +305,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
             self.text_edit[len(self.text_edit) - 1].ProgressDlg.Destroy()
 
             # This doesn't work!  Hidden text remains visible.
-            self.text_edit[len(self.text_edit) - 1].StyleSetVisible(self.text_edit[len(self.text_edit) - 1].STYLE_HIDDEN, False)
+#            self.text_edit[len(self.text_edit) - 1].StyleSetVisible(self.text_edit[len(self.text_edit) - 1].STYLE_HIDDEN, False)
             self.text_edit[len(self.text_edit) - 1].codes_vis = 0
             # Scan transcript for Time Codes
             self.text_edit[len(self.text_edit) - 1].load_timecodes()
@@ -428,17 +428,23 @@ class ClipPropertiesForm(Dialogs.GenForm):
         # Create an empty ListBox
         self.ekw_lb = wx.ListBox(self.panel, -1, wx.DefaultPosition, wx.DefaultSize, style=wx.LB_EXTENDED)
         # Populate the ListBox
+        # If the clip object has keywords ... 
+        for clipKeyword in self.obj.keyword_list:
+            # ... add them to the keyword list
+            self.ekw_lb.Append(clipKeyword.keywordPair)
+
+#       NOTE:  This functionality doesn't belong HERE.  It's NOT a function of the FORM!!!!
         # If we are loading a defined Clips (Clip.number != 0), use the Clips's keywords
-        if self.obj.number != 0:
-            for clipKeyword in self.obj.keyword_list:
-                self.ekw_lb.Append(clipKeyword.keywordPair)
+#        if self.obj.number != 0:
+#            for clipKeyword in self.obj.keyword_list:
+#                self.ekw_lb.Append(clipKeyword.keywordPair)
         # If we are creating a NEW Clip (Clip.number == 0), use the Episode's Keywords as default Keywords
-        else:
-            if self.obj.episode_num != 0:
-                tempEpisode = Episode.Episode(self.obj.episode_num)
-                for clipKeyword in tempEpisode.keyword_list:
-                    self.obj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
-                    self.ekw_lb.Append(clipKeyword.keywordPair)
+#        else:
+#            if self.obj.episode_num != 0:
+#                tempEpisode = Episode.Episode(self.obj.episode_num)
+#                for clipKeyword in tempEpisode.keyword_list:
+#                    self.obj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
+#                    self.ekw_lb.Append(clipKeyword.keywordPair)
                                 
         self.ekw_lb.SetConstraints(lay)
 
@@ -688,7 +694,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
                 # ... now add the original clip's text ...
                 self.text_edit[x].InsertRTFText(self.obj.transcripts[x].text)
                 # This doesn't work!  Hidden text remains visible.
-                self.text_edit[x].StyleSetVisible(self.text_edit[x].STYLE_HIDDEN, False)
+#                self.text_edit[x].StyleSetVisible(self.text_edit[x].STYLE_HIDDEN, False)
                 # ... signal that time codes will be visible, which they always are in the Clip Properties ...
                 self.text_edit[x].codes_vis = 0
                 # ... scan transcript for Time Codes ...
@@ -731,7 +737,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
                 # ... now add the merge clip's text ...
                 self.text_edit[x].InsertRTFText(mergeClip.transcripts[x].text)
                 # This doesn't work!  Hidden text remains visible.
-                self.text_edit[x].StyleSetVisible(self.text_edit[x].STYLE_HIDDEN, False)
+#                self.text_edit[x].StyleSetVisible(self.text_edit[x].STYLE_HIDDEN, False)
                 # ... signal that time codes will be visible, which they always are in the Clip Properties ...
                 self.text_edit[x].codes_vis = 0
                 # ... scan transcript for Time Codes ...

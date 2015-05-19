@@ -394,11 +394,11 @@ class OptionsSettings(wx.Dialog):
             lay.left.SameAs(lblTabSize, wx.Left, 0)
             lay.right.PercentOf(panelTranscriber, wx.Width, 25)
             lay.height.AsIs()
-            self.tabSize = wx.ComboBox(panelTranscriber, -1, choices=['4', '6', '8', '10', '12', '14', '16', '18', '20'], style = wx.CB_DROPDOWN )
+            self.tabSize = wx.Choice(panelTranscriber, -1, choices=['0', '2', '4', '6', '8', '10', '12', '14', '16', '18', '20'])
             self.tabSize.SetConstraints(lay)
 
             # Set the value to the default value provided by the Configuration Data
-            self.tabSize.SetValue(TransanaGlobal.configData.tabSize)
+            self.tabSize.SetStringSelection(TransanaGlobal.configData.tabSize)
 
             # Add Default Transcript Font
             lay = wx.LayoutConstraints()
@@ -675,7 +675,7 @@ class OptionsSettings(wx.Dialog):
             # Update the Global Video Speed
             TransanaGlobal.configData.videoSpeed = self.videoSpeed.GetValue()
             # Update the tab size
-            TransanaGlobal.configData.tabSize = self.tabSize.GetValue()
+            TransanaGlobal.configData.tabSize = self.tabSize.GetStringSelection()
             # Update the Word Wrap setting
             if self.cbWordWrap.GetValue():
                 wordWrapValue = stc.STC_WRAP_WORD

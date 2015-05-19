@@ -503,7 +503,7 @@ class PropagateClipChanges(wx.Dialog):
                                     # ... add the keyword as an example keyword
                                     clipObj.add_keyword(kw[0], kw[1], example=1)
                                     # This will be unexpected by the user, so let's add a note to the user about this.
-                                    prompt = _('Clip "%s" in collection "%s" retained keyword "%s : %s" because it is a keyword example.') + '\n'
+                                    prompt = _('Clip "%s" in collection "%s" retained keyword "%s : %s" because it is a keyword example.') + '\n\n'
                                     if 'unicode' in wx.PlatformInfo:
                                         prompt = unicode(prompt, 'utf8')
                                     # Add the prompt to the memo to communicate this to the user.
@@ -515,18 +515,18 @@ class PropagateClipChanges(wx.Dialog):
                         clipObj.unlock_record()
                         
                         # Finally, indicate success in the Report
-                        prompt = _('Transcript %d of clip "%s" in collection "%s" has been updated.\n')
+                        prompt = _('Transcript %d of clip "%s" in collection "%s" has been updated.')
                         if 'unicode' in wx.PlatformInfo:
                             prompt = unicode(prompt, 'utf8')
                         # Add the message to the report
-                        self.memo.AppendText(prompt % (key + 1, oldClipID, clipObj.GetNodeString(False)))
+                        self.memo.AppendText(prompt % (key + 1, oldClipID, clipObj.GetNodeString(False)) + '\n\n')
                     # If the user indicates we should skip ONE clip ...
                     elif results == ID_SKIP:
                         # ... indicate that in the report and don't do anything else.
                         prompt = _('Clip change has been skipped for transcript %d of clip "%s" in collection "%s".')
                         if 'unicode' in wx.PlatformInfo:
                             prompt = unicode(prompt, 'utf8')
-                        self.memo.AppendText(prompt % (key + 1, oldClipID, clipObj.GetNodeString(False)) + '\n')
+                        self.memo.AppendText(prompt % (key + 1, oldClipID, clipObj.GetNodeString(False)) + '\n\n')
                     # If the user indicates we should CANCEL Clip propagation ...
                     elif results == wx.ID_CANCEL:
                         # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
@@ -620,7 +620,7 @@ class PropagateClipChanges(wx.Dialog):
                 prompt = _('ERROR: Clip "%s" in collection "%s" is locked and cannot be updated.')
                 if 'unicode' in wx.PlatformInfo:
                     prompt = unicode(prompt, 'utf8')
-                self.memo.AppendText(prompt % (oldClipID, clipObj.GetNodeString(False)) + '\n')
+                self.memo.AppendText(prompt % (oldClipID, clipObj.GetNodeString(False)) + '\n\n')
 
             # If a SaveError exception is raised -- Duplicate Clip ID error, for example
             except TransanaExceptions.SaveError, e:
@@ -629,7 +629,7 @@ class PropagateClipChanges(wx.Dialog):
                 if 'unicode' in wx.PlatformInfo:
                     prompt = unicode(prompt, 'utf8')
                 # ... and report the error in the report.
-                self.memo.AppendText(prompt % (e.reason, oldClipID, clipObj.GetNodeString(False)) + '\n')
+                self.memo.AppendText(prompt % (e.reason, oldClipID, clipObj.GetNodeString(False)) + '\n\n')
                 # unlock the clip
                 clipObj.unlock_record()
 
@@ -881,7 +881,7 @@ class AcceptClipTranscriptChanges(wx.Dialog):
         # Clean up the Progress Dialog
         oldTranscript.ProgressDlg.Destroy()
         # This doesn't work!  Hidden text remains visible.
-        oldTranscript.StyleSetVisible(oldTranscript.STYLE_HIDDEN, False)
+#        oldTranscript.StyleSetVisible(oldTranscript.STYLE_HIDDEN, False)
         # Set the Visibility flag
         oldTranscript.codes_vis = 0
         # Scan transcript for Time Codes
@@ -941,7 +941,7 @@ class AcceptClipTranscriptChanges(wx.Dialog):
         newTranscript.ProgressDlg.Destroy()
 
         # This doesn't work!  Hidden text remains visible.
-        newTranscript.StyleSetVisible(newTranscript.STYLE_HIDDEN, False)
+#        newTranscript.StyleSetVisible(newTranscript.STYLE_HIDDEN, False)
         # Set the Visibility flag
         newTranscript.codes_vis = 0
         # Scan transcript for Time Codes

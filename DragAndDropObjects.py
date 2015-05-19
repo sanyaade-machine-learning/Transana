@@ -822,6 +822,21 @@ def CreateClip(clipData, dropData, tree, dropNode):
         contin = False
         # Let's get out of here!
         return
+
+    # We need to set up the initial keywords.
+    # If we are working from an Episode Transcript ...
+    if tempTranscript.clip_num == 0:
+        # Iterate through the source Episode's Keyword List ...
+        for clipKeyword in tempEpisode.keyword_list:
+            # ... and copy each keyword to the new Clip
+            tempClip.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
+    # If we are working from a Clip Transcript ...
+    else:
+        # Iterate through the source Clip's Keyword List ...
+        for clipKeyword in sourceClip.keyword_list:
+            # ... and copy each keyword to the new Clip
+            tempClip.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
+
     # Load the parent Collection
     tempCollection = Collection.Collection(tempClip.collection_num)
     try:
@@ -834,6 +849,7 @@ def CreateClip(clipData, dropData, tree, dropNode):
         # to prevent someone from deleting it out from under us, which is pretty unlikely.  But we should 
         # still be able to add Clips even if someone else is editing the Collection properties.
         collectionLocked = False
+
     # Create the Clip Properties Dialog Box to Add a Clip
     dlg = ClipPropertiesForm.AddClipDialog(None, -1, tempClip)
     # While the "continue" flag is True ...

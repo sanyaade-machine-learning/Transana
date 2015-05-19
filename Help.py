@@ -89,7 +89,6 @@ class Help(object):
         self.help.AddBook(os.path.join(programDir, 'help', 'Manual.hhp'))
         self.help.AddBook(os.path.join(programDir, 'help', 'Tutorial.hhp'))
         self.help.AddBook(os.path.join(programDir, 'help', 'TranscriptNotation.hhp'))
-        self.help.AddBook(os.path.join(programDir, 'help', 'FileManagement.hhp'))
         # And finally, we display the Help Control, showing the current contents.
         self.help.Display(HelpContext)
 
