@@ -2369,50 +2369,60 @@ class ControlObject(object):
 
     def SaveTranscriptAs(self):
         """Export the Transcript to an RTF file."""
-        # If we're using a Right-To-Left language ...
-        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
-            # ... we can only export to XML format
-            wildcard = _("XML Format (*.xml)|*.xml")
-        # ... whereas with Left-to-Right languages
-        else:
-            # ... we can export both RTF and XML formats
-            wildcard = _("Rich Text Format (*.rtf)|*.rtf|XML Format (*.xml)|*.xml")
-        dlg = wx.FileDialog(None, defaultDir=self.defaultExportDir,
-                            wildcard=wildcard, style=wx.SAVE)
-        if dlg.ShowModal() == wx.ID_OK:
-            # The Default Export Directory should use the last-used value for the session but reset to the
-            # video root between sessions.
-            self.defaultExportDir = dlg.GetDirectory()
-            fname = dlg.GetPath()
-            # Mac doesn't automatically append the file extension.  Do it if necessary.
-            if (TransanaGlobal.configData.LayoutDirection != wx.Layout_RightToLeft) and \
-               (dlg.GetFilterIndex() == 0) and \
-               (not fname.upper().endswith(".RTF")):
-                fname += '.rtf'
-            elif (dlg.GetFilterIndex() == 1) and (not fname.upper().endswith(".XML")):
-                fname += '.xml'
-            if os.path.exists(fname):
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_('A file named "%s" already exists.  Do you want to replace it?'), 'utf8')
-                else:
-                    prompt = _('A file named "%s" already exists.  Do you want to replace it?')
-                dlg2 = Dialogs.QuestionDialog(None, prompt % fname,
-                                        _('Transana Confirmation'))
-#                dlg2.CentreOnScreen()
-                TransanaGlobal.CenterOnPrimary(dlg2)
-                if dlg2.LocalShowModal() == wx.ID_YES:
-                    self.TranscriptWindow[self.activeTranscript].SaveTranscriptAs(fname)
-                dlg2.Destroy()
+        # Prompt the user to save before exporting
+        if self.SaveTranscript(prompt=1, continueEditing=TransanaConstants.partialTranscriptEdit):
+            # If we're using a Right-To-Left language ...
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                # ... we can only export to XML format
+                wildcard = _("XML Format (*.xml)|*.xml")
+            # ... whereas with Left-to-Right languages
             else:
-                self.TranscriptWindow[self.activeTranscript].SaveTranscriptAs(fname)
-        dlg.Destroy()
-
+                # ... we can export both RTF and XML formats
+                wildcard = _("Rich Text Format (*.rtf)|*.rtf|XML Format (*.xml)|*.xml")
+            dlg = wx.FileDialog(None, defaultDir=self.defaultExportDir,
+                                wildcard=wildcard, style=wx.SAVE)
+            if dlg.ShowModal() == wx.ID_OK:
+                # The Default Export Directory should use the last-used value for the session but reset to the
+                # video root between sessions.
+                self.defaultExportDir = dlg.GetDirectory()
+                fname = dlg.GetPath()
+                # Mac doesn't automatically append the file extension.  Do it if necessary.
+                if (TransanaGlobal.configData.LayoutDirection != wx.Layout_RightToLeft) and \
+                   (dlg.GetFilterIndex() == 0) and \
+                   (not fname.upper().endswith(".RTF")):
+                    fname += '.rtf'
+                elif (dlg.GetFilterIndex() == 1) and (not fname.upper().endswith(".XML")):
+                    fname += '.xml'
+                if os.path.exists(fname):
+                    if 'unicode' in wx.PlatformInfo:
+                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                        prompt = unicode(_('A file named "%s" already exists.  Do you want to replace it?'), 'utf8')
+                    else:
+                        prompt = _('A file named "%s" already exists.  Do you want to replace it?')
+                    dlg2 = Dialogs.QuestionDialog(None, prompt % fname,
+                                            _('Transana Confirmation'))
+    #                dlg2.CentreOnScreen()
+                    TransanaGlobal.CenterOnPrimary(dlg2)
+                    if dlg2.LocalShowModal() == wx.ID_YES:
+                        self.TranscriptWindow[self.activeTranscript].SaveTranscriptAs(fname)
+                    dlg2.Destroy()
+                else:
+                    self.TranscriptWindow[self.activeTranscript].SaveTranscriptAs(fname)
+            dlg.Destroy()
+        # If the user doesn't SAVE ...
+        else:
+            # ... mark that the transcript IS changed so we don't lose these edits!
+            self.TranscriptWindow[self.activeTranscript].dlg.editor.MarkDirty()
+            
     def PropagateChanges(self, transcriptWindowNumber):
         """ Propagate changes in an Episode transcript down to derived clips """
         # First, let's save the changes in the Transcript.  We don't want to propagate changes, then end up
         # not saving them in the source!
-        if self.SaveTranscript(prompt=1):
+        if TransanaConstants.partialTranscriptEdit:
+            saveResult = self.SaveTranscript(prompt=1, continueEditing=True)
+        else:
+            saveResult = self.SaveTranscript(prompt=1)
+        if saveResult:
             # If we are working with an Episode Transcript ...
             if type(self.currentObj).__name__ == 'Episode':
                 # Start up the Propagate Episode Transcript Changes tool

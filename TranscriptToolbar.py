@@ -693,7 +693,10 @@ class TranscriptToolbar(wx.ToolBar):
 
     def OnSave(self, evt):
         """ Implement the Save Button """
-        self.parent.ControlObject.SaveTranscript()
+        if TransanaConstants.partialTranscriptEdit:
+            self.parent.ControlObject.SaveTranscript(continueEditing=True)
+        else:
+            self.parent.ControlObject.SaveTranscript()
 
     def OnPropagate(self, event):
         """ Implement Propagate Changes button """

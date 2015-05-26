@@ -344,14 +344,14 @@ class ReportGenerator(wx.Object):
                         for x in tmpSnapshotList:
                             # ... add the Snapshot to the Dictionary with the Sort Order as the key and with the Object Type added
                             tmpDict[x[3]] = (('Snapshot',) + x)
-                        # Get the Dictionary's Keys
-                        order = tmpDict.keys()
-                        # Sort the Dictionary's Keys
-                        order.sort()
-                        # For each element in the sorted list of Keys ...
-                        for x in order:
-                            # Add the elemnt to the Major List.
-                            majorList.append(tmpDict[x][:-1])
+                    # Get the Dictionary's Keys
+                    order = tmpDict.keys()
+                    # Sort the Dictionary's Keys
+                    order.sort()
+                    # For each element in the sorted list of Keys ...
+                    for x in order:
+                        # Add the elemnt to the Major List.
+                        majorList.append(tmpDict[x][:-1])
 
                     # Then get the nested collections under the new collection and add them to the Nested Collection list
                     # They get added at the FRONT of the list so that the report will mirror the organization of the

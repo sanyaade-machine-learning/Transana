@@ -615,9 +615,19 @@ class TranscriptEditor(RichTextEditCtrl):
 	self.DiscardEdits()
         # Destroy the Save Popup Dialog
         self.saveDlg.Destroy()
+        # If Partial Transcript editing is enabled ...
+        if TransanaConstants.partialTranscriptEdit and continueEditing:
+            # If we have only part of the transcript in the editor, we need to restore the partial transcript state following save
+            self.UpdateCurrentContents('EnterEditMode')
 
     def export_transcript(self, fname):
         """Export the transcript to an RTF file."""
+        # If Partial Transcript editing is enabled ...
+        if TransanaConstants.partialTranscriptEdit:
+            # If we have only part of the transcript in the editor, we need to restore the full transcript
+            self.UpdateCurrentContents('LeaveEditMode')
+            self.Refresh()
+
         # See if there are any time codes in the text.  If not ...
         if self.timecodes == []:
             # ... then we can ignore the whole issue of time-code stripping
@@ -700,7 +710,12 @@ class TranscriptEditor(RichTextEditCtrl):
             else:
                 # ... then mark it as clean.  (yeah, one of these is probably not needed.)
                 self.DiscardEdits()
-        
+
+        # If Partial Transcript editing is enabled ...
+        if TransanaConstants.partialTranscriptEdit:
+            # If we have only part of the transcript in the editor, we need to restore the partial transcript state following save
+            self.UpdateCurrentContents('EnterEditMode')
+
     def set_font(self, font_face, font_size, font_fg=0x000000, font_bg=0xffffff):
         """Change the current font or the font for the selected text."""
         self.SetFont(font_face, font_size, font_fg, font_bg)
@@ -1978,10 +1993,10 @@ class TranscriptEditor(RichTextEditCtrl):
             # to the transcript!
             self.SetFocus()
             
-        # If Partial Transcript editing is enabled ...
-        if TransanaConstants.partialTranscriptEdit:
-            # If we have only part of the transcript in the editor, we need to restore the partial transcript state following save
-            self.UpdateCurrentContents('EnterEditMode')
+##        # If Partial Transcript editing is enabled ...
+##        if TransanaConstants.partialTranscriptEdit:
+##            # If we have only part of the transcript in the editor, we need to restore the partial transcript state following save
+##            self.UpdateCurrentContents('EnterEditMode')
 
     def CheckTimeCodesAtSelectionBoundaries(self):
         """ Check the start and end of a selection and make sure neither is in the middle of a time code """

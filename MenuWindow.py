@@ -1161,7 +1161,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
 
     def OnSaveTranscript(self, event):
         """Handler for File > Save Transcript menu command"""
-        self.ControlObject.SaveTranscript()
+        self.ControlObject.SaveTranscript(continueEditing=TransanaConstants.partialTranscriptEdit)
 
     def OnSaveTranscriptAs(self, event):
         """Handler for File > Save Transcript As menu command"""
