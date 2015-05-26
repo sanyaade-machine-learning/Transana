@@ -32,6 +32,8 @@ import wx
 import gettext
 # import Python's os module
 import os
+# import Transana's Constants
+import TransanaConstants
 # Import Transana's Global variables
 import TransanaGlobal
 # Import Transana's Dialogs
@@ -182,15 +184,26 @@ class TranscriptionUI(wx.Frame):  # (wx.MDIChildFrame):
         # Pass through to the Editor
         self.dlg.editor.insert_timed_pause(start_ms, end_ms)
 
+    def SetReadOnly(self, readOnly=True):
+        """ Change the Read Only / Edit Mode status of a transcript """
+        # Change the Read Only Button status in the Toolbar
+        self.dlg.toolbar.ToggleTool(self.dlg.toolbar.CMD_READONLY_ID, not readOnly)
+        # Fire the Read Only Button's event, like the button had been pressed manually.
+        self.dlg.toolbar.OnReadOnlySelect(None)
+
     def TranscriptModified(self):
         """Return TRUE if transcript was modified since last save."""
         # Pass through to the Editor
         return self.dlg.editor.modified()
         
-    def SaveTranscript(self):
-        """Save the Transcript to the database."""
+    def SaveTranscript(self, continueEditing=True):
+        """Save the Transcript to the database.
+           continueEditing is only used for Partial Transcript Editing."""
         # Pass through to the Editor
-        self.dlg.editor.save_transcript()
+        if TransanaConstants.partialTranscriptEdit:
+            self.dlg.editor.save_transcript(continueEditing)
+        else:
+            self.dlg.editor.save_transcript()
 
     def SaveTranscriptAs(self, fname):
         """Export the Transcript to an RTF or XML file."""
@@ -286,6 +299,8 @@ class _TranscriptDialog(wx.Frame):  # (wx.MDIChildFrame):
     """ Implement a wx.Frame-based control for the private use of the TranscriptionUI object """
 
     def __init__(self, parent, id=-1, includeClose=False, showLineNumbers=False):
+        # Remember the parent
+        self.parent = parent
         # If we're including an optional Close button ...
         if includeClose:
             # ... define a style that includes the Close Box.  (System_Menu is required for Close to show on Windows in wxPython.)
@@ -402,7 +417,7 @@ class _TranscriptDialog(wx.Frame):  # (wx.MDIChildFrame):
 ##            self.GDITimer.Start(5000)
 
         try:
-            # Defind the Activate event (for setting the active window)
+            # Define the Activate event (for setting the active window)
             self.Bind(wx.EVT_ACTIVATE, self.OnActivate)
             # Define the Close event (for THIS Transcript Window)
             self.Bind(wx.EVT_CLOSE, self.OnCloseWindow)
@@ -429,7 +444,7 @@ class _TranscriptDialog(wx.Frame):  # (wx.MDIChildFrame):
         # by detecting that the number of Transcript Windows is smaller than this window's transcriptWindowNumber
         # and NOT resetting activeTranscript in that circumstance.
         if (self.ControlObject != None) and (self.transcriptWindowNumber < len(self.ControlObject.TranscriptWindow)):
-            # ... make this transcript the Control Object's active trasncript
+            # ... make this transcript the Control Object's active transcript
             self.ControlObject.activeTranscript = self.transcriptWindowNumber
         elif (self.ControlObject != None) and (self.ControlObject.activeTranscript >= len(self.ControlObject.TranscriptWindow)):
             self.ControlObject.activeTranscript = 0

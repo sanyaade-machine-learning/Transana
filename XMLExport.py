@@ -19,7 +19,8 @@
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Ronnie Steinmetz, Jonathan Beavers'
 
 DEBUG = False
-if DEBUG:
+DEBUG2 = False
+if DEBUG or DEBUG2:
     print "XMLExport DEBUG is ON!!"
 
 import wx
@@ -33,6 +34,7 @@ if TransanaConstants.USESRTC:
     import TranscriptEditor_STC  # for conversion
 import RichTextEditCtrl
 import cPickle
+import datetime
 import pickle
 import os
 import sys
@@ -40,6 +42,7 @@ import sys
 # Set the encoding for export.
 # Use UTF-8 regardless of the current encoding for consistency in the Transana XML files
 EXPORT_ENCODING = 'utf8'
+ENCODE_PROPERLY = True
 
 class XMLExport(Dialogs.GenForm):
     """ This window displays a variety of GUI Widgets. """
@@ -187,6 +190,11 @@ class XMLExport(Dialogs.GenForm):
 
         db = DBInterface.get_db()
 
+        # If we're using sqlite ...
+        if TransanaConstants.DBInstalled in ['sqlite3']:
+            # ... switch the text_factory from string to unicode here so we don't have to mess with decoding.
+            db.text_factory = unicode
+
         try:
             fs = self.XMLFile.GetValue()
             if (fs[-4:].lower() != '.xml') and (fs[-4:].lower() != '.tra'):
@@ -217,17 +225,22 @@ class XMLExport(Dialogs.GenForm):
             #                Transana 2.40 release.
             # Version 1.6 -- Added XML format for transcripts and character escapes for Transana 2.50 release
             # Version 1.7 -- Database Structure changed for Still Image Snapshots for Transana 2.60 release
-            f.write('    1.7\n');
-            f.write('  </TransanaXMLVersion>\n');
+            # Version 1.8 -- Character Encoding Rules changed completely!!
+            if ENCODE_PROPERLY:
+                f.write('    1.8\n')
+            else:
+                f.write('    1.7\n')
+            f.write('  </TransanaXMLVersion>\n')
 
             progress.Update(7, _('Writing Series Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT SeriesNum, SeriesID, SeriesComment, SeriesOwner, DefaultKeywordGroup FROM Series2'
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <SeriesFile>\n')
-                    for seriesRec in dbCursor.fetchall():
+                    for seriesRec in data:
                         self.WriteSeriesRec(f, seriesRec)
                     f.write('  </SeriesFile>\n')
                 dbCursor.close()
@@ -237,9 +250,10 @@ class XMLExport(Dialogs.GenForm):
                 dbCursor = db.cursor()
                 SQLText = 'SELECT EpisodeNum, EpisodeID, SeriesNum, TapingDate, MediaFile, EpLength, EpComment FROM Episodes2'
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <EpisodeFile>\n')
-                    for episodeRec in dbCursor.fetchall():
+                    for episodeRec in data:
                         self.WriteEpisodeRec(f, episodeRec)
                     f.write('  </EpisodeFile>\n')
                 dbCursor.close()
@@ -251,9 +265,10 @@ class XMLExport(Dialogs.GenForm):
                                     Contributor, DCDate, DCType, Format, Source, Language, Relation, Coverage, Rights
                                     FROM CoreData2"""
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <CoreDataFile>\n')
-                    for coreDataRec in dbCursor.fetchall():
+                    for coreDataRec in data:
                         self.WriteCoreDataRec(f, coreDataRec)
                     f.write('  </CoreDataFile>\n')
                 dbCursor.close()
@@ -263,9 +278,10 @@ class XMLExport(Dialogs.GenForm):
                 dbCursor = db.cursor()
                 SQLText = 'SELECT CollectNum, CollectID, ParentCollectNum, CollectComment, CollectOwner, DefaultKeywordGroup FROM Collections2'
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <CollectionFile>\n')
-                    for collectionRec in dbCursor.fetchall():
+                    for collectionRec in data:
                         self.WriteCollectionRec(f, collectionRec)
                     f.write('  </CollectionFile>\n')
                 dbCursor.close()
@@ -276,9 +292,10 @@ class XMLExport(Dialogs.GenForm):
                 SQLText = 'SELECT ClipNum, ClipID, CollectNum, EpisodeNum, MediaFile, ClipStart, ClipStop, ClipOffset, Audio, '
                 SQLText += 'ClipComment, SortOrder FROM Clips2'
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <ClipFile>\n')
-                    for clipRec in dbCursor.fetchall():
+                    for clipRec in data:
                         self.WriteClipRec(f, clipRec)
                     f.write('  </ClipFile>\n')
                 dbCursor.close()
@@ -288,9 +305,10 @@ class XMLExport(Dialogs.GenForm):
                 dbCursor = db.cursor()
                 SQLText = 'SELECT AddVidNum, EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio FROM AdditionalVids2'
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <AdditionalVidsFile>\n')
-                    for additionalMediaFileRec in dbCursor.fetchall():
+                    for additionalMediaFileRec in data:
                         self.WriteAdditionalMediaFileRec(f, additionalMediaFileRec)
                     f.write('  </AdditionalVidsFile>\n')
                 dbCursor.close()
@@ -300,18 +318,11 @@ class XMLExport(Dialogs.GenForm):
                 dbCursor = db.cursor()
                 SQLText = 'SELECT TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum, ClipNum, SortOrder, Transcriber, '
                 SQLText += 'ClipStart, ClipStop, Comment, MinTranscriptWidth, RTFText FROM Transcripts2'
-
-                if DEBUG:
-                    print "Selecting Transcripts"
-                    
                 dbCursor.execute(SQLText)
-
-                if DEBUG:
-                    print "%d Transcripts selected." % dbCursor.rowcount
-                    
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <TranscriptFile>\n')
-                    for transcriptRec in dbCursor.fetchall():
+                    for transcriptRec in data:
                         self.WriteTranscriptRec(f, progress, transcriptRec)
                     f.write('  </TranscriptFile>\n')
                 dbCursor.close()
@@ -323,60 +334,65 @@ class XMLExport(Dialogs.GenForm):
                 SQLText += 'ImageSizeW, ImageSizeH, EpisodeNum, TranscriptNum, SnapshotTimeCode, SnapshotDuration, '
                 SQLText += 'SnapshotComment, SortOrder FROM Snapshots2'
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <SnapshotFile>\n')
-                    for snapshotRec in dbCursor.fetchall():
+                    for snapshotRec in data:
                         self.WriteSnapshotRec(f, snapshotRec)
                     f.write('  </SnapshotFile>\n')
                 dbCursor.close()
 
-            progress.Update(60, _('Writing Snapshot Keywords Records'))
+            progress.Update(60, _('Writing Keyword Records'))
+            if db != None:
+                dbCursor = db.cursor()
+                SQLText = 'SELECT KeywordGroup, Keyword, Definition, LineColorName, LineColorDef, DrawMode, LineWidth, LineStyle FROM Keywords2'
+                dbCursor.execute(SQLText)
+                data = dbCursor.fetchall()
+                if len(data) > 0:
+                    f.write('  <KeywordFile>\n')
+                    for keywordRec in data:
+                        self.WriteKeywordRec(f, keywordRec)
+                    f.write('  </KeywordFile>\n')
+                dbCursor.close()
+
+            progress.Update(67, _('Writing Clip Keyword Records'))
+            if db != None:
+                dbCursor = db.cursor()
+                SQLText = 'SELECT EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example FROM ClipKeywords2'
+                dbCursor.execute(SQLText)
+                data = dbCursor.fetchall()
+                if len(data) > 0:
+                    f.write('  <ClipKeywordFile>\n')
+                    for clipKeywordRec in data:
+                        self.WriteClipKeywordRec(f, clipKeywordRec)
+                    f.write('  </ClipKeywordFile>\n')
+                dbCursor.close()
+
+            progress.Update(73, _('Writing Snapshot Keywords Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible FROM SnapshotKeywords2'
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <SnapshotKeywordFile>\n')
-                    for snapshotKeywordRec in dbCursor.fetchall():
+                    for snapshotKeywordRec in data:
                         self.WriteSnapshotKeywordRec(f, snapshotKeywordRec)
                     f.write('  </SnapshotKeywordFile>\n')
                 dbCursor.close()
 
-            progress.Update(67, _('Writing Snapshot Coding Style Records'))
+            progress.Update(80, _('Writing Snapshot Coding Style Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle '
                 SQLText += 'FROM SnapshotKeywordStyles2'
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <SnapshotKeywordStyleFile>\n')
-                    for snapshotKeywordStyleRec in dbCursor.fetchall():
+                    for snapshotKeywordStyleRec in data:
                         self.WriteSnapshotKeywordStyleRec(f, snapshotKeywordStyleRec)
                     f.write('  </SnapshotKeywordStyleFile>\n')
-                dbCursor.close()
-
-            progress.Update(73, _('Writing Keyword Records'))
-            if db != None:
-                dbCursor = db.cursor()
-                SQLText = 'SELECT KeywordGroup, Keyword, Definition, LineColorName, LineColorDef, DrawMode, LineWidth, LineStyle FROM Keywords2'
-                dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
-                    f.write('  <KeywordFile>\n')
-                    for keywordRec in dbCursor.fetchall():
-                        self.WriteKeywordRec(f, keywordRec)
-                    f.write('  </KeywordFile>\n')
-                dbCursor.close()
-
-            progress.Update(80, _('Writing Clip Keyword Records'))
-            if db != None:
-                dbCursor = db.cursor()
-                SQLText = 'SELECT EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example FROM ClipKeywords2'
-                dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
-                    f.write('  <ClipKeywordFile>\n')
-                    for clipKeywordRec in dbCursor.fetchall():
-                        self.WriteClipKeywordRec(f, clipKeywordRec)
-                    f.write('  </ClipKeywordFile>\n')
                 dbCursor.close()
 
             progress.Update(87, _('Writing Note Records'))
@@ -385,9 +401,10 @@ class XMLExport(Dialogs.GenForm):
                 SQLText = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, SnapshotNum, TranscriptNum, '
                 SQLText += 'NoteTaker, NoteText FROM Notes2'
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <NoteFile>\n')
-                    for noteRec in dbCursor.fetchall():
+                    for noteRec in data:
                         self.WriteNoteRec(f, noteRec)
                     f.write('  </NoteFile>\n')
                 dbCursor.close()
@@ -397,9 +414,10 @@ class XMLExport(Dialogs.GenForm):
                 dbCursor = db.cursor()
                 SQLText = 'SELECT ReportType, ReportScope, ConfigName, FilterDataType, FilterData FROM Filters2'
                 dbCursor.execute(SQLText)
-                if dbCursor.rowcount > 0:
+                data = dbCursor.fetchall()
+                if len(data) > 0:
                     f.write('  <FilterFile>\n')
-                    for filterRec in dbCursor.fetchall():
+                    for filterRec in data:
                         self.WriteFilterRec(f, filterRec)
                     f.write('  </FilterFile>\n')
                 dbCursor.close()
@@ -420,10 +438,15 @@ class XMLExport(Dialogs.GenForm):
             errordlg.ShowModal()
             errordlg.Destroy()
 
-            if DEBUG:
+            if DEBUG or DEBUG2:
                 import traceback
                 traceback.print_exc(file=sys.stdout)
             dbCursor.close()
+        finally:
+            # If we're using sqlite ...
+            if TransanaConstants.DBInstalled in ['sqlite3']:
+                # ... we need to go back to using strings rather than unicode objects from the database
+                db.text_factory = str
 
         f.close()
         progress.Update(100)
@@ -570,6 +593,15 @@ class XMLExport(Dialogs.GenForm):
 
     def WriteSeriesRec(self, f, seriesRec):
         (SeriesNum, SeriesID, SeriesComment, SeriesOwner, DefaultKeywordGroup) = seriesRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            SeriesID = DBInterface.ProcessDBDataForUTF8Encoding(SeriesID)
+            SeriesComment = DBInterface.ProcessDBDataForUTF8Encoding(SeriesComment)
+            SeriesOwner = DBInterface.ProcessDBDataForUTF8Encoding(SeriesOwner)
+            DefaultKeywordGroup = DBInterface.ProcessDBDataForUTF8Encoding(DefaultKeywordGroup)
+
         f.write('    <Series>\n')
         f.write('      <Num>\n')
         f.write('        %s\n' % SeriesNum)
@@ -593,6 +625,14 @@ class XMLExport(Dialogs.GenForm):
 
     def WriteEpisodeRec(self, f, episodeRec):
         (EpisodeNum, EpisodeID, SeriesNum, TapingDate, MediaFile, EpLength, EpComment) = episodeRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            EpisodeID = DBInterface.ProcessDBDataForUTF8Encoding(EpisodeID)
+            MediaFile = DBInterface.ProcessDBDataForUTF8Encoding(MediaFile)
+            EpComment = DBInterface.ProcessDBDataForUTF8Encoding(EpComment)
+
         f.write('    <Episode>\n')
         f.write('      <Num>\n')
         f.write('        %s\n' % EpisodeNum)
@@ -623,6 +663,25 @@ class XMLExport(Dialogs.GenForm):
     def WriteCoreDataRec(self, f, coreDataRec):
         (CoreDataNum, Identifier, Title, Creator, Subject, Description, Publisher,
          Contributor, DCDate, DCType, Format, Source, Language, Relation, Coverage, Rights) = coreDataRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            Identifier = DBInterface.ProcessDBDataForUTF8Encoding(Identifier)
+            Title = DBInterface.ProcessDBDataForUTF8Encoding(Title)
+            Creator = DBInterface.ProcessDBDataForUTF8Encoding(Creator)
+            Subject = DBInterface.ProcessDBDataForUTF8Encoding(Subject)
+            Description = DBInterface.ProcessDBDataForUTF8Encoding(Description)
+            Publisher = DBInterface.ProcessDBDataForUTF8Encoding(Publisher)
+            Contributor = DBInterface.ProcessDBDataForUTF8Encoding(Contributor)
+            DCType = DBInterface.ProcessDBDataForUTF8Encoding(DCType)
+            Format = DBInterface.ProcessDBDataForUTF8Encoding(Format)
+            Source = DBInterface.ProcessDBDataForUTF8Encoding(Source)
+            Language = DBInterface.ProcessDBDataForUTF8Encoding(Language)
+            Relation = DBInterface.ProcessDBDataForUTF8Encoding(Relation)
+            Coverage = DBInterface.ProcessDBDataForUTF8Encoding(Coverage)
+            Rights = DBInterface.ProcessDBDataForUTF8Encoding(Rights)
+
         f.write('    <CoreData>\n')
         f.write('      <Num>\n')
         f.write('        %s\n' % CoreDataNum)
@@ -655,6 +714,10 @@ class XMLExport(Dialogs.GenForm):
             f.write('        %s\n' % self.Escape(Contributor.encode(EXPORT_ENCODING)))
             f.write('      </Contributor>\n')
         if DCDate != None:
+            # If we have a string or unicode object ...
+            if isinstance(DCDate, str) or isinstance(DCDate, unicode):
+                # ... convert it to a datetime object!
+                DCDate = datetime.datetime.strptime(DCDate, '%Y/%m/%d')
             f.write('      <Date>\n')
             f.write('        %s/%s/%s\n' % (DCDate.month, DCDate.day, DCDate.year))
             f.write('      </Date>\n')
@@ -690,6 +753,15 @@ class XMLExport(Dialogs.GenForm):
 
     def WriteCollectionRec(self, f, collectionRec):
         (CollectNum, CollectID, ParentCollectNum, CollectComment, CollectOwner, DefaultKeywordGroup) = collectionRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            CollectID = DBInterface.ProcessDBDataForUTF8Encoding(CollectID)
+            CollectComment = DBInterface.ProcessDBDataForUTF8Encoding(CollectComment)
+            CollectOwner = DBInterface.ProcessDBDataForUTF8Encoding(CollectOwner)
+            DefaultKeywordGroup = DBInterface.ProcessDBDataForUTF8Encoding(DefaultKeywordGroup)
+
         f.write('    <Collection>\n')
         f.write('      <Num>\n')
         f.write('        %s\n' % CollectNum)
@@ -717,6 +789,14 @@ class XMLExport(Dialogs.GenForm):
 
     def WriteClipRec(self, f, clipRec):
         (ClipNum, ClipID, CollectNum, EpisodeNum, MediaFile, ClipStart, ClipStop, ClipOffset, ClipAudio, ClipComment, SortOrder) = clipRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            ClipID = DBInterface.ProcessDBDataForUTF8Encoding(ClipID)
+            MediaFile = DBInterface.ProcessDBDataForUTF8Encoding(MediaFile)
+            ClipComment = DBInterface.ProcessDBDataForUTF8Encoding(ClipComment)
+
         f.write('    <Clip>\n')
         f.write('      <Num>\n')
         f.write('        %s\n' % ClipNum)
@@ -760,6 +840,12 @@ class XMLExport(Dialogs.GenForm):
 
     def WriteAdditionalMediaFileRec(self, f, additionalVidRec):
         (AddVidNum, EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio) = additionalVidRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            MediaFile = DBInterface.ProcessDBDataForUTF8Encoding(MediaFile)
+
         f.write('    <AddVid>\n')
         f.write('      <Num>\n')
         f.write('        %s\n' % AddVidNum)
@@ -788,13 +874,82 @@ class XMLExport(Dialogs.GenForm):
         f.write('      </Audio>\n')
         f.write('    </AddVid>\n')
 
+    def WriteSnapshotRec(self, f, snapshotRec):
+        (SnapshotNum, SnapshotID, CollectNum, ImageFile, ImageScale, ImageCoordsX, ImageCoordsY, 
+         ImageSizeW, ImageSizeH, EpisodeNum, TranscriptNum, SnapshotTimeCode, SnapshotDuration, 
+         SnapshotComment, SortOrder) = snapshotRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            SnapshotID = DBInterface.ProcessDBDataForUTF8Encoding(SnapshotID)
+            ImageFile = DBInterface.ProcessDBDataForUTF8Encoding(ImageFile)
+            SnapshotComment = DBInterface.ProcessDBDataForUTF8Encoding(SnapshotComment)
+
+        f.write('    <Snapshot>\n')
+        f.write('      <Num>\n')
+        f.write('        %s\n' % SnapshotNum)
+        f.write('      </Num>\n')
+        f.write('      <ID>\n')
+        f.write('        %s\n' % self.Escape(SnapshotID.encode(EXPORT_ENCODING)))
+        f.write('      </ID>\n')
+        if (CollectNum != None) and (CollectNum > 0):
+            f.write('      <CollectNum>\n')
+            f.write('        %s\n' % CollectNum)
+            f.write('      </CollectNum>\n')
+        f.write('      <MediaFile>\n')
+        f.write('        %s\n' % self.Escape(ImageFile.encode(EXPORT_ENCODING)))
+        f.write('      </MediaFile>\n')
+        f.write('      <ImageScale>\n')
+        f.write('        %s\n' % ImageScale)
+        f.write('      </ImageScale>\n')
+        f.write('      <ImageCoordsX>\n')
+        f.write('        %s\n' % ImageCoordsX)
+        f.write('      </ImageCoordsX>\n')
+        f.write('      <ImageCoordsY>\n')
+        f.write('        %s\n' % ImageCoordsY)
+        f.write('      </ImageCoordsY>\n')
+        f.write('      <ImageSizeW>\n')
+        f.write('        %s\n' % ImageSizeW)
+        f.write('      </ImageSizeW>\n')
+        f.write('      <ImageSizeH>\n')
+        f.write('        %s\n' % ImageSizeH)
+        f.write('      </ImageSizeH>\n')
+        if (EpisodeNum != None) and (EpisodeNum > 0):
+            f.write('      <EpisodeNum>\n')
+            f.write('        %s\n' % EpisodeNum)
+            f.write('      </EpisodeNum>\n')
+        if (TranscriptNum != None) and (TranscriptNum > 0):
+            f.write('      <TranscriptNum>\n')
+            f.write('        %s\n' % TranscriptNum)
+            f.write('      </TranscriptNum>\n')
+        f.write('      <SnapshotTimeCode>\n')
+        f.write('        %s\n' % SnapshotTimeCode)
+        f.write('      </SnapshotTimeCode>\n')
+        f.write('      <SnapshotDuration>\n')
+        f.write('        %s\n' % SnapshotDuration)
+        f.write('      </SnapshotDuration>\n')
+        if SnapshotComment != '':
+            f.write('      <Comment>\n')
+            f.write('        %s\n' % self.Escape(SnapshotComment.encode(EXPORT_ENCODING)))
+            f.write('      </Comment>\n')
+        if (SortOrder != '') and (SortOrder != 0):
+            f.write('      <SortOrder>\n')
+            f.write('        %s\n' % SortOrder)
+            f.write('      </SortOrder>\n')
+        f.write('    </Snapshot>\n')
+
     def WriteTranscriptRec(self, f, progress, transcriptRec):
         (TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum, ClipNum, SortOrder, Transcriber,
          ClipStart, ClipStop, Comment, MinTranscriptWidth, RTFText) = transcriptRec
 
-        if DEBUG:
-            print "TranscriptNum =", TranscriptNum
-            
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            TranscriptID = DBInterface.ProcessDBDataForUTF8Encoding(TranscriptID)
+            Transcriber = DBInterface.ProcessDBDataForUTF8Encoding(Transcriber)
+            Comment = DBInterface.ProcessDBDataForUTF8Encoding(Comment)
+
         f.write('    <Transcript>\n')
         f.write('      <Num>\n')
         f.write('        %s\n' % TranscriptNum)
@@ -858,13 +1013,21 @@ class XMLExport(Dialogs.GenForm):
                     RTFText = RTFText.tounicode()
                 else:
                     RTFText = RTFText.tostring()
+            elif isinstance(RTFText, unicode):
+
+                RTFText = RTFText.encode('utf8')
+                
             f.write('      <RTFText>\n')
 
-            if DEBUG:
-                print "type(RTFText) =", type(RTFText)
+            if DEBUG2:
+                print "type(RTFText) =", type(RTFText),
 
             # Determine if we have RTF Text, a pickled wxSTC Object, or XML Text
             if (type(RTFText).__name__ != 'NoneType') and (len(RTFText) > 5) and (RTFText[:5].upper() == '<?XML'):
+
+                if DEBUG2:
+                    print "XML Type"
+                    
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
@@ -873,13 +1036,17 @@ class XMLExport(Dialogs.GenForm):
                     prompt1 = _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)')
                     prompt2 = '\n' + _('Exporting %s')
 
-                progress.Update(60, prompt1 + prompt2 % DBInterface.ProcessDBDataForUTF8Encoding(TranscriptID))
+                progress.Update(47, prompt1 + prompt2 % TranscriptID)
                 progress.Refresh()
 
                 # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
                 rtfData = RTFText[39:]
 
             elif (type(RTFText).__name__ != 'NoneType') and (len(RTFText) > 6) and (RTFText[:6].upper() == '{\\RTF1'):
+
+                if DEBUG2:
+                    print "RTF Type"
+                    
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
@@ -888,7 +1055,7 @@ class XMLExport(Dialogs.GenForm):
                     prompt1 = _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)')
                     prompt2 = _('\nConverting %s')
 
-                progress.Update(60, prompt1 + prompt2 % DBInterface.ProcessDBDataForUTF8Encoding(TranscriptID))
+                progress.Update(47, prompt1 + prompt2 % TranscriptID)
 
                 # If RTF  ...
                 # If we're using the RichTextCtrl ...
@@ -911,6 +1078,10 @@ class XMLExport(Dialogs.GenForm):
 
             # If we have STC formatted data ...
             else:
+
+                if DEBUG2:
+                    print "STC Type"
+                    
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
@@ -919,7 +1090,7 @@ class XMLExport(Dialogs.GenForm):
                     prompt1 = _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)')
                     prompt2 = _('\nConverting %s')
 
-                progress.Update(60, prompt1 + prompt2 % DBInterface.ProcessDBDataForUTF8Encoding(TranscriptID))
+                progress.Update(47, prompt1 + prompt2 % TranscriptID)
 
                 # unpickle the text and style info
                 (bufferContents, specs, attrs) = pickle.loads(RTFText)
@@ -956,8 +1127,6 @@ class XMLExport(Dialogs.GenForm):
                     # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
                     rtfData = rtfData[39:]
 
-#                progress.Update(60, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
-                
             # now simply write the RTF data to the file.  (This does NOT need to be encoded, as the RTF already is!)
             # (but check to make sure there's actually RTF data there!)
             if rtfData != None:
@@ -974,6 +1143,14 @@ class XMLExport(Dialogs.GenForm):
 
     def WriteKeywordRec(self, f, keywordRec):
         (KeywordGroup, Keyword, Definition, LineColorName, LineColorDef, DrawMode, LineWidth, LineStyle) = keywordRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            KeywordGroup = DBInterface.ProcessDBDataForUTF8Encoding(KeywordGroup)
+            Keyword = DBInterface.ProcessDBDataForUTF8Encoding(Keyword)
+            Definition = DBInterface.ProcessDBDataForUTF8Encoding(Definition)
+
         f.write('    <KeywordRec>\n')
         f.write('      <KeywordGroup>\n')
         f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
@@ -1025,6 +1202,13 @@ class XMLExport(Dialogs.GenForm):
 
     def WriteClipKeywordRec(self, f, clipKeywordRec):
         (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example) = clipKeywordRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            KeywordGroup = DBInterface.ProcessDBDataForUTF8Encoding(KeywordGroup)
+            Keyword = DBInterface.ProcessDBDataForUTF8Encoding(Keyword)
+
         f.write('    <ClipKeyword>\n')
         if (EpisodeNum != '') and (EpisodeNum != 0):
             f.write('      <EpisodeNum>\n')
@@ -1050,8 +1234,89 @@ class XMLExport(Dialogs.GenForm):
             f.write('      </Example>\n')
         f.write('    </ClipKeyword>\n')
 
+    def WriteSnapshotKeywordRec(self, f, snapshotKeywordRec):
+        (SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible) = snapshotKeywordRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            KeywordGroup = DBInterface.ProcessDBDataForUTF8Encoding(KeywordGroup)
+            Keyword = DBInterface.ProcessDBDataForUTF8Encoding(Keyword)
+
+        f.write('    <SnapshotKeyword>\n')
+        f.write('      <SnapshotNum>\n')
+        f.write('        %s\n' % SnapshotNum)
+        f.write('      </SnapshotNum>\n')
+        f.write('      <KeywordGroup>\n')
+        f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
+        f.write('      </KeywordGroup>\n')
+        f.write('      <Keyword>\n')
+        f.write('        %s\n' % self.Escape(Keyword.encode(EXPORT_ENCODING)))
+        f.write('      </Keyword>\n')
+        f.write('      <X1>\n')
+        f.write('        %s\n' % x1)
+        f.write('      </X1>\n')
+        f.write('      <Y1>\n')
+        f.write('        %s\n' % y1)
+        f.write('      </Y1>\n')
+        f.write('      <X2>\n')
+        f.write('        %s\n' % x2)
+        f.write('      </X2>\n')
+        f.write('      <Y2>\n')
+        f.write('        %s\n' % y2)
+        f.write('      </Y2>\n')
+        f.write('      <Visible>\n')
+        f.write('        %s\n' % visible)
+        f.write('      </Visible>\n')
+        f.write('    </SnapshotKeyword>\n')
+
+    def WriteSnapshotKeywordStyleRec(self, f, snapshotKeywordStyleRec):
+        (SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle) = snapshotKeywordStyleRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            KeywordGroup = DBInterface.ProcessDBDataForUTF8Encoding(KeywordGroup)
+            Keyword = DBInterface.ProcessDBDataForUTF8Encoding(Keyword)
+            LineColorName = DBInterface.ProcessDBDataForUTF8Encoding(LineColorName)
+
+        f.write('    <SnapshotKeywordStyle>\n')
+        f.write('      <SnapshotNum>\n')
+        f.write('        %s\n' % SnapshotNum)
+        f.write('      </SnapshotNum>\n')
+        f.write('      <KeywordGroup>\n')
+        f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
+        f.write('      </KeywordGroup>\n')
+        f.write('      <Keyword>\n')
+        f.write('        %s\n' % self.Escape(Keyword.encode(EXPORT_ENCODING)))
+        f.write('      </Keyword>\n')
+        f.write('      <DrawMode>\n')
+        f.write('        %s\n' % DrawMode)
+        f.write('      </DrawMode>\n')
+        f.write('      <ColorName>\n')
+        f.write('        %s\n' % self.Escape(LineColorName.encode(EXPORT_ENCODING)))
+        f.write('      </ColorName>\n')
+        f.write('      <ColorDef>\n')
+        f.write('        %s\n' % LineColorDef)
+        f.write('      </ColorDef>\n')
+        f.write('      <LineWidth>\n')
+        f.write('        %s\n' % LineWidth)
+        f.write('      </LineWidth>\n')
+        f.write('      <LineStyle>\n')
+        f.write('        %s\n' % LineStyle)
+        f.write('      </LineStyle>\n')
+        f.write('    </SnapshotKeywordStyle>\n')
+
     def WriteNoteRec(self, f, noteRec):
         (NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, SnapshotNum, TranscriptNum, NoteTaker, NoteText) = noteRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            NoteID = DBInterface.ProcessDBDataForUTF8Encoding(NoteID)
+            NoteTaker = DBInterface.ProcessDBDataForUTF8Encoding(NoteTaker)
+            NoteText = DBInterface.ProcessDBDataForUTF8Encoding(NoteText)
+
         f.write('    <Note>\n')
         f.write('      <Num>\n')
         f.write('        %s\n' % NoteNum)
@@ -1136,6 +1401,11 @@ class XMLExport(Dialogs.GenForm):
             else:
                 print
                 
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            ConfigName = DBInterface.ProcessDBDataForUTF8Encoding(ConfigName)
+
         if FilterData != None:
             f.write('    <Filter>\n')
             f.write('      <ReportType>\n')
@@ -1180,6 +1450,10 @@ class XMLExport(Dialogs.GenForm):
                     if type(FilterData).__name__ == 'array':
                         # ... so convert it to a string and un-pickle it
                         filterDataList = cPickle.loads(FilterData.tostring())
+                    # If we have a unicode object ...
+                    elif isinstance(FilterData, unicode):
+                        # ... unpickle it while encoding it
+                        filterDataList = cPickle.loads(FilterData.encode(EXPORT_ENCODING))
                     # If it's not an array ...
                     else:
                         # ... just un-pickle the data.
@@ -1293,12 +1567,12 @@ class XMLExport(Dialogs.GenForm):
                 if type(FilterData).__name__ == 'array':
                     # ... so convert it to a string
                     filterDataList = FilterData.tostring()
+                # If we have a unicode object ...
+                elif isinstance(FilterData, unicode):
+                    # ... encode it
+                    filterDataList = FilterData.encode(EXPORT_ENCODING)
                 else:
                     filterDataList = FilterData
-
-                if ReportType != 15:
-                    # Encode the string using the export encoding
-                    filterDataList = filterDataList  # .encode(EXPORT_ENCODING)
 
             # If we have data from FilterDataTypes 1, 2, 3, 5, 6, or 7 ...
             if FilterDataType in [1, 2, 3, 5, 6, 7]:
@@ -1313,121 +1587,6 @@ class XMLExport(Dialogs.GenForm):
             f.write('        %s\n' % self.Escape(FilterData))
             f.write('      </FilterData>\n')
             f.write('    </Filter>\n')
-
-    def WriteSnapshotRec(self, f, snapshotRec):
-        (SnapshotNum, SnapshotID, CollectNum, ImageFile, ImageScale, ImageCoordsX, ImageCoordsY, 
-         ImageSizeW, ImageSizeH, EpisodeNum, TranscriptNum, SnapshotTimeCode, SnapshotDuration, 
-         SnapshotComment, SortOrder) = snapshotRec
-        f.write('    <Snapshot>\n')
-        f.write('      <Num>\n')
-        f.write('        %s\n' % SnapshotNum)
-        f.write('      </Num>\n')
-        f.write('      <ID>\n')
-        f.write('        %s\n' % self.Escape(SnapshotID.encode(EXPORT_ENCODING)))
-        f.write('      </ID>\n')
-        if (CollectNum != None) and (CollectNum > 0):
-            f.write('      <CollectNum>\n')
-            f.write('        %s\n' % CollectNum)
-            f.write('      </CollectNum>\n')
-        f.write('      <MediaFile>\n')
-        f.write('        %s\n' % self.Escape(ImageFile.encode(EXPORT_ENCODING)))
-        f.write('      </MediaFile>\n')
-        f.write('      <ImageScale>\n')
-        f.write('        %s\n' % ImageScale)
-        f.write('      </ImageScale>\n')
-        f.write('      <ImageCoordsX>\n')
-        f.write('        %s\n' % ImageCoordsX)
-        f.write('      </ImageCoordsX>\n')
-        f.write('      <ImageCoordsY>\n')
-        f.write('        %s\n' % ImageCoordsY)
-        f.write('      </ImageCoordsY>\n')
-        f.write('      <ImageSizeW>\n')
-        f.write('        %s\n' % ImageSizeW)
-        f.write('      </ImageSizeW>\n')
-        f.write('      <ImageSizeH>\n')
-        f.write('        %s\n' % ImageSizeH)
-        f.write('      </ImageSizeH>\n')
-        if (EpisodeNum != None) and (EpisodeNum > 0):
-            f.write('      <EpisodeNum>\n')
-            f.write('        %s\n' % EpisodeNum)
-            f.write('      </EpisodeNum>\n')
-        if (TranscriptNum != None) and (TranscriptNum > 0):
-            f.write('      <TranscriptNum>\n')
-            f.write('        %s\n' % TranscriptNum)
-            f.write('      </TranscriptNum>\n')
-        f.write('      <SnapshotTimeCode>\n')
-        f.write('        %s\n' % SnapshotTimeCode)
-        f.write('      </SnapshotTimeCode>\n')
-        f.write('      <SnapshotDuration>\n')
-        f.write('        %s\n' % SnapshotDuration)
-        f.write('      </SnapshotDuration>\n')
-        if SnapshotComment != '':
-            f.write('      <Comment>\n')
-            f.write('        %s\n' % self.Escape(SnapshotComment.encode(EXPORT_ENCODING)))
-            f.write('      </Comment>\n')
-        if (SortOrder != '') and (SortOrder != 0):
-            f.write('      <SortOrder>\n')
-            f.write('        %s\n' % SortOrder)
-            f.write('      </SortOrder>\n')
-        f.write('    </Snapshot>\n')
-
-    def WriteSnapshotKeywordRec(self, f, snapshotKeywordRec):
-        (SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible) = snapshotKeywordRec
-        f.write('    <SnapshotKeyword>\n')
-        f.write('      <SnapshotNum>\n')
-        f.write('        %s\n' % SnapshotNum)
-        f.write('      </SnapshotNum>\n')
-        f.write('      <KeywordGroup>\n')
-        f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
-        f.write('      </KeywordGroup>\n')
-        f.write('      <Keyword>\n')
-        f.write('        %s\n' % self.Escape(Keyword.encode(EXPORT_ENCODING)))
-        f.write('      </Keyword>\n')
-        f.write('      <X1>\n')
-        f.write('        %s\n' % x1)
-        f.write('      </X1>\n')
-        f.write('      <Y1>\n')
-        f.write('        %s\n' % y1)
-        f.write('      </Y1>\n')
-        f.write('      <X2>\n')
-        f.write('        %s\n' % x2)
-        f.write('      </X2>\n')
-        f.write('      <Y2>\n')
-        f.write('        %s\n' % y2)
-        f.write('      </Y2>\n')
-        f.write('      <Visible>\n')
-        f.write('        %s\n' % visible)
-        f.write('      </Visible>\n')
-        f.write('    </SnapshotKeyword>\n')
-
-    def WriteSnapshotKeywordStyleRec(self, f, snapshotKeywordStyleRec):
-        (SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle) = snapshotKeywordStyleRec
-        f.write('    <SnapshotKeywordStyle>\n')
-        f.write('      <SnapshotNum>\n')
-        f.write('        %s\n' % SnapshotNum)
-        f.write('      </SnapshotNum>\n')
-        f.write('      <KeywordGroup>\n')
-        f.write('        %s\n' % self.Escape(KeywordGroup.encode(EXPORT_ENCODING)))
-        f.write('      </KeywordGroup>\n')
-        f.write('      <Keyword>\n')
-        f.write('        %s\n' % self.Escape(Keyword.encode(EXPORT_ENCODING)))
-        f.write('      </Keyword>\n')
-        f.write('      <DrawMode>\n')
-        f.write('        %s\n' % DrawMode)
-        f.write('      </DrawMode>\n')
-        f.write('      <ColorName>\n')
-        f.write('        %s\n' % self.Escape(LineColorName.encode(EXPORT_ENCODING)))
-        f.write('      </ColorName>\n')
-        f.write('      <ColorDef>\n')
-        f.write('        %s\n' % LineColorDef)
-        f.write('      </ColorDef>\n')
-        f.write('      <LineWidth>\n')
-        f.write('        %s\n' % LineWidth)
-        f.write('      </LineWidth>\n')
-        f.write('      <LineStyle>\n')
-        f.write('        %s\n' % LineStyle)
-        f.write('      </LineStyle>\n')
-        f.write('    </SnapshotKeywordStyle>\n')
 
     def OnBrowse(self, evt):
         """Invoked when the user activates the Browse button."""

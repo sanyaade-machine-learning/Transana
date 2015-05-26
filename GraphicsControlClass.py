@@ -62,6 +62,8 @@ import wx
 import os
 # import Python's time module
 import time
+# import Transana's Globals
+import TransanaGlobal
 
 class GraphicsControl(wx.ScrolledWindow):
     """ Graphics Control Class implements a Graphic Control used for doing some
@@ -365,6 +367,13 @@ class GraphicsControl(wx.ScrolledWindow):
             # Get start and end X coords from startTime and endTime
             startX = self.canvassize[0]*self.parent.PctPosFromTimeCode(self.startTime)
             endX = self.canvassize[0]*self.parent.PctPosFromTimeCode(self.endTime)
+
+            # If we are in a Right-To-Left Language ...
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                # ... we need to adjust the X positions for that
+                startX = self.canvassize[0] - startX
+                endX = self.canvassize[0] - endX
+
             # If startTime and endTime are the same, then startX = endX so we
             # end up drawing a zero width rectangle which works with wxPython
             dc.DrawRectangle(int(startX), 0, int(endX - startX), int(self.canvassize[1]))
@@ -603,8 +612,8 @@ class GraphicsControl(wx.ScrolledWindow):
                 # Return the position and event to the Parent control
                 self.parent.OnLeftUp(self.x, self.y, float(self.x)/self.canvassize[0], float(self.y)/self.canvassize[1])
                 # Draw a grey marker at x if left click has been made
-                if self.x == self.lastX:
-                    self.SetStartMarker(self.x)
+                # if self.x == self.lastX:
+                #    self.SetStartMarker(self.x)
                 # We need to track the  position where we started this drag.  (see TransanaOnMotion below)
                 self.lastX = None
                 # Track the ending of a selection and store it as a timecode
@@ -649,6 +658,9 @@ class GraphicsControl(wx.ScrolledWindow):
     def TransanaOnMotion(self, event):
         self.x = event.GetX() + (self.GetViewStart()[0] * self.GetScrollPixelsPerUnit()[0])
         self.y = event.GetY() + (self.GetViewStart()[1] * self.GetScrollPixelsPerUnit()[1])
+
+#        print "GraphicsControlClass.TransanaOnMotion():", self.x, event.GetX(), self.GetViewStart()[0], self.GetScrollPixelsPerUnit()[0]
+        
         self.parent.OnMouseOver(self.x, self.y, float(self.x)/self.canvassize[0], float(self.y)/self.canvassize[1])
 
         # When dragging in Transana Mode, we are making a selection in the Waveform Diagram.  
@@ -719,7 +731,7 @@ class GraphicsControl(wx.ScrolledWindow):
             # Find x position and add grey marker to lines[]
             x = self.canvassize[0]*self.parent.PctPosFromTimeCode(self.startTime)
             self.SetStartMarker(x)
-        # Signal that the control needs to be redrawn in idle time. InitBuffer will also 
+         # Signal that the control needs to be redrawn in idle time. InitBuffer will also 
         # recreate a new selection based on timecodes
         self.reInitBuffer = True
 
@@ -843,20 +855,25 @@ class GraphicsControl(wx.ScrolledWindow):
         self.reSetSelection = True
 
     def DrawCursor(self, currentPosition):
+        # If we are in a Right-To-Left Language ...
+        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft) and \
+           (TransanaGlobal.configData.visualizationStyle in ['Keyword', 'Hybrid']):
+            # ... reverse the Visualization Cursor position
+            currentPosition = 1.0 - currentPosition
         (width, height) = self.GetSizeTuple()
-        y = int(currentPosition * self.canvassize[0])
+        x = int(currentPosition * self.canvassize[0])
         # If there is an existing cursor, eliminate it.  (It would be in the temporary (lines2[]) layer)
         if (self.cursorPosition != None) and (len(self.lines2) > self.cursorPosition):
             del(self.lines2[self.cursorPosition])
         # If there is NO entry for the cursor in self.lines2, and as long as the CURRENT POSITION wasn't just inserted, we add a temporary
         # line for the cursor
-        if (len(self.lines2) == 0) or ((len(self.lines2) > 0) and (int(y) != self.lines2[-1][2][0][0]) and (int(y) != self.lines2[-1][2][0][0] + 1)):
+        if (len(self.lines2) == 0) or ((len(self.lines2) > 0) and (int(x) != self.lines2[-1][2][0][0]) and (int(x) != self.lines2[-1][2][0][0] + 1)):
             # Remember the original color
             oldColour = self.colour
             # Change the color to grey for the cursor
             self.colour = "GREY"
             # Draw the new cursor to the temporary (lines2[]) layer
-            self.AddLines2([(int(y), 0, int(y), int(height-6))])
+            self.AddLines2([(int(x), 0, int(x), int(height-6))])
             # Restore the original color
             self.colour = oldColour
         # As long as the cursor entry has been made to the self.lines2 list ...

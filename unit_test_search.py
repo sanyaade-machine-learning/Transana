@@ -44,6 +44,7 @@ class FormCheck(wx.Frame):
         # Set essential global color manipulation data structures once the ConfigData object exists.
         (TransanaGlobal.transana_colorNameList, TransanaGlobal.transana_colorLookup, TransanaGlobal.keywordMapColourSet) = TransanaGlobal.SetColorVariables()
         TransanaGlobal.configData.videoPath = 'C:\\Users\\DavidWoods\\Videos'
+        TransanaGlobal.configData.ssl = False
 
         TransanaGlobal.menuWindow = MenuWindow.MenuWindow(None, -1, title)
 
@@ -51,13 +52,21 @@ class FormCheck(wx.Frame):
         self.ControlObject.Register(Menu = TransanaGlobal.menuWindow)
         TransanaGlobal.menuWindow.Register(ControlObject = self.ControlObject)
 
-        dlg = wx.PasswordEntryDialog(None, 'Please enter your database password.', 'Unit Test 1:  Database Connection')
-        result = dlg.ShowModal()
-        if result == wx.ID_OK:
-            password = dlg.GetValue()
+        if TransanaConstants.DBInstalled in ['MySQLdb-server', 'PyMySQL']:
+
+            dlg = wx.PasswordEntryDialog(None, 'Please enter your database password.', 'Unit Test 1:  Database Connection')
+            result = dlg.ShowModal()
+            if result == wx.ID_OK:
+                password = dlg.GetValue()
+            else:
+                password = ''
+            dlg.Destroy()
+
         else:
+            if TransanaConstants.DBInstalled in ['MySQLdb-embedded']:
+                DBInterface.InitializeSingleUserDatabase()
             password = ''
-        dlg.Destroy()
+            
         loginInfo = DBLogin('DavidW', password, 'DKW-Linux', 'Transana_UnitTest', '3306')
         dbReference = DBInterface.get_db(loginInfo)
         DBInterface.establish_db_exists()
@@ -71,7 +80,7 @@ class FormCheck(wx.Frame):
 
         mainSizer = wx.BoxSizer(wx.VERTICAL)
 
-        self.txtCtrl = wx.TextCtrl(self, -1, "Unit Test:  Search\n\n", style=wx.TE_LEFT | wx.TE_MULTILINE)
+        self.txtCtrl = wx.TextCtrl(self, -1, "Unit Test 3:  Search\n\n", style=wx.TE_LEFT | wx.TE_MULTILINE)
         self.txtCtrl.AppendText("Transana Version:  %s     singleUserVersion:  %s\n\n" % (TransanaConstants.versionNumber, TransanaConstants.singleUserVersion))
         mainSizer.Add(self.txtCtrl, 1, wx.EXPAND | wx.ALL, 5)
 
@@ -89,6 +98,11 @@ class FormCheck(wx.Frame):
         self.Show(True)
         self.RunTests()
 
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded']:
+            DBInterface.EndSingleUserDatabase()
+
+        TransanaGlobal.menuWindow.Destroy()
+
     def RunTests(self):
         # Tests defined:
         testsNotToSkip = []  # DON'T SKIP TESTS in this file!
@@ -100,30 +114,6 @@ class FormCheck(wx.Frame):
             # Database Connection
             testName = 'Database Connection, set up Database'
             self.SetStatusText(testName)
-            if False:
-
-                dlg = wx.PasswordEntryDialog(self, 'Please enter your database password.', 'Unit Test 1:  Database Connection')
-                result = dlg.ShowModal()
-                if result == wx.ID_OK:
-                    password = dlg.GetValue()
-                else:
-                    password = ''
-                dlg.Destroy()
-                loginInfo = DBLogin('DavidW', password, 'DKW-Linux', 'Transana_UnitTest', '3306')
-                dbReference = DBInterface.get_db(loginInfo)
-
-                self.txtCtrl.AppendText('Create or confirm tables for ' + loginInfo.databaseName + '\n\n')
-                DBInterface.establish_db_exists()
-
-                self.testsRun += 1
-                self.txtCtrl.AppendText('Test "%s" ' % testName)
-                if dbReference != None:
-                    self.txtCtrl.AppendText('Passed.')
-                    self.testsSuccessful += 1
-                else:
-                    self.txtCtrl.AppendText('FAILED.')
-                    self.testsFailed += 1
-                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 11 in testsToRun:
             # Keyword Saving
@@ -2246,7 +2236,7 @@ class DBLogin:
 
 class MyApp(wx.App):
    def OnInit(self):
-      frame = FormCheck(None, -1, "Unit Test 2: Search")
+      frame = FormCheck(None, -1, "Unit Test 3: Search")
       self.SetTopWindow(frame)
       return True
       

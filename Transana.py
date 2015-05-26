@@ -19,6 +19,36 @@ definition."""
 
 __author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
 
+
+"""
+     Transana 2.61 uses the following programming tools and modules:
+
+     Program                                            Win Version        Mac Version
+       Python                                             2.6.6              2.6.6
+         (NOTE:  Python 2.6.6 on OS X and 2.7.1 on OS X have a bug that prevents SSL socket connections
+                 from working correctly when the certificates have been created on Ubuntu 14.04.)
+         (NOTE:  I've started work to convert to Python 2.7.7 on Windows and Python 2.7.1 on OS X.)
+       wxPython                                           3.0.0.0            2.9.5.0.b20130318
+         (NOTE:  wxPython 3.0.0.0 on OS X has a bug that prevents drag-and-drop from working in the
+                 Database Tree.  However, wxPython 2.9.5.0b20130318 on OS X has a bug that prevents
+                 selecting text off the edge of the screen in the RichTextCtrl.)
+         (NOTE:  wxPython 3.x does not currently work with Python 3.3.x.  Specifically, the wxMediaCtrl
+                 doesn't work.)
+       MySQL for Python (embedded)(Python 2.6.6)          1.2.3c1            1.2.3
+         (NOTE:  I can get MySQL for Python (embedded) to work with Python 2.6.x, but not 2.7.x,
+                 especially on Windows.)
+       MySQL for Python (server)(Python 2.6.6)            1.2.3c1            1.2.4b4
+       SQLite (embedded)(Python 2.7.x)                    2.6.0
+       PyMySQL (server)(Python 2.7.x)
+       MySQL (embedded)                                   5.1.44             5.5.27
+       ctypes                                             1.1.0              1.1.0
+       Crypto                                             2.3                2.6
+       paramiko                                           1.7.7.1            1.7.7.1
+       
+"""
+
+
+
 import sys                          # import Python's sys module
 import wx                           # import wxPython's wxWindows implementation
 import os
@@ -541,47 +571,14 @@ class Transana(wx.App):
                     # NOTE:  If changing this value, it also needs to be changed in the ControlObjectClass.GetNewDatabase() method.
                     TransanaGlobal.connectionTimer.Start(600000)
 
-
                 if DEBUG:
                     print "MessageServer connected!"
 
-##            # If we're on OS X ...
-##            if 'wxMac' in wx.PlatformInfo:
-##                # ... create a list of the FFmpeg files that should be in /usr/local/lib
-##                ffmpegFileList = ['libmp4ff.a', 'libfaad.la', 'libfaad.a', 'libfaad.2.0.0.dylib', 'libmp3lame.la', 'libmp3lame.a',
-##                                  'libmp3lame.0.0.0.dylib']
-##                # Create a list of the Links that should be in /usr/local/lib, including what they should link to
-##                ffmpegLinkList = [('libfaad.2.0.0.dylib', 'libfaad.2.dylib'),
-##                                  ('libfaad.2.0.0.dylib', 'libfaad.dylib'),
-##                                  ('libmp3lame.0.0.0.dylib', 'libmp3lame.0.dylib'),
-##                                  ('libmp3lame.0.0.0.dylib', 'libmp3lame.dylib')]
-##                # Assume the files exist
-##                filesExist = True
-##                # For each file that should be in /usr/local/lib ...
-##                for filename in ffmpegFileList:
-##                    # ... if that file does not exist ...
-##                    if not os.path.exists('/usr/local/lib/%s' % filename):
-##                        # ... not that NOT ALL FILES exist ...
-##                        filesExist = False
-##                        # ... and stop looking
-##                        break
-##                # See if the FFMpeg libraries are installed correctly.  If not ...
-##                if not filesExist:
-##                    # ... get the program directory, removing the final directory which points to Transana.py
-##                    sourceDir = os.path.split(TransanaGlobal.programDir)[0]
-##                    # For each file in the FFmpeg file list ...
-##                    for filename in ffmpegFileList:
-##                        # ... if the file is not already in /usr/local/lib ...
-##                        if not os.path.exists('/usr/local/lib/%s' % filename):
-##                            # ... copy the file to /usr/local/lib
-##                            os.system("cp %s/Frameworks/%s /usr/local/lib/%s" % (sourceDir, filename, filename))
-##                    # For each file LINK in the FFmpeg List List ...
-##                    for (filename, linkname) in ffmpegLinkList:
-##                        # ... create the appropriate symbolic link
-##                        os.system("ln -fs /usr/local/lib/%s /usr/local/lib/%s" % (filename, linkname))
+                # Check if the Database and Message Server are both using SSL and select the appropriate graphic
+                self.dataWindow.UpdateSSLStatus(TransanaGlobal.configData.ssl and TransanaGlobal.chatIsSSL)
 
             # if this is the first time this user profile has used Transana ...
-            if firstStartup:
+            if firstStartup and loggedOn:
                 # ... create a prompt about looking at the Tutorial
                 prompt = _('If this is your first time using Transana, the Transana Tutorial can help you learn how to use the program.')
                 prompt += '\n\n' + _('Would you like to see the Transana Tutorial now?')

@@ -35,7 +35,7 @@ import DBInterface
 import inspect
 import copy
 import Misc
-from MySQLdb import *
+import TransanaConstants
 from TransanaExceptions import *
 import TransanaGlobal
 
@@ -168,9 +168,10 @@ class DataObject(object):
             WHERE %sNum = %%s
             ORDER BY NoteID
         """ % (t,)
-
+        # Adjust the query for sqlite if needed
         db = DBInterface.get_db()
         c = db.cursor()
+        query = DBInterface.FixQuery(query)
         c.execute(query, (self.number,))
         r = c.fetchall()    # return array of tuples with results
         for tup in r:
@@ -196,9 +197,10 @@ class DataObject(object):
             id = self.id.encode(TransanaGlobal.encoding)
         else:
             id = self.id
-
+        # Adjust the query for sqlite if needed
         c = DBInterface.get_db().cursor()
-        c.execute(query, (id,))
+        query = DBInterface.FixQuery(query)
+        c.execute(query, (id, ))
         r = c.fetchall()    # return array of tuples with results
         for tup in r:
             notelist.append(tup[0])
@@ -247,64 +249,94 @@ class DataObject(object):
         """Get the values of fields from the database for the currently
         loaded record.  Use existing cursor if it exists, otherwise create
         a new one.  Return a tuple containing the values obtained."""
-        
-        if self.number == 0:    # no record loaded?
+        # If the object number is 0, there's no record in the database ...
+        if self.number == 0:
+            # ... so just return an empty tuple
             return ()
         
+        # Get the table name and the name of the Number property
         tablename = self._table()
         numname = self._num()
         
-        close_c = 0
+        # Create a flag tht indicates whether the cursor was passed in
+        close_c = False
+        # If no cursor was passed in ...
         if (c == None):
-            close_c = 1
+            # ... update the flag ...
+            close_c = True
+            # ... get a database reference ...
             db = DBInterface.get_db()
+            # ... and create a database cursor
             c = db.cursor()
 
+        # Determine the field values needed for the query
         fields = ""
         for field in fieldlist:
             fields = fields + field + ", "
         fields = fields[:-2]
 
-        query = "SELECT " + fields + " FROM " + tablename + "\n" + \
-                "  WHERE " + numname + " = %s\n"
-        c.execute(query, self.number)
-        
-        qr = c.fetchone()       # get query row results
+        # Formulate the query based on the fields
+        query = "SELECT " + fields + " FROM " + tablename + \
+                "  WHERE " + numname + " = %s"
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Execute the query
+        c.execute(query, (self.number, ))
+        # Get query row results
+        qr = c.fetchone()
 
         if DEBUG:
             print "DataObject._get_db_fields():\n", query, qr
             print
         
+        # If we created the cursor locally (as flagged) ...
         if (close_c):
+            # ... close the database cursor
             c.close()
+        # Return the Query Results
         return qr
 
     def _set_db_fields(self, fields, values, c=None):
         """Set the values of fields in the database for the currently loaded
         record.  Use existing cursor if it exists, otherwise create a new
         one."""
-
-        if self.number == 0:    # no record loaded?
+        # If the object number is 0, there's no record in the database ...
+        if self.number == 0:
+            # ... so just return
             return
- 
+
+        # Get the table name and the name of the Number property
         tablename = self._table()
         numname = self._num()
 
-        close_c = 0
+        # Create a flag tht indicates whether the cursor was passed in
+        close_c = False
+        # If no cursor was passed in ...
         if (c == None):
-            close_c = 1
+            # ... update the flag ...
+            close_c = True
+            # ... get a database reference ...
             db = DBInterface.get_db()
+            # ... and create a database cursor
             c = db.cursor()
 
+        # Determine the field values needed for the query
         fv = ""
         for f, v in map(None, fields, values):
-            fv = fv + f + " = " + "%s,\n\t\t"
-        fv = fv[:-4]
-        
-        query = "UPDATE " + tablename + "\n  SET " + fv + "\n  WHERE " + numname + " = %s\n"
+            fv = fv + f + " = " + "%s, "
+        fv = fv[:-2]
 
-        c.execute(query, values + (self.number,))
+        # Formulate the query based on the fields
+        query = "UPDATE " + tablename + " SET " + fv + " WHERE " + numname + " = %s"
+        # Modify the values by adding the object number on the end
+        values = values + (self.number,)
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Execute the query
+        c.execute(query, values)
+        # If we created the cursor locally (as flagged) ...
         if (close_c):
+            # ... close the database cursor
             c.close()
 
     def _db_start_save(self):
@@ -322,7 +354,8 @@ class DataObject(object):
             # Verify record lock is still good
             if (self.number == 0) or \
                 ((self.record_lock == DBInterface.get_username()) and
-                ((self.lock_time == None) or ((DBInterface.ServerDateTime() - self.lock_time).days <= 1))):
+                ((self.lock_time == None) or
+                 ((DBInterface.ServerDateTime() - self.lock_time).days <= 1))):
                 # If record num is 0, this is a NEW record and needs to be
                 # INSERTed.  Otherwise, it is an existing record to be UPDATEd.
                 if (self.number == 0):
@@ -332,7 +365,6 @@ class DataObject(object):
             else:
                 raise SaveError, _("Record lock no longer valid.")
                 
-                        
     def _db_start_delete(self, use_transactions):
         """Initialize delete operation and begin transaction if necessary.
         This is a helper method intended for sub-class db_delete() methods."""
@@ -357,39 +389,42 @@ class DataObject(object):
 
         return (db, c)
 
-
     def _db_do_delete(self, use_transactions, c, result):
         """Do the actual record delete and handle the transaction as needed.
         This is a helper method intended for sub-class db_delete() methods."""
         tablename = self._table()
         numname = self._num()
-
-        query = "DELETE FROM " + tablename + "\n" + \
-                "   WHERE " + numname + " = %s\n"
-        c.execute(query, self.number)
-
+        # Define the Delete query
+        query = "DELETE FROM " + tablename + \
+                "   WHERE " + numname + " = %s"
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Execute the query
+        c.execute(query, (self.number, ))
+        # If we're using Transactions ...
         if (use_transactions):
-            # Commit the transaction
+            # ... and the result exists ...
             if (result):
+                # Commit the transaction
                 c.execute("COMMIT")
 
                 if DEBUG:
                     print "Transaction committed"
-                    
+            # ... and the result does NOT exist (failed) ....
             else:
                 # Rollback transaction because some part failed
                 c.execute("ROLLBACK")
 
                 if DEBUG:
                     print "Transaction rolled back"
-                    
+
+                # if the object has a number (and therefore existed before) ...   
                 if (self.number != 0):
+                    # ... release the record lock when the delete fails
                     self.unlock_record()
                     
                     if DEBUG:
                         print "Record '%s' unlocked" % self.id
-        
-        return
 
     def _get_number(self):
         return self._number
@@ -416,10 +451,21 @@ class DataObject(object):
         return self._get_db_fields(('RecordLock',))[0]
 
     def _get_lt(self):
+        # Get the Record Lock Time from the Database
         lt = self._get_db_fields(('LockTime',))
+        # If a Lock Time has been specified ...
         if len(lt) > 0:
-            return lt[0]
+            # ... If we're using sqlite, we get a string and need to convert it to a datetime object
+            if TransanaConstants.DBInstalled in ['sqlite3']:
+                import datetime
+                tempDate = datetime.datetime.strptime(lt[0], '%Y-%m-%d %H:%M:%S.%f')
+                return tempDate
+            # ... If we're using MySQL, we get a MySQL DateTime value
+            else:
+                return lt[0]
+        # If we don't get a Lock Time ...
         else:
+            # ... return the current Server Time
             return DBInterface.ServerDateTime()
 
     def _get_isLocked(self):

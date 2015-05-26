@@ -100,15 +100,16 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # Initialize a RichTextCtrl object
         richtext.RichTextCtrl.__init__(self, parent, id, pos = pos, style=wx.VSCROLL | wx.HSCROLL | wx.WANTS_CHARS)
 
-## Unfortunately, SetScale does not yet really WORK.  It displays larger, but all the rules of the textctrl break.
-## Display window boundaries are ignored.
-## You can't even click in the transcript and move around in the text with the cursor.
-## The control acts like it doesn't know the scale is changed.
-##
-##        # If OS X ...
-##        if 'wxMac' in wx.PlatformInfo:
-##            # ... Set the Scale so text looks bigger
-##            self.SetScale(1.25, 1.25)
+        ## Unfortunately, SetScale is still pretty broken.  It changes the size of the transcript display,
+        ## but event.GetPosition() isn't Scale sensitive and GetScaleX() and GetScaleY() don't return the
+        ## correct values (on OSX for sure, I didn't check Windows.)  I tried adjusting GetPosition for a
+        ## KNOWN scale of 1.25, and the results were just not right.  As a result, Drag-and-Drop in the
+        ## Transcript stopped working, so I couldn't make a selection and create a Clip or an inVivo code.
+
+        ## # Get the Transcript Scale from the Configuration Data
+        ## scaleFactor = TransanaGlobal.configData.transcriptScale
+        ## # ... Set the Scale so text looks bigger
+        ## self.SetScale(scaleFactor, scaleFactor)
 
         # Bind key press handlers
         self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
@@ -121,25 +122,20 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # Bind a hyperlink event handler
         self.Bind(wx.EVT_TEXT_URL, self.OnURL)
 
-        # If we're on Mac ...
-        if 'wxMac' in wx.PlatformInfo:
-            # ... use CMD as the accelerator key
-            accelKey = wx.ACCEL_CMD
-        # If we're NOT on Mac ...
-        else:
-            # ... use Ctrl as teh accelerator key
-            accelKey = wx.ACCEL_CTRL
         # The wx.richtext.RichTextCtrl does some things that aren't Transana-friendly with default behaviors.
         # This section, and the accompanying methods, clean that up by replacing the standard Cut, Copy, Paste,
         # Undo, and Redo methods
         
         # Replace the Accelerator Table for the RichTextCtrl.
         # This removes the Ctrl-A Select All accelerator completely
-        aTable = wx.AcceleratorTable([(accelKey,  ord('C'), wx.ID_COPY),
-                                      (accelKey,  ord('V'), wx.ID_PASTE),
-                                      (accelKey,  ord('X'), wx.ID_CUT),
-                                      (accelKey,  ord('Y'), wx.ID_REDO),
-                                      (accelKey,  ord('Z'), wx.ID_UNDO)])
+        # As of wxPython 2.9.5, this is AUTOMATICALLY converted to CMD for Mac
+        accelList = [(wx.ACCEL_CTRL,  ord('C'), wx.ID_COPY),
+                     (wx.ACCEL_CTRL,  ord('V'), wx.ID_PASTE),
+                     (wx.ACCEL_CTRL,  ord('X'), wx.ID_CUT),
+                     (wx.ACCEL_CTRL,  ord('Y'), wx.ID_REDO),
+                     (wx.ACCEL_CTRL,  ord('Z'), wx.ID_UNDO)]
+
+        aTable = wx.AcceleratorTable(accelList)
         # Assign the modified accelerator table to the control
         self.SetAcceleratorTable(aTable)
 
@@ -148,9 +144,6 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         self.Bind(wx.EVT_MENU, self.OnCutCopy, id=wx.ID_COPY)
         self.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
         # However, we can leave the Undo and Redo commands alone and use the default ones from the RichTextCtrl.
-
-        # initialize the style change tracker to 0
-##        self.stylechange = 0
 
         # Initialize current style to None
         self.txtAttr = None
@@ -418,7 +411,12 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # Close the Clipboard
         wx.TheClipboard.Close()
         # If we are CUTting (rather than COPYing) ...
-        if self.IsEditable() and event.GetId() == wx.ID_CUT:
+        # (NOTE:  On OS X, the event object isn't what we expect, it's a MENU, so we have to get the menu item
+        #         text and do a comparison!!!)
+        if self.IsEditable() and \
+           ((event.GetId() == wx.ID_CUT) or \
+            ((sys.platform == 'darwin') and \
+             (event.GetEventObject().GetLabel(event.GetId()) == _("Cu&t\tCtrl-X").decode('utf8')))):
             # Reset the selection, which was mangled by the GetFormattedSelection call
             self.SetSelection(origSelection[0], origSelection[1])
             # ... delete the selection from the Rich Text Ctrl.
@@ -1619,7 +1617,6 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
     def OnKeyDown(self, event):
         """ Handler for EVT_KEY_DOWN events for use with Transana.
             This handles deletion of time codes. """
-
         # Assume that event.Skip() should be called unless proven otherwise
         shouldSkip = True
         # Create some variables to make this code a little simpler to read
@@ -1817,21 +1814,31 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
 
     def RemoveTimeCodeData(self, txt):
         """  Remove any time code values contained in "txt" from the self.timecodes list """
-        # While there is time code data ...
-        while "<" in txt:
-            # Identify the start and end of the time code data
-            st = txt.find("<")
-            end = txt.find(">")
-            # Capture the time code value
-            tcval = int(txt[st+1 : end])
-            # Remove this value from the self.timecodes list
-            self.timecodes.remove(tcval)
-            # Remove it (including the angle brackets) from the string to allow the next one to be found
-            txt = txt[:st] + txt[end + 1:]
+        # Get the position of the first "<" character in the string
+        minPos = txt.find('<', 0)
+        # Determine the position of the selection within the RichTextCtrl as a whole
+        sel = self.GetSelection()
+        # While there is a "<" character ...
+        while (minPos > -1):
+            # ... check to see if it is HIDDEN, i.e. part of a time code.  Use the position in the RichTextCtrl,
+            #     not merely the position within the string being evaluated.
+            if self.IsStyleHiddenAt(minPos + sel[0]):
+                # Identify the start and end of the time code data
+                st = minPos
+                # Get the ">" character that follows the current "<" character
+                end = txt.find(">", minPos + 1)
+                # Capture the time code value
+                tcval = int(txt[st+1 : end])
+                # Remove this value from the self.timecodes list
+                self.timecodes.remove(tcval)
+                # Remove it (including the angle brackets) from the string to allow the next one to be found
+                txt = txt[:st] + txt[end + 1:]
+            # Determin the position of the next "<" character.
+            # (This allows for "<" characters in the text that are not part of time codes!)
+            minPos = txt.find('<', minPos + 1)
 
     def OnKey(self, event):
         """ Handler for EVT_CHAR events for use with Transana """
-
         # Create some variables to make this code a little simpler to read
         ctrl = event.GetEventObject()
         # Get the current String Selection and remember it for later
@@ -1853,10 +1860,18 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         if event.GetKeyCode() == wx.WXK_LEFT:
             # If the current style is "hidden" text, it needs to be skipped ...
             while self.IsStyleHiddenAt(ip) and (ip > 0):
-                # ... so move a character to the left
-                ctrl.MoveLeft()
-                # Get the new insertion point
-                ip = ctrl.GetInsertionPoint()
+
+                if ctrl.HasSelection():
+                    (start, end) = ctrl.GetSelection()
+                    # Setting from END to START ensures cursor presses move the correct end of the selection!!
+                    ctrl.SetSelection(start - 1, end)
+                    ip = ip - 1
+                else:
+                    # ... so move a character to the left
+                    ctrl.MoveLeft()
+                    # Get the new insertion point
+                    ip = ctrl.GetInsertionPoint()
+
         # if Cursor Right, Cursor Down, or Cursor Up is pressed ...
         elif event.GetKeyCode() in [wx.WXK_RIGHT, wx.WXK_DOWN, wx.WXK_UP, wx.WXK_END, wx.WXK_PAGEDOWN, wx.WXK_PAGEUP]:
             # If the current style is "hidden" text, it needs to be skipped ...
@@ -1876,13 +1891,19 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
                     # ... and move the insertion point before the space
                     self.SetInsertionPoint(ip)
                 else:
-                    # ... so move a character to the right
-                    ctrl.MoveRight()
-                    # Get the new insertion point
-                    ip = ctrl.GetInsertionPoint()
 
-        # Call event.Skip()
-#        event.Skip()
+                    if ctrl.HasSelection():
+                        tmpSel = ctrl.GetSelection()
+                        ctrl.SetSelection(tmpSel[0], tmpSel[1] + 1)
+                        ip = ctrl.GetInsertionPoint()
+                    else:
+                        # ... so move a character to the right
+                        ctrl.MoveRight()
+                        # Get the new insertion point
+                        ip = ctrl.GetInsertionPoint()
+
+        # Call event.Skip() was removed to prevent MULTIPLE CALLS to this method
+        # event.Skip()
 
         # If the transcript is editable and there WAS a selection and there's no longer a selection ...
         if self.IsEditable() and (len(st) > 0) and (ctrl.GetSelectionStart() == ctrl.GetSelectionEnd()):
@@ -1929,7 +1950,9 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
 
     def OnLeftDown(self, event):
         """ Handles the Left Mouse Down event """
+        
         # NOTE:  This does NOT get called in Transana!
+        
         # If there is currently a selection ...
         if event.GetEventObject().HasSelection():
             # Determine the start and end character numbers of the current selection
@@ -1957,7 +1980,6 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
                 originalSelection = event.GetEventObject().GetSelection()
                 # Remember the STRING in the original selection
                 originalStringSelection = event.GetEventObject().GetStringSelection()
-             
                 # Intiate the Drag Operation
                 result = tds.DoDragDrop(True)
                 # If we have a MOVE (instead of a COPY) ...
@@ -1974,6 +1996,8 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
                 event.Skip()
         # If there is NOT currently a selection ...
         else:
+            # Cursor getting lost on OS X.  This is an attempt to make it visible
+            self.GetCaret().Show()
             # Skip here allows selection to be made
             event.Skip()
 

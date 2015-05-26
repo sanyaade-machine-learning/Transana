@@ -62,6 +62,8 @@ import OptionsSettings
 import TransanaConstants
 # Import Transana Globals
 import TransanaGlobal
+# Import Transana's Images
+import TransanaImages
 if TransanaConstants.USESRTC:
     import wx.richtext as richtext
     # Import the RTC-based RichTextEditCtrl, needed for printing
@@ -109,7 +111,7 @@ if 'unicode' in wx.PlatformInfo:
 else:
     RUSSIAN_LABEL = 'Russian'
 SWEDISH_LABEL = 'Svenska'
-CHINESE_LABEL = 'Chinese - Simplified'
+CHINESE_LABEL = unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93', 'utf8') # 'Chinese - Simplified'
 EASTEUROPE_LABEL = _("English prompts, Eastern European data (ISO-8859-2 encoding)")
 JAPANESE_LABEL = 'English prompts, Japanese data'
 KOREAN_LABEL = 'English prompts, Korean data'
@@ -451,6 +453,15 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             # Save the Text Direction to the Configuration Data
             TransanaGlobal.configData.LayoutDirection = self.locale.GetLanguageInfo(lang).LayoutDirection
 
+
+            # We need to reset the media type constants if we are using a Right-To-Left Language, due to a
+            # bug in wxWidgets 3.0.0.0's MediaCtrl, which doesn't play video for QuickTime formats under RtL languages.
+            # We do this here, because layout direction isn't defined when we load the Constants!
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                TransanaConstants.fileTypesString = TransanaConstants.fileTypesString_RtL
+                TransanaConstants.fileTypesList = TransanaConstants.fileTypesList_RtL
+                TransanaConstants.mediaFileTypes = TransanaConstants.mediaFileTypes_RtL
+
         if DEBUG:
             print "MenuWindow.__init__():  Language:  ", TransanaGlobal.configData.language, lang
             if not 'wxGTK' in wx.PlatformInfo:
@@ -460,11 +471,11 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         # Check to see if we have a translation, and if it is up-to-date.
         
         # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  "&Media Conversion" works for 2.50.
-        #        For 2.60, let's go with "Snapshot"
+        #        For 2.60, let's go with "Snapshot".  For 2.61, we'll use "SSL Client Key File"
         # If you update this, also update the phrase
         # below in the OnOptionsLanguage method.)
         
-        if (outofdateLanguage != '') and ("Snapshot" == _("Snapshot")):
+        if (outofdateLanguage != '') and ("SSL Client Key File" == _("SSL Client Key File")):
             # If not, display an information message.
             dlg = wx.MessageDialog(None, languageErrorPrompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
             dlg.ShowModal()
@@ -624,6 +635,8 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_WORDTRACK, self.OnOptionsWordTrack)
         # Define handler for Options > Auto-Arrange
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_AUTOARRANGE, self.OnOptionsAutoArrange)
+        # Define handler for Options > Long Transcript Editing
+        wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_LONGTRANSCRIPTEDIT, self.OnOptionsLongTranscriptEdit)
         # Define handler for Options > Visualization Style changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_VISUALIZATION_WAVEFORM, MenuSetup.MENU_OPTIONS_VISUALIZATION_HYBRID, self.OnOptionsVisualizationStyle)
         # Define handler for Options > Video Size changes
@@ -797,7 +810,10 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
     def OnCloseWindow(self, event):
         """ This code forces the Video Window to close when the "X" is used to close the Menu Bar """
         # Prompt for save if transcript was modified
-        self.ControlObject.SaveTranscript(1)
+        if TransanaConstants.partialTranscriptEdit:
+            self.ControlObject.SaveTranscript(1, continueEditing=False)
+        else:
+            self.ControlObject.SaveTranscript(1)
 
         # For each Shapshot Window (from the end of the list to the start) ...
         while len(self.ControlObject.SnapshotWindows) > 0:
@@ -835,7 +851,10 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
                 # If the transcript has been modified ...
                 if self.ControlObject.TranscriptWindow[x].TranscriptModified():
                     # ... save it!
-                    self.ControlObject.SaveTranscript(1, transcriptToSave=x)
+                    if TransanaConstants.partialTranscriptEdit:
+                        self.ControlObject.SaveTranscript(1, transcriptToSave=x, continueEditing=False)
+                    else:
+                        self.ControlObject.SaveTranscript(1, transcriptToSave=x)
                 # If the transcript is locked ...
                 if (self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj != None) and \
                    (self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj.isLocked):
@@ -913,9 +932,17 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         """Enable or disable the menu options that depend on whether or not
         a Transcript is loaded."""
         self.menuBar.filemenu.Enable(MenuSetup.MENU_FILE_SAVEAS, enable)
-        self.menuBar.filemenu.Enable(MenuSetup.MENU_FILE_PRINTTRANSCRIPT, enable)
+        # If we have Right to Left text, we cannot enable PRINT because it doesn't work right due to wxWidgets bugs.
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+            self.menuBar.filemenu.Enable(MenuSetup.MENU_FILE_PRINTTRANSCRIPT, False)
+        else:
+            self.menuBar.filemenu.Enable(MenuSetup.MENU_FILE_PRINTTRANSCRIPT, enable)
         self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_EDIT_COPY, enable)
-        self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_PRINT, enable)
+        # If we have Right to Left text, we cannot enable PRINT because it doesn't work right due to wxWidgets bugs.
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_PRINT, False)
+        else:
+            self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_PRINT, enable)
 
     def SetTranscriptEditOptions(self, enable):
         """Enable or disable the menu options that depend on whether or not
@@ -981,6 +1008,11 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             if (DBInterface.is_db_open()) and ((not TransanaConstants.singleUserVersion) and (not ChatWindow.ConnectToMessageServer())):
                 # If no connection is made, close Transana!
                 self.OnCloseWindow(event)
+            # Otherwise, if we are in the multi-user version ...
+            elif not TransanaConstants.singleUserVersion:
+                # ... determine if BOTH the Database and Message Server are using SSL
+                #     and set the appropriate graphic ...
+                self.ControlObject.DataWindow.UpdateSSLStatus(TransanaGlobal.configData.ssl and TransanaGlobal.chatIsSSL)
 
     def OnFileManagement(self, event):
         """ Implements the FileManagement Menu command """
@@ -1710,10 +1742,10 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             # Check to see if we have a translation, and if it is up-to-date.
             
             # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  "&Media Conversion" works for version 2.50.
-            #        For 2.60, let's go with "Snapshot".
+            #        For 2.60, let's go with "Snapshot".  For 2.61, we'll use "SSL Client Key File".
             # If you update this, also update the phrase above in the __init__ method.)
             
-            if (outofdateLanguage != '') and ("Snapshot" == _("Snapshot")):
+            if (outofdateLanguage != '') and ("SSL Client Key File" == _("SSL Client Key File")):
                 # If not, display an information message.
                 prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
                 dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
@@ -1793,6 +1825,17 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             self.videoWindowLayout = (self.ControlObject.VideoWindow.GetPosition(), self.ControlObject.VideoWindow.GetSize())
             self.transcriptWindowLayout = (self.ControlObject.TranscriptWindow[0].dlg.GetPosition(), self.ControlObject.TranscriptWindow[0].dlg.GetSize())
             self.dataWindowLayout = (self.ControlObject.DataWindow.GetPosition(), self.ControlObject.DataWindow.GetSize())
+
+    def OnOptionsLongTranscriptEdit(self, event):
+        """ Handler for Options > Long Transcript Editing """
+        # Let's just make sure no transcripts are in Edit Mode.  For each transcript ...
+        for win in self.ControlObject.TranscriptWindow:
+            # ... if it's not Read Only (i.e. IS in Edit Mode) ...
+            if not win.dlg.editor.GetReadOnly():
+                # ... set that window to Read Only (which will save it!)
+                win.SetReadOnly(True)
+        # Set the Constant value when the value changes
+        TransanaConstants.partialTranscriptEdit = event.IsChecked()
 
     def OnOptionsWordTrack(self, event):
         """ Handler for Options > Auto Word-tracking """
@@ -1982,6 +2025,28 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         # Bind the ID to the Menu Handler
         wx.EVT_MENU(self, id, self.OnWindow)
 
+    def UpdateWindowMenuItem(self, oldSnapshotName, oldSnapshotNumber, newSnapshotName, newSnapshotNumber):
+        """ Update a Window Menu item when a Snapshot is changed via Prev / Next buttons """
+        # Get the menu items
+        items = self.menuBar.windowMenu.GetMenuItems()
+        # If the oldSnapshotNumber is NOT a unicode ...
+        if not isinstance(oldSnapshotNumber, unicode):
+            # ... convert it to Unicode to match what comes out of the menu item
+            oldSnapshotNumber = "%s" % oldSnapshotNumber
+        # If the oldSnapshotNumber is NOT a unicode ...
+        if not isinstance(newSnapshotNumber, unicode):
+            # ... convert it to Unicode appropriate for the menu item
+            newSnapshotNumber = "%s" % newSnapshotNumber
+        # Iterate through the menu items
+        for x in items:
+            # If the item matches the OLD name and number ...
+            if (x.GetLabel() == oldSnapshotName) and (x.GetHelp() == oldSnapshotNumber):
+                # ... update it to the NEW name and number
+                x.SetItemLabel(newSnapshotName)
+                x.SetHelp(newSnapshotNumber)
+                # ... and we're done
+                break
+
     def DeleteWindowMenuItem(self, itemName, itemNumber):
         """ Remove an item from the Menu Window's Window menu """
 
@@ -2151,6 +2216,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_QUICKCLIPWARNING, _("Show Quick Clip Warning"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_WORDTRACK, _("Auto &Word-tracking"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"))
+        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_LONGTRANSCRIPTEDIT, _("Long Transcript Editing"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION, _("Vi&sualization Style"))
         self.menuBar.optionsvisualizationmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION_WAVEFORM, _("&Waveform"))
         self.menuBar.optionsvisualizationmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION_KEYWORD, _("&Keyword"))
@@ -2264,10 +2330,10 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         if os.path.exists(dir):
             languages.append(CHINESE_LABEL)
         # Easern Europe encoding, Greek, Japanese, Korean, and Chinese
-        if ('wxMSW' in wx.PlatformInfo) and TransanaConstants.singleUserVersion:
-            languages.append(EASTEUROPE_LABEL)
-            languages.append(GREEK_LABEL)
-            languages.append(JAPANESE_LABEL)
+#        if ('wxMSW' in wx.PlatformInfo) and TransanaConstants.singleUserVersion:
+#            languages.append(EASTEUROPE_LABEL)
+#            languages.append(GREEK_LABEL)
+#            languages.append(JAPANESE_LABEL)
             # Korean support must be removed due to a bug in wxSTC on Windows.
             # languages.append(KOREAN_LABEL)
 

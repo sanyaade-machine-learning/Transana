@@ -113,6 +113,8 @@ class TranscriptEditor(RichTextEditCtrl):
         self.timeCodeDataVisible = False
         # Initialize the Transcript Object to be held in this Transcript Editor
         self.TranscriptObj = None
+        # For Partial Transcript Loading, we need to track the number of lines loaded in the Text Control
+        self.LinesLoaded = 0
         # Initialize the Time Codes array to empty
         self.timecodes = []
         # Initialize the current time code to DOES NOT EXIST
@@ -160,6 +162,11 @@ class TranscriptEditor(RichTextEditCtrl):
     # Public methods
     def load_transcript(self, transcript):
         """ Load the given transcript object or RTF file name into the editor. """
+        # Remember Partial Transcript Editing status
+        tmpPartialTranscriptEdit = TransanaConstants.partialTranscriptEdit
+        # Temporarily turn partial transcript editing off
+        TransanaConstants.partialTranscriptEdit = False
+        
         # Create a popup telling the user about the load (needed for large files)
         loadDlg = Dialogs.PopupDialog(None, _("Loading..."), _("Loading your transcript.\nPlease wait...."))
         # Freeze the control to speed transcript load / RTF Import times
@@ -176,7 +183,10 @@ class TranscriptEditor(RichTextEditCtrl):
         # This code should never get activated. It's just here for safety's sake.
         if self.TranscriptObj:
             # Save the transcript
-            self.parent.ControlObject.SaveTranscript(1)
+            if TransanaConstants.partialTranscriptEdit:
+                self.parent.ControlObject.SaveTranscript(1, continueEditing=False)
+            else:
+                self.parent.ControlObject.SaveTranscript(1)
             # If you have the Transcript locked, then load something else without leaving
             # Edit Mode, you need to unlock the record!
             if self.TranscriptObj.isLocked:
@@ -190,7 +200,7 @@ class TranscriptEditor(RichTextEditCtrl):
         if isinstance(transcript, types.StringTypes):
             dataType = 'filename'
         # If we have an empty transcript or a TEXT file ...
-        elif (transcript.text == '') or transcript.text[:4] == 'txt\n':
+        elif transcript.text[:4] == 'txt\n':
             dataType = 'text'
         # If we have a transcript in XML format ...
         elif transcript.text[:5] == '<?xml':
@@ -198,6 +208,9 @@ class TranscriptEditor(RichTextEditCtrl):
         # If we have a transcript in Rich Text Format ...
         elif transcript.text[2:5] == u'rtf':
             dataType = 'rtf'
+        # If we are creating a Transcript-less Clip ...
+        elif (transcript.text == '') or transcript.text[0:24] == u'<(transcript-less clip)>':
+            dataType = 'transcript-less clip'
         # Otherwise, we probably have a Styled Text Ctrl object that's been pickled (Transana 2.42 and earlier)
         else:
             dataType = 'pickle'
@@ -268,7 +281,11 @@ class TranscriptEditor(RichTextEditCtrl):
 	    # If we have an Episode Transcript in TXT Form, save it in FastSave format upon loading
 	    # to convert it.  
             self.TranscriptObj.lock_record()
-            self.save_transcript()
+
+            if TransanaConstants.partialTranscriptEdit:
+                self.save_transcript(continueEditing=False)
+            else:
+                self.save_transcript()
             self.TranscriptObj.unlock_record()
 
         # If we have an XML document, let's assume it's XML from Transana
@@ -294,6 +311,14 @@ class TranscriptEditor(RichTextEditCtrl):
             transcript.text = invisibleSTC.GetRTFBuffer()
             # Destroy the STC-based Editor
             invisibleSTC.Destroy()
+        # If we have a transcript-less Clip ...
+        elif dataType == 'transcript-less clip':
+            # ... then it should have not Transcript Text !!!
+            transcript.text = ''
+            # The transcript that was passed in is our Transcript Object
+            self.TranscriptObj = transcript
+            # Initialize that the transcript has not yet changed.
+            self.TranscriptObj.has_changed = 0
 
         # THIS SHOULD NOT BE AN ELIF.
         # If we have a filename, RichTextFormat, or a pickle that has just been converted to RTF ...
@@ -330,13 +355,23 @@ class TranscriptEditor(RichTextEditCtrl):
                 # this was added in to automatically convert an RTF document into
                 # the fastsave format.
                 self.TranscriptObj.lock_record()
-                self.save_transcript()
+                # If Partial Transcript Editing is enabled ...
+                if TransanaConstants.partialTranscriptEdit:
+                    # ... save the transcript
+                    self.save_transcript(continueEditing=False)
+                # If Partial Transcript Editing is NOT enabled ...
+                else:
+                    # ... save the transcript
+                    self.save_transcript()
+                # Unlock the transcript
                 self.TranscriptObj.unlock_record()
             except:
                 # Note the failure in the Error Log
                 print "TranscriptEditor_RTC.load_transcript():  SAVE AFTER CONVERSION FAILED."
             
-
+        # Restore Partial Transcript Editing status
+        TransanaConstants.partialTranscriptEdit = tmpPartialTranscriptEdit
+        
         # Scan transcript for timecodes
         self.load_timecodes()
         # Re-enable widget
@@ -377,6 +412,100 @@ class TranscriptEditor(RichTextEditCtrl):
         self.parent.SetSizeHints(minH = 0, minW = self.TranscriptObj.minTranscriptWidth)
         # Destroy the Load Popup Dialog
         loadDlg.Destroy()
+
+        # if Partial Transcript Editing is enabled ...
+        if TransanaConstants.partialTranscriptEdit:
+            # ... we need to track the lines that are loaded
+            self.LinesLoaded = self.TranscriptObj.paragraphs
+
+    def UpdateCurrentContents(self, action):
+        """ This method maintains a LIMITED load of data in the editor control, rather than having all
+            the data present all the time. In wxPython 2.9.4.0 and 3.0.0.0, the wxRichTextCtrl becomes
+            VERY slow during editing for very large documents.  (eg. a 7000 line document can take 4
+            seconds per key press near the beginning of the document!) """
+
+        # Set the number of lines that should be included in a transcript segment loaded into the editor
+        numberOfLinesInControl = 200
+        # If no Transcript Object is defined ...
+        if self.TranscriptObj == None:
+            # ... we can skip this!
+            return
+
+        # If we're entering edit mode, we need to limit the amount of text in the control ...
+        if action == 'EnterEditMode':
+
+            # ... and if the transcript has over numberOfLinesInControl lines long AFTER the current window ...
+            if self.NumberOfLines - self.PositionToXY(self.HitTestPos((3, self.GetRect()[3] - 10))[1])[1] > numberOfLinesInControl:
+                # ... determine the number of lines to load into the control 
+                linesToLoad = self.PositionToXY(self.HitTestPos((3, self.GetRect()[3] - 10))[1])[1]
+                linesToLoad = linesToLoad - (linesToLoad % numberOfLinesInControl) + numberOfLinesInControl
+                # If we should load fewer than ALL the lines ...
+                if linesToLoad < self.TranscriptObj.paragraphs:
+                    # Create a temporary popup dialog ...
+                    loadDlg = Dialogs.PopupDialog(self, _("Loading %d lines") % linesToLoad, _("Loading your transcript.\nPlease wait...."))
+
+                    # Initialize text
+                    text = ''
+                    # Add the appropriate number of lines (i.e. paragraphs)
+                    for x in range(self.TranscriptObj.paragraphPointers[linesToLoad]):
+                        text += self.TranscriptObj.lines[x] + '\n'
+                    # Add closing XML to made our text a LEGAL XML document
+                    text += '  </paragraphlayout>\n'
+                    text += '</richtext>'
+                        
+                    # Load the XML Data held in the transcript's text field
+                    self.LoadXMLData(text, clearDoc=False)
+
+                    # Delete the popup dialog.
+                    loadDlg.Destroy()
+
+                    # Update the indicator for the number of lines loaded
+                    self.LinesLoaded = linesToLoad
+                # If we shouls load ALL the lines ...
+                else:
+                    # ... update the indicator for the number of lines loaded to the total number of paragraphs
+                    self.LinesLoaded = self.TranscriptObj.paragraphs
+            # Otherwise ...
+            else:
+                # ... update the indicator for the number of lines loaded to the total number of paragraphs
+                self.LinesLoaded = self.TranscriptObj.paragraphs
+
+        # if we're leaving Edit mode, we need to recover the text that had been left out of the control ...
+        elif action == 'LeaveEditMode':
+            # if there are lines beyond what is currently in the Editor control ...
+            if self.LinesLoaded > 0 and self.LinesLoaded != self.TranscriptObj.paragraphs:
+                # If the transcript has been changed ...
+                if self.IsModified():
+                    # ... get the text currently in the control ...
+                    currenttext = self.GetFormattedSelection('XML')
+                    # ... and break it into lines
+                    currentlines = currenttext.split('\n')
+                    # Delete the last TWO lines from the loaded text, as they close off the XML too early
+                    del(currentlines[-1])
+                    del(currentlines[-1])
+                    # See if the (formerly) 3rd to last line closes a ParagraphLayout XML tag set
+                    if currentlines[-1].strip() == '</paragraphlayout>':
+                        # ... and if so, delete that too!
+                        del(currentlines[-1])
+
+                    # For all of the original Transcript that falls AFTER what we have loaded in the Text Control ...
+                    for x in range(self.TranscriptObj.paragraphPointers[self.LinesLoaded], len(self.TranscriptObj.lines)):
+                        # ... add these lines to what we got from the Text Control.
+                        currentlines.append(self.TranscriptObj.lines[x])
+
+                    # re-initialize CurrentText
+                    currenttext = ""
+                    # Concatenate all the current LINES into the current TEXT
+                    for x in range(len(currentlines)):
+                        currenttext += currentlines[x] + '\n'
+                    # Now load the cumulated text into the Text Control
+                    self.LoadXMLData(currenttext, clearDoc=False)
+                    # Note that the text HAS changed in the Text Control
+                    self.MarkDirty()
+                # If the transcript has NOT been changed ...
+                else:
+                    # ... restore the original transcript's text to the Text Control
+                    self.LoadXMLData(self.TranscriptObj.text, clearDoc = False)
 
     def HideTimeCodeData(self):
             """ Hide the Time Code Data, which should NEVER be visible to users """
@@ -444,12 +573,17 @@ class TranscriptEditor(RichTextEditCtrl):
             # Look for the next time code.  Result will be -1 if NOT FOUND
             i = txt.find(findstr, i+1)
 
-    def save_transcript(self):
-        """Save the transcript to the database."""
+    def save_transcript(self, continueEditing=True):
+        """ Save the transcript to the database.
+            continueEditing is used for Partial Transcript Editing only. """
         # Create a popup telling the user about the save (needed for large files)
         self.saveDlg = Dialogs.PopupDialog(None, _("Saving..."), _("Saving your transcript.\nPlease wait...."))
         # Let's try to remember the cursor position
         self.SaveCursor()
+        # If Partial Transcript editing is enabled ...
+        if TransanaConstants.partialTranscriptEdit:
+            # If we have only part of the transcript in the editor, we need to restore the full transcript
+            self.UpdateCurrentContents('LeaveEditMode')
         # We can't save with Time Codes showing!  Remember the initial status, and hide them
         # if they are showing.
         initCodesVis = self.codes_vis
@@ -727,8 +861,6 @@ class TranscriptEditor(RichTextEditCtrl):
         initReadOnly = self.get_read_only()
         # Let's also remember if the transcript has already been modified.  This value WILL get changed, but maybe it shouldn't be.
         initModified = self.modified()
-        # Let's try to remember the cursor position
-#        self.SaveCursor()
 
         # Let's show all the hidden text of the time codes.  This doesn't work without it!
         if not self.codes_vis:
@@ -750,6 +882,7 @@ class TranscriptEditor(RichTextEditCtrl):
             tcEndPos = 0
             # Now iterate through each Time Code in the RegEx list
             for TC in tcSequences:
+
                 # Find the next Time Code in the RTF control, starting at the end point of the previous time code for efficiency's sake.
                 tcStartPos = self.GetValue().find(TC, tcEndPos, self.GetLength())  # self.FindText(tcEndPos, self.GetLength(), TC)
                 # Remember the end point of the current time code, used to start the next search.
@@ -764,28 +897,14 @@ class TranscriptEditor(RichTextEditCtrl):
                 # Note the length of the time code text
                 lenText = len(text)
 
+#                print "TrancriptEditor_RTC.changeTimeCodeValueStatus():", tcCounter, len(tcSequences)
+
                 # If we're going to SHOW the time code data ...
                 if visible:
                     # Insert the text
                     self.WriteText(text)
 
                     self.SetStyle(richtext.RichTextRange(tcEndPosAdjusted, tcEndPosAdjusted + lenText), self.txtTimeCodeHRFAttr)
-##                    # We may need to manipulate the saved cursor position data due to these changes in the document.  Let's find out.
-##                    # Let's determine the current data, saving the point to tc1 and the selection to tc2
-##                    tc1 = self.cursorPosition[0]
-##                    tc2 = self.cursorPosition[1][1]
-##                    # if the current position or selection start is AFTER the end of the time code ...
-##                    if (self.cursorPosition[0] > tcEndPos) or (self.cursorPosition[1][0] > tcEndPos):
-##                        # ... then it needs to be increased by the length of the time code text.
-##                        tc1 = self.cursorPosition[0] + lenText
-##                    # If the selection end is AFTER the end of the time code ...
-##                    if (self.cursorPosition[1][1] > tcEndPos):
-##                        # ... then it needs to be increased by the length of the time code text.
-##                        tc2 = self.cursorPosition[1][1] + lenText
-##                    # If any of hte values have changed ...
-##                    if (tc1 > self.cursorPosition[0]) or (tc2 > self.cursorPosition[1][1]):
-##                        # ... then update the cursor position saved data.
-##                        self.cursorPosition = (tc1, (tc1, tc2))
                 # If we're gong to HIDE the time code data ...
                 else:
                     # Let's look at the end of the time code for the opening paragraph character.  This probably signals that the user hasn't
@@ -798,23 +917,6 @@ class TranscriptEditor(RichTextEditCtrl):
                         self.SetSelection(hrtcStartPos, hrtcEndPos)
                         # ... and get rid of it!
                         self.DeleteSelection()
-
-##                        # We may need to manipulate the saved cursor position data due to these changes in the document.  Let's find out.
-##                        # Let's determine the current data, saving the point to tc1 and the selection to tc2
-##                        tc1 = self.cursorPosition[0]
-##                        tc2 = self.cursorPosition[1][1]
-##                        # if the current cursor position or selection start is AFTER the end of the time code ...
-##                        if (self.cursorPosition[0] > tcEndPos) or (self.cursorPosition[1][0] > tcEndPos):
-##                            # ... then decrement it by 1 character
-##                            tc1 = self.cursorPosition[0] - 1
-##                        # if the end of the current selection is after the end of the time code ...
-##                        if (self.cursorPosition[1][1] > tcEndPos):
-##                            # ... decrement it by one character.
-##                            tc2 = self.cursorPosition[1][1] - 1
-##                        # If any information has changed ...
-##                        if (tc1 < self.cursorPosition[0]) or (tc2 < self.cursorPosition[1][1]):
-##                            # ... update the cursor data
-##                            self.cursorPosition = (tc1, (tc1, tc2))
 
         # Change the Time Code Data Visible flag to indicate the new state
         self.timeCodeDataVisible = visible
@@ -1376,7 +1478,7 @@ class TranscriptEditor(RichTextEditCtrl):
                 self.autoSaveTimer.Stop()
             # If we are switching to EDIT MODE ...
             else:
-                # ... we shoudl turn ON the AutoSave Timer.  600,000 is every TEN MINUTES
+                # ... we should turn ON the AutoSave Timer.  600,000 is every TEN MINUTES
                 self.autoSaveTimer.Start(600000)
 
     def get_read_only(self):
@@ -1389,6 +1491,15 @@ class TranscriptEditor(RichTextEditCtrl):
         
     def get_selected_time_range(self):
         """Get the time range of the currently selected text.  Return a tuple with the start and end times in milliseconds."""
+        # If the transcript is long and lacks time codes (i.e. has just been imported), this can
+        # be VERY slow.  I'm adding escape clauses to speed this method up when we're after the
+        # last time code.  We assume people will time-code from the beginning of a transcript.
+
+        # If the transcript has NO timecodes ...
+        if len(self.timecodes) == 0:
+            # ... return that we start at the beginning and finish at the end.
+            return (0, -1)
+        
         # Get the position of the start of the current selection
         pos = self.GetSelectionStart()
         # remember the initial selected position, just in case.
@@ -1430,6 +1541,10 @@ class TranscriptEditor(RichTextEditCtrl):
         except:
             # ... just assume the time code value is 0.
             start_timecode = 0
+        # If we are positioned AFTER the LAST time-code ...
+        if (start_timecode in self.timecodes) and (self.timecodes.index(start_timecode) == len(self.timecodes) - 1):
+            # ... return the start time code and the end of the file
+            return (start_timecode, -1)
 
         # Get the position of the end of the current selection
         pos = self.GetSelectionEnd()
@@ -1469,7 +1584,6 @@ class TranscriptEditor(RichTextEditCtrl):
         except:
             # ... just assume the time code value is -1.
             end_timecode = -1
-
         # If you have two consecutive time codes with no text between, this routine is producing the
         # WRONG RESULTS!!  You get what should be the end time code for both values.
         # So if start_timecode and end_timecode are the same ...
@@ -1743,7 +1857,6 @@ class TranscriptEditor(RichTextEditCtrl):
                     # If you cursor over a time code while making a selection, the selection was getting lost with
                     # the original code.  Instead, determine if a selection is being made, and if so, make a new
                     # selection appropriately.
-                    
                     # If these values differ, we're selecting rather than merely moving.
                     if cursel[0] == cursel[1]:
                         # Position the cursor after the hidden timecode data
@@ -1812,43 +1925,12 @@ class TranscriptEditor(RichTextEditCtrl):
         if self.StyleChanged != None:
             # ... make sure any style change is reflected on screen
             self.StyleChanged(self)
-            
-#        event.Skip()
 
-##        # If we're supposed to update the SelectionText (i.e. we're in a Transcript Window, not a Clip Properties Dialog) ...
-##        if self.updateSelectionText:
-##            # We need to update the Selection Text for changes in the cursor position / selection
-##            self.parent.ControlObject.UpdateSelectionTextLater(self.parent.transcriptWindowNumber)
-##        # Also call the parent object's OnKeyUp method
-##        event.Skip()
-##
-##        # This doesn't DO anything, so skip it.
-##        if False:
-##            # If we are moving the cursor or deleting a character ...
-##            if event.GetKeyCode() in [wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_UP, wx.WXK_DOWN,
-##                                      wx.WXK_HOME, wx.WXK_END, wx.WXK_PAGEUP, wx.WXK_PAGEDOWN,
-##                                      wx.WXK_DELETE]:
-##                # Get the style at the insertion point
-##                tmpStyle1 = self.GetStyleAt(self.GetInsertionPoint())
-##                
-##                # ... we need to check for formatting changes
-##                self.CheckFormatting()
-##                
-##                # Now get the style at the insertion point again
-##                tmpStyle2 = self.GetStyleAt(self.GetInsertionPoint())
-##
-##                # See if the style has changed 
-##                if (not self.CompareFormatting(tmpStyle1, tmpStyle2, fullCompare=True)):
-##
-##                    self.PrintTextAttr("before:", tmpStyle1)
-##                    self.PrintTextAttr("after:", tmpStyle2)
-##                    print
-##                    print
-##
-##        # If the SHIFT key is being released and we have a selection, the text selection process has just been completed.
-##        if event.GetKeyCode() in [wx.WXK_SHIFT] and (self.GetSelection()[0] != self.GetSelection()[1]):
-##            # ... so check the selection for time codes at the beginning and end.
-##            self.CheckTimeCodesAtSelectionBoundaries()
+#        if event.GetKeyCode() != wx.WXK_SHIFT:
+#            print "TranscriptEditor_RTC.OnKeyUp() (WITH SKIP)", event.GetKeyCode(), wx.WXK_SHIFT
+
+#       DISABLED because this causes this method to be called TWICE on each keystroke.            
+#        event.Skip()
 
     def OnAutoSave(self, event):
         """ Process the AutoSave Timer Event """
@@ -1872,7 +1954,10 @@ class TranscriptEditor(RichTextEditCtrl):
         # Replace the label to indicate we are auto-saving
         self.parent.SetLabel(_("Auto-saving ..."))
         # Save the transcript
-        self.save_transcript()
+        if TransanaConstants.partialTranscriptEdit:
+            self.save_transcript(continueEditing=True)
+        else:
+            self.save_transcript()
         # Restore the window label to its original value
         self.parent.SetLabel(lbl)
         # Okay, we're done
@@ -1892,6 +1977,11 @@ class TranscriptEditor(RichTextEditCtrl):
             # If the original control that had focus is not available, set focus
             # to the transcript!
             self.SetFocus()
+            
+        # If Partial Transcript editing is enabled ...
+        if TransanaConstants.partialTranscriptEdit:
+            # If we have only part of the transcript in the editor, we need to restore the partial transcript state following save
+            self.UpdateCurrentContents('EnterEditMode')
 
     def CheckTimeCodesAtSelectionBoundaries(self):
         """ Check the start and end of a selection and make sure neither is in the middle of a time code """
@@ -1970,10 +2060,6 @@ class TranscriptEditor(RichTextEditCtrl):
             # ... abort the Start Drag 'cause the interface is empty.
             return
 
-        # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
-        # can happen.  Preventing this is the sole function of this section of this method.
-#        self.CheckTimeCodesAtSelectionBoundaries()
-
         # Let's get the time code boundaries.  This will return a start_time of 0 if there's not initial time code,
         # and an end_time of -1 if there's no ending time code.
         (start_time, end_time) = self.get_selected_time_range()
@@ -1992,42 +2078,6 @@ class TranscriptEditor(RichTextEditCtrl):
             tmpClip = self.parent.ControlObject.currentObj
             # Get a temporary copy of the source Episode for comparison purposes
             tmpEpisode = Episode.Episode(tmpClip.episode_num)
-
-##            # If the Episode and Clip have the same number of media files, no adjustments are needed.  Otherwise ...
-##            if len(tmpEpisode.additional_media_files) != len(tmpClip.additional_media_files):
-##                # If the FIRST media files are the SAME ...
-##                if os.path.normpath(tmpEpisode.media_filename) == os.path.normpath(tmpClip.media_filename):
-##                    # ... initialize the Clip Media Counter to zero ...
-##                    clipMediaCounter = 0
-##                    # If there is a second media file ...
-##                    if len(tmpClip.additional_media_files) > 0:
-##                        # ... and note the first ADDITIONAL media file as the one to look for next.
-##                        clipMediaFile = tmpClip.additional_media_files[0]['filename']
-##                    # If there is NO additional Media File ...
-##                    else:
-##                        # ... note that.
-##                        clipMediaFile = ''
-##                # If the FIRST media files are DIFFERENT ...
-##                else:
-##                    # ... initialize the Clip Media Counter to zero, signaling that we start looking at the beginning ...
-##                    clipMediaCounter = 0
-##                    # ... note the FIRST media file as the one to look for next ...
-##                    clipMediaFile = tmpClip.media_filename
-##                    # ... and insert Falses as a first video checkbox from the Episode to signal that file wasn't in the Clip!
-##                    videoCheckboxData = [(False, False)] + videoCheckboxData
-##                # Iteratere through the files in the Episode's list of additional media files (because there can't be fewer in the Episode
-##                # than the Clip)
-##                for episodeMediaCounter in range(len(tmpEpisode.additional_media_files)):
-##                    # If the Episode media file is the Clip Media file we're looking for ...
-##                    if os.path.normpath(tmpEpisode.additional_media_files[episodeMediaCounter]['filename']) == os.path.normpath(clipMediaFile):
-##                        # ... update what file we're looking for next ...
-##                        clipMediaFile = tmpClip.additional_media_files[clipMediaCounter]['filename']
-##                        # ... and increment the Clip Media Counter
-##                        clipMediaCounter += 1
-##                    # If the Episode media file is NOT the Clip media file we're looking for ...
-##                    else:
-##                        # ... Insert another pair of Falses in the video checkbox data to signal the Episode media file wasn't in the clip!
-##                        videoCheckboxData = videoCheckboxData[:episodeMediaCounter + 1] + [(False, False)] + videoCheckboxData[episodeMediaCounter + 1:]
 
             # First, let's find out if the EPISODE's main file is included in the Clip.
             if tmpEpisode.media_filename == tmpClip.media_filename:
@@ -2123,6 +2173,11 @@ class TranscriptEditor(RichTextEditCtrl):
 
             # If we're on the Mac ...
             if ("wxMac" in wx.PlatformInfo):
+                # If the "selection" attribute doesn't exist ... (This came up with multi-transcript quick clips where the
+                # selection in the second transcript occurred automatically!)
+                if not hasattr(self, 'selection'):
+                    # ... then create it!!
+                    self.selection = self.GetSelection()
                 # ... if we're in Edit mode ...
                 if(not self.get_read_only()):
                     # ... temporarily slip the RTF control into read-only mode (not all of Transana) ...
@@ -2147,29 +2202,41 @@ class TranscriptEditor(RichTextEditCtrl):
 
     def OnLeftDown(self, event):
         """ Left Mouse Button Down event """
+
+        ## # Get the Transcript Scale from the Configuration Data
+        ## scaleFactor = TransanaGlobal.configData.transcriptScale
+        ## # Set the Transcript Scale Factor.  (self.GetScaleX() and self.GetScaleY() do not work !!!)
+        ## scale = (scaleFactor, scaleFactor)
+
         # Note the Mouse Position.  Used in OnLeftUp so see if de-selection is appropriate.
         self.mousePosition = event.GetPosition()
 
         if event.GetEventObject().HasSelection():
             # Determine the start and end character numbers of the current selection
             textSelection = event.GetEventObject().GetSelection()
-            # Determine the character number of the current mouse position (!)
-#            mousePos = event.GetEventObject().HitTest(event.GetPosition())[1]
             # If we're using wxPython 2.8.x.x ...
             if wx.VERSION[:2] == (2, 8):
                 # ... use HitTest()
                 mousePos = event.GetEventObject().HitTest(event.GetPosition())[1]
             # If we're using a later wxPython version ...
             else:
+                (posx, posy) = event.GetPosition()
+                ## posx /= scale[0]
+                ## posy /= scale[1]
                 # ... use HitTestPos()
-                mousePos = event.GetEventObject().HitTestPos(event.GetPosition())[1]
+                mousePos = event.GetEventObject().HitTestPos((posx, posy))[1]
+
             # If the Mouse Character is inside the selection ...
             if (textSelection[0] <= mousePos) and (mousePos < textSelection[1]):
                 self.canDrag = True
             else:
                 self.canDrag = False
                 event.Skip()
+
         else:
+            # The Mac doesn't show the cursor properly in wxPython 3.0.0.0.
+            self.GetCaret().Show()
+
             self.canDrag = False
             event.Skip()
 
@@ -2201,13 +2268,13 @@ class TranscriptEditor(RichTextEditCtrl):
             if self.get_read_only() and not self.parent.ControlObject.IsPlaying():
                 # First, clear the current selection in the visualization window, if there is one.
                 self.parent.ControlObject.ClearVisualizationSelection()
-
                 # Set the start and end points to match the current segment
                 self.parent.ControlObject.SetVideoSelection(segmentStartTime, segmentEndTime)
             # If we're in Edit mode ...
             else:
                 # we don't update the Video Selection, but we still need to update the Selection Text for ALL transcripts
                 wx.CallLater(200, self.parent.ControlObject.UpdateSelectionTextLater, self.parent.transcriptWindowNumber)
+
         # See if the mouse has moved.  If the mouse HAS moved ...
         if (self.mousePosition != event.GetPosition()):
             # ... and restore the original Selection
@@ -2218,7 +2285,6 @@ class TranscriptEditor(RichTextEditCtrl):
             # If a DRAG is possible ...
             if self.canDrag:
                 # ... then set the insertion point to the mouse's current position (We're IN the selection)
-#                self.SetInsertionPoint(event.GetEventObject().HitTest(event.GetPosition())[1])
                 # If we're using wxPython 2.8.x.x ...
                 if wx.VERSION[:2] == (2, 8):
                     # ... use HitTest()
@@ -3112,9 +3178,6 @@ class TranscriptEditor(RichTextEditCtrl):
                         self.parent.SetSize((size[0], size[1] - 5))
                         # Set the Parent Window back to the original size
                         self.parent.SetSize(size)
-
-
-
 
                     if DEBUG:
                         print "surroundingUnderline correction DISABLED"

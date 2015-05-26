@@ -20,7 +20,8 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 # Patch sent by David Fraser to eliminate need for mx module
 
 DEBUG = False
-if DEBUG:
+DEBUG_Exceptions = False
+if DEBUG or DEBUG_Exceptions:
     print "XMLImport DEBUG is ON!"
 
 # import wxPython
@@ -43,6 +44,7 @@ import Misc
 import Note
 import Series
 import Snapshot
+import TransanaConstants
 import TransanaGlobal
 import Transcript
 
@@ -272,8 +274,12 @@ class XMLImport(Dialogs.GenForm):
            SQLText = 'BEGIN'
            dbCursor.execute(SQLText)
 
+#           print "XMLImport - Begin Transaction"
+
        # We need to track the number of lines read and processed from the input file.
        lineCount = 0
+       objCountNumber = 1
+       
        # We need to track how many Transcript records were in the database PRIOR to import!
        # (Needed for merging non-overlapping databases!  Otherwise, we lose SourceTranscriptNum information.)
 
@@ -305,6 +311,10 @@ class XMLImport(Dialogs.GenForm):
            # Some collections may have become children of LATER collections not yet imported.
            # Let's keep a list of instances of when this occurs so we can fix it after all the collections are read.
            collectionsToUpdate = []
+
+
+           tmpDict = {}
+           
            
            # For each line in the file ...
            for line in f:
@@ -376,23 +386,23 @@ class XMLImport(Dialogs.GenForm):
                        # These records should NEVER skip error messages
                        skipCheck = False
                        skipValue = False
-                   elif lineUpper == '<SNAPSHOTKEYWORDFILE>':
-                       progress.Update(57, _('Importing Snapshot Keyword records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<SNAPSHOTKEYWORDSTYLEFILE>':
-                       progress.Update(64, _('Importing Snapshot Coding Style records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
                    elif lineUpper == '<KEYWORDFILE>':
-                       progress.Update(71, _('Importing Keyword records'))
+                       progress.Update(57, _('Importing Keyword records'))
                        # These records MAY skip error messages
                        skipCheck = True
                        skipValue = False
                    elif lineUpper == '<CLIPKEYWORDFILE>':
-                       progress.Update(79, _('Importing Clip Keyword records'))
+                       progress.Update(64, _('Importing Clip Keyword records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<SNAPSHOTKEYWORDFILE>':
+                       progress.Update(71, _('Importing Snapshot Keyword records'))
+                       # These records should NEVER skip error messages
+                       skipCheck = False
+                       skipValue = False
+                   elif lineUpper == '<SNAPSHOTKEYWORDSTYLEFILE>':
+                       progress.Update(79, _('Importing Snapshot Coding Style records'))
                        # These records should NEVER skip error messages
                        skipCheck = False
                        skipValue = False
@@ -418,8 +428,13 @@ class XMLImport(Dialogs.GenForm):
                            tmpColl.lock_record()
                            # ... Update the Parent Collection Number by translating the parent collection number ...
                            tmpColl.parent = recNumbers['Collection'][tmpColl.parent]
+
+                           if DEBUG_Exceptions:
+                               print "XMLImport 1:  Saving ", type(currentObj), objCountNumber
+                               objCountNumber += 1;
+
                            # ... save the collection ...
-                           tmpColl.db_save()
+                           tmpColl.db_save(use_transactions=False)
                            # ... and unlock the collection record.
                            tmpColl.unlock_record()
 
@@ -436,7 +451,8 @@ class XMLImport(Dialogs.GenForm):
                        # Version 1.4 -- Database structure changed to accomodate Multiple Transcript Clips for Transana 2.30 release.
                        # Version 1.5 -- Database structure changed to accomodate Multiple Media Files for Transana 2.40
                        # Version 1.6 -- Added MinTranscriptWidth, XML format for transcripts, and character escapes for Transana 2.50 release
-                       # Versino 1.7 -- Added Snapshots, Snapshot Keywords, and Snapshot Coding Styles for Transana 2.60
+                       # Version 1.7 -- Added Snapshots, Snapshot Keywords, and Snapshot Coding Styles for Transana 2.60
+                       # Version 1.8 -- Character Encoding Rules changed completely!!
 
                        # Transana-XML version 1.0 ...
                        if self.XMLVersionNumber == '1.0':
@@ -447,7 +463,7 @@ class XMLImport(Dialogs.GenForm):
                            # ... use the encoding selected by the user
                            self.importEncoding = self.encodingOptions[self.chImportEncoding.GetSelection()]
                        # Transana-XML version 1.6 ...
-                       elif self.XMLVersionNumber in ['1.6', '1.7']:
+                       elif self.XMLVersionNumber in ['1.6', '1.7', '1.8']:
                            # ... use UTF8 encoding
                            self.importEncoding = 'utf8'
                        # All other Transana XML versions ...
@@ -641,8 +657,12 @@ class XMLImport(Dialogs.GenForm):
                                    tmpdlg.ShowModal()
                                    tmpdlg.Destroy()
 
+                               if DEBUG_Exceptions:
+                                   print "XMLImport 2:  Saving ", type(currentObj), objCountNumber
+                                   objCountNumber += 1;
+
                                # Save the data object
-                               currentObj.db_save()
+                               currentObj.db_save(use_transactions=False)
                                # Let's keep a record of the old and new object numbers for each object saved.
                                recNumbers[objectType][oldNumber] = currentObj.number
 
@@ -669,6 +689,7 @@ class XMLImport(Dialogs.GenForm):
 
                                # Define the query to insert the additional media files into the databse
                                query = "INSERT INTO AdditionalVids2 (EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio) VALUES (%s, %s, %s, %s, %s, %s)"
+                               query = DBInterface.FixQuery(query)
                                # Substitute the generic OS seperator "/" for the Windows "\".
                                tmpFilename = currentObj['MediaFile'].replace('\\', '/')
                                # Encode the filename
@@ -680,13 +701,28 @@ class XMLImport(Dialogs.GenForm):
 
                            elif  objectType == 'CoreData':
                                currentObj.number = 0
+
+                               if DEBUG_Exceptions:
+                                   print "XMLImport 3:  Saving ", type(currentObj), objCountNumber
+                                   objCountNumber += 1;
+
                                currentObj.db_save()
 
                            elif objectType == 'Keyword':
-                               currentObj.db_save()
+
+                               if DEBUG_Exceptions:
+                                   print "XMLImport 4:  Saving ", type(currentObj), objCountNumber
+                                   objCountNumber += 1;
+
+                               currentObj.db_save(use_transactions=False)
                                
                            elif objectType == 'ClipKeyword':
                                if (currentObj.episodeNum != 0) or (currentObj.clipNum != 0) or (currentObj.snapshotNum != 0):
+
+                                   if DEBUG_Exceptions:
+                                       print "XMLImport 5:  Saving ", type(currentObj), objCountNumber
+                                       objCountNumber += 1;
+
                                    currentObj.db_save()
 
                            elif objectType == 'SnapshotKeyword':
@@ -696,6 +732,7 @@ class XMLImport(Dialogs.GenForm):
                                                  (SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible)
                                                VALUES
                                                  (%s, %s, %s, %s, %s, %s, %s, %s) """
+                                   query = DBInterface.FixQuery(query)
                                    # Build the values to match the query
                                    values = (self.snapshotKeyword['SnapshotNum'],
                                              self.snapshotKeyword['KeywordGroup'].encode('utf8'),
@@ -716,6 +753,7 @@ class XMLImport(Dialogs.GenForm):
                                                  (SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle)
                                                VALUES
                                                  (%s, %s, %s, %s, %s, %s, %s, %s) """
+                                   query = DBInterface.FixQuery(query)
                                    # Build the values to match the query
                                    values = (self.snapshotKeywordStyle['SnapshotNum'],
                                              self.snapshotKeywordStyle['KeywordGroup'].encode('utf8'),
@@ -751,7 +789,7 @@ class XMLImport(Dialogs.GenForm):
                                        self.FilterFilterData = DBInterface.ProcessDBDataForUTF8Encoding(self.FilterFilterData)
 
                                    # Saved Searches (Added for 2.50)
-                                   elif self.FilterReportType == '15':
+                                   elif self.FilterReportType == '15' and self.FilterScope == '0':
                                        # If the Filter Data is a string (it always should be!) ...
                                        if isinstance(self.FilterFilterData, str):
                                            # ... then decode it using the import encoding.
@@ -761,10 +799,13 @@ class XMLImport(Dialogs.GenForm):
                                # Encode the Filter Configuration Name using the file encoding
                                self.FilterConfigName = self.FilterConfigName.encode(TransanaGlobal.encoding)
 
+#                               print "Filter Rec:", type(self.FilterReportType), self.FilterReportType, type(self.FilterScope), self.FilterScope
+
                                # Certain FilterDataTypes need to have their DATA adjusted for the new object numbers!
                                # This should be done before the save.
                                # So if we have Clips or Notes Filter Data ...
-                               if self.FilterFilterDataType in ['2', '8']:
+                               if (self.FilterFilterDataType in ['2', '8']) or \
+                                  ((self.FilterReportType == '15') and (self.FilterScope == 1)):
                                    # ... initialize a List for accepting the altered Filter Data
                                    filterData = []
                                    # Unpack the pickled data, which must be done differently depending on its current form
@@ -794,6 +835,14 @@ class XMLImport(Dialogs.GenForm):
                                                filterData.append((noteNum, ) + dataRec[1:])
                                         # NOTE that data records without new references are automatically dropped from
                                         #      the filter data!
+                                       # If we have a Save Collections record ...
+                                       elif self.FilterReportType == '15':
+                                           # ... and if the Collection Number still exists in the new data set ...
+                                           if recNumbers['Collection'].has_key(dataRec[0]):
+                                               # ... get the new Collection Number ...
+                                               collNum = recNumbers['Collection'][dataRec[0]]
+                                               # ... and substitute it into the data record
+                                               filterData.append((collNum, dataRec[1]))
                                    # Now re-pickle the filter data
                                    self.FilterFilterData = cPickle.dumps(filterData)
                                # Create the query to save the Filter record    
@@ -801,6 +850,11 @@ class XMLImport(Dialogs.GenForm):
                                                (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
                                              VALUES
                                                (%s, %s, %s, %s, %s) """
+                               query = DBInterface.FixQuery(query)
+
+#                               print 'XMLImport: Saving Filter Record:', self.FilterReportType, self.FilterScope, \
+#                                     self.FilterConfigName, self.FilterFilterDataType, type(self.FilterFilterData)
+                               
                                # Build the values to match the query, including the pickled Clip data
                                values = (self.FilterReportType, self.FilterScope, self.FilterConfigName, self.FilterFilterDataType,
                                          self.FilterFilterData)
@@ -809,7 +863,7 @@ class XMLImport(Dialogs.GenForm):
                                    dbCursor.execute(query, values)
                        except:
 
-                           if DEBUG:
+                           if DEBUG or DEBUG_Exceptions:
                                print
                                print sys.exc_info()[0], sys.exc_info()[1]
                                print
@@ -1360,12 +1414,16 @@ class XMLImport(Dialogs.GenForm):
                                # See if the date is in YYYY-MM-DD format (produced by XMLExport.py).
                                # If not, substitute slashes for dashes, as this file likely came from Delphi!
                                reStr = '\d{4}-\d+-\d+'
-                               if re.compile(reStr).match(line) == None:
-                                   line = line.replace('-', '/')
-                                   timeformat = "%m/%d/%Y"
+                               reStr2 = '\d{4}/\d+/\d+'
+                               if re.compile(reStr).match(line) != None:
+                                   timeformat = "%Y-%m-%d"
+                               # The date should be stored in the Episode record as a date object
+                               elif re.compile(reStr2).match(line) != None:
+                                   timeformat = "%Y/%m/%d"
                                # The date should be stored in the Episode record as a date object
                                else:
-                                   timeformat = "%Y-%m-%d"
+                                   line = line.replace('-', '/')
+                                   timeformat = "%m/%d/%Y"
                                # Check to see if we've got extraneous time data appended.  If so, remove it!
                                # (This is reliably signalled by the presence of a space.)
                                if line.find(' ') > -1:
@@ -1703,13 +1761,13 @@ class XMLImport(Dialogs.GenForm):
                         # Collection Clip Data Export (ReportType 4) only needs translation if ReportScope != 0
                         elif (self.FilterReportType in ['12', '16']) or ((self.FilterReportType == '4') and (int(line) != 0)):
                             self.FilterScope = recNumbers['Collection'][int(line)]
-                        elif self.FilterReportType in ['13']:
+                        elif self.FilterReportType in ['13', '15']:
                             # FilterScopes for ReportType 13 (Notes Report) are constants, not object numbers!
                             self.FilterScope = int(line)
                         # Collection Clip Data Export (ReportType 4) for ReportScope 0, the Collection Root, needs
                         # a FilterScope of 0
                         # Saved Search (ReportType 15) needs no modifications, but setting FilterScope to 0 allows the SAVE!
-                        elif ((self.FilterReportType == '4') and (int(line) == 0)) or (self.FilterReportType == '15'):
+                        elif ((self.FilterReportType == '4') and (int(line) == 0)):
                             self.FilterScope = 0
                         else:
                            if 'unicode' in wx.PlatformInfo:
@@ -1765,11 +1823,13 @@ class XMLImport(Dialogs.GenForm):
                    # Get all NEW transcript records.  We DON'T want to process transcript records that were in the database prior
                    # to the import, as they won't be in recNumbers and thus we'd lose all SourceTranscript records!
                    SQLText = 'SELECT TranscriptNum, SourceTranscriptNum, ClipNum FROM Transcripts2 WHERE ClipNum > 0 AND TranscriptNum > %s'
-                   dbCursor.execute(SQLText % transcriptCount)
+                   SQLText = DBInterface.FixQuery(SQLText)
+                   dbCursor.execute(SQLText, (transcriptCount, ))
                    # create the SQL for updating the SourceTranscriptNum of all new transcripts
                    SQLText = """ UPDATE Transcripts2
                                  SET SourceTranscriptNum = %s
                                  WHERE TranscriptNum = %s """
+                   SQLText = DBInterface.FixQuery(SQLText)
                    # For each new Transcript record ...
                    for (TranscriptNum, SourceTranscriptNum, ClipNum) in dbCursor.fetchall():
                        # It is possible that the originating Transcript has been deleted.  If so,
@@ -1786,6 +1846,9 @@ class XMLImport(Dialogs.GenForm):
            else:
                # If contin is False, there's been an error and we should roll back the database transaction
                SQLText = 'ROLLBACK'
+
+#           print "TRANSACTION ENDED!  1  ", SQLText
+           
            # Execute the COMMIT or ROLLBACK
            dbCursor.execute(SQLText)
            dbCursor.close()
@@ -1802,10 +1865,13 @@ class XMLImport(Dialogs.GenForm):
            errordlg.ShowModal()
            errordlg.Destroy()
            SQLText = 'ROLLBACK'
+
+#           print "TRANSACTION ENDED!  2  ", SQLText
+           
            dbCursor.execute(SQLText)
            dbCursor.close()
        except:
-           if DEBUG:
+           if DEBUG or DEBUG_Exceptions:
                import traceback
                traceback.print_exc(file=sys.stdout)
            if 'unicode' in wx.PlatformInfo:
@@ -1817,6 +1883,9 @@ class XMLImport(Dialogs.GenForm):
            errordlg.ShowModal()
            errordlg.Destroy()
            SQLText = 'ROLLBACK'
+
+#           print "TRANSACTION ENDED!  3  ", SQLText
+          
            dbCursor.execute(SQLText)
            dbCursor.close()
 
@@ -1846,6 +1915,9 @@ class XMLImport(Dialogs.GenForm):
     def ProcessLine(self, txt):
         """ Process most lines read from the XML file to apply the proper encoding, if needed. """
         if 'unicode' in wx.PlatformInfo:
+
+#            print "XMLImport.ProcessLine(1):", type(txt) # , txt.encode(self.importEncoding), self.importEncoding, self.XMLVersionNumber
+
             # If we're not reading a file encoded with UTF-8 encoding, we need to ...
             if (self.importEncoding != 'utf8'):
                 # ... initialize a STRING variable.  (txt is UNICODE, but the WRONG ENCODING.  Damn.)
@@ -1879,9 +1951,12 @@ class XMLImport(Dialogs.GenForm):
             # Process Escaped characters (& >, <)
             txt = self.UnEscape(txt)
             # If we ARE using UTF-8 ....
-            if self.importEncoding == 'utf8':
+            if (self.importEncoding == 'utf8') and (self.XMLVersionNumber in ['1.1', '1.2', '1.3', '1.4', '1.5', '1.6', '1.7']):
                 # ... perform the UTF-8 encoding needed for the database.
                 txt = DBInterface.ProcessDBDataForUTF8Encoding(txt)
+
+#            print "XMLImport.ProcessLine(2):", type(txt), txt.encode(self.importEncoding), self.importEncoding, self.XMLVersionNumber
+#            print
 
         # Return the encoded text to the calling method
         return(txt)

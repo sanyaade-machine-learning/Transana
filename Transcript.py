@@ -69,6 +69,16 @@ class Transcript(DataObject.DataObject):
             self.db_load_by_num(id_or_num)
         elif isinstance(id_or_num, types.StringTypes) and (type(ep) in (int, long)):
             self.db_load_by_name(id_or_num, ep)
+        # For Partial Transcript Editing, create a data structure for storing the transcript information by LINE
+        self.lines = []
+        # Initialize a paragraph counter
+        self.paragraphs = 0
+        # Create a data structure for tracking very large transcripts by section
+        self.paragraphPointers = {}
+        # If we have text in the transcript ...
+        if id_or_num != None:
+            # ... set up data structures needed for editing large paragraphs
+            self.UpdateParagraphs()
 
 # Public methods
 
@@ -91,6 +101,28 @@ class Transcript(DataObject.DataObject):
         else:
             str = str + "text = %s\n\n" % self.text
         return str.encode('utf8')
+
+    def __eq__(self, other):
+        """ Object Equality function """
+        if other == None:
+            return False
+        else:
+
+##            print "Transcript.__eq__():", len(self.__dict__.keys()), len(other.__dict__.keys())
+##
+##            print self.__dict__.keys()
+##            print other.__dict__.keys()
+##            print
+##            
+##            for key in self.__dict__.keys():
+##                print key, self.__dict__[key] == other.__dict__[key],
+##                if self.__dict__[key] != other.__dict__[key]:
+##                    print self.__dict__[key], other.__dict__[key]
+##                else:
+##                    print
+##            print
+            
+            return self.__dict__ == other.__dict__
 
     def GetTranscriptWithoutTimeCodes(self):
         """ Returns a copy of the Transcript Text with the Time Code information removed. """
@@ -121,9 +153,11 @@ class Transcript(DataObject.DataObject):
         # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
         if 'unicode' in wx.PlatformInfo:
             name = name.encode(TransanaGlobal.encoding)
+        # Get the database connection
         db = DBInterface.get_db()
         # If we're skipping the RTFText ...
         if self.skipText:
+            # Define the query to load a Clip Transcript without text
             query = """SELECT a.TranscriptNum, a.TranscriptID, a.EpisodeNum, a.SourceTranscriptNum,
                               a.ClipNum, a.SortOrder, a.Transcriber, a.ClipStart, a.ClipStop, a.Comment,
                               a.MinTranscriptWidth, a.RecordLock, a.LockTime, a.LastSaveTime,
@@ -135,30 +169,55 @@ class Transcript(DataObject.DataObject):
             """
         # If we're NOT skipping the RTF Text
         else:
+            # Define the query to load a Clip Transcript with everything
             query = """SELECT a.*, b.EpisodeID, c.SeriesID FROM Transcripts2 a, Episodes2 b, Series2 c
                 WHERE   TranscriptID = %s AND
                         a.EpisodeNum = b.EpisodeNum AND
                         b.EpisodeNum = %s AND
                         b.SeriesNum = c.SeriesNum
             """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Get a database cursor
         c = db.cursor()
+        # Execute the Load query
         c.execute(query, (name, episode))
-        n = c.rowcount
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            n = 1
+        else:
+            n = c.rowcount
+        # If we don't have exactly ONE record ...
         if (n != 1):
+            # ... close the database cursor ...
             c.close()
+            # ... clear the current Transcript Object ...
             self.clear()
+            # ... and raise an exception
             raise RecordNotFoundError(name, n)
         else:
+            # ... Fetch the query results ...
             r = DBInterface.fetch_named(c)
+            # If sqlite and not results are found ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}): 
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current Transcript object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (name, 0)
+            # Load the data into the Transcript Object
             self._load_row(r)
-        
+        # Close the database cursor
         c.close()
     
     def db_load_by_num(self, num):
         """Load a record by record number."""
+        # Get the database connection
         db = DBInterface.get_db()
         # If we're skipping the RTF Text ...
         if self.skipText:
+            # Define the query to load a Clip Transcript without text
             query = """SELECT TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum,
                               ClipNum, SortOrder, Transcriber, ClipStart, ClipStop, Comment,
                               MinTranscriptWidth, RecordLock, LockTime, LastSaveTime
@@ -166,38 +225,119 @@ class Transcript(DataObject.DataObject):
                     """
         # If we're NOT skipping the RTF Text ...
         else:
+            # Define the query to load a Clip Transcript with everything
             query = """SELECT * FROM Transcripts2 WHERE   TranscriptNum = %s"""
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Get a database cursor
         c = db.cursor()
-        c.execute(query, num)
-        n = c.rowcount
-        if (n != 1):
-            c.close()
-            self.clear()
-            raise RecordNotFoundError, (num, n)
+        # Execute the Load query
+        c.execute(query, (num, ))
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            n = 1
         else:
+            n = c.rowcount
+        # If we don't have exactly ONE record ...
+        if (n != 1):
+            # ... close the database cursor ...
+            c.close()
+            # ... clear the current Transcript Object ...
+            self.clear()
+            # ... and raise an exception
+            raise RecordNotFoundError, (num, n)
+        # If we DO have exactly one record (or use sqlite) ...
+        else:
+            # ... Fetch the query results ...
             r = DBInterface.fetch_named(c)
+            # If sqlite and not results are found ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}): 
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current Transcript object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (num, 0)
+            # Load the data into the Transcript Object
             self._load_row(r)
+        # Close the database cursor
         c.close()
 
     def db_load_by_clipnum(self, clip):
         """ Load a Transcript Record based on Clip Number """
+        # Get the database connection
         db = DBInterface.get_db()
+        # Define the query to load a Clip Transcript
         query = """SELECT * FROM Transcripts2 a
             WHERE   ClipNum = %s """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Get a database cursor
         c = db.cursor()
-        c.execute(query, clip)
-        n = c.rowcount
-        if (n != 1):
-            c.close()
-            self.clear()
-            raise RecordNotFoundError, (clip, n)
+        # Execute the Load query
+        c.execute(query, (clip, ))
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            n = 1
         else:
+            n = c.rowcount
+        # If we don't have exactly ONE record ...
+        if (n != 1):
+            # ... close the database cursor ...
+            c.close()
+            # ... clear the current Transcript Object ...
+            self.clear()
+            # ... and raise an exception
+            raise RecordNotFoundError, (clip, n)
+        # If we DO have exactly one record (or use sqlite) ...
+        else:
+            # ... Fetch the query results ...
             r = DBInterface.fetch_named(c)
+            # If sqlite and not results are found ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current Transcript object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (num, 0)
+            # Load the data into the Transcript Object
             self._load_row(r)
-        
+        # Close the database cursor
         c.close()
 
-    def db_save(self):
+    def UpdateParagraphs(self):
+        """ This method divides XML text up into paragraphs, needed for editing LONG transcripts """
+        # Initialize (or re-initialize) the paragraph pointers dictionary
+        self.paragraphPointers = {}
+        # If there's a defined (saved) transcript object ...
+        if (self.id != 0) and (self.text != None):
+            
+#            print "Transcript.UpdateParagraphs()"
+
+            # ... and if the text is in XML form ...
+            if self.text[:5] == '<?xml':
+                # ... divide the transcript text into individual LINES
+                self.lines = self.text.split('\n')
+                # Initialize the paragraph counter
+                self.paragraphs = 0
+                # Iterate through the lines
+                for x in range(0, len(self.lines)):
+                    # Every 100 paragraphs ...
+                    if self.paragraphs % 100 == 0:
+                        # ... set a pointer to the line that starts the paragraph
+                        self.paragraphPointers[self.paragraphs] = x
+                    # # If the line contains the Paragraph XML tag, ...
+                    if ("<paragraph " in self.lines[x]) or ("<paragraph>" in self.lines[x]):
+                        # ... increment the Paragraph Counter
+                        self.paragraphs += 1
+
+#                print "characters:", len(self.text)
+#                print "lines:", len(self.lines)
+#                print "paragraphs:", self.paragraphs
+#            print
+
+    def db_save(self, use_transactions=True):
         """Save the record to the database using Insert or Update as
         appropriate."""
 
@@ -348,31 +488,78 @@ class Transcript(DataObject.DataObject):
             dlg = Dialogs.InfoDialog(None, msg)
             dlg.ShowModal()
             dlg.Destroy()
-
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Get a database cursor
         c = DBInterface.get_db().cursor()
+        # Execure the Save query
         c.execute(query, values)
-                              
-        # Load the auto-assigned new number record if necessary and the saved time.
-        query = """
-                  SELECT TranscriptNum, LastSaveTime FROM Transcripts2
-                  WHERE TranscriptID = %s AND
-                        EpisodeNum = %s AND
-                        ClipNum = %s
-                """
-        args = (id, self.episode_num, self.clip_num)
-        if self.sort_order != None:
-            query += " AND SortOrder = %s"
-            args += (self.sort_order,)
-        tempDBCursor = DBInterface.get_db().cursor()
-        tempDBCursor.execute(query, args)
-        if tempDBCursor.rowcount == 1:
-            recs = tempDBCursor.fetchone()
-            if (self.number == 0):
-                self.number = recs[0]
-            self.lastsavetime = recs[1]
+        # If the object number is 0, we have a new object
+        if self.number == 0:
+            # Load the auto-assigned new number record if necessary and the saved time.
+            query = """
+                      SELECT TranscriptNum, LastSaveTime FROM Transcripts2
+                      WHERE TranscriptID = %s AND
+                            EpisodeNum = %s AND
+                            ClipNum = %s
+                    """
+            # Assemble the arguments for the query
+            args = (id, self.episode_num, self.clip_num)
+            # If we've got a sort-order ...
+            if self.sort_order != None:
+                # ... include that as well!
+                query += " AND SortOrder = %s"
+                args += (self.sort_order,)
+            # Get a temporarly database cursor
+            tempDBCursor = DBInterface.get_db().cursor()
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Execute the query
+            tempDBCursor.execute(query, args)
+            # Get the results from the query
+            recs = tempDBCursor.fetchall()
+            # If we have exactly one record ...
+            if len(recs) == 1:
+                # ... load the record number ...
+                self.number = recs[0][0]
+                # ... and update the LastSaveTime
+                self.lastsavetime = recs[0][1]
+            # If we don't have a single record ...
+            else:
+                # ... raise an exception
+                raise RecordNotFoundError, (self.id, len(recs))
+            # Close the temporary database cursor
+            tempDBCursor.close()
+        # If we're updating an EXISTING record ... 
         else:
-            raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
-        tempDBCursor.close()
+            # Load the NEW last saved time.
+            query = """
+                      SELECT LastSaveTime FROM Transcripts2
+                      WHERE TranscriptNum = %s
+                    """
+            # Assemble the arguments for the query
+            args = (self.number, )
+            # Get a temporarly database cursor
+            tempDBCursor = DBInterface.get_db().cursor()
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Execute the query
+            tempDBCursor.execute(query, args)
+            # Get the results from the query
+            recs = tempDBCursor.fetchall()
+            # If we have exactly one record ...
+            if len(recs) == 1:
+                # ... load the LastSaveTime
+                self.lastsavetime = recs[0][0]
+            # If we don't have a single record ...
+            else:
+                # ... raise an exception
+                raise RecordNotFoundError, (self.id, len(recs))
+            # Close the temporary database cursor
+            tempDBCursor.close()
+
+        # For Partial Transcript Editing, update the Paragraph Information for long transcripts
+        self.UpdateParagraphs()
 
     def db_delete(self, use_transactions=1):
         """Delete this object record from the database."""
@@ -470,14 +657,27 @@ class Transcript(DataObject.DataObject):
                       SELECT LastSaveTime FROM Transcripts2
                       WHERE TranscriptNum = %s
                     """
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Get a database cursor
             tempDBCursor = DBInterface.get_db().cursor()
-            tempDBCursor.execute(query % self.number)
-            if tempDBCursor.rowcount == 1:
-                newLastSaveTime = tempDBCursor.fetchone()[0]
+            # Execute the Lock query
+            tempDBCursor.execute(query, (self.number, ))
+            # Get the query results
+            rows = tempDBCursor.fetchall()
+            # If we get exactly one row (and we should) ...
+            if len(rows) == 1:
+                # ... get the LastSaveTime
+                newLastSaveTime = rows[0]
+            # Otherwise ...
             else:
-                raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
+                # ... raise an exception
+                raise RecordNotFoundError, (self.id, len(rows))
+            # Close the database cursor
             tempDBCursor.close()
+            # if the LastSaveTime has changed, some other user has altered the record since we loaded it.
             if newLastSaveTime != self.lastsavetime:
+                # ... so we need to re-load it!
                 self.db_load_by_num(self.number)
         
         # ... lock the Transcript Record

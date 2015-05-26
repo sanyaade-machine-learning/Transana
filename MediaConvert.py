@@ -1013,7 +1013,62 @@ class MediaConvert(wx.Dialog):
             # We need to build the Extraction command line in stages.  Start with the executable path and name,
             # and add that we are using it embedded and want the first level of feedback (progress information),
             # and specify the Input File name placeholder.
-            FFmpegCommand = '"' + TransanaGlobal.programDir + os.sep + 'ffmpeg_Transana" "-embedded" "1" "-i" "%s"'
+##            FFmpegCommand = '"' + TransanaGlobal.programDir + os.sep + 'ffmpeg_Transana" "-embedded" "1" "-i" "%s"'
+            FFmpegCommand = '"' + TransanaGlobal.programDir + os.sep + 'ffmpeg_Transana" "-embedded" "1"'
+
+            ## THEORY:  Moving -ss parameter before -i parameter will speed up Clip Export and prevent Harrie's "Buffering
+            ##          several frames" problem.  "-async 1" will prevent audio-video synch problems.
+            ##          See http://ffmpeg.org/pipermail/ffmpeg-user/2011-April/000234.html
+            ## Implemented for Transana 2.61.  It appears to work exactly that way.
+
+            # For CLIPS, add "-ss StartTime" and "-t Duration (seconds)"!!
+            if (not self.ext in ['.jpg']) and (self.clipDuration > 0):
+                FFmpegCommand += ' "-ss" "%0.5f" "-t" "%0.5f"' % (float(self.clipStart) / 1000.0, float(self.clipDuration) / 1000.0)
+
+            # If we're producing still images ...
+            if self.ext in ['.jpg']:
+                # Extract the extension of the source file name
+                (srcName, srcExt) = os.path.splitext(self.txtSrcFileName.GetValue())
+                # Some video formats have proven to be less reliable than others.  They seem to
+                # work well enough if we request 4 frames.
+                # Specifically, MPEG formats only seem to work with every third frame.  Weird.
+                # The value 4 was determined through trial-and-error.
+                numFramesForStill = 4
+
+                # AVI and WMV formats appear to have a frame rate of float(-1.#IND00), which also shows up as
+                # string('nan').  To check for this, we have to typecast the Frame Rate as a string.
+                # If the Video Frame Rate is "not a number" ...
+                if str(self.vidFrameRate) == 'nan':
+                    # ... then a frame rate of 30 fps can be used.
+                    tmpVidFrameRate = 30.0
+                # Otherwise ...
+                else:
+                    # ... just use the frame rate extracted from the video
+                    tmpVidFrameRate = self.vidFrameRate
+
+                # If we're doing a video snapshot ...
+                if self.snapshot:
+                    # Set the Clip Duration to the frame rate times the number of frames divided by 1000.
+                    # Hopefully, this will stop the DIVx Snapshot not stopping problem.  (It didn't.)
+                    self.clipDuration = round(tmpVidFrameRate * numFramesForStill) / 1000.0
+                    # ... then a frame rate of whatever the frame rate is and specifying the position of the desired frame is needed.
+                    # We need to adjust the start time one FRAME earlier!  We need to adjust the end time  4 FRAMES later.  Otherwise,
+                    # MPEG-1 video doesn't work every time!  I'm not sure why.  (This was determined experimentally.)
+                    FFmpegCommand += ' "-r" "%0.2f" "-ss" "%0.5f" "-t" "%0.5f"' % (tmpVidFrameRate, (float(self.clipStart) - (1.5 * tmpVidFrameRate))/ 1000.0, self.clipDuration)
+
+                # If we're NOT doing a snapshop, we need to get the proper frame rate to produce the correct pictures.
+                elif self.stillFrameRate.GetStringSelection() == _("20 seconds"):
+                    FFmpegCommand += ' "-r" "0.05"'
+                elif self.stillFrameRate.GetStringSelection() == _("15 seconds"):
+                    FFmpegCommand += ' "-r" "0.0666667"'
+                elif self.stillFrameRate.GetStringSelection() == _("10 seconds"):
+                    FFmpegCommand += ' "-r" "0.1"'
+                elif self.stillFrameRate.GetStringSelection() == _("5 seconds"):
+                    FFmpegCommand += ' "-r" "0.2"'
+                elif self.stillFrameRate.GetStringSelection() == _("1 second"):
+                    FFmpegCommand += ' "-r" "1"'
+
+            FFmpegCommand += ' "-i" "%s"'
 
             # Specify image size.  If we are creating a Video file ...
             if self.vidStream and (self.ext in ['.mpg', '.mp4', '.mov', '.jpg']):
@@ -1124,52 +1179,59 @@ class MediaConvert(wx.Dialog):
             if TransanaConstants.demoVersion and (self.duration > 600):
                 FFmpegCommand += ' "-t" "600"'
 
-            # If we're producing still images ...
-            if self.ext in ['.jpg']:
-                # Extract the extension of the source file name
-                (srcName, srcExt) = os.path.splitext(self.txtSrcFileName.GetValue())
-                # Some video formats have proven to be less reliable than others.  They seem to
-                # work well enough if we request 4 frames.
-                # Specifically, MPEG formats only seem to work with every third frame.  Weird.
-                # The value 4 was determined through trial-and-error.
-                numFramesForStill = 4
+##            # If we're producing still images ...
+##            if self.ext in ['.jpg']:
+##                # Extract the extension of the source file name
+##                (srcName, srcExt) = os.path.splitext(self.txtSrcFileName.GetValue())
+##                # Some video formats have proven to be less reliable than others.  They seem to
+##                # work well enough if we request 4 frames.
+##                # Specifically, MPEG formats only seem to work with every third frame.  Weird.
+##                # The value 4 was determined through trial-and-error.
+##                numFramesForStill = 4
+##
+##                # AVI and WMV formats appear to have a frame rate of float(-1.#IND00), which also shows up as
+##                # string('nan').  To check for this, we have to typecast the Frame Rate as a string.
+##                # If the Video Frame Rate is "not a number" ...
+##                if str(self.vidFrameRate) == 'nan':
+##                    # ... then a frame rate of 30 fps can be used.
+##                    tmpVidFrameRate = 30.0
+##                # Otherwise ...
+##                else:
+##                    # ... just use the frame rate extracted from the video
+##                    tmpVidFrameRate = self.vidFrameRate
+##
+##                # If we're doing a video snapshot ...
+##                if self.snapshot:
+##                    # Set the Clip Duration to the frame rate times the number of frames divided by 1000.
+##                    # Hopefully, this will stop the DIVx Snapshot not stopping problem.  (It didn't.)
+##                    self.clipDuration = round(tmpVidFrameRate * numFramesForStill) / 1000.0
+##                    # ... then a frame rate of whatever the frame rate is and specifying the position of the desired frame is needed.
+##                    # We need to adjust the start time one FRAME earlier!  We need to adjust the end time  4 FRAMES later.  Otherwise,
+##                    # MPEG-1 video doesn't work every time!  I'm not sure why.  (This was determined experimentally.)
+##                    FFmpegCommand += ' "-r" "%0.2f" "-ss" "%0.5f" "-t" "%0.5f"' % (tmpVidFrameRate, (float(self.clipStart) - (1.5 * tmpVidFrameRate))/ 1000.0, self.clipDuration)
+##
+##                # If we're NOT doing a snapshop, we need to get the proper frame rate to produce the correct pictures.
+##                elif self.stillFrameRate.GetStringSelection() == _("20 seconds"):
+##                    FFmpegCommand += ' "-r" "0.05"'
+##                elif self.stillFrameRate.GetStringSelection() == _("15 seconds"):
+##                    FFmpegCommand += ' "-r" "0.0666667"'
+##                elif self.stillFrameRate.GetStringSelection() == _("10 seconds"):
+##                    FFmpegCommand += ' "-r" "0.1"'
+##                elif self.stillFrameRate.GetStringSelection() == _("5 seconds"):
+##                    FFmpegCommand += ' "-r" "0.2"'
+##                elif self.stillFrameRate.GetStringSelection() == _("1 second"):
+##                    FFmpegCommand += ' "-r" "1"'
 
-                # AVI and WMV formats appear to have a frame rate of float(-1.#IND00), which also shows up as
-                # string('nan').  To check for this, we have to typecast the Frame Rate as a string.
-                # If the Video Frame Rate is "not a number" ...
-                if str(self.vidFrameRate) == 'nan':
-                    # ... then a frame rate of 30 fps can be used.
-                    tmpVidFrameRate = 30.0
-                # Otherwise ...
-                else:
-                    # ... just use the frame rate extracted from the video
-                    tmpVidFrameRate = self.vidFrameRate
+## THEORY:  Moving -ss parameter before -i parameter will speed up Clip Export and prevent Harrie's "Buffering
+##          several frames" problem.  "-async 1" will prevent audio-video synch problems.
+##          See http://ffmpeg.org/pipermail/ffmpeg-user/2011-April/000234.html
 
-                # If we're doing a video snapshot ...
-                if self.snapshot:
-                    # Set the Clip Duration to the frame rate times the number of frames divided by 1000.
-                    # Hopefully, this will stop the DIVx Snapshot not stopping problem.  (It didn't.)
-                    self.clipDuration = round(tmpVidFrameRate * numFramesForStill) / 1000.0
-                    # ... then a frame rate of whatever the frame rate is and specifying the position of the desired frame is needed.
-                    # We need to adjust the start time one FRAME earlier!  We need to adjust the end time  4 FRAMES later.  Otherwise,
-                    # MPEG-1 video doesn't work every time!  I'm not sure why.  (This was determined experimentally.)
-                    FFmpegCommand += ' "-r" "%0.2f" "-ss" "%0.5f" "-t" "%0.5f"' % (tmpVidFrameRate, (float(self.clipStart) - (1.5 * tmpVidFrameRate))/ 1000.0, self.clipDuration)
+##            # For CLIPS, add "-ss StartTime" and "-t Duration (seconds)"!!
+##            if (not self.ext in ['.jpg']) and (self.clipDuration > 0):
+##                FFmpegCommand += ' "-ss" "%0.5f" "-t" "%0.5f"' % (float(self.clipStart) / 1000.0, float(self.clipDuration) / 1000.0)
 
-                # If we're NOT doing a snapshop, we need to get the proper frame rate to produce the correct pictures.
-                elif self.stillFrameRate.GetStringSelection() == _("20 seconds"):
-                    FFmpegCommand += ' "-r" "0.05"'
-                elif self.stillFrameRate.GetStringSelection() == _("15 seconds"):
-                    FFmpegCommand += ' "-r" "0.0666667"'
-                elif self.stillFrameRate.GetStringSelection() == _("10 seconds"):
-                    FFmpegCommand += ' "-r" "0.1"'
-                elif self.stillFrameRate.GetStringSelection() == _("5 seconds"):
-                    FFmpegCommand += ' "-r" "0.2"'
-                elif self.stillFrameRate.GetStringSelection() == _("1 second"):
-                    FFmpegCommand += ' "-r" "1"'
-
-            # For CLIPS, add "-ss StartTime" and "-t Duration (seconds)"!!
             if (not self.ext in ['.jpg']) and (self.clipDuration > 0):
-                FFmpegCommand += ' "-ss" "%0.5f" "-t" "%0.5f"' % (float(self.clipStart) / 1000.0, float(self.clipDuration) / 1000.0)
+                FFmpegCommand += ' "-async" "1"'
 
             # Add the "-y" parameter to over-write files, and append the destination file name placeholder
             FFmpegCommand += ' "-y" "%s"'

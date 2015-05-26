@@ -18,12 +18,28 @@
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
+# import Python's sys module
+import sys
+
 # Define Transana's Configuration Constants here.  This file can be easily substituted by an automated build process.
 
 # Define a Boolean to indicate Single- or Multi- user
 # NOTE:  When you change this value, you MUST change the MySQL for Python installation you are using
 #        to match.
 singleUserVersion = False
+# Different Python versions require different database engines!
+if sys.version[:5] == '2.6.6':
+    DBInstalled = 'MySQLdb-server'
+elif sys.version[:5] in ['2.7.7', '2.7.8']:
+#    DBInstalled = 'PyMySQL'
+    DBInstalled = 'MySQLdb-server'
+
+    print "TransanaConfigConstants.py"
+    print "Python", sys.version[:5]
+    print
+    print DBInstalled, "in use.  Need to fix SSL configuration for PyMySQL."
+    print
+
 # Define Std vs. Pro feature set
 proVersion = True
 # Indicate if this is the Lab version

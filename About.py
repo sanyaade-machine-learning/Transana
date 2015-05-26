@@ -138,15 +138,16 @@ class AboutBox(wx.Dialog):
             str = _("Swedish translation provided by\nJohan Gille, Stockholm University, Sweden")
         elif TransanaGlobal.configData.language == 'zh':
             str = _("Chinese translation provided by\nZhong Hongquan, Beijin Poweron Technology Co.Ltd.,\nmaintained by Bei Zhang, University of Wisconsin.")
-        translations = wx.StaticText(self, -1, str, style=wx.ALIGN_CENTRE)
+        self.translations_str = str
+        self.translations = wx.StaticText(self, -1, self.translations_str, style=wx.ALIGN_CENTRE)
         # Add the transcription credit to the main sizer
-        mainSizer.Add(translations, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
+        mainSizer.Add(self.translations, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
 
         # Create a label for the FFmpeg Credits
         self.ffmpeg_str = _("This software uses libraries from the FFmpeg project\nunder the LGPLv2.1 or GNU-GPL.  Transana's copyright\ndoes not extend to the FFmpeg libraries or code.\nPlease see http://www.ffmpeg.com.")
-        ffmpeg = wx.StaticText(self, -1, self.ffmpeg_str, style=wx.ALIGN_CENTRE)
+        self.ffmpeg = wx.StaticText(self, -1, self.ffmpeg_str, style=wx.ALIGN_CENTRE)
         # Add the FFmpeg Credits to the main sizer
-        mainSizer.Add(ffmpeg, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
+        mainSizer.Add(self.ffmpeg, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
 
         # Create an OK button
         btnOK = wx.Button(self, wx.ID_OK, _("OK"))
@@ -185,25 +186,36 @@ class AboutBox(wx.Dialog):
             key = event.GetKeyCode()
             # If F11 is pressed, show COMPONENT VERSION information
             if (key == wx.WXK_F11) or (key in [ord('S'), ord('s')]):
-                # Import Python's ctypes, Transana's DBInterface, MySQLdb, and Python's sys modules
-                import Crypto, ctypes, DBInterface, MySQLdb, paramiko, sys
+                # Import Python's ctypes, Transana's DBInterface, and Python's sys modules
+                import Crypto, ctypes, DBInterface, paramiko, sys
                 # Build a string that contains the version information for crucial programming components
                 str = '\n            Transana %s uses the following tools:\n\n'% (TransanaConstants.versionNumber)
-                str = '%sPython:  %s\n' % (str, sys.version_info)
+                str = '%sPython:  %s\n' % (str, sys.version[:5])
                 if 'unicode' in wx.PlatformInfo:
                     str2 = 'unicode'
                 else:
                     str2 = 'ansi'
                 str = '%swxPython:  %s - %s\n' % (str, wx.VERSION_STRING, str2)
-                str = '%sMySQL for Python:  %s\n' % (str, MySQLdb.__version__)
+                if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server']:
+                    import MySQLdb
+                    str = '%sMySQL for Python:  %s\n' % (str, MySQLdb.__version__)
+                elif TransanaConstants.DBInstalled in ['PyMySQL']:
+                    import pymysql
+                    str = '%sPyMySQL:  %s\n' % (str, pymysql.version_info)
+                elif TransanaConstants.DBInstalled in ['sqlite3']:
+                    import sqlite3
+                    str = '%ssqlite:  %s\n' % (str, sqlite3.version)
+                else:
+                    str = '%sUnknown Database:  Unknown Version\n' % (str, )
                 if DBInterface._dbref != None:
                     # Get a Database Cursor
                     dbCursor = DBInterface._dbref.cursor()
-                    # Query the Database about what Database Names have been defined
-                    dbCursor.execute('SELECT VERSION()')
-                    vs = dbCursor.fetchall()
-                    for v in vs:
-                        str = "%sMySQL:  %s\n" % (str, v[0])
+                    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+                        # Query the Database about what Database Names have been defined
+                        dbCursor.execute('SELECT VERSION()')
+                        vs = dbCursor.fetchall()
+                        for v in vs:
+                            str = "%sMySQL:  %s\n" % (str, v[0])
                 str = "%sctypes:  %s\n" % (str, ctypes.__version__)
                 str = "%sCrypto:  %s\n" % (str, Crypto.__version__)
                 str = "%sparamiko:  %s\n" % (str, paramiko.__version__)
@@ -211,14 +223,99 @@ class AboutBox(wx.Dialog):
                 str = "%sLanguage:  %s\n" % (str, TransanaGlobal.configData.language)
                 # Replace the Description text with the version information text
                 self.description.SetLabel(str)
+
+                query = "SELECT COUNT(SeriesNum) FROM Series2"
+                dbCursor.execute(query)
+                seriesCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(EpisodeNum) FROM Episodes2"
+                dbCursor.execute(query)
+                episodeCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(CoreDataNum) FROM CoreData2"
+                dbCursor.execute(query)
+                coreDataCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(TranscriptNum) FROM Transcripts2 WHERE ClipNum = 0"
+                dbCursor.execute(query)
+                transcriptCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(CollectNum) FROM Collections2"
+                dbCursor.execute(query)
+                collectionCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(clipNum) FROM Clips2"
+                dbCursor.execute(query)
+                clipCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(TranscriptNum) FROM Transcripts2 WHERE ClipNum <> 0"
+                dbCursor.execute(query)
+                clipTranscriptCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(SnapshotNum) FROM Snapshots2"
+                dbCursor.execute(query)
+                snapshotCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(NoteNum) FROM Notes2"
+                dbCursor.execute(query)
+                noteCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(Keyword) FROM Keywords2"
+                dbCursor.execute(query)
+                keywordCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(Keyword) FROM ClipKeywords2"
+                dbCursor.execute(query)
+                clipKeywordCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(Keyword) FROM SnapshotKeywords2"
+                dbCursor.execute(query)
+                snapshotKeywordCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(Keyword) FROM SnapshotKeywordStyles2"
+                dbCursor.execute(query)
+                snapshotKeywordStylesCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(AddVidNum) FROM AdditionalVids2"
+                dbCursor.execute(query)
+                addVidCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(ConfigName) FROM Filters2"
+                dbCursor.execute(query)
+                filterCount = dbCursor.fetchall()[0][0]
+
+                tmpStr = """Data Records:
+  Series: %s
+  Episodes: %s
+  Episode Transcripts: %s
+  Collections: %s
+  Clips: %s
+  Clip Transcripts: %s
+  Snapshots: %s
+  Notes:  %s
+  Keywords: %s
+  Clip Keywords: %s
+  Snapshot Keywords: %s
+  Snapshot Keyword Styles: %s
+  Additional Videos:  %s
+  Filters:  %s
+  Core Data: %s\n  """
+                data = (seriesCount, episodeCount, transcriptCount, collectionCount, clipCount, clipTranscriptCount,
+                        snapshotCount, noteCount, keywordCount, clipKeywordCount, snapshotKeywordCount,
+                        snapshotKeywordStylesCount, addVidCount, filterCount, coreDataCount)
+                
                 # Eliminate the Credits text
-                self.credits.SetLabel('')
+                self.credits.SetLabel(tmpStr % data)
+                self.translations.SetLabel('')
+                self.ffmpeg.SetLabel('')
             # If F12 is pressed ...
             elif (key == wx.WXK_F12) or (key in [ord('H'), ord('h')]):
                 # Replace the Version information text with the original description text
                 self.description.SetLabel(self.description_str)
                 # Replace the blank credits text with the original credits text
                 self.credits.SetLabel(self.credits_str)
+                self.translations.SetLabel(self.translations_str)
+                self.ffmpeg.SetLabel(self.ffmpeg_str)
             # Fit the window to the altered controls
             self.Fit()
         # If ALT and SHIFT aren't both pressed ...

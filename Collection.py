@@ -36,6 +36,8 @@ import DBInterface
 import Note
 # import Transana's Snapshot object
 import Snapshot
+# import Transana's Constants
+import TransanaConstants
 # import Transana's Exceptions
 from TransanaExceptions import *
 # import Transana's Globals
@@ -56,8 +58,6 @@ class Collection(DataObject.DataObject):
              
         self._parentName = ""  # This property is looked up and loaded when requested.  It needs to be initialized, however, to a blank string.
         
-
-# Public methods
     def __repr__(self):
         str = 'Collection Object:\n'
         str = str + "Number = %s\n" % self.number
@@ -69,68 +69,130 @@ class Collection(DataObject.DataObject):
         str += "GetNodeData(): %s\n\n" % (self.GetNodeData(), )
         return str
 
+    def __eq__(self, other):
+        """ Determine object equality """
+        if other == None:
+            return False
+        else:
+            return self.__dict__ == other.__dict__
+
+# Public methods
     def db_load_by_name(self, name, parent_num=0):
         """Load a record by ID / Name.  Raise a RecordNotFound exception
         if record is not found in database."""
         # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
         if 'unicode' in wx.PlatformInfo:
             name = name.encode(TransanaGlobal.encoding)
+        # Get a reference to the database
         db = DBInterface.get_db()
-
+        # Get a database cursor
         c = db.cursor()
-        
+        # If we have a nested Collection ...
         if parent_num:
+            # ... define the "Load" query
             query = """
             SELECT * FROM Collections2
                 WHERE   CollectID = %s AND
                         ParentCollectNum = %s
             """
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Execute the query
             c.execute(query, (name, parent_num))
+        # If we have a root-level Collection ...
         else:
+            # ... define the "Load" query
             query = """
             SELECT * FROM Collections2
                 WHERE   CollectID = %s AND
-                        (ParentCollectNum = %s OR ParentCollectNum = %s)
+                        (ParentCollectNum = %s OR ParentCollectNum IS NULL)
             """
-            c.execute(query, (name, 0, None))
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Execute the query
+            c.execute(query, (name, 0))
 
-        n = c.rowcount
-        if (n != 1):
-            c.close()
-            self.clear()
-            raise RecordNotFoundError, (name, n)
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            # ... so assume one row returned
+            n = 1
+        # For MySQL, just use rowcount
         else:
+            n = c.rowcount
+        # If we have other than one row returned ...
+        if (n != 1):
+            # ... close the cursor ...
+            c.close()
+            # ... clear the Collection object ...
+            self.clear()
+            # ... and raise an exception
+            raise RecordNotFoundError, (name, n)
+        # If we have exactly one record returned ...
+        else:
+            # ... get the data categories from the cursor ...
             r = DBInterface.fetch_named(c)
+            # If sqlite and no data returned ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the cursor ...
+                c.close()
+                # ... clear the current Collection object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (name, 0)
+            # Load the data into the Collection object
             self._load_row(r)
-
+        # Close the database cursor
         c.close()
 
-
-        
     def db_load_by_num(self, num):
         """Load a record by record number. Raise a RecordNotFound exception
         if record is not found in database."""
+        # Get a reference to the database
         db = DBInterface.get_db()
+        # Define the "Load" query
         query = """
         SELECT * FROM Collections2
             WHERE CollectNum = %s
         """
+        # Adjust query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Get a database cursor
         c = db.cursor()
-        c.execute(query, num)
-        n = c.rowcount
-        if (n != 1):
-            c.close()
-            self.clear()
-            raise RecordNotFoundError, (num, n)
+        # Execute the query
+        c.execute(query, (num, ))
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            n = 1
         else:
+            n = c.rowcount
+        # if we don't get exactly one result ...
+        if (n != 1):
+            # close the cursor
+            c.close()
+            # clear the current Collection
+            self.clear()
+            # Raise an exception saying the record is not found
+            raise RecordNotFoundError, (num, n)
+        # If we get exactly one result ...
+        else:
+            # get the data from the cursor
             r = DBInterface.fetch_named(c)
+            # if sqlite and no results ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current object ...
+                self.clear()
+                # Raise an exception saying the record is not found
+                raise RecordNotFoundError, (num, 0)
+            # Load the data into the Collection object
             self._load_row(r)
+        # Close the Database Cursor
         c.close()
-
         
-    def db_save(self):
+    def db_save(self, use_transactions=True):
         """Save the record to the database using Insert or Update as
-        appropriate."""
+        appropriate.  """
         # Sanity checks
         if self.id == "":
             raise SaveError, _("Collection ID is required.")
@@ -169,9 +231,9 @@ class Collection(DataObject.DataObject):
             # insert the new collection
             query = """
             INSERT INTO Collections2
-                (%s,%s,%s,%s,%s)
+                (%s, %s, %s, %s, %s)
                 VALUES
-                (%%s,%%s,%%s,%%s,%%s)
+                (%%s, %%s, %%s, %%s, %%s)
             """ % fields
         else:               # Update existing collection
             
@@ -194,7 +256,8 @@ class Collection(DataObject.DataObject):
             query = query[:-3] + "\n"
             query = query + "    WHERE CollectNum = %s"
             values = values + (self.number,)
-
+        # Adjust query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         c = DBInterface.get_db().cursor()
         c.execute(query, values)
         c.close()

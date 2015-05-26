@@ -135,27 +135,37 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         bmp = wx.ArtProvider_GetBitmap(wx.ART_LIST_VIEW, wx.ART_TOOLBAR, (16,16))
         # Add Filter Button
         self.filter = wx.BitmapButton(self.toolbar, -1, bmp)
+        self.filter.SetToolTipString(_("Filter"))
         toolbarSizer.Add(self.filter, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
         self.filter.Enable(False)
         wx.EVT_BUTTON(self, self.filter.GetId(), self.OnFilter)
 
         # Add Zoom In Button
         self.zoomIn = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOMIN, TransanaGlobal.GetImage(TransanaImages.ZoomIn))
+        self.zoomIn.SetToolTipString(_("Zoom In"))
         toolbarSizer.Add(self.zoomIn, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_ZOOMIN, self.OnZoomIn)
 
         # Add Zoom Out Button
         self.zoomOut = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOMOUT, TransanaGlobal.GetImage(TransanaImages.ZoomOut))
+        self.zoomOut.SetToolTipString(_("Zoom Out"))
         toolbarSizer.Add(self.zoomOut, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_ZOOMOUT, self.OnZoomOut)
 
         # Add Zoom to 100% Button
         self.zoom100 = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_ZOOM100, TransanaGlobal.GetImage(TransanaImages.Zoom100))
+        self.zoom100.SetToolTipString(_("Zoom to 100%"))
         toolbarSizer.Add(self.zoom100, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_ZOOM100, self.OnZoom100)
 
         # Put in a tiny horizontal spacer
         toolbarSizer.Add((4, 0))
+
+        # Add Create Clip Button
+        self.createClip = wx.BitmapButton(self.toolbar, TransanaConstants.VISUAL_BUTTON_CREATECLIP, TransanaGlobal.GetImage(TransanaImages.Clip16))
+        self.createClip.SetToolTipString(_("Create Transcript-less Clip"))
+        toolbarSizer.Add(self.createClip, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
+        wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_CREATECLIP, self.OnCreateClip)
 
         # There is a problem with the lib.buttons.GenBitmapToggleButton in Arabic.  I don't know if it's limited to Arabic,
         # or if other right-to-left languages are also affected because of image reversal.  For the moment, we'll use
@@ -170,6 +180,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             self.loop.SetBitmapLabel(TransanaGlobal.GetImage(TransanaImages.loop_up))
             # Define the image for the "pressed" state
             self.loop.SetBitmapSelected(TransanaGlobal.GetImage(TransanaImages.loop_down))
+            self.loop.SetToolTipString(_("Loop Playback"))
             # Set the button to "un-pressed"
             self.loop.SetToggle(False)
         # If we have a right-to-left language, use a standard BitmapButton
@@ -177,6 +188,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             # Add a button for looping playback
             # We need to use the regular Bitmap Button!
             self.loop = wx.BitmapButton(self.toolbar, -1, TransanaGlobal.GetImage(TransanaImages.loop_up))
+            self.loop.SetToolTipString(_("Loop Playback"))
             # Since we don't have the GetValue function, let's create a variable called Looping to tell us if we're
             # looping or not.  Initialize to False.
             self.looping = False
@@ -206,6 +218,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
 
         # Add "Current" label
         self.btn_Current = wx.Button(self.toolbar, TransanaConstants.VISUAL_BUTTON_CURRENT, _("Current:"))
+        self.btn_Current.SetToolTipString(_("Insert Time Code"))
         toolbarSizer.Add(self.btn_Current, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_CURRENT, self.OnCurrent)
 
@@ -219,6 +232,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
 
         # Add "Selected" label
         self.btn_Selected = wx.Button(self.toolbar, TransanaConstants.VISUAL_BUTTON_SELECTED, _("Selected:"))
+        self.btn_Selected.SetToolTipString(_("Insert Time Span"))
         toolbarSizer.Add(self.btn_Selected, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 2)
         wx.EVT_BUTTON(self, TransanaConstants.VISUAL_BUTTON_SELECTED, self.OnSelected)
 
@@ -811,6 +825,17 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
             # Redraw the waveform
             self.redrawWhenIdle = True
+
+    def OnCreateClip(self, event):
+        """ Create a Transcript-less Clip """
+        # If there's no selection (endPoint could be 0 or -1!) ...
+        if self.endPoint <= 0:
+            # then we can't make a clip
+            return
+
+        # Create a Transcript-less Clip.  (This routine can handle both Standard and Quick Clips, depending on
+        # what is selected in the Database Tree.)
+        self.ControlObject.CreateTranscriptlessClip()
 
     def OnScroll(self, direction):
         """ Scroll the visualization in the direction specified """
@@ -1414,6 +1439,9 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             self.ControlObject.PlayPause()
 
     def OnMouseOver(self, x, y, xpct, ypct):
+
+#        print "VisualizationWindow.OnMouseOver():", x, xpct
+        
         self.lbl_Time_Time.SetLabel(Misc.time_in_ms_to_str(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit))
 
     def GetDimensions(self):
@@ -1436,6 +1464,14 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
 
     def ChangeLanguages(self):
         self.SetTitle(_('Visualization'))
+        self.filter.SetToolTipString(_("Filter"))
+        self.zoomIn.SetToolTipString(_("Zoom In"))
+        self.zoomOut.SetToolTipString(_("Zoom Out"))
+        self.zoom100.SetToolTipString(_("Zoom to 100%"))
+        self.createClip.SetToolTipString(_("Create Transcript-less Clip"))
+        self.loop.SetToolTipString(_("Loop Playback"))
+        self.btn_Current.SetToolTipString(_("Insert Time Code"))
+        self.btn_Selected.SetToolTipString(_("Insert Time Span"))
         self.lbl_Time.SetLabel(_("Time:"))
         self.btn_Current.SetLabel(_("Current:"))
         self.btn_Selected.SetLabel(_("Selected:"))

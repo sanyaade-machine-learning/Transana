@@ -111,6 +111,7 @@ if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
 MENU_OPTIONS_QUICKCLIPWARNING   =  wx.NewId()
 MENU_OPTIONS_WORDTRACK          =  wx.NewId()
 MENU_OPTIONS_AUTOARRANGE        =  wx.NewId()
+MENU_OPTIONS_LONGTRANSCRIPTEDIT =  wx.NewId()
 # Options Visualization Style menu
 MENU_OPTIONS_VISUALIZATION          =  wx.NewId()
 MENU_OPTIONS_VISUALIZATION_WAVEFORM =  wx.NewId()
@@ -298,6 +299,7 @@ class MenuSetup(wx.MenuBar):
         self.optionsmenu.Append(MENU_OPTIONS_QUICKCLIPWARNING, _("Show Quick Clip Warning"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_WORDTRACK, _("Auto Word-&tracking"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"), kind=wx.ITEM_CHECK)
+        self.optionsmenu.Append(MENU_OPTIONS_LONGTRANSCRIPTEDIT, _("Long Transcript Editing"), kind=wx.ITEM_CHECK)
         
         self.optionsmenu.AppendSeparator()
         

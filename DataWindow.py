@@ -26,6 +26,7 @@ import wx
 from DatabaseTreeTab import *
 from EpisodeClipsTab import *
 from KeywordsTab import *
+import TransanaConstants
 import TransanaGlobal
 
 class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
@@ -79,10 +80,37 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
         self.SetAutoLayout(True)
         self.Layout()
 
+        # If we are using the Multi-User Version ...
+        if not TransanaConstants.singleUserVersion:
+            # ... check to see if the Database is using SSL
+            #     and select the appropriate graphic file ...
+            if TransanaGlobal.configData.ssl:
+                bitmap = TransanaImages.locked.GetBitmap()
+            else:
+                bitmap = TransanaImages.unlocked.GetBitmap()
+            # Place a graphic on the screen.  This is NOT placed in the Sizer, but is placed on top of the notebook tabs.
+            self.sslDBImage = wx.StaticBitmap(self, -1, bitmap, pos=(self.nb.GetSizeTuple()[0] - 32, 0), size=(16, 16))
+            # Make the SSL Indicator clickable
+            self.sslDBImage.Bind(wx.EVT_LEFT_DOWN, self.OnSSLClick)
+
+            # ... check to see if both the Database and the Message Server are using SSL
+            #     and select the appropriate graphic file ...
+            if TransanaGlobal.configData.ssl and TransanaGlobal.chatIsSSL:
+                bitmap = TransanaImages.locked.GetBitmap()
+            else:
+                bitmap = TransanaImages.unlocked.GetBitmap()
+            # Place a graphic on the screen.  This is NOT placed in the Sizer, but is placed on top of the notebook tabs.
+            self.sslImage = wx.StaticBitmap(self, -1, bitmap, pos=(self.nb.GetSizeTuple()[0] - 16, 0), size=(16, 16))
+            # Make the SSL Indicator clickable
+            self.sslImage.Bind(wx.EVT_LEFT_DOWN, self.OnSSLClick)
+            # Remember the current SSL Status of the Message Server
+            self.sslStatus = TransanaGlobal.configData.ssl and TransanaGlobal.chatIsSSL
+
         self.ControlObject = None            # The ControlObject handles all inter-object communication, initialized to None
 
         # Capture Size Changes
         wx.EVT_SIZE(self, self.OnSize)
+        wx.EVT_PAINT(self, self.OnPaint)
 
         if DEBUG:
             print "DataWindow.__init__():  Initial size:", self.GetSize()
@@ -184,6 +212,20 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
             self.ControlObject.UpdateWindowPositions('Data', left - 1, YLower = top)
         # Call to Layout() is required so that the Notebook Control resizes properly
         self.Layout()
+        if not TransanaConstants.singleUserVersion:
+            # Keep the SSL Image in the upper right corner
+            self.sslDBImage.SetPosition((self.nb.GetSizeTuple()[0] - 32, 0))
+            self.sslImage.SetPosition((self.nb.GetSizeTuple()[0] - 16, 0))
+
+    def OnPaint(self, event):
+        """ Local Paint Event to keep the SSL Image on top """
+        # Call the normal Paint Event
+        event.Skip()
+        # If we're in the Multi-user version ...
+        if not TransanaConstants.singleUserVersion:
+            # ... bring the SSL Image to the top
+            self.sslDBImage.Raise()
+            self.sslImage.Raise()
 
     def OnNotebookPageSelect(self, event):
         """ Detect which tab in the Notebook is selected and prepare that tab for display. """
@@ -224,6 +266,62 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # Remove any extra tabs that are displayed
         self.DeleteTabs()
 
+    def UpdateSSLStatus(self, sslValue):
+        """ Update the SSL Status Indicator """
+
+        # If we are using the Multi-User Version ...
+        if not TransanaConstants.singleUserVersion:
+            # ... check to see if both the Database and the Message Server are using SSL
+            #     and select the appropriate graphic file ...
+            if TransanaGlobal.configData.ssl:
+                bitmap = TransanaImages.locked.GetBitmap()
+            else:
+                bitmap = TransanaImages.unlocked.GetBitmap()
+            # Place a graphic on the screen.  This is NOT placed in the Sizer, but is placed on top of the notebook tabs.
+            self.sslDBImage.SetBitmap(bitmap)
+
+            # ... check to see if both the Database and the Message Server are using SSL
+            #     and select the appropriate graphic file ...
+            if sslValue:
+                bitmap = TransanaImages.locked.GetBitmap()
+            else:
+                bitmap = TransanaImages.unlocked.GetBitmap()
+            # Place a graphic on the screen.  This is NOT placed in the Sizer, but is placed on top of the notebook tabs.
+            self.sslImage.SetBitmap(bitmap)
+            # Remember the current SSL status of the Message Server
+            self.sslStatus = sslValue
+
+    def OnSSLClick(self, event):
+        """ Handle click on the SSL indicator image """
+        # Determine whether SSL is in use with the Database connection
+        dbIsSSL = TransanaGlobal.configData.ssl
+        # Determine whether SSL is FULLY in use with the Message Server connection
+        chatIsSSL = self.sslStatus
+            
+        # Start building user feedback based on SSL usage
+        if dbIsSSL:
+            prompt = _("You have a secure connection to the Database.  ")
+        else:
+            prompt = _("You do not have a secure connection to the Database.  ")
+        if chatIsSSL:
+            prompt += '\n' + _("You have a secure connection to the Message Server.  ")
+        else:
+            prompt += '\n' + _("You do not have a secure connection to the Message Server.  ")
+        prompt += "\n\n"
+        # Complete user feedback with a summary based on SSL usage
+        if dbIsSSL:
+            if chatIsSSL:
+                prompt += _("Therefore, your Transana connection is as secure as we can make it.")
+            else:
+                prompt += _('To maintain data security, you should avoid using identifying\ninformation in object names, keywords, and chat messages.')
+        else:
+            prompt += _("Therefore, your data could be observed during transmission.\nYou may want to look into making your Transana connections more secure.")
+
+        # Create and display a dialog to provide the user security feedback.
+        tmpDlg = Dialogs.InfoDialog(self, prompt)
+        tmpDlg.ShowModal()
+        tmpDlg.Destroy()
+        
     def OnKeyDown(self, event):
         """ Handle Key Press events """
         # See if the ControlObject wants to handle the key that was pressed.

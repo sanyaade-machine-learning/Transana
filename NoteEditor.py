@@ -124,15 +124,22 @@ class _NotePanel(wx.Panel):
         self.toolbar.AddTool(T_SAVEAS, TransanaImages.SaveTXT16.GetBitmap(), shortHelpString=_('Save As'))
         # Add a Page Setup button to the toolbar
         self.toolbar.AddTool(T_PAGESETUP, TransanaImages.PrintSetup.GetBitmap(), shortHelpString=_('Page Setup'))
+        # Disable Print Setup for Right-To-Left languages
+        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+            self.toolbar.EnableTool(T_PAGESETUP, False)
+            
         # Add a Print Preview button to the Toolbar
         self.toolbar.AddTool(T_PRINTPREVIEW, TransanaImages.PrintPreview.GetBitmap(), shortHelpString=_('Print Preview'))
-
         # Disable Print Preview on the PPC Mac and for Right-To-Left languages
         if (platform.processor() == 'powerpc') or (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
             self.toolbar.EnableTool(T_PRINTPREVIEW, False)
             
         # Add a Print button to the Toolbar
         self.toolbar.AddTool(T_PRINT, TransanaImages.Print.GetBitmap(), shortHelpString=_('Print'))
+        # Disable Print for Right-To-Left languages
+        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+            self.toolbar.EnableTool(T_PRINT, False)
+            
         # Get the graphic for Help ...
         bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
         # ... and create a bitmap button for the Help button
@@ -267,13 +274,18 @@ class _NotePanel(wx.Panel):
         # Change the status of the Toolbar Buttons
         self.toolbar.EnableTool(T_DATETIME, enable)
         self.toolbar.EnableTool(T_SAVEAS, enable)
-        self.toolbar.EnableTool(T_PAGESETUP, enable)
+        # Disable Print Setup for Right-To-Left languages
+        if (TransanaGlobal.configData.LayoutDirection != wx.Layout_RightToLeft):
+            self.toolbar.EnableTool(T_PAGESETUP, enable)
 
         # Disable Print Preview on the PPC Mac and for Right-To-Left languages
         if (platform.processor() != 'powerpc') and (TransanaGlobal.configData.LayoutDirection != wx.Layout_RightToLeft):
             self.toolbar.EnableTool(T_PRINTPREVIEW, enable)
             
-        self.toolbar.EnableTool(T_PRINT, enable)
+        # Disable Print for Right-To-Left languages
+        if (TransanaGlobal.configData.LayoutDirection != wx.Layout_RightToLeft):
+            self.toolbar.EnableTool(T_PRINT, enable)
+
         # Change the status of the Search tool elements
         self.searchBack.Enable(enable)
         self.searchText.Enable(enable)

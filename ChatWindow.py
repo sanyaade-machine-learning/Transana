@@ -23,9 +23,12 @@ DEBUG = False
 if DEBUG:
     print "ChatWindow DEBUG is ON!"
 
+VERSION = 261
 
 # import wxPython
 import wx
+# import Python ssl module
+import ssl
 # import Python socket module
 import socket
 # import Python os module
@@ -40,6 +43,8 @@ import threading
 import TransanaGlobal
 # import Transana Exceptions
 import TransanaExceptions
+# import Transana's Images
+import TransanaImages
 # import Transana's Database Interface
 import DBInterface
 # import Transana Dialogs
@@ -288,13 +293,36 @@ class ChatWindow(wx.Frame):
         # Add a ListBox to hold the names of active users.  Allow multiple selection for Private Chat specification.
         self.userList = wx.ListBox(self, -1, choices=[self.userName], style=wx.LB_MULTIPLE)
         boxUser.Add(self.userList, 1, wx.BOTTOM | wx.EXPAND, 3)
+        # Create a dictionary that knows the SSL status of each connected user
+        self.sslStatus = {}        
+
+        # Add the SSL image
+        # Create a Row Sizer
+        infoSizer = wx.BoxSizer(wx.HORIZONTAL)
+        # If Chat has an SSL connection ...
+        if TransanaGlobal.chatIsSSL:
+            # ... load the "locked" image
+            image = TransanaImages.locked.GetBitmap()
+        # If Chat has an un-encrypted connection ...
+        else:
+            # ... load the "unlocked" image
+            image = TransanaImages.unlocked.GetBitmap()
+
+        # Create a BitMap to display on screen
+        self.sslImage = wx.StaticBitmap(self, -1, image, (16, 16))
+        # Add the image to the Row sizer
+        infoSizer.Add(self.sslImage, 0, wx.RIGHT, 4)
+        # Make the image clickable
+        self.sslImage.Bind(wx.EVT_LEFT_DOWN, self.OnSSLClick)
 
         # Add a checkbox to enable/disable audio feedback
         self.useSound = wx.CheckBox(self, -1, _("Sound Enabled"))
         # Check the box to start
         self.useSound.SetValue(True)
-        # Add the checkbox to the sizer
-        boxUser.Add(self.useSound, 0)
+        # Add the checkbox to the Row sizer
+        infoSizer.Add(self.useSound, 0)
+        # Add the Row Sizer to the User column Sizer
+        boxUser.Add(infoSizer, 0)
         
         # Add the User List display to the Receiver Sizer
         boxRecv.Add(boxUser, 2, wx.EXPAND | wx.LEFT, 6)
@@ -389,9 +417,10 @@ class ChatWindow(wx.Frame):
             userName = self.userName.encode('utf8')
             host = TransanaGlobal.configData.host.encode('utf8')
             db = TransanaGlobal.configData.database.encode('utf8')
+            ssl = TransanaGlobal.chatIsSSL
             
             if DEBUG:
-                print 'C %s %s %s 250 ||| ' % (userName, host, db)
+                print 'C %s %s %s %s %s ||| ' % (userName, host, db, ssl, VERSION)
 
 
             if ('wxGTK' in wx.PlatformInfo) and (host.lower() == 'localhost'):
@@ -419,9 +448,21 @@ class ChatWindow(wx.Frame):
                 # Destroy the Text Entry Dialog.
                 dlg.Destroy()
 
-            self.socketObj.send('C %s %s %s 260 ||| ' % (userName, host, db))
+            self.socketObj.send('C %s %s %s %s %s ||| ' % (userName, host, db, ssl, VERSION))
+
+            # Add this user to the SSL Status Dictionary
+            if ssl:
+                self.sslStatus[userName] = 'TRUE'
+            else:
+                self.sslStatus[userName] = 'FALSE'
         else:
-            self.socketObj.send('C %s %s %s 260 ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
+            self.socketObj.send('C %s %s %s %s %s ||| ' % (self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database, TransanaGlobal.chatIsSSL, VERSION))
+
+            # Add this user to the SSL Status Dictionary
+            if TransanaGlobal.chatIsSSL:
+                self.sslStatus[self.userName] = 'TRUE'
+            else:
+                self.sslStatus[self.userName] = 'FALSE'
 
         # Create a Timer to check for Message Server validation.
         # Initialize to unvalidated state
@@ -460,8 +501,26 @@ class ChatWindow(wx.Frame):
         """ Send Message handler """
         # Get the message from the text entry box
         message = self.txtEntry.GetValue()
+        # if a User Report is requested ...
+        if message.upper() == _('REPORT'):
+            # ... get the user list
+            userList = self.userList.GetItems()
+            # Print the Report Header
+            self.memo.AppendText(_('User Report:') + u'\n')
+            # For each user ...
+            for x in userList:
+                # ... determine the user's SSL Status
+                if self.sslStatus[x] == 'TRUE':
+                    status = _('Secure')
+                else:
+                    status = _('NOT secure')
+                # Add a line to the Report indicating the user name and SSL status
+                self.memo.AppendText(unicode('%s\t\t%s\n', 'utf8') % (x, status))
+            # Add a blank line to the Report
+            self.memo.AppendText('\n')
+
         # Make sure there IS a message!
-        if message.strip() != "":
+        elif message.strip() != "":
             # If there are user selections, we want PRIVATE MESSAGING.  If all or none are selected,
             # everyone gets to see the message.  If only the current user is selected, there are NO
             # RECIPIENTS, so don't sent the message!
@@ -500,6 +559,53 @@ class ChatWindow(wx.Frame):
         self.memo.Clear()
         # Set the focus to the Text Entry control
         self.txtEntry.SetFocus()
+
+    def UpdateSSLStatus(self):
+        """ Check and Update the SSL Connection Status of the Chat Window """
+        # See if there are unsecured connections ...
+        if "FALSE" in self.sslStatus.values():
+            # ... load the "unlocked" image
+            image = TransanaImages.unlocked.GetBitmap()
+        # If Chat has only encrypted connections ...
+        else:
+            # ... load the "locked" image
+            image = TransanaImages.locked.GetBitmap()
+
+        # Update the BitMap on screen
+        self.sslImage.SetBitmap(image)
+
+        # Notify the Control Object to update other SSL indicator(s)
+        self.ControlObject.UpdateSSLStatus(not ("FALSE" in self.sslStatus.values()))
+
+    def OnSSLClick(self, event):
+        """ Handle click on the SSL indicator image """
+        # Determine whether SSL is in use with the Database connection
+        dbIsSSL = TransanaGlobal.configData.ssl
+        # Determine whether SSL is FULLY in use with the Message Server connection
+        chatIsSSL = not ("FALSE" in self.sslStatus.values())
+        # Start building user feedback based on SSL usage
+        if dbIsSSL:
+            prompt = _("You have a secure connection to the Database.  ")
+        else:
+            prompt = _("You do not have a secure connection to the Database.  ")
+        if chatIsSSL:
+            prompt += '\n' + _("You have a secure connection to the Message Server.  ")
+        else:
+            prompt += '\n' + _("You do not have a secure connection to the Message Server.  ")
+        prompt += "\n\n"
+        # Complete user feedback with a summary based on SSL usage
+        if dbIsSSL:
+            if chatIsSSL:
+                prompt += _("Therefore, your Transana connection is as secure as we can make it.")
+            else:
+                prompt += _('To maintain data security, you should avoid using identifying\ninformation in object names, keywords, and chat messages.')
+        else:
+            prompt += _("Therefore, your data could be observed during transmission.\nYou may want to look into making your Transana connections more secure.")
+
+        # Create and display a dialog to provide the user security feedback.
+        tmpDlg = Dialogs.InfoDialog(self, prompt)
+        tmpDlg.ShowModal()
+        tmpDlg.Destroy()
         
     def OnPostMessage(self, event):
         """ Post Message handler """
@@ -544,18 +650,34 @@ class ChatWindow(wx.Frame):
                     # ... play the message sound.
                     self.soundplayer.Play()
                 
-            # Connection Message ?
+            # Connection Message
             elif messageHeader == 'C':
                 # This signals that a UserName should be added to the list of current users.
                 # Drop the Message Prefix.
                 st = event.data[2:]
-                # The first "word" is the username.  Text after the first space should be dropped.
-                if st.find(' ') > -1:
-                    st = st[:st.find(' ')]
+                # Break the message into its components
+                tmpData = st.split(' ')
+                # See how many components were included.  If five (when OTHER users connect using 2.61 or later) ...
+                if len(tmpData) == 5:
+                    # ... then SSL is the 4th (index 3) of them.
+                    tmpSSL = tmpData[3].upper()
+                # If there are only 2 elements (OTHER users when WE first connect)
+                elif len(tmpData) == 2:
+                    tmpSSL = tmpData[1].upper()
+                # If not five or 2 (OTHER users using 2.60 or earlier have 4, for example) ...
+                else:
+                    # ... then SSL is missing, so is FALSE!!
+                    tmpSSL = 'FALSE'
+                
                 # Only add a user name if it's not redundant.  (The message server should prevent this
                 # from occurring.)
-                if (st != self.userName) and not (st in self.userList.GetItems()):
-                    self.userList.Append(st)
+                if (tmpData[0] != self.userName) and not (tmpData[0] in self.userList.GetItems()):
+                    # Add the user to the User List
+                    self.userList.Append(tmpData[0])
+                    # Add the user's SSL Status to the dictionary
+                    self.sslStatus[tmpData[0]] = tmpSSL
+                    # Update the SSL indicators
+                    self.UpdateSSLStatus()
                     
             # Rename Message ?
             elif messageHeader == 'R':
@@ -563,15 +685,28 @@ class ChatWindow(wx.Frame):
                 # This code indicates that THIS USER's account has been renamed by the Message Server.
                 # Remove the "old" user name
                 self.userList.Delete(0)
+                # Start Exception Handling
+                try:
+                    # Try to remove the user from the SSL Status dictionary
+                    del(self.sslStatus[self.userName])
+                # If a KeyError is generated ...
+                except KeyError:
+                    # ... we can ignore it.
+                    pass
                 # Drop the Message Prefix
                 st = event.data[2:]
-                # The first "word" is the username.  Text after the first space should be dropped.
-                if st.find(' ') > -1:
-                    self.userName = st[:st.find(' ')]
-                else:
-                    self.userName = st
-                # self.SetStatusText(_('Transana Message Server "%s" on port %d.  User "%s" on Database Server "%s", Database "%s".') % (SERVERHOST, SERVERPORT, self.userName, TransanaGlobal.configData.host, TransanaGlobal.configData.database))
-                self.userList.Append(st)
+                # Break the message into its parts
+                tmpData = st.split(' ')
+                # The first part will be the user name
+                self.userName = tmpData[0]
+                # The second part will be the user's SSL status
+                SSL = tmpData[1]
+                # Add the user to the User List
+                self.userList.Append(self.userName)
+                # Add this user's SSL Status to the dictionary
+                self.sslStatus[tmpData[0]] = tmpData[1]
+                # Update SSL Status indicators
+                self.UpdateSSLStatus()
                 
             # Import Message
             elif messageHeader == 'I':
@@ -597,6 +732,10 @@ class ChatWindow(wx.Frame):
                 try:
                     # The remainder of the message is the username to be removed.  Delete it from the User List.
                     self.userList.Delete(self.userList.FindString(st))
+                    # Remove the user from the SSL Status dictionary
+                    del(self.sslStatus[st])
+                    # Update the SSL Status indicators
+                    self.UpdateSSLStatus()
                 except:
                     pass
                 
@@ -1346,16 +1485,109 @@ def ConnectToMessageServer():
             # raise a socket error now.
             if TransanaGlobal.configData.messageServer == '':
                 raise socket.error
-            # Define the Socket connection
-            socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            # Connect to the socket.  Server and Port are pulled from the Transana Configuration File
-            socketObj.connect((TransanaGlobal.configData.messageServer, TransanaGlobal.configData.messageServerPort))
+
+            # If an SSL Certificate File has been defined ...
+            if TransanaGlobal.configData.ssl and (TransanaGlobal.configData.sslMsgSrvCert != ''):
+
+                if DEBUG:
+                    print TransanaGlobal.configData.sslMsgSrvCert, os.path.exists(TransanaGlobal.configData.sslMsgSrvCert)
+
+                # Define the Socket connection
+                socketObj_plain = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                # Start Exception Handling to catch SSL errors
+                try:
+
+                    # Add the SSL wrapper to the socket connection
+                    socketObj = ssl.wrap_socket(socketObj_plain,
+                                                ca_certs=TransanaGlobal.configData.sslMsgSrvCert,
+                                                cert_reqs=ssl.CERT_REQUIRED)
+                    # Connect to the socket.  Server and Port are pulled from the Transana Configuration File
+                    socketObj.connect((TransanaGlobal.configData.messageServer, TransanaGlobal.configData.messageServerPort + 1))
+
+                    if DEBUG:
+                        print "ChatWindow.ConnectToMessageServer():  SSL Connection established"
+
+                    # Note that the Chat WIndow is using SSL
+                    TransanaGlobal.chatIsSSL = True
+
+                except ssl.SSLError:
+
+                    prompt = _("SSL Connection Error:")
+                    prompt += '\n\n%s\n\n' % sys.exc_info()[1]
+                    prompt += _("Transana is establishing an un-encrypted connection to the Message Server.")
+
+                    tmpDlg = Dialogs.ErrorDialog(None, prompt, _("SSL Connection Error"))
+                    tmpDlg.ShowModal()
+                    tmpDlg.Destroy()
+
+                    # On SSL failure, we need to delete the sockets and start over to make an un-encrypted connection
+                    del(socketObj)
+                    del(socketObj_plain)
+                    
+                    # Define the Socket connection
+                    socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    # Connect to the socket.  Server and Port are pulled from the Transana Configuration File
+                    socketObj.connect((TransanaGlobal.configData.messageServer, TransanaGlobal.configData.messageServerPort))
+
+                    if DEBUG:
+                        print "ChatWindow.ConnectToMessageServer():  Un-encoded Connection established"
+
+                    # Note that the Chat Window is NOT using SSL
+                    TransanaGlobal.chatIsSSL = False
+
+                except socket.error:
+
+                    prompt = _("SSL Socket Error:")
+                    prompt += '\n\n%s\n\n' % sys.exc_info()[1]
+                    prompt += _("Transana is establishing an un-encrypted connection to the Message Server.")
+
+                    tmpDlg = Dialogs.ErrorDialog(None, prompt, _("SSL Connection Error"))
+                    tmpDlg.ShowModal()
+                    tmpDlg.Destroy()
+
+                    # On SSL failure, we need to delete the sockets and start over to make an un-encrypted connection
+                    del(socketObj)
+                    del(socketObj_plain)
+                    
+                    # Define the Socket connection
+                    socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    # Connect to the socket.  Server and Port are pulled from the Transana Configuration File
+                    socketObj.connect((TransanaGlobal.configData.messageServer, TransanaGlobal.configData.messageServerPort))
+
+                    if DEBUG:
+                        print "ChatWindow.ConnectToMessageServer():  Un-encoded Connection established"
+
+                    # Note that the Chat Window is NOT using SSL
+                    TransanaGlobal.chatIsSSL = False
+
+            else:
+                # Define the Socket connection
+                socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+                # Connect to the socket.  Server and Port are pulled from the Transana Configuration File
+                socketObj.connect((TransanaGlobal.configData.messageServer, TransanaGlobal.configData.messageServerPort))
+
+                if DEBUG:
+                    print "ChatWindow.ConnectToMessageServer():  Un-encoded Connection established"
+
+                # Note that the Chat Window is NOT using SSL
+                TransanaGlobal.chatIsSSL = False
+
             # Create the Chat Window Frame, passing in the socket object.
             # This window is NOT SHOWN at this time.
             TransanaGlobal.chatWindow = ChatWindow(None, -1, _("Transana Chat Window"), socketObj)
             # If we get this far, the connection was successful.
             ConnectedToMessageServer = True
         except socket.error:
+
+
+            print sys.exc_info()[0], sys.exc_info()[1]
+            import traceback
+            print traceback.print_exc(file=sys.stdout)
+
+            # Note that the Chat Window is NOT using SSL
+            TransanaGlobal.chatIsSSL = False
+
             # Unable to connect to the specified Message Server.
             # Build the appropriate error message.
             if TransanaGlobal.configData.messageServer != '':

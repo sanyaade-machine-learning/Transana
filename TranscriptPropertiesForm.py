@@ -26,6 +26,8 @@ import DBInterface
 import Dialogs
 # import Transana's Episode object
 import Episode
+# import Transana's Globals
+import TransanaGlobal
 # Import the Transcript Object
 import Transcript
 # import Python's os module
@@ -139,6 +141,8 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
         v6 = wx.BoxSizer(wx.VERTICAL)
         # Add the Import File element
         self.rtfname_edit = self.new_edit_box(_("RTF/XML/TXT File to import  (optional)"), v6, '')
+        # Make this text box a File Drop Target
+        self.rtfname_edit.SetDropTarget(EditBoxFileDropTarget(self.rtfname_edit))
         # Add the element to the row sizer
         r5Sizer.Add(v6, 1, wx.EXPAND)
 
@@ -201,10 +205,16 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
         tmpEpisode = Episode.Episode(num=self.obj.episode_num)
         # Get the directory for the MAIN media file name
         dirName = os.path.dirname(tmpEpisode.media_filename)
+        # If we're using a Right-To-Left language ...
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+            # ... we can only export to XML format
+            wildcard = _("Transcript Import Files (*.xml)|*.xml;|All Files (*.*)|*.*")
+        # ... whereas with Left-to-Right languages
+        else:
+            # ... we can export both RTF and XML formats
+            wildcard = _("Transcript Import Formats (*.rtf, *.xml, *.txt)|*.rtf;*.xml;*.txt|Rich Text Format Files (*.rtf)|*.rtf|XML Files (*.xml)|*.xml|Text Files (*.txt)|*.txt|All Files (*.*)|*.*")
         # Allow for RTF, XML, TXT or *.* combinations
-        dlg = wx.FileDialog(None, defaultDir=dirName,
-                            wildcard="Transcript Import Formats (*.rtf, *.xml, *.txt)|*.rtf;*.xml;*.txt|Rich Text Format Files (*.rtf)|*.rtf|XML Files (*.xml)|*.xml|Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
-                            style=wx.OPEN)
+        dlg = wx.FileDialog(None, defaultDir=dirName, wildcard=wildcard, style=wx.OPEN)
         # Get a file selection from the user
         if dlg.ShowModal() == wx.ID_OK:
             # If the user clicks OK, set the file to import to the selected path.
@@ -265,6 +275,17 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
             self.obj = None
         # Return the Transcript Object we've created / edited
         return self.obj
+
+
+# This simple derrived class let's the user drop files onto an edit box
+class EditBoxFileDropTarget(wx.FileDropTarget):
+    def __init__(self, editbox):
+        wx.FileDropTarget.__init__(self)
+        self.editbox = editbox
+    def OnDropFiles(self, x, y, files):
+        """Called when a file is dragged onto the edit box."""
+        self.editbox.SetValue(files[0])
+
         
 class AddTranscriptDialog(TranscriptPropertiesForm):
     """Dialog used when adding a new Transcript."""

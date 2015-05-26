@@ -259,6 +259,69 @@ class FormCheck(wx.Frame):
             self.ConfirmTest(msg, testName)
 
         if 9 in testsToRun:
+            # QuestionDialog 5 
+            testName = 'QuestionDialog 5 - YesToAll'
+            self.SetStatusText(testName)
+            msg = 'You are about to see a Yes/YesToAll/No QuestionDialog with the question "Should you say YES?".'
+            msg += '\n\n'
+            msg += 'Say Yes.'
+            self.ShowMessage(msg)
+            msg = "Should you say Yes?"
+            dlg = Dialogs.QuestionDialog(self, msg, header="Unit Test 1", yesToAll=True)
+            result = dlg.LocalShowModal()
+            msg = 'Did you see the QuestionDialog?\n\n'
+            if result == wx.ID_NO:
+                msg += 'You said No.'
+            elif result == dlg.YESTOALLID:
+                msg += 'You said Yes to All.'
+            else:
+                msg += 'You said Yes.'
+            dlg.Destroy()
+            self.ConfirmTest(msg, testName)
+
+        if 10 in testsToRun:
+            # QuestionDialog 6 
+            testName = 'QuestionDialog 6 - YesToAll'
+            self.SetStatusText(testName)
+            msg = 'You are about to see a Yes/YesToAll/No QuestionDialog with the question "Should you say YES TO ALL?".'
+            msg += '\n\n'
+            msg += 'Say Yes to All.'
+            self.ShowMessage(msg)
+            msg = "Should you say YES TO ALL?"
+            dlg = Dialogs.QuestionDialog(self, msg, header="Unit Test 1", yesToAll=True)
+            result = dlg.LocalShowModal()
+            msg = 'Did you see the QuestionDialog?\n\n'
+            if result == wx.ID_NO:
+                msg += 'You said No.'
+            elif result == dlg.YESTOALLID:
+                msg += 'You said Yes to All.'
+            else:
+                msg += 'You said Yes.'
+            dlg.Destroy()
+            self.ConfirmTest(msg, testName)
+
+        if 11 in testsToRun:
+            # QuestionDialog 7
+            testName = 'QuestionDialog 7 - YesToAll'
+            self.SetStatusText(testName)
+            msg = 'You are about to see a Yes/YesToAll/No QuestionDialog with the question "Should you say Yes?".'
+            msg += '\n\n'
+            msg += 'Say No.'
+            self.ShowMessage(msg)
+            msg = "Should you say Yes?"
+            dlg = Dialogs.QuestionDialog(self, msg, header="Unit Test 1", yesToAll=True)
+            result = dlg.LocalShowModal()
+            msg = 'Did you see the QuestionDialog?\n\n'
+            if result == wx.ID_NO:
+                msg += 'You said No.'
+            elif result == dlg.YESTOALLID:
+                msg += 'You said Yes to All.'
+            else:
+                msg += 'You said Yes.'
+            dlg.Destroy()
+            self.ConfirmTest(msg, testName)
+
+        if 12 in testsToRun:
             # wx.TextEntryDialog
             testName = 'wx.TextEntryDialog'
             self.SetStatusText(testName)
@@ -279,7 +342,7 @@ class FormCheck(wx.Frame):
                 msg += 'You said OK!\nYou entered "%s"' % value
             self.ConfirmTest(msg, testName)
 
-        if 10 in testsToRun:
+        if 13 in testsToRun:
             # wx.TextEntryDialog
             testName = 'wx.TextEntryDialog'
             self.SetStatusText(testName)
@@ -300,7 +363,7 @@ class FormCheck(wx.Frame):
                 msg += 'You said OK!\nYou entered "%s"' % value
             self.ConfirmTest(msg, testName)
 
-        if 11 in testsToRun:
+        if 14 in testsToRun:
             # About Box
             testName = 'About Box'
             self.SetStatusText(testName)
@@ -316,7 +379,7 @@ class FormCheck(wx.Frame):
             testName = 'Database Connection, set up Database'
             self.SetStatusText(testName)
             if True or (101 in testsToRun):   # Do this whether it's included in the test to run or not!!
-                import MySQLdb
+#                import MySQLdb
 
                 dlg = wx.PasswordEntryDialog(self, 'Please enter your database password.', 'Unit Test 1:  Database Connection')
                 result = dlg.ShowModal()
@@ -382,7 +445,7 @@ class FormCheck(wx.Frame):
             result = dlg.get_input()
             dlg.Destroy()
             msg = 'Do you see the correct Keyword data?\n\n'
-            if result == None:
+            if result is None:
                 msg += 'You pressed Cancel.'
             else:
                 keyword1 = result

@@ -67,6 +67,19 @@ class Keyword(object):
         str += "lineStyle = %s\n" % self.lineStyle
         return str
 
+    def __eq__(self, other):
+        if other == None:
+            return False
+        else:
+
+            if self.__dict__ != other.__dict__:
+                print "Keyword Objects NOT EQUAL:"
+                print len(self.__dict__), len(other.__dict__)
+                for key in self.__dict__.keys():
+                    print key, type(self.__dict__[key]), type(other.__dict__[key]), self.__dict__[key] == other.__dict__[key]
+                    
+            return self.__dict__ == other.__dict__
+
     def clear(self):
         """Clear all properties, resetting them to default values."""
         attrdesc = inspect.classify_class_attrs(self.__class__)
@@ -99,6 +112,7 @@ class Keyword(object):
                             c.RecordLock IS NOT NULL)"""
         values = (originalKeywordGroup, originalKeyword)
         c = DBInterface.get_db().cursor()
+        query = DBInterface.FixQuery(query)
         c.execute(query, values)
         result = c.fetchall()
         RecordCount = len(result)
@@ -118,6 +132,7 @@ class Keyword(object):
                                 c.RecordLock IS NOT NULL)"""
             values = (originalKeywordGroup, originalKeyword)
             c = DBInterface.get_db().cursor()
+            query = DBInterface.FixQuery(query)
             c.execute(query, values)
             result = c.fetchall()
             RecordCount = len(result)
@@ -137,6 +152,7 @@ class Keyword(object):
                                 c.RecordLock IS NOT NULL)"""
             values = (originalKeywordGroup, originalKeyword)
             c = DBInterface.get_db().cursor()
+            query = DBInterface.FixQuery(query)
             c.execute(query, values)
             result = c.fetchall()
             RecordCount = len(result)
@@ -156,6 +172,7 @@ class Keyword(object):
                                 c.RecordLock IS NOT NULL)"""
             values = (originalKeywordGroup, originalKeyword)
             c = DBInterface.get_db().cursor()
+            query = DBInterface.FixQuery(query)
             c.execute(query, values)
             result = c.fetchall()
             RecordCount = len(result)
@@ -196,6 +213,7 @@ class Keyword(object):
                            a.SnapshotNum = b.SnapshotNum"""
         values = (originalKeywordGroup, originalKeyword, keywordGroup, keyword)
         c = DBInterface.get_db().cursor()
+        query = DBInterface.FixQuery(query)
         c.execute(query, values)
         # Remember the list of what would become duplicate entries
         result = c.fetchall()
@@ -206,7 +224,8 @@ class Keyword(object):
                             ClipNum = %s AND
                             SnapshotNum = %s AND
                             KeywordGroup = %s AND
-                            Keyword = %s"""
+                            Keyword = %s """
+        query = DBInterface.FixQuery(query)
         # Go through the list of duplicates ...
         for line in result:
             # ... and delete the original keyword listing, leaving the other (merge) record untouched.
@@ -219,8 +238,9 @@ class Keyword(object):
                      SET KeywordGroup = %s,
                          Keyword = %s
                      WHERE KeywordGroup = %s AND
-                           Keyword = %s"""
+                           Keyword = %s """
         values = (keywordGroup, keyword, originalKeywordGroup, originalKeyword)
+        query = DBInterface.FixQuery(query)
         c.execute(query, values)
             
         # Look for Snapshots that have STYLES for BOTH the original and the merge keywords
@@ -229,8 +249,9 @@ class Keyword(object):
                            a.Keyword = %s AND
                            b.KeywordGroup = %s AND
                            b.Keyword = %s AND
-                           a.SnapshotNum = b.SnapshotNum"""
+                           a.SnapshotNum = b.SnapshotNum """
         values = (originalKeywordGroup, originalKeyword, keywordGroup, keyword)
+        query = DBInterface.FixQuery(query)
         c.execute(query, values)
         # Remember the list of what would become duplicate entries
         result = c.fetchall()
@@ -239,7 +260,8 @@ class Keyword(object):
         query = """ DELETE FROM SnapshotKeywordStyles2
                       WHERE SnapshotNum = %s AND
                             KeywordGroup = %s AND
-                            Keyword = %s"""
+                            Keyword = %s """
+        query = DBInterface.FixQuery(query)
         # Go through the list of duplicates ...
         for line in result:
             # ... and delete the original keyword listing, leaving the other (merge) record untouched.
@@ -301,15 +323,25 @@ class Keyword(object):
             WHERE KeywordGroup = %s AND
                   Keyword = %s
         """
+        query = DBInterface.FixQuery(query)
         c = db.cursor()
         c.execute(query, (keywordGroup, keyword))
-        n = c.rowcount
+
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            n = 1
+        else:
+            n = c.rowcount
         if (n != 1):
             c.close()
             self.clear()
             raise RecordNotFoundError, (keywordGroup + ':' + keyword, n)
         else:
             r = DBInterface.fetch_named(c)
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}): 
+                c.close()
+                self.clear()
+                raise RecordNotFoundError, (keywordGroup + ':' + keyword, 0)
             self._load_row(r)
             
 
@@ -319,7 +351,7 @@ class Keyword(object):
     #        a boolean function so that if the Save fails, the Properties Dialog can
     #        remain open, giving the user a chance to fix whatever caused the Save to
     #        fail.  Remember to do this here AND in DataObject.
-    def db_save(self):
+    def db_save(self, use_transactions=True):
         """Save the record to the database using Insert or Update as
         appropriate."""
         # Define and implement Demo Version limits
@@ -403,7 +435,10 @@ class Keyword(object):
                 (%s, %s, %s, %s, %s, %s, %s, %s)
             """
             c = DBInterface.get_db().cursor()
+            query = DBInterface.FixQuery(query)
             c.execute(query, values)
+#            if TransanaConstants.DBInstalled in ['sqlite3']:
+#                DBInterface.get_db().commit()
             c.close()
             # When inserting, we're not merging keywords!
             mergeKeywords = False
@@ -492,6 +527,7 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
                               Keyword = %s
                     """
                     values = values + (originalKeywordGroup, originalKeyword)
+                    query = DBInterface.FixQuery(query)
                     c.execute(query, values)
 
                 # If the Keyword Group or Keyword has changed, we need to update all ClipKeyword records too.
@@ -505,6 +541,7 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
                               Keyword = %s
                     """
                     values = (keywordGroup, keyword, originalKeywordGroup, originalKeyword)
+                    query = DBInterface.FixQuery(query)
                     c.execute(query, values)
 
                 # If the Keyword Group or Keyword has changed, we need to update all Snapshot Keyword records too.
@@ -518,6 +555,7 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
                               Keyword = %s
                     """
                     values = (keywordGroup, keyword, originalKeywordGroup, originalKeyword)
+                    query = DBInterface.FixQuery(query)
                     c.execute(query, values)
 
                 # If the Keyword Group or Keyword has changed, we need to update all Snapshot Keyword Style records too.
@@ -531,6 +569,7 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
                               Keyword = %s
                     """
                     values = (keywordGroup, keyword, originalKeywordGroup, originalKeyword)
+                    query = DBInterface.FixQuery(query)
                     c.execute(query, values)
 
                 # If we're merging Keywords, we need to DELETE the original keyword and end the transaction
@@ -540,15 +579,19 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
                                   WHERE KeywordGroup = %s AND
                                         Keyword = %s"""
                     values = (originalKeywordGroup, originalKeyword)
+                    query = DBInterface.FixQuery(query)
                     c.execute(query, values)
                     # If we make it this far, we can commit the transaction, 'cause we're done.
                     query = 'COMMIT'
                     c.execute(query)
+                if TransanaConstants.DBInstalled in ['sqlite3']:
+                    c.commit()
                 c.close()
                 # If the save is successful, we need to update the "original" values to reflect the new record key.
                 # Otherwise, we can't unlock the proper record, among other things.
                 self.originalKeywordGroup = self.keywordGroup
                 self.originalKeyword = self.keyword
+                
         # We need to signal if the we need to update (or delete) the keyword listing in the database tree.
         return not mergeKeywords
 
@@ -602,6 +645,7 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
         query = "SELECT " + fields + " FROM " + tablename + "\n" + \
                 "  WHERE KeywordGroup = %s AND\n" + \
                 "        Keyword = %s\n"
+        query = DBInterface.FixQuery(query)
         c.execute(query, (originalKeywordGroup, originalKeyword))
 
         qr = c.fetchone()       # get query row results
@@ -643,8 +687,9 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
                 "  SET " + fv + "\n" + \
                 "  WHERE KeywordGroup = %s AND\n" + \
                 "        Keyword = %s\n"
-                
-        c.execute(query, values + (originalKeywordGroup, originalKeyword))
+        values = values + (originalKeywordGroup, originalKeyword)
+        query = DBInterface.FixQuery(query)
+        c.execute(query, values)
         
         if (close_c):
             c.close()
@@ -699,7 +744,7 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
         c = db.cursor()
  
         if use_transactions:
-            query = "Begin\n"   # Begin a transaction
+            query = "BEGIN"   # Begin a transaction
             c.execute(query)
 
         return (db, c)
@@ -718,11 +763,12 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
 
         tablename = self._table()
 
-        query = "DELETE FROM " + tablename + "\n" + \
-                "  WHERE KeywordGroup = %s AND\n" + \
-                "        Keyword = %s\n"
+        query = "DELETE FROM " + tablename + \
+                "  WHERE KeywordGroup = %s AND" + \
+                "        Keyword = %s"
+        values = values + (originalKeywordGroup, originalKeyword)
                 
-        c.execute(query, values + (originalKeywordGroup, originalKeyword))
+        c.execute(query, values)
 
         if (use_transactions):
             # Commit the transaction

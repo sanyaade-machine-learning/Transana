@@ -75,6 +75,8 @@ menuWindow = None
 chatWindow = None
 # define the primary Socket Connection
 socketConnection = None
+# Remember if this socket connection is made with SSL or is un-encoded
+chatIsSSL = False
 
 # Prepare the wxPrintData object for use in Printing
 printData = wx.PrintData()

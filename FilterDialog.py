@@ -876,6 +876,8 @@ class FilterDialog(wx.Dialog):
                           ORDER BY ConfigName """
             # Set up the data values that match the query
             values = (self.reportType, reportScope)
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
             # Execute the query with the data values
             DBCursor.execute(query, values)
             # Iterate through the report results
@@ -1027,11 +1029,12 @@ class FilterDialog(wx.Dialog):
                                     ReportScope = %s AND
                                     ConfigName = %s
                               ORDER BY FilterDataType DESC"""
+                # Adjust the query for sqlite if needed
+                query = DBInterface.FixQuery(query)
                 # Build the data values that match the query
                 values = (self.reportType, reportScope, configName.encode(TransanaGlobal.encoding))
                 # Execute the query with the appropriate data values
                 DBCursor.execute(query, values)
-
                 
                 # If there are Episodes in the form, we need to make sure they get reconciled even if they
                 # don't occur in the saved Filter Configuration.  Let's make sure this happens.
@@ -1438,7 +1441,7 @@ class FilterDialog(wx.Dialog):
                         self.showSnapshotCoding.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Enable Hyperlink value (filterDataType 113) ...
-                    elif self.showHyperlink and (filterDataType == 113):
+                    elif (filterDataType == 113):
                         if type(filterData).__name__ == 'array':
                             filterData = filterData.tostring()
                         # Set the Enable Hyperlink value
@@ -1687,6 +1690,8 @@ class FilterDialog(wx.Dialog):
                                                 ReportScope = %s AND
                                                 ConfigName = %s AND
                                                 FilterDataType = %s """
+                            # Adjust the query for sqlite if needed
+                            query = DBInterface.FixQuery(query)
 
                             # If we have a Series Keyword Sequence Map (reportType 5), or
                             # a Series Keyword Bar Graph (reportType 6), or
@@ -1768,6 +1773,8 @@ class FilterDialog(wx.Dialog):
                                                     (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
                                                   VALUES
                                                     (%s, %s, %s, %s, %s) """
+                                    # Adjust the query for sqlite if needed
+                                    query2 = DBInterface.FixQuery(query2)
                                     # Build the values to match the query, including the pickled Keyword Colors data
                                     values = (self.reportType, reportScope, configName, 4, keywordColors)
                                     # Execute the query with the appropriate data
@@ -1795,11 +1802,30 @@ class FilterDialog(wx.Dialog):
                             if self.snapshotFilter and self.reportType in [1, 2, 5, 6, 7, 11, 12, 16]:
                                 # Pickle the Snapshot Data
                                 snapshots = cPickle.dumps(self.GetSnapshots())
-                                # Build the values to match the query, including the pickled Snapshot data
-                                values = (snapshots, self.reportType, reportScope, configName, 18)
-                                # Execute the query with the appropriate data
-                                DBCursor.execute(query, values)
-                                
+
+                                # Snapshot Records might not have existed when the filter was originally created.
+                                # Therefore, we need to check whether we need to INSERT or UPDATE this record
+                                if DBInterface.record_match_count('Filters2',
+                                                         ('ReportType', 'ReportScope', 'ConfigName', 'FilterDataType'),
+                                                         (self.reportType, reportScope, configName, 18)) > 0:
+                                    # Build the values to match the query, including the pickled Keyword Colors data
+                                    values = (snapshots, self.reportType, reportScope, configName, 18)
+                                    # Execute the query with the appropriate data
+                                    DBCursor.execute(query, values)
+
+                                else:
+                                    # Build the Insert Query for the Data
+                                    query2 = """ INSERT INTO Filters2
+                                                    (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
+                                                  VALUES
+                                                    (%s, %s, %s, %s, %s) """
+                                    # Adjust the query for sqlite if needed
+                                    query2 = DBInterface.FixQuery(query2)
+                                    # Build the values to match the query, including the pickled Keyword Colors data
+                                    values = (self.reportType, reportScope, configName, 18, snapshots)
+                                    # Execute the query with the appropriate data
+                                    DBCursor.execute(query2, values)
+
                         else:
                             # Insert new record.  Note that each report may generate up to 4 records in the database,
                             # FilterDataType 1 = Episodes, FilterDataType 2 = Clips, FilterDataType 3 = Keywords, 4 = Keyword Colors
@@ -1809,6 +1835,8 @@ class FilterDialog(wx.Dialog):
                                             (ReportType, ReportScope, ConfigName, FilterDataType, FilterData)
                                           VALUES
                                             (%s, %s, %s, %s, %s) """
+                            # Adjust the query for sqlite if needed
+                            query = DBInterface.FixQuery(query)
 
                             # If we have a Series Keyword Sequence Map (reportType 5), or
                             # a Series Keyword Bar Graph (reportType 6), or
@@ -1917,7 +1945,7 @@ class FilterDialog(wx.Dialog):
                             # an Episode Report (reportType 11), or
                             # a Collection Report (reportType 12), or
                             # a Collection Keyword Map (reportType 16),
-                            # insert Snapshot Data (FilterDataType 9)
+                            # insert Snapshot Data (FilterDataType 18)
                             if self.snapshotFilter and self.reportType in [1, 2, 5, 6, 7, 11, 12, 16]:
                                 # Pickle the Snapshot Data
                                 snapshots = cPickle.dumps(self.GetSnapshots())
@@ -2094,6 +2122,8 @@ class FilterDialog(wx.Dialog):
                           VALUES
                             (%s, %s, %s, %s, %s) """
             values = (reportType, reportScope, configName, filterDataType, filterData)
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Get a database cursor
         DBCursor = DBInterface.get_db().cursor()
         # Execute the query with the appropriate data
@@ -2140,6 +2170,8 @@ class FilterDialog(wx.Dialog):
                                   WHERE ReportType = %s AND
                                         ReportScope = %s AND
                                         ConfigName = %s """
+                    # Adjust the query for sqlite if needed
+                    query = DBInterface.FixQuery(query)
                     # Build the data values that match the query
                     values = (self.reportType, reportScope, localConfigName.encode(TransanaGlobal.encoding))
                     # Execute the query with the appropriate data values
@@ -3061,7 +3093,8 @@ class FilterLoadDialog(wx.Dialog):
                                         ConfigName = %s"""
                     # Set up the data values that match the query
                     values = (copyReportType, copyReportScope, copyConfigName.encode(TransanaGlobal.encoding))
-
+                # Adjust the query for sqlite if needed
+                query = DBInterface.FixQuery(query)
                 # Execute the query with the data values
                 DBCursor.execute(query, values)
                 
@@ -3102,6 +3135,8 @@ class FilterLoadDialog(wx.Dialog):
                                           VALUES
                                             (%s, %s, %s, %s, %s) """
                             values = (self.reportType, self.reportScope, newConfigName.encode(TransanaGlobal.encoding), rowFilterDataType, rowFilterData)
+                        # Adjust the query for sqlite if needed
+                        query = DBInterface.FixQuery(query)
                         # Execute the query with the data values
                         DBCursor.execute(query, values)
 
@@ -3174,6 +3209,8 @@ class FilterLoadDialog(wx.Dialog):
             values = (self.reportScope)
             
         if query != '':
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
             # Execute the query with the data values
             DBCursor.execute(query, values)
             # Iterate through the report results

@@ -1419,7 +1419,7 @@ class ReportGenerator(wx.Object):
                                     print
 
                                 # ... build the error message and display it.
-                                tmpDlg = Dialogs.ErrorDialog(self.report, tmpObj.GetNodeString() + '\n' + e.message)
+                                tmpDlg = Dialogs.ErrorDialog(self.report, e.message)
                                 tmpDlg.ShowModal()
                                 tmpDlg.Destroy()
                                 

@@ -162,17 +162,28 @@ class TextReport(wx.Frame):
         self.toolBar.EnableTool(T_FILE_FONT, False)
         # Add a Save button to the Toolbar
         self.toolBar.AddTool(T_FILE_SAVEAS, TransanaImages.Save16.GetBitmap(), shortHelpString=_('Save As'))
+        # Disable Save for Right-To-Left languages
+        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+            self.toolBar.EnableTool(T_FILE_SAVEAS, False)
+
         # Add a Print (page) Setup button to the toolbar
         self.toolBar.AddTool(T_FILE_PRINTSETUP, TransanaImages.PrintSetup.GetBitmap(), shortHelpString=_('Set up Page'))
+        # Disable Print Setup for Right-To-Left languages
+        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+            self.toolBar.EnableTool(T_FILE_PRINTSETUP, False)
+
         # Add a Print Preview button to the Toolbar
         self.toolBar.AddTool(T_FILE_PRINTPREVIEW, TransanaImages.PrintPreview.GetBitmap(), shortHelpString=_('Print Preview'))
-
         # Disable Print Preview on the PPC Mac and for Right-To-Left languages
         if (platform.processor() == 'powerpc') or (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
             self.toolBar.EnableTool(T_FILE_PRINTPREVIEW, False)
 
         # Add a Print button to the Toolbar
         self.toolBar.AddTool(T_FILE_PRINT, TransanaImages.Print.GetBitmap(), shortHelpString=_('Print'))
+        # Disable Print Setup for Right-To-Left languages
+        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+            self.toolBar.EnableTool(T_FILE_PRINT, False)
+
         # If a help context is defined ...
         if self.helpContext != None:
             # ... get the graphic for Help ...
@@ -211,12 +222,28 @@ class TextReport(wx.Frame):
             self.menuFile.Enable(M_FILE_FONT, False)
             # Add "Save As" to File Menu
             self.menuFile.Append(M_FILE_SAVEAS, _("Save &As"), _("Save As"))
+            # If we have Right to Left text, we cannot enable PRINT because it doesn't work right due to wxWidgets bugs.
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                self.menuFile.Enable(M_FILE_SAVEAS, False)
+                
             # Add "Page Setup" to the File Menu
             self.menuFile.Append(M_FILE_PRINTSETUP, _("Page Setup"), _("Set up Page"))
+            # If we have Right to Left text, we cannot enable PRINT because it doesn't work right due to wxWidgets bugs.
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                self.menuFile.Enable(M_FILE_PRINTSETUP, False)
+                
             # Add "Print Preview" to the File Menu
             self.menuFile.Append(M_FILE_PRINTPREVIEW, _("Print Preview"), _("Preview your printed output"))
+            # If we have Right to Left text, we cannot enable PRINT because it doesn't work right due to wxWidgets bugs.
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                self.menuFile.Enable(M_FILE_PRINTPREVIEW, False)
+            
             # Add "Print" to the File Menu
             self.menuFile.Append(M_FILE_PRINT, _("&Print"), _("Send your output to the Printer"))
+            # If we have Right to Left text, we cannot enable PRINT because it doesn't work right due to wxWidgets bugs.
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                self.menuFile.Enable(M_FILE_PRINT, False)
+                
             # Add "Exit" to the File Menu
             self.menuFile.Append(M_FILE_EXIT, _("E&xit"), _("Exit the Keyword Map program"))
             # Add the File Menu to the Menu Bar

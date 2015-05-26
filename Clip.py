@@ -104,9 +104,6 @@ class Clip(DataObject.DataObject):
         self._series_id = ""
         self._episode_id = ""
 
-
-
-# Public methods
     def __repr__(self):
         str = 'Clip Object Definition:\n'
         str = str + "number = %s\n" % self.number
@@ -132,6 +129,25 @@ class Clip(DataObject.DataObject):
             str = str + "\nKeyword:  %s" % kws.keywordPair
         str = str + '\n'
         return str.encode('utf8')
+
+    def __eq__(self, other):
+        """ Compares two Clip objects to each other """
+        if other == None:
+            return False
+        else:
+
+##            print "Clip.__eq__():", len(self.__dict__.keys()), len(other.__dict__.keys())
+##            for key in self.__dict__.keys():
+##                print key, self.__dict__[key] == other.__dict__[key],
+##                if self.__dict__[key] != other.__dict__[key]:
+##                    print self.__dict__[key], other.__dict__[key]
+##                else:
+##                    print
+##            print
+
+            return self.__dict__ == other.__dict__
+
+# Public methods
         
     def GetTranscriptWithoutTimeCodes(self):
         """ Returns a copy of the Transcript Text with the Time Code information removed. """
@@ -169,12 +185,18 @@ class Clip(DataObject.DataObject):
                 a.CollectNum = b.CollectNum AND
                 b.CollectID = %s AND
                 b.ParentCollectNum = %s """
+        # Adjust query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Get a database cursor
         c = db.cursor()
         # Execute the query
         c.execute(query, (clip_name, collection_name, collection_parent))
-        # Get the number of rows returned
-        n = c.rowcount
+
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            n = 1
+        else:
+            n = c.rowcount
         # if we don't get exactly one result ...
         if (n != 1):
             # close the cursor
@@ -185,8 +207,16 @@ class Clip(DataObject.DataObject):
             raise RecordNotFoundError, (collection_name + ", " + clip_name, n)
         # If we get exactly one result ...
         else:
-            # get the data from the cursor
+            # ... get the data categories from the cursor
             r = DBInterface.fetch_named(c)
+            # if sqlite and no results ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (collection_name + ", " + clip_name, n)
             # Load the data into the Clip object
             self._load_row(r)
             # Load additional Media Files, which aren't handled in the "old" code
@@ -208,12 +238,17 @@ class Clip(DataObject.DataObject):
           WHERE a.ClipNum = %s AND
                 a.CollectNum = b.CollectNum
         """
+        # Adjust query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Get a database cursor
         c = db.cursor()
         # Execute the query
-        c.execute(query, (num,))
-        # Get the number of rows returned
-        n = c.rowcount
+        c.execute(query, (num, ))
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            n = 1
+        else:
+            n = c.rowcount
         # If we don't get exactly one result ...
         if (n != 1):
             # close the database cursor
@@ -222,10 +257,18 @@ class Clip(DataObject.DataObject):
             self.clear()
             # Raise an exception indicating the data was not found
             raise RecordNotFoundError, (num, n)
-        # If we get exactly one result ...
+        # If we get exactly one result (or use sqlite) ...
         else:
             # ... get the data from the cursor
             r = DBInterface.fetch_named(c)
+            # If sqlite and no results ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the cursor ...
+                c.close()
+                # ... clear the current object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (num, 0)
             # ... load the data into the Clip Object
             self._load_row(r)
             # Load Additional Media Files, which aren't handled in the "old" code
@@ -235,8 +278,9 @@ class Clip(DataObject.DataObject):
         # Close the database cursor
         c.close()
 
-    def db_save(self, usetransactions=True):
+    def db_save(self, use_transactions=True):
         """Save the record to the database using Insert or Update as appropriate."""
+
         # Define and implement Demo Version limits
         if TransanaConstants.demoVersion and (self.number == 0):
             # Get a DB Cursor
@@ -314,7 +358,7 @@ class Clip(DataObject.DataObject):
                  MediaFile, ClipStart, ClipStop, ClipOffset, Audio, ClipComment,
                  SortOrder)
                 VALUES
-                (%s,%s,%s,%s,%s,%s,%s,%s,%s, %s)
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
         else:
             if DBInterface.record_match_count("Clips2", \
@@ -344,13 +388,20 @@ class Clip(DataObject.DataObject):
             """
             values = values + (self.number,)
 
+        # Get a database cursor
         c = DBInterface.get_db().cursor()
 
-        if usetransactions:
+        # If we're using Transactions ...
+        if use_transactions:
+            # ... start the transaction
             c.execute('BEGIN')
-        
+        # Adjust query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Execute the Insert / Update query
         c.execute(query, values)
+        # If this is a NEW record
         if self.number == 0:
+            # ... signal that the number has been changed
             numberChanged = True
             # If we are dealing with a brand new Clip, it does not yet know its
             # record number.  It HAS a record number, but it is not known yet.
@@ -360,16 +411,31 @@ class Clip(DataObject.DataObject):
                       WHERE ClipID = %s AND
                             CollectNum = %s
                     """
+            # Adjust query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Get a database cursor
             tempDBCursor = DBInterface.get_db().cursor()
+            # Execute the query 
             tempDBCursor.execute(query, (id, self.collection_num))
-            if tempDBCursor.rowcount == 1:
-                self.number = tempDBCursor.fetchone()[0]
+            # Get the query results
+            data = tempDBCursor.fetchall()
+            # If there ARE results ...
+            if len(data) == 1:
+                # ... extract the object number
+                self.number = data[0][0]
+            # If there are NOT results ...
             else:
-                if usetransactions:
+                # ... and we are using Transactions ...
+                if use_transactions:
+                    # ... then roll back the transaction, as there is a problem
                     c.execute('ROLLBACK')
-                raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
+                # Raise an exception
+                raise RecordNotFoundError, (self.id, len(data))
+            # Close the database cursor
             tempDBCursor.close()
+        # If this record already has a record number ...
         else:
+            # ... signal that the record number was not changed
             numberChanged = False
             # If we are dealing with an existing Clip, delete all the Keywords
             # in anticipation of putting them all back in after we deal with the
@@ -394,11 +460,15 @@ class Clip(DataObject.DataObject):
         
         # To save the additional video file names, we must first delete them from the database!
         # Craft a query to remove all existing Additonal Videos
-        query = "DELETE FROM AdditionalVids2 WHERE ClipNum = %d" % self.number
+        query = "DELETE FROM AdditionalVids2 WHERE ClipNum = %s"
+        # Adjust query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Execute the query
-        c.execute(query)
+        c.execute(query, (self.number, ))
         # Define the query to insert the additional media files into the databse
         query = "INSERT INTO AdditionalVids2 (EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio) VALUES (%s, %s, %s, %s, %s, %s)"
+        # Adjust query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # For each additional media file ...
         for vid in self.additional_media_files:
             # Encode the filename
@@ -444,7 +514,7 @@ class Clip(DataObject.DataObject):
                         tr.number = 0
                         tr.clip_num = 0
             # Undo the database save transaction
-            if usetransactions:
+            if use_transactions:
                 c.execute('ROLLBACK')
             # Close the Database Cursor
             c.close()
@@ -456,7 +526,7 @@ class Clip(DataObject.DataObject):
         # If there's no error prompt ...
         else:
             # ... Commit the database transaction
-            if usetransactions:
+            if use_transactions:
                 c.execute('COMMIT')
             # Close the Database Cursor
             c.close()
@@ -465,6 +535,8 @@ class Clip(DataObject.DataObject):
         """ Delete this object record from the database.  Parameters indicate if we should use DB Transactions
             and if we should prompt about the deletion of Keyword Examples.  (in Clip Merging, for example, we
             don't want to prompt.) """
+
+        # Assume success to begin
         result = 1
         try:
             # Initialize delete operation, begin transaction if necessary
@@ -541,9 +613,11 @@ class Clip(DataObject.DataObject):
 
             if result:
                 # Craft a query to remove all existing Additonal Videos
-                query = "DELETE FROM AdditionalVids2 WHERE ClipNum = %d" % self.number
+                query = "DELETE FROM AdditionalVids2 WHERE ClipNum = %s"
+                # Adjust query for sqlite if needed
+                query = DBInterface.FixQuery(query)
                 # Execute the query
-                c.execute(query)
+                c.execute(query, (self.number, ))
 
             # Delete the actual Clip record.
             self._db_do_delete(use_transactions, c, result)
@@ -737,8 +811,10 @@ class Clip(DataObject.DataObject):
         c = db.cursor()
         # Define the DB Query
         query = "SELECT MediaFile, VidLength, Offset, Audio FROM AdditionalVids2 WHERE ClipNum = %s ORDER BY AddVidNum"
+        # Adjust query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Execute the query
-        c.execute(query, self.number)
+        c.execute(query, (self.number, ))
         # For each video in the query results ...
         for (vidFilename, vidLength, vidOffset, audio) in c.fetchall():
             # Detection of the use of the Video Root Path is platform-dependent and must be done for EACH filename!

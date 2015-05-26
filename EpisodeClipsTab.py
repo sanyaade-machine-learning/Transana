@@ -110,7 +110,6 @@ class EpisodeClipsTab(wx.Panel):
 
     def DisplayCells(self, TimeCode):
         """ Get data from the database and populate the Episode Clips / Selected Clips Grid """
-
         # Get clip data from the database
         clipData = DBInterface.list_of_clips_by_episode(self.episodeObj.number, TimeCode)
         if TransanaConstants.proVersion:

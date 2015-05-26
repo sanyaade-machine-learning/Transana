@@ -14,7 +14,6 @@
 #along with this program; if not, write to the Free Software
 #Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
-
 """ For single-user Transana, this module requests the Database Name from the user.
     For multi-user Transana, this module requests UserName, Password, Database Server,
     and Database Name from the user. """
@@ -24,10 +23,8 @@ __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>'
 # import wxPython
 import wx
 
-
 if __name__ == '__main__':
     __builtins__._ = wx.GetTranslation
-
 
 # Import Python's os and sys modules
 import os, sys
@@ -39,7 +36,6 @@ import Dialogs
 import TransanaConstants
 # import Transana's Global Variables
 import TransanaGlobal
-
 
 class UsernameandPassword(wx.Dialog):
     """ Username, Password, Database Server, and Database Name Dialog """
@@ -65,7 +61,7 @@ class UsernameandPassword(wx.Dialog):
             # Dialog Title
             dlgTitle = _("Username and Password")
             # Dialog Size
-            dlgSize=(350, 310)
+            dlgSize=(450, 320)  # (350, 310)
             # Instructions Text
             instructions = _("Please enter your MySQL username and password, as well \nas the names of the server and database you wish to use.\nTo create a new database, type in a new database name\n(if you have appropriate permissions.)\n(Database names may contain only letters and numbers in\na single word.)")
             # Macs don't need as much space for instructions as Windows machines do.
@@ -74,7 +70,7 @@ class UsernameandPassword(wx.Dialog):
                 instProportion = 4
             else:
                 # Sizer Proportion for the instructions
-                instProportion = 5
+                instProportion = 6
 
         # Define the main Dialog Box
         wx.Dialog.__init__(self, parent, -1, dlgTitle, size=dlgSize, style=wx.CAPTION | wx.RESIZE_BORDER)
@@ -90,6 +86,8 @@ class UsernameandPassword(wx.Dialog):
         if not TransanaConstants.singleUserVersion:
             notebook = wx.Notebook(self, -1, size=self.GetSizeTuple())
             panelParent = notebook
+            # Adding this line prevents an odd visual distortion in Arabic!
+            notebook.SetBackgroundColour(wx.WHITE)
         else:
             panelParent = self
 
@@ -100,7 +98,8 @@ class UsernameandPassword(wx.Dialog):
         # Instructions Text
         lblIntro = wx.StaticText(userPanel, -1, instructions)
         # Add the Instructions to the Main Sizer
-        userPanelSizer.Add(lblIntro, instProportion, wx.EXPAND | wx.ALL, 10)
+#        userPanelSizer.Add(lblIntro, instProportion, wx.EXPAND | wx.ALL, 10)
+        userPanelSizer.Add(lblIntro, 0, wx.ALL, 10) # instProportion, wx.EXPAND | wx.ALL, 10)
 
         # Get the dictionary of defined database hosts and databases from the Configuration module
         self.Databases = TransanaGlobal.configData.databaseList
@@ -126,30 +125,50 @@ class UsernameandPassword(wx.Dialog):
 
             # Let's use a FlexGridSizer for the data entry fields.
             # for MU, we want 5 rows with 2 columns
-            box2 = wx.FlexGridSizer(5, 2, 6, 0)
+#            box2 = wx.FlexGridSizer(5, 2, 6, 0)
             # We want to be flexible horizontally
-            box2.SetFlexibleDirection(wx.HORIZONTAL)
+#            box2.SetFlexibleDirection(wx.HORIZONTAL)
             # We want the data entry fields to expand
-            box2.AddGrowableCol(1)
-            # The proportion for the data entry portion of the screen should be 6
-            box2Proportion = 6
+#            box2.AddGrowableCol(1)
 
+            # The proportion for the data entry portion of the screen should be 6
+#            box2Proportion = 0
+
+            # Use a BoxSizer instead of a FlexGridSizer.  The FlexGridSizer isn't handling alternate font sizes
+            # on Windows correctly.
+#            box2 = wx.BoxSizer(wx.VERTICAL)
+
+            # Create a Row Sizer for Username
+            r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
             # Username Label        
             lblUsername = wx.StaticText(userPanel, -1, _("Username:"))
+            r1Sizer.Add(lblUsername, 1, wx.ALL, 5)
 
             # User Name TextCtrl
             self.txtUsername = wx.TextCtrl(userPanel, -1, style=wx.TE_LEFT)
             if DBInterface.get_username() != '':
                 self.txtUsername.SetValue(DBInterface.get_username())
+            r1Sizer.Add(self.txtUsername, 4, wx.EXPAND | wx.ALL, 5)
+#            box2.Add(r1Sizer, 0, wx.EXPAND)
+            userPanelSizer.Add(r1Sizer, 0, wx.EXPAND)
 
+            # Create a Row Sizer for Password
+            r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
             # Password Label
             lblPassword = wx.StaticText(userPanel, -1, _("Password:"))
+            r2Sizer.Add(lblPassword, 1, wx.ALL, 5)
 
             # Password TextCtrl (with PASSWORD style)
             self.txtPassword = wx.TextCtrl(userPanel, -1, style=wx.TE_LEFT|wx.TE_PASSWORD)
+            r2Sizer.Add(self.txtPassword, 4, wx.EXPAND | wx.ALL, 5)
+#            box2.Add(r2Sizer, 0, wx.EXPAND)
+            userPanelSizer.Add(r2Sizer, 0, wx.EXPAND)
 
+            # Create a Row Sizer for Host / Server
+            r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
             # Host / Server Label
             lblDBServer = wx.StaticText(userPanel, -1, _("Host / Server:"))
+            r3Sizer.Add(lblDBServer, 1, wx.ALL, 5)
 
             # If Databases has entries, use that to create the Choice List for the Database Servers list.
             if self.Databases.keys() != []:
@@ -169,6 +188,9 @@ class UsernameandPassword(wx.Dialog):
 
             # Set the value to the default value provided by the Configuration Data
             self.chDBServer.SetValue(TransanaGlobal.configData.host)
+            r3Sizer.Add(self.chDBServer, 4, wx.EXPAND | wx.ALL, 5)
+#            box2.Add(r3Sizer, 0, wx.EXPAND)
+            userPanelSizer.Add(r3Sizer, 0, wx.EXPAND)
 
             # Define the Selection, SetFocus and KillFocus events for the Host / Server Combo Box
             wx.EVT_COMBOBOX(self, self.chDBServer.GetId(), self.OnServerSelect)
@@ -176,38 +198,54 @@ class UsernameandPassword(wx.Dialog):
             # NOTE:  These events don't work on the MAC!  There appears to be a wxPython bug.  See wxPython ticket # 9862
             wx.EVT_KILL_FOCUS(self.chDBServer, self.OnServerKillFocus)
 
+            # Create a Row Sizer for Port
+            r4Sizer = wx.BoxSizer(wx.HORIZONTAL)
             # Define the Port TextCtrl and its KillFocus event
             lblPort = wx.StaticText(userPanel, -1, _("Port:"))
+            r4Sizer.Add(lblPort, 1, wx.ALL, 5)
             self.txtPort = wx.TextCtrl(userPanel, -1, TransanaGlobal.configData.dbport, style=wx.TE_LEFT)
+            r4Sizer.Add(self.txtPort, 4, wx.EXPAND | wx.ALL, 5)
+#            box2.Add(r4Sizer, 0, wx.EXPAND)
+            userPanelSizer.Add(r4Sizer, 0, wx.EXPAND)
 
             # This wx.EVT_SET_FOCUS is a poor attempt to compensate for wxPython bug # 9862
             if 'wxMac' in wx.PlatformInfo:
                 self.txtPort.Bind(wx.EVT_SET_FOCUS, self.OnServerKillFocus)
             self.txtPort.Bind(wx.EVT_KILL_FOCUS, self.OnPortKillFocus)
 
-            # Let's add the MU controls we've created to the Data Entry Sizer
-            box2.AddMany([(lblUsername, 1, wx.RIGHT, 10),
-                          (self.txtUsername, 2, wx.EXPAND),
-                          (lblPassword, 1, wx.RIGHT, 10),
-                          (self.txtPassword, 2, wx.EXPAND),
-                          (lblDBServer, 1, wx.RIGHT, 10),
-                          (self.chDBServer, 2, wx.EXPAND),
-                          (lblPort, 1, wx.RIGHT, 10),
-                          (self.txtPort, 2, wx.EXPAND)
-                         ])
-        else:
-            # For single-user Transana, we only need one row with two columns
-            box2 = wx.FlexGridSizer(1, 2, 0, 0)
-            # We want the grid to grow horizontally
-            box2.SetFlexibleDirection(wx.HORIZONTAL)
-            # We want the data entry field to grow
-            box2.AddGrowableCol(1)
-            # Since there's only one row, the sizer proportion can be small.
-            box2Proportion = 2
+#            # Let's add the MU controls we've created to the Data Entry Sizer
+#            box2.AddMany([(lblUsername, 1, wx.RIGHT, 10),
+#                          (self.txtUsername, 2, wx.EXPAND),
+#                          (lblPassword, 1, wx.RIGHT, 10),
+#                          (self.txtPassword, 2, wx.EXPAND),
+#                          (lblDBServer, 1, wx.RIGHT, 10),
+#                          (self.chDBServer, 2, wx.EXPAND),
+#                          (lblPort, 1, wx.RIGHT, 10),
+#                          (self.txtPort, 2, wx.EXPAND)
+#                         ])
+#        else:
+#            # For single-user Transana, we only need one row with two columns
+#            box2 = wx.FlexGridSizer(1, 2, 0, 0)
+#            # We want the grid to grow horizontally
+#            box2.SetFlexibleDirection(wx.HORIZONTAL)
+#            # We want the data entry field to grow
+#            box2.AddGrowableCol(1)
+#            # Since there's only one row, the sizer proportion can be small.
+#            box2Proportion = 2
+
+            # The proportion for the data entry portion of the screen should be 6
+#            box2Proportion = 0
+
+            # Use a BoxSizer instead of a FlexGridSizer.  The FlexGridSizer isn't handling alternate font sizes
+            # on Windows correctly.
+#            box2 = wx.BoxSizer(wx.VERTICAL)
 
         # The rest of the controls are needed for both single- and multi-user versions.
+        # Create a Row Sizer for Port
+        r5Sizer = wx.BoxSizer(wx.HORIZONTAL)
         # Databases Label
         lblDBName = wx.StaticText(userPanel, -1, _("Database:"))
+        r5Sizer.Add(lblDBName, 1, wx.ALL, 5)
 
         # If a Host is defined, get the list of Databases defined for that host.
         # The single-user version ...
@@ -282,6 +320,10 @@ class UsernameandPassword(wx.Dialog):
                 # Set the value to the default value provided by the Configuration Data
                 self.chDBName.SetStringSelection(TransanaGlobal.configData.database)
 
+        r5Sizer.Add(self.chDBName, 4, wx.EXPAND | wx.ALL, 5)
+#        box2.Add(r5Sizer, 0, wx.EXPAND)
+        userPanelSizer.Add(r5Sizer, 0, wx.EXPAND)
+
         # Define the SetFocus and KillFocus events for the Database Combo Box
         wx.EVT_KILL_FOCUS(self.chDBName, self.OnNameKillFocus)
 
@@ -290,12 +332,13 @@ class UsernameandPassword(wx.Dialog):
             # ... add a Combo Box Event handler for the Database Name selection
             self.chDBName.Bind(wx.EVT_COMBOBOX, self.OnNameSelect)
 
-        # Add the Database name fields to the Data Entry sizer
-        box2.AddMany([(lblDBName, 1, wx.RIGHT, 10),
-                      (self.chDBName, 2, wx.EXPAND)
-                     ])
+#        # Add the Database name fields to the Data Entry sizer
+#        box2.AddMany([(lblDBName, 1, wx.RIGHT, 10),
+#                      (self.chDBName, 2, wx.EXPAND)
+#                     ])
         # Now add the Data Entry sizer to the Main sizer
-        userPanelSizer.Add(box2, box2Proportion, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+#        userPanelSizer.Add(box2, box2Proportion, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+#        userPanelSizer.Add(box2, 0, wx.LEFT | wx.RIGHT, 10)
 
         # If we are in the Multi-user Version ...
         if not TransanaConstants.singleUserVersion:
@@ -335,7 +378,7 @@ class UsernameandPassword(wx.Dialog):
             self.sslDir = sp.GetDocumentsDir()
 
             # Add the Client Certificate File to the SSL Tab
-            lblClientCert = wx.StaticText(sslPanel, -1, _("SSL Client Certificate File"), style=wx.ST_NO_AUTORESIZE)
+            lblClientCert = wx.StaticText(sslPanel, -1, _("Database Server SSL Client Certificate File"), style=wx.ST_NO_AUTORESIZE)
             # Add the label to the Panel Sizer
             sslSizer.Add(lblClientCert, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
             
@@ -357,7 +400,7 @@ class UsernameandPassword(wx.Dialog):
             sslSizer.Add((0, 5))
 
             # Add the Client Key File to the SSL Tab
-            lblClientKey = wx.StaticText(sslPanel, -1, _("SSL Client Key File"), style=wx.ST_NO_AUTORESIZE)
+            lblClientKey = wx.StaticText(sslPanel, -1, _("Database Server SSL Client Key File"), style=wx.ST_NO_AUTORESIZE)
             # Add the label to the Panel Sizer
             sslSizer.Add(lblClientKey, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
             # Add a spacer
@@ -374,6 +417,25 @@ class UsernameandPassword(wx.Dialog):
             sslSizer.Add(self.sslClientKeyBrowse, 0, wx.LEFT | wx.BOTTOM, 10)
             # Bind the button to the event processor
             self.sslClientKeyBrowse.Bind(wx.EVT_BUTTON, self.OnSSLButton)
+
+            # Add the Message Server Certificate File to the SSL Tab
+            lblMsgSrvCert = wx.StaticText(sslPanel, -1, _("Message Server SSL Certificate File"), style=wx.ST_NO_AUTORESIZE)
+            # Add the label to the Panel Sizer
+            sslSizer.Add(lblMsgSrvCert, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+            # Add a spacer
+            sslSizer.Add((0, 3))
+            
+            # Add the Message Server Certificate File TextCtrl to the SSL Tab
+            self.sslMsgSrvCert = wx.TextCtrl(sslPanel, -1, TransanaGlobal.configData.sslMsgSrvCert)
+            # Add the element to the Panel Sizer
+            sslSizer.Add(self.sslMsgSrvCert, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            # Add a Browse button for the Message Server Certificate File
+            self.sslMsgSrvCertBrowse = wx.Button(sslPanel, -1, _("Browse"))
+            # Add the button to the Sizer
+            sslSizer.Add(self.sslMsgSrvCertBrowse, 0, wx.LEFT | wx.BOTTOM, 10)
+            # Bind the button to the event processor
+            self.sslMsgSrvCertBrowse.Bind(wx.EVT_BUTTON, self.OnSSLButton)
 
             # Set the SSL Panel's Sizer
             sslPanel.SetSizer(sslSizer)
@@ -424,6 +486,9 @@ class UsernameandPassword(wx.Dialog):
         userPanel.SetSizer(userPanelSizer)
         userPanel.Fit()
 
+        # Remember the size of the UserPanel at this point, to determine what DISPLAY TEXT size is selected in Windows
+        userPanelSize = userPanel.GetSize()
+
         # Let's stick the panel on a sizer to fit in the Dialog
         panSizer = wx.BoxSizer(wx.VERTICAL)
         if TransanaConstants.singleUserVersion:
@@ -437,16 +502,27 @@ class UsernameandPassword(wx.Dialog):
 
         self.SetSizer(panSizer)
         self.Layout()
+
         self.SetAutoLayout(True)
         self.Fit()
 
         # Lay out the dialog box, and tell it to resize automatically
         self.Layout()
-        self.SetAutoLayout(True)
+
+        # If we are in the Multi-user Version ...
+        if not TransanaConstants.singleUserVersion:
+            # ... if we're using Small or Normal fonts ...
+            if userPanelSize[1] < 350:
+                # ... this size should work for the dialog
+                self.SetSize((self.GetSize()[0], 410))
+            # ... but if we're using Medium fonts ...
+            else:
+                # ... we need a larger dialog size
+                self.SetSize((520, 500))
 
         # Set minimum window size
         dlgSize = self.GetSizeTuple()
-        self.SetSizeHints(dlgSize[0], dlgSize[1], -1, round(dlgSize[1]))
+        self.SetSizeHints(dlgSize[0], dlgSize[1])
 
         # Center the dialog on the screen
         self.CentreOnScreen()
@@ -480,6 +556,7 @@ class UsernameandPassword(wx.Dialog):
               self.MessageServerPort = ''
               self.SSLClientCert = ''
               self.SSLClientKey = ''
+              self.SSLMsgSrvCert = ''
           else:
               self.Username = self.txtUsername.GetValue()
               self.Password = self.txtPassword.GetValue()
@@ -490,6 +567,7 @@ class UsernameandPassword(wx.Dialog):
               self.MessageServerPort = self.messageServerPanel.messageServerPort.GetValue()
               self.SSLClientCert = self.sslClientCert.GetValue()
               self.SSLClientKey = self.sslClientKey.GetValue()
+              self.SSLMsgSrvCert = self.sslMsgSrvCert.GetValue()
           self.DBName   = self.chDBName.GetValue()
 
           # the EVT_KILL_FOCUS for the Combo Boxes isn't getting called on the Mac.  Let's call it manually here
@@ -510,15 +588,11 @@ class UsernameandPassword(wx.Dialog):
           self.MessageServerPort = ''
           self.SSLClientCert = ''
           self.SSLClientKey = ''
+          self.SSLMsgSrvCert = ''
         return None
 
-
     def OnCloseWindow(self, event):
-
-        print "UsernameandPasswordClass.OnOK():  Error Checking!"
-
         event.Veto()
-
 
     def OnNameSelect(self, event):
         """ Process Database Name Selection (only used on Mac due to weird Mac bug!) """
@@ -651,6 +725,9 @@ class UsernameandPassword(wx.Dialog):
         elif event.GetId() == self.sslClientKeyBrowse.GetId():
             prompt = _("Select the SSL Client Key file")
             fileName = self.sslClientKey.GetValue()
+        elif event.GetId() == self.sslMsgSrvCertBrowse.GetId():
+            prompt = _("Select the SSL Message Server Certificate file")
+            fileName = self.sslMsgSrvCert.GetValue()
         (path, flnm) = os.path.split(fileName)
         if path != '':
             self.sslDir = path
@@ -667,6 +744,8 @@ class UsernameandPassword(wx.Dialog):
                 self.sslClientCert.SetValue(fs)
             elif event.GetId() == self.sslClientKeyBrowse.GetId():
                 self.sslClientKey.SetValue(fs)
+            elif event.GetId() == self.sslMsgSrvCertBrowse.GetId():
+                self.sslMsgSrvCert.SetValue(fs)
             (path, flnm) = os.path.split(fs)
             if path != '':
                 self.sslDir = path
@@ -677,7 +756,7 @@ class UsernameandPassword(wx.Dialog):
 
     def GetMultiUserValues(self):
         """ Get all Data Values needed for Multi-user version """
-        return (self.SSL, self.MessageServer, self.MessageServerPort, self.SSLClientCert, self.SSLClientKey)
+        return (self.SSL, self.MessageServer, self.MessageServerPort, self.SSLClientCert, self.SSLClientKey, self.SSLMsgSrvCert)
 
     def GetUsername(self):
         """ Get the User Name Entry """
@@ -718,6 +797,10 @@ class UsernameandPassword(wx.Dialog):
     def GetSSLClientKey(self):
         """ Get the SSL Client Key Entry """
         return self.SSLClientKey
+
+    def GetMsgSrvCert(self):
+        """ Get the SSL Message Server Certificate """
+        return self.SSLMsgSrvCert
 
     def OnDeleteDatabase(self, event):
         """ Delete a database """

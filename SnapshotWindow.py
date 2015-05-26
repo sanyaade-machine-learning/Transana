@@ -172,6 +172,22 @@ class SnapshotWindow(wx.Frame):
         # Create a Sizer for the Panel
         pnlSizer = wx.BoxSizer(wx.VERTICAL)
 
+        # Get a list of all Snapshots in the same collection
+        self.snapshotList = DBInterface.list_of_snapshots_by_collectionnum(self.obj.collection_num, True)
+        # Initialize values for Previous and Next Snapshots
+        self.prevSnapshot = 0
+        self.nextSnapshot = 0
+        # Determine the list index for the current Snapshot
+        index = self.snapshotList.index((self.obj.number, self.obj.id, self.obj.collection_num, self.obj.sort_order))
+        # If the current snapshot isn't the first item in the list ...
+        if index > 0:
+            # ... then remember the previous snapshot's number
+            self.prevSnapshot = self.snapshotList[index - 1][0]
+        # If the current snapshot isn't the last item in the list ...
+        if index < len(self.snapshotList) - 1:
+            # ... then remember the next snapshot's number
+            self.nextSnapshot = self.snapshotList[index + 1][0]
+
         if self.showWindow:
             # Create the Toolbar
             self.toolbar = self.CreateToolBar ()  # wx.ToolBar(self.panel)
@@ -212,6 +228,24 @@ class SnapshotWindow(wx.Frame):
             bmp = TransanaImages.Keyword16.GetBitmap()
             self.codingKeyTool = self.toolbar.AddTool(wx.ID_ANY, bitmap=bmp, isToggle=False, shortHelpString = _("Show Coding Key"))
             self.Bind(wx.EVT_TOOL, self.OnCodingKey, self.codingKeyTool)
+
+            # Add a Previous button
+            bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
+            self.prevSnapBtn = self.toolbar.AddTool(wx.ID_ANY, bitmap=bmp, isToggle=False, shortHelpString = _("Previous Snapshot"))
+            self.Bind(wx.EVT_TOOL, self.OnChangeSnapshot, self.prevSnapBtn)
+            # If there is no previous snapshot ...
+            if self.prevSnapshot == 0:
+                # ... disable the button
+                self.toolbar.EnableTool(self.prevSnapBtn.GetId(), False)
+                
+            # If there is a next snapshot in the collection, add a Next button
+            bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
+            self.nextSnapBtn = self.toolbar.AddTool(wx.ID_ANY, bitmap=bmp, isToggle=False, shortHelpString = _("Next Snapshot"))
+            self.Bind(wx.EVT_TOOL, self.OnChangeSnapshot, self.nextSnapBtn)
+            # If there is no next snapshot ...
+            if self.nextSnapshot == 0:
+                # ... disable the button
+                self.toolbar.EnableTool(self.nextSnapBtn.GetId(), False)
 
             # Use multiple Separators to create a space between cursor modes and coding tools
             self.toolbar.AddSeparator()
@@ -454,6 +488,8 @@ class SnapshotWindow(wx.Frame):
 
         # Create a FloatCanvas for the image and coding
         self.canvas = FloatCanvas.FloatCanvas(self.panel)
+        # Set Layout Direction to Left-to-Right to prevent image reversal in Arabic
+        self.canvas.SetLayoutDirection(wx.Layout_LeftToRight)
         # Add the FloatCanvas to the Panel Sizer
         pnlSizer.Add(self.canvas, 1, wx.EXPAND | wx.GROW, 0)
         # Set the Panel Sizer on the Panel and Fit it.
@@ -472,7 +508,7 @@ class SnapshotWindow(wx.Frame):
 
         # Set the minimum scale to 1/20th normal size
         self.canvas.MinScale = 0.05
-        # Set the maximum scale to 3.7 times normal size.  (This avoids unsightly but not serious errors with large images.)
+        # Set the maximum scale to 5 times normal size.  (This avoids unsightly but not serious errors with large images.)
         self.canvas.MaxScale = 5.0  # 3.70
         if self.showWindow:
             # Select the Move Tool initially
@@ -554,6 +590,20 @@ class SnapshotWindow(wx.Frame):
             newItem.SetHelp("%s" % itemNumber)
             # Bind the ID to the Menu Handler
             wx.EVT_MENU(self, id, self.OnWindowMenuItem)
+
+    def UpdateWindowMenuItem(self, oldName, oldNumber, newName, newNumber):
+        """ Update an item from this Snapshot Window's Window menu when a snapshot has been changed via Prev / Next buttons """
+        # Let's go ahead and keep the menu for non-Mac platforms
+        if self.showWindow and (not '__WXMAC__' in wx.PlatformInfo):
+            # Iterate through all of the Window Menu Items
+            for item in self.menuWindow.GetMenuItems():
+                # Find the item with the correct name and number
+                if (oldName == item.GetLabel()) and (oldNumber == int(item.GetHelp())):
+                    # Update the Menu Label and Menu's Help (which indicates the Snapshot Number)
+                    item.SetItemLabel(newName)
+                    item.SetHelp("%s" % newNumber)
+                    # We don't need to look any more
+                    break
 
     def OnWindowMenuItem(self, event):
         """ Handle the Selection of an item in the Window Menu """
@@ -975,6 +1025,149 @@ class SnapshotWindow(wx.Frame):
             pos = (rect[0] + rect[2]  - winPos[2], winPos[1])
             self.codingKeyPopup.SetPosition(pos)
 
+    def OnChangeSnapshot(self, event):
+        """ Handle the Previous and Next Snapshot buttons """
+
+        # Remember the old Snapshot / Snapshot Window / Snapshot Window Menu Item name
+        oldSnapshotName = self.obj.id
+        oldSnapshotNumber = self.obj.number
+
+        # if we're in Edit Mode ...
+        if self.showWindow and self.editTool.IsToggled():
+            # ... leave Edit Mode
+            self.LeaveEditMode()
+
+            # If LeaveEditMode did NOT leave Edit Mode ...
+            if self.editTool.IsToggled():
+                # ... there is an error condition and we need to VETO the close!
+                event.Veto()
+                # Reset the closing flag.  We're not closing after all.
+                self.closing = False
+                # We need to exit this method now for the Veto to occur properly.
+                return
+
+        # If the Coding Key is visible ...
+        if self.codingKeyPopup != None:
+            # Start Exception handling
+            try:
+                # ... close the Coding Key
+                self.codingKeyPopup.Close()
+            # Ignore exceptions
+            except:
+                pass
+
+        # If the Previous Button was pressed ...
+        if event.GetId() == self.prevSnapBtn.GetId():
+            # ... load the Previous Snapshot
+            newSnapshot = Snapshot.Snapshot(self.prevSnapshot)
+        # If the Next Button was pressed ...
+        elif event.GetId() == self.nextSnapBtn.GetId():
+            # ... load the Next Snapshot
+            newSnapshot = Snapshot.Snapshot(self.nextSnapshot)
+
+        # Check to see if the image file can be found
+        if not os.path.exists(newSnapshot.image_filename):
+            # If not, raise an exception
+            errmsg = unicode(_("Image file not found:\n%s"), 'utf8')
+            raise TransanaExceptions.ImageLoadError(errmsg % newSnapshot.image_filename)
+
+        # Load the image
+        self.bgImage = wx.Image(newSnapshot.image_filename)
+            
+        # Make sure the image is loaded, is not corrupt
+        if not self.bgImage.IsOk():
+            # If not, raise an exception
+            errmsg = unicode(_("Unable to load image file:\n%s\nThere may be a problem with the file, or you may\nhave too many Snapshots open."), 'utf8')
+            raise TransanaExceptions.ImageLoadError(errmsg % newSnapshot.image_filename)
+
+        # Change Window Menu Items in MenuWindow and all Snapshot Windows.  This can be done via the ControlObject.
+        # This has to be done NOW in case the Snapshot being loaded is loaded and edited in another window!!
+        self.ControlObject.UpdateWindowMenu(oldSnapshotName, oldSnapshotNumber, newSnapshot.id, newSnapshot.number)
+
+        # Now we have to re-load the Snapshot, in case it was updated in another window that just got closed.
+        self.obj = Snapshot.Snapshot(newSnapshot.number)
+
+        # Clear the Canvas to remove the previous Snapshot
+        self.canvas.ClearAll()
+
+        # Change the Window Name
+        self.SetTitle(self.obj.id)
+
+        # If the image that is passed in has a defined window size ...
+        if self.obj.image_size[0] > 0:
+            # ... use that defined size
+            width = self.obj.image_size[0]
+            height = self.obj.image_size[1]
+        # If the image does NOT have a size ...
+        else:
+            # ... use the default image window size
+            width = self.__size()[0]
+            height = self.__size()[1]
+
+        # Resize the window 
+        self.SetSize((width, height))
+
+        # Get a list of all Snapshots in the same collection
+        self.snapshotList = DBInterface.list_of_snapshots_by_collectionnum(self.obj.collection_num, True)
+        # Initialize values for Previous and Next Snapshots
+        self.prevSnapshot = 0
+        self.nextSnapshot = 0
+        # Determine the list index for the current Snapshot
+        index = self.snapshotList.index((self.obj.number, self.obj.id, self.obj.collection_num, self.obj.sort_order))
+        # If the current snapshot isn't the first item in the list ...
+        if index > 0:
+            # ... then remember the previous snapshot's number
+            self.prevSnapshot = self.snapshotList[index - 1][0]
+            self.toolbar.EnableTool(self.prevSnapBtn.GetId(), True)
+        else:
+            self.toolbar.EnableTool(self.prevSnapBtn.GetId(), False)
+        # If the current snapshot isn't the last item in the list ...
+        if index < len(self.snapshotList) - 1:
+            # ... then remember the next snapshot's number
+            self.nextSnapshot = self.snapshotList[index + 1][0]
+            self.toolbar.EnableTool(self.nextSnapBtn.GetId(), True)
+        else:
+            self.toolbar.EnableTool(self.nextSnapBtn.GetId(), False)
+
+        # The FloatCanvas ScaledBitmap object seems to run into problems when zoomed in too far.  Large images raise
+        # an exception on Zoom In with click and Wheel zooms, as well as with selection-based zoomed.  I contacted Chris
+        # Barker, who wrote FloatCanvas, and he suggested I try ScaledBitmap2, which requires a 2-step creation process.
+        # It seems to work.
+        # Add a Scaled Bitmap, converted from the loaded image, to the SnapshotWindow canvas
+        bgBitmapObj = FloatCanvas.ScaledBitmap2(self.bgImage,  # wx.BitmapFromImage(self.bgImage),
+                                               (0 - (float(self.bgImage.GetWidth()) / 2.0), (float(self.bgImage.GetHeight()) / 2.0)),
+                                               Height = self.bgImage.GetHeight(),
+                                               Position = "tl")
+        self.canvas.AddObject(bgBitmapObj)
+
+        # Set the minimum scale to 1/20th normal size
+        self.canvas.MinScale = 0.05
+        # Set the maximum scale to 3.7 times normal size.  (This avoids unsightly but not serious errors with large images.)
+        self.canvas.MaxScale = 5.0  # 3.70
+        if self.showWindow:
+            # Select the Move Tool initially
+            self.toolbar.ToggleTool(self.moveTool.GetId(), True)
+        # Set the Canvas Mode to the Move Tool initially
+        self.canvas.SetMode(GUIMode.GUIMove())
+
+        # If the snapshot that was passed in has a defined Scale ...
+        if self.obj.image_scale > 0.0:
+            # ... set the canvas' scale to the snapshot's value ...
+            self.canvas.Scale = self.obj.image_scale
+            # ... and apply the scale change to the canvas.
+            self.canvas.SetToNewScale(DrawFlag=True)
+        # If the snapshot that was passed in does NOT have a defined Scale ...
+        else:
+            # ... size the image to fit the frame
+            self.canvas.ZoomToBB()
+        # Position the image according to the snapshot object's settings
+        self.canvas.ViewPortCenter = [self.obj.image_coords[0], self.obj.image_coords[1]]
+        # Draw the initial codingObjects
+        self.FileRedraw(None)
+
+        # Call Yield so everything gets drawn properly
+        wx.GetApp().Yield(True)
+            
     def OnKWGSelect(self, event):
         """ Handle the selection of a Keyword Group """
         # Initialize a list for Keyword Choices
@@ -1209,8 +1402,8 @@ class SnapshotWindow(wx.Frame):
         if (self.mouseDown != None) and (self.editTool.IsToggled()) and (self.line_color_cb.IsEnabled()):
             # Determine how much the mouse has moved
             mouseChange = self.mouseUp - self.mouseDown
-            # If the mouse has moved at least 10 pixels in either direction ...
-            if (abs(mouseChange[0]) > 10) or (abs(mouseChange[1]) > 10):
+            # If the mouse has moved at least 5 pixels in either direction ...  (Used to be 10, which was too big!)
+            if (abs(mouseChange[0]) > 5) or (abs(mouseChange[1]) > 5):
                 # Initialize the Draw Object to None
                 drawObj = None
                 # If we're drawing an Arrow ...
@@ -2041,7 +2234,8 @@ class GUITransana(GUIMode.GUIBase):
     def OnMove(self, event):
         """ Detect Mouse Motion for Rubber Band Box and Hit Test functions """
         # Hit Test
-        self.Canvas.MouseOverTest(event)
+        # self.Canvas.MouseOverTest(event)
+
         # Always raise the Move event.
         self.Canvas._RaiseMouseEvent(event,FloatCanvas.EVT_FC_MOTION)
         # Rubber Band Box

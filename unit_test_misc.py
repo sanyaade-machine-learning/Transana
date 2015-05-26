@@ -45,7 +45,7 @@ class FormCheck(wx.Frame):
     def RunTests(self):
         # Tests defined:
         testsNotToSkip = []
-        startAtTest = 100  # Should start at 1, not 0!
+        startAtTest = 1  # Should start at 1, not 0!
         endAtTest = 500   # Should be one more than the last test to be run!
         testsToRun = testsNotToSkip + range(startAtTest, endAtTest)
 
@@ -286,7 +286,7 @@ class FormCheck(wx.Frame):
 
 class MyApp(wx.App):
    def OnInit(self):
-      frame = FormCheck(None, -1, "Unit Test 1: Objects and Forms")
+      frame = FormCheck(None, -1, "Unit Test 4: Miscellaneous Functions")
       self.SetTopWindow(frame)
       return True
       

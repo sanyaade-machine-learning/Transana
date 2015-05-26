@@ -36,6 +36,8 @@ import Dialogs
 import Episode
 # Import Transana's Note object
 import Note
+# import Transana's Constants
+import TransanaConstants
 # import Transana's Exceptions
 from TransanaExceptions import *
 # import Transana's Globals
@@ -65,6 +67,12 @@ class Series(DataObject.DataObject):
         str += 'keyword_group = %s\n\n' % self.keyword_group.encode('utf8')
         return str
         
+    def __eq__(self, other):
+        """ Object equality check """
+        if other == None:
+            return False
+        else:
+            return self.__dict__ == other.__dict__
 
 # Public methods
 
@@ -74,44 +82,101 @@ class Series(DataObject.DataObject):
         # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
         if 'unicode' in wx.PlatformInfo:
             name = name.encode(TransanaGlobal.encoding)
+        # Get the database connection
         db = DBInterface.get_db()
+        # Define the load query
         query = """
         SELECT * FROM Series2
             WHERE SeriesID = %s
         """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Get a database cursor
         c = db.cursor()
-        c.execute(query, name)
-        n = c.rowcount
-        if (n != 1):
-            c.close()
-            self.clear()
-            raise RecordNotFoundError, (name, n)
+        # Execute the query
+        c.execute(query, (name, ))
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            # ... so assume one row return for now
+            n = 1
+        # If not sqlite ...
         else:
+            # ... we can use rowcount
+            n = c.rowcount
+        # If not one row ...
+        if (n != 1):
+            # ... close the database cursor ...
+            c.close()
+            # ... clear the current series ...
+            self.clear()
+            # ... and raise an exception
+            raise RecordNotFoundError, (name, n)
+        # If exactly one row, or sqlite ...
+        else:
+            # ... get the query results ...
             r = DBInterface.fetch_named(c)
+            # If sqlite and no results ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current series ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (name, 0)
+            # Load the database results into the Series object
             self._load_row(r)
-
+        # Close the database cursor ...
         c.close()
 
     def db_load_by_num(self, num):
         """Load a record by record number."""
+        # Get the database connection
         db = DBInterface.get_db()
+        # Define the load query
         query = """
         SELECT * FROM Series2
             WHERE SeriesNum = %s
         """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Get a database cursor
         c = db.cursor()
-        c.execute(query, num)
-        n = c.rowcount
-        if (n != 1):
-            c.close()
-            self.clear()
-            raise RecordNotFoundError, (num, n)
+        # Execute the query
+        c.execute(query, (num, ))
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            # ... so assume one result for now
+            n = 1
+        # If not sqlite ...
         else:
+            # ... we can use rowcount
+            n = c.rowcount
+        # If something other than one record is returned ...
+        if (n != 1):
+            # ... close the database cursor ...
+            c.close()
+            # ... clear the current Series object ...
+            self.clear()
+            # ... and raise an exception
+            raise RecordNotFoundError, (num, n)
+        # If exactly one row is returned, or we're using sqlite ...
+        else:
+            # ... load the query results ...
             r = DBInterface.fetch_named(c)
+            # If sqlite and no data is loaded ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current Series object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (num, 0)
+            # Place the loaded data in the object
             self._load_row(r)
+        # Close the database cursor ...
         c.close()
         
-    def db_save(self):
+    def db_save(self, use_transactions=True):
         """Save the record to the database using Insert or Update as
         appropriate."""
 
@@ -154,7 +219,7 @@ class Series(DataObject.DataObject):
             INSERT INTO Series2
                 (SeriesID, SeriesComment, SeriesOwner, DefaultKeywordGroup)
                 VALUES
-                (%s,%s,%s,%s)
+                (%s, %s, %s, %s)
             """
         else:
             # check for dupes
@@ -178,9 +243,13 @@ class Series(DataObject.DataObject):
                 WHERE SeriesNum = %s
             """
             values = values + (self.number,)
-
+        # Get a database cursor
         c = DBInterface.get_db().cursor()
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Execute the query
         c.execute(query, values)
+        # Close the database cursor
         c.close()
         # if we saved a new series, NUM was auto-assigned so our
         # 'local' data is out of date.  re-sync
@@ -191,7 +260,7 @@ class Series(DataObject.DataObject):
         """Delete this object record from the database.  Raises
         RecordLockedError exception if record is locked and unable to be
         deleted."""
-
+        # Assume success
         result = 1
         try:
             # Initialize delete operation, begin transaction if necessary.

@@ -79,6 +79,10 @@ class ClipKeyword(object):
         str += '  example = %s (%s)\n\n' % (self.example, type(self.example))
         return str.encode('utf8')
 
+    def __eq__(self, other):
+        """ Determine object equality """
+        return self.__dict__ == other.__dict__
+
     def db_save(self):
         """ Saves ClipKeyword record to Database """
         # NOTE:  This routine, at present, is ONLY used by the Database Import routine.
@@ -102,6 +106,8 @@ class ClipKeyword(object):
                         (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example)
                       VALUES
                         (%s, %s, %s, %s, %s, %s) """
+        # Adjust the query for sqlite if needed
+        SQLText = DBInterface.FixQuery(SQLText)
         # Prepare the Data Values for the query
         values = (self.episodeNum, self.clipNum, self.snapshotNum, keywordGroup, keyword, self.example)
         # Execute the Query

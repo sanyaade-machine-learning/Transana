@@ -27,14 +27,16 @@ import wx
 import DataObject
 # Import the Transana Database Interface
 import DBInterface
-# Import MySQLdb for its DateTime class, used to implement the CoreData Date field
-import MySQLdb
+# import Transana's Constants
+import TransanaConstants
 # Import the Transana Exceptions
 from TransanaExceptions import *
 import TransanaGlobal
 import types
 # import Python's sys module
 import sys
+# import Python's datetime module
+import datetime
 
 class CoreData(DataObject.DataObject):
     """This class defines the structure for the Core Data object.  This
@@ -107,13 +109,21 @@ class CoreData(DataObject.DataObject):
         # Define the SQL that loads a Core Data record
         query = """ SELECT * FROM CoreData2
                       WHERE Identifier = %s """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Get a Database Cursor
         dbCursor = DBInterface.get_db().cursor()
         # Execute the SQL Statement using the Database Cursor
-        dbCursor.execute(query, name)
+        dbCursor.execute(query, (name, ))
 
         # Check the Query Results and load the data
-        rowCount = dbCursor.rowcount
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            # ... so just assume we get one record for now
+            rowCount = 1
+        # If MySQL, use rowcount
+        else:
+            rowCount = dbCursor.rowcount
         # If anything other that 1 record is returned, we have a problem
         if (rowCount != 1):
             # Close the Database Cursor
@@ -124,6 +134,14 @@ class CoreData(DataObject.DataObject):
         else:
             # Get the Raw Data and prepare it for loading into the Object
             data = DBInterface.fetch_named(dbCursor)
+            # If sqlite and no data is returned ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (data == {}):
+                # ... close the database cursor ...
+                dbCursor.close()
+                # ... clear the current CoreData object ...
+                self.clear()
+                # and raise an exception
+                raise RecordNotFoundError, (name, 0)
             # Load the prepared Raw Data into the Object
             self._load_row(data)
 
@@ -240,7 +258,8 @@ class CoreData(DataObject.DataObject):
             """
             # Add the Record Number to the Values for the WHERE Clause
             values = values + (self.number,)
-
+        # Adjust query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Get a Database Cursor
         dbCursor = DBInterface.get_db().cursor()
         # Execute the SQL Query with the data values assembled above
@@ -250,8 +269,7 @@ class CoreData(DataObject.DataObject):
         # In this case, we need to now load the database record to get the new Record Number.
         if (self.number == 0):
             # Load the auto-assigned new number record
-            self.db_load(self.id)           
-
+            self.db_load(self.id)
         # Close the Database Cursor
         dbCursor.close()
             
@@ -397,10 +415,17 @@ class CoreData(DataObject.DataObject):
                         year = 0
                     else:
                         year = int(year)
+                    # String-based Dates seem to come in two different forms, MM/DD/YYYY and YYYY/MM/DD.
+                    # Let's see if we got it wrong and adjust
+                    if month > 12:
+                        temp = year
+                        year = month
+                        month = day
+                        day = temp
                     # if all values were empty or bogus, set _dc_date to None, but if we have SOMETHING to save,
                     # save it.
                     if (year != 0) or (month != 0) or (day != 0):
-                        self._dc_date = MySQLdb.Date(int(year), int(month), int(day))
+                        self._dc_date = datetime.date(int(year), int(month), int(day))
                     else:
                         self._dc_date = None
                 # If we get a non-string argument, just save it.  

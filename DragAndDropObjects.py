@@ -76,6 +76,8 @@ import TransanaConstants            # Import the Transana Constants
 import TransanaGlobal               # Import Transana's Globals
 import TransanaExceptions           # Import Transana's Exceptions
 
+# initialize a GLOBAL variable called YESTOALL to handle cross-object communication required for Copy / Move requests
+YESTOALL = False
 
 def DragDropEvaluation(source, destination):
     """ This boolean function indicates whether the source tree node can legally be dropped (or pasted) on the destination
@@ -428,7 +430,6 @@ class DataTreeDropTarget(wx.PyDropTarget):
 
     def OnDrop(self, x, y):
         # Process the "Drop" event
-
         # If you drop off the Database Tree, you get an exception here
         try:
             # Use the tree's HitTest method to find out about the potential drop target for the current mouse position
@@ -444,6 +445,8 @@ class DataTreeDropTarget(wx.PyDropTarget):
 
     def OnData(self, x, y, dragResult):
         # once OnDrop returns TRUE, this method is automatically called.
+        global YESTOALL
+        YESTOALL = False
 
         # Let's get the data being dropped so we can do some processing logic
         if self.GetData():
@@ -455,7 +458,7 @@ class DataTreeDropTarget(wx.PyDropTarget):
                 # one from a previous drag has been Cleared, this will be successful.
                 sourceDataList = cPickle.loads(self.sourceNodeData.GetData())
                 # This line compares the data being dragged (sourceData) to the drop site determined in OnDrop and
-                # passed here as self.dropData.  
+                # passed here as self.dropData.
                 if DragDropEvaluation(sourceDataList, self.dropData):
                     # if the sourceDataList is NOT a list (i.e. a single tree node item instead of mulitple selections) ...
                     if not isinstance(sourceDataList, list):
@@ -533,13 +536,13 @@ class DataTreeDropTarget(wx.PyDropTarget):
                     else:
                         # ... act as if the user pressed Yes to be able to continue
                         result = wx.ID_YES
-
                     # If the user said yes, or we didn't ask anything ...
                     if result == wx.ID_YES:
                         # If we have multiple Keywords dropped on a Series Node ...
                         if (len(sourceDataList) > 1) and \
                            (sourceDataList[0].nodetype == 'KeywordNode') and \
                            (self.dropData.nodetype in ['SeriesNode', 'EpisodeNode']):
+
                             # Create a Keyword List
                             kwList = []
 
@@ -602,7 +605,6 @@ class DataTreeDropTarget(wx.PyDropTarget):
 
             except:
                 # If an expection occurs here, it's no big deal.  Forget about it.
-
                 # Reset the cursor, regardless of whether the drop succeeded or failed.
                 self.tree.SetCursor(wx.StockCursor(wx.CURSOR_ARROW))
                 pass
@@ -1423,6 +1425,8 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
           action     -- a string of "Copy" or "Move", indicating whether a Copy or Cut/Move has been requested.
                         (This value is ignored in some instances where "Move" has no meaning.  """
 
+    global YESTOALL
+
     # Since we get the actual destination node as a parameter, let's first extract the Node Data for the Destination
     destNodeData = treeCtrl.GetPyData(destNode)
 
@@ -1854,15 +1858,26 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
         # Load the Destination Collection
         destCollection = Collection.Collection(destNodeData.recNum, destNodeData.parent)
 
-        # Get user confirmation of the Clip Copy/Move request
-        if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
+        # If "Yes to All" has not already been selected ...
+        if not YESTOALL:
+            # Get user confirmation of the Clip Copy/Move request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
+            else:
+                prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt, yesToAll=True)
+            result = dlg.LocalShowModal()
+            # If the user selected Yes To All, we need to process that before destroying the Dialog
+            if result == dlg.YESTOALLID:
+                # Set the global YesToAll to True
+                YESTOALL = True
+                # Yes to All is a Yes.
+                result = wx.ID_YES
+            dlg.Destroy()
         else:
-            prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
-        dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-        result = dlg.LocalShowModal()
-        dlg.Destroy()
+            result = wx.ID_YES
+        
         if result == wx.ID_YES:
             try:
                 # Copy or Move the Clip to the Destination Collection
@@ -1902,15 +1917,27 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
 
         # If not, we are copying/moving a Clip to a place in the SortOrder in a Different Colletion
         else:
-            # Get user confirmation of the Clip Copy/Move request
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
+
+            # If "Yes to All" has not already been selected ...
+            if not YESTOALL:
+                # Get user confirmation of the Clip Copy/Move request
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
+                else:
+                    prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
+                dlg = Dialogs.QuestionDialog(treeCtrl, prompt, yesToAll=True)
+                result = dlg.LocalShowModal()
+                # If the user selected Yes To All, we need to process that before destroying the Dialog
+                if result == dlg.YESTOALLID:
+                    # Set YesToAll to True
+                    YESTOALL = True
+                    # YesToAll is a Yes
+                    result = wx.ID_YES
+                dlg.Destroy()
             else:
-                prompt = _('Do you want to %s Clip "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceClip.id, sourceCollection.id, destCollection.id)
-            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-            result = dlg.LocalShowModal()
-            dlg.Destroy()
+                result = wx.ID_YES
+
             if result == wx.ID_YES:
                 try:
                     # Copy or Move the Clip to the Destination Collection
@@ -1999,15 +2026,28 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
         # Load the Destination Collection
         destCollection = Collection.Collection(destNodeData.recNum, destNodeData.parent)
 
-        # Get user confirmation of the Clip Copy/Move request
-        if 'unicode' in wx.PlatformInfo:
-            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
+        # If "Yes to All" has not already been selected ...
+        if not YESTOALL:
+            # Get user confirmation of the Clip Copy/Move request
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
+            else:
+                prompt = _('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
+            dlg = Dialogs.QuestionDialog(treeCtrl, prompt, yesToAll=True)
+            result = dlg.LocalShowModal()
+            # If the user selected Yes To All, we need to process that before destroying the Dialog
+            if result == dlg.YESTOALLID:
+                # Set YesToAll to True
+                YESTOALL = True
+                # YesToAll is a Yes
+                result = wx.ID_YES
+            dlg.Destroy()
+        # If we have YesToAll ...
         else:
-            prompt = _('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
-        dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-        result = dlg.LocalShowModal()
-        dlg.Destroy()
+            # ... then that's a Yes
+            result = wx.ID_YES
+
         if result == wx.ID_YES:
             try:
                 # Copy or Move the Snapshot to the Destination Collection
@@ -2047,15 +2087,29 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
 
         # If not, we are copying/moving a Snapshot to a place in the SortOrder in a different Collection ...
         else:
-            # Get user confirmation of the Snapshot Copy/Move request
-            if 'unicode' in wx.PlatformInfo:
-                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
+
+            # If "Yes to All" has not already been selected ...
+            if not YESTOALL:
+                # Get user confirmation of the Snapshot Copy/Move request
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?'), 'utf8') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
+                else:
+                    prompt = _('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
+                dlg = Dialogs.QuestionDialog(treeCtrl, prompt, yesToAll=True)
+                result = dlg.LocalShowModal()
+                # If the user selected Yes To All, we need to process that before destroying the Dialog
+                if result == dlg.YESTOALLID:
+                    # Set YesToAll to True
+                    YESTOALL = True
+                    # YesToAll is a Yes
+                    result = wx.ID_YES
+                dlg.Destroy()
+            # If we have YesToAll ...
             else:
-                prompt = _('Do you want to %s Snapshot "%s" from\nCollection "%s" to\nCollection "%s"?') % (copyMovePrompt, sourceSnapshot.id, sourceCollection.id, destCollection.id)
-            dlg = Dialogs.QuestionDialog(treeCtrl, prompt)
-            result = dlg.LocalShowModal()
-            dlg.Destroy()
+                # ... then that's a Yes
+                result = wx.ID_YES
+
             if result == wx.ID_YES:
                 try:
                     # Copy or Move the Snapshot to the Destination Collection
@@ -4056,7 +4110,7 @@ def ChangeClipOrder(treeCtrl, destNode, sourceObject, sourceCollection):
         if isinstance(sourceObject, Snapshot.Snapshot):
             nodeList = sourceObject.GetNodeData(False)
 
-            print "DragAndDropObjects.ChangeClipOrder():", nodeList
+#            print "DragAndDropObjects.ChangeClipOrder():", nodeList
             
             # Now let's communicate with other Transana instances if we're in Multi-user mode
             if not TransanaConstants.singleUserVersion:
@@ -4067,8 +4121,8 @@ def ChangeClipOrder(treeCtrl, destNode, sourceObject, sourceCollection):
                     msg += " >|< %s"
                     data += (nd, )
 
-                print '"msg %s"' % (data,)
-                print
+#                print '"msg %s"' % (data,)
+#                print
                 
                 if TransanaGlobal.chatWindow != None:
                     TransanaGlobal.chatWindow.SendMessage(msg % data)
@@ -4086,8 +4140,10 @@ def ChangeClipOrder(treeCtrl, destNode, sourceObject, sourceCollection):
 
 def CreateQuickClip(clipData, kwg, kw, dbTree, extraKeywords=[]):
     """ Create a "Quick Clip", which is the implementation of a simplified form of Clip Creation """
-    # We need to error check to make sure we have a legal Clip spec
-    if (clipData.clipStart >= clipData.clipStop) or (clipData.text == ""):
+    # We need to error check to make sure we have a legal Clip spec.
+    # If multi-transcript QuickClip is being created, clipData.text will be a CLIP, not Transcript text!!!!
+    if (clipData.clipStart >= clipData.clipStop) or \
+       (not isinstance(clipData.text, Clip.Clip) and (clipData.text == "")):
         msg = _("You must select some text in the Transcript to be able to create a Quick Clip.")
         errorDlg = Dialogs.ErrorDialog(None, msg)
         errorDlg.ShowModal()
@@ -4185,10 +4241,8 @@ def CreateQuickClip(clipData, kwg, kw, dbTree, extraKeywords=[]):
                     vidFiles.append(sourceEpisode.additional_media_files[cnt]['filename'])
                 # increment the counter
                 cnt += 1
-
         # Check to see if a Quick Clip for this selection in this Transcript in this Episode has already been created.
         dupClipNum = DBInterface.CheckForDuplicateQuickClip(collectNum, clipData.episodeNum, clipData.transcriptNum, clipData.clipStart, clipData.clipStop, vidFiles)
-
         # -1 indicates no duplicate Quick Clip.  If there IS a duplicate ...
         if dupClipNum > -1:
             # ... load the existing Quick Clip
@@ -4362,7 +4416,10 @@ def CreateQuickClip(clipData, kwg, kw, dbTree, extraKeywords=[]):
                 tempTranscript.clip_start = quickClip.clip_start
                 tempTranscript.clip_stop = quickClip.clip_stop
                 # Assign the Transcript Text
-                tempTranscript.text = clipData.text
+                if clipData.text == u'<(transcript-less clip)>':
+                    tempTranscript.text = ''
+                else:
+                    tempTranscript.text = clipData.text
                 # Add the Temporary Transcript to the Quick Clip
                 quickClip.transcripts.append(tempTranscript)
 

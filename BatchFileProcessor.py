@@ -15,7 +15,8 @@
 #
 
 """ This module implements the Batch Waveform Generator for Transana.
-    Because of interface overlap, it also implements Batch Episode Generation! """
+    Because of interface overlap, it also implements Batch Episode Creation
+    and Batch Snapshot Creation! """
 
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Jonathan Beavers <jonathan.beavers@gmail.com>'
 
@@ -43,8 +44,9 @@ import sys
 class BatchFileProcessor(Dialogs.GenForm):
     """ Batch File Processor, used for Batch Waveform Generator and Batch Episode Creation """
     def __init__(self, parent, mode):
-        """ Initialize the Batch Waveform Generator form.  "mode" is either "waveform" for the
-            Batch Waveform Generator or "episode" for the Batch Episode Creation routine. """
+        """ Initialize the Batch Waveform Generator form.  "mode" is waveform" for the
+            Batch Waveform Generator, "episode" for the Batch Episode Creation routine,
+            or "snapshot" fo Batch Snapshot Creation. """
         # Remember the mode passed in.
         self.mode = mode
         # Based on the mode passed in, set the title and help context for the File Selection form
@@ -54,6 +56,9 @@ class BatchFileProcessor(Dialogs.GenForm):
         elif self.mode == 'episode':
             formTitle = _("Batch Episode Creation")
             helpContext = 'Batch Episode Creation'
+        elif self.mode == 'snapshot':
+            formTitle = _("Batch Snapshot Creation")
+            helpContext = 'Batch Snapshot Creation'
         else:
             print "UNKNOWN BATCHFILEPROCESSOR MODE"
 
@@ -247,8 +252,12 @@ class BatchFileProcessor(Dialogs.GenForm):
 
     def OnBrowse(self, evt):
         """ Invoked when the user presses the Get Files button. """
-        # Get Transana's File Filter definitions
-        fileTypesString = TransanaConstants.fileTypesString
+        if self.mode == "snapshot":
+            # Get Transana's Image File Filter definitions
+            fileTypesString = TransanaConstants.imageFileTypesString
+        else:
+            # Get Transana's Media File Filter definitions
+            fileTypesString = TransanaConstants.fileTypesString
         # Create a File Open dialog.
         # Changed from FileSelector to FileDialog to allow multiple file selections.
         fs = wx.FileDialog(self, _('Select a media file to process:'),
@@ -303,6 +312,10 @@ class BatchFileProcessor(Dialogs.GenForm):
 
     def FindMediaFiles(self, directory):
         """ Find files in a given directory with extensions that match those found in TransanaConstants.mediaFileTypes. """
+        if self.mode == "snapshot":
+            filetypes = TransanaConstants.imageFileTypes
+        else:
+            filetypes = TransanaConstants.mediaFileTypes
         # Starting with the specified directory, traverse through all files and subdirectories
         for root, dirs, files in os.walk(directory):
             # for all the files in the current directory ...
@@ -310,6 +323,6 @@ class BatchFileProcessor(Dialogs.GenForm):
                 # ... get the file extension of the current file
                 extension = name[name.rfind('.')+1:]
                 # If the extension is in the list of supported media types ...
-                if extension.lower() in TransanaConstants.mediaFileTypes:
+                if extension.lower() in filetypes:
                     # ... add the file to the File List
                     self.fileList.Append(os.path.join(root, name))

@@ -16,10 +16,16 @@
 
 """ This module implements the Search Interface. """
 
+USE_NOTEBOOK = True
+
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
 # import wxPython
 import wx
+# import the CustomTreeCtrl
+import wx.lib.agw.customtreectrl as CT
+# import Python's cPickle module
+import cPickle
 
 # import Transana's Database interface
 import DBInterface
@@ -34,6 +40,8 @@ import TransanaImages
 # import Python's os module
 import os
 
+T_CHECK_ALL    =  wx.NewId()
+T_CHECK_NONE   =  wx.NewId()
 
 class SearchDialog(wx.Dialog):
     """ Dialog Box that implements Transana's Search Interface. """
@@ -133,116 +141,372 @@ class SearchDialog(wx.Dialog):
         # Add the Include Sizer on the Main Sizer
         mainSizer.Add(includeSizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
-        # Add Boolean Operators Label
-        operatorsText = wx.StaticText(self, -1, _('Operators:'))
-        mainSizer.Add(operatorsText, 0, wx.LEFT, 10)
-        mainSizer.Add((0, 3))
-        
-        # Create a HORIZONTAL sizer for the first row
-        r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
-        # Add AND Button
-        self.btnAnd = wx.Button(self, -1, _('AND'), size=wx.Size(50, 24))
-        r1Sizer.Add(self.btnAnd, 0)
-        self.btnAnd.Enable(False)
-        wx.EVT_BUTTON(self, self.btnAnd.GetId(), self.OnBtnClick)
 
-        r1Sizer.Add((10, 0))
+        # experimental NOTEBOOK INTERFACE
+        if USE_NOTEBOOK:
 
-        # Add OR Button
-        self.btnOr = wx.Button(self, -1, _('OR'), size=wx.Size(50, 24))
-        r1Sizer.Add(self.btnOr, 0)
-        self.btnOr.Enable(False)
-        wx.EVT_BUTTON(self, self.btnOr.GetId(), self.OnBtnClick)
+            # Create a Notebook Control to allow different types of Search Information
+            selectionNotebook = wx.Notebook(self, -1)
+            # Set the Notebook Background to White (probably prevents a visible anomoly in Arabic!)
+            selectionNotebook.SetBackgroundColour(wx.WHITE)
 
-        r1Sizer.Add((1, 0), 1, wx.EXPAND)
 
-        # Add NOT Button
-        self.btnNot = wx.Button(self, -1, _('NOT'), size=wx.Size(50, 24))
-        r1Sizer.Add(self.btnNot, 0)
-        wx.EVT_BUTTON(self, self.btnNot.GetId(), self.OnBtnClick)
+            # *********************************************************************************************************
+            # Add a Panel to the Notebook for Text Search information
+#            panelText = wx.Panel(selectionNotebook, -1)
+#            panelText.SetBackgroundColour(wx.RED)
 
-        r1Sizer.Add((1, 0), 1, wx.EXPAND)
+            # Add a Sizer to the Text Search Panel
+#            panelTextSizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Add Left Parenthesis Button
-        self.btnLeftParen = wx.Button(self, -1, '(', size=wx.Size(30, 24))
-        r1Sizer.Add(self.btnLeftParen, 0)
-        wx.EVT_BUTTON(self, self.btnLeftParen.GetId(), self.OnBtnClick)
 
-        r1Sizer.Add((10, 0))
 
-        # Add Right Parenthesis Button
-        self.btnRightParen = wx.Button(self, -1, ')', size=wx.Size(30, 24))
-        r1Sizer.Add(self.btnRightParen, 0)
-        self.btnRightParen.Enable(False)
-        wx.EVT_BUTTON(self, self.btnRightParen.GetId(), self.OnBtnClick)
+            # Add the Text Search Sizer to the Collections Panel
+#            panelText.SetSizer(panelTextSizer)
 
-        r1Sizer.Add((1, 0), 1, wx.EXPAND)
+            # Add the Text Search Panel to the Notebook as the initial page
+#            selectionNotebook.AddPage(panelText, _("Text Search"), True)
+            # *********************************************************************************************************
 
-        # Add "Undo" Button
-        # Get the image for Undo
-        bmp = TransanaImages.Undo16.GetBitmap()
-        self.btnUndo = wx.BitmapButton(self, -1, bmp, size=wx.Size(30, 24))
-        self.btnUndo.SetToolTip(wx.ToolTip(_('Undo')))
-        r1Sizer.Add(self.btnUndo, 0)
-        wx.EVT_BUTTON(self, self.btnUndo.GetId(), self.OnBtnClick)
+            # Add a Panel to the Notebook for Collection information
+            panelCollections = wx.Panel(selectionNotebook, -1)
+#            panelCollections.SetBackgroundColour(wx.BLUE)
 
-        r1Sizer.Add((10, 0))
+            # Add a Sizer to the Collections Panel
+            panelCollectionsSizer = wx.BoxSizer(wx.VERTICAL)
 
-        # Add Reset Button
-        self.btnReset = wx.Button(self, -1, _('Reset'), size=wx.Size(80, 24))
-        r1Sizer.Add(self.btnReset, 0)
-        wx.EVT_BUTTON(self, self.btnReset.GetId(), self.OnBtnClick)
+            collToolBar = wx.ToolBar(panelCollections, -1, style=wx.TB_HORIZONTAL | wx.NO_BORDER)
+            # Toggle Button to indicate if child nodes should follow parent node
+            self.btnChildFollow = collToolBar.AddCheckLabelTool(-1, "Checkable", TransanaImages.CheckTree.GetBitmap(), shortHelp=_("Change Nested Collections"))
+            # have this be toggled by default
+            self.btnChildFollow.Toggle()
+            # Create the Check All button
+            self.btnCheckAll = collToolBar.AddTool(T_CHECK_ALL, TransanaImages.Check.GetBitmap(), shortHelpString=_('Check All'))
+            # Create the Uncheck All button
+            self.btnCheckNone = collToolBar.AddTool(T_CHECK_NONE, TransanaImages.NoCheck.GetBitmap(), shortHelpString=_('Uncheck All'))
+            collToolBar.Realize()
+            panelCollectionsSizer.Add(collToolBar, 0, wx.EXPAND, 0)
 
-        mainSizer.Add(r1Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+            self.Bind(wx.EVT_MENU, self.OnCollectionSelectAll, self.btnCheckAll)
+            self.Bind(wx.EVT_MENU, self.OnCollectionSelectAll, self.btnCheckNone)
 
-        r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
-        # Add Keyword Groups Label
-        keywordGroupsText = wx.StaticText(self, -1, _('Keyword Groups:'))
-        r2Sizer.Add(keywordGroupsText, 1, wx.EXPAND)
+            # Create a Tree Control with Checkboxes.
+            # (I experimented with the TR_AUTO_CHECK_CHILD style, but that is not appropriate.  Not wanting data
+            # from a certain collection doesn't necessarily imply we don't want it from the children.
+            self.ctcCollections = CT.CustomTreeCtrl(panelCollections, agwStyle=wx.TR_DEFAULT_STYLE )
+            # Set the TreeCtrl's background to white so it looks better
+            self.ctcCollections.SetBackgroundColour(wx.WHITE)
+            # Add the TreeCtrl to the Notebook Tab's Sizer
+            panelCollectionsSizer.Add(self.ctcCollections, 1, wx.EXPAND | wx.ALL, 10)
 
-        r2Sizer.Add((10, 0))
-        
-        # Add Keywords Label
-        keywordsText = wx.StaticText(self, -1, _('Keywords:'))
-        r2Sizer.Add(keywordsText, 1, wx.EXPAND)
+            # Define the TreeCtrl's Images
+            image_list = wx.ImageList(16, 16, 0, 2)
+            image_list.Add(TransanaImages.Collection16.GetBitmap())
+            image_list.Add(TransanaImages.db.GetBitmap())
+            self.ctcCollections.SetImageList(image_list)
 
-        mainSizer.Add(r2Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
-        mainSizer.Add((0, 3))
-        
-        r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+            # Add the TreeCtrl's Root Node
+            self.ctcRoot = self.ctcCollections.AddRoot(_("Collections"))
+            self.ctcCollections.SetItemImage(self.ctcRoot, 1, wx.TreeItemIcon_Normal)
+            self.ctcCollections.SetItemImage(self.ctcRoot, 1, wx.TreeItemIcon_Selected)
+            self.ctcCollections.SetItemImage(self.ctcRoot, 1, wx.TreeItemIcon_Expanded)
+            self.ctcCollections.SetItemImage(self.ctcRoot, 1, wx.TreeItemIcon_SelectedExpanded)
 
-        # Add Keyword Groups
-        self.kw_group_lb = wx.ListBox(self, -1, wx.DefaultPosition, wx.DefaultSize, [])
-        r3Sizer.Add(self.kw_group_lb, 1, wx.EXPAND)
-        # Define the "Keyword Group Select" behavior
-        wx.EVT_LISTBOX(self, self.kw_group_lb.GetId(), self.OnKeywordGroupSelect)
+            # Create a Mapping Dictionary for the Collections so we can place Nested Collections quickly
+            mapDict = {}
+            # Add the Root Node to the Mapping Dictionary
+            mapDict[0] = self.ctcRoot
 
-        r3Sizer.Add((10, 0))
-        
-        # Add Keywords
-        self.kw_lb = wx.ListBox(self, -1, wx.DefaultPosition, wx.DefaultSize, [])
-        r3Sizer.Add(self.kw_lb, 1, wx.EXPAND)
-        # Define the "Keyword Select" behavior
-        wx.EVT_LISTBOX(self, self.kw_lb.GetId(), self.OnKeywordSelect)
-        # Double-clicking a Keyword is equivalent to selecting it and pressing the "Add Keyword to Query" button
-        wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnBtnClick)
+            # Get all the Collections from the Database and iterate through them
+            for (collNo, collID, parentCollNo) in DBInterface.list_of_all_collections():
+                # If the Mapping Dictionary has the PARENT Collection ...
+                # (NOTE:  The query's ORDER BY clause means the parent should ALWAYS exist!!)
+                if mapDict.has_key(parentCollNo):
+                    # Get the Parent Node
+                    parentItem = mapDict[parentCollNo]
+                    # Create a new Checkbox Node for the current item a a child to the Parent Node
+                    item = self.ctcCollections.AppendItem(parentItem, collID, ct_type=CT.TREE_ITEMTYPE_CHECK)
+                    self.ctcCollections.SetItemImage(item, 0, wx.TreeItemIcon_Normal)
+                    self.ctcCollections.SetItemImage(item, 0, wx.TreeItemIcon_Selected)
+                    self.ctcCollections.SetItemImage(item, 0, wx.TreeItemIcon_Expanded)
+                    self.ctcCollections.SetItemImage(item, 0, wx.TreeItemIcon_SelectedExpanded)
+                    # Check the item
+                    self.ctcCollections.CheckItem(item, True)
+                    # Set the item's PyData to the Collection Number
+                    self.ctcCollections.SetPyData(item, collNo)
+                    # Add the new item to the Mapping Dictionary
+                    mapDict[collNo] = item
 
-        mainSizer.Add(r3Sizer, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+                else:
+                    print "SearchDialog.__init__(): Adding Collections.  ", collNo, collID, parentCollNo, "*** NOT ADDED ***"
 
-        # Add "Add Keyword to Query" Button
-        self.btnAdd = wx.Button(self, -1, _('Add Keyword to Query'), size=wx.Size(240, 24))
-        mainSizer.Add(self.btnAdd, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
-        wx.EVT_BUTTON(self, self.btnAdd.GetId(), self.OnBtnClick)
+            # Expand the tree's Root Node
+            self.ctcCollections.Expand(self.ctcRoot)
+            # Define the Item Check event handler.
+            self.ctcCollections.Bind(CT.EVT_TREE_ITEM_CHECKED, self.OnCollectionsChecked)
 
-        # Add Search Query Label
-        searchQueryText = wx.StaticText(self, -1, _('Search Query:'))
-        mainSizer.Add(searchQueryText, 0, wx.LEFT | wx.RIGHT, 10)
-        mainSizer.Add((0, 3))
-        
-        # Add Search Query Text Box
-        # The Search Query is Read-Only
-        self.searchQuery = wx.TextCtrl(self, -1, size = wx.Size(200, 120), style=wx.TE_MULTILINE | wx.TE_READONLY)
-        mainSizer.Add(self.searchQuery, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+            # Add the Collections Sizer to the Collections Panel
+            panelCollections.SetSizer(panelCollectionsSizer)
+
+            # Add the Collections Panel to the Notebook as the initial page
+            selectionNotebook.AddPage(panelCollections, _("Collections"), True)
+
+            # Add a Panel to the Notebook for the Keywords information
+            panelKeywords = wx.Panel(selectionNotebook, -1)
+
+            # Add a Sizer to the Keywords Panel
+            panelKeywordsSizer = wx.BoxSizer(wx.VERTICAL)
+
+            # Add Boolean Operators Label
+            operatorsText = wx.StaticText(panelKeywords, -1, _('Operators:'))
+            panelKeywordsSizer.Add(operatorsText, 0, wx.LEFT | wx.TOP, 10)
+            panelKeywordsSizer.Add((0, 3))
+
+            # Create a HORIZONTAL sizer for the first row
+            r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+            # Add AND Button
+            self.btnAnd = wx.Button(panelKeywords, -1, _('AND'), size=wx.Size(50, 24))
+            r1Sizer.Add(self.btnAnd, 0)
+            self.btnAnd.Enable(False)
+            wx.EVT_BUTTON(self, self.btnAnd.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((10, 0))
+
+            # Add OR Button
+            self.btnOr = wx.Button(panelKeywords, -1, _('OR'), size=wx.Size(50, 24))
+            r1Sizer.Add(self.btnOr, 0)
+            self.btnOr.Enable(False)
+            wx.EVT_BUTTON(self, self.btnOr.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((1, 0), 1, wx.EXPAND)
+
+            # Add NOT Button
+            self.btnNot = wx.Button(panelKeywords, -1, _('NOT'), size=wx.Size(50, 24))
+            r1Sizer.Add(self.btnNot, 0)
+            wx.EVT_BUTTON(self, self.btnNot.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((1, 0), 1, wx.EXPAND)
+
+            # Add Left Parenthesis Button
+            self.btnLeftParen = wx.Button(panelKeywords, -1, '(', size=wx.Size(30, 24))
+            r1Sizer.Add(self.btnLeftParen, 0)
+            wx.EVT_BUTTON(self, self.btnLeftParen.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((10, 0))
+
+            # Add Right Parenthesis Button
+            self.btnRightParen = wx.Button(panelKeywords, -1, ')', size=wx.Size(30, 24))
+            r1Sizer.Add(self.btnRightParen, 0)
+            self.btnRightParen.Enable(False)
+            wx.EVT_BUTTON(self, self.btnRightParen.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((1, 0), 1, wx.EXPAND)
+
+            # Add "Undo" Button
+            # Get the image for Undo
+            bmp = TransanaImages.Undo16.GetBitmap()
+            self.btnUndo = wx.BitmapButton(panelKeywords, -1, bmp, size=wx.Size(30, 24))
+            self.btnUndo.SetToolTip(wx.ToolTip(_('Undo')))
+            r1Sizer.Add(self.btnUndo, 0)
+            wx.EVT_BUTTON(self, self.btnUndo.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((10, 0))
+
+            # Add Reset Button
+            self.btnReset = wx.Button(panelKeywords, -1, _('Reset'), size=wx.Size(80, 24))
+            r1Sizer.Add(self.btnReset, 0)
+            wx.EVT_BUTTON(self, self.btnReset.GetId(), self.OnBtnClick)
+
+            panelKeywordsSizer.Add(r1Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+            # Add Keyword Groups Label
+            keywordGroupsText = wx.StaticText(panelKeywords, -1, _('Keyword Groups:'))
+            r2Sizer.Add(keywordGroupsText, 1, wx.EXPAND)
+
+            r2Sizer.Add((10, 0))
+            
+            # Add Keywords Label
+            keywordsText = wx.StaticText(panelKeywords, -1, _('Keywords:'))
+            r2Sizer.Add(keywordsText, 1, wx.EXPAND)
+
+            panelKeywordsSizer.Add(r2Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+            panelKeywordsSizer.Add((0, 3))
+            
+            r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Add Keyword Groups
+            self.kw_group_lb = wx.ListBox(panelKeywords, -1, wx.DefaultPosition, wx.DefaultSize, [])
+            r3Sizer.Add(self.kw_group_lb, 1, wx.EXPAND)
+            # Define the "Keyword Group Select" behavior
+            wx.EVT_LISTBOX(self, self.kw_group_lb.GetId(), self.OnKeywordGroupSelect)
+
+            r3Sizer.Add((10, 0))
+            
+            # Add Keywords
+            self.kw_lb = wx.ListBox(panelKeywords, -1, wx.DefaultPosition, wx.DefaultSize, [])
+            r3Sizer.Add(self.kw_lb, 1, wx.EXPAND)
+            # Define the "Keyword Select" behavior
+            wx.EVT_LISTBOX(self, self.kw_lb.GetId(), self.OnKeywordSelect)
+            # Double-clicking a Keyword is equivalent to selecting it and pressing the "Add Keyword to Query" button
+            wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnBtnClick)
+
+            panelKeywordsSizer.Add(r3Sizer, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            # Add "Add Keyword to Query" Button
+            self.btnAdd = wx.Button(panelKeywords, -1, _('Add Keyword to Query'), size=wx.Size(240, 24))
+            panelKeywordsSizer.Add(self.btnAdd, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+            wx.EVT_BUTTON(self, self.btnAdd.GetId(), self.OnBtnClick)
+
+            # Add Search Query Label
+            searchQueryText = wx.StaticText(panelKeywords, -1, _('Search Query:'))
+            panelKeywordsSizer.Add(searchQueryText, 0, wx.LEFT | wx.RIGHT, 10)
+            panelKeywordsSizer.Add((0, 3))
+            
+            # Add Search Query Text Box
+            # The Search Query is Read-Only
+            self.searchQuery = wx.TextCtrl(panelKeywords, -1, size = wx.Size(200, 120), style=wx.TE_MULTILINE | wx.TE_READONLY)
+            panelKeywordsSizer.Add(self.searchQuery, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            # Add the Keyword Sizer to the Keyword Panel
+            panelKeywords.SetSizer(panelKeywordsSizer)
+
+            # Add the Keywords Panel to tne Notebook and select it
+            selectionNotebook.AddPage(panelKeywords, _("Keywords"), True)
+
+            # Add the Notebook to the form's Main Sizer
+            mainSizer.Add(selectionNotebook, 5, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            # *****************************************************************************************************
+            # Set the Text Search Panel to AutoLayout
+#            panelText.SetAutoLayout(True)
+            # Lay Out the Text Search Panel
+#            panelText.Layout()
+            # *****************************************************************************************************
+
+            # Set the Collection Panel to AutoLayout
+            panelCollections.SetAutoLayout(True)
+            # Lay Out the Collections Panel
+            panelCollections.Layout()
+
+            # Set the Keyword Panel to AutoLayout
+            panelKeywords.SetAutoLayout(True)
+            # Lay Out the Keyword Panel
+            panelKeywords.Layout()
+
+        # TRADITIONAL Keywords Only Interface
+        else:
+            
+            # Add Boolean Operators Label
+            operatorsText = wx.StaticText(self, -1, _('Operators:'))
+            mainSizer.Add(operatorsText, 0, wx.LEFT, 10)
+            mainSizer.Add((0, 3))
+            
+            # Create a HORIZONTAL sizer for the first row
+            r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
+            # Add AND Button
+            self.btnAnd = wx.Button(self, -1, _('AND'), size=wx.Size(50, 24))
+            r1Sizer.Add(self.btnAnd, 0)
+            self.btnAnd.Enable(False)
+            wx.EVT_BUTTON(self, self.btnAnd.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((10, 0))
+
+            # Add OR Button
+            self.btnOr = wx.Button(self, -1, _('OR'), size=wx.Size(50, 24))
+            r1Sizer.Add(self.btnOr, 0)
+            self.btnOr.Enable(False)
+            wx.EVT_BUTTON(self, self.btnOr.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((1, 0), 1, wx.EXPAND)
+
+            # Add NOT Button
+            self.btnNot = wx.Button(self, -1, _('NOT'), size=wx.Size(50, 24))
+            r1Sizer.Add(self.btnNot, 0)
+            wx.EVT_BUTTON(self, self.btnNot.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((1, 0), 1, wx.EXPAND)
+
+            # Add Left Parenthesis Button
+            self.btnLeftParen = wx.Button(self, -1, '(', size=wx.Size(30, 24))
+            r1Sizer.Add(self.btnLeftParen, 0)
+            wx.EVT_BUTTON(self, self.btnLeftParen.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((10, 0))
+
+            # Add Right Parenthesis Button
+            self.btnRightParen = wx.Button(self, -1, ')', size=wx.Size(30, 24))
+            r1Sizer.Add(self.btnRightParen, 0)
+            self.btnRightParen.Enable(False)
+            wx.EVT_BUTTON(self, self.btnRightParen.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((1, 0), 1, wx.EXPAND)
+
+            # Add "Undo" Button
+            # Get the image for Undo
+            bmp = TransanaImages.Undo16.GetBitmap()
+            self.btnUndo = wx.BitmapButton(self, -1, bmp, size=wx.Size(30, 24))
+            self.btnUndo.SetToolTip(wx.ToolTip(_('Undo')))
+            r1Sizer.Add(self.btnUndo, 0)
+            wx.EVT_BUTTON(self, self.btnUndo.GetId(), self.OnBtnClick)
+
+            r1Sizer.Add((10, 0))
+
+            # Add Reset Button
+            self.btnReset = wx.Button(self, -1, _('Reset'), size=wx.Size(80, 24))
+            r1Sizer.Add(self.btnReset, 0)
+            wx.EVT_BUTTON(self, self.btnReset.GetId(), self.OnBtnClick)
+
+            mainSizer.Add(r1Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            r2Sizer = wx.BoxSizer(wx.HORIZONTAL)
+            # Add Keyword Groups Label
+            keywordGroupsText = wx.StaticText(self, -1, _('Keyword Groups:'))
+            r2Sizer.Add(keywordGroupsText, 1, wx.EXPAND)
+
+            r2Sizer.Add((10, 0))
+            
+            # Add Keywords Label
+            keywordsText = wx.StaticText(self, -1, _('Keywords:'))
+            r2Sizer.Add(keywordsText, 1, wx.EXPAND)
+
+            mainSizer.Add(r2Sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+            mainSizer.Add((0, 3))
+            
+            r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+            # Add Keyword Groups
+            self.kw_group_lb = wx.ListBox(self, -1, wx.DefaultPosition, wx.DefaultSize, [])
+            r3Sizer.Add(self.kw_group_lb, 1, wx.EXPAND)
+            # Define the "Keyword Group Select" behavior
+            wx.EVT_LISTBOX(self, self.kw_group_lb.GetId(), self.OnKeywordGroupSelect)
+
+            r3Sizer.Add((10, 0))
+            
+            # Add Keywords
+            self.kw_lb = wx.ListBox(self, -1, wx.DefaultPosition, wx.DefaultSize, [])
+            r3Sizer.Add(self.kw_lb, 1, wx.EXPAND)
+            # Define the "Keyword Select" behavior
+            wx.EVT_LISTBOX(self, self.kw_lb.GetId(), self.OnKeywordSelect)
+            # Double-clicking a Keyword is equivalent to selecting it and pressing the "Add Keyword to Query" button
+            wx.EVT_LISTBOX_DCLICK(self, self.kw_lb.GetId(), self.OnBtnClick)
+
+            mainSizer.Add(r3Sizer, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+
+            # Add "Add Keyword to Query" Button
+            self.btnAdd = wx.Button(self, -1, _('Add Keyword to Query'), size=wx.Size(240, 24))
+            mainSizer.Add(self.btnAdd, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+            wx.EVT_BUTTON(self, self.btnAdd.GetId(), self.OnBtnClick)
+
+            # Add Search Query Label
+            searchQueryText = wx.StaticText(self, -1, _('Search Query:'))
+            mainSizer.Add(searchQueryText, 0, wx.LEFT | wx.RIGHT, 10)
+            mainSizer.Add((0, 3))
+            
+            # Add Search Query Text Box
+            # The Search Query is Read-Only
+            self.searchQuery = wx.TextCtrl(self, -1, size = wx.Size(200, 120), style=wx.TE_MULTILINE | wx.TE_READONLY)
+            mainSizer.Add(self.searchQuery, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Create a Row sizer for the buttons at the bottom of the form
         btnSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -336,6 +600,55 @@ class SearchDialog(wx.Dialog):
         if len(self.kw_list) > 0:
             self.kw_lb.SetSelection(0)
 
+    def OnCollectionsChecked(self, event):
+        """ Event Handler for when a Collection is checked un-checked """
+        # Get the item that has been checked/unchecked
+        sel = event.GetItem()
+        # Make sure that item is expanded in the tree, so the user will see that nested collections have NOT been checked as well.
+        self.ctcCollections.Expand(sel)
+        # if the toggle is set so that check changes should be shared with children ...
+        if self.btnChildFollow.IsToggled():
+            # ... determine whether we're enabling or disabling
+            enable = self.ctcCollections.IsItemChecked(sel)
+            # ... and apply the setting to the children
+            self.ctcCollections.CheckChilds(sel, enable)
+
+    def EnableCollections(self, collNode, enable):
+        """ A recursive method for enabling or disabling all Collections in the Collections Tree """
+        # Get the First Child record
+        (childNode, cookieItem) = self.ctcCollections.GetFirstChild(collNode)
+        # While there are valid Child records ...
+        while childNode.IsOk():
+            # ... get the Collection Number out of the PyData
+            collNum = self.ctcCollections.GetPyData(childNode)
+            # Set the node's Checked status
+            self.ctcCollections.CheckItem(childNode, enable)
+            # If the Node has children ...
+            if self.ctcCollections.HasChildren(childNode):
+                # ... recursively call this method to set the Enabled status of children
+                self.EnableCollections(childNode, enable)
+            # If this node is not the LAST child ...
+            if childNode != self.ctcCollections.GetLastChild(collNode):
+                # ... then get the next child
+                (childNode, cookieItem) = self.ctcCollections.GetNextChild(collNode, cookieItem)
+            # if we're at the last child ...
+            else:
+                # ... we can quit
+                break
+            
+    def OnCollectionSelectAll(self, event):
+        """ An event handler for the Check All Collections and Uncheck All Collections Toolbar Buttons """
+        # If we're Checking ALL ...
+        if event.GetId() == self.btnCheckAll.GetId():
+            # ... set Enable to True
+            enable = True
+        # If we're UnChecking ALL ...
+        elif event.GetId() == self.btnCheckNone.GetId():
+            # ... set Enable to False
+            enable = False
+        # Call the recursive Method for enabling/disabling all Collections
+        self.EnableCollections(self.ctcRoot, enable)
+        
     def OnBtnClick(self, event):
         """ This method handles all Button Clicks for the Search Dialog. """
         
@@ -612,8 +925,10 @@ class SearchDialog(wx.Dialog):
                       WHERE ReportType = %s
                       GROUP BY ConfigName
                       ORDER BY ConfigName """
+        # Adjust query for sqlite, if needed
+        query = DBInterface.FixQuery(query)
         # Set up the data values that match the query
-        values = (self.reportType)
+        values = (self.reportType, )
         # Execute the query with the data values
         DBCursor.execute(query, values)
         # Iterate through the report results
@@ -624,6 +939,41 @@ class SearchDialog(wx.Dialog):
             resList.append(configName)
         # return the Results List
         return resList
+
+
+    def UpdateCollectionList(self, collTree, collNode, uncheckedList):
+        """ Recursively traverse through all nodes for the Search Collections checkbox tree,
+            unchecking those in the "uncheckedList" and checking all other.
+            This is for loading the Saved Search data for Collections.  """
+        # Initialize a list of results to hold the Checked Collection records
+        results = []
+        # Get the First Child record
+        (childNode, cookieItem) = collTree.GetFirstChild(collNode)
+        # While there are valid Child records ...
+        while childNode.IsOk():
+            # ... get the Collection Number out of the PyData
+            collNum = collTree.GetPyData(childNode)
+            collName = collTree.GetItemText(childNode)
+            # If the node is checked ...
+            if (collNum, collName) in uncheckedList:
+                collTree.CheckItem(childNode, False)
+            else:
+                collTree.CheckItem(childNode, True)
+            # If the Node has children ... (The Node does NOT have to be checked.  You can check a child of an unchecked parent!)
+            if collTree.HasChildren(childNode):
+                # ... recursively call this method
+                self.UpdateCollectionList(collTree, childNode, uncheckedList)
+            # If this node is not the LAST child ...
+            if childNode != collTree.GetLastChild(collNode):
+                # ... then get the next child
+                (childNode, cookieItem) = collTree.GetNextChild(collNode, cookieItem)
+            # if we're at the last child ...
+            else:
+                # ... we can quit
+                break
+        # Return the results to the calling method
+        return results
+
 
     def OnFileOpen(self, event):
         """ Load a saved Search Query from the Filter Table """
@@ -641,56 +991,123 @@ class SearchDialog(wx.Dialog):
             self.configName = dlg.GetStringSelection()
             # Get a Database Cursor
             DBCursor = DBInterface.get_db().cursor()
-            # Build a query to get the selected report's data.  The Order By clause is
-            # necessary so that when keyword colors are updated, they will have been loaded
-            # by the time the list in the keyword control is re-populated by the KeywordList
-            # (that is, we need FilterDataType 4 to be processed BEFORE FilterDataType 3)
+            # Build a query to get the Saved Search's Query data.
             query = """ SELECT FilterData FROM Filters2
                           WHERE ReportType = %s AND
+                                ReportScope = 0 AND
                                 ConfigName = %s
                           ORDER BY FilterDataType DESC"""
+            # Adjust query for sqlite, if needed
+            query = DBInterface.FixQuery(query)
             # Build the data values that match the query
             values = (self.reportType, self.configName.encode(TransanaGlobal.encoding))
             # Execute the query with the appropriate data values
             DBCursor.execute(query, values)
             # Initialize the Search Stack
             self.ClearSearchStack()
-            # We shouldn't get multiple records, just one.
-            (filterData,) = DBCursor.fetchone()
-            # Get the Search Text data from the Database.
-            # (If MySQLDB returns an Array, convert it to a String!)
-            if type(filterData).__name__ == 'array':
-                searchText = filterData.tostring()
+            # Get the query results
+            data = DBCursor.fetchall()
+            if len(data) > 0:
+                # We shouldn't get multiple records, just one.
+                (filterData,) = data[0]
+                # Get the Search Text data from the Database.
+                # (If MySQLDB returns an Array, convert it to a String!)
+                if type(filterData).__name__ == 'array':
+                    searchText = filterData.tostring()
+                else:
+                    searchText = filterData
+                # Decode the text
+                searchText = searchText.decode(TransanaGlobal.encoding)
+                # Replace the Search Query with the value from the database.
+                self.searchQuery.SetValue(searchText)
+                # Only valid searches can be saved, so we know the desired state of the interface buttons
+                # Disable the "Add" button
+                self.btnAdd.Enable(False)
+                # Enable the "And" button
+                self.btnAnd.Enable(True)
+                # Enable the "Or" button
+                self.btnOr.Enable(True)
+                # Disable the "Not" button
+                self.btnNot.Enable(False)
+                # Enable the "Search" button
+                self.btnSearch.Enable(True)
+                # and the Save button
+                self.btnFileSave.Enable(True)
+                # Disable the "(" (Left Paren) button
+                self.btnLeftParen.Enable(False)
+                # Disable the ")" (Left Paren) button
+                self.btnRightParen.Enable(False)
+                # Reset the number of open paren pairs to NONE
+                self.parensOpen = 0
+                # Add to the Search Stack
+                self.SaveSearchStack()
+            
+            # Initialize CollectionsToSkip
+            collectionsToSkip = []
+            # Build a query to get the Saved Search's Collections data.
+            query = """ SELECT FilterData FROM Filters2
+                          WHERE ReportType = %s AND
+                                ReportScope = 1 AND
+                                ConfigName = %s
+                          ORDER BY FilterDataType DESC"""
+            # Adjust query for sqlite, if needed
+            query = DBInterface.FixQuery(query)
+            # Build the data values that match the query
+            values = (self.reportType, self.configName.encode(TransanaGlobal.encoding))
+            # Execute the query with the appropriate data values
+            DBCursor.execute(query, values)
+
+            # Get the data from the query
+            data = DBCursor.fetchall()
+            # Iterate through the data (There should only be one record!)
+            for datum in data:
+                # We shouldn't get multiple records, just one.
+                (filterData,) = datum
+                # Get the list of Unchecked Collections from the Database.
+                # (If MySQLDB returns an Array, convert it to a String!)
+                if type(filterData).__name__ == 'array':
+                    collectionsDataEnc = cPickle.loads(filterData.tostring())
+                else:
+                    collectionsDataEnc = cPickle.loads(filterData)
+                # Decode the data
+                for coll in collectionsDataEnc:
+                    collectionsToSkip.append((coll[0], coll[1].decode(TransanaGlobal.encoding)))
+            # update the Collections Check Tree based on this configuration
+            self.UpdateCollectionList(self.ctcCollections, self.ctcRoot, collectionsToSkip)
+
+    def GetCollectionList(self, collTree, collNode, checkedVal):
+        """ Recursively builds a list of all nodes for the Search Collections checkbox tree that match checkedVal """
+        # Initialize a list of results to hold the Checked Collection records
+        results = []
+        # Get the First Child record
+        (childNode, cookieItem) = collTree.GetFirstChild(collNode)
+        # While there are valid Child records ...
+        while childNode.IsOk():
+            # ... get the Collection Number out of the PyData
+            collNum = collTree.GetPyData(childNode)
+            # If the node is checked ...
+            if childNode.IsChecked() == checkedVal:
+                # ... add the Collection Number and collection Name to the Results List
+                results.append((collNum, collTree.GetItemText(childNode)))
+            # If the Node has children ... (The Node does NOT have to be checked.  You can check a child of an unchecked parent!)
+            if collTree.HasChildren(childNode):
+                # ... recursively call this method to get the results of this node's child nodes, adding those results to these
+                results += self.GetCollectionList(collTree, childNode, checkedVal)
+            # If this node is not the LAST child ...
+            if childNode != collTree.GetLastChild(collNode):
+                # ... then get the next child
+                (childNode, cookieItem) = collTree.GetNextChild(collNode, cookieItem)
+            # if we're at the last child ...
             else:
-                searchText = filterData
-            # Decode the text
-            searchText = searchText.decode(TransanaGlobal.encoding)
-            # Replace the Search Query with the value from the database.
-            self.searchQuery.SetValue(searchText)
-            # Only valid searches can be saved, so we know the desired state of the interface buttons
-            # Disable the "Add" button
-            self.btnAdd.Enable(False)
-            # Enable the "And" button
-            self.btnAnd.Enable(True)
-            # Enable the "Or" button
-            self.btnOr.Enable(True)
-            # Disable the "Not" button
-            self.btnNot.Enable(False)
-            # Enable the "Search" button
-            self.btnSearch.Enable(True)
-            # and the Save button
-            self.btnFileSave.Enable(True)
-            # Disable the "(" (Left Paren) button
-            self.btnLeftParen.Enable(False)
-            # Disable the ")" (Left Paren) button
-            self.btnRightParen.Enable(False)
-            # Reset the number of open paren pairs to NONE
-            self.parensOpen = 0
-            # Add to the Search Stack
-            self.SaveSearchStack()
+                # ... we can quit
+                break
+        # Return the results to the calling method
+        return results
 
     def OnFileSave(self, event):
         """ Save a Search Query to the Filter table """
+        # Get a list of the Collections that are UN-CHECKED
+        collectionsToSkip = self.GetCollectionList(self.ctcCollections, self.ctcRoot, False)
         # Get the data to be saved in the Filter table
         filterData = self.searchQuery.GetValue()
         # Remember the original Search Name
@@ -731,27 +1148,55 @@ class SearchDialog(wx.Dialog):
                 # Encode the data for saving
                 configNameEnc = configName.encode(TransanaGlobal.encoding)
                 filterDataEnc = filterData.encode(TransanaGlobal.encoding)
+                collectionsDataEnc = []
+                for coll in collectionsToSkip:
+                    collectionsDataEnc.append((coll[0], coll[1].encode(TransanaGlobal.encoding)))
                 # To proceed, we need a report name and we need the error message to still be blank
                 if (configName != '') and (errorMsg == ''):
 
-                    # Check to see if the Configuration record already exists
+                    # Check to see if the Configuration record for the Query already exists
                     if DBInterface.record_match_count('Filters2',
-                                                     ('ReportType', 'ConfigName'),
-                                                     (self.reportType, configNameEnc)) > 0:
+                                                     ('ReportType', 'ReportScope', 'ConfigName'),
+                                                     (self.reportType, 0, configNameEnc)) > 0:
                         # Build the Update Query for Data
                         query = """ UPDATE Filters2
                                       SET FilterData = %s
                                       WHERE ReportType = %s AND
+                                            ReportScope = 0 AND
                                             ConfigName = %s """
                         values = (filterDataEnc, self.reportType, configNameEnc)
                     else:
                         query = """ INSERT INTO Filters2
-                                        (ReportType, ConfigName, FilterData)
+                                        (ReportType, ReportScope, ConfigName, FilterData)
                                       VALUES
-                                        (%s, %s, %s) """
+                                        (%s, 0, %s, %s) """
                         values = (self.reportType, configNameEnc, filterDataEnc)
+                    # Adjust query for sqlite, if needed
+                    query = DBInterface.FixQuery(query)
                     # Get a database cursor
                     DBCursor = DBInterface.get_db().cursor()
+                    # Execute the query with the appropriate data
+                    DBCursor.execute(query, values)
+
+                    # Check to see if the Configuration record for the Collections already exists
+                    if DBInterface.record_match_count('Filters2',
+                                                     ('ReportType', 'ReportScope', 'ConfigName'),
+                                                     (self.reportType, 1, configNameEnc)) > 0:
+                        # Build the Update Query for Data
+                        query = """ UPDATE Filters2
+                                      SET FilterData = %s
+                                      WHERE ReportType = %s AND
+                                            ReportScope = 1 AND
+                                            ConfigName = %s """
+                        values = (filterDataEnc, self.reportType, configNameEnc)
+                    else:
+                        query = """ INSERT INTO Filters2
+                                        (ReportType, ReportScope, ConfigName, FilterData)
+                                      VALUES
+                                        (%s, 1, %s, %s) """
+                        values = (self.reportType, configNameEnc, cPickle.dumps(collectionsDataEnc))
+                    # Adjust the query for sqlite if needed
+                    query = DBInterface.FixQuery(query)
                     # Execute the query with the appropriate data
                     DBCursor.execute(query, values)
                     # Close the cursor
@@ -800,6 +1245,8 @@ class SearchDialog(wx.Dialog):
                 query = """ DELETE FROM Filters2
                               WHERE ReportType = %s AND
                                     ConfigName = %s """
+                # Adjust query for sqlite, if needed
+                query = DBInterface.FixQuery(query)
                 # Build the data values that match the query
                 values = (self.reportType, localConfigName.encode(TransanaGlobal.encoding))
                 # Execute the query with the appropriate data values

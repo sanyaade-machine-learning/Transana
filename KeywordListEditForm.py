@@ -199,6 +199,8 @@ class KeywordListEditForm(Dialogs.GenForm):
         self.kw_groups = DBInterface.list_of_keyword_groups()
         for keywordGroup in self.kw_groups:
             self.kw_group_lb.Append(keywordGroup)
+        if self.kw_group_lb.GetCount() > 0:
+            self.kw_group_lb.EnsureVisible(0)
 
         # Get the Parent Object, so we can know the Default Keyword Group
         if isinstance(self.obj, Episode.Episode):
@@ -217,10 +219,14 @@ class KeywordListEditForm(Dialogs.GenForm):
             self.kw_list = []
         for keyword in self.kw_list:
             self.kw_lb.Append(keyword)
+        if self.kw_lb.GetCount() > 0:
+            self.kw_lb.EnsureVisible(0)
 
         # Populate the ListBox
         for clipKeyword in self.keywords:
             self.ekw_lb.Append(clipKeyword.keywordPair)
+        if self.ekw_lb.GetCount() > 0:
+            self.ekw_lb.EnsureVisible(0)
 
         self.kw_group_lb.SetFocus()
 
@@ -245,6 +251,8 @@ class KeywordListEditForm(Dialogs.GenForm):
         self.kw_group_lb.InsertItems(self.kw_groups, 0)
         if len(self.kw_groups) > 0:
             self.kw_group_lb.SetSelection(0)
+        if self.kw_group_lb.GetCount() > 0:
+            self.kw_group_lb.EnsureVisible(0)
 
     def refresh_keywords(self):
         """Refresh the keywords listbox."""
@@ -253,6 +261,8 @@ class KeywordListEditForm(Dialogs.GenForm):
             self.kw_list = DBInterface.list_of_keywords_by_group(sel)
             self.kw_lb.Clear()
             self.kw_lb.InsertItems(self.kw_list, 0)
+            if self.kw_lb.GetCount() > 0:
+                self.kw_lb.EnsureVisible(0)
 
     def highlight_bad_keyword(self):
         """ Highlight the first bad keyword in the keyword list """

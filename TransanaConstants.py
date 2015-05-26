@@ -41,6 +41,7 @@ import TransanaConfigConstants
 # NOTE:  When you change this value, you MUST change the MySQL for Python installation you are using
 #        to match.
 singleUserVersion = TransanaConfigConstants.singleUserVersion
+DBInstalled = TransanaConfigConstants.DBInstalled
 proVersion = TransanaConfigConstants.proVersion
 # Indicate if this is the Lab version
 labVersion = TransanaConfigConstants.labVersion
@@ -52,9 +53,9 @@ if workshopVersion:
     expirationdate = TransanaConfigConstants.xpdt
 
 # Program Version Number
-versionNumber = '2.60'
+versionNumber = '2.61a'
 # Build Number
-buildNumber = '260'
+buildNumber = '261a'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
@@ -105,10 +106,14 @@ else:
 # or the (new) wxPython Rich Text Control (RTC)
 USESRTC = True
 
+# Indicate if the Partial Transcript Editing fix should be applied
+partialTranscriptEdit = False
+
 # IDs for the Visualization Window
 VISUAL_BUTTON_ZOOMIN            =  wx.NewId()
 VISUAL_BUTTON_ZOOMOUT           =  wx.NewId()
 VISUAL_BUTTON_ZOOM100           =  wx.NewId()
+VISUAL_BUTTON_CREATECLIP        =  wx.NewId()
 VISUAL_BUTTON_CURRENT           =  wx.NewId()
 VISUAL_BUTTON_SELECTED          =  wx.NewId()
 
@@ -154,7 +159,32 @@ fileTypesList = [_("All files (*.*)"),
                  _("Transana Database Exports (*.tra)"),
                  _("BMP, PNG, and WAV files (*.bmp, *.png, *.wav)")]
 mediaFileTypes = ['mpg', 'mpeg', 'avi', 'mov', 'mp4', 'm4v', 'wmv', 'mp3', 'wav', 'wma', 'aac', 'm4a']
+
+# Define the Media File type strings to be used throughout Transana for Right-To-Left languages
+# wxWidgets' MediaCtrl doesn't support QuickTime formats under Right-To-Left languages as of wx 3.0.0.0
+fileTypesString_RtL = _("""All files (*.*)|*.*|All supported media files (*.mpg, *.avi, *.wmv, *.mp3, *.wav, *.wma, *.aac)|*.mpg;*.avi;*.wmv;*.mp3;*.wav;*.wma;*.aac|All video files (*.mpg, *.avi, *.wmv)|*.mpg;*.mpeg;*.avi;*.wmv|All audio files (*.mp3, *.wav, *.wma, *.aac, *.au, *.snd)|*.mp3;*.wav;*.wma;*.aac;*.au;*.snd|MPEG files (*.mpg)|*.mpg;*.mpeg|AVI files (*.avi)|*.avi|Windows Media Video (*.wmv)|*wmv|MP3 files (*.mp3)|*.mp3|WAV files (*.wav)|*.wav|Windows Media Audio (*.wma)|*.wma|AAC Audio (*.aac)|*.aac""")
+fileTypesList_RtL = [_("All files (*.*)"),
+                     _("All supported media files (*.mpg, *.avi, *.wmv, *.mp3, *.wav, *.wma, *.aac)"),
+                     _("All video files (*.mpg, *.avi, *.wmv)"),
+                     _("All audio files (*.mp3, *.wav, *.wma, *.aac, *.au, *.snd)"),
+                     _("MPEG files (*.mpg, *.mpeg)"),
+                     _("AVI files (*.avi)"),
+                     _("Windows Media Video files (*.wmv)"),
+                     _("MP3 files (*.mp3)"),
+                     _("WAV files (*.wav)"),
+                     _("Windows Media Audio files (*.wma)"),
+                     _("AAC files (*.aac)"),
+                     _("Transcript Formats (*.rtf, *.xml, *.txt)"), 
+                     _("Rich Text Format files (*.rtf)"),
+                     _("XML Format files (*.xml)"),
+                     _("Plain Text Format files (*.txt)"),
+                     _("Graphics Files (*.bmp, *.jpg, *.jpeg, *.png, *.tif, *.xpm)"),
+                     _("Transana Database Exports (*.tra)"),
+                     _("BMP, PNG, and WAV files (*.bmp, *.png, *.wav)")]
+mediaFileTypes_RtL = ['mpg', 'mpeg', 'avi', 'wmv', 'mp3', 'wav', 'wma', 'aac']
+
 imageFileTypesString = _("""All files (*.*)|*.*|All supported graphics files (*.ani, *.bmp, *.cur, *.gif, *.ico, *.iff, *.jpg, *.jpeg, *.pcx, *.png, *.pnm, *.tga, *.tif, *.xpm)|*.ani;*.bmp;*.cur;*.gif;*.ico;*.iff;*.jpg;*.jpeg;*.pcx;*.png;*.pnm;*.tga;*.tif;*.xpm""")
+imageFileTypes = ['ani', 'bmp', 'cur', 'gif', 'ico', 'iff', 'jpg', 'jpeg', 'pcx', 'png', 'pnm', 'tga', 'tif', 'xpm']
 
 
 # We need to know what characters are legal in a file name!

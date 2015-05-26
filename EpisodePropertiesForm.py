@@ -433,8 +433,12 @@ class EpisodePropertiesForm(Dialogs.GenForm):
             (fn, ext) = os.path.splitext(self.obj.media_filename)
             # If we have a known File Type or if blank, use "All Media Files".
             # If it's an unrecognized type, go to "All Files"
-            if ext.lower() in ['.mpg', '.avi', '.mov', '.mp4', '.m4v', '.wmv', '.mp3', '.wav', '.wma', '.aac', '']:
+            if (TransanaGlobal.configData.LayoutDirection == wx.Layout_LeftToRight) and \
+               (ext.lower() in ['.mpg', '.avi', '.mov', '.mp4', '.m4v', '.wmv', '.mp3', '.wav', '.wma', '.aac', '']):
                 fileType =  '*.mpg;*.avi;*.mov;*.mp4;*.m4v;*.wmv;*.mp3;*.wav;*.wma;*.aac'
+            elif (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft) and \
+               (ext.lower() in ['.mpg', '.avi', '.wmv', '.mp3', '.wav', '.wma', '.aac', '']):
+                fileType =  '*.mpg;*.avi;*.wmv;*.mp3;*.wav;*.wma;*.aac'
             else:
                 fileType = ''
             # Invoke the File Selector with the proper default directory, filename, file type, and style

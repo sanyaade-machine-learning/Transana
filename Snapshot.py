@@ -93,7 +93,6 @@ class Snapshot(DataObject.DataObject):
             self.codingObjects = {}
             self.keywordStyles = {}
 
-# Public methods
     def __repr__(self):
         str = 'Snapshot Object Definition:\n'
         str += "  number           = %s\n" % self.number
@@ -133,6 +132,21 @@ class Snapshot(DataObject.DataObject):
         str = str + '\n'
         return str.encode('utf8')
         
+    def __eq__(self, other):
+        """ Object Equality function """
+
+#        print "Snapshot.__eq__():", len(self.__dict__.keys()), len(other.__dict__.keys())
+#        for key in self.__dict__.keys():
+#            print key, self.__dict__[key] == other.__dict__[key]
+#        print
+
+        if other == None:
+            return False
+        else:
+            return self.__dict__ == other.__dict__
+
+# Public methods
+
     def db_load(self, num):
         """Load a record by record number."""
         self.clear()
@@ -144,17 +158,22 @@ class Snapshot(DataObject.DataObject):
           FROM Snapshots2 a
           WHERE a.SnapshotNum = %s
         """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Get a database cursor
         c = db.cursor()
         # Execute the query
-        c.execute(query, (num,))
-        # Get the number of rows returned
-        n = c.rowcount
+        c.execute(query, (num, ))
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            n = 1
+        else:
+            n = c.rowcount
         # If we don't get exactly one result ...
         if (n != 1):
-            # close the database cursor
+            # ... close the database cursor ...
             c.close()
-            # clear the current Clip object
+            # ... clear the current Snapshot object ...
             self.clear()
             # Raise an exception indicating the data was not found
             raise RecordNotFoundError, (num, n)
@@ -162,7 +181,15 @@ class Snapshot(DataObject.DataObject):
         else:
             # ... get the data from the cursor
             r = DBInterface.fetch_named(c)
-            # ... load the data into the Clip Object
+            # If sqlite and no results ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current Snapshot object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (name, 0)
+            # ... load the data into the Snapshot Object
             self._load_row(r)
             # Refresh the Keywords
             self.refresh_keywords()
@@ -170,8 +197,10 @@ class Snapshot(DataObject.DataObject):
         query = """ SELECT SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible
                       FROM SnapshotKeywords2
                       WHERE SnapshotNum = %s """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Execute the query
-        c.execute(query, (num,))
+        c.execute(query, (num, ))
         # Get the query results
         results = c.fetchall()
         # Initialize the counter
@@ -190,8 +219,10 @@ class Snapshot(DataObject.DataObject):
         query = """ SELECT SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle
                       FROM SnapshotKeywordStyles2
                       WHERE SnapshotNum = %s """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Execute the query
-        c.execute(query, (num,))
+        c.execute(query, (num, ))
         # Get the query results
         results = c.fetchall()
         # Put the results into the Snapshot Object
@@ -226,17 +257,23 @@ class Snapshot(DataObject.DataObject):
           WHERE a.SnapshotID = %s AND
                 a.CollectNum = %s
         """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Get a database cursor
         c = db.cursor()
         # Execute the query
         c.execute(query, (name, collNum))
         # Get the number of rows returned
-        n = c.rowcount
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            n = 1
+        else:
+            n = c.rowcount
         # If we don't get exactly one result ...
         if (n != 1):
-            # close the database cursor
+            # ... close the database cursor ...
             c.close()
-            # clear the current Clip object
+            # ... clear the current Snapshot object ...
             self.clear()
             # Raise an exception indicating the data was not found
             raise RecordNotFoundError, (name, n)
@@ -244,7 +281,15 @@ class Snapshot(DataObject.DataObject):
         else:
             # ... get the data from the cursor
             r = DBInterface.fetch_named(c)
-            # ... load the data into the Clip Object
+            # if sqlite and no data in the cursor ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current Snapshot object ...
+                self.clear()
+                # Raise an exception
+                raise RecordNotFoundError, (name, 0)
+            # ... load the data into the Snapshot Object
             self._load_row(r)
             # Refresh the Keywords
             self.refresh_keywords()
@@ -252,8 +297,10 @@ class Snapshot(DataObject.DataObject):
         query = """ SELECT SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible
                       FROM SnapshotKeywords2
                       WHERE SnapshotNum = %s """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Execute the query
-        c.execute(query, (self.number,))
+        c.execute(query, (self.number, ))
         # Get the query results
         results = c.fetchall()
         # Initialize the counter
@@ -272,8 +319,10 @@ class Snapshot(DataObject.DataObject):
         query = """ SELECT SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle
                       FROM SnapshotKeywordStyles2
                       WHERE SnapshotNum = %s """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Execute the query
-        c.execute(query, (self.number,))
+        c.execute(query, (self.number, ))
         # Get the query results
         results = c.fetchall()
         # Put the results into the Snapshot Object
@@ -289,16 +338,8 @@ class Snapshot(DataObject.DataObject):
         c.close()
         self._sync_snapshot()
 
-##        tmpDlg = Dialogs.InfoDialog(None, self.__repr__(), "Snapshot.db_load_by_name()")
-##        tmpDlg.ShowModal()
-##        tmpDlg.Destroy()
-
-    def db_save(self):
+    def db_save(self, use_transactions=True):
         """Save the record to the database using Insert or Update as appropriate."""
-
-##        tmpDlg = Dialogs.InfoDialog(None, self.__repr__(), "Snapshot.db_save()")
-##        tmpDlg.ShowModal()
-##        tmpDlg.Destroy()
 
         # Define and implement Demo Version limits
         if TransanaConstants.demoVersion and (self.number == 0):
@@ -383,7 +424,7 @@ class Snapshot(DataObject.DataObject):
                  EpisodeNum, TranscriptNum, SnapshotTimeCode, SnapshotDuration, SnapshotComment,
                  SortOrder, LastSaveTime)
                 VALUES
-                (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, CURRENT_TIMESTAMP)
+                (%s, %s, %s , %s, %s , %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
         else:
             if DBInterface.record_match_count("Snapshots2", \
@@ -417,13 +458,16 @@ class Snapshot(DataObject.DataObject):
                 WHERE SnapshotNum = %s
             """
             values = values + (self.number,)
-
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         c = DBInterface.get_db().cursor()
-
-        c.execute('BEGIN')
-        
+        if use_transactions:
+            c.execute('BEGIN')
+        # Execute the query that puts the data in the database
         c.execute(query, values)
+        # if our object number is 0, we have a NEW Snapshot
         if self.number == 0:
+            # ... then flag that we've change the object number
             numberChanged = True
             # If we are dealing with a brand new Snapshot, it does not yet know its
             # record number.  It HAS a record number, but it is not known yet.
@@ -433,23 +477,45 @@ class Snapshot(DataObject.DataObject):
                       WHERE SnapshotID = %s AND
                             CollectNum = %s
                     """
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Execute the query
             c.execute(query, (id, self.collection_num))
-            if c.rowcount == 1:
-                recs = c.fetchone()
-                self.number = recs[0]
-                self.lastsavetime = recs[1]
+            # Get the query's results.
+            data = c.fetchall()
+            # If we have exactly one record ...
+            if len(data) == 1:
+                # ... get the object number
+                self.number = data[0][0]
+                # ... and update the LastSaveTime
+                self.lastsavetime = data[0][1]
+            # If we have something other than exactly one record ...
             else:
-                c.execute('ROLLBACK')
-                raise RecordNotFoundError, (self.id, c.rowcount)
+                # if we're using Transactions ...
+                if use_transaction:
+                    # ... roll back the transaction ...
+                    c.execute('ROLLBACK')
+                # ... and raise an exception
+                raise RecordNotFoundError, (self.id, len(data))
+        # If we've updated an existing record ...
         else:
+            # ... then we haven't changed the object's number 
             numberChanged = False
             # If we are dealing with an existing Snapshot, delete all the Keywords
             # in anticipation of putting them all back in
             DBInterface.delete_all_keywords_for_a_group(0, 0, self.number)
+            # Define the query for deleting Snapshot Keywords
             query = "DELETE FROM SnapshotKeywords2 WHERE SnapshotNum = %s"
-            c.execute(query, (self.number,))
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # execute the query
+            c.execute(query, (self.number, ))
+            # Define the query for deleting Snapshot Keyword Styles
             query = "DELETE FROM SnapshotKeywordStyles2 WHERE SnapshotNum = %s"
-            c.execute(query, (self.number,))
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Execute the query
+            c.execute(query, (self.number, ))
 
         # Initialize a blank error prompt
         prompt = ''
@@ -471,8 +537,10 @@ class Snapshot(DataObject.DataObject):
             if numberChanged:
                 # ... change it back to zero!!
                 self.number = 0
-            # Undo the database save transaction
-            c.execute('ROLLBACK')
+            # If we're using Transactions ...
+            if use_transactions:
+                # Undo the database save transaction
+                c.execute('ROLLBACK')
             # Close the Database Cursor
             c.close()
             # Complete the error prompt
@@ -488,30 +556,41 @@ class Snapshot(DataObject.DataObject):
             # Let's also build a temporary list of all the Detail Codes that are used in this Snapshot.
             # Initialize it first.
             tmpCodeList = []
-
+            # Define a query for inserting the Snapshot Keywords
             query = """ INSERT INTO SnapshotKeywords2
                           (SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible)
                           VALUES
                           (%s, %s, %s, %s, %s, %s, %s, %s) """
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Get the Coding Objects' Key values ...
             keys = self.codingObjects.keys()
+            # ... and sort them
             keys.sort()
-
+            # Now iterate through these Key values ...
             for x in keys:
+                # See if the keyword is in the list of defined keywords, which it should be.
                 if (self.codingObjects[x]['keywordGroup'], self.codingObjects[x]['keyword']) in tmpKeywordList:
-
+                    # If this keyword isn't already part of the list of known keywords ...
                     if not((self.codingObjects[x]['keywordGroup'], self.codingObjects[x]['keyword']) in tmpCodeList):
+                        # ... add it to the list of keywords used in this Snapshot
                         tmpCodeList.append((self.codingObjects[x]['keywordGroup'], self.codingObjects[x]['keyword']))
-                        
+                    # If we're using Unicode (and we always are) ...
                     if 'unicode' in wx.PlatformInfo:
+                        # ... encode the Keyword Group and Keyword
                         keywordGroup = self.codingObjects[x]['keywordGroup'].encode(TransanaGlobal.encoding)
                         keyword = self.codingObjects[x]['keyword'].encode(TransanaGlobal.encoding)
+                    # Assemble the data values for the Insert query
                     values = (self.number, keywordGroup, keyword,
                               self.codingObjects[x]['x1'], self.codingObjects[x]['y1'], self.codingObjects[x]['x2'], self.codingObjects[x]['y2'])
+                    # Encode the Visible property as '0' or '1' for the database
                     if self.codingObjects[x]['visible']:
                         values += ('1',)
                     else:
                         values += ('0',)
+                    # Insert the data into the database
                     c.execute(query, values)
+                # If the keyword isn't in the list of existing keywords, some other user must have changed it.  Inform the user.
                 else:
                     # if the prompt isn't blank ...
                     if prompt != '':
@@ -521,30 +600,38 @@ class Snapshot(DataObject.DataObject):
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt += unicode(_('Keyword "%s : %s" cannot be added to Snapshot "%s".\nAnother user must have edited the keyword while you were adding it.'), 'utf8') % (self.codingObjects[x]['keywordGroup'], self.codingObjects[x]['keyword'], self.id)
 
+            # If no error prompt is defines yet ...
             if prompt == '':
-                query = """ INSERT INTO SnapshotKeywordStyles2
-                              (SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle)
-                              VALUES
-                              (%s, %s, %s, %s, %s, %s, %s, %s) """
+                # ... iterate through the Keyword Styles ....
                 for (keywordGroup, keyword) in self.keywordStyles.keys():
+                    # If the keyword is in the Code List ...
                     if (keywordGroup, keyword) in tmpCodeList:
+                        # ... and the keyword is ALSO in the Temporary Keyword List ...
                         if (keywordGroup, keyword) in tmpKeywordList:
-                        
+                            # Define the query for inserting the Keyword Style into the database
+                            query = """ INSERT INTO SnapshotKeywordStyles2
+                                          (SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle)
+                                          VALUES
+                                          (%s, %s, %s, %s, %s, %s, %s, %s) """
+                            # Get the styles for this Keyword ...
                             row = self.keywordStyles[(keywordGroup, keyword)]
-                            
+                            # Encode the style values that aren't part of "row" ...
                             if 'unicode' in wx.PlatformInfo:
                                 keywordGroup = keywordGroup.encode(TransanaGlobal.encoding)
                                 keyword = keyword.encode(TransanaGlobal.encoding)
                                 lineColorName = row['lineColorName'].encode(TransanaGlobal.encoding)
-
+                            # Gather the data values for the query, encoding values from "row" while we're at it.
                             values = (self.number, keywordGroup, keyword,
-                                      row['drawMode'],
+                                      row['drawMode'].encode('utf8'),
                                       lineColorName,
-                                      row['lineColorDef'],
-                                      row['lineWidth'],
-                                      row['lineStyle'])
+                                      row['lineColorDef'].encode('utf8'),
+                                      row['lineWidth'].encode('utf8'),
+                                      row['lineStyle'].encode('utf8'))
+                            # Adjust the query for sqlite if needed
+                            query = DBInterface.FixQuery(query)
+                            # Execute the query
                             c.execute(query, values)
-                            
+                        # If the keyword is NOT part of the Temporary Keyword List ...
                         else:
                             # if the prompt isn't blank ...
                             if prompt != '':
@@ -559,16 +646,16 @@ class Snapshot(DataObject.DataObject):
                         # ... remove it from the Keyword Style List
                         del self.keywordStyles[(keywordGroup, keyword)]
 
-                        
-
             # If there is an error prompt ...
             if prompt != '':
                 # If the Episode Number was changed ...
                 if numberChanged:
                     # ... change it back to zero!!
                     self.number = 0
-                # Undo the database save transaction
-                c.execute('ROLLBACK')
+                # If we're using Transactions ...
+                if use_transactions:
+                    # Undo the database save transaction
+                    c.execute('ROLLBACK')
                 # Close the Database Cursor
                 c.close()
                 # Complete the error prompt
@@ -577,8 +664,10 @@ class Snapshot(DataObject.DataObject):
                 # ... raise a SaveError exception using the error prompt
                 raise SaveError, prompt
             else:
-                # ... Commit the database transaction
-                c.execute('COMMIT')
+                # If we're using Transactions ...
+                if use_transactions:
+                    # ... Commit the database transaction
+                    c.execute('COMMIT')
                 # Close the Database Cursor
                 c.close()
 
@@ -597,13 +686,23 @@ class Snapshot(DataObject.DataObject):
                 del note
             del notes
 
-            # Delete all related references in the ClipKeywords table
+            # Delete all related references in the ClipKeywords table as well as the Snapshot Keywords and SnapshotKeyword
+            # Styles tables.
             if result:
+                # Delete Clip Keywords
                 DBInterface.delete_all_keywords_for_a_group(0, 0, self.number)
+                # Create the query to delete Snapshot Keywords
                 query = "DELETE FROM SnapshotKeywords2 WHERE SnapshotNum = %s"
-                c.execute(query, (self.number,))
+                # Adjust the query for sqlite if needed
+                query = DBInterface.FixQuery(query)
+                # Execute the query
+                c.execute(query, (self.number, ))
+                # Create the query to delete Snapshot Keyword Styles
                 query = "DELETE FROM SnapshotKeywordStyles2 WHERE SnapshotNum = %s"
-                c.execute(query, (self.number,))
+                # Adjust the query for sqlite if needed
+                query = DBInterface.FixQuery(query)
+                # Execute the query
+                c.execute(query, (self.number, ))
 
             # Delete the actual Snapshot record.
             self._db_do_delete(use_transactions, c, result)
@@ -634,14 +733,27 @@ class Snapshot(DataObject.DataObject):
                       SELECT LastSaveTime FROM Snapshots2
                       WHERE SnapshotNum = %s
                     """
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Get a database cursor
             tempDBCursor = DBInterface.get_db().cursor()
-            tempDBCursor.execute(query % self.number)
-            if tempDBCursor.rowcount == 1:
-                newLastSaveTime = tempDBCursor.fetchone()[0]
+            # Execute the query
+            tempDBCursor.execute(query, (self.number, ))
+            # Get the results from the query
+            data = tempDBCursor.fetchall()
+            # If one record is returned ...
+            if len(data) == 1:
+                # ... get tehe last save time
+                newLastSaveTime = data[0][0]
+            # Otherwise ...
             else:
-                raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
+                # ... raise an exception
+                raise RecordNotFoundError, (self.id, len(data))
+            # Close the database cursor
             tempDBCursor.close()
+            # If the object has a different LastSaveTime ...
             if newLastSaveTime != self.lastsavetime:
+                # ... it's been edited elsewhere, so we need to re-load it!
                 self.db_load(self.number)
         
         # ... lock the Transcript Record

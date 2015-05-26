@@ -162,13 +162,14 @@ class InfoDialog(wx.MessageDialog):
 class QuestionDialog(wx.MessageDialog):
     """Replacement for wxMessageDialog with style=wx.YES_NO | wx.ICON_QUESTION."""
 
-    def __init__(self, parent, msg, header=_("Transana Confirmation"), noDefault=False, useOkCancel=False, includeEncoding=False):
+    def __init__(self, parent, msg, header=_("Transana Confirmation"), noDefault=False, useOkCancel=False, yesToAll=False, includeEncoding=False):
         """ QuestionDialog Parameters:
                 parent           Parent Window
                 msg              Message to display
-                header           Dialog box header, "Transana Confirmation by default
+                header           Dialog box header, "Transana Confirmation" by default
                 noDefault        Set the No or Cancel button as the default, instead of Yes or OK
                 useOkCancel      Use OK / Cancel as the button labels rather than Yes / No
+                yesToAll         Include the "Yes to All" option
                 includeEncoding  Include Encoding selection for upgrading the single-user Windows database for 2.50 """
         
         # This should be easy, right?  Just use the OS MessageDialog like so:
@@ -234,6 +235,16 @@ class QuestionDialog(wx.MessageDialog):
         btnYes = wx.Button(self, btnYesID, btnYesText)
         # Bind the button event to its method
         btnYes.Bind(wx.EVT_BUTTON, self.OnButton)
+
+        # If the "Yes to All" option is enabled
+        if yesToAll:
+            # ... create a YesToAll ID
+            self.YESTOALLID = wx.NewId()
+            # Create a Yes To All button
+            self.btnYesToAll = wx.Button(self, self.YESTOALLID, _("Yes to All"))
+            # Bind the button handler for the Yes To All button
+            self.btnYesToAll.Bind(wx.EVT_BUTTON, self.OnButton)
+        
         # Create the second button, which is No or Cancel
         self.btnNo = wx.Button(self, btnNoID, btnNoText)
         # Bind the button event to its method
@@ -246,6 +257,12 @@ class QuestionDialog(wx.MessageDialog):
             boxButtons.Add(self.btnNo, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
             # Add a spacer
             boxButtons.Add((20,1))
+            # If the "Yes to All" option is enabled
+            if yesToAll:
+                # Add No first
+                boxButtons.Add(self.btnYesToAll, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+                # Add a spacer
+                boxButtons.Add((20,1))
             # Then add Yes
             boxButtons.Add(btnYes, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
         # If we're not on the Mac, we want Yes/OK then No/Cancel
@@ -254,6 +271,12 @@ class QuestionDialog(wx.MessageDialog):
             boxButtons.Add(btnYes, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
             # Add a spacer
             boxButtons.Add((20,1))
+            # If the "Yes to All" option is enabled
+            if yesToAll:
+                # Add No first
+                boxButtons.Add(self.btnYesToAll, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+                # Add a spacer
+                boxButtons.Add((20,1))
             # Then add No
             boxButtons.Add(self.btnNo, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
         # Add a final expandable spacer

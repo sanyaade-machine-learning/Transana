@@ -28,6 +28,8 @@ import wx
 from wx import stc
 # import Python os module
 import os
+## # import Python sys module
+## import sys
 # Import Transana's Constants
 import TransanaConstants
 # Import Transana's Globals
@@ -73,6 +75,7 @@ class ConfigData(object):
         str = str + 'ssl = %s\n' % self.ssl
         str = str + 'sslClientCert = %s\n' % self.sslClientCert
         str = str + 'sslClientKey = %s\n' % self.sslClientKey
+        srt = str + 'sslMsgSrvCert = %s\n' % self.sslMsgSrvCert
         str = str + 'language = %s\n\n' % self.language
         str = str + 'databaseList = %s\n\n' % self.databaseList
         str += 'pathsByDB = %s\n' % self.pathsByDB
@@ -85,6 +88,7 @@ class ConfigData(object):
         str = str + 'specialFontFace = %s\n' % self.specialFontFace
         str = str + 'specialFontSize = %s\n' % self.specialFontSize
         str += 'formatUnits = %s\n' % self.formatUnits
+        ## str += 'transcriptScale = %s\n' % self.transcriptScale
         str = str + 'keywordMapBarHeight = %s\n' % self.keywordMapBarHeight
         str = str + 'keywordMapWhitespace = %s\n' % self.keywordMapWhitespace
         str = str + 'keywordVisualizationBarHeight = %s\n' % self.keywordVisualizationBarHeight
@@ -198,6 +202,8 @@ class ConfigData(object):
             self.sslClientCert = config.Read('/2.0/SSLClientCert', '')
             # Load SSL Client Key File Setting
             self.sslClientKey = config.Read('/2.0/SSLClientKey', '')
+            # Load the SSL Message Server Certificate File Setting
+            self.sslMsgSrvCert = config.Read('/2.0/SSLMessageServerCertificate', '')
             # Load Language Setting
             self.language = config.Read('/2.0/Language', '')
             # Load the Tab Size Setting
@@ -218,6 +224,16 @@ class ConfigData(object):
             self.specialFontSize = config.ReadInt('/2.0/FontSizeSpecial', self.specialFontSize)
             # Load Format Units Setting
             self.formatUnits = config.Read('/2.0/FormatUnits', 'in')
+            ## # For the Transcript Scaling Factor, if we're on OS X ...
+            ## if sys.platform == 'darwin':
+            ##     # ... default to 1.25 times normal size
+            ##     defVal = 1.25
+            ## # Otherwise ...
+            ## else:
+            ##     # ... use the normal size
+            ##     defVal = 1.00
+            ## # Load the Transcript Scaling Factor
+            ## self.transcriptScale = config.ReadFloat('/2.0/TranscriptScale', defVal)
             # Load Keyword Map Bar Height Setting
             self.keywordMapBarHeight = config.ReadInt('/2.0/KeywordMapBarHeight', 8)
             # Load Keyword Map Whitespace Height Setting
@@ -279,6 +295,8 @@ class ConfigData(object):
                 self.sslClientCert = ''
                 # Set SSL Client Key File Setting
                 self.sslClientKey = ''
+                # Set the SSL Message Server Certificate File Setting
+                self.sslMsgSrvCert = ''
 
             # Default Database Host
             self.host = defaultHost
@@ -307,6 +325,14 @@ class ConfigData(object):
             self.language = ''
             # Format Units
             self.formatUnits = 'in'
+            ## # For the Transcript Scaling Factor, if we're on OS X ...
+            ## if sys.platform == 'darwin':
+            ##     # ... default to 1.25 times normal size
+            ##     self.transcriptScale = 1.25
+            ## # Otherwise ...
+            ## else:
+            ##     # ... use the normal size
+            ##     self.transcriptScale = 1.00
             # Load Keyword Map Bar Height Setting
             self.keywordMapBarHeight = 8
             # Load Keyword Map Whitespace Height Setting
@@ -481,6 +507,7 @@ class ConfigData(object):
         config.Write('/2.0/SSLClientCert', self.sslClientCert)
         # Save the SSL Client Certificate Key
         config.Write('/2.0/SSLClientKey', self.sslClientKey)
+        config.Write('/2.0/SSLMessageServerCertificate', self.sslMsgSrvCert)
         # Save the Language setting
         config.Write('/2.0/Language', self.language)
         # NOTE:  Video Speed, Auto-Arrange, and Waveform Quickload are NOT saved to the config file.
@@ -526,6 +553,8 @@ class ConfigData(object):
         config.WriteInt('/2.0/FontSizeSpecial', self.specialFontSize)
         # Save Format Units Setting
         config.Write('/2.0/FormatUnits', self.formatUnits)
+        ## # Save the Transcript Scaling Factor
+        ## config.WriteFloat('/2.0/TranscriptScale', self.transcriptScale)
         # Save Keyword Map Bar Height Setting
         config.WriteInt('/2.0/KeywordMapBarHeight', self.keywordMapBarHeight)
         # Save Keyword Map Whitespace Setting

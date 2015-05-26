@@ -28,8 +28,6 @@ import os, sys
 import platform
 # load wxPython for GUI
 import wx
-# import MySQLdb for database access
-import MySQLdb
 # load the GraphicsControl
 import GraphicsControlClass
 # Load the Printout Class
@@ -201,13 +199,20 @@ class KeywordMap(wx.Frame):
         self.toolBar.AddTool(T_FILE_FILTER, bmp, shortHelpString=_("Filter"))
         self.toolBar.AddTool(T_FILE_SAVEAS, TransanaImages.SaveJPG16.GetBitmap(), shortHelpString=_('Save As'))
         self.toolBar.AddTool(T_FILE_PRINTSETUP, TransanaImages.PrintSetup.GetBitmap(), shortHelpString=_('Set up Page'))
-        self.toolBar.AddTool(T_FILE_PRINTPREVIEW, TransanaImages.PrintPreview.GetBitmap(), shortHelpString=_('Print Preview'))
+        # Disable Print Setup for Right-To-Left languages
+#        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+#            self.toolBar.EnableTool(T_FILE_PRINTSETUP, False)
 
+        self.toolBar.AddTool(T_FILE_PRINTPREVIEW, TransanaImages.PrintPreview.GetBitmap(), shortHelpString=_('Print Preview'))
         # Disable Print Preview on the PPC Mac and for Right-To-Left languages
         if (platform.processor() == 'powerpc') or (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
             self.toolBar.EnableTool(T_FILE_PRINTPREVIEW, False)
             
         self.toolBar.AddTool(T_FILE_PRINT, TransanaImages.Print.GetBitmap(), shortHelpString=_('Print'))
+        # Disable Print Setup for Right-To-Left languages
+#        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+#            self.toolBar.EnableTool(T_FILE_PRINT, False)
+
         # Get the graphic for Help
         bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
         # create a bitmap button for the Move Down button
@@ -223,6 +228,9 @@ class KeywordMap(wx.Frame):
             self.menuFile.Append(M_FILE_SAVEAS, _("Save &As"), _("Save image in JPEG format"))  # Add "Save As" to File Menu
             self.menuFile.Enable(M_FILE_SAVEAS, False)
             self.menuFile.Append(M_FILE_PRINTSETUP, _("Page Setup"), _("Set up Page")) # Add "Page Setup" to the File Menu
+            # Disable Print Setup for Right-To-Left languages
+#            if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+#                self.menuFile.Enable(M_FILE_PRINTSETUP, False)
             self.menuFile.Append(M_FILE_PRINTPREVIEW, _("Print Preview"), _("Preview your printed output")) # Add "Print Preview" to the File Menu
             self.menuFile.Enable(M_FILE_PRINTPREVIEW, False)
             self.menuFile.Append(M_FILE_PRINT, _("&Print"), _("Send your output to the Printer")) # Add "Print" to the File Menu
@@ -721,7 +729,15 @@ class KeywordMap(wx.Frame):
         # The horizontal coordinate is the left margin plus the Horizontal Adjustment for Keyword Labels plus
         # position times the scaling factor
         res = marginwidth + hadjust + ((XPos - self.startTime) * scale)
-        return int(res)
+
+        # If we are in a Right-To-Left Language ...
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+            # ... adjust for a right-to-left graph
+            return int(self.Bounds[2] - self.Bounds[0] - res)
+        # If we are in a Left-To-Right language ...
+        else:
+            # ... just return the calculated value
+            return int(res)
 
     def FindTime(self, x):
         """ Given a horizontal pixel position, determine the corresponding time value from
@@ -904,7 +920,9 @@ class KeywordMap(wx.Frame):
                                  cl.ClipNum = ck.ClipNum
                            GROUP BY ck.keywordgroup, ck.keyword
                            ORDER BY KeywordGroup, Keyword, ClipStart"""
-            self.DBCursor.execute(SQLText, self.episodeNum)
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
+            self.DBCursor.execute(SQLText, (self.episodeNum, ))
             for (kwg, kw) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                 kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -921,7 +939,9 @@ class KeywordMap(wx.Frame):
                                      sn.SnapshotNum = ck.SnapshotNum
                                GROUP BY ck.keywordgroup, ck.keyword
                                ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
-                self.DBCursor.execute(SQLText, self.episodeNum)
+                # Adjust the query for sqlite if needed
+                SQLText = DBInterface.FixQuery(SQLText)
+                self.DBCursor.execute(SQLText, (self.episodeNum, ))
                 for (kwg, kw) in self.DBCursor.fetchall():
                     kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                     kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -937,7 +957,9 @@ class KeywordMap(wx.Frame):
                                      sn.SnapshotNum = ck.SnapshotNum
                                GROUP BY ck.keywordgroup, ck.keyword
                                ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
-                self.DBCursor.execute(SQLText, self.episodeNum)
+                # Adjust the query for sqlite if needed
+                SQLText = DBInterface.FixQuery(SQLText)
+                self.DBCursor.execute(SQLText, (self.episodeNum, ))
                 for (kwg, kw) in self.DBCursor.fetchall():
                     kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                     kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -958,8 +980,10 @@ class KeywordMap(wx.Frame):
                        FROM Clips2 cl, ClipKeywords2 ck
                        WHERE cl.EpisodeNum = %s AND
                              cl.ClipNum = ck.ClipNum
-                       ORDER BY ClipStart, ClipNum, KeywordGroup, Keyword"""
-        self.DBCursor.execute(SQLText, self.episodeNum)
+                       ORDER BY ClipStart, cl.ClipNum, KeywordGroup, Keyword"""
+        # Adjust the query for sqlite if needed
+        SQLText = DBInterface.FixQuery(SQLText)
+        self.DBCursor.execute(SQLText, (self.episodeNum, ))
         for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) in self.DBCursor.fetchall():
             kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
             kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -980,8 +1004,10 @@ class KeywordMap(wx.Frame):
                            FROM Snapshots2 sn, ClipKeywords2 ck
                            WHERE sn.EpisodeNum = %s AND
                                  sn.SnapshotNum = ck.SnapshotNum
-                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
-            self.DBCursor.execute(SQLText, self.episodeNum)
+                           ORDER BY SnapshotTimeCode, sn.SnapshotNum, KeywordGroup, Keyword"""
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
+            self.DBCursor.execute(SQLText, (self.episodeNum, ))
             for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                 kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -1001,8 +1027,10 @@ class KeywordMap(wx.Frame):
                            FROM Snapshots2 sn, SnapshotKeywords2 ck
                            WHERE sn.EpisodeNum = %s AND
                                  sn.SnapshotNum = ck.SnapshotNum
-                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
-            self.DBCursor.execute(SQLText, self.episodeNum)
+                           ORDER BY SnapshotTimeCode, sn.SnapshotNum, KeywordGroup, Keyword"""
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
+            self.DBCursor.execute(SQLText, (self.episodeNum, ))
             for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                 kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -1040,8 +1068,10 @@ class KeywordMap(wx.Frame):
                                  cl.ClipNum = ck.ClipNum
                            GROUP BY ck.keywordgroup, ck.keyword
                            ORDER BY KeywordGroup, Keyword, ClipStart"""
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
             # Execute the query
-            self.DBCursor.execute(SQLText, self.collectionNum)
+            self.DBCursor.execute(SQLText, (self.collectionNum, ))
             # For each record in the query results ...
             for (kwg, kw) in self.DBCursor.fetchall():
                 # ... encode the KWG and KW
@@ -1059,8 +1089,10 @@ class KeywordMap(wx.Frame):
                                      sn.SnapshotNum = ck.SnapshotNum
                                GROUP BY ck.keywordgroup, ck.keyword
                                ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
+                # Adjust the query for sqlite if needed
+                SQLText = DBInterface.FixQuery(SQLText)
                 # Execute the query
-                self.DBCursor.execute(SQLText, self.collectionNum)
+                self.DBCursor.execute(SQLText, (self.collectionNum, ))
                 # For each record in the query results ...
                 for (kwg, kw) in self.DBCursor.fetchall():
                     # ... encode the KWG and KW
@@ -1080,8 +1112,10 @@ class KeywordMap(wx.Frame):
                                      sn.SnapshotNum = ck.SnapshotNum
                                GROUP BY ck.keywordgroup, ck.keyword
                                ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
+                # Adjust the query for sqlite if needed
+                SQLText = DBInterface.FixQuery(SQLText)
                 # Execute the query
-                self.DBCursor.execute(SQLText, self.collectionNum)
+                self.DBCursor.execute(SQLText, (self.collectionNum, ))
                 # For each record in the query results ...
                 for (kwg, kw) in self.DBCursor.fetchall():
                     # ... encode the KWG and KW
@@ -1111,8 +1145,10 @@ class KeywordMap(wx.Frame):
                        WHERE cl.CollectNum = %s AND
                              cl.ClipNum = ck.ClipNum
                        ORDER BY SortOrder, KeywordGroup, Keyword"""
+        # Adjust the query for sqlite if needed
+        SQLText = DBInterface.FixQuery(SQLText)
         # Execute the query
-        self.DBCursor.execute(SQLText, self.collectionNum)
+        self.DBCursor.execute(SQLText, (self.collectionNum, ))
         # Iterate through the query results
         for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum, sortOrder) in self.DBCursor.fetchall():
             # If there's no entry for this item in the Sort Order ...
@@ -1131,9 +1167,11 @@ class KeywordMap(wx.Frame):
                            FROM Snapshots2 sn, ClipKeywords2 ck
                            WHERE sn.CollectNum = %s AND
                                  sn.SnapshotNum = ck.SnapshotNum
-                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
+                           ORDER BY SnapshotTimeCode, sn.SnapshotNum, KeywordGroup, Keyword"""
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
             # Execute the query
-            self.DBCursor.execute(SQLText, self.collectionNum)
+            self.DBCursor.execute(SQLText, (self.collectionNum, ))
             # Iterate through the query results
             for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum, sortOrder) in self.DBCursor.fetchall():
                 # If the Snapshot does not have a defined duration ...
@@ -1157,9 +1195,11 @@ class KeywordMap(wx.Frame):
                            FROM Snapshots2 sn, SnapshotKeywords2 ck
                            WHERE sn.CollectNum = %s AND
                                  sn.SnapshotNum = ck.SnapshotNum
-                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
+                           ORDER BY SnapshotTimeCode, sn.SnapshotNum, KeywordGroup, Keyword"""
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
             # Execute the query
-            self.DBCursor.execute(SQLText, self.collectionNum)
+            self.DBCursor.execute(SQLText, (self.collectionNum, ))
             # Iterate through the query results
             for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum, sortOrder) in self.DBCursor.fetchall():
                 # If the Snapshot does not have a defined duration ...
@@ -1268,8 +1308,10 @@ class KeywordMap(wx.Frame):
                        WHERE cl.EpisodeNum = %s AND
                              cl.ClipNum = ck.ClipNum
                        ORDER BY ClipStart, ClipNum, KeywordGroup, Keyword"""
+        # Adjust the query for sqlite if needed
+        SQLText = DBInterface.FixQuery(SQLText)
         # Execute the query
-        self.DBCursor.execute(SQLText, self.episodeNum)
+        self.DBCursor.execute(SQLText, (self.episodeNum, ))
         # Iterate through the results ...
         for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) in self.DBCursor.fetchall():
             kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
@@ -1311,8 +1353,10 @@ class KeywordMap(wx.Frame):
                            WHERE sn.EpisodeNum = %s AND
                                  sn.SnapshotNum = ck.SnapshotNum
                            ORDER BY SnapshotTimecode, SnapshotNum, KeywordGroup, Keyword"""
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
             # Execute the query
-            self.DBCursor.execute(SQLText, self.episodeNum)
+            self.DBCursor.execute(SQLText, (self.episodeNum, ))
             # Iterate through the results ...
             for (kwg, kw, snapshotStart, snapshotDuration, snapshotNum, snapshotID, collectNum) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
@@ -1348,8 +1392,10 @@ class KeywordMap(wx.Frame):
                            WHERE sn.EpisodeNum = %s AND
                                  sn.SnapshotNum = ck.SnapshotNum
                            ORDER BY SnapshotTimecode, SnapshotNum, KeywordGroup, Keyword"""
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
             # Execute the query
-            self.DBCursor.execute(SQLText, self.episodeNum)
+            self.DBCursor.execute(SQLText, (self.episodeNum, ))
             # Iterate through the results ...
             for (kwg, kw, snapshotStart, snapshotDuration, snapshotNum, snapshotID, collectNum) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
@@ -1424,7 +1470,11 @@ class KeywordMap(wx.Frame):
                     prompt = unicode(_('Series: %s'), 'utf8')
                 else:
                     prompt = _('Series: %s')
-                self.graphic.AddText(prompt % self.seriesName, 2, 2)
+                # If we are in a Right-To-Left Language ...
+                if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                    self.graphic.AddTextRight(prompt % self.seriesName, self.Bounds[2] - self.Bounds[0] - 2, 2)
+                else:
+                    self.graphic.AddText(prompt % self.seriesName, 2, 2)
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_("Episode: %s"), 'utf8')
@@ -1437,9 +1487,17 @@ class KeywordMap(wx.Frame):
                 else:
                     prompt = _('File: %s')
                 try:
-                    self.graphic.AddTextRight(prompt % DBInterface.ProcessDBDataForUTF8Encoding(self.MediaFile), self.Bounds[2] - self.Bounds[1], 2)
+                    # If we are in a Right-To-Left Language ...
+                    if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                        self.graphic.AddText(prompt % DBInterface.ProcessDBDataForUTF8Encoding(self.MediaFile), 10, 2)
+                    else:
+                        self.graphic.AddTextRight(prompt % DBInterface.ProcessDBDataForUTF8Encoding(self.MediaFile), self.Bounds[2] - self.Bounds[0], 2)
                 except ValueError:
-                    self.graphic.AddTextRight(prompt % self.MediaFile, self.Bounds[2] - self.Bounds[1], 2)
+                    # If we are in a Right-To-Left Language ...
+                    if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                        self.graphic.AddText(prompt % self.MediaFile, 10, 2)
+                    else:
+                        self.graphic.AddTextRight(prompt % self.MediaFile, self.Bounds[2] - self.Bounds[0], 2)
             # If we're doing a Collection Keyword Map, not a Keyword Map ...
             else:
                 if 'unicode' in wx.PlatformInfo:
@@ -1454,21 +1512,41 @@ class KeywordMap(wx.Frame):
                     prompt = unicode(_('Filter Configuration: %s'), 'utf8')
                 else:
                     prompt = _('Filter Configuration: %s')
-                self.graphic.AddText(prompt % self.configName, 2, 16)
+                # If we are in a Right-To-Left Language ...
+                if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                    self.graphic.AddTextRight(prompt % self.configName, self.Bounds[2] - self.Bounds[0] - 2, 16)
+                else:
+                    self.graphic.AddText(prompt % self.configName, 2, 16)
                 
             Count = 0
             # We want Grid Lines in light gray
             self.graphic.SetColour('LIGHT GREY')
             # Draw the top Grid Line, if appropriate
             if self.hGridLines:
-                self.graphic.AddLines([(10, self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2))])
+                # If we are in a Right-To-Left Language ...
+                if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                    self.graphic.AddLines([(self.Bounds[2] - self.Bounds[0] - 10, self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2),
+                                            self.CalcX(self.endTime), self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2))])
+                else:
+                    self.graphic.AddLines([(10, self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2))])
 
             for KWG, KW in self.filteredKeywordList:
-                self.graphic.AddText("%s : %s" % (KWG, KW), 10, self.CalcY(Count) - 7)
-                
+                # If we are in a Right-To-Left Language ...
+                if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                    tmpX = self.Bounds[2] - self.Bounds[0] - 10
+                    self.graphic.AddTextRight("%s : %s" % (KWG, KW), tmpX, self.CalcY(Count) - 7)
+                else:
+                    tmpX = 10
+                    self.graphic.AddText("%s : %s" % (KWG, KW), tmpX, self.CalcY(Count) - 7)
+
                 # Add Horizontal Grid Lines, if appropriate
                 if self.hGridLines and (Count % 2 == 1):
-                    self.graphic.AddLines([(10, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
+                    # If we are in a Right-To-Left Language ...
+                    if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                        self.graphic.AddLines([(self.Bounds[2] - self.Bounds[0] - 10, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2),
+                                                self.CalcX(self.endTime), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
+                    else:
+                        self.graphic.AddLines([(10, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
                 Count = Count + 1
             # Reset the graphic color following drawing the Grid Lines
             self.graphic.SetColour("BLACK")
@@ -1501,7 +1579,12 @@ class KeywordMap(wx.Frame):
                 for KWG, KW in self.filteredKeywordList:
                     # Add Horizontal Grid Lines, if appropriate
                     if self.hGridLines and (Count % 2 == 1):
-                        self.graphic.AddLines([(0, self.CalcY(Count) + 3 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(Count) + 3 + int(self.whitespaceHeight / 2))])
+                        # If we are in a Right-To-Left Language ...
+                        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                            self.graphic.AddLines([(self.Bounds[2] - self.Bounds[0], self.CalcY(Count) + 3 + int(self.whitespaceHeight / 2),
+                                                    self.CalcX(self.endTime), self.CalcY(Count) + 3 + int(self.whitespaceHeight / 2))])
+                        else:
+                            self.graphic.AddLines([(0, self.CalcY(Count) + 3 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(Count) + 3 + int(self.whitespaceHeight / 2))])
                     Count = Count + 1
                 # Reset the graphic color following drawing the Grid Lines
                 self.graphic.SetColour("BLACK")
@@ -1891,6 +1974,7 @@ class KeywordMap(wx.Frame):
                 # We can't enable Print Preview for Right-To-Left languages
                 if not (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
                     self.menuFile.Enable(M_FILE_PRINTPREVIEW, True)
+                self.menuFile.Enable(M_FILE_PRINTSETUP, True)
                 self.menuFile.Enable(M_FILE_PRINT, True)
         else:
             # The DrawGraph routine destroys and recreates self.graphic.  We need to re-point the waveform to it.

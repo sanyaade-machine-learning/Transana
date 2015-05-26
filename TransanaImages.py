@@ -45,6 +45,13 @@ Check = PyEmbeddedImage(
     "4xcKITd87XBKeQAAAABJRU5ErkJggg==")
 
 #----------------------------------------------------------------------
+CheckTree = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAHxJ"
+    "REFUOI1jZGRiZqAEMFGkm6oG/P/39z861v3y9z8hA1iQOYxMzIwwtu6Xv/8v8yD4BF0A0wSj"
+    "L3ER4wGIrQzQmPjPyMTMoPcNQsP4BDEsGv//w/QvspdwOmDwpgNio5UFm2YYICZa8XqBqGjF"
+    "FT0MxEYrrlggNlopjkYASRhVRi98xu0AAAAASUVORK5CYII=")
+
+#----------------------------------------------------------------------
 Clip16 = PyEmbeddedImage(
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAA3NCSVQICAjb4U/gAAAA10lE"
     "QVQokZWSQWoCQRBF35cZJyDtygN4CI/iXWYhJC5ceAQP6UJsRIZBvos2o+m0JFM0taj6VP3/"
@@ -136,6 +143,14 @@ KWManage = PyEmbeddedImage(
     "REFUKJHFktsOgDAIQ0/B31a/XOeDI27eou7BJiQbWRmlSOa0wJrYQFde5nlKcRYgcz3uoCQD"
     "JCDtcmeQzA/kN6hmoByvCoxDv+k21xPd1adh45UMsc4DwHLxeGvmurUxnLhrSeUifbFRv2/i"
     "At47IK74kvbwAAAAAElFTkSuQmCC")
+
+#----------------------------------------------------------------------
+locked = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAJhJ"
+    "REFUOI2lkzEOgCAMRak4cAEXD4Nn18O4eAGWpg6kUkihJvwJCP/zPgSAxbsZLVPuUQAhEiGS"
+    "FbD2zOnK44BI4D38JmDz/eR5uvJaLwDkJcqTW4XonEai3sH9ZEOIhcSsIDH3rWyQY63KV2GE"
+    "z9JqVBUsXE1VAONyUDjsYJVA9tbm3YCRehRqBTak06aoXuEPSfsKMPudX4d8SGl9mbWuAAAA"
+    "AElFTkSuQmCC")
 
 #----------------------------------------------------------------------
 loop_down = PyEmbeddedImage(
@@ -1594,6 +1609,14 @@ Undo16 = PyEmbeddedImage(
     "gP/+VdbD3SH2boB4BmA+hWG0f21RciA7kbsIK+8aOjol0ajegexErst5Fw1Ek1h5WylQJQIA"
     "WOhg+hmjv9FvFpDj/PSMAKDV7mBwOIa5ZiqdGhMABZ4g+7inzM+41iwAgJ4et+nqJIfdZ/d/"
     "AvalXf4H11NhxjV8AxxMmjhkvLK2AAAAAElFTkSuQmCC")
+
+#----------------------------------------------------------------------
+unlocked = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAL5J"
+    "REFUOI2lUzsOgzAMfQ6V2guwsPUQIG89Vs/AXbgEG4I7MLJwAVhwB5QqTtMQKZaixPHv+Tkh"
+    "MgVyxGRFA7ilOB1NLd+K40TKSKaILmGWrYdsPWTuIMIsrj3aglsZAKoS2NtB36dUt5WFWebu"
+    "RGORJJFYleEz4JDow00Vsu/gaGrZ2yHqfH+z0s04kRrjsv5C9MUfo+LABi/ruT9eWg8m9BG4"
+    "ifzElwli8g9FsAUbsPXXKBSJLsvPRGSU+50/EnhHMw4lMl0AAAAASUVORK5CYII=")
 
 #----------------------------------------------------------------------
 WhisperedSpeech = PyEmbeddedImage(

@@ -22,19 +22,40 @@ __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>, Nathaniel Case, Rajas Sambh
 DEBUG = False
 if DEBUG:
     print "DBInterface DEBUG is ON!"
-    
-# import wxPython
-import wx
-# import MySQL for Python
-import MySQLdb
+
+# import Transana's Constants
+import TransanaConstants
+
+if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server']:
+    # import MySQLdb
+    import MySQLdb
+    # We also need the MySQL exceptions!
+    import _mysql_exceptions
+elif TransanaConstants.DBInstalled in ['PyMySQL']:
+    # import PyMySQL
+    import pymysql as MySQLdb
+elif TransanaConstants.DBInstalled in ['sqlite3']:
+    # import sqlite
+    import sqlite3
+    # import the python DateTime module
+    import datetime
+else:
+    import TransanaExceptions
+    raise TransanaExceptions.ProgrammingError('No Database Module loaded in DBInterface.py.')
 
 if DEBUG:
-    print "MySQLdb version =", MySQLdb.version_info, MySQLdb.__version__
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server']:
+        print "MySQLdb version =", MySQLdb.version_info, MySQLdb.__version__
+    elif TransanaConstants.DBInstalled in ['PyMySQL']:
+        print "PyMySQL version =", MySQLdb.version_info
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        print "sqlite 3 version =", sqlite3.version
+            
+# import wxPython
+import wx
     
 # import Python's exceptions module
 from exceptions import *
-# We also need the MySQL exceptions!
-import _mysql_exceptions
 # import Python's array module
 import array
 # import Python's fast cPickle
@@ -63,8 +84,6 @@ import Note
 import Series
 # import Transana's Snapshot Object
 import Snapshot
-# import Transana's Constants
-import TransanaConstants
 # import Transana's Global Variables
 import TransanaGlobal
 # import Transana's Exceptions
@@ -79,100 +98,98 @@ _dbref = None
 def InitializeSingleUserDatabase():
     """ For single-user Transana only, this initializes (starts) the embedded MySQL Server. """
     # See if the "databases" path exists off the Transana Program folder
-    if "__WXMSW__" in wx.Platform:
-        databasePath = TransanaGlobal.configData.databaseDir
-    elif "__WXMAC__" in wx.Platform:
-        databasePath = TransanaGlobal.configData.databaseDir
-    else:
-        databasePath = TransanaGlobal.configData.databaseDir
-    
+    databasePath = TransanaGlobal.configData.databaseDir
+    # If the Database Path doesn't exist ...
     if not os.path.exists(databasePath):
         # If not, create it
         os.makedirs(databasePath)
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded']:
+        # Start the embedded MySQL Server, using the "databases" folder off the Transana Program
+        # folder for the root Data folder.
+        datadir = "--datadir=" + databasePath
+        # Default to English
+        lang = '--language=./share/english'
+        # Change the language if it is supported
+        # Danish
+        if (TransanaGlobal.configData.language == 'da'):
+            lang = '--language=./share/danish'
+        # German
+        elif (TransanaGlobal.configData.language == 'de'):
+            lang = '--language=./share/german'
+        # Greek
+        elif (TransanaGlobal.configData.language == 'el'):
+            lang = '--language=./share/greek'
+        # Spanish
+        elif (TransanaGlobal.configData.language == 'es'):
+            lang = '--language=./share/spanish'
+        # French
+        elif (TransanaGlobal.configData.language == 'fr'):
+            lang = '--language=./share/french'
+        # Italian
+        elif (TransanaGlobal.configData.language == 'it'):
+            lang = '--language=./share/italian'
+        # Dutch
+        elif (TransanaGlobal.configData.language == 'nl'):
+            lang = '--language=./share/dutch'
+        # Norwegian Bokmal
+        elif (TransanaGlobal.configData.language == 'nb'):
+            lang = '--language=./share/norwegian'
+        # Norwegian Ny-norsk
+        elif (TransanaGlobal.configData.language == 'nn'):
+            lang = '--language=./share/norwegian-ny'
+        # Polish
+        elif (TransanaGlobal.configData.language == 'pl'):
+            lang = '--language=./share/polish'
+        # Portuguese
+        elif (TransanaGlobal.configData.language == 'pt'):
+            lang = '--language=./share/portuguese'
+        # 
+        elif (TransanaGlobal.configData.language == 'ru'):
+            lang = '--language=./share/russian'
+        # Swedish
+        elif (TransanaGlobal.configData.language == 'sv'):
+            lang = '--language=./share/swedish'
 
-    # Start the embedded MySQL Server, using the "databases" folder off the Transana Program
-    # folder for the root Data folder.
-    datadir = "--datadir=" + databasePath
-    # Default to English
-    lang = '--language=./share/english'
-    # Change the language if it is supported
-    # Danish
-    if (TransanaGlobal.configData.language == 'da'):
-        lang = '--language=./share/danish'
-    # German
-    elif (TransanaGlobal.configData.language == 'de'):
-        lang = '--language=./share/german'
-    # Greek
-    elif (TransanaGlobal.configData.language == 'el'):
-        lang = '--language=./share/greek'
-    # Spanish
-    elif (TransanaGlobal.configData.language == 'es'):
-        lang = '--language=./share/spanish'
-    # French
-    elif (TransanaGlobal.configData.language == 'fr'):
-        lang = '--language=./share/french'
-    # Italian
-    elif (TransanaGlobal.configData.language == 'it'):
-        lang = '--language=./share/italian'
-    # Dutch
-    elif (TransanaGlobal.configData.language == 'nl'):
-        lang = '--language=./share/dutch'
-    # Norwegian Bokmal
-    elif (TransanaGlobal.configData.language == 'nb'):
-        lang = '--language=./share/norwegian'
-    # Norwegian Ny-norsk
-    elif (TransanaGlobal.configData.language == 'nn'):
-        lang = '--language=./share/norwegian-ny'
-    # Polish
-    elif (TransanaGlobal.configData.language == 'pl'):
-        lang = '--language=./share/polish'
-    # Portuguese
-    elif (TransanaGlobal.configData.language == 'pt'):
-        lang = '--language=./share/portuguese'
-    # 
-    elif (TransanaGlobal.configData.language == 'ru'):
-        lang = '--language=./share/russian'
-    # Swedish
-    elif (TransanaGlobal.configData.language == 'sv'):
-        lang = '--language=./share/swedish'
+        # MySQLdb.server_init parameters MUST be strings, but paths with encoded characters aren't.
+        if isinstance(datadir, unicode):
+            # On Windows ...
+            if 'wxMSW' in wx.PlatformInfo:
+                # ... we seem to be able to fix this by using "CP1250" encoding
+                datadir = datadir.encode('cp1250')
+            # On non-Windows platforms, maybe we can use UTF8.
+            else:
+                datadir = datadir.encode('utf8')
 
-    # MySQLdb.server_init parameters MUST be strings, but paths with encoded characters aren't.
-    if isinstance(datadir, unicode):
-        # On Windows ...
-        if 'wxMSW' in wx.PlatformInfo:
-            # ... we seem to be able to fix this by using "CP1250" encoding
-            datadir = datadir.encode('cp1250')
-        # On non-Windows platforms, maybe we can use UTF8.
-        else:
-            datadir = datadir.encode('utf8')
-
-    MySQLdb.server_init(args=['Transana', datadir, '--basedir=.', lang])
+        MySQLdb.server_init(args=['Transana', datadir, '--basedir=.', lang])
     
 def EndSingleUserDatabase():
     """ For single-user Transana only, this ends (exits) the embedded MySQL Server. """
-    # End the embedded MySQL Server
-    MySQLdb.server_end()
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded']:
+        # End the embedded MySQL Server
+        MySQLdb.server_end()
 
 def SetTableType(hasInnoDB, query):
     """ Set Table Type and Character Set Information for the database as appropriate """
-    # NOTE:  Default Table Type switched from BDB to InnoDB for version 2.10.  BDB tables were having trouble importing
-    #        a German Transana XML database someone sent to me, and switching databases was the only way I could find to
-    #        fix the problem.  Therefore, the BDB tables will probably never be used, as I think they're always present
-    #        if the BDB tables are.
-    if TransanaGlobal.DBVersion >= u'5.0':
-        if hasInnoDB:
-            query = query + 'ENGINE=InnoDB'
+    # If we're using MySQL ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # NOTE:  Default Table Type switched from BDB to InnoDB for version 2.10.  BDB tables were having trouble importing
+        #        a German Transana XML database someone sent to me, and switching databases was the only way I could find to
+        #        fix the problem.  Therefore, the BDB tables will probably never be used, as I think they're always present
+        #        if the BDB tables are.
+        if TransanaGlobal.DBVersion >= u'5.0':
+            if hasInnoDB:
+                query = query + 'ENGINE=InnoDB'
+            else:
+                query = query + 'ENGINE=BDB'
         else:
-            query = query + 'ENGINE=BDB'
-    else:
-        if hasInnoDB:
-            query = query + 'TYPE=InnoDB'
-        else:
-            query = query + 'TYPE=BDB'
+            if hasInnoDB:
+                query = query + 'TYPE=InnoDB'
+            else:
+                query = query + 'TYPE=BDB'
 
-    if TransanaGlobal.DBVersion >= u'4.1':
-        # Add the Character Set specification
-        query += '  CHARACTER SET %s' % TransanaGlobal.encoding
+        if TransanaGlobal.DBVersion >= u'4.1':
+            # Add the Character Set specification
+            query += '  CHARACTER SET %s' % TransanaGlobal.encoding
 
     return query
 
@@ -183,30 +200,55 @@ def is_db_open():
 def CreateSeriesTableQuery(num):
     """ Create query for the Series Table """
 
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
+
     # NOTE:  If you change this, you need to change the INSERT queries in the SERIES object
     #        AND in the UpdateEncoding250() method below in this file!
     
     # Series Table: Test for existence and create if needed
     query = """
               CREATE TABLE IF NOT EXISTS Series%d
-                (SeriesNum            INTEGER auto_increment, 
+                (SeriesNum            INTEGER %s,
                  SeriesID             VARCHAR(100), 
                  SeriesComment        VARCHAR(255), 
                  SeriesOwner          VARCHAR(100), 
                  DefaultKeywordGroup  VARCHAR(50), 
                  RecordLock           VARCHAR(25),
-                 LockTime             DATETIME, 
+                 LockTime             DATETIME"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """,
                  PRIMARY KEY (SeriesNum))
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
-    # Add the appropriate Table Type to the CREATE Query
-    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+            """
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
     # Return the query to the calling routine
-    return query
+    return query % (num, autoIncrementSyntax)
 
 def CreateEpisodesTableQuery(num):
     """ Create query for the Episode Table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
 
     # NOTE:  If you change this, you need to change the INSERT queries in the EPISODE object
     #        AND in the UpdateEncoding250() method below in this file!
@@ -214,7 +256,7 @@ def CreateEpisodesTableQuery(num):
     # Episode Table: Test for existence and create if needed
     query = """
               CREATE TABLE IF NOT EXISTS Episodes%d
-                (EpisodeNum     INTEGER auto_increment, 
+                (EpisodeNum     INTEGER %s, 
                  EpisodeID      VARCHAR(100), 
                  SeriesNum      INTEGER, 
                  TapingDate     DATE, 
@@ -222,18 +264,33 @@ def CreateEpisodesTableQuery(num):
                  EpLength       INTEGER, 
                  EpComment      VARCHAR(255), 
                  RecordLock     VARCHAR(25), 
-                 LockTime       DATETIME, 
+                 LockTime       DATETIME"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """,
                  PRIMARY KEY (EpisodeNum))
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
-    # Add the appropriate Table Type to the CREATE Query
-    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+            """ 
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
     # Return the query to the calling routine
-    return query
+    return query % (num, autoIncrementSyntax)
 
 def CreateTranscriptsTableQuery(num):
     """ Create query for the Transcripts Table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
 
     # NOTE:  If you change this, you need to change the INSERT queries in the TRANSCRIPT object
     #        AND in the UpdateEncoding250() method below in this file!
@@ -241,7 +298,7 @@ def CreateTranscriptsTableQuery(num):
     # Transcripts Table: Test for existence and create if needed
     query = """
               CREATE TABLE IF NOT EXISTS Transcripts%d
-                (TranscriptNum        INTEGER auto_increment, 
+                (TranscriptNum        INTEGER %s, 
                  TranscriptID         VARCHAR(100), 
                  EpisodeNum           INTEGER,
                  SourceTranscriptNum  INTEGER,
@@ -255,18 +312,33 @@ def CreateTranscriptsTableQuery(num):
                  RTFText              LONGBLOB, 
                  RecordLock           VARCHAR(25), 
                  LockTime             DATETIME, 
-                 LastSaveTime         DATETIME, 
+                 LastSaveTime         DATETIME"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """,
                  PRIMARY KEY (TranscriptNum))
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
-    # Add the appropriate Table Type to the CREATE Query
-    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+            """ 
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
     # Return the query to the calling routine
-    return query
+    return query % (num, autoIncrementSyntax)
 
 def CreateCollectionsTableQuery(num):
     """ Create query for the Collections Table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
 
     # NOTE:  If you change this, you need to change the INSERT queries in the COLLECTIONS object
     #        AND in the UpdateEncoding250() method below in this file!
@@ -274,25 +346,40 @@ def CreateCollectionsTableQuery(num):
     # Collections Table: Test for existence and create if needed
     query = """
               CREATE TABLE IF NOT EXISTS Collections%d
-                (CollectNum            INTEGER auto_increment, 
+                (CollectNum            INTEGER %s, 
                  CollectID             VARCHAR(100), 
                  ParentCollectNum      INTEGER, 
                  CollectComment        VARCHAR(255), 
                  CollectOwner          VARCHAR(100), 
                  DefaultKeywordGroup   VARCHAR(50), 
                  RecordLock            VARCHAR(25), 
-                 LockTime              DATETIME, 
+                 LockTime              DATETIME"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """,
                  PRIMARY KEY (CollectNum))
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
-    # Add the appropriate Table Type to the CREATE Query
-    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+            """ 
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
     # Return the query to the calling routine
-    return query
+    return query % (num, autoIncrementSyntax)
 
 def CreateClipsTableQuery(num):
     """ Create query for the Clips Table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
 
     # NOTE:  If you change this, you need to change the INSERT queries in the CLIPS object
     #        AND in the UpdateEncoding250() method below in this file!
@@ -300,7 +387,7 @@ def CreateClipsTableQuery(num):
     # Clips Table: Test for existence and create if needed
     query = """
               CREATE TABLE IF NOT EXISTS Clips%d
-                (ClipNum        INTEGER auto_increment, 
+                (ClipNum        INTEGER %s, 
                  ClipID         VARCHAR(100), 
                  CollectNum     INTEGER, 
                  EpisodeNum     INTEGER, 
@@ -312,25 +399,40 @@ def CreateClipsTableQuery(num):
                  ClipComment    VARCHAR(255), 
                  SortOrder      INTEGER, 
                  RecordLock     VARCHAR(25), 
-                 LockTime       DATETIME, 
+                 LockTime       DATETIME"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """, 
                  PRIMARY KEY (ClipNum))
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
-    # Add the appropriate Table Type to the CREATE Query
-    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+            """
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
     # Return the query to the calling routine
-    return query
+    return query % (num, autoIncrementSyntax)
 
 def CreateSnapshotsTableQuery(num):
     """ Create query for the Snapshots Table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
 
     # NOTE:  If you change this, you need to change the INSERT queries in the SNAPSHOTS object
     
     # Snapshots Table: Test for existence and create if needed
     query = """
               CREATE TABLE IF NOT EXISTS Snapshots%d
-                (SnapshotNum        INTEGER auto_increment, 
+                (SnapshotNum        INTEGER %s, 
                  SnapshotID         VARCHAR(100), 
                  CollectNum         INTEGER, 
                  ImageFile          VARCHAR(255), 
@@ -347,18 +449,33 @@ def CreateSnapshotsTableQuery(num):
                  SortOrder          INTEGER, 
                  LastSaveTime       DATETIME, 
                  RecordLock         VARCHAR(25), 
-                 LockTime           DATETIME, 
+                 LockTime           DATETIME"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """, 
                  PRIMARY KEY (SnapshotNum))
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
-    # Add the appropriate Table Type to the CREATE Query
-    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+            """
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
     # Return the query to the calling routine
-    return query
+    return query % (num, autoIncrementSyntax)
 
 def CreateNotesTableQuery(num):
     """ Create query for the Notes Table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
 
     # NOTE:  If you change this, you need to change the INSERT queries in the NOTES object
     #        AND in the UpdateEncoding250() method below in this file!
@@ -366,7 +483,7 @@ def CreateNotesTableQuery(num):
     # Notes Table: Test for existence and create if needed
     query = """
                   CREATE TABLE IF NOT EXISTS Notes%d
-                    (NoteNum        INTEGER auto_increment, 
+                    (NoteNum        INTEGER %s, 
                      NoteID         VARCHAR(100), 
                      SeriesNum      INTEGER, 
                      EpisodeNum     INTEGER, 
@@ -377,15 +494,20 @@ def CreateNotesTableQuery(num):
                      NoteTaker      VARCHAR(100), 
                      NoteText       LONGBLOB, 
                      RecordLock     VARCHAR(25), 
-                     LockTime       DATETIME, 
+                     LockTime       DATETIME"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """, 
                      PRIMARY KEY (NoteNum))
                      DEFAULT CHARACTER SET utf8
                      COLLATE utf8_bin
-            """ % num
-    # Add the appropriate Table Type to the CREATE Query
-    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+            """
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
     # Return the query to the calling routine
-    return query
+    return query % (num, autoIncrementSyntax)
 
 def CreateKeywordsTableQuery(num):
     """ Create query for the Keywords Table """
@@ -407,13 +529,17 @@ def CreateKeywordsTableQuery(num):
                  RecordLock    VARCHAR(25), 
                  LockTime      DATETIME, 
                  PRIMARY KEY (KeywordGroup, Keyword))
+                """
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
+            """
     # Add the appropriate Table Type to the CREATE Query
     query = SetTableType(TransanaGlobal.hasInnoDB, query)
     # Return the query to the calling routine
-    return query
+    return query % num
 
 def CreateClipKeywordsTableQuery(num):
     """ Create query for the Clip Keywords Table """
@@ -421,26 +547,42 @@ def CreateClipKeywordsTableQuery(num):
     # NOTE:  If you change this, you need to change the INSERT queries in the EPISODE and CLIP object
     #        AND in the UpdateEncoding250() method below in this file!
 
-    # Clip Keywords Table: Test for existence and create if needed
-    # MySQL Primary Keys cannot contain NULL values, and either EpisodeNum
-    # or ClipNum will always be NULL!  Therefore, use a UNIQUE KEY rather
-    # than a PRIMARY KEY for this table.
-    query = """
-              CREATE TABLE IF NOT EXISTS ClipKeywords%d
-                (EpisodeNum    INTEGER, 
-                 ClipNum       INTEGER,
-                 SnapshotNum   INTEGER,
-                 KeywordGroup  VARCHAR(50), 
-                 Keyword       VARCHAR(85), 
-                 Example       CHAR(1), 
-                 UNIQUE KEY UniqueKey (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword))
-                 DEFAULT CHARACTER SET utf8
-                 COLLATE utf8_bin
-            """ % num
+    # If we're using MySQL ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # Clip Keywords Table: Test for existence and create if needed
+        # MySQL Primary Keys cannot contain NULL values, and either EpisodeNum
+        # or ClipNum will always be NULL!  Therefore, use a UNIQUE KEY rather
+        # than a PRIMARY KEY for this table.
+        query = """
+                  CREATE TABLE IF NOT EXISTS ClipKeywords%d
+                    (EpisodeNum    INTEGER, 
+                     ClipNum       INTEGER,
+                     SnapshotNum   INTEGER,
+                     KeywordGroup  VARCHAR(50), 
+                     Keyword       VARCHAR(85), 
+                     Example       CHAR(1), 
+                     UNIQUE KEY UniqueKey (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword))
+                     DEFAULT CHARACTER SET utf8
+                     COLLATE utf8_bin
+                """
+    # If we're using sqlite, we need a Primary Key
+    else:
+        # Clip Keywords Table: Test for existence and create if needed
+        # The MySQL Unique Key syntax is not supported.  Therefore, we'll give this table it's own unique key.
+        query = """
+                  CREATE TABLE IF NOT EXISTS ClipKeywords%d
+                    (number        INTEGER PRIMARY KEY AUTOINCREMENT,
+                     EpisodeNum    INTEGER, 
+                     ClipNum       INTEGER,
+                     SnapshotNum   INTEGER,
+                     KeywordGroup  VARCHAR(50), 
+                     Keyword       VARCHAR(85), 
+                     Example       CHAR(1))
+                """
     # Add the appropriate Table Type to the CREATE Query
     query = SetTableType(TransanaGlobal.hasInnoDB, query)
     # Return the query to the calling routine
-    return query
+    return query % num
 
 def CreateSnapshotKeywordsTableQuery(num):
     """ Create query for the Snapshot Keywords Table """
@@ -459,13 +601,17 @@ def CreateSnapshotKeywordsTableQuery(num):
                  x2            INTEGER,
                  y2            INTEGER,
                  visible       CHAR(1))
+                """
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
+            """
     # Add the appropriate Table Type to the CREATE Query
     query = SetTableType(TransanaGlobal.hasInnoDB, query)
     # Return the query to the calling routine
-    return query
+    return query % num
 
 def CreateSnapshotKeywordStylesTableQuery(num):
     """ Create query for the Snapshot Keyword Styles Table """
@@ -483,17 +629,31 @@ def CreateSnapshotKeywordStylesTableQuery(num):
                  LineColorDef  VARCHAR(10),
                  LineWidth     INTEGER,
                  LineStyle     VARCHAR(20),
-                 UNIQUE KEY (SnapshotNum, KeywordGroup, Keyword))
+                 PRIMARY KEY (SnapshotNum, KeywordGroup, Keyword))
+                """
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
+            """
     # Add the appropriate Table Type to the CREATE Query
     query = SetTableType(TransanaGlobal.hasInnoDB, query)
     # Return the query to the calling routine
-    return query
+    return query % num
 
 def CreateCoreDataTableQuery(num):
     """ Create query for the Core Data table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
 
     # NOTE:  If you change this, you need to change the INSERT queries in the CORE DATA object
     #        AND in the UpdateEncoding250() method below in this file!
@@ -501,7 +661,7 @@ def CreateCoreDataTableQuery(num):
     # Core Data Table: Test for existence and create if needed
     query = """
               CREATE TABLE IF NOT EXISTS CoreData%d
-                (CoreDataNum    INTEGER auto_increment, 
+                (CoreDataNum    INTEGER %s, 
                  Identifier     VARCHAR(255), 
                  Title          VARCHAR(255), 
                  Creator        VARCHAR(255), 
@@ -518,15 +678,20 @@ def CreateCoreDataTableQuery(num):
                  Coverage       VARCHAR(255), 
                  Rights         VARCHAR(255), 
                  RecordLock     VARCHAR(25), 
-                 LockTime       DATETIME, 
+                 LockTime       DATETIME"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """, 
                  PRIMARY KEY (CoreDataNum))
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
-    # Add the appropriate Table Type to the CREATE Query
-    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+            """
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
     # Return the query to the calling routine
-    return query
+    return query % (num, autoIncrementSyntax)
 
 def CreateFiltersTableQuery(num):
     """ Create query for the Filters table """
@@ -543,16 +708,30 @@ def CreateFiltersTableQuery(num):
                  FilterDataType  INTEGER,
                  FilterData      LONGBLOB,
                  PRIMARY KEY (ReportType, ReportScope, ConfigName, FilterDataType))
+                """
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
+            """
     # Add the appropriate Table Type to the CREATE Query
     query = SetTableType(TransanaGlobal.hasInnoDB, query)
     # Return the query to the calling routine
-    return query
+    return query % num
 
 def CreateAdditionalVidsTableQuery(num):
     """ Create query for the Additional Videos table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
 
     # NOTE:  If you change this, you need to change the INSERT queries in the EPISODE and Clip objects
     #        AND in the UpdateEncoding250() method below in this file!
@@ -560,21 +739,26 @@ def CreateAdditionalVidsTableQuery(num):
     # Additional Videos Table: Test for existence and create if needed
     query = """
               CREATE TABLE IF NOT EXISTS AdditionalVids%d
-                (AddVidNum      INTEGER auto_increment,
+                (AddVidNum      INTEGER %s,
                  EpisodeNum     INTEGER,
                  ClipNum        INTEGER,
                  MediaFile      VARCHAR(255), 
                  VidLength      INTEGER,
                  Offset         INTEGER,
-                 Audio          INTEGER,
+                 Audio          INTEGER"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """,
                  PRIMARY KEY (AddVidNum))
                  DEFAULT CHARACTER SET utf8
                  COLLATE utf8_bin
-            """ % num
-    # Add the appropriate Table Type to the CREATE Query
-    query = SetTableType(TransanaGlobal.hasInnoDB, query)
+            """
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
     # Return the query to the calling routine
-    return query
+    return query % (num, autoIncrementSyntax)
 
 
 def establish_db_exists(dbToOpen=None):
@@ -595,57 +779,66 @@ def establish_db_exists(dbToOpen=None):
     # Obtain a Database Cursor
     dbCursor = db.cursor()
 
-    # MySQL for Python 1.2.0 and later defaults to turning off AUTOCOMMIT.  We want AutoCommit to be ON.
-    # query = "SET AUTOCOMMIT = 1"
-    # Execute the Query
-    # dbCursor.execute(query)
-    db.autocommit(1)
+    # If we're using MySQL ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
 
-    # MySQLdb 1.2.2 displays Warnings if the tables already exist as they are created.  We don't want this!
-    if not MySQLdb.version_info in [(1, 2, 0, 'final', 1)]:
-        dbCursor._defer_warnings = True
+        # MySQL for Python 1.2.0 and later defaults to turning off AUTOCOMMIT.  We want AutoCommit to be ON.
+        # query = "SET AUTOCOMMIT = 1"
+        # Execute the Query
+        # dbCursor.execute(query)
+        db.autocommit(1)
 
-    # Initialize BDB and InnoDB Table Flags to false
-    hasBDB = False
-    hasInnoDB = False
-    # First, let's find out if the InnoDB and BDB Tables are supported on the MySQL Instance we are using.
-    # Define a "SHOW VARIABLES" Query
-    query = "SHOW VARIABLES LIKE 'have%'"
-    # Execute the Query
-    dbCursor.execute(query)
-    # Look at the Results Set
-    for pair in dbCursor.fetchall():
-        # If there is a pair in the Results that indicates that the value for "have_bdb" is "YES",
-        # set the DBD Flag to True
-        if pair[0] == 'have_bdb':
-            if type(pair[1]).__name__ == 'array':
-                p1 = pair[1].tostring()
-            else:
-                p1 = pair[1]
-            if p1 == 'YES':
-                hasBDB = True
-        # If there is a pair in the Results that indicates that the value for "have_innodb" is "YES",
-        # set the InnoDB Flag to True
-        if pair[0] == 'have_innodb':
-            if type(pair[1]).__name__ == 'array':
-                p1 = pair[1].tostring()
-            else:
-                p1 = pair[1]
-            if p1 == 'YES':
-                hasInnoDB = True
-    # Then let's check the MySQL version.  MySQL dropped have_bdb a long time ago, and have_innodb with 5.6.x
-    # Define a "SHOW VARIABLES" Query
-    query = "SHOW VARIABLES LIKE 'version'"
-    # Execute the Query
-    dbCursor.execute(query)
-    # Look at the Results Set
-    version = dbCursor.fetchone()[1]
-    # Break the MySQL version into major, minor, and sub-minor sections based on decimal points in the version number
-    version = version.split('.')
+        # MySQLdb 1.2.2 displays Warnings if the tables already exist as they are created.  We don't want this!
+        if not MySQLdb.version_info in [(1, 2, 0, 'final', 1)]:
+            dbCursor._defer_warnings = True
 
-    # If we have MySQL version 5.6 or higher ...
-    if (int(version[0]) >= 5) and (int(version[1]) >= 6):
-        # ... then InnoDB IS built in, even though there's no longer a variable for it!
+        # Initialize BDB and InnoDB Table Flags to false
+        hasBDB = False
+        hasInnoDB = False
+        # First, let's find out if the InnoDB and BDB Tables are supported on the MySQL Instance we are using.
+        # Define a "SHOW VARIABLES" Query
+        query = "SHOW VARIABLES LIKE 'have%'"
+        # Execute the Query
+        dbCursor.execute(query)
+        # Look at the Results Set
+        for pair in dbCursor.fetchall():
+            # If there is a pair in the Results that indicates that the value for "have_bdb" is "YES",
+            # set the DBD Flag to True
+            if pair[0] == 'have_bdb':
+                if type(pair[1]).__name__ == 'array':
+                    p1 = pair[1].tostring()
+                else:
+                    p1 = pair[1]
+                if p1 == 'YES':
+                    hasBDB = True
+            # If there is a pair in the Results that indicates that the value for "have_innodb" is "YES",
+            # set the InnoDB Flag to True
+            if pair[0] == 'have_innodb':
+                if type(pair[1]).__name__ == 'array':
+                    p1 = pair[1].tostring()
+                else:
+                    p1 = pair[1]
+                if p1 == 'YES':
+                    hasInnoDB = True
+        # Then let's check the MySQL version.  MySQL dropped have_bdb a long time ago, and have_innodb with 5.6.x
+        # Define a "SHOW VARIABLES" Query
+        query = "SHOW VARIABLES LIKE 'version'"
+        # Execute the Query
+        dbCursor.execute(query)
+        # Look at the Results Set
+        version = dbCursor.fetchone()[1]
+        # Break the MySQL version into major, minor, and sub-minor sections based on decimal points in the version number
+        version = version.split('.')
+
+        # If we have MySQL version 5.6 or higher ...
+        if (int(version[0]) >= 5) and (int(version[1]) >= 6):
+            # ... then InnoDB IS built in, even though there's no longer a variable for it!
+            hasInnoDB = True
+
+    # If we're using sqlite ...
+    else:
+        # ... this has no meaning, so we cannot fail the test!
+        hasBDB = True
         hasInnoDB = True
 
     # If neither BDB nor InnoDB are supported, display an error message.
@@ -655,15 +848,24 @@ def establish_db_exists(dbToOpen=None):
         dlg.Destroy
     # If either DBD or InnoDB is supported ...
     else:
-
-        query = "SHOW TABLES"
-        # Execute the Query
-        dbCursor.execute(query)
-        if dbCursor.rowcount == 0:
-            DBVersion = 0
+        # If we're using MySQL ...
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # See if any database tables exist
+            query = "SHOW TABLES"
+            # Execute the Query
+            dbCursor.execute(query)
+            # If no tables exists ...
+            if dbCursor.rowcount == 0:
+                # ... initialize database version to 0
+                DBVersion = 0
+            # if tables DO exists ...
+            else:
+                # ... set the Database Version Number to reflect the version that didn't yet have this feature
+                DBVersion = 242
+        # If we're using sqlite ...
         else:
-            # Set the Database Version Number to reflect the version that didn't yet have this feature
-            DBVersion = 242
+            # ... initialize database version to 0
+            DBVersion = 0
 
         TransanaGlobal.hasInnoDB = hasInnoDB
         # Create the Configuration Information table if it doesn't exist
@@ -672,6 +874,9 @@ def establish_db_exists(dbToOpen=None):
                       (KeyVal        VARCHAR(25),
                        Value         VARCHAR(255),
                        PRIMARY KEY (KeyVal))
+                """
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            query += """
                      DEFAULT CHARACTER SET utf8
                      COLLATE utf8_bin
                 """
@@ -684,8 +889,9 @@ def establish_db_exists(dbToOpen=None):
         query = "SELECT Value FROM  ConfigInfo WHERE KeyVal = 'DBVersion'"
         # Execute the Query
         dbCursor.execute(query)
+        data = dbCursor.fetchall()
         # if no value is returned ...
-        if dbCursor.rowcount == 0:
+        if len(data) <= 0:
             # If there WERE other tables ...
             if DBVersion == 242:
                 # ... then we've just created this table.  Let's populate it!
@@ -707,7 +913,7 @@ def establish_db_exists(dbToOpen=None):
                 dbCursor.execute(query)
         else:
             # Get the Transana Database Version from the Database
-            DBVersion = int(dbCursor.fetchone()[0])
+            DBVersion = int(data[0][0])
 
         # Detect OLDER Database Versions
         if (DBVersion > 0) and (DBVersion < 260):
@@ -749,6 +955,7 @@ def establish_db_exists(dbToOpen=None):
 
         # Get the SQL to create the Series2 Table
         query = CreateSeriesTableQuery(2)
+
         # Execute the Query
         dbCursor.execute(query)
 
@@ -765,91 +972,94 @@ def establish_db_exists(dbToOpen=None):
         # Now we need to check the Transcripts table to see if it has the SourceTranscriptNum and SortOrder
         # fields, added for Transana 2.30 to allow multi-transcript clips.
 
-        # First, let's look at the Transcripts table structure.
-        # Define the appropriate query
-        query = "SHOW CREATE TABLE Transcripts2"
-        # Execute the Query
-        dbCursor.execute(query)
-        # now let's look at the data returned from the database
-        for data in dbCursor.fetchall():
-            # Check for "array" data and convert if needed
-            if type(data[1]).__name__ == 'array':
-                d1 = data[1].tostring()
-            else:
-                d1 = data[1]
-            # if a "SourceTranscriptNum" field is present, the table has already been altered.
-            if not u"sourcetranscriptnum" in d1.lower():
-                # If not, build a message to the user about upgrading the database
-                msg = _("Transana has detected that this database needs to be upgraded.") + "\n" + \
-                      _("Once you upgrade your database, you should not use it with older versions of Transana.") + "\n\n" + \
-                      _("Do you want to upgrade this database at this time?")
-                # Provide an extra warning for MU users
-                if not TransanaConstants.singleUserVersion:
-                    msg += "\n\n" + _("NOTE:  Upgrading the database before the Message Server has been upgraded\ncan lead to serious problems.  Do not upgrade unless you are SURE your\nMessage Server has already been upgraded.")
-                # Create the dialog box
-                dlg = Dialogs.QuestionDialog(None, msg, noDefault=True)
-                # Display the error message
-                result = dlg.LocalShowModal()
-                # Destroy the dialog
-                dlg.Destroy()
-                # If the user answered "YES" to upgrading ...
-                if result == wx.ID_YES:
-                    # If not, we need to alter the table to add the SourceTranscriptNum field
-                    query = """ ALTER TABLE Transcripts2
-                                  ADD COLUMN
-                                    SourceTranscriptNum  INTEGER AFTER EpisodeNum """
-                    dbCursor2 = db.cursor()
-                    dbCursor2.execute(query)
-                    # ... then we need to alter the table to add the SortOrder field
-                    query = """ ALTER TABLE Transcripts2
-                                  ADD COLUMN
-                                    SortOrder  INTEGER AFTER ClipNum """
-                    dbCursor2.execute(query)
-                    # ... then we need to alter the table to add the ClipStart field
-                    query = """ ALTER TABLE Transcripts2
-                                  ADD COLUMN
-                                    ClipStart  INTEGER AFTER Transcriber """
-                    dbCursor2.execute(query)
-                    # ... then we need to alter the table to add the ClipStop field
-                    query = """ ALTER TABLE Transcripts2
-                                  ADD COLUMN
-                                    ClipStop  INTEGER AFTER ClipStart """
-                    dbCursor2.execute(query)
-                    # Now find all the Clip Transcripts
-                    query = " SELECT ClipNum, TranscriptNum, ClipStart, ClipStop FROM Clips2 "
-                    dbCursor2.execute(query)
-                    # Get the list of clips from the query
-                    clipList = dbCursor2.fetchall()
-                    # Create a progress dialog (This isn't even seen on small databases, but might be nice for large ones.)
-                    progDlg = wx.ProgressDialog(_("Transana"), _("Database upgrade in progress"), maximum = len(clipList),
-                                                style = wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME | wx.PD_REMAINING_TIME)
-                    # We need another database cursor
-                    dbCursor3 = db.cursor()
-                    # Define a query that will move the Source Transcript data from the Clip data we've already got to
-                    # the Transcript table
-                    query = "UPDATE Transcripts2 SET SourceTranscriptNum = %d, SortOrder = 0, ClipStart = %d, ClipStop = %d WHERE ClipNum = %d"
-                    # Initialize a counter for the Progress Dialog
-                    counter = 0
-                    # Iterate through the list of known clips ...
-                    for (clipNum, transcriptNum, clipStart, clipStop) in clipList:
-                        # ... update the Progress Dialog ...
-                        (cont, skip) = progDlg.Update(counter)
-                        # ... move the Source Transcript data from the Clip table to the Transcript table
-                        dbCursor3.execute(query % (transcriptNum, clipStart, clipStop, clipNum))
-                        # ... and increment the progress counter
-                        counter += 1
-                    # We can now close the Progress Dialog
-                    progDlg.Destroy()
-                    # Finally, drop TranscriptNum from the Clip table, now that the data's beem moved to the Transcript table.
-                    query = """ ALTER TABLE Clips2
-                                  DROP COLUMN TranscriptNum """
-                    dbCursor2.execute(query)
-                # If the user says "NO" to upgrading ...
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # First, let's look at the Transcripts table structure.
+            # Define the appropriate query
+            query = "SHOW CREATE TABLE Transcripts2"
+            # Execute the Query
+            dbCursor.execute(query)
+            # now let's look at the data returned from the database
+            for data in dbCursor.fetchall():
+                # Check for "array" data and convert if needed
+                if type(data[1]).__name__ == 'array':
+                    d1 = data[1].tostring()
                 else:
-                    # Close the database before any changes get made!
-                    close_db()
-                    # signal failure to connect to the database
-                    return False
+                    d1 = data[1]
+                # if a "SourceTranscriptNum" field is present, the table has already been altered.
+                if not u"sourcetranscriptnum" in d1.lower():
+                    # If not, build a message to the user about upgrading the database
+                    msg = _("Transana has detected that this database needs to be upgraded.") + "\n" + \
+                          _("Once you upgrade your database, you should not use it with older versions of Transana.") + "\n\n" + \
+                          _("Do you want to upgrade this database at this time?")
+                    # Provide an extra warning for MU users
+                    if not TransanaConstants.singleUserVersion:
+                        msg += "\n\n" + _("NOTE:  Upgrading the database before the Message Server has been upgraded\ncan lead to serious problems.  Do not upgrade unless you are SURE your\nMessage Server has already been upgraded.")
+                    # Create the dialog box
+                    dlg = Dialogs.QuestionDialog(None, msg, noDefault=True)
+                    # Display the error message
+                    result = dlg.LocalShowModal()
+                    # Destroy the dialog
+                    dlg.Destroy()
+                    # If the user answered "YES" to upgrading ...
+                    if result == wx.ID_YES:
+                        # If not, we need to alter the table to add the SourceTranscriptNum field
+                        query = """ ALTER TABLE Transcripts2
+                                      ADD COLUMN
+                                        SourceTranscriptNum  INTEGER AFTER EpisodeNum """
+                        dbCursor2 = db.cursor()
+                        dbCursor2.execute(query)
+                        # ... then we need to alter the table to add the SortOrder field
+                        query = """ ALTER TABLE Transcripts2
+                                      ADD COLUMN
+                                        SortOrder  INTEGER AFTER ClipNum """
+                        dbCursor2.execute(query)
+                        # ... then we need to alter the table to add the ClipStart field
+                        query = """ ALTER TABLE Transcripts2
+                                      ADD COLUMN
+                                        ClipStart  INTEGER AFTER Transcriber """
+                        dbCursor2.execute(query)
+                        # ... then we need to alter the table to add the ClipStop field
+                        query = """ ALTER TABLE Transcripts2
+                                      ADD COLUMN
+                                        ClipStop  INTEGER AFTER ClipStart """
+                        dbCursor2.execute(query)
+                        # Now find all the Clip Transcripts
+                        query = " SELECT ClipNum, TranscriptNum, ClipStart, ClipStop FROM Clips2 "
+                        dbCursor2.execute(query)
+                        # Get the list of clips from the query
+                        clipList = dbCursor2.fetchall()
+                        # Create a progress dialog (This isn't even seen on small databases, but might be nice for large ones.)
+                        progDlg = wx.ProgressDialog(_("Transana"), _("Database upgrade in progress"), maximum = len(clipList),
+                                                    style = wx.PD_APP_MODAL | wx.PD_ELAPSED_TIME | wx.PD_REMAINING_TIME)
+                        # We need another database cursor
+                        dbCursor3 = db.cursor()
+                        # Define a query that will move the Source Transcript data from the Clip data we've already got to
+                        # the Transcript table
+                        query = "UPDATE Transcripts2 SET SourceTranscriptNum = %s, SortOrder = 0, ClipStart = %s, ClipStop = %s WHERE ClipNum = %s"
+                        # Adjust the query for sqlite if needed
+                        query = FixQuery(query)
+                        # Initialize a counter for the Progress Dialog
+                        counter = 0
+                        # Iterate through the list of known clips ...
+                        for (clipNum, transcriptNum, clipStart, clipStop) in clipList:
+                            # ... update the Progress Dialog ...
+                            (cont, skip) = progDlg.Update(counter)
+                            # ... move the Source Transcript data from the Clip table to the Transcript table
+                            dbCursor3.execute(query, (transcriptNum, clipStart, clipStop, clipNum))
+                            # ... and increment the progress counter
+                            counter += 1
+                        # We can now close the Progress Dialog
+                        progDlg.Destroy()
+                        # Finally, drop TranscriptNum from the Clip table, now that the data's beem moved to the Transcript table.
+                        query = """ ALTER TABLE Clips2
+                                      DROP COLUMN TranscriptNum """
+                        dbCursor2.execute(query)
+                    # If the user says "NO" to upgrading ...
+                    else:
+                        # Close the database before any changes get made!
+                        close_db()
+                        # signal failure to connect to the database
+                        return False
 
         # Collections2 Table: Test for existence and create if needed
         query = CreateCollectionsTableQuery(2)
@@ -861,42 +1071,43 @@ def establish_db_exists(dbToOpen=None):
         # Execute the Query
         dbCursor.execute(query)
 
-        # Now, let's look at the Clips table structure.
-        # Define the appropriate query
-        query = "SHOW CREATE TABLE Clips2"
-        # Execute the Query
-        dbCursor.execute(query)
-        # now let's look at the data returned from the database
-        for data in dbCursor.fetchall():
-            # Check for "array" data and convert if needed
-            if type(data[1]).__name__ == 'array':
-                d1 = data[1].tostring()
-            else:
-                d1 = data[1]
-            # if a "ClipOffset" field is present, the table has already been altered.
-            if not u"clipoffset" in d1.lower():
-                # If not, we need to alter the table to add the ClipOffset field
-                query = """ ALTER TABLE Clips2
-                              ADD COLUMN
-                                ClipOffset  INTEGER
-                              AFTER ClipStop """
-                dbCursor2 = db.cursor()
-                dbCursor2.execute(query)
-                # Define a query that will set ClipOffset to the default value of 0
-                query = "UPDATE Clips2 SET ClipOffset = 0"
-                dbCursor2.execute(query)
-            # Check to see if an "Audio" field is present.
-            if not u"audio" in d1.lower():
-                # If not, we need to alter the table to add the Audio field
-                query = """ ALTER TABLE Clips2
-                              ADD COLUMN
-                                Audio  INTEGER
-                              AFTER ClipOffset """
-                dbCursor2 = db.cursor()
-                dbCursor2.execute(query)
-                # Define a query that will set Audio to the default value of 1
-                query = "UPDATE Clips2 SET Audio = 1"
-                dbCursor2.execute(query)
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # Now, let's look at the Clips table structure.
+            # Define the appropriate query
+            query = "SHOW CREATE TABLE Clips2"
+            # Execute the Query
+            dbCursor.execute(query)
+            # now let's look at the data returned from the database
+            for data in dbCursor.fetchall():
+                # Check for "array" data and convert if needed
+                if type(data[1]).__name__ == 'array':
+                    d1 = data[1].tostring()
+                else:
+                    d1 = data[1]
+                # if a "ClipOffset" field is present, the table has already been altered.
+                if not u"clipoffset" in d1.lower():
+                    # If not, we need to alter the table to add the ClipOffset field
+                    query = """ ALTER TABLE Clips2
+                                  ADD COLUMN
+                                    ClipOffset  INTEGER
+                                  AFTER ClipStop """
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
+                    # Define a query that will set ClipOffset to the default value of 0
+                    query = "UPDATE Clips2 SET ClipOffset = 0"
+                    dbCursor2.execute(query)
+                # Check to see if an "Audio" field is present.
+                if not u"audio" in d1.lower():
+                    # If not, we need to alter the table to add the Audio field
+                    query = """ ALTER TABLE Clips2
+                                  ADD COLUMN
+                                    Audio  INTEGER
+                                  AFTER ClipOffset """
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
+                    # Define a query that will set Audio to the default value of 1
+                    query = "UPDATE Clips2 SET Audio = 1"
+                    dbCursor2.execute(query)
 
         #  Snapshots2 Table: Test for existence and create if needed
         query = CreateSnapshotsTableQuery(2)
@@ -915,38 +1126,39 @@ def establish_db_exists(dbToOpen=None):
         # changing databases against my linux box running MySQL 5.0.27. (Not sure what the relevant
         # factor was in that.  Just know it fails.)  So I switched to SHOW CREATE TABLE.
 
-        # query = "SHOW COLUMNS FROM Notes2 LIKE 'NoteText'"
-        query = "SHOW CREATE TABLE Notes2"
-        # Execute the Query
-        dbCursor.execute(query)
-        # now let's look at the data returned from the database
-        for data in dbCursor.fetchall():
-            # Check for "array" data and convert if needed
-            if type(data[1]).__name__ == 'array':
-                d1 = data[1].tostring()
-            else:
-                d1 = data[1]
-            # if a LONGBLOB is present, we can skip this.     # If the Field is "NoteText" and the Type is "Blob" ...
-            if not u"longblob" in d1.lower():            # (data[0].lower() == u'notetext') and (data[1].lower() == u'blob'):
-                # ... then we need to alter the table to change the data type to LONGBLOB.
-                query = "ALTER TABLE Notes2 MODIFY NoteText LONGBLOB"
-                dbCursor2 = db.cursor()
-                dbCursor2.execute(query)
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # query = "SHOW COLUMNS FROM Notes2 LIKE 'NoteText'"
+            query = "SHOW CREATE TABLE Notes2"
+            # Execute the Query
+            dbCursor.execute(query)
+            # now let's look at the data returned from the database
+            for data in dbCursor.fetchall():
+                # Check for "array" data and convert if needed
+                if type(data[1]).__name__ == 'array':
+                    d1 = data[1].tostring()
+                else:
+                    d1 = data[1]
+                # if a LONGBLOB is present, we can skip this.     # If the Field is "NoteText" and the Type is "Blob" ...
+                if not u"longblob" in d1.lower():            # (data[0].lower() == u'notetext') and (data[1].lower() == u'blob'):
+                    # ... then we need to alter the table to change the data type to LONGBLOB.
+                    query = "ALTER TABLE Notes2 MODIFY NoteText LONGBLOB"
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
 
-            # Transana 2.60 -- Adding Snapshot Table requires modifications to the Notes table
-            #                  so it can hold Snapshot Notes!
-            # if a "SnapshotNum" field is present, the table has already been altered.
-            if not u"snapshotnum" in d1.lower():
-                # If not, we need to alter the table to add the ClipOffset field
-                query = """ ALTER TABLE Notes2
-                              ADD COLUMN
-                                SnapshotNum  INTEGER
-                              AFTER ClipNum """
-                dbCursor2 = db.cursor()
-                dbCursor2.execute(query)
-                # Define a query that will set SnapshotNum to the default value of 0
-                query = "UPDATE Notes2 SET SnapshotNum = 0"
-                dbCursor2.execute(query)
+                # Transana 2.60 -- Adding Snapshot Table requires modifications to the Notes table
+                #                  so it can hold Snapshot Notes!
+                # if a "SnapshotNum" field is present, the table has already been altered.
+                if not u"snapshotnum" in d1.lower():
+                    # If not, we need to alter the table to add the ClipOffset field
+                    query = """ ALTER TABLE Notes2
+                                  ADD COLUMN
+                                    SnapshotNum  INTEGER
+                                  AFTER ClipNum """
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
+                    # Define a query that will set SnapshotNum to the default value of 0
+                    query = "UPDATE Notes2 SET SnapshotNum = 0"
+                    dbCursor2.execute(query)
 
         # Keywords2 Table: Test for existence and create if needed
         query = CreateKeywordsTableQuery(2)
@@ -956,85 +1168,87 @@ def establish_db_exists(dbToOpen=None):
         # Now we need to check the Keywords table to see if the Definition field is a VARCHAR(255) or a LONGBLOB,
         # and we need to increase the size of the field if it's a VARCHAR.
 
-        query = "SHOW CREATE TABLE Keywords2"
-        # Execute the Query
-        dbCursor.execute(query)
-        # now let's look at the data returned from the database
-        for data in dbCursor.fetchall():
-            # Check for "array" data and convert if needed
-            if type(data[1]).__name__ == 'array':
-                d1 = data[1].tostring()
-            else:
-                d1 = data[1]
-            # if a LONGBLOB is present, we can skip this.
-            if not u"longblob" in d1.lower():
-                # ... then we need to alter the table to change the data type to LONGBLOB.
-                query = "ALTER TABLE Keywords2 MODIFY Definition LONGBLOB"
-                dbCursor2 = db.cursor()
-                dbCursor2.execute(query)
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            query = "SHOW CREATE TABLE Keywords2"
+            # Execute the Query
+            dbCursor.execute(query)
+            # now let's look at the data returned from the database
+            for data in dbCursor.fetchall():
+                # Check for "array" data and convert if needed
+                if type(data[1]).__name__ == 'array':
+                    d1 = data[1].tostring()
+                else:
+                    d1 = data[1]
+                # if a LONGBLOB is present, we can skip this.
+                if not u"longblob" in d1.lower():
+                    # ... then we need to alter the table to change the data type to LONGBLOB.
+                    query = "ALTER TABLE Keywords2 MODIFY Definition LONGBLOB"
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
 
-            # Transana 2.60 -- Add Coding Default information to the Keywords table
-            # if a "DrawMode" field is present, the table has already been altered.
-            if not u"drawmode" in d1.lower():
-                # If not, we need to alter the table to add the ClipOffset field
-                query = """ ALTER TABLE Keywords2
-                              ADD COLUMN
-                                 LineColorName VARCHAR(50)
-                                 AFTER Definition,
-                              ADD COLUMN
-                                 LineColorDef  VARCHAR(10)
-                                 AFTER LineColorName,
-                              ADD COLUMN
-                                 DrawMode      VARCHAR(20)
-                                 AFTER LineColorDef,
-                              ADD COLUMN
-                                 LineWidth     INTEGER
-                                 AFTER DrawMode,
-                              ADD COLUMN
-                                 LineStyle     VARCHAR(20)
-                                 AFTER LineWidth """
-                dbCursor2 = db.cursor()
-                dbCursor2.execute(query)
-                # Define a query that will set SnapshotNum to the default value of 0
-                query = "UPDATE Keywords2 SET LineColorName = '', LineColorDef = '', DrawMode = '', LineWidth = 0, LineStyle = ''"
-                dbCursor2.execute(query)
+                # Transana 2.60 -- Add Coding Default information to the Keywords table
+                # if a "DrawMode" field is present, the table has already been altered.
+                if not u"drawmode" in d1.lower():
+                    # If not, we need to alter the table to add the ClipOffset field
+                    query = """ ALTER TABLE Keywords2
+                                  ADD COLUMN
+                                     LineColorName VARCHAR(50)
+                                     AFTER Definition,
+                                  ADD COLUMN
+                                     LineColorDef  VARCHAR(10)
+                                     AFTER LineColorName,
+                                  ADD COLUMN
+                                     DrawMode      VARCHAR(20)
+                                     AFTER LineColorDef,
+                                  ADD COLUMN
+                                     LineWidth     INTEGER
+                                     AFTER DrawMode,
+                                  ADD COLUMN
+                                     LineStyle     VARCHAR(20)
+                                     AFTER LineWidth """
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
+                    # Define a query that will set SnapshotNum to the default value of 0
+                    query = "UPDATE Keywords2 SET LineColorName = '', LineColorDef = '', DrawMode = '', LineWidth = 0, LineStyle = ''"
+                    dbCursor2.execute(query)
 
         # ClipKeywords2 Table: Test for existence and create if needed
         query = CreateClipKeywordsTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
 
-        # Transana 2.60 -- Adding Snapshot Table requires modifications to the Clip Keywords table
-        #                  so it can hold Snapshot Keyword records!
-        query = "SHOW CREATE TABLE ClipKeywords2"
-        # Execute the Query
-        dbCursor.execute(query)
-        # now let's look at the data returned from the database
-        for data in dbCursor.fetchall():
-            # Check for "array" data and convert if needed
-            if type(data[1]).__name__ == 'array':
-                d1 = data[1].tostring()
-            else:
-                d1 = data[1]
-            # if a "SnapshotNum" field is present, the table has already been altered.
-            if not u"snapshotnum" in d1.lower():
-                # If not, we need to alter the table to add the ClipOffset field
-                query = """ ALTER TABLE ClipKeywords2
-                              ADD COLUMN
-                                SnapshotNum  INTEGER
-                              AFTER ClipNum """
-                dbCursor2 = db.cursor()
-                dbCursor2.execute(query)
-                # Define a query that will set SnapshotNum to the default value of 0
-                query = "UPDATE ClipKeywords2 SET SnapshotNum = 0"
-                dbCursor2.execute(query)
-                # Define a set of queries that will remove the old Unique key and replace it
-                query = """ALTER TABLE ClipKeywords2
-                              DROP KEY EpisodeNum """
-                dbCursor2.execute(query)
-                query = """ALTER TABLE ClipKeywords2
-                             ADD UNIQUE KEY EpisodeNum (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword) """
-                dbCursor2.execute(query)
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # Transana 2.60 -- Adding Snapshot Table requires modifications to the Clip Keywords table
+            #                  so it can hold Snapshot Keyword records!
+            query = "SHOW CREATE TABLE ClipKeywords2"
+            # Execute the Query
+            dbCursor.execute(query)
+            # now let's look at the data returned from the database
+            for data in dbCursor.fetchall():
+                # Check for "array" data and convert if needed
+                if type(data[1]).__name__ == 'array':
+                    d1 = data[1].tostring()
+                else:
+                    d1 = data[1]
+                # if a "SnapshotNum" field is present, the table has already been altered.
+                if not u"snapshotnum" in d1.lower():
+                    # If not, we need to alter the table to add the ClipOffset field
+                    query = """ ALTER TABLE ClipKeywords2
+                                  ADD COLUMN
+                                    SnapshotNum  INTEGER
+                                  AFTER ClipNum """
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
+                    # Define a query that will set SnapshotNum to the default value of 0
+                    query = "UPDATE ClipKeywords2 SET SnapshotNum = 0"
+                    dbCursor2.execute(query)
+                    # Define a set of queries that will remove the old Unique key and replace it
+                    query = """ALTER TABLE ClipKeywords2
+                                  DROP KEY EpisodeNum """
+                    dbCursor2.execute(query)
+                    query = """ALTER TABLE ClipKeywords2
+                                 ADD UNIQUE KEY EpisodeNum (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword) """
+                    dbCursor2.execute(query)
 
         # SnapshotKeywords2 Table: Test for existence and create if needed
         query = CreateSnapshotKeywordsTableQuery(2)
@@ -1057,49 +1271,16 @@ def establish_db_exists(dbToOpen=None):
         # Execute the Query
         dbCursor.execute(query)
 
-        # Now we need to check the Filters table to see if the FilterData field is a BLOB or a LONGBLOB,
-        # and we need to increase the size of the field if it's a BLOB.
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # Now we need to check the Filters table to see if the FilterData field is a BLOB or a LONGBLOB,
+            # and we need to increase the size of the field if it's a BLOB.
 
-        # I originally used SHOW COLUMNS to detect this, but that caused a WEAK REFERENCE failure on
-        # changing databases against my linux box running MySQL 5.0.27. (Not sure what the relevant
-        # factor was in that.  Just know it fails.)  So I switched to SHOW CREATE TABLE.
+            # I originally used SHOW COLUMNS to detect this, but that caused a WEAK REFERENCE failure on
+            # changing databases against my linux box running MySQL 5.0.27. (Not sure what the relevant
+            # factor was in that.  Just know it fails.)  So I switched to SHOW CREATE TABLE.
 
-        # query = "SHOW COLUMNS FROM Filters2 LIKE 'FilterData'"
-        query = "SHOW CREATE TABLE Filters2"
-        # Execute the Query
-        dbCursor.execute(query)
-        # now let's look at the data returned from the database
-        for data in dbCursor.fetchall():
-            # Check for "array" data and convert if needed
-            if type(data[1]).__name__ == 'array':
-                d1 = data[1].tostring()
-            else:
-                d1 = data[1]
-            # if a LONGBLOB is present, we can skip this.     # If the Field is "FilterData" and the Type is "Blob" ...
-            if not u"longblob" in d1.lower():            # (data[0].lower() == u'filterdata') and (data[1].lower() == u'blob'):
-                # ... then we need to alter the table to change the data type to LONGBLOB.
-                query = "ALTER TABLE Filters2 MODIFY FilterData LONGBLOB"
-                dbCursor2 = db.cursor()
-                dbCursor2.execute(query)
-
-        # We need to detect the upgrade to version 2.40.  This should do that.
-        query = "SHOW TABLES LIKE 'AdditionalVids2'"
-        dbCursor.execute(query)
-        if dbCursor.rowcount == 0:
-            UpdateTranscriptRecsfor240(None)
-
-        # AdditionalVids2 (Additional Videos) Table: Test for existence and create if needed
-        query = CreateAdditionalVidsTableQuery(2)
-        # Execute the Query
-        dbCursor.execute(query)
-
-        # Let's test for COLLATION.  ** NOTE:  THIS DOESN'T WORK for CHINESE!! **
-        # Create a list of table to check
-        tables = ['AdditionalVids2', 'ClipKeywords2', 'Clips2', 'Collections2', 'CoreData2', 'Episodes2', 'Filters2', 'Keywords2', 'Notes2', 'Series2', 'Transcripts2']
-        # For each table in the list ...
-        for table in tables:
-            # ... get the table creation statement
-            query = "SHOW CREATE TABLE %s" % table
+            # query = "SHOW COLUMNS FROM Filters2 LIKE 'FilterData'"
+            query = "SHOW CREATE TABLE Filters2"
             # Execute the Query
             dbCursor.execute(query)
             # now let's look at the data returned from the database
@@ -1109,97 +1290,111 @@ def establish_db_exists(dbToOpen=None):
                     d1 = data[1].tostring()
                 else:
                     d1 = data[1]
-                # See if the urf8_bin collation has been declared.  If NOT ...
-                if not u'utf8_bin' in d1.lower():
-                    # ... then we need to alter the table to change the character set and collation
-                    query = "ALTER TABLE %s DEFAULT CHARACTER SET utf8 COLLATE utf8_bin" % table
+                # if a LONGBLOB is present, we can skip this.     # If the Field is "FilterData" and the Type is "Blob" ...
+                if not u"longblob" in d1.lower():            # (data[0].lower() == u'filterdata') and (data[1].lower() == u'blob'):
+                    # ... then we need to alter the table to change the data type to LONGBLOB.
+                    query = "ALTER TABLE Filters2 MODIFY FilterData LONGBLOB"
                     dbCursor2 = db.cursor()
                     dbCursor2.execute(query)
 
-        # Now, let's look at the Transcripts table structure again.  This time we're looking for MinTranscriptWidth for 2.50.
-        # Define the appropriate query
-        query = "SHOW CREATE TABLE Transcripts2"
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # We need to detect the upgrade to version 2.40.  This should do that.
+            query = "SHOW TABLES LIKE 'AdditionalVids2'"
+            dbCursor.execute(query)
+            if dbCursor.rowcount == 0:
+                UpdateTranscriptRecsfor240(None)
+
+        # AdditionalVids2 (Additional Videos) Table: Test for existence and create if needed
+        query = CreateAdditionalVidsTableQuery(2)
         # Execute the Query
         dbCursor.execute(query)
-        # now let's look at the data returned from the database
-        for data in dbCursor.fetchall():
-            # Check for "array" data and convert if needed
-            if type(data[1]).__name__ == 'array':
-                d1 = data[1].tostring()
-            else:
-                d1 = data[1]
-            # if no "MinTranscriptWidth" field is present, the table has needs to be updated.  Added for Transana 2.50
-            if not u"mintranscriptwidth" in d1.lower():
-                # Set the need to include Encoding options to False by default
-                includeEncoding = False
-                # If we're converting from 2.4x to 2.50 AND are on the Single-user version on Windows,
-                # there may be encoding issues we need to deal with.  This will display a
-                # Message for the user.
-                msg = _("Transana has detected that this database needs to be upgraded.") + "\n" + \
-                      _("Once you upgrade your database, you cannot use it with older \nversions of Transana.")
-                # Provide an extra warning for MU users
-                if not TransanaConstants.singleUserVersion:
-                    msg += "\n\n" + _("NOTE:  Upgrading the database before the Message Server has been upgraded\ncan lead to serious problems.  Do not upgrade unless you are SURE your\nMessage Server has already been upgraded.")
-                # Also provide an extra warning for single-user Windows users!
-                elif (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
-                    msg += "\n\n" + _("NOTE:  This process will include changing the encoding for your database.\nPlease be sure your database is backed up, and that you select the\ncorrect language option below.  Making an incorrect selection will\ncorrupt your database!\n\nPlease back up your data before proceeding.")
-                    # This is the case where we need to include the Encoding options!
-                    includeEncoding = True
-                # Finally, ask for confirmation.
-                msg += "\n\n" + _("Do you want to upgrade this database at this time?")
 
-                # Create the dialog box.  This should include the Encoding choice box!!
-                dlg = Dialogs.QuestionDialog(None, msg, header=_("IMPORTANT UPGRADE NOTICE"), noDefault=True, includeEncoding=includeEncoding)
-                # Display the question and get the answer
-                result = dlg.LocalShowModal()
-                # If we're single-user on Windows ...
-                if (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
-                    # Get the user's recommended encoding
-                    encodingToUse = dlg.encodingOptions[dlg.chImportEncoding.GetStringSelection()]
-                # Destroy the dialog
-                dlg.Destroy()
-                # If the user answered "YES" to upgrading ...
-                if result == wx.ID_YES:
-                    
-                    # We need to alter the table to add the MinTranscriptWidth field.
-                    # Get a database cursor ...
-                    dbCursor2 = db.cursor()
-                    # ... create the Query ...
-                    query = """ ALTER TABLE Transcripts2
-                                  ADD COLUMN
-                                    MinTranscriptWidth  INTEGER AFTER Comment """
-                    # ... and execute the query
-                    dbCursor2.execute(query)
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # Let's test for COLLATION.  ** NOTE:  THIS DOESN'T WORK for CHINESE!! **
+            # Create a list of table to check
+            tables = ['AdditionalVids2', 'ClipKeywords2', 'Clips2', 'Collections2', 'CoreData2', 'Episodes2', 'Filters2', 'Keywords2', 'Notes2', 'Series2', 'Transcripts2']
+            # For each table in the list ...
+            for table in tables:
+                # ... get the table creation statement
+                query = "SHOW CREATE TABLE %s" % table
+                # Execute the Query
+                dbCursor.execute(query)
+                # now let's look at the data returned from the database
+                for data in dbCursor.fetchall():
+                    # Check for "array" data and convert if needed
+                    if type(data[1]).__name__ == 'array':
+                        d1 = data[1].tostring()
+                    else:
+                        d1 = data[1]
+                    # See if the urf8_bin collation has been declared.  If NOT ...
+                    if not u'utf8_bin' in d1.lower():
+                        # ... then we need to alter the table to change the character set and collation
+                        query = "ALTER TABLE %s DEFAULT CHARACTER SET utf8 COLLATE utf8_bin" % table
+                        dbCursor2 = db.cursor()
+                        dbCursor2.execute(query)
 
-##                    # If we're single-user on Windows ...
-##                    if (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
-##
-##
-##                        ##  WE SHOULD NEVER GET HERE!!!
-##
-##
-##                        # We need to alter the table to remove the MinTranscriptWidth field added above.
-##                        # This way, the database will still require an Encoding update, giving the user another chance.
-##                        # Get a database cursor ...
-##                        dbCursor2 = db.cursor()
-##                        # ... create the Query ...
-##                        query = """ ALTER TABLE Transcripts2
-##                                      DROP COLUMN
-##                                        MinTranscriptWidth """
-##                        # ... and execute the query
-##                        dbCursor2.execute(query)
-##
-##                        # ... close the database ...
-##                        close_db()
-##                        # ... and indicate failure!
-##                        return False
-
-                # If the user says "NO" to upgrading ...
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # Now, let's look at the Transcripts table structure again.  This time we're looking for MinTranscriptWidth for 2.50.
+            # Define the appropriate query
+            query = "SHOW CREATE TABLE Transcripts2"
+            # Execute the Query
+            dbCursor.execute(query)
+            # now let's look at the data returned from the database
+            for data in dbCursor.fetchall():
+                # Check for "array" data and convert if needed
+                if type(data[1]).__name__ == 'array':
+                    d1 = data[1].tostring()
                 else:
-                    # Close the database before any changes get made!
-                    close_db()
-                    # signal failure to connect to the database
-                    return False
+                    d1 = data[1]
+                # if no "MinTranscriptWidth" field is present, the table has needs to be updated.  Added for Transana 2.50
+                if not u"mintranscriptwidth" in d1.lower():
+                    # Set the need to include Encoding options to False by default
+                    includeEncoding = False
+                    # If we're converting from 2.4x to 2.50 AND are on the Single-user version on Windows,
+                    # there may be encoding issues we need to deal with.  This will display a
+                    # Message for the user.
+                    msg = _("Transana has detected that this database needs to be upgraded.") + "\n" + \
+                          _("Once you upgrade your database, you cannot use it with older \nversions of Transana.")
+                    # Provide an extra warning for MU users
+                    if not TransanaConstants.singleUserVersion:
+                        msg += "\n\n" + _("NOTE:  Upgrading the database before the Message Server has been upgraded\ncan lead to serious problems.  Do not upgrade unless you are SURE your\nMessage Server has already been upgraded.")
+                    # Also provide an extra warning for single-user Windows users!
+                    elif (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
+                        msg += "\n\n" + _("NOTE:  This process will include changing the encoding for your database.\nPlease be sure your database is backed up, and that you select the\ncorrect language option below.  Making an incorrect selection will\ncorrupt your database!\n\nPlease back up your data before proceeding.")
+                        # This is the case where we need to include the Encoding options!
+                        includeEncoding = True
+                    # Finally, ask for confirmation.
+                    msg += "\n\n" + _("Do you want to upgrade this database at this time?")
+
+                    # Create the dialog box.  This should include the Encoding choice box!!
+                    dlg = Dialogs.QuestionDialog(None, msg, header=_("IMPORTANT UPGRADE NOTICE"), noDefault=True, includeEncoding=includeEncoding)
+                    # Display the question and get the answer
+                    result = dlg.LocalShowModal()
+                    # If we're single-user on Windows ...
+                    if (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
+                        # Get the user's recommended encoding
+                        encodingToUse = dlg.encodingOptions[dlg.chImportEncoding.GetStringSelection()]
+                    # Destroy the dialog
+                    dlg.Destroy()
+                    # If the user answered "YES" to upgrading ...
+                    if result == wx.ID_YES:
+                        
+                        # We need to alter the table to add the MinTranscriptWidth field.
+                        # Get a database cursor ...
+                        dbCursor2 = db.cursor()
+                        # ... create the Query ...
+                        query = """ ALTER TABLE Transcripts2
+                                      ADD COLUMN
+                                        MinTranscriptWidth  INTEGER AFTER Comment """
+                        # ... and execute the query
+                        dbCursor2.execute(query)
+
+                    # If the user says "NO" to upgrading ...
+                    else:
+                        # Close the database before any changes get made!
+                        close_db()
+                        # signal failure to connect to the database
+                        return False
 
         # See if this (username, server, database) combination has defined paths.
         if TransanaGlobal.configData.pathsByDB.has_key((TransanaGlobal.userName.encode('utf8'), TransanaGlobal.configData.host.encode('utf8'), TransanaGlobal.configData.database.encode('utf8'))):
@@ -1220,6 +1415,24 @@ def establish_db_exists(dbToOpen=None):
         # If we've gotten this far, return "true" to indicate success.
         return True
 
+
+def FixQuery(query):
+    """ If we're using sqlite, queries require "?" rather than "%s" for parameter substitution.
+        This method converts the SQL query string as needed. """
+    # If we're using sqlite ...
+    if TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... replace all "%s" parameters with "?" parameters
+        query2 = query.replace('%s', '?')
+        # Check the query for apostrophes around paramters or the presence of the "%" character (from %d parameters, for example)
+        if (query2.find("'?") > -1) or (query2.find('%') > -1):
+            # If found, raise a ProgrammingError exception.  We will need to fix the query
+            raise TransanaExceptions.ProgrammingError('Query Format Error')
+        # Return the modified query
+        return query2
+    # If we're NOT using sqlite ...
+    else:
+        # ... just return the query unaltered
+        return query
 
 def UpdateTranscriptRecsfor240(self):
     """ For release 2.40, I changed the way clips created from other clips track their source transcript.
@@ -1273,21 +1486,26 @@ def UpdateTranscriptRecsfor240(self):
         # While the current transcript is a Clip transcript ...
         while CN2 > 0:
             # Create a secondary query to get the current transcript's Source Transcript
-            query = "SELECT TranscriptNum, SourceTranscriptNum, ClipNum FROM Transcripts2 WHERE TranscriptNum = %d"
+            query = "SELECT TranscriptNum, SourceTranscriptNum, ClipNum FROM Transcripts2 WHERE TranscriptNum = %s"
+            # Adjust the query for sqlite if needed
+            query = FixQuery(query)
             # Execute the secondary query
-            dbCursor2.execute(query % STNum2)
+            dbCursor2.execute(query, (STNum2, ))
+            data = dbCursor2.fetchall()
             # If data is returned ...
-            if dbCursor2.rowcount >= 1:
+            if len(data) >= 1:
                 # ... get the data
-                (TNum2, STNum2, CN2) = dbCursor2.fetchone()
+                (TNum2, STNum2, CN2) = data[0]
             # If no data is returned ...
             else:
                 # ... then indicate that with all 0 values
                 (TNum2, STNum2, CN2) = (0, 0, 0)
         # Build a query to update the data in the database
-        query = 'UPDATE Transcripts2 SET SourceTranscriptNum = %d WHERE TranscriptNum = %d'
+        query = 'UPDATE Transcripts2 SET SourceTranscriptNum = %s WHERE TranscriptNum = %s'
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
         # Execute the query
-        dbCursor2.execute(query % (TNum2, TranscriptNum))
+        dbCursor2.execute(query, (TNum2, TranscriptNum))
 
 def get_db(dbToOpen=None):
     """ Get a connection object reference to the database.  If a connection has not yet been established, then create the connection.
@@ -1308,7 +1526,7 @@ def get_db(dbToOpen=None):
             # If we have the multi-user version ...
             if not TransanaConstants.singleUserVersion:
                 # Get the additional multi-user information
-                (ssl, messageServer, messageServerPort, sslClientCert, sslClientKey) = UsernameForm.GetMultiUserValues()
+                (ssl, messageServer, messageServerPort, sslClientCert, sslClientKey, sslMsgSrvCert) = UsernameForm.GetMultiUserValues()
             else:
                 ssl = False
 
@@ -1322,6 +1540,20 @@ def get_db(dbToOpen=None):
             dbServer = dbToOpen.dbServer          # ''
             databaseName = dbToOpen.databaseName  # dbToOpen
             port = dbToOpen.port                  # ''
+            # For unit_test_search.py...
+            if dbServer == 'DKW-Linux':
+                messageServer = 'transana.wcer.wisc.edu'
+                messageServerPort = 17595
+                if hasattr(dbToOpen, 'ssl'):
+                    ssl = dbToOpen.ssl
+                    sslClientCert = dbToOpen.sslClientCert
+                    sslClientKey = dbToOpen.sslClientKey
+                    sslMsgSrvCert = dbToOpen.sslMsgSrvCert
+                else:
+                    ssl = False
+                    sslClientCert = ''
+                    sslClientKey = ''
+                    sslMsgSrvCert = ''
 
         # Check for the validity of the data.
         # The single-user version of Transana needs only the Database Name.  The multi-user version of
@@ -1332,317 +1564,14 @@ def get_db(dbToOpen=None):
             return None
         # Otherwise, all data was provided by the user.
         else:
-            try:
-
-                if DEBUG:
-                    print "Establishing Database Server connection."
-                    
-                # Assign the username to a global variable
-                TransanaGlobal.userName = userName  
-
-                # Establish a connection to the Database Server.
-                # NOTE:  This does not yet support Unicode.  We'll delay the Database Name so it can be unicode.
-                if TransanaConstants.singleUserVersion:
-                    if 'unicode' in wx.PlatformInfo:
-                        # The single-user version requires no parameters
-                        _dbref = MySQLdb.connect(use_unicode=True)
-                    else:
-                        # The single-user version requires no parameters
-                        _dbref = MySQLdb.connect()
-                else:
-                    # Put the Host name and the rest of the login information into the Configuration Data
-                    # so that the same connection can be the default for the next logon
-                    TransanaGlobal.configData.host = dbServer
-                    TransanaGlobal.configData.dbport = port
-
-                    # Add the Message Server configuration information
-                    TransanaGlobal.configData.messageServer = messageServer
-                    try:
-                        TransanaGlobal.configData.messageServerPort = int(messageServerPort)
-                    except ValueError:
-                        print "DBInterface.get_db():  Non-integer Message Server from UserName screen!"
-                        print sys.exc_info()[0]
-                        print sys.exc_info()[1]
-
-                    # Add the SSL configuration information
-                    TransanaGlobal.configData.ssl = ssl
-                    TransanaGlobal.configData.sslClientCert = sslClientCert
-                    TransanaGlobal.configData.sslClientKey = sslClientKey
-
-                    # If we're using Unicode (and we ALWAYS are now!)
-                    if 'unicode' in wx.PlatformInfo:
-                        # If we want an SSL Connection ...
-                        if ssl:
-                            # ... create the correct data structure for MySQLdb's SSL parameter
-                            sslData = {'cert': sslClientCert, 'key': sslClientKey}
-                            # Use MySQLdb to establish the SSL and Unicode connection to the database server
-                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port), use_unicode=True, ssl=sslData)
-                        # If we're NOT requesting an SSL Connection ...
-                        else:
-                            # ... use MySQLdb to establish the Unicode connection to the database server without SSL
-                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port), use_unicode=True)
-                    else:
-                        # The multi-user version requires all information to connect to the database server
-                        _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port))
-
-            # If MySQLdb throws an exception ...
-            except MySQLdb.OperationalError, ex:
-                if DEBUG:
-                    print "DBInterface.get_db():  ", sys.exc_info()[1]
-
-                    errormsg = unicode(_('Database Connection Error:\n%s'), 'utf8') % sys.exc_info()[1]
-                    errordlg = Dialogs.ErrorDialog(None, errormsg)
-                    errordlg.ShowModal()
-                    errordlg.Destroy()
-                # ... signal that the connection failed.  MySQLdb messages aren't very helpful!
-                _dbref = None
-
-            # If the Database Connection fails, an exception is raised.
-            except:
-
-                if DEBUG:
-
-                    print "DBInterface.get_db():  Exception 1"
-                    
-                    print sys.exc_info()[0], sys.exc_info()[1]
-                    import traceback
-                    traceback.print_exc(file=sys.stdout)
-
-                _dbref = None
-
-
-            # If we were able to make a connection to the database and want an SSL connection ...
-            if (_dbref != None) and ssl:
-                # Let's find out the current setting of ssl variables, to see if the server supports SSL
-                query = "SHOW VARIABLES LIKE 'have_ssl%'"
-                dbCursor = _dbref.cursor()
-                # Execute the Query
-                dbCursor.execute(query)
-                # Define the SSL_Found variable, assuming it's NOT present to begin with
-                SSL_Found = False
-                # Iterate through the Results Set
-                for pair in dbCursor.fetchall():
-                    # If we find that SSL is supported ...
-                    if pair == (u'have_ssl', u'YES'):
-                        # ... change teh SSL_Found variable to indicate SSL Support
-                        SSL_Found = True
-                # If SSL was requested but is not supported by the server ...
-                if not SSL_Found:
-                    # ... signal to the config file that this is NOT an SSL connection ...
-                    TransanaGlobal.configData.ssl = False
-                    # ... let's tell the user.  First, create the prompt.
-                    prompt = _("You requested an SSL connection to MySQL, but your MySQL Server is not configured to support SSL.") + '\n\n' + \
-                             _("Please note that your connection to the database server is not secured by SSL.")
-                    # now display the prompt.
-                    dlg = Dialogs.ErrorDialog(None, prompt)
-                    dlg.ShowModal()
-                    dlg.Destroy()
-
-            # By default, MySQL limits the size of a record to 1 MB.  This has started causing some problems with large transcripts.
-            # So we need to change the value of the "max_allowed_packet" to fix this.  However, we apparently need to break our
-            # database connection and re-establish it for the parameter change to go into effect.  That's what the following block
-            # of code does.
-
-            # Initialize a value, as I suppose it's possible it won't be found.
-            max_allowed_packet = 0
-            
-            # If we were able to make a connection to the database...
-            if _dbref != None:
-                # Let's find out the current setting of max_allowed_packets
-                # Query the DB for the current value
-                query = "SHOW VARIABLES LIKE 'max_allowed_packe%'"
-                dbCursor = _dbref.cursor()
-                # Execute the Query
-                dbCursor.execute(query)
-                # Look at the Results Set
-                for pair in dbCursor.fetchall():
-                    # Find the max_allowed_packet variable
-                    if pair[0] == 'max_allowed_packet':
-                        # Its value comes in different forms depending on what version of MySQL and MySQL for Python we're using.
-                        if type(pair[1]) == array.array:
-                            max_allowed_packet = pair[1].tostring()
-                        else:
-                            max_allowed_packet = pair[1]
-                # We need to know what the max allowed packet size is later, so save it to the Globals
-                TransanaGlobal.max_allowed_packet = long(max_allowed_packet)
-                        
-                # We need to increase the size of the maximum allowed "packet" from 1MB (default) to at least 8MB, and preferably to 64MB.
-                # The MySQL documentation indicates that MySQL 4.01 and higher allow a maximum setting of 1GB, and that increasing this
-                # value above the default of 1MB should not be problematic.
-
-                desiredPacket = 64 # MB
-
-                # Check the current value
-                if int(max_allowed_packet) < desiredPacket * 1024 * 1024:
-                    # If we have the single-user version ...
-                    if TransanaConstants.singleUserVersion:
-                        # ... create the SQL to change the value
-                        prompt = "SET GLOBAL max_allowed_packet=%d" % (desiredPacket * 1024 * 1024)
-                        # ... and execute that SQL
-                        dbCursor.execute(prompt)
-                        # If we had to change this, we need to shut down our connection and re-establish it for the change to "take".
-                        close_db()
-                        # Re-establish a connection to the Database Server.
-                        if 'unicode' in wx.PlatformInfo:
-                            # The single-user version requires no parameters
-                            _dbref = MySQLdb.connect(use_unicode=True)
-                        else:
-                            # The single-user version requires no parameters
-                            _dbref = MySQLdb.connect()
-                        # We need to know what the max allowed packet size is later, so save it to the Globals
-                        TransanaGlobal.max_allowed_packet = long(desiredPacket * 1024 * 1024)
-                    # If we have the multi-user version ...
-                    else:
-                        # We need a minimum of 8 MB for text-only transcripts.  Larger values are desirable so that graphics
-                        # can be inserted into transcripts, but we allow sysadmins to use smaller values if they need to.
-                        # Therefore, only show a warning if the value is less than 8MB.
-                        if int(max_allowed_packet) < 8 * 1024 * 1024 - 1024:
-                            # We can't change the variable due to permissions issues.  Let's tell the user.
-                            # First, create the prompt.
-                            prompt = _("Your MySQL Server requires a configuration change.") + '\n\n' + \
-                                     _('Please ask your server administrator to change the\n"max_allowed_packet" variable in the "my.ini" or\n"my.cnf" file.  The desired value is "%dM", but the\nminimum acceptable value is "8M" or "8388620".') % desiredPacket + '\n\n' + \
-                                     _("Larger values allow more and larger images to be\ninserted in each transcript.")
-                            # now display the prompt.
-                            dlg = Dialogs.ErrorDialog(None, prompt)
-                            dlg.ShowModal()
-                            dlg.Destroy()
-                            # Now exit this function, indicating failure.
-                            _dbref.close()
-                            _dbref = None
-                            return None
-
-                # We need to know the MySQL version we're dealing with to know if UTF-8 is supported.
-                # Get a Database Cursor
-                dbCursor = _dbref.cursor()
-                # Query the Database about what Database Names have been defined
-                dbCursor.execute('SELECT VERSION()')
-                vs = dbCursor.fetchall()
-                for v in vs:
-                    TransanaGlobal.DBVersion = v[0][:3]
-
-                    if DEBUG:
-                        print "MySQL Version =", TransanaGlobal.DBVersion, type(TransanaGlobal.DBVersion)
-                        
-            try:
-                # If we made a connection to MySQL...
-                if _dbref != None:
-
-                    # If we're single-user on Windows ...
-                    if (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
-                        # Check the database to see if it is a version 2.50 database
-                        result = CheckSUWin250Database(databaseName)
-                        # If the database is NOT a 2.50 database ...
-                        if not result:
-                            # ... construct an error message
-                            errormsg = unicode(_('Database "%s" has not been converted for Transana release 2.50.\nIt cannot be opened in this version of Transana.\n\n'), 'utf8')
-                            errormsg = errormsg % databaseName
-                            # If there already IS a converted version of this database ...
-                            if os.path.exists(os.path.join(TransanaGlobal.configData.databaseDir, databaseName + '_Converted')):
-                                # ... the message should direct the user there ...
-                                errormsg += unicode(_('Please try again, choosing database "%s" from the database list.'), 'utf8')
-                                errormsg = errormsg % (databaseName + '_Converted',)
-                                # ... and we'll make this the default database to make it even easier.
-                                TransanaGlobal.configData.database = databaseName + '_Converted'
-                                TransanaGlobal.configData.SaveConfiguration()
-                            # if the database has NOT been converted yet ...
-                            else:
-                                # ... the message should direct the user to the Conversion Utility
-                                errormsg += unicode(_('Please quit Transana, run the "2.42 to 2.50 Data Conversion Utility,"\nand re-start Transana.'), 'utf8')
-                            # Display the Error Message
-                            errordlg = Dialogs.ErrorDialog(None, errormsg)
-                            errordlg.ShowModal()
-                            errordlg.Destroy()
-                            # Close the Database Cursor
-                            dbCursor.close()
-                            # Close the Database Connection
-                            _dbref.close()
-                            # If database limits have been exceeded, block the database open ...
-                            _dbref = None
-                            # ... and get out of here.
-                            return None
-
-                    # If we have MySQL 4.1 or later, we have UTF-8 support and should use it.
-                    if TransanaGlobal.DBVersion >= u'4.1':
-                        # Get a Database Cursor
-                        dbCursor = _dbref.cursor()
-                        # Set Character Encoding settings
-                        dbCursor.execute('SET CHARACTER SET utf8')
-                        dbCursor.execute('SET character_set_connection = utf8')
-                        dbCursor.execute('SET character_set_client = utf8')
-                        dbCursor.execute('SET character_set_server = utf8')
-                        dbCursor.execute('SET character_set_database = utf8')
-                        dbCursor.execute('SET character_set_results = utf8')
-                        
-                        dbCursor.execute('USE %s' % databaseName.encode('utf8'))
-                        # Set the global character encoding to UTF-8
-                        TransanaGlobal.encoding = 'utf8'
-                    # If we're using MySQL 4.0 or earlier, we lack UTF-8 support, so should use 
-                    # another language-appropriate encoding, or Latin-1 encoding as a fall-back
-                    else:
-                        # If we're in Russian, change the encoding to KOI8r
-                        if TransanaGlobal.configData.language == 'ru':
-                            TransanaGlobal.encoding = 'koi8_r'
-                        # If we're in Chinese, change the encoding to the appropriate Chinese encoding
-                        elif TransanaGlobal.configData.language == 'zh':
-                            TransanaGlobal.encoding = TransanaConstants.chineseEncoding
-                        # If we're in Eastern Europe Encoding, change the encoding to 'iso8859_2'
-                        elif TransanaGlobal.configData.language == 'easteurope':
-                            TransanaGlobal.encoding = 'iso8859_2'
-                        # If we're in Greek, change the encoding to 'iso8859_7'
-                        elif TransanaGlobal.configData.language == 'el':
-                            TransanaGlobal.encoding = 'iso8859_7'
-                        # If we're in Japanese, change the encoding to cp932
-                        elif TransanaGlobal.configData.language == 'ja':
-                            TransanaGlobal.encoding = 'cp932'
-                        # If we're in Korean, change the encoding to cp949
-                        elif TransanaGlobal.configData.language == 'ko':
-                            TransanaGlobal.encoding = 'cp949'
-                        # Otherwise, fall back to utf8??
-                        else:
-                            TransanaGlobal.encoding = 'utf8'  # 'latin1'
-
-
-                        dbCursor.execute('USE %s' % databaseName.encode(TransanaGlobal.encoding))
-
-                    if TransanaConstants.demoVersion:
-                        # Get a Database Cursor
-                        dbCursor.execute('SELECT COUNT(EpisodeNum) from Episodes2')
-                        # Determine the number of Episode records
-                        epCount = dbCursor.fetchone()[0]
-                        # Determine the number of Episode Transcript records (exclude Clip Transcripts)
-                        dbCursor.execute('SELECT COUNT(TranscriptNum) FROM Transcripts2 WHERE ClipNum = 0')
-                        trCount = dbCursor.fetchone()[0]
-                        # Determine the number of Clip records
-                        dbCursor.execute('SELECT COUNT(ClipNum) from Clips2')
-                        clCount = dbCursor.fetchone()[0]
-                        # Determine the number of Keyword records
-                        dbCursor.execute('SELECT COUNT(Keyword) from Keywords2')
-                        kwCount = dbCursor.fetchone()[0]
-                        # Check to see that the Demo limits are not exceeded
-                        if (epCount > TransanaConstants.maxEpisodes) or \
-                           (trCount > TransanaConstants.maxEpisodeTranscripts) or \
-                           (clCount > TransanaConstants.maxClips) or \
-                           (kwCount > TransanaConstants.maxKeywords):
-                            # If they are, display an error message
-                            errormsg = _("The data in this database exceeds what is allowed in the Transana Demonstration.")
-                            errordlg = Dialogs.ErrorDialog(None, errormsg)
-                            errordlg.ShowModal()
-                            errordlg.Destroy()
-                            # Close the Database Cursor
-                            dbCursor.close()
-                            # Close the Database Connection
-                            _dbref.close()
-                            # If database limits have been exceeded, block the database open.
-                            _dbref = None
-
-                    TransanaGlobal.configData.database = databaseName
-
-            except MySQLdb.OperationalError:
-                if DEBUG:
-                    print "DBInterface.get_db():  Unknown Database!"
-
-                # Skip the Database Creation message if we're in Demonstation Mode
-                if (dbToOpen == None) and not TransanaConstants.demoVersion:
+            # If we're using sqlite ...
+            if TransanaConstants.DBInstalled in ['sqlite3']:
+                # ... get the database path
+                databasePath = TransanaGlobal.configData.databaseDir
+                # Add the path and the database extension to the database name to create the full database file path and name
+                dbName = os.path.join(databasePath, databaseName.encode(TransanaGlobal.encoding) + '.db')
+                # If the database file does not exist ...
+                if not os.path.exists(dbName):
                     # If the Database Name was not found, prompt the user to see if they want to create a new Database.
                     # First, create the Prompt Dialog
                     # NOTE:  This does not use Dialogs.ErrorDialog because it requires a Yes/No reponse
@@ -1651,128 +1580,498 @@ def get_db(dbToOpen=None):
                         prompt = unicode(_('Database "%s" does not exist.  Would you like to create it?\n(If you do not have rights to create a database, see your system administrator.)'), 'utf8')
                     else:
                         prompt = _('Database "%s" does not exist.  Would you like to create it?\n(If you do not have rights to create a database, see your system administrator.)')
+                    # Create the prompt's dialog box
                     dlg = Dialogs.QuestionDialog(None, prompt % databaseName)
                     # Display the Dialog
                     result = dlg.LocalShowModal()
                     # Clean up after the Dialog
                     dlg.Destroy()
+                # If the database file already exists ...
                 else:
+                    # ... treat it the same as the user agreeing to create a new database
                     result = wx.ID_YES
-                # If the user wants to create a new Database ...
-                if result == wx.ID_YES:
-                    try:
-                        if 'unicode' in wx.PlatformInfo:
-                            tempDatabaseName = databaseName.encode(TransanaGlobal.encoding)
-                        else:
-                            tempDatabaseName = databaseName
-                        # If MySQL is version 4.1 or greater, we can use explicit Character Sets including UTF8
-                        if TransanaGlobal.DBVersion >= u'4.1':
-                            query = 'CREATE DATABASE IF NOT EXISTS %s CHARACTER SET %s' % (tempDatabaseName, TransanaGlobal.encoding)
-                        else:
-                            query = 'CREATE DATABASE IF NOT EXISTS %s' % tempDatabaseName
-                        # ... create the Database ...
-                        dbCursor.execute(query)
-                        # ... specify that the new database should be used ...
-                        dbCursor.execute('USE %s' % tempDatabaseName)
-                        TransanaGlobal.configData.database = databaseName
-                        # Close the Database Cursor
-                        dbCursor.close()
-                    # If the Create fails ...
-                    except:
-                        if DEBUG:
-                            print sys.exc_info()[0], sys.exc_info()[1]
-                            import traceback
-                            traceback.print_exc(file=sys.stdout)
 
-                        # ... the user probably lacks CREATE parmission in the Database Rights structure.
-                        # Create an error message Dialog
-                        dlg = Dialogs.ErrorDialog(None, _('Database Creation Error.\nYou specified an illegal database name, or do not have rights to create a database.\nTry again with a simple database name (with no punctuation or spaces), or see your system administrator.'))
-                        # Display the Error Message.
+                # If we should connect to the database ...
+                if result == wx.ID_YES:
+                    # ... connect to it.
+                    _dbref = sqlite3.connect(dbName)
+                    # Enable AutoCommit
+                    _dbref.isolation_level = None
+                    # Have sqlite use Strings rather than Unicode, as all fields in Transana are manually encoded
+                    _dbref.text_factory = str
+                    # Set the Max Allowed Packet setting for use with sqlite (This number came from the sqlite documentation)
+                    TransanaGlobal.max_allowed_packet = 2147483647
+                    # ... and we'll make this the default database to make it even easier.
+                    TransanaGlobal.configData.database = databaseName
+                    TransanaGlobal.configData.SaveConfiguration()
+                else:
+                    _dbref = None
+
+            elif TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+                try:
+
+                    if DEBUG:
+                        print "Establishing Database Server connection."
+                        
+                    # Assign the username to a global variable
+                    TransanaGlobal.userName = userName  
+
+                    # Establish a connection to the Database Server.
+                    # NOTE:  This does not yet support Unicode.  We'll delay the Database Name so it can be unicode.
+                    if TransanaConstants.singleUserVersion:
+                        if TransanaConstants.DBInstalled in ['MySQLdb-embedded']:
+                            if 'unicode' in wx.PlatformInfo:
+                                # The single-user version requires no parameters
+                                _dbref = MySQLdb.connect(use_unicode=True)
+                            else:
+                                # The single-user version requires no parameters
+                                _dbref = MySQLdb.connect()
+                        elif TransanaConstants.DBInstalled in ['sqlite3']:
+                            pass
+                    else:
+                        # Put the Host name and the rest of the login information into the Configuration Data
+                        # so that the same connection can be the default for the next logon
+                        TransanaGlobal.configData.host = dbServer
+                        TransanaGlobal.configData.dbport = port
+
+                        # Add the Message Server configuration information
+                        TransanaGlobal.configData.messageServer = messageServer
+                        try:
+                            TransanaGlobal.configData.messageServerPort = int(messageServerPort)
+                        except ValueError:
+                            print "DBInterface.get_db():  Non-integer Message Server from UserName screen!"
+                            print sys.exc_info()[0]
+                            print sys.exc_info()[1]
+
+                        # Add the SSL configuration information
+                        TransanaGlobal.configData.ssl = ssl
+                        TransanaGlobal.configData.sslClientCert = sslClientCert
+                        TransanaGlobal.configData.sslClientKey = sslClientKey
+                        TransanaGlobal.configData.sslMsgSrvCert = sslMsgSrvCert
+
+                        # If we're using Unicode (and we ALWAYS are now!)
+                        if 'unicode' in wx.PlatformInfo:
+                            # If we want an SSL Connection ...
+                            if ssl:
+                                # ... create the correct data structure for MySQLdb's SSL parameter
+                                sslData = {'cert': sslClientCert, 'key': sslClientKey}
+
+                                if DEBUG:
+                                    print sslData
+                                
+                                # Use MySQLdb to establish the SSL and Unicode connection to the database server
+                                _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port), use_unicode=True, ssl=sslData)
+
+                                if DEBUG:
+                                    print "Connected 1"
+                                
+                            # If we're NOT requesting an SSL Connection ...
+                            else:
+                                # ... use MySQLdb to establish the Unicode connection to the database server without SSL
+                                _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port), use_unicode=True)
+
+                                if DEBUG:
+                                    print "Connected 2"
+                        else:
+                            # The multi-user version requires all information to connect to the database server
+                            _dbref = MySQLdb.connect(host=dbServer, user=userName, passwd=password, port=int(port))
+
+                            if DEBUG:
+                                print "Connected 3"
+
+                # If MySQLdb throws an exception ...
+                except MySQLdb.OperationalError, ex:
+                    if DEBUG:
+                        print "DBInterface.get_db():  ", sys.exc_info()[1]
+
+                        errormsg = unicode(_('Database Connection Error:\n%s'), 'utf8') % sys.exc_info()[1]
+                        errordlg = Dialogs.ErrorDialog(None, errormsg)
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                    # ... signal that the connection failed.  MySQLdb messages aren't very helpful!
+                    _dbref = None
+
+                # If the Database Connection fails, an exception is raised.
+                except:
+
+                    if DEBUG:
+
+                        print "DBInterface.get_db():  Exception 1"
+                        
+                        print sys.exc_info()[0], sys.exc_info()[1]
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+
+                    _dbref = None
+
+
+                # If we were able to make a connection to the database and want an SSL connection ...
+                if (_dbref != None) and ssl:
+                    # Let's find out the current setting of ssl variables, to see if the server supports SSL
+                    query = "SHOW VARIABLES LIKE 'have_ssl%'"
+                    dbCursor = _dbref.cursor()
+                    # Execute the Query
+                    dbCursor.execute(query)
+                    # Define the SSL_Found variable, assuming it's NOT present to begin with
+                    SSL_Found = False
+                    # Iterate through the Results Set
+                    for pair in dbCursor.fetchall():
+                        # If we find that SSL is supported ...
+                        if pair == (u'have_ssl', u'YES'):
+                            # ... change teh SSL_Found variable to indicate SSL Support
+                            SSL_Found = True
+                    # If SSL was requested but is not supported by the server ...
+                    if not SSL_Found:
+                        # ... signal to the config file that this is NOT an SSL connection ...
+                        TransanaGlobal.configData.ssl = False
+                        # ... let's tell the user.  First, create the prompt.
+                        prompt = _("You requested an SSL connection to MySQL, but your MySQL Server is not configured to support SSL.") + '\n\n' + \
+                                 _("Please note that your connection to the database server is not secured by SSL.")
+                        # now display the prompt.
+                        dlg = Dialogs.ErrorDialog(None, prompt)
                         dlg.ShowModal()
-                        # Clean up the Error Message
                         dlg.Destroy()
+
+                # By default, MySQL limits the size of a record to 1 MB.  This has started causing some problems with large transcripts.
+                # So we need to change the value of the "max_allowed_packet" to fix this.  However, we apparently need to break our
+                # database connection and re-establish it for the parameter change to go into effect.  That's what the following block
+                # of code does.
+
+                # Initialize a value, as I suppose it's possible it won't be found.
+                max_allowed_packet = 0
+                
+                # If we were able to make a connection to the database...
+                if _dbref != None:
+                    # Let's find out the current setting of max_allowed_packets
+                    # Query the DB for the current value
+                    query = "SHOW VARIABLES LIKE 'max_allowed_packe%'"
+                    dbCursor = _dbref.cursor()
+                    # Execute the Query
+                    dbCursor.execute(query)
+                    # Look at the Results Set
+                    for pair in dbCursor.fetchall():
+                        # Find the max_allowed_packet variable
+                        if pair[0] == 'max_allowed_packet':
+                            # Its value comes in different forms depending on what version of MySQL and MySQL for Python we're using.
+                            if type(pair[1]) == array.array:
+                                max_allowed_packet = pair[1].tostring()
+                            else:
+                                max_allowed_packet = pair[1]
+                    # We need to know what the max allowed packet size is later, so save it to the Globals
+                    TransanaGlobal.max_allowed_packet = long(max_allowed_packet)
+                            
+                    # We need to increase the size of the maximum allowed "packet" from 1MB (default) to at least 8MB, and preferably to 64MB.
+                    # The MySQL documentation indicates that MySQL 4.01 and higher allow a maximum setting of 1GB, and that increasing this
+                    # value above the default of 1MB should not be problematic.
+
+                    desiredPacket = 64 # MB
+
+                    # Check the current value
+                    if int(max_allowed_packet) < desiredPacket * 1024 * 1024:
+                        # If we have the single-user version ...
+                        if TransanaConstants.singleUserVersion:
+                            # ... create the SQL to change the value
+                            prompt = "SET GLOBAL max_allowed_packet=%d" % (desiredPacket * 1024 * 1024)
+                            # ... and execute that SQL
+                            dbCursor.execute(prompt)
+                            # If we had to change this, we need to shut down our connection and re-establish it for the change to "take".
+                            close_db()
+                            # Re-establish a connection to the Database Server.
+                            if 'unicode' in wx.PlatformInfo:
+                                # The single-user version requires no parameters
+                                _dbref = MySQLdb.connect(use_unicode=True)
+                            else:
+                                # The single-user version requires no parameters
+                                _dbref = MySQLdb.connect()
+                            # We need to know what the max allowed packet size is later, so save it to the Globals
+                            TransanaGlobal.max_allowed_packet = long(desiredPacket * 1024 * 1024)
+                        # If we have the multi-user version ...
+                        else:
+                            # We need a minimum of 8 MB for text-only transcripts.  Larger values are desirable so that graphics
+                            # can be inserted into transcripts, but we allow sysadmins to use smaller values if they need to.
+                            # Therefore, only show a warning if the value is less than 8MB.
+                            if int(max_allowed_packet) < 8 * 1024 * 1024 - 1024:
+                                # We can't change the variable due to permissions issues.  Let's tell the user.
+                                # First, create the prompt.
+                                prompt = _("Your MySQL Server requires a configuration change.") + '\n\n' + \
+                                         _('Please ask your server administrator to change the\n"max_allowed_packet" variable in the "my.ini" or\n"my.cnf" file.  The desired value is "%dM", but the\nminimum acceptable value is "8M" or "8388620".') % desiredPacket + '\n\n' + \
+                                         _("Larger values allow more and larger images to be\ninserted in each transcript.")
+                                # now display the prompt.
+                                dlg = Dialogs.ErrorDialog(None, prompt)
+                                dlg.ShowModal()
+                                dlg.Destroy()
+                                # Now exit this function, indicating failure.
+                                _dbref.close()
+                                _dbref = None
+                                return None
+
+                    # We need to know the MySQL version we're dealing with to know if UTF-8 is supported.
+                    # Get a Database Cursor
+                    dbCursor = _dbref.cursor()
+                    # Query the Database about what Database Names have been defined
+                    dbCursor.execute('SELECT VERSION()')
+                    vs = dbCursor.fetchall()
+                    for v in vs:
+                        TransanaGlobal.DBVersion = v[0][:3]
+
+                        if DEBUG:
+                            print "MySQL Version =", TransanaGlobal.DBVersion, type(TransanaGlobal.DBVersion)
+                            
+                try:
+                    # If we made a connection to MySQL...
+                    if _dbref != None:
+
+                        # If we're single-user on Windows ...
+                        if (TransanaConstants.singleUserVersion) and ('wxMSW' in wx.PlatformInfo):
+                            # Check the database to see if it is a version 2.50 database
+                            result = CheckSUWin250Database(databaseName)
+                            # If the database is NOT a 2.50 database ...
+                            if not result:
+                                # ... construct an error message
+                                errormsg = unicode(_('Database "%s" has not been converted for Transana release 2.50.\nIt cannot be opened in this version of Transana.\n\n'), 'utf8')
+                                errormsg = errormsg % databaseName
+                                # If there already IS a converted version of this database ...
+                                if os.path.exists(os.path.join(TransanaGlobal.configData.databaseDir, databaseName + '_Converted')):
+                                    # ... the message should direct the user there ...
+                                    errormsg += unicode(_('Please try again, choosing database "%s" from the database list.'), 'utf8')
+                                    errormsg = errormsg % (databaseName + '_Converted',)
+                                    # ... and we'll make this the default database to make it even easier.
+                                    TransanaGlobal.configData.database = databaseName + '_Converted'
+                                    TransanaGlobal.configData.SaveConfiguration()
+                                # if the database has NOT been converted yet ...
+                                else:
+                                    # ... the message should direct the user to the Conversion Utility
+                                    errormsg += unicode(_('Please quit Transana, run the "2.42 to 2.50 Data Conversion Utility,"\nand re-start Transana.'), 'utf8')
+                                # Display the Error Message
+                                errordlg = Dialogs.ErrorDialog(None, errormsg)
+                                errordlg.ShowModal()
+                                errordlg.Destroy()
+                                # Close the Database Cursor
+                                dbCursor.close()
+                                # Close the Database Connection
+                                _dbref.close()
+                                # If database limits have been exceeded, block the database open ...
+                                _dbref = None
+                                # ... and get out of here.
+                                return None
+
+                        # If we have MySQL 4.1 or later, we have UTF-8 support and should use it.
+                        if TransanaGlobal.DBVersion >= u'4.1':
+                            # Get a Database Cursor
+                            dbCursor = _dbref.cursor()
+                            # Set Character Encoding settings
+                            dbCursor.execute('SET CHARACTER SET utf8')
+                            dbCursor.execute('SET character_set_connection = utf8')
+                            dbCursor.execute('SET character_set_client = utf8')
+                            dbCursor.execute('SET character_set_server = utf8')
+                            dbCursor.execute('SET character_set_database = utf8')
+                            dbCursor.execute('SET character_set_results = utf8')
+                            
+                            dbCursor.execute('USE %s' % databaseName.encode('utf8'))
+                            # Set the global character encoding to UTF-8
+                            TransanaGlobal.encoding = 'utf8'
+                        # If we're using MySQL 4.0 or earlier, we lack UTF-8 support, so should use 
+                        # another language-appropriate encoding, or Latin-1 encoding as a fall-back
+                        else:
+                            # If we're in Russian, change the encoding to KOI8r
+                            if TransanaGlobal.configData.language == 'ru':
+                                TransanaGlobal.encoding = 'koi8_r'
+                            # If we're in Chinese, change the encoding to the appropriate Chinese encoding
+                            elif TransanaGlobal.configData.language == 'zh':
+                                TransanaGlobal.encoding = TransanaConstants.chineseEncoding
+                            # If we're in Eastern Europe Encoding, change the encoding to 'iso8859_2'
+                            elif TransanaGlobal.configData.language == 'easteurope':
+                                TransanaGlobal.encoding = 'iso8859_2'
+                            # If we're in Greek, change the encoding to 'iso8859_7'
+                            elif TransanaGlobal.configData.language == 'el':
+                                TransanaGlobal.encoding = 'iso8859_7'
+                            # If we're in Japanese, change the encoding to cp932
+                            elif TransanaGlobal.configData.language == 'ja':
+                                TransanaGlobal.encoding = 'cp932'
+                            # If we're in Korean, change the encoding to cp949
+                            elif TransanaGlobal.configData.language == 'ko':
+                                TransanaGlobal.encoding = 'cp949'
+                            # Otherwise, fall back to utf8??
+                            else:
+                                TransanaGlobal.encoding = 'utf8'  # 'latin1'
+
+
+                            dbCursor.execute('USE %s', (databaseName.encode(TransanaGlobal.encoding), ))
+
+                        if TransanaConstants.demoVersion:
+                            # Get a Database Cursor
+                            dbCursor.execute('SELECT COUNT(EpisodeNum) from Episodes2')
+                            # Determine the number of Episode records
+                            epCount = dbCursor.fetchone()[0]
+                            # Determine the number of Episode Transcript records (exclude Clip Transcripts)
+                            dbCursor.execute('SELECT COUNT(TranscriptNum) FROM Transcripts2 WHERE ClipNum = 0')
+                            trCount = dbCursor.fetchone()[0]
+                            # Determine the number of Clip records
+                            dbCursor.execute('SELECT COUNT(ClipNum) from Clips2')
+                            clCount = dbCursor.fetchone()[0]
+                            # Determine the number of Keyword records
+                            dbCursor.execute('SELECT COUNT(Keyword) from Keywords2')
+                            kwCount = dbCursor.fetchone()[0]
+                            # Check to see that the Demo limits are not exceeded
+                            if (epCount > TransanaConstants.maxEpisodes) or \
+                               (trCount > TransanaConstants.maxEpisodeTranscripts) or \
+                               (clCount > TransanaConstants.maxClips) or \
+                               (kwCount > TransanaConstants.maxKeywords):
+                                # If they are, display an error message
+                                errormsg = _("The data in this database exceeds what is allowed in the Transana Demonstration.")
+                                errordlg = Dialogs.ErrorDialog(None, errormsg)
+                                errordlg.ShowModal()
+                                errordlg.Destroy()
+                                # Close the Database Cursor
+                                dbCursor.close()
+                                # Close the Database Connection
+                                _dbref.close()
+                                # If database limits have been exceeded, block the database open.
+                                _dbref = None
+
+                        TransanaGlobal.configData.database = databaseName
+
+                except MySQLdb.OperationalError:
+                    if DEBUG:
+                        print "DBInterface.get_db():  Unknown Database!"
+
+                    # Skip the Database Creation message if we're in Demonstation Mode
+                    if (dbToOpen == None) and not TransanaConstants.demoVersion:
+                        # If the Database Name was not found, prompt the user to see if they want to create a new Database.
+                        # First, create the Prompt Dialog
+                        # NOTE:  This does not use Dialogs.ErrorDialog because it requires a Yes/No reponse
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_('Database "%s" does not exist.  Would you like to create it?\n(If you do not have rights to create a database, see your system administrator.)'), 'utf8')
+                        else:
+                            prompt = _('Database "%s" does not exist.  Would you like to create it?\n(If you do not have rights to create a database, see your system administrator.)')
+                        dlg = Dialogs.QuestionDialog(None, prompt % databaseName)
+                        # Display the Dialog
+                        result = dlg.LocalShowModal()
+                        # Clean up after the Dialog
+                        dlg.Destroy()
+                    else:
+                        result = wx.ID_YES
+                    # If the user wants to create a new Database ...
+                    if result == wx.ID_YES:
+                        try:
+                            if 'unicode' in wx.PlatformInfo:
+                                tempDatabaseName = databaseName.encode(TransanaGlobal.encoding)
+                            else:
+                                tempDatabaseName = databaseName
+
+                            # If MySQL is version 4.1 or greater, we can use explicit Character Sets including UTF8
+                            if TransanaGlobal.DBVersion >= u'4.1':
+                                query = 'CREATE DATABASE IF NOT EXISTS %s CHARACTER SET %s' % (tempDatabaseName, TransanaGlobal.encoding)
+                            else:
+                                query = 'CREATE DATABASE IF NOT EXISTS %s' % tempDatabaseName
+
+                            # ... create the Database ...
+                            dbCursor.execute(query)
+                            # ... specify that the new database should be used ...
+                            dbCursor.execute('USE %s' % tempDatabaseName)
+                            TransanaGlobal.configData.database = databaseName
+                            TransanaGlobal.configData.SaveConfiguration()
+                            # Close the Database Cursor
+                            dbCursor.close()
+                        # If the Create fails ...
+                        except:
+                            if DEBUG:
+                                print sys.exc_info()[0], sys.exc_info()[1]
+                                import traceback
+                                traceback.print_exc(file=sys.stdout)
+
+                            # ... the user probably lacks CREATE parmission in the Database Rights structure.
+                            # Create an error message Dialog
+                            dlg = Dialogs.ErrorDialog(None, _('Database Creation Error.\nYou specified an illegal database name, or do not have rights to create a database.\nTry again with a simple database name (with no punctuation or spaces), or see your system administrator.'))
+                            # Display the Error Message.
+                            dlg.ShowModal()
+                            # Clean up the Error Message
+                            dlg.Destroy()
+                            # Close the Database Cursor
+                            dbCursor.close()
+                            # Close the Database Connection
+                            _dbref.close()
+                            _dbref = None
+                    else:
                         # Close the Database Cursor
                         dbCursor.close()
                         # Close the Database Connection
                         _dbref.close()
                         _dbref = None
-                else:
+
+                except UnicodeEncodeError, e:
+
+                    if DEBUG:
+
+                        print "DBInterface.get_db():  Exception:", TransanaGlobal.configData.language, TransanaGlobal.encoding
+
+                        print sys.exc_info()[0], sys.exc_info()[1]
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+
+                    # ... The only time I've seen an error here has to do with encoding failures.
+                    # Create an error message Dialog
+                    dlg = Dialogs.ErrorDialog(None, _("Unicode Error opening the database.\nIs it possible your current language setting doesn't match the database's language?\nPlease open a different database, change your language setting, then try this database again."))
+                    # Display the Error Message.
+                    dlg.ShowModal()
+                    # Clean up the Error Message
+                    dlg.Destroy()
+
                     # Close the Database Cursor
                     dbCursor.close()
                     # Close the Database Connection
                     _dbref.close()
                     _dbref = None
 
-            except UnicodeEncodeError, e:
+                except _mysql_exceptions.ProgrammingError, e:
 
-                if DEBUG:
+                    if DEBUG:
 
-                    print "DBInterface.get_db():  Exception:", TransanaGlobal.configData.language, TransanaGlobal.encoding
+                        print "DBInterface.get_db():  Exception:", TransanaGlobal.configData.language, TransanaGlobal.encoding
 
-                    print sys.exc_info()[0], sys.exc_info()[1]
-                    import traceback
-                    traceback.print_exc(file=sys.stdout)
+                        print sys.exc_info()[0], sys.exc_info()[1]
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
 
-                # ... The only time I've seen an error here has to do with encoding failures.
-                # Create an error message Dialog
-                dlg = Dialogs.ErrorDialog(None, _("Unicode Error opening the database.\nIs it possible your current language setting doesn't match the database's language?\nPlease open a different database, change your language setting, then try this database again."))
-                # Display the Error Message.
-                dlg.ShowModal()
-                # Clean up the Error Message
-                dlg.Destroy()
+                    # ... The only time I've seen an error here has to do with encoding failures.
+                    # Create an error message Dialog
+                    dlg = Dialogs.ErrorDialog(None, _("MySQL Error opening the database.\nTry again with a simple database name (with no punctuation or spaces.)\nAlso try entering a database name in English."))
+                    # Display the Error Message.
+                    dlg.ShowModal()
+                    # Clean up the Error Message
+                    dlg.Destroy()
 
-                # Close the Database Cursor
-                dbCursor.close()
-                # Close the Database Connection
-                _dbref.close()
-                _dbref = None
+                    # Close the Database Cursor
+                    dbCursor.close()
+                    # Close the Database Connection
+                    _dbref.close()
+                    _dbref = None
 
-            except _mysql_exceptions.ProgrammingError, e:
+                # If the Database Connection fails, an exception is raised.
+                except:
 
-                if DEBUG:
+                    if DEBUG:
 
-                    print "DBInterface.get_db():  Exception:", TransanaGlobal.configData.language, TransanaGlobal.encoding
+                        print "DBInterface.get_db():  Exception 2"
 
-                    print sys.exc_info()[0], sys.exc_info()[1]
-                    import traceback
-                    traceback.print_exc(file=sys.stdout)
+                        print sys.exc_info()[0], sys.exc_info()[1]
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
 
-                # ... The only time I've seen an error here has to do with encoding failures.
-                # Create an error message Dialog
-                dlg = Dialogs.ErrorDialog(None, _("MySQL Error opening the database.\nTry again with a simple database name (with no punctuation or spaces.)\nAlso try entering a database name in English."))
-                # Display the Error Message.
-                dlg.ShowModal()
-                # Clean up the Error Message
-                dlg.Destroy()
+                    errormsg = '%s' % sys.exc_info()[1]
+                    errordlg = Dialogs.ErrorDialog(None, errormsg)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
 
-                # Close the Database Cursor
-                dbCursor.close()
-                # Close the Database Connection
-                _dbref.close()
-                _dbref = None
-
-            # If the Database Connection fails, an exception is raised.
-            except:
-
-                if DEBUG:
-
-                    print "DBInterface.get_db():  Exception 2"
-
-                    print sys.exc_info()[0], sys.exc_info()[1]
-                    import traceback
-                    traceback.print_exc(file=sys.stdout)
-
-                errormsg = '%s' % sys.exc_info()[1]
-                errordlg = Dialogs.ErrorDialog(None, errormsg)
-                errordlg.ShowModal()
-                errordlg.Destroy()
-
-                # Close the Database Cursor
-                dbCursor.close()
-                # Close the Database Connection
-                _dbref.close()
-                _dbref = None
-
+                    # Close the Database Cursor
+                    dbCursor.close()
+                    # Close the Database Connection
+                    _dbref.close()
+                    _dbref = None
+            else:
+                TransanaExceptions.ProgrammingError('Database Undefined in DBInterface.get_db()')
+    # Return the database reference
     return _dbref
 
 def close_db():
@@ -1797,7 +2096,7 @@ def get_username():
 def list_of_series():
     """Get a list of all Series record names."""
     l = []
-    query = "SELECT SeriesNum, SeriesID FROM Series2 ORDER BY SeriesID\n"
+    query = "SELECT SeriesNum, SeriesID FROM Series2 ORDER BY SeriesID"
     DBCursor = get_db().cursor()
     DBCursor.execute(query)
     for row in fetchall_named(DBCursor):
@@ -1844,8 +2143,10 @@ def list_of_episodes_for_series(SeriesName):
               b.SeriesID = %s
         ORDER BY EpisodeID
     """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor = get_db().cursor()
-    DBCursor.execute(query, SeriesName)
+    DBCursor.execute(query, (SeriesName, ))
     # Records returned contain EpisodeNum, EpisodeID, and parent Series Num
     for row in fetchall_named(DBCursor):
         id = row['EpisodeID']
@@ -1896,6 +2197,8 @@ def list_transcripts(SeriesName, EpisodeName):
                 ClipNum = %s
         ORDER BY TranscriptID
     """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor = get_db().cursor()
     DBCursor.execute(query, (EpisodeName, SeriesName, 0))
     for row in fetchall_named(DBCursor):
@@ -1911,10 +2214,12 @@ def list_clip_transcripts(clipNum):
     l = []
     query = """ SELECT TranscriptNum, SourceTranscriptNum, SortOrder
                   FROM Transcripts2
-                  WHERE ClipNum = %d
+                  WHERE ClipNum = %s
                   ORDER BY SortOrder """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor = get_db().cursor()
-    DBCursor.execute(query % clipNum)
+    DBCursor.execute(query, (clipNum, ))
     for row in fetchall_named(DBCursor):
         l.append((row['TranscriptNum'], row['SourceTranscriptNum'], row['SortOrder']))
     DBCursor.close()
@@ -1933,14 +2238,18 @@ def list_of_collections(ParentNum=0):
             WHERE   ParentCollectNum = %s
         ORDER BY CollectID
         """
-        DBCursor.execute(query, ParentNum)
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
+        DBCursor.execute(query, (ParentNum, ))
     else:
         query = """
         SELECT CollectNum, CollectID, ParentCollectNum FROM Collections2
-            WHERE   (ParentCollectNum = %s OR ParentCollectNum = %s)
+            WHERE   (ParentCollectNum = %s OR ParentCollectNum IS NULL)
         ORDER BY CollectID
         """
-        DBCursor.execute(query, (0, None))
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
+        DBCursor.execute(query, (0, ))
 
     # This method returns Collection Number, Collection ID, and Parent Colletion Number
     for row in fetchall_named(DBCursor):
@@ -1992,12 +2301,15 @@ def locate_quick_clips_collection():
         collectionName = _("Quick Clips")
     if not TransanaConstants.singleUserVersion:
         collectionName += " - %s" % get_username()
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
-    DBCursor.execute(query, collectionName.encode(TransanaGlobal.encoding))
+    DBCursor.execute(query, (collectionName.encode(TransanaGlobal.encoding), ))
+    data = DBCursor.fetchall()
     # See if the Quick Clips Collection already exists.  If so, return the Collection Number and False to indicate we didn't create
     # a new collection.
-    if DBCursor.rowcount == 1:
-        return (DBCursor.fetchone()[0], collectionName, False)
+    if len(data) == 1:
+        return (data[0][0], collectionName, False)
     # If not, we need to create it!
     else:
         import Collection
@@ -2048,8 +2360,8 @@ def list_of_clips_by_collection(CollectionID, ParentNum):
         subquery = "        b.ParentCollectNum = %s"
         values = (CollectionID, ParentNum)
     else:
-        subquery = "    (b.ParentCollectNum = %s OR b.ParentCollectNum = %s)"
-        values = (CollectionID, 0, None)
+        subquery = "    (b.ParentCollectNum = %s OR b.ParentCollectNum IS NULL)"
+        values = (CollectionID, 0)
     query = """
     SELECT ClipNum, ClipID, a.CollectNum FROM Clips2 a, Collections2 b
         WHERE a.CollectNum = b.CollectNum AND
@@ -2058,6 +2370,8 @@ def list_of_clips_by_collection(CollectionID, ParentNum):
         ORDER BY SortOrder, ClipID
     """ % subquery
     DBCursor = get_db().cursor()
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # FIXME: Need try/except block here?
     DBCursor.execute(query, values)
     # This method will return the Clip's Record Number, its ID, and
@@ -2076,8 +2390,10 @@ def list_of_clips_by_collectionnum(collectionNum, includeSortOrder=False):
                 FROM Clips2
                 WHERE CollectNum = %s
                 ORDER BY SortOrder, ClipID """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     cursor = get_db().cursor()
-    cursor.execute(query, collectionNum)
+    cursor.execute(query, (collectionNum, ))
     for (clipNum, clipID, collectNum, sortOrder) in cursor.fetchall():
         id = clipID
         if 'unicode' in wx.PlatformInfo:
@@ -2101,7 +2417,7 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
                           a.EpisodeNum = %s
                     ORDER BY a.ClipStart, b.CollectID, a.ClipID
                 """
-        args = (EpisodeNum)
+        args = (EpisodeNum, )
     else:
         query = """
                   SELECT a.ClipNum, a.ClipID, a.CollectNum, a.ClipStart, a.ClipStop, b.CollectID, b.ParentCollectNum, a.ClipComment
@@ -2114,6 +2430,8 @@ def list_of_clips_by_episode(EpisodeNum, TimeCode=None):
                 """
         args = (EpisodeNum, TimeCode, TimeCode)
     DBCursor = get_db().cursor()
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, args)
     for row in fetchall_named(DBCursor):
         ClipNum = row['ClipNum']
@@ -2147,6 +2465,8 @@ def list_of_clips_by_transcriptnum(TranscriptNum):
     args = (TranscriptNum, )
     # Get a Database Cursor
     DBCursor = get_db().cursor()
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
     DBCursor.execute(query, args)
     # For each row returned from the database ...
@@ -2180,6 +2500,8 @@ def list_of_clip_copies(clipID, sourceTranscriptNum, clipStart, clipStop):
                         t.ClipStop = %s"""
     # Define the data to get plugged into the SQL query
     data = (clipID.encode('utf8'), sourceTranscriptNum, clipStart, clipStop)
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Get a database cursor
     cursor = get_db().cursor()
     # Execute the SQL query
@@ -2237,7 +2559,7 @@ def list_of_snapshots_by_episode(EpisodeNum, TimeCode=None):
                           a.EpisodeNum = %s
                     ORDER BY a.SnapshotTimeCode, b.CollectID, a.SnapshotID
                 """
-        args = (EpisodeNum)
+        args = (EpisodeNum, )
     else:
         query = """
                   SELECT a.SnapshotNum, a.SnapshotID, a.CollectNum, a.SnapshotTimeCode, a.SnapshotDuration,
@@ -2251,6 +2573,8 @@ def list_of_snapshots_by_episode(EpisodeNum, TimeCode=None):
                 """
         args = (EpisodeNum, TimeCode, TimeCode)
     DBCursor = get_db().cursor()
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, args)
     for row in fetchall_named(DBCursor):
         SnapshotNum = row['SnapshotNum']
@@ -2275,8 +2599,10 @@ def list_of_snapshots_by_transcriptnum(transcriptNum):
     query = """ SELECT SnapshotNum, SnapshotID, CollectNum
                 FROM Snapshots2
                 WHERE TranscriptNum = %s """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     cursor = get_db().cursor()
-    cursor.execute(query, collectionNum)
+    cursor.execute(query, (transcriptNum, ))
     for (snapshotNum, snapshotID, collectNum) in cursor.fetchall():
         id = snapshotID
         if 'unicode' in wx.PlatformInfo:
@@ -2291,8 +2617,10 @@ def list_of_snapshots_by_collectionnum(collectionNum, includeSortOrder=False):
                 FROM Snapshots2
                 WHERE CollectNum = %s
                 ORDER BY SortOrder, SnapshotID """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     cursor = get_db().cursor()
-    cursor.execute(query, collectionNum)
+    cursor.execute(query, (collectionNum, ))
     for (snapshotNum, snapshotID, collectNum, sortOrder) in cursor.fetchall():
         id = snapshotID
         if 'unicode' in wx.PlatformInfo:
@@ -2317,8 +2645,10 @@ def GetSortOrderData(collectionNum):
     query = """ SELECT ClipNum, SortOrder
                 FROM Clips2
                 WHERE CollectNum = %s """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
-    cursor.execute(query, collectionNum)
+    cursor.execute(query, (collectionNum, ))
     # For each item returned from the database ...
     for (clipNum, sortOrder) in cursor.fetchall():
         # ... add it to the dictionary
@@ -2327,8 +2657,10 @@ def GetSortOrderData(collectionNum):
     query = """ SELECT SnapshotNum, SortOrder
                 FROM Snapshots2
                 WHERE CollectNum = %s """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
-    cursor.execute(query, collectionNum)
+    cursor.execute(query, (collectionNum, ))
     # For each item returned from the database ...
     for (snapshotNum, sortOrder) in cursor.fetchall():
         d[('SnapshotNode', snapshotNum)] = sortOrder
@@ -2352,10 +2684,13 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
                            a.ClipNum = b.ClipNum """
         # Put the data passed in into a compatible data structure
         data = (collectNum, episodeNum, transcriptNum, clipStart, clipStop)
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
         # Execute the query
         DBCursor.execute(query, data)
+        records = DBCursor.fetchall()
         # If no rows are returned ...
-        if DBCursor.rowcount == 0:
+        if len(records) == 0:
             # ... close the database cursor ...
             DBCursor.close()
             # ... and return -1 to indicate that no duplicate clips were found
@@ -2363,9 +2698,9 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
         # If duplicate clip(s) are found ...
         else:
             # ... for each clip found ...
-            for data in DBCursor.fetchall():
+            for data in records:
                 # ... create a list of the found CLIP's media files, starting with the clip's mail file
-                cmpVidFiles = [os.path.join(TransanaGlobal.configData.videoPath, data[1]).replace('/', os.sep)]
+                cmpVidFiles = [ProcessDBDataForUTF8Encoding(os.path.join(TransanaGlobal.configData.videoPath, data[1]).replace('/', os.sep))]
                 # Initialize the Clip Number, assuming a match will NOT be found
                 clipNum = -1
                 # if the found clip's main file matches the new clip's main file ....
@@ -2374,12 +2709,14 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
                     DBCursor2 = get_db().cursor()
                     # Let's get the found clip's remaining video files.  Create a query
                     query2 = 'SELECT MediaFile FROM AdditionalVids2 WHERE ClipNum = %s'
+                    # Adjust the query for sqlite if needed
+                    query2 = FixQuery(query2)
                     # execute the query
-                    DBCursor2.execute(query2, data[0])
+                    DBCursor2.execute(query2, (data[0], ))
                     # For each additional media file in the found clip ...
                     for data2 in DBCursor2.fetchall():
                         # ... append the additional video to the found clip's video file list
-                        cmpVidFiles.append(os.path.join(TransanaGlobal.configData.videoPath, data2[0]).replace('/', os.sep))
+                        cmpVidFiles.append(ProcessDBDataForUTF8Encoding(os.path.join(TransanaGlobal.configData.videoPath, data2[0]).replace('/', os.sep)))
                     # Close the cursor
                     DBCursor2.close()
                 # If the found clip's video files EXACTLY MATCH the new clip's video files ...
@@ -2414,11 +2751,15 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
             tmpDlg = wx.MessageDialog(None, query % data, "Hello!")
             tmpDlg.ShowModal()
             tmpDlg.Destroy()
-        
+
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
         # Execute the query
         DBCursor.execute(query, data)
+        # ... get the query results ...
+        queryResults = DBCursor.fetchall()
         # If no rows are returned ...
-        if DBCursor.rowcount == 0:
+        if len(queryResults) == 0:
             # ... close the database cursor ...
             DBCursor.close()
             # ... and return -1 to indicate that no duplicate clips were found
@@ -2430,8 +2771,6 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
             queryTranscripts = {}
             # Let's initialize a variable for holding the clip number we're looking at
             currentClipNum = 0
-            # ... get the query results ...
-            queryResults = DBCursor.fetchall()
             # Iterate through the query results
             for (cl, tr, mf) in queryResults:
                 # If we're looking at a new Clip number ...
@@ -2457,19 +2796,21 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
             # ... for each clip found ...
             for data in clipList:
                 # ... create a list of the found CLIP's media files, starting with the clip's mail file
-                cmpVidFiles = [os.path.join(TransanaGlobal.configData.videoPath, data[1]).replace('/', os.sep)]
+                cmpVidFiles = [ProcessDBDataForUTF8Encoding(os.path.join(TransanaGlobal.configData.videoPath, data[1]).replace('/', os.sep))]
                 # if the found clip's main file matches the new clip's main file ....
                 if cmpVidFiles[0] == vidFiles[0]:
                     # Get a database cursor
                     DBCursor2 = get_db().cursor()
                     # Let's get the found clip's remaining video files.  Create a query
                     query2 = 'SELECT MediaFile FROM AdditionalVids2 WHERE ClipNum = %s'
+                    # Adjust the query for sqlite if needed
+                    query2 = FixQuery(query2)
                     # execute the query
-                    DBCursor2.execute(query2, data[0])
+                    DBCursor2.execute(query2, (data[0], ))
                     # For each additional media file in the found clip ...
                     for data2 in DBCursor2.fetchall():
                         # ... append the additional video to the found clip's video file list
-                        cmpVidFiles.append(os.path.join(TransanaGlobal.configData.videoPath, data2[0]).replace('/', os.sep))
+                        cmpVidFiles.append(ProcessDBDataForUTF8Encoding(os.path.join(TransanaGlobal.configData.videoPath, data2[0]).replace('/', os.sep)))
                     # Close the cursor
                     DBCursor2.close()
                 # If the found clip's video files EXACTLY MATCH the new clip's video files ...
@@ -2514,6 +2855,8 @@ def FindAdjacentClips(episodeNum, startTime, endTime, trInfo, trFiles):
                   ORDER BY ClipStart, ClipID """
     # Define the data for the query
     data = (episodeNum, startTime, endTime)
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
     DBCursor.execute(query, data)
     # Iterate through the query results
@@ -2575,18 +2918,32 @@ def FindAdjacentClips(episodeNum, startTime, endTime, trInfo, trFiles):
 def getMaxSortOrder(collNum):
     """Get the largest Sort Order value for all the Clips and Snapshots in a Collection."""
     DBCursor = get_db().cursor()
-    query = "SELECT MAX(SortOrder) FROM Clips2 WHERE CollectNum = %s" 
-    DBCursor.execute(query, collNum)
-    if DBCursor.rowcount >= 1:
+    query = "SELECT MAX(SortOrder) FROM Clips2 WHERE CollectNum = %s"
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    DBCursor.execute(query, (collNum, ))
+    # rowcount doesn't work for sqlite!
+    if TransanaConstants.DBInstalled == 'sqlite3':
+        n = 1
+    else:
+        n = DBCursor.rowcount
+    if n >= 1:
         maxSortOrder = DBCursor.fetchone()[0]
         # Dropping a clip into a new collection produces a maxSortOrder of None, rather than rowcount being 0!
         if maxSortOrder == None:
             maxSortOrder = 0
     else:
         maxSortOrder = 0
-    query = "SELECT MAX(SortOrder) FROM Snapshots2 WHERE CollectNum = %s" 
-    DBCursor.execute(query, collNum)
-    if DBCursor.rowcount >= 1:
+    query = "SELECT MAX(SortOrder) FROM Snapshots2 WHERE CollectNum = %s"
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    DBCursor.execute(query, (collNum, ))
+    # rowcount doesn't work for sqlite!
+    if TransanaConstants.DBInstalled == 'sqlite3':
+        n = 1
+    else:
+        n = DBCursor.rowcount
+    if n >= 1:
         maxSortOrder = max(maxSortOrder, DBCursor.fetchone()[0])
     DBCursor.close()
     return maxSortOrder
@@ -2632,8 +2989,10 @@ def list_of_notes(** kwargs):
     db = get_db()
     # Get a database cursor
     DBCursor = db.cursor()
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute our query
-    DBCursor.execute(query % values)
+    DBCursor.execute(query, values)
     # Get the results set
     r = DBCursor.fetchall()
     # Iterate through the records in the query results
@@ -2776,7 +3135,7 @@ def list_of_all_notes(reportType=None, searchText=None):
 def list_of_keyword_groups():
     """Get a list of all keyword groups."""
     l = []
-    query = "SELECT KeywordGroup FROM Keywords2 GROUP BY KeywordGroup\n"
+    query = "SELECT KeywordGroup FROM Keywords2 GROUP BY KeywordGroup"
     DBCursor = get_db().cursor()
     DBCursor.execute(query)
     for row in fetchall_named(DBCursor):
@@ -2792,10 +3151,11 @@ def list_of_keywords_by_group(KeywordGroup):
     if 'unicode' in wx.PlatformInfo:
         KeywordGroup = KeywordGroup.encode(TransanaGlobal.encoding)
     l = []
-    query = \
-    "SELECT Keyword FROM Keywords2 WHERE KeywordGroup = %s ORDER BY Keyword\n"
+    query = "SELECT Keyword FROM Keywords2 WHERE KeywordGroup = %s ORDER BY Keyword"
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor = get_db().cursor()
-    DBCursor.execute(query, KeywordGroup)
+    DBCursor.execute(query, (KeywordGroup, ))
     for row in fetchall_named(DBCursor):
         id = row['Keyword']
         if 'unicode' in wx.PlatformInfo:
@@ -2846,18 +3206,18 @@ def list_of_keywords(** kwargs):
     
     count = len(kwargs)
     i = 1
-    query = "SELECT * FROM ClipKeywords2\n"
+    query = "SELECT EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example FROM ClipKeywords2"
     for obj in kwargs:
         query = query + "   WHERE %sNum = %%s" % (obj)
         if i != count:      # not last item
-            query = query + " AND \n"
-        else:
-            query = query + "\n"
+            query = query + " AND "
         i += 1
-    query = query + "    ORDER BY KeywordGroup, Keyword\n"
+    query = query + "    ORDER BY KeywordGroup, Keyword"
     DBCursor = get_db().cursor()
     if len(kwargs) > 0:
-        DBCursor.execute(query, kwargs.values())
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
+        DBCursor.execute(query, (kwargs.values()[0], ))
     else:
         DBCursor.execute(query)
     r = DBCursor.fetchall()
@@ -2885,7 +3245,7 @@ def list_of_snapshot_detail_keywords(** kwargs):
     
     count = len(kwargs)
     i = 1
-    query = "SELECT * FROM SnapshotKeywords2\n"
+    query = "SELECT SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible FROM SnapshotKeywords2\n"
     for obj in kwargs:
         query = query + "   WHERE %sNum = %%s" % (obj)
         if i != count:      # not last item
@@ -2898,7 +3258,9 @@ def list_of_snapshot_detail_keywords(** kwargs):
     query = query + "    ORDER BY KeywordGroup, Keyword\n"
     DBCursor = get_db().cursor()
     if len(kwargs) > 0:
-        DBCursor.execute(query, kwargs.values())
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
+        DBCursor.execute(query, tuple(kwargs.values()))
     else:
         DBCursor.execute(query)
     r = DBCursor.fetchall()
@@ -2917,7 +3279,7 @@ def list_of_snapshot_detail_keywords(** kwargs):
 def list_of_keyword_examples():
     """Get a list of all Keyword Examples from the ClipKeywords table."""
     
-    query = "SELECT * FROM ClipKeywords2 WHERE Example = 1"
+    query = "SELECT EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example FROM ClipKeywords2 WHERE Example = 1"
     dbCursor = get_db().cursor()
     dbCursor.execute(query)
     results = dbCursor.fetchall()
@@ -2947,13 +3309,16 @@ def SetKeywordExampleStatus(kwg, kw, clipNum, exampleValue):
                  WHERE KeywordGroup = %s AND
                        Keyword = %s AND
                        ClipNum = %s"""
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     dbCursor = get_db().cursor()
     dbCursor.execute(query, (exampleValue, tempkwg, tempkw, clipNum))
 
     # If rowcount == 0, no rows were affected by the update.  That is, the Keyword
     # had not previously been assigned to this Clip, so there was no record to update.
     # In this case, we have to ADD the record!
-    if dbCursor.rowcount == 0:
+    # BUT ROWCOUNT DOESN'T WORK WITH sqlite!
+    if (dbCursor.rowcount == 0) or (TransanaConstants.DBInstalled in ['sqlite3']):
         insert_clip_keyword(0, clipNum, 0, kwg, kw, 1)
     dbCursor.close()
 
@@ -2963,13 +3328,16 @@ def check_username_as_keyword():
     # Get a Database Cursor
     DBCursor = get_db().cursor()
     # Create a query to get the Collection Number for the QuickClips Collection
-    query = "SELECT * from Keywords2 where KeywordGroup = %s AND Keyword = %s"
+    query = "SELECT KeywordGroup, Keyword from Keywords2 where KeywordGroup = %s AND Keyword = %s"
     # Determine the appropriate Keyword Group and Keyword
     data = (_("Transana Users"), get_username())
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
     DBCursor.execute(query, data)
+    results = DBCursor.fetchall()
     # See if the keyword already exists.  If not, we need to create it.
-    if DBCursor.rowcount == 0:
+    if len(results) == 0:
         import KeywordObject as Keyword
         tempKeyword = Keyword.Keyword()
         if 'unicode' in wx.PlatformInfo:
@@ -3239,8 +3607,10 @@ def IsDatabaseEmpty():
     tables = ('Series2', 'Collections2', 'CoreData2', 'Keywords2')
     SQLText = "SELECT * FROM %s"
     for table in tables:
-        dbCursor.execute(SQLText % table)
-        if dbCursor.rowcount > 0:
+        query = SQLText % table
+        dbCursor.execute(query)
+        data = dbCursor.fetchall()
+        if len(data) > 0:
             result = False
             break
     dbCursor.close()
@@ -3255,7 +3625,8 @@ def fetch_named(cursor, row_result=None):
     if row_result == None:
         row_result = cursor.fetchone()
     dict = {}
-    if not d:
+    # with sqlite3, row_result == None if the data is not found!
+    if not d or row_result == None:
         return dict
     for c, r in map(None, d, row_result):
         dict[c[0]] = r
@@ -3308,10 +3679,12 @@ def list_all_keyword_examples_for_a_clip(clipnum):
                     WHERE CK.ClipNum = %s AND
                           Example = 1 AND
                           CK.ClipNum = C.ClipNum """
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
         # Get a Database Cursor
         cursor = get_db().cursor()
         # Execute the query
-        cursor.execute(query, clipnum)
+        cursor.execute(query, (clipnum, ))
         # Iterate through the cursor's result set and put all Keyword Group : Keyword pairs in the Keyword List
         for (kwg, kw, clipNumber, clipID) in cursor.fetchall():
             kwg = ProcessDBDataForUTF8Encoding(kwg)
@@ -3349,8 +3722,10 @@ def delete_all_keywords_for_a_group(epnum, clipnum, snapshotnum):
     query = "DELETE FROM ClipKeywords2 WHERE %s = %%s " % (specifier)
     # Get a database cursor
     DBCursor = get_db().cursor()
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
-    DBCursor.execute(query, num)
+    DBCursor.execute(query, (num, ))
     # Close the database cursor
     DBCursor.close()
 
@@ -3364,16 +3739,26 @@ def insert_clip_keyword(ep_num, clip_num, snapshot_num, kw_group, kw, exampleVal
     # one user to edit a keyword while another user is applying it to an Episode, Clip, or Snapshot.
     # If this occurs, we need to avoid the save and notify the user!
     query = "SELECT KeywordGroup, Keyword FROM Keywords2 WHERE KeywordGroup = %s AND Keyword = %s"
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kw_group, kw))
-    # If the keyword exists, which is almost always will ...    
-    if DBCursor.rowcount == 1:
+    # rowcount doesn't work for sqlite
+    if TransanaConstants.DBInstalled in ['sqlite3']:
+        data = DBCursor.fetchall()
+        n = len(data)
+    else:
+        n = DBCursor.rowcount
+    # If the keyword exists, which it almost always will ...    
+    if n == 1:
         # create a query to insert the Clip Keyword Record
         query = """
         INSERT INTO ClipKeywords2
             (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example)
             VALUES
-            (%s,%s,%s,%s,%s, %s)
+            (%s, %s, %s, %s, %s, %s)
         """
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
         DBCursor.execute(query, (ep_num, clip_num, snapshot_num, kw_group, kw, exampleValue))
         DBCursor.close()
         # Signal success
@@ -3389,8 +3774,10 @@ def add_keyword(group, kw_name):
     DBCursor = get_db().cursor()
     query = """INSERT INTO Keywords2
         (KeywordGroup, Keyword)
-        VALUES (%s,%s)
+        VALUES (%s, %s)
     """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (group, kw_name))
     DBCursor.close()
 
@@ -3409,7 +3796,8 @@ def delete_keyword_group(name):
         WHERE   KeywordGroup = %s AND
                 RecordLock <> %s
     """
-
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kwg, ""))
     for row in fetchall_named(DBCursor):
         tempkwg = row['KeywordGroup']
@@ -3433,7 +3821,8 @@ def delete_keyword_group(name):
                 a.EpisodeNum = b.EpisodeNum AND
                 b.RecordLock <> %s
     """
-
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kwg, 0, ""))
     for row in fetchall_named(DBCursor):
         tempepid = row['EpisodeID']
@@ -3456,6 +3845,8 @@ def delete_keyword_group(name):
                 a.ClipNum = c.ClipNum AND
                 c.RecordLock <> %s
     """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kwg, 0, ""))
     for row in fetchall_named(DBCursor):
         tempclid = row['ClipID']
@@ -3478,6 +3869,8 @@ def delete_keyword_group(name):
                 a.SnapshotNum = s.SnapshotNum AND
                 s.RecordLock <> %s
     """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kwg, 0, ""))
     for row in fetchall_named(DBCursor):
         tempsnid = row['SnapshotID']
@@ -3500,6 +3893,8 @@ def delete_keyword_group(name):
                 a.SnapshotNum = s.SnapshotNum AND
                 s.RecordLock <> %s
     """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kwg, 0, ""))
     for row in fetchall_named(DBCursor):
         tempsnid = row['SnapshotID']
@@ -3520,23 +3915,31 @@ def delete_keyword_group(name):
 
         # Build and execute the SQL to delete a word from the list.
         query = """DELETE FROM Keywords2
-            WHERE   KeywordGroup = %s"""
-        DBCursor.execute(query, kwg)
+            WHERE   KeywordGroup = %s """
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
+        DBCursor.execute(query, (kwg, ))
         # Now delete all instances of this keywordgroup/keyword combo in the
         # ClipKeywords file
         query = """DELETE FROM ClipKeywords2
-            WHERE   KeywordGroup = %s"""
-        DBCursor.execute(query, (kwg))
+            WHERE   KeywordGroup = %s """
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
+        DBCursor.execute(query, (kwg, ))
         # Now delete all instances of this keywordgroup/keyword combo in the
         # SnapshotKeywords file
         query = """DELETE FROM SnapshotKeywords2
-            WHERE   KeywordGroup = %s"""
-        DBCursor.execute(query, (kwg))
+            WHERE   KeywordGroup = %s """
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
+        DBCursor.execute(query, (kwg, ))
         # Now delete all instances of this keywordgroup/keyword combo in the
         # SnapshotKeywordStyles file
         query = """DELETE FROM SnapshotKeywordStyles2
-            WHERE   KeywordGroup = %s"""
-        DBCursor.execute(query, (kwg))
+            WHERE   KeywordGroup = %s """
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
+        DBCursor.execute(query, (kwg, ))
 
         # Finish the transaction
         DBCursor.execute("COMMIT")
@@ -3568,7 +3971,8 @@ def delete_keyword(group, kw_name):
                 Keyword = %s AND
                 RecordLock <> %s
     """
-
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kwg, kw, ""))
     for row in fetchall_named(DBCursor):
         msg = _('%s  Keyword "%s : %s" is locked by %s\n')
@@ -3590,7 +3994,8 @@ def delete_keyword(group, kw_name):
                 a.EpisodeNum = b.EpisodeNum AND
                 b.RecordLock <> %s
     """
-
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kwg, kw, 0, ""))
     for row in fetchall_named(DBCursor):
         msg = _('%s  Episode "%s" is locked by %s\n')
@@ -3611,6 +4016,8 @@ def delete_keyword(group, kw_name):
                 a.ClipNum = c.ClipNum AND
                 c.RecordLock <> %s
     """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kwg, kw, 0, ""))
     for row in fetchall_named(DBCursor):
         msg = _('%s  Clip "%s" is locked by %s\n')
@@ -3631,6 +4038,8 @@ def delete_keyword(group, kw_name):
                 a.SnapshotNum = s.SnapshotNum AND
                 s.RecordLock <> %s
     """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kwg, kw, 0, ""))
 
     for row in fetchall_named(DBCursor):
@@ -3652,6 +4061,8 @@ def delete_keyword(group, kw_name):
                 a.SnapshotNum = s.SnapshotNum AND
                 s.RecordLock <> %s
     """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     DBCursor.execute(query, (kwg, kw, 0, ""))
 
     for row in fetchall_named(DBCursor):
@@ -3673,6 +4084,8 @@ def delete_keyword(group, kw_name):
             WHERE   KeywordGroup = %s AND
                     KeyWord = %s
         """
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
         DBCursor.execute(query, (kwg, kw))
         # Now delete all instances of this keywordgroup/keyword combo in the
         # Clipkeywords file
@@ -3680,6 +4093,8 @@ def delete_keyword(group, kw_name):
             WHERE   KeywordGroup = %s AND
                     KeyWord = %s
         """
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
         DBCursor.execute(query, (kwg, kw))
         # Now delete all instances of this keywordgroup/keyword combo in the
         # SnapshotKeywords file
@@ -3687,6 +4102,8 @@ def delete_keyword(group, kw_name):
             WHERE   KeywordGroup = %s AND
                     KeyWord = %s
         """
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
         DBCursor.execute(query, (kwg, kw))
         # Now delete all instances of this keywordgroup/keyword combo in the
         # SnapshotKeywordStyles file
@@ -3694,6 +4111,8 @@ def delete_keyword(group, kw_name):
             WHERE   KeywordGroup = %s AND
                     KeyWord = %s
         """
+        # Adjust the query for sqlite if needed
+        query = FixQuery(query)
         DBCursor.execute(query, (kwg, kw))
 
         # Finish the transaction
@@ -3726,8 +4145,10 @@ def ClearSourceEpisodeRecords(episodeNum):
                       SnapshotTimeCode = 0,
                       SnapshotDuration = 0
                   WHERE EpisodeNum = %s """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
-    DBCursor.execute(query, episodeNum)
+    DBCursor.execute(query, (episodeNum, ))
 
     # Close the Database Cursor
     DBCursor.close()
@@ -3746,13 +4167,17 @@ def ClearSourceTranscriptRecords(transcriptNum):
 
     # Define a query to delete the appropriate records
     query = "UPDATE Transcripts2 SET SourceTranscriptNum = 0 where SourceTranscriptNum = %s"
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
-    DBCursor.execute(query, transcriptNum)
+    DBCursor.execute(query, (transcriptNum, ))
 
     # Define a query to delete the appropriate records
     query = "UPDATE Snapshots2 SET TranscriptNum = 0 where TranscriptNum = %s"
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
-    DBCursor.execute(query, transcriptNum)
+    DBCursor.execute(query, (transcriptNum, ))
 
     # Close the Database Cursor
     DBCursor.close()
@@ -3763,6 +4188,8 @@ def delete_filter_records(reportType, reportScope):
     DBCursor = get_db().cursor()
     # Define a query to delete the appropriate records
     query = "DELETE FROM Filters2 WHERE ReportType = %s AND ReportScope = %s"
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
     # Execute the query
     DBCursor.execute(query, (reportType, reportScope))
     # Close the Database Cursor
@@ -3793,10 +4220,19 @@ def record_match_count(table, field_names, field_values):
         query = "%s    %s %s %%s AND\n" % (query, field, cmp_op)
     # The query will have a trailing " AND\n".  Remove it.
     query = query[:-5]
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)    
     # Execute the query
     DBCursor.execute(query, field_values)
-    # Determine the number of records returned
-    num = DBCursor.rowcount
+    # If we are using MySQL ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... determine the number of records returned by checking rowcount
+        num = DBCursor.rowcount
+    # If we're using sqlite ...
+    else:
+        # rowcount doesn't work, so get the results and count them
+        data = DBCursor.fetchall()
+        num = len(data)
     # Close the Database Cursor
     DBCursor.close()
     # Return the number of records found
@@ -3806,86 +4242,112 @@ def ProcessDBDataForUTF8Encoding(text):
     """ MySQL's UTF8 Encoding isn't straight-forward because of variable character length.  For example, the
         Chinese character 4EB0 is stored as \xE4\xBA\xB0 .  Therefore, we need to do some translation
         of the data read from the database to get it into the format that wxPython wants. """
+    # If we're not using a unicode version of wxPython ...
     if not 'unicode' in wx.PlatformInfo:
+        # ... do nothing
         return text
+    # If we are using a unicode version of wxPython ...
     else:
-        result = unicode('', TransanaGlobal.encoding)
-        # Because some Unicode characters are more than one byte wide, but the STC doesn't recognize this,
-        # we will need to skip the processing of the later parts of multi-byte characters.  skipNext allows this.
-        skipNext = 0
-        # process each character in the StyledText.  The GetStyledText() call has returned a string
-        # with the data in two-character chunks, the text char and the styling char.  This for loop
-        # allows up to process these character pairs.
-        try:
-            for x in range(len(text)):
-                # If we are looking at the second character of a Unicode character pair, we can skip
-                # this processing, as it has already been handled.
-                if skipNext > 0:
-                    # We need to reset the skipNext flag so we won't skip too many characters.
-                    skipNext -= 1
-                else:
-                    # Check for a Unicode character pair by looking to see if the first character is above 128
-                    if ord(text[x]) > 127:
-                            
-                        # UTF-8 characters are variable length.  We need to figure out the correct number of bytes.
-                        # Note the current position
-                        pos = x
-                        # Initialize the final character variable
-                        c = ''
-
-                        # Begin processing of unicode characters, continue until we have a legal character.
-                        while (pos < len(text)):
-                            # Add the current character to the character variable
-                            c += chr(ord(text[pos]))  # "Un-Unicode" the character ????
-                            # Try to encode the character.
-                            try:
-                                # See if we have a legal UTF-8 character yet.
-                                d = unicode(c, TransanaGlobal.encoding)
-                                # If so, break out of the while loop
-                                break
-                            # If we don't have a legal UTF-8 character, we'll get a UnicodeDecodeError exception
-                            except UnicodeDecodeError:
-                                # We need to signal the need to skip a charater in overall processing
-                                skipNext += 1
-                                # We need to update the current position and keep processing until we have a legal UTF-8 character
-                                pos += 1
-
-                        result += unicode(c, TransanaGlobal.encoding)
+        # If we're using MySQLdb (either server or embedded) ...
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server']:
+            # Initialize a unicode object to build the function's result
+            result = unicode('', TransanaGlobal.encoding)
+            # Because some Unicode characters are more than one byte wide, but the STC doesn't recognize this,
+            # we will need to skip the processing of the later parts of multi-byte characters.  skipNext allows this.
+            skipNext = 0
+            # process each character in the StyledText.  The GetStyledText() call has returned a string
+            # with the data in two-character chunks, the text char and the styling char.  This for loop
+            # allows up to process these character pairs.
+            try:
+                for x in range(len(text)):
+                    # If we are looking at the second character of a Unicode character pair, we can skip
+                    # this processing, as it has already been handled.
+                    if skipNext > 0:
+                        # We need to reset the skipNext flag so we won't skip too many characters.
+                        skipNext -= 1
                     else:
-                        c = text[x]
-                        result += c
+                        # Check for a Unicode character pair by looking to see if the first character is above 128
+                        if ord(text[x]) > 127:
+                                
+                            # UTF-8 characters are variable length.  We need to figure out the correct number of bytes.
+                            # Note the current position
+                            pos = x
+                            # Initialize the final character variable
+                            c = ''
 
-        except TypeError:
-            result = text
-        except UnicodeDecodeError:
-            # If we are reading Unicode text from Transana 2.05 or earlier, the line above that reads:
-            # result += unicode(c, TransanaGlobal.encoding)
-            # throws a UnicodeDecodeError when it can't interpret Latin-1 encoded characters using UTF-8.
-            # When that happens, we need to use Latin-1 encoding instead of UTF-8.
+                            # Begin processing of unicode characters, continue until we have a legal character.
+                            while (pos < len(text)):
+                                # Add the current character to the character variable
+                                c += chr(ord(text[pos]))  # "Un-Unicode" the character ????
+                                # Try to encode the character.
+                                try:
+                                    # See if we have a legal UTF-8 character yet.
+                                    d = unicode(c, TransanaGlobal.encoding)
+                                    # If so, break out of the while loop
+                                    break
+                                # If we don't have a legal UTF-8 character, we'll get a UnicodeDecodeError exception
+                                except UnicodeDecodeError:
+                                    # We need to signal the need to skip a charater in overall processing
+                                    skipNext += 1
+                                    # We need to update the current position and keep processing until we have a legal UTF-8 character
+                                    pos += 1
 
-            # The text doesn't need to be encoded in this circumstance.
-            result = text
-            # If we're in Russian, change the encoding to KOI8r
-            if TransanaGlobal.configData.language == 'ru':
-                TransanaGlobal.encoding = 'koi8_r'
-            # If we're in Chinese, change the encoding to the appropriate Chinese encoding
-            elif TransanaGlobal.configData.language == 'zh':
-                TransanaGlobal.encoding = TransanaConstants.chineseEncoding
-            # If we're in Eastern European Encoding, change the encoding to 'iso8859_2'
-            elif TransanaGlobal.configData.language == 'easteurope':
-                TransanaGlobal.encoding = 'iso8859_2'
-            # If we're in Greek, change the encoding to 'iso8859_7'
-            elif TransanaGlobal.configData.language == 'el':
-                TransanaGlobal.encoding = 'iso8859_7'
-            # If we're in Japanese, change the encoding to cp932
-            elif TransanaGlobal.configData.language == 'ja':
-                TransanaGlobal.encoding = 'cp932'
-            # If we're in Korean, change the encoding to cp949
-            elif TransanaGlobal.configData.language == 'ko':
-                TransanaGlobal.encoding = 'cp949'
-            # Otherwise, fall back to UTF8, not Latin-1 as of 2.50
+                            result += unicode(c, TransanaGlobal.encoding)
+                        else:
+                            c = text[x]
+                            result += c
+
+            except TypeError:
+                result = text
+            except UnicodeDecodeError:
+                # If we are reading Unicode text from Transana 2.05 or earlier, the line above that reads:
+                # result += unicode(c, TransanaGlobal.encoding)
+                # throws a UnicodeDecodeError when it can't interpret Latin-1 encoded characters using UTF-8.
+                # When that happens, we need to use Latin-1 encoding instead of UTF-8.
+
+                # The text doesn't need to be encoded in this circumstance.
+                result = text
+                # If we're in Russian, change the encoding to KOI8r
+                if TransanaGlobal.configData.language == 'ru':
+                    TransanaGlobal.encoding = 'koi8_r'
+                # If we're in Chinese, change the encoding to the appropriate Chinese encoding
+                elif TransanaGlobal.configData.language == 'zh':
+                    TransanaGlobal.encoding = TransanaConstants.chineseEncoding
+                # If we're in Eastern European Encoding, change the encoding to 'iso8859_2'
+                elif TransanaGlobal.configData.language == 'easteurope':
+                    TransanaGlobal.encoding = 'iso8859_2'
+                # If we're in Greek, change the encoding to 'iso8859_7'
+                elif TransanaGlobal.configData.language == 'el':
+                    TransanaGlobal.encoding = 'iso8859_7'
+                # If we're in Japanese, change the encoding to cp932
+                elif TransanaGlobal.configData.language == 'ja':
+                    TransanaGlobal.encoding = 'cp932'
+                # If we're in Korean, change the encoding to cp949
+                elif TransanaGlobal.configData.language == 'ko':
+                    TransanaGlobal.encoding = 'cp949'
+                # Otherwise, fall back to UTF8, not Latin-1 as of 2.50
+                else:
+                    TransanaGlobal.encoding = 'utf8'  # 'latin1'
+
+        # If we're NOT using MySQLdb ...
+        else:
+            # if we have a unicode object already ...
+            if isinstance(text, unicode):
+                # ... we can just return it
+                result = text
+            # If we have a string object ...
+            elif isinstance(text, str):
+                # ... decode it using UTF8
+                result = text.decode('utf8')
+            # If we have an Integer ...
+            elif isinstance(text, int):
+                # ... convert it to a unicode object using UTF8
+                result = unicode(str(text), 'utf8')
+            # if we have none of those things ...
             else:
-                TransanaGlobal.encoding = 'utf8'  # 'latin1'
+                # ... print a message
+                print "DBInterface.ProcessDBDataforUTF8Encoding():", type(text), text
+        # Return the results
         return result
 
 
@@ -3914,10 +4376,10 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
     #   query = "UPDATE Episodes2 SET MediaFile = %s WHERE MediaFile LIKE %s"
     #
     # Instead, we have to load each record, lock it, change it, save it, and unlock it.
-    episodeQuery = "SELECT EpisodeNum FROM Episodes2 WHERE MediaFile LIKE %s"
-    clipQuery = "SELECT ClipNum FROM Clips2 WHERE MediaFile LIKE %s"
-    additionalQuery = "SELECT AddVidNum, EpisodeNum, ClipNum FROM AdditionalVids2 WHERE MediaFile LIKE %s"
-    snapshotQuery = "SELECT SnapshotNum FROM Snapshots2 WHERE ImageFile LIKE %s"
+    episodeQuery = "SELECT EpisodeNum FROM Episodes2 WHERE MediaFile LIKE '%s'"
+    clipQuery = "SELECT ClipNum FROM Clips2 WHERE MediaFile LIKE '%s'"
+    additionalQuery = "SELECT AddVidNum, EpisodeNum, ClipNum FROM AdditionalVids2 WHERE MediaFile LIKE '%s'"
+    snapshotQuery = "SELECT SnapshotNum FROM Snapshots2 WHERE ImageFile LIKE '%s'"
 
     # Let's count the number of records changed
     episodeCounter = 0
@@ -3936,7 +4398,8 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
         
         # Add a "%" character to the beginning of the File Name so that the "LIKE" operator will work
         # Execute the Episode Query
-        DBCursor.execute(episodeQuery, ('%' + queryFileName))
+        query = episodeQuery % ('%' + queryFileName.replace("'", "''"))
+        DBCursor.execute(query)
 
         # Iterate through the records returned from the Database
         for (episodeNum, ) in DBCursor.fetchall():
@@ -3971,7 +4434,8 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
             break
         
         # Execute the Clip Query
-        DBCursor.execute(clipQuery, ('%' + queryFileName))
+        query = clipQuery % ('%' + queryFileName.replace("'", "''"))
+        DBCursor.execute(query)
 
         # Iterate through the records returned from the Database
         for (clipNum, ) in DBCursor.fetchall():
@@ -4007,7 +4471,8 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
             break
 
         # Execute the Additional Query
-        DBCursor.execute(additionalQuery, ('%' + queryFileName))
+        query = additionalQuery % ('%' + queryFileName.replace("'", "''"))
+        DBCursor.execute(query)
 
         # Iterate through the records returned from the Database
         for (addVidNum, episodeNum, clipNum) in DBCursor.fetchall():
@@ -4097,7 +4562,8 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
                     break
 
         # Execute the Snapshot Query
-        DBCursor.execute(snapshotQuery, ('%' + queryFileName))
+        query = snapshotQuery % ('%' + queryFileName.replace("'", "''"))
+        DBCursor.execute(query)
 
         # Iterate through the records returned from the Database
         for (snapshotNum, ) in DBCursor.fetchall():
@@ -4161,63 +4627,116 @@ def DeleteDatabase(username, password, server, database, port):
     # Assume failure
     res = 0
     try:
-        # Connect to the MySQL Server without specifying a Database
-        if TransanaConstants.singleUserVersion:
-            # The single-user version requires no parameters
-            dbConn = MySQLdb.connect()
-        else:
-            try:
-                # The multi-user version requires all information except the database name
-                dbConn = MySQLdb.connect(host=server, user=username, passwd=password, port=port)
-                # If the connection fails here, it's not the database name that was the problem.
-            except:
-                dbConn = None
-        # If we made a connection to MySQL...
-        if dbConn != None:
-            try:
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_('Are you sure you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.'), 'utf8')
-                else:
-                    prompt = _('Are you sure you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.')
-                dlg = Dialogs.QuestionDialog(None, prompt % database, _('Delete Database'), noDefault=True)
-                result = dlg.LocalShowModal()
-                dlg.Destroy()
-                if result == wx.ID_YES:
-                    # Give the user another chance to back out!
+        # If we're using MySQL ...
+        if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # Connect to the MySQL Server without specifying a Database
+            if TransanaConstants.singleUserVersion:
+                # The single-user version requires no parameters
+                dbConn = MySQLdb.connect()
+            else:
+                try:
+                    # The multi-user version requires all information except the database name
+                    dbConn = MySQLdb.connect(host=server, user=username, passwd=password, port=port)
+                    # If the connection fails here, it's not the database name that was the problem.
+                except:
+                    dbConn = None
+            # If we made a connection to MySQL...
+            if dbConn != None:
+                try:
+                    # Build a prompt for confirming the delete
                     if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                        prompt = unicode(_('Are you ABSOLUTELY SURE you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.'), 'utf8')
+                        prompt = unicode(_('Are you sure you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.'), 'utf8')
                     else:
-                        prompt = _('Are you ABSOLUTELY SURE you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.')
+                        prompt = _('Are you sure you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.')
+                    # Create the confirmation dialog
                     dlg = Dialogs.QuestionDialog(None, prompt % database, _('Delete Database'), noDefault=True)
+                    # Display the confirmation dialog and get user input
                     result = dlg.LocalShowModal()
+                    # Destroy the user input dialog
                     dlg.Destroy()
+                    # if the user confirmed ...
                     if result == wx.ID_YES:
-                        # Get a Database Cursor
-                        dbCursor = dbConn.cursor()
-                        # Query the Database to delete the desired database
-                        dbCursor.execute('DROP DATABASE IF EXISTS %s' % database.encode(TransanaGlobal.encoding))
-                        # Close the Database Cursor
-                        dbCursor.close()
-                        # If we get this far, return True rather than False
-                        res = 1
+                        # Give the user another chance to back out!
+                        if 'unicode' in wx.PlatformInfo:
+                            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                            prompt = unicode(_('Are you ABSOLUTELY SURE you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.'), 'utf8')
+                        else:
+                            prompt = _('Are you ABSOLUTELY SURE you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.')
+                        dlg = Dialogs.QuestionDialog(None, prompt % database, _('Delete Database'), noDefault=True)
+                        result = dlg.LocalShowModal()
+                        dlg.Destroy()
+                        # if the user REALLY wants to delete the database ...
+                        if result == wx.ID_YES:
+                            # Get a Database Cursor
+                            dbCursor = dbConn.cursor()
+                            # Query the Database to delete the desired database
+                            query = 'DROP DATABASE IF EXISTS %s' % database.encode(TransanaGlobal.encoding)
+                            dbCursor.execute(query)
+                            # Close the Database Cursor
+                            dbCursor.close()
+                            # If we get this far, return True rather than False
+                            res = 1
+                        # If user cancels ...
+                        else:
+                            # ... signal that the user said NO.
+                            res = 2
                     # If user cancels ...
                     else:
                         # ... signal that the user said NO.
                         res = 2
+
+                        # Okay, this is weird.  If you drop a database, immediately quit transana, then
+                        # shut down the database server (in multi-user mode), then the server 
+                        # won't be able to start up again.  
+                        # (To get the server going again, you need to restore the missing database's folder!)
+                finally:
+                    # Close the Database Connection
+                    dbConn.close()
+        # If we're using sqlite ...
+        elif TransanaConstants.DBInstalled in ['sqlite3']:
+            # ... get the database path
+            databasePath = TransanaGlobal.configData.databaseDir
+            # ... and build the full database name by combining the path, database name, and file extension
+            dbName = os.path.join(databasePath, database.encode(TransanaGlobal.encoding) + '.db')
+            # Build a prompt for confirming the delete
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Are you sure you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.'), 'utf8')
+            else:
+                prompt = _('Are you sure you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.')
+            # Create the confirmation dialog
+            dlg = Dialogs.QuestionDialog(None, prompt % database, _('Delete Database'), noDefault=True)
+            # Display the confirmation dialog and get user input
+            result = dlg.LocalShowModal()
+            # Destroy the user input dialog
+            dlg.Destroy()
+            # if the user confirmed ...
+            if result == wx.ID_YES:
+                # ... give the user another chance to back out!
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('Are you ABSOLUTELY SURE you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.'), 'utf8')
+                else:
+                    prompt = _('Are you ABSOLUTELY SURE you want to delete Database "%s"?\nAll data in this database will be permanently deleted and cannot be recovered.')
+                dlg = Dialogs.QuestionDialog(None, prompt % database, _('Delete Database'), noDefault=True)
+                result = dlg.LocalShowModal()
+                dlg.Destroy()
+                # if the user REALLY wants to delete the database ...
+                if result == wx.ID_YES:
+                    # Delete the database file!
+                    os.remove(dbName)
+                    # If we get this far, return True rather than False
+                    res = 1
                 # If user cancels ...
                 else:
                     # ... signal that the user said NO.
                     res = 2
+            # If user cancels ...
+            else:
+                # ... signal that the user said NO.
+                res = 2
 
-                    # Okay, this is weird.  If you drop a database, immediately quit transana, then
-                    # shut down the database server (in multi-user mode), then the server 
-                    # won't be able to start up again.  
-                    # (To get the server going again, you need to restore the missing database's folder!)
-            finally:
-                # Close the Database Connection
-                dbConn.close()
         return res
     except:
         return res
@@ -4246,7 +4765,7 @@ def ReportRecordLocks(parent):
     # Define the SERIES Query
     lockQuery = """SELECT SeriesID, RecordLock
                    FROM Series2
-                   WHERE RecordLock <> ''"""
+                   WHERE RecordLock <> '' """
     # run the query
     if 'unicode' in wx.PlatformInfo:
         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -4280,7 +4799,7 @@ def ReportRecordLocks(parent):
     lockQuery = """SELECT EpisodeID, SeriesID, e.RecordLock
                    FROM Episodes2 e, Series2 s
                    WHERE e.RecordLock <> '' AND
-                         e.SeriesNum = s.SeriesNum""" 
+                         e.SeriesNum = s.SeriesNum """ 
     # run the query
     if 'unicode' in wx.PlatformInfo:
         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -4320,7 +4839,7 @@ def ReportRecordLocks(parent):
                          t.EpisodeNum > 0 AND
                          t.ClipNum = 0 AND
                          t.EpisodeNum = e.EpisodeNum AND
-                         e.SeriesNum = s.SeriesNum""" 
+                         e.SeriesNum = s.SeriesNum """ 
     # run the query
     if 'unicode' in wx.PlatformInfo:
         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -4358,7 +4877,7 @@ def ReportRecordLocks(parent):
     # Define the COLLECTION Query
     lockQuery = """SELECT CollectID, ParentCollectNum, RecordLock
                    FROM Collections2
-                   WHERE RecordLock <> ''"""
+                   WHERE RecordLock <> '' """
     # run the query
     if 'unicode' in wx.PlatformInfo:
         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -4390,11 +4909,13 @@ def ReportRecordLocks(parent):
             # ... build a query to get the parent collection ...
             subQ = """ SELECT CollectID, ParentCollectNum
                        FROM Collections2
-                       WHERE CollectNum = %d """
+                       WHERE CollectNum = %s """
+            # Adjust the query for sqlite if needed
+            subQ = FixQuery(subQ)
             # ... get a second database cursor ...
             DBCursor2 = dbConn.cursor()
             # ... execute the parent collection query ...
-            DBCursor2.execute(subQ % collPar)
+            DBCursor2.execute(subQ, (collPar, ))
             # ... get the parent collection data ...
             rec2 = DBCursor2.fetchone()
             # ... note the collection's parent ...
@@ -4464,11 +4985,13 @@ def ReportRecordLocks(parent):
             # ... build a query to get the parent collection ...
             subQ = """ SELECT CollectID, ParentCollectNum
                        FROM Collections2
-                       WHERE CollectNum = %d """
+                       WHERE CollectNum = %s """
+            # Adjust the query for sqlite if needed
+            subQ = FixQuery(subQ)
             # ... get a second database cursor ...
             DBCursor2 = dbConn.cursor()
             # ... execute the parent collection query ...
-            DBCursor2.execute(subQ % collPar)
+            DBCursor2.execute(subQ, (collPar, ))
             # ... get the parent collection data ...
             rec2 = DBCursor2.fetchone()
             # ... note the collection's parent ...
@@ -4540,11 +5063,13 @@ def ReportRecordLocks(parent):
             # ... build a query to get the parent collection ...
             subQ = """ SELECT CollectID, ParentCollectNum
                        FROM Collections2
-                       WHERE CollectNum = %d """
+                       WHERE CollectNum = %s """
+            # Adjust the query for sqlite if needed
+            subQ = FixQuery(subQ)
             # ... get a second database cursor ...
             DBCursor2 = dbConn.cursor()
             # ... execute the parent collection query ...
-            DBCursor2.execute(subQ % collPar)
+            DBCursor2.execute(subQ, (collPar, ))
             # ... get the parent collection data ...
             rec2 = DBCursor2.fetchone()
             # ... note the collection's parent ...
@@ -4614,11 +5139,13 @@ def ReportRecordLocks(parent):
             # ... build a query to get the parent collection ...
             subQ = """ SELECT CollectID, ParentCollectNum
                        FROM Collections2
-                       WHERE CollectNum = %d """
+                       WHERE CollectNum = %s """
+            # Adjust the query for sqlite if needed
+            subQ = FixQuery(subQ)
             # ... get a second database cursor ...
             DBCursor2 = dbConn.cursor()
             # ... execute the parent collection query ...
-            DBCursor2.execute(subQ % collPar)
+            DBCursor2.execute(subQ, (collPar, ))
             # ... get the parent collection data ...
             rec2 = DBCursor2.fetchone()
             # ... note the collection's parent ...
@@ -4804,18 +5331,22 @@ def UnlockRecords(parent, userName):
     dbConn = get_db()
     # Get a Database Cursor
     DBCursor = dbConn.cursor()
-
     # Create the Unlock query
     unlockQuery = """ UPDATE %s
                         SET RecordLock = '',
                             LockTime = NULL
-                        WHERE RecordLock = '%s' """
-
+                        WHERE RecordLock = %s """
     # Iterate through the list of tables ...
     for table in tableList:
-        # ... and execute the unlock query for each table.
-        DBCursor.execute(unlockQuery % (table, userName))
 
+        # DBCursor.execute() has started putting apostrophes around the TABLE name, which is incorrect.
+        # Therefore, we need to substitute the table name BEFORE we go to the query.execute() call,
+        # but we need to keep the second %s parameter AS a %s string!
+
+        # Adjust the query for sqlite if needed
+        query = FixQuery(unlockQuery % (table, '%s'))
+        # ... and execute the unlock query for each table.
+        DBCursor.execute(query, (userName))
     # Close the Database Cursor
     DBCursor.close()
     # Reset the Cursor now that the unlock is complete.
@@ -4828,17 +5359,21 @@ def ServerDateTime():
     #        computer.  Further, what if someone's computer has the wrong date or time setting?
     #        Therefore, all comparisons should be made with the DB Server's current date and time.
     #        This function returns that value.
-    
-    # Get a Database Connection
-    dbConn = get_db()
-    # Get a Database Cursor
-    DBCursor = dbConn.cursor()
-    # Get the DB Server's current Date and Time
-    DBCursor.execute('SELECT CURRENT_TIMESTAMP()')
-    # Get the result
-    serverDateTime = DBCursor.fetchall()[0][0]
-    # Close the Database Cursor
-    DBCursor.close()
+
+    # MySQL supports a "Server Time", while sqlite does not.
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # Get a Database Connection
+        dbConn = get_db()
+        # Get a Database Cursor
+        DBCursor = dbConn.cursor()
+        # Get the DB Server's current Date and Time
+        DBCursor.execute('SELECT CURRENT_TIMESTAMP()')
+        # Get the result
+        serverDateTime = DBCursor.fetchall()[0][0]
+        # Close the Database Cursor
+        DBCursor.close()
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        serverDateTime = datetime.datetime.now()
     # Return the value retrieved from the server
     return serverDateTime
 

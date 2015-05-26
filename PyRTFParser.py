@@ -23,7 +23,7 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 
 DEBUG = False    # Shows debug messages
 DEBUG2 = False   # Shows unknown control words, not those explicitly ignored
-DEBUG3 = False    # SHOW CHARACTERS ONLY
+DEBUG3 = False   # SHOW CHARACTERS ONLY
 
 # Transana is my program, and has some special requirements.  These can be skipped using this GLOBAL.
 IN_TRANSANA = True
@@ -939,6 +939,8 @@ class RTFTowxRichTextCtrlParser:
         self.in_font_block = False
         self.fontName = ""
         self.fontNumber = -1
+        self.fontCharSet = -1
+        self.fontEncoding = 'utf8'
         self.fontTable = {}
 
         # Initialize the Default Font Number
@@ -1002,6 +1004,7 @@ class RTFTowxRichTextCtrlParser:
         if fontFace:
             self.txtAttr.SetFontFaceName(fontFace)
             self.font['fontfacename'] = fontFace
+
         # If the font size is specified, set the font size
         if fontSize:
             self.txtAttr.SetFontSize(fontSize)
@@ -1077,6 +1080,7 @@ class RTFTowxRichTextCtrlParser:
                                             len(self.buffer), None,
                                             wx.PD_APP_MODAL | wx.PD_AUTO_HIDE |
                                             wx.PD_ELAPSED_TIME | wx.PD_ESTIMATED_TIME | wx.PD_REMAINING_TIME )
+            progressDlg.CentreOnScreen()
         else:
             progressDlg = None
 
@@ -1133,73 +1137,76 @@ class RTFTowxRichTextCtrlParser:
                     # Get the hex part and convert it to an integer value.
                     val = int(self.buffer[self.index+2:self.index+4], 16)
 
-                    if DEBUG:
-                        print "Word-style Unicode specification:", val
+                    if DEBUG or DEBUG3:
+                        print "Word-style Unicode specification:", val, self.fontEncoding, self.in_font_table, self.in_font_block
 
-                    # Word ellipsis character causes problems.  These come across as "\'85"
-                    #(hex for 133) and needs to be replaced with the unicode equivalent.
-                    if (val in [133]):
-                        # 22 is the HEX value for chr(34), the quotation mark character.
-                        val = 46
-                        # Replace smart quote with regular quotes in the self.buffer text.  
-                        txt += "..."
+                    if self.fontEncoding == 'utf8':
+                        # Word ellipsis character causes problems.  These come across as "\'85"
+                        #(hex for 133) and needs to be replaced with the unicode equivalent.
+                        if (val in [133]):
+                            # 22 is the HEX value for chr(34), the quotation mark character.
+                            val = 46
+                            # Replace smart quote with regular quotes in the self.buffer text.  
+                            txt += "..."
 
-                    # "smart" Apostophes are sometimes represented as /'91 and /'92, val=145 and 146
-                    elif (val in [145, 146]):
-                        # 27 is the HEX value for chr(39), the apostrophe character.
-                        val = 39
-                        # Replace the hex representation in the self.buffer text.  
-                        self.buffer = self.buffer[:self.index] + "\u39" + self.buffer[self.index+4:]
-                        # Apostrophes are special because they have meaning in RTF.  Add it to the
-                        # txt variable here, or it won't show up anywhere!
-                        txt += "'"
+                        # "smart" Apostophes are sometimes represented as /'91 and /'92, val=145 and 146
+                        elif (val in [145, 146]):
+                            # 27 is the HEX value for chr(39), the apostrophe character.
+                            val = 39
+                            # Replace the hex representation in the self.buffer text.  
+                            self.buffer = self.buffer[:self.index] + "\u39" + self.buffer[self.index+4:]
+                            # Apostrophes are special because they have meaning in RTF.  Add it to the
+                            # txt variable here, or it won't show up anywhere!
+                            txt += "'"
 
-                    # Word Smart Quotes cause problems.  These come across as "\'93" and "\'94"
-                    #(hex for 147 and 148) and need to be replaced with a normal quote character.
-                    elif (val in [147, 148]):
-                        # 22 is the HEX value for chr(34), the quotation mark character.
-                        val = 34
-                        # Replace smart quote with regular quotes in the self.buffer text.  
-                        self.buffer = self.buffer[:self.index+2] + '22' + self.buffer[self.index+4:]
+                        # Word Smart Quotes cause problems.  These come across as "\'93" and "\'94"
+                        #(hex for 147 and 148) and need to be replaced with a normal quote character.
+                        elif (val in [147, 148]):
+                            # 22 is the HEX value for chr(34), the quotation mark character.
+                            val = 34
+                            # Replace smart quote with regular quotes in the self.buffer text.  
+                            self.buffer = self.buffer[:self.index+2] + '22' + self.buffer[self.index+4:]
 
-                    # Word en-dash and em-dash cause problems.  These come across as "\'96" and "\'97"
-                    #(hex for 150) and needs to be replaced with the unicode equivalent.
-                    elif (val in [150, 151]):
-                        # 22 is the HEX value for chr(34), the quotation mark character.
-                        val = 34
-                        # Replace smart quote with regular quotes in the self.buffer text.  
-#                        self.buffer = self.buffer[:self.index] + '\u2013' + self.buffer[self.index+4:]
-#                        self.index += 2
-                        txt += "--"
+                        # Word en-dash and em-dash cause problems.  These come across as "\'96" and "\'97"
+                        #(hex for 150) and needs to be replaced with the unicode equivalent.
+                        elif (val in [150, 151]):
+                            # 22 is the HEX value for chr(34), the quotation mark character.
+                            val = 34
+                            # Replace smart quote with regular quotes in the self.buffer text.  
+    #                        self.buffer = self.buffer[:self.index] + '\u2013' + self.buffer[self.index+4:]
+    #                        self.index += 2
+                            txt += "--"
 
-                    # OpenOffice handles the Open Dot oddly.  This should detect that odd form
-                    elif (val == 129) and (self.buffer[self.index:self.index+8] == "\\'81\\'8b"):
-                        # This representation seems to work best, although it's not the right Font Size.
-                        val = 176
-                        # Replace the odd RTF character specification with one that works better
-                        self.buffer = self.buffer[:self.index] + "\u176" + self.buffer[self.index+8:]
-                        # We need to move the index by 1 character here, as 176 is more than 2 digits wide!
-                        # NOTE:  This sucks, but I can't figure out the right way to do it!
-                        self.index += 1
+                        # OpenOffice handles the Open Dot oddly.  This should detect that odd form
+                        elif (val == 129) and (self.buffer[self.index:self.index+8] == "\\'81\\'8b"):
+                            # This representation seems to work best, although it's not the right Font Size.
+                            val = 176
+                            # Replace the odd RTF character specification with one that works better
+                            self.buffer = self.buffer[:self.index] + "\u176" + self.buffer[self.index+8:]
+                            # We need to move the index by 1 character here, as 176 is more than 2 digits wide!
+                            # NOTE:  This sucks, but I can't figure out the right way to do it!
+                            self.index += 1
 
-                    # An old style of the Closed Dot comes up across as "\'95" (hex 149, or 0xb7)
-                    elif (val == 149):
-                        # This representation seems to work best, although it's not the right Font Size.
-                        val = 8226
-                        self.buffer = self.buffer[:self.index] + "\u82" + self.buffer[self.index+4:]
+                        # An old style of the Closed Dot comes up across as "\'95" (hex 149, or 0xb7)
+                        elif (val == 149):
+                            # This representation seems to work best, although it's not the right Font Size.
+                            val = 8226
+                            self.buffer = self.buffer[:self.index] + "\u82" + self.buffer[self.index+4:]
 
-                    # This is BOGUS.  I don't like it, and I know it's not right.  But I can't figure it out.
-                    # So if the codepage indicates we have a WORD FOR MAC export, we have to ignore certain
-                    # characters.
-                    elif (self.codePage == 10000) and \
-                         (val in [142, 146, 150, 151]):  # [210, 211]):
+                        # This is BOGUS.  I don't like it, and I know it's not right.  But I can't figure it out.
+                        # So if the codepage indicates we have a WORD FOR MAC export, we have to ignore certain
+                        # characters.
+                        elif (self.codePage == 10000) and \
+                             (val in [142, 146, 150, 151]):  # [210, 211]):
 
-                        if DEBUG:
-                            print "***********************************************", val, self.in_font_table
+                            if DEBUG:
+                                print "***********************************************", val, self.in_font_table
 
-                        val = 32
-                        self.buffer = self.buffer[:self.index] + "" + self.buffer[self.index+4:]
-                        txt = ''
+                            val = 32
+                            self.buffer = self.buffer[:self.index] + "" + self.buffer[self.index+4:]
+                            txt = ''
+##                    else:
+##                        txt = '\\x%x' % val
 
 ##                    # If we have the code page for Word for Mac, we need to convert characters!
 ##                    if self.codePage == 10000:
@@ -1240,40 +1247,105 @@ class RTFTowxRichTextCtrlParser:
 
                     # If we encounter Unicode characters while naming a font ...
                     if self.in_font_block:
-                        # If our character value is 161 or larger ...
-                        if val >= 161:
-                            # ... we can add the appropriate unicode character to the font name
-                            txt += unichr(val)
-                        # If our value is less than 161 ...
-                        elif val > 138:
-                            # ... then unichr() and chr() disagree, and we need the chr() character instead.
-                            txt += chr(val)
+                        if self.fontEncoding == 'utf8':
+                            # If our character value is 161 or larger ...
+                            if val >= 161:
+                                # ... we can add the appropriate unicode character to the font name
+                                txt += unichr(val)
+                            # If our value is less than 161 ...
+                            elif val > 138:
+                                # ... then unichr() and chr() disagree, and we need the chr() character instead.
+                                txt += chr(val)
+#                        else:
+#                            txt = '\\x%x' % val
+
+
+
+
+                        # We are now done inserting the character, so can move 4 positions in the buffer to get past it.
+                        self.index += 4
+
+
+
 
                     else:
-                        # If our character value is 161 or larger ...
-                        if val >= 161:
-                            # ... we can insert the appropriate unicode character
-                            self.process_text(unichr(val))
-                        # If our value is less than 161 ...
-                        elif val > 138:
-                            # ... then unichr() and chr() disagree, and we need the chr() character instead.
-                            self.process_text(chr(val))
 
-                    # We are now done inserting the character, so can move 4 positions in the buffer to get past it.
-                    self.index += 4
+                        if self.fontEncoding == 'utf8':
+                            # If our character value is 161 or larger ...
+                            if val >= 161:
+                                # ... we can insert the appropriate unicode character
+                                self.process_text(unichr(val))
+                            # If our value is less than 161 ...
+                            elif val > 138:
+                                # ... then unichr() and chr() disagree, and we need the chr() character instead.
+                                self.process_text(chr(val))
+
+
+
+
+                            # We are now done inserting the character, so can move 4 positions in the buffer to get past it.
+                            self.index += 4
+
+
+
+                        else:
+
+                            if DEBUG3:
+                                print "Encoding applied:", self.fontEncoding, self.encoding
+                                print (self.buffer[self.index : self.index+4])
+
+                                print
+                                print "YOU CAN'T WORK ONE CHARACTER AT A TIME HERE.  GET ALL CHARACTERS, THEN DECODE!!"
+                                print
+
+##                            tmpCh = chr(val)
+##                            tmpTxt = tmpCh.decode(self.fontEncoding)
+##
+####                            tmpTxt = unichr(val)
+
+                            # Initialize a string
+                            tmpTxt = ''
+                            # We have to process ALL Unicode characters to handle multi-byte character encoding,
+                            # so while there is another Unicode character at the current index ...
+                            while (self.buffer[self.index] in [b'\n', b'\r']) or (self.buffer[self.index : self.index+2] in ["\\'", "\\\'"]):
+                                # If we have a Line Break ...
+                                if self.buffer[self.index] in [b'\n', b'\r']:
+                                    # ... ignore it
+                                    self.index += 1
+                                # If we have a backslash and an apostrophe ...
+                                else:
+                                    # The WORD style is \'hh, where hh is a hex representation of the character.
+                                    # Get the hex part and convert it to an integer value.
+                                    val = int(self.buffer[self.index+2:self.index+4], 16)
+                                    # Add the CHARACTER to the string.
+                                    # NOTE:  unichr(val) gives INCORRECT characters for Czech, and probably other languages
+                                    tmpTxt += chr(val)
+                                    # Increment the index to the next character in the RTF file
+                                    self.index += 4
+
+                            # Encode the string based on the current Font's encoding definition
+                            tmpTxt = tmpTxt.decode(self.fontEncoding)
+                            # Process the encoded text to add it to our RTF Control
+                            self.process_text(tmpTxt)
+
+##                    # We are now done inserting the character, so can move 4 positions in the buffer to get past it.
+##                    self.index += 4
 
                 # If we're not dealing with an escaped character, continue normal processing
                 else:
                     # If we're in a Font block within the Font Table ...
                     if self.in_font_block and len(txt) > 0:
                         # If the txt is not blank ...
-                        if txt[:-1] != '':
-                            # ... it must be the font name!  Grab it!
-                            self.fontName = txt[:-1]
+##                        if txt[:-1] != '':
+##                            # ... it must be the font name!  Grab it!
+##                            self.fontName = txt[:-1]
                         # Clear the txt, since we've used it
                         txt = ""
                         # Add the font number / name combination to the Font Table
-                        self.fontTable[self.fontNumber] = self.fontName
+                        self.fontTable[self.fontNumber] = { "name" : self.fontName.decode(self.fontEncoding), "charset" : self.fontCharSet, 'encoding' : self.fontEncoding }
+
+                        if DEBUG3:
+                            print 'Font defined 1:', self.fontNumber, self.fontName, self.fontCharSet, self.fontEncoding
 
                     # If we're in a list and txt has been captured ...
                     elif self.in_list and len(txt) > 0:
@@ -1423,6 +1495,11 @@ class RTFTowxRichTextCtrlParser:
                 if (self.in_color_table) and (c == ";"):
                     # ... then increment the color index to the next color
                     self.colorIndex += 1
+                # If we're in the Font Table ...
+                elif self.in_font_table:
+                    # ... if we DON'T have a semicolon, which signals the end of the font name) ...
+                    if c != ';':
+                        self.fontName += c
                 # For any other character other than a newline or \r ...
                 elif (c != '\r' and c != '\n'):
                     # ... add the character to the local text variable ...
@@ -1559,6 +1636,12 @@ class RTFTowxRichTextCtrlParser:
                 try:
                     # ... then add that text to the wxRichTextCtrl.
                     self.txtCtrl.WriteText(txt)
+
+#                    print txt.encode('utf8')
+#                    print self.txtAttr.GetFontFaceName()
+#                    print self.font
+#                    print
+                    
                 # If we get a UnicodeDecodeError ...
                 except UnicodeDecodeError:
                     # ... put a SPACE in the Transcript
@@ -1723,7 +1806,7 @@ class RTFTowxRichTextCtrlParser:
                 elif (num == 10000) and DEBUG:
                     print "ansicpg - Mac Roman"
                 elif DEBUG:
-                    print "ansicpg is NOT 1252, US English or 10000, Mac Roman."
+                    print "ansicpg is NOT 1252, US English or 10000, Mac Roman.", num
 
             # Bold
             elif cw == "b":
@@ -1792,6 +1875,10 @@ class RTFTowxRichTextCtrlParser:
 
             # Font number specification
             elif cw == "f":
+
+                if DEBUG3:
+                    print "FONT keyword",
+                
                 # If we have a Font Number, it's different than the current font number and it isn't in the Font Table ...
                 if (self.fontNumber > -1) and \
                    (self.fontNumber != num) and \
@@ -1801,9 +1888,15 @@ class RTFTowxRichTextCtrlParser:
                         # ... and remove the semicolon
                         self.fontName = self.fontName[:-1]
                     # Add the font number / name combination to the Font Table ...
-                    self.fontTable[self.fontNumber] = self.fontName
+                    self.fontTable[self.fontNumber] = { "name" : self.fontName.decode(self.fontEncoding), "charset" : self.fontCharSet, 'encoding' : self.fontEncoding }
+
+                    if DEBUG3:
+                        print 'Font defined 2:', self.fontNumber, self.fontName, self.fontCharSet, self.fontEncoding
+                    
                     # and clear the Font Name
                     self.fontName = ''
+                    self.fontCharSet = -1
+                    self.fontEncoding = 'utf8'
 
                 # If the font number is NOT already in the Font Table dictionary ...
                 if not self.fontTable.has_key(num):
@@ -1814,7 +1907,106 @@ class RTFTowxRichTextCtrlParser:
                 # If the font number IS in the Font Table ...
                 else:
                     # ... set the current Font Face to the appropriate font
-                    self.SetTxtStyle(fontFace = self.fontTable[num])
+                    self.SetTxtStyle(fontFace = self.fontTable[num]["name"])
+                    if self.fontTable[num]['encoding'] != 0:
+                        self.fontEncoding = self.fontTable[num]['encoding']
+                    else:
+                        self.fontEncoding = self.encoding
+
+            # Font Character Set
+            # Here, I attempted to map from the fcharset / codepage table in the RTF specification to
+            # the defined encodings in Python.  Some other options are included in comments if a particular
+            # encoding does not work correctly.
+            # (Many are un-tested best-guesses!)
+            elif cw == 'fcharset':
+                self.fontCharSet = num
+                # ANSI
+                if num == 0:
+                    self.fontEncoding = 'cp1252'
+                # Mac Roman
+                elif num == 77:
+                    self.fontEncoding = 'mac_roman'
+                # Mac ShiftJis
+                elif num == 78:
+                    self.fontEncoding = 'shift_jis' # cp932     NOT euc_jp
+                # Mac Hangul / Hangul (Korean)
+                elif num in [79, 129]:
+                    self.fontEncoding = 'cp949'
+                # Mac GB2312
+                elif num == 80:
+                    self.fontEncoding = 'gb2312'
+                # Mac Big5 (Chinese)
+                elif num == 81:
+                    self.fontEncoding = 'big5'
+                # Mac Johab (old) / Johab
+                elif num in [82, 130]:
+                    self.fontEncoding = 'johab'
+                # Mac Hebrew
+                elif num == 83:
+                    self.fontEncoding = 'cp424' # cp856, cp862, cp1255, iso_8859_8
+                # Mac Arabic
+                elif num == 84:
+                    self.fontEncoding = 'cp720'  # cp864, cp1256, iso8859_6
+                # Mac Greek
+                elif num == 85:
+                    self.fontEncoding = 'mac_greek'
+                # Mac Turkish
+                elif num == 86:
+                    self.fontEncoding = 'mac_turkish'
+                # Mac Thai = 87
+                # Mac East Europe = 88
+                # Mac Russian = 89
+                # ShiftJIS
+                elif num == 128:
+                    self.fontEncoding = 'cp932'
+                # GB2312
+                elif num == 134:
+                    self.fontEncoding = 'gb2312'
+                # Big5  (Traditional Chinese)
+                elif num == 136:
+                    self.fontEncoding = 'cp950'
+                # Greek
+                elif num == 161:
+                    self.fontEncoding = 'cp1253'  # cp737, cp869, cp875, cp1253, iso2022_jp_2, iso8859_7
+                # Turkish
+                elif num == 162:
+                    self.fontEncoding = 'cp1254'  # 
+                # Vietnamese
+                elif num == 163:
+                    self.fontEncoding = 'cp1258'
+                # Hebrew
+                elif num == 177:
+                    self.fontEncoding = 'cp1255'
+                # Arabic
+                elif num == 178:
+                    self.fontEncoding = 'cp1256'
+                # Arabic Traditional (old) = 179
+                # Arabic User (old) = 180
+                # Hebrew User (old) = 181
+                # Baltic
+                elif num == 186:
+                    self.fontEncoding = 'cp1257'
+                # Russian
+                elif num == 204:
+                    self.fontEncoding = 'cp1251'
+                # Thai
+                elif num == 222:
+                    self.fontEncoding = 'cp874'
+                # Eastern European
+                elif num == 238:
+                    self.fontEncoding = 'cp1250'
+                # PC 437
+                elif num == 254:
+                    self.fontEncoding = 'cp437'
+                # OEM / Western European
+                elif num == 255:
+                    self.fontEncoding = 'cp850'
+                else:
+                    self.fontEncoding = 'utf8'
+
+                if DEBUG3:
+                    print 'PyRTFParser fcharset:', num, self.fontEncoding, self.index
+
 
             # First line paragraph indent
             elif cw == 'fi':
@@ -1875,6 +2067,27 @@ class RTFTowxRichTextCtrlParser:
                 # (This shouldn't be necessary, but can't hurt.)
                 if not self.in_image:
                     self.in_image = True
+
+            # Language Specification
+            elif cw == 'lang':
+
+                if DEBUG:
+                    print
+                    print
+                    print "PyRTFParser lang:", num
+
+                # If Czech (Eastern European)
+#                if num == 1029:
+#                    self.encoding = 'cp1250'
+                # American English
+#                elif num == 1033:
+#                    self.encoding = 'utf8'
+                # Otherwise ...
+#                else:
+
+#                    print "PyRTFParser lang:", num
+                    
+#                    self.encoding = 'utf8'
 
             # Left and right double quote
             elif cw == "ldblquote" or cw == "rdblquote":
@@ -1959,7 +2172,7 @@ class RTFTowxRichTextCtrlParser:
 
             # Plain Font formatting
             elif cw == "plain":
-                self.SetTxtStyle(fontUnderline = False, fontBold = False, fontItalic = False)
+                self.SetTxtStyle(fontUnderline = False, fontBold = False, fontItalic = False, fontColor = wx.Colour(0, 0, 0))
 
             # PNG graphic format image processing
             elif cw == 'pngblip':
@@ -2026,6 +2239,10 @@ class RTFTowxRichTextCtrlParser:
 
             # Line Spacing
             elif cw == 'sl':
+                # OLD RTF uses "sl" without a number parameter for single spacing.
+                if num is None:
+                    # Single Spacing would be 240 twips, I think.
+                    num = 240
                 # NOTE:  The wxRichTextCtrl has limited line spacing options.
                 # Double Spacing is 3 lines per inch, or 480 twips
                 if num == 480:
@@ -2079,6 +2296,9 @@ class RTFTowxRichTextCtrlParser:
                         self.txtCtrl.Newline()
                     # Otherwise ...
                     else:
+
+                        if num < 0:
+                            num = 65536 + num
                         # ... convert the number to a unicode character ...
                         tempChar = unichr(num)
                         # ... and process the character as text
@@ -2100,15 +2320,22 @@ class RTFTowxRichTextCtrlParser:
  	                # This one catches other unicode characters, such as Chinese characters.  Without this, Chinese doesn't
  	                # import correctly.
  	                else:
-                            # First, look for a backslash and an apostrophe
-                            while (self.buffer[self.index : self.index + 2] == "\\'"):
-                                # Skip those
-                                self.index += 2
-                                # Now look for HEX values ...
-                                while (self.buffer[self.index] in '0123456789ABCDEFabcdef'):
-                                    # ... and skip those as well
+
+                            # First, ignore line breaks and look for a backslash and an apostrophe
+                            while (self.buffer[self.index] in [b'\n', b'\r']) or (self.buffer[self.index : self.index + 2] == "\\'"):
+                                # If we have a line break ...
+                                if self.buffer[self.index] in [b'\n', b'\r']:
+                                    # ... skip it
                                     self.index += 1
-                                
+                                # If we have another backslash and apostrophe ...
+                                else:
+                                    # Skip those characters as REDUNDANT with the Unicode Character just processed
+                                    self.index += 2
+                                    # Now look for HEX values ...
+                                    while (self.buffer[self.index] in '0123456789ABCDEFabcdef'):
+                                        # ... and skip those as well
+                                        self.index += 1
+
                 # If a ValueError is raised ...
                 except ValueError:
                     # Report to the programmer if desired
@@ -2155,7 +2382,7 @@ class RTFTowxRichTextCtrlParser:
             # expshrtn                    Expand characters spaces on line-ending
             # faauto                      Font Alignment - Auto
             # fbidi, fmodern, fnil, froman, fscript, fswiss  Font family specifications.  At this time, I'm only dealing with specific fonts, not families.
-            # fcharset                    Character Set spec.
+            # fcharset                    Character Set (a FONT property?)
             # fcs                         something about complex script
             # fet                         Footnote type
             # flomajor, fdbmajor, fhimajor, fbimajor, flominor, fdbminor, fhiminor, fbiminor     ... ummmmm.
@@ -2171,7 +2398,7 @@ class RTFTowxRichTextCtrlParser:
             # jclisttab
             # jcompress                   Justification compression
             # kerning                     Point size for kerning (0 is off)
-            # lang, langfe                Language settings
+            # langfe                      Language settings
             # langnp, langfenp            Language for a text run
             # lin, rin                    left, right paragraph indent
             # linex                       Distance from line number to left margin
@@ -2332,12 +2559,20 @@ class RTFTowxRichTextCtrlParser:
                     # ... and remove the semicolon
                     self.fontName = self.fontName[:-1]
                 # Add the font number / name combination to the Font Table ...
-                self.fontTable[self.fontNumber] = self.fontName
+                self.fontTable[self.fontNumber] = { "name" : self.fontName.decode(self.fontEncoding), "charset" : self.fontCharSet, 'encoding' : self.fontEncoding }
+
+                if DEBUG3:
+                    print "Font defined 3:", self.fontNumber, self.fontName, self.fontCharSet, self.fontEncoding
+                
                 # ... and clear the font name
                 self.fontName = ''
-
+            # Sometimes the default font might be undefined!  Check that.
+            if self.defaultFontNumber not in self.fontTable.keys():
+                # If not found, just pick the first font!!
+                self.defaultFontNumber = min(self.fontTable.keys())
             # Set the current text attribute to the default font face
-            self.SetTxtStyle(fontFace = self.fontTable[self.defaultFontNumber])
+            self.SetTxtStyle(fontFace = self.fontTable[self.defaultFontNumber]['name'])
+            self.fontEncoding = self.fontTable[self.defaultFontNumber]['encoding']
             # Setting the Basic Style sets the wxRichTextCtrl's default font
             self.txtCtrl.SetBasicStyle(self.txtAttr)
             self.txtCtrl.SetDefaultStyle(self.txtAttr)
@@ -2370,7 +2605,8 @@ class RTFTowxRichTextCtrlParser:
         # If we're in a list specification ...
         if self.in_list:
             # Reset the Font (Added by Che M)
-            self.SetTxtStyle(fontFace = self.fontTable[self.defaultFontNumber])
+            self.SetTxtStyle(fontFace = self.fontTable[self.defaultFontNumber]['name'])
+            self.fontEncoding = self.fontTable[self.defaultFontNumber]['encoding']
             # ... then the list specification is probably over now.
             self.in_list = False
 

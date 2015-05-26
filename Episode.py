@@ -24,8 +24,7 @@ if DEBUG:
 
 # import wxPython
 import wx
-# import MySQLdb (for Date Formatting)
-import MySQLdb
+
 # Import Python's os module
 import os
 # import Python's sys module
@@ -50,6 +49,8 @@ import TransanaConstants
 import TransanaGlobal
 # import Transana's Transcript Object
 import Transcript
+# import Python's datetime module
+import datetime
 
 
 class Episode(DataObject.DataObject):
@@ -67,8 +68,6 @@ class Episode(DataObject.DataObject):
         elif (series != None and episode != None):
             self.db_load_by_name(series, episode)
 
-        
-# Public methods
     def __repr__(self):
         str = 'Episode Object:\n'
         str = str + "Number = %s\n" % self.number
@@ -89,6 +88,24 @@ class Episode(DataObject.DataObject):
             str += '  ' + kw.keywordPair + '\n'
         return str.encode('utf8')
 
+    def __eq__(self, other):
+        """ Object equality check """
+        if other == None:
+            return False
+        else:
+
+##            print "Episode.__eq__():", len(self.__dict__.keys()), len(other.__dict__.keys())
+##            for key in self.__dict__.keys():
+##                print key, self.__dict__[key] == other.__dict__[key],
+##                if self.__dict__[key] != other.__dict__[key]:
+##                    print self.__dict__[key], other.__dict__[key]
+##                else:
+##                    print
+##            print
+            
+            return self.__dict__ == other.__dict__
+        
+# Public methods
 
     def db_load_by_name(self, series, episode):
         """Load a record by ID / Name."""
@@ -104,12 +121,21 @@ class Episode(DataObject.DataObject):
                     a.SeriesNum = b.SeriesNum AND
                     b.SeriesID = %s
         """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Get a database cursor
         c = db.cursor()
         # Execute the query
         c.execute(query, (episode, series))
         # Get the number of rows returned
-        n = c.rowcount
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            # ... so assume one record returned and check later
+            n = 1
+        # If not sqlite ...
+        else:
+            # ... we can use rowcount to know how much data was returned
+            n = c.rowcount
         # If we don't get exactly one result ...
         if (n != 1):
             # Close the cursor
@@ -122,6 +148,14 @@ class Episode(DataObject.DataObject):
         else:
             # Get the data from the cursor
             r = DBInterface.fetch_named(c)
+            # if sqlite and no data is returned ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the cursor ...
+                c.close()
+                # ... clear the Episode object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (episode, 0)
             # Load the data into the Episode object
             self._load_row(r)
             # Load Additional Media Files, which aren't handled in the "old" code
@@ -140,12 +174,21 @@ class Episode(DataObject.DataObject):
             WHERE   EpisodeNum = %s AND
                     a.SeriesNum = b.SeriesNum
         """
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Get a database cursor
         c = db.cursor()
         # Execute the query
-        c.execute(query, num)
+        c.execute(query, (num, ))
         # Get the number of rows returned
-        n = c.rowcount
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            # so assume one record for now
+            n = 1
+        # If not sqlite ...
+        else:
+            # ... we can use rowcount to know the number of records returned
+            n = c.rowcount
         # If we don't get exactly one result ...
         if (n != 1):
             # Close the cursor
@@ -160,6 +203,14 @@ class Episode(DataObject.DataObject):
             r = DBInterface.fetch_named(c)
             # Load the data into the Episode object
             self._load_row(r)
+            # If sqlite and no data is returned ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # .. close the cursor ...
+                c.close()
+                # ... clear the Episode object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (num, 0)
             # Load Additional Media Files, which aren't handled in the "old" code
             self.load_additional_vids()
             # Refresh the Keywords
@@ -167,7 +218,7 @@ class Episode(DataObject.DataObject):
         # Close the Database cursor
         c.close()
 
-    def db_save(self):
+    def db_save(self, use_transactions=True):
         """Save the record to the database using Insert or Update as
         appropriate."""
 
@@ -226,13 +277,13 @@ class Episode(DataObject.DataObject):
                 series_id = self.series_id.encode(TransanaGlobal.encoding)
 
         self._sync_series()
-
+        # Define the fields for an Episode
         fields = ("EpisodeID", "SeriesNum", "MediaFile", "EpLength", \
                         "TapingDate", "EpComment")
-        
+        # Define the values for the Episode
         values = (id, self.series_num, tempMediaFilename, \
                     self.tape_length, self.tape_date_db, comment)
-
+        # Start the Save Process (inherited).  If we have a NEW Episode ...
         if (self._db_start_save() == 0):
             # Duplicate Episode IDs within a Series are not allowed.
             if DBInterface.record_match_count("Episodes2", \
@@ -255,6 +306,7 @@ class Episode(DataObject.DataObject):
             for value in values:
                 query = "%s%%s," % query
             query = query[:-1] + ')'
+        # If we have an existing Episode ...
         else:
             # check for dupes
             if DBInterface.record_match_count("Episodes2", \
@@ -278,13 +330,16 @@ class Episode(DataObject.DataObject):
                 WHERE EpisodeNum = %s
             """
             values = values + (self.number,)
-
+        # Get a database cursor
         c = DBInterface.get_db().cursor()
-
-        c.execute('BEGIN')
-        
+        # If we're using transactions, start the transaction
+        if use_transactions:
+            c.execute('BEGIN')
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Execute the query
         c.execute(query, values)
-
+        # If this is a new Episode (doesn't yet know its own record number) ...
         if self.number == 0:
             numberChanged = True
             # If we are dealing with a brand new Episode, it does not yet know its
@@ -295,13 +350,15 @@ class Episode(DataObject.DataObject):
                       WHERE EpisodeID = %s AND
                             SeriesNum = %s
                     """
+            # Adjust the query for sqlite if needed
+            query = DBInterface.FixQuery(query)
             tempDBCursor = DBInterface.get_db().cursor()
             tempDBCursor.execute(query, (id, self.series_num))
-            if tempDBCursor.rowcount == 1:
-                self.number = tempDBCursor.fetchone()[0]
+            data = tempDBCursor.fetchall()
+            if len(data) == 1:
+                self.number = data[0][0]
             else:
-                c.execute('ROLLBACK')
-                raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
+                raise RecordNotFoundError, (self.id, len(data))
             tempDBCursor.close()
         else:
             numberChanged = False
@@ -311,11 +368,15 @@ class Episode(DataObject.DataObject):
 
         # To save the additional video file names, we must first delete them from the database!
         # Craft a query to remove all existing Additonal Videos
-        query = "DELETE FROM AdditionalVids2 WHERE EpisodeNum = %d" % self.number
+        query = "DELETE FROM AdditionalVids2 WHERE EpisodeNum = %s"
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Execute the query
-        c.execute(query)
+        c.execute(query, (self.number, ))
         # Define the query to insert the additional media files into the databse
         query = "INSERT INTO AdditionalVids2 (EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio) VALUES (%s, %s, %s, %s, %s, %s)"
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # For each additional media file ...
         for vid in self.additional_media_files:
             # Encode the filename
@@ -350,8 +411,9 @@ class Episode(DataObject.DataObject):
             if numberChanged:
                 # ... change it back to zero!!
                 self.number = 0
-            # Undo the database save transaction
-            c.execute('ROLLBACK')
+            if use_transactions:
+                # Undo the database save transaction
+                c.execute('ROLLBACK')
             # Close the Database Cursor
             c.close()
             # Complete the error prompt
@@ -361,8 +423,9 @@ class Episode(DataObject.DataObject):
             raise SaveError, prompt
         # If there's no error prompt ...
         else:
-            # ... Commit the database transaction
-            c.execute('COMMIT')
+            if use_transactions:
+                # ... Commit the database transaction
+                c.execute('COMMIT')
             # Close the Database Cursor
             c.close()
             
@@ -406,15 +469,17 @@ class Episode(DataObject.DataObject):
 
             if result:
                 # Craft a query to remove all existing Additonal Videos
-                query = "DELETE FROM AdditionalVids2 WHERE EpisodeNum = %d" % self.number
+                query = "DELETE FROM AdditionalVids2 WHERE EpisodeNum = %s"
+                # Adjust the query for sqlite if needed
+                query = DBInterface.FixQuery(query)
                 # Execute the query
-                c.execute(query)
+                c.execute(query, (self.number, ))
 
-
+                
 
             # We need a user confirmation when Snapshot will be orphaned.
 
-
+            
 
             # Snapshots with this Episode number need to be cleared.
             # This must be done LAST, after everything else.
@@ -518,8 +583,10 @@ class Episode(DataObject.DataObject):
         c = db.cursor()
         # Define the DB Query
         query = "SELECT MediaFile, VidLength, Offset, Audio FROM AdditionalVids2 WHERE EpisodeNum = %s ORDER BY AddVidNum"
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
         # Execute the query
-        c.execute(query, self.number)
+        c.execute(query, (self.number, ))
         # For each video in the query results ...
         for (vidFilename, vidLength, vidOffset, audio) in c.fetchall():
             # Detection of the use of the Video Root Path is platform-dependent and must be done for EACH filename!
@@ -632,14 +699,21 @@ class Episode(DataObject.DataObject):
             return "%02d/%02d/%s" % (self._td.month, self._td.day, self._td.year)
     def _set_td(self, td):
         # Although _dc_date is a MySQLdb.DateTime object, Date will be presented for ingestion as a 'MM/DD/YYYY' string!
+        # sqlite will present the date as a unicode object in YYYY/MM/DD format.
         # A None Object or a blank string should set _dc_date to None
-        if (td == '') or (td == None) or (td == u'  /  /    '):
+
+        if td is None:
+            self._td = None
+        elif (td == '') or (td == u'None') or (td == u'  /  /    '):
             self._td = None
         else:
             try:
                 # A 'MM/DD/YYYY' string needs to be parsed.
                 if isinstance(td, types.StringTypes):
-                    (month, day, year) = td.split('/')
+                    if td[4] == '/' and td[7] == '/':
+                        (year, month, day) = td.split('/')
+                    else:
+                        (month, day, year) = td.split('/')
                     # The wxMaskedTextCtrl returns '  /  /    ' if left empty.
                     # We need to convert the Month into an Integer, setting it to 1 if empty
                     if month.strip() == '':
@@ -659,7 +733,7 @@ class Episode(DataObject.DataObject):
                     # if all values were empty or bogus, set _dc_date to None, but if we have SOMETHING to save,
                     # save it.
                     if (year != 0) or (month != 0) or (day != 0):
-                        self._td = MySQLdb.Date(int(year), int(month), int(day))
+                        self._td = datetime.date(int(year), int(month), int(day))
                     else:
                         self._td = None
                 # If we get a non-string argument, just save it.  
@@ -672,6 +746,7 @@ class Episode(DataObject.DataObject):
                 else:
                     prompt = _('Date Format Error.  The Date must be in the format MM/DD/YYYY.\n%s')
                 raise SaveError, prompt % sys.exc_info()[1]
+
     def _del_td(self):
         self._td = None
         

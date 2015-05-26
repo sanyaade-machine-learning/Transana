@@ -51,6 +51,7 @@ class ProcessSearch(object):
 
         # Note the Database Tree that accepts Search Results
         self.dbTree = dbTree
+        self.collectionList = []
         # If kwg and kw are None, we are doing a regular (full) search.
         if ((kwg == None) or (kw == None)) and (searchTerms == None):
             # Create the Search Dialog Box
@@ -64,6 +65,13 @@ class ProcessSearch(object):
                 # Search Name is required.  If it was eliminated, put it back!
                 if searchName == '':
                     searchName = _("Search") + " %s" % searchCount
+
+                # Get the Collections Tree from the Search Form
+                collTree = dlg.ctcCollections
+                # Get the Collections Tree's Root Node
+                collNode = collTree.GetRootItem()
+                # Get a list of all the Checked Collections in the Collections Tree
+                self.collectionList = dlg.GetCollectionList(collTree, collNode, True)
                 # ... and get the search terms from the dialog
                 searchTerms = dlg.searchQuery.GetValue().split('\n')
                 # Get the includeEpisodes info
@@ -148,8 +156,10 @@ class ProcessSearch(object):
                 dbCursor = DBInterface.get_db().cursor()
 
                 if includeEpisodes:
+                    # Adjust query for sqlite, if needed
+                    episodeQuery = DBInterface.FixQuery(episodeQuery)
                     # Execute the Series/Episode query
-                    dbCursor.execute(episodeQuery, params)
+                    dbCursor.execute(episodeQuery, tuple(params))
 
                     # Process the results of the Series/Episode query
                     for line in DBInterface.fetchall_named(dbCursor):
@@ -175,6 +185,8 @@ class ProcessSearch(object):
                             self.dbTree.add_Node('SearchEpisodeNode', nodeList, tempEpisode.number, tempSeries.number)
 
                 if includeClips:
+                    # Adjust query for sqlite, if needed
+                    clipQuery = DBInterface.FixQuery(clipQuery)
                     # Execute the Collection/Clip query
                     dbCursor.execute(clipQuery, params)
 
@@ -207,6 +219,8 @@ class ProcessSearch(object):
                         self.dbTree.add_Node('SearchClipNode', nodeList, line['ClipNum'], line['CollectNum'], sortOrder=line['SortOrder'])
 
                 if includeSnapshots:
+                    # Adjust query for sqlite, if needed
+                    wholeSnapshotQuery = DBInterface.FixQuery(wholeSnapshotQuery)
                     # Execute the Whole Snapshot query
                     dbCursor.execute(wholeSnapshotQuery, params)
 
@@ -246,7 +260,8 @@ class ProcessSearch(object):
                         
                         tmpNode = self.dbTree.select_Node(nodeList[:-1], 'SearchCollectionNode', ensureVisible=False)
                         self.dbTree.SortChildren(tmpNode)
-
+                    # Adjust query for sqlite if needed
+                    snapshotCodingQuery = DBInterface.FixQuery(snapshotCodingQuery)
                     # Execute the Snapshot Coding query
                     dbCursor.execute(snapshotCodingQuery, params)
 
@@ -291,6 +306,7 @@ class ProcessSearch(object):
         # If the Search Dialog is cancelled, do NOT increment the Search Number                
         else:
             self.searchCount = searchCount
+
 
     def GetSearchCount(self):
         """ This method is called to determine whether the Search Counter was incremented, that is, whether the
@@ -394,7 +410,8 @@ class ProcessSearch(object):
                 # Please, don't mess with it.
 
                 # Add a line to the SQL "COUNT" statements to indicate the presence or absence of a Keyword Group : Keyword pair
-                countStrings.append("COUNT(CASE WHEN ((CK1.KeywordGroup = %s) AND (CK1.Keyword = %s)) THEN 1 ELSE NULL END) V%s")
+                tempStr2 = "COUNT(CASE WHEN ((CK1.KeywordGroup = %s) AND (CK1.Keyword = %s)) THEN 1 ELSE NULL END) " + "V%s" % tempVarNum
+                countStrings.append(tempStr2)
                 # Add the Keyword Group to the Parameters
                 kwg = tempStr[:tempStr.find(':')]
                 if 'unicode' in wx.PlatformInfo:
@@ -406,7 +423,7 @@ class ProcessSearch(object):
                     kw = kw.encode(TransanaGlobal.encoding)
                 params.append(kw)
                 # Add the Temporary Variable Number that corresponds to this Keyword Group : Keyword pair to the Parameters
-                params.append(tempVarNum)
+#                params.append(tempVarNum)
 
                 # If the "NOT" operator has been specified, we want the Temporary Variable to equal Zero in the "HAVING" clause
                 if notFlag:
@@ -420,6 +437,21 @@ class ProcessSearch(object):
                     havingStr += ')'
                 # Add the appropriate Boolean Operator to the end of the "HAVING" clause, if one was specified
                 havingStr += continStr
+
+        # Before we continue, let's build the part of the query that implements the Collections selections
+        # made on the Collections tab of the Search Form
+
+        if len(self.collectionList) > 0:
+            paramsCl = ()
+            paramsSn = ()
+            collectionSQL = ' AND ('
+            for coll in self.collectionList:
+                collectionSQL += "(%%s.CollectNum = %d) " % coll[0]
+                if coll != self.collectionList[-1]:
+                    collectionSQL += "or "
+                paramsCl+= ('Cl',)
+                paramsSn += ('Sn',)
+            collectionSQL += ") "
 
         # Now that all the pieces (countStrings, params, and the havingStr) are assembled, we can build the
         # SQL Statements for the searches.
@@ -456,7 +488,7 @@ class ProcessSearch(object):
         episodeSQL += 'WHERE (Ep.EpisodeNum = CK1.EpisodeNum) AND '
         episodeSQL += '(Ep.SeriesNum = Se.SeriesNum) AND '
         episodeSQL += '(CK1.EpisodeNum > 0) '
-        episodeSQL += 'GROUP BY SeriesNum, SeriesID, EpisodeNum, EpisodeID '
+        episodeSQL += 'GROUP BY Ep.SeriesNum, SeriesID, Ep.EpisodeNum, EpisodeID '
         # Add in the SQL "HAVING" Clause that was constructed above
         episodeSQL += 'HAVING %s ' % havingStr
 
@@ -465,6 +497,8 @@ class ProcessSearch(object):
         clipSQL += 'WHERE (Cl.ClipNum = CK1.ClipNum) AND '
         clipSQL += '(Cl.CollectNum = Co.CollectNum) AND '
         clipSQL += '(CK1.ClipNum > 0) '
+        if len(self.collectionList) > 0:
+            clipSQL += collectionSQL % paramsCl
         clipSQL += 'GROUP BY Cl.CollectNum, CollectID, ClipID '
         # Add in the SQL "HAVING" Clause that was constructed above
         clipSQL += 'HAVING %s ' % havingStr
@@ -476,6 +510,8 @@ class ProcessSearch(object):
         wholeSnapshotSQL += 'WHERE (Sn.SnapshotNum = CK1.SnapshotNum) AND '
         wholeSnapshotSQL += '(Sn.CollectNum = Co.CollectNum) AND '
         wholeSnapshotSQL += '(CK1.SnapshotNum > 0) '
+        if len(self.collectionList) > 0:
+            wholeSnapshotSQL += collectionSQL % paramsSn
         wholeSnapshotSQL += 'GROUP BY Sn.CollectNum, CollectID, SnapshotID '
         # Add in the SQL "HAVING" Clause that was constructed above
         wholeSnapshotSQL += 'HAVING %s ' % havingStr
@@ -489,31 +525,33 @@ class ProcessSearch(object):
         snapshotCodingSQL += '(CK1.SnapshotNum > 0) '
         # For Snapshot Coding, we ONLY want VISIBLE Keywords
         snapshotCodingSQL += 'AND (CK1.Visible = 1) '
+        if len(self.collectionList) > 0:
+            snapshotCodingSQL += collectionSQL % paramsSn
         snapshotCodingSQL += 'GROUP BY Sn.CollectNum, CollectID, SnapshotID '
         # Add in the SQL "HAVING" Clause that was constructed above
         snapshotCodingSQL += 'HAVING %s ' % havingStr
         # Add an "ORDER BY" Clause to preserve Snapshot Sort Order
         snapshotCodingSQL += 'ORDER BY CollectID, SortOrder'
 
-        # tempParams = ()
-        # for p in params:
-        #     tempParams = tempParams + (p,)
+#        tempParams = ()
+#        for p in params:
+#            tempParams = tempParams + (p,)
             
         # dlg = wx.TextEntryDialog(None, "Transana Series/Episode SQL Statement:", "Transana", episodeSQL % tempParams, style=wx.OK)
         # dlg.ShowModal()
         # dlg.Destroy()
 
-        # dlg = wx.TextEntryDialog(None, "Transana Collection/Clip SQL Statement:", "Transana", clipSQL % tempParams, style=wx.OK)
-        # dlg.ShowModal()
-        # dlg.Destroy()
+#        dlg = wx.TextEntryDialog(None, "Transana Collection/Clip SQL Statement:", "Transana", clipSQL % tempParams, style=wx.OK)
+#        dlg.ShowModal()
+#        dlg.Destroy()
 
-        # dlg = wx.TextEntryDialog(None, "Transana Whole Snapshot SQL Statement:", "Transana", wholeSnapshotSQL % tempParams, style=wx.OK)
-        # dlg.ShowModal()
-        # dlg.Destroy()
+#        dlg = wx.TextEntryDialog(None, "Transana Whole Snapshot SQL Statement:", "Transana", wholeSnapshotSQL % tempParams, style=wx.OK)
+#        dlg.ShowModal()
+#        dlg.Destroy()
 
-        # dlg = wx.TextEntryDialog(None, "Transana Snapshot Coding SQL Statement:", "Transana", snapshotCodingSQL % tempParams, style=wx.OK)
-        # dlg.ShowModal()
-        # dlg.Destroy()
+#        dlg = wx.TextEntryDialog(None, "Transana Snapshot Coding SQL Statement:", "Transana", snapshotCodingSQL % tempParams, style=wx.OK)
+#        dlg.ShowModal()
+#        dlg.Destroy()
 
         # Return the Series/Episode Query, the Collection/Clip Query, the Whole Snapshot Query, the Snapshot Coding Query, 
         # and the list of parameters to use with these queries to the calling routine.

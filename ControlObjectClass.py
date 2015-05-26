@@ -73,6 +73,8 @@ else:
 import os
 # import Python's sys module
 import sys
+# Import Python's fast cPickle module
+import cPickle
 # import Python's pickle module
 import pickle
 
@@ -198,7 +200,10 @@ class ControlObject(object):
             this method should be called so that all Transana Objects are set appropriately. """
         # Before we do anything else, let's save the current transcript if it's been modified.
         if self.TranscriptWindow[self.activeTranscript].TranscriptModified():
-            self.SaveTranscript(1, cleardoc=1)
+            if TransanaConstants.partialTranscriptEdit:
+                self.SaveTranscript(1, cleardoc=1, continueEditing=False)
+            else:
+                self.SaveTranscript(1, cleardoc=1)
         # activeTranscript 0 signals we should reset everything in the interface!
         if self.activeTranscript == 0:
             clearAll = True
@@ -305,7 +310,10 @@ class ControlObject(object):
             this method should be called so that all Transana Objects are set appropriately. """
         # Before we do anything else, let's save the current transcript if it's been modified.
         if self.TranscriptWindow[self.activeTranscript].TranscriptModified():
-            self.SaveTranscript(1, cleardoc=1)
+            if TransanaConstants.partialTranscriptEdit:
+                self.SaveTranscript(1, cleardoc=1, continueEditing=False)
+            else:
+                self.SaveTranscript(1, cleardoc=1)
         # Set Active Transcript to 0 to signal close of all existing secondary Transcript Windows
         self.activeTranscript = 0
         # Clear all Windows
@@ -506,6 +514,23 @@ class ControlObject(object):
         # Return the Return values
         return values
 
+    def UpdateWindowMenu(self, oldSnapshotName, oldSnapshotNumber, newSnapshotName, newSnapshotNumber):
+        """ Update all Window Menus when a Snapshot Window changes Snapshots through Prev / Next buttons """
+        # See if the NEW window is already open somewhere
+        if self.SelectSnapshotWindow(newSnapshotName, newSnapshotNumber):
+            # If so, iterate through the open Snapshot Windows ...
+            for win in self.SnapshotWindows:
+                # If this Snapshot Window matches the one we're trying to open ...
+                if (win.obj.id == newSnapshotName) and (win.obj.number == newSnapshotNumber):
+                    # ... then close it!  (This will save unsaved edits!
+                    win.Close()
+        # Iterate through the open Snapshot Windows ...
+        for win in self.SnapshotWindows:
+            # ... and trigger an update to their MenuWindows
+            win.UpdateWindowMenuItem(oldSnapshotName, oldSnapshotNumber, newSnapshotName, newSnapshotNumber)
+        # Update the MenuWindow's Windows Menu
+        self.MenuWindow.UpdateWindowMenuItem(oldSnapshotName, oldSnapshotNumber, newSnapshotName, newSnapshotNumber)
+
     def ShowNotesBrowser(self):
         """ Bring the Notes Browser to the front """
         # Raise the Notes Browser Window to the top
@@ -649,7 +674,10 @@ class ControlObject(object):
             prevActiveTranscript = self.activeTranscript - 1
         # Before we do anything else, let's save the current transcript if it's been modified.
         if self.TranscriptWindow[transcriptNum].TranscriptModified():
-            self.SaveTranscript(1, cleardoc=1)
+            if TransanaConstants.partialTranscriptEdit:
+                self.SaveTranscript(1, cleardoc=1, continueEditing=False)
+            else:
+                self.SaveTranscript(1, cleardoc=1)
         if transcriptNum == 0:
             (left, top) = self.TranscriptWindow[0].dlg.GetPositionTuple()
             self.TranscriptWindow[1].dlg.SetPosition(wx.Point(left, top))
@@ -738,7 +766,10 @@ class ControlObject(object):
         # Let's stop the media from playing
         self.VideoWindow.Stop()
         # Prompt for save if transcript modifications exist
-        self.SaveTranscript(1)
+        if TransanaConstants.partialTranscriptEdit:
+            self.SaveTranscript(1, continueEditing=False)
+        else:
+            self.SaveTranscript(1)
         if resetMultipleTranscripts:
             self.activeTranscript = 0
         # Reset the ControlObject's TranscriptNum
@@ -775,7 +806,10 @@ class ControlObject(object):
             # While there are additional Transcript windows open ...
             while len(self.TranscriptWindow) > 1:
                 # Save the transcript
-                self.SaveTranscript(1, transcriptToSave=len(self.TranscriptWindow) - 1)
+                if TransanaConstants.partialTranscriptEdit:
+                    self.SaveTranscript(1, transcriptToSave=len(self.TranscriptWindow) - 1, continueEditing=False)
+                else:
+                    self.SaveTranscript(1, transcriptToSave=len(self.TranscriptWindow) - 1)
                 
                 # Clear Transcript Window
                 self.TranscriptWindow[len(self.TranscriptWindow) - 1].ClearDoc()
@@ -809,7 +843,7 @@ class ControlObject(object):
         # set the active transcript to 0 so multiple transcript will be cleared
         self.activeTranscript = 0
         # Clear all existing Data
-        self.ClearAllWindows()
+        self.ClearAllWindows()  
         # Close all Snapshot Windows
         self.CloseAllImages()
         # Close all Reports
@@ -821,7 +855,8 @@ class ControlObject(object):
         # Close the existing database connection
         DBInterface.close_db()
         # Reset the global encoding to UTF-8 if the Database supports it
-        if TransanaGlobal.DBVersion >= u'4.1':
+        if (TransanaGlobal.DBVersion >= u'4.1') or \
+           (not TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']):
             TransanaGlobal.encoding = 'utf8'
         # Otherwise, if we're in Russian, change the encoding to KOI8r
         elif TransanaGlobal.configData.language == 'ru':
@@ -874,6 +909,7 @@ class ControlObject(object):
                 # ... start the Connection Timer.  This attempts to prevent the "Connection to Database Lost" error by
                 # running a very small query every 10 minutes.  See Transana.py.
                 TransanaGlobal.connectionTimer.Start(600000)
+
         # If the Database Connection fails ...
         if not loggedOn:
             # ... Close Transana
@@ -2275,12 +2311,15 @@ class ControlObject(object):
             # ... resize the video window.  This will trigger changes in all the other windows as appropriate.
             self.VideoWindow.OnSizeChange()
 
-    def SaveTranscript(self, prompt=0, cleardoc=0, transcriptToSave=-1):
-        """Save the Transcript to the database if modified.  If prompt=1,
-        prompt the user to confirm the save.  Return 1 if Transcript was
-        saved or unchanged, and 0 if user chose to discard changes.  If
-        cleardoc=1, then the transcript will be cleared if the user chooses
-        to not save."""
+    def SaveTranscript(self, prompt=0, cleardoc=0, transcriptToSave=-1, continueEditing=True):
+        """Save the Transcript to the database if modified.
+
+           If prompt=1, prompt the user to confirm the save.
+           If cleardoc=1, then the transcript will be cleared if the user chooses to not save.
+           transcriptToSave indicates which of multiple transcripts should be saved, or -1 to save the active transcript.
+           continueEditing is only applicable for Partial Transcript Editing.
+
+           Return 1 if Transcript was saved or unchanged, and 0 if user chose to discard changes.  """
         # NOTE:  When the user presses their response to dlg below, it can shift the focus if there are multiple
         #        transcript windows open!  Therefore, remember which transcript we're working on now.
         if transcriptToSave == -1:
@@ -2304,7 +2343,10 @@ class ControlObject(object):
             
             if result == wx.ID_YES:
                 try:
-                    self.TranscriptWindow[transcriptToSave].SaveTranscript()
+                    if TransanaConstants.partialTranscriptEdit:
+                        self.TranscriptWindow[transcriptToSave].SaveTranscript(continueEditing=continueEditing)
+                    else:
+                        self.TranscriptWindow[transcriptToSave].SaveTranscript()
                     return 1
                 except TransanaExceptions.SaveError, e:
                     dlg = Dialogs.ErrorDialog(None, e.reason)
@@ -2317,19 +2359,35 @@ class ControlObject(object):
                 if cleardoc:
                     self.TranscriptWindow[transcriptToSave].ClearDoc()
                 return 0
+        # If the transcript has NOT been changed since the last save ...
+        else:
+            # ... and we are NOT going to continue editing it ...
+            if TransanaConstants.partialTranscriptEdit and (not continueEditing):
+                # ... then we need to update the contents of the editor control, restoring missing transcript lines.
+                self.TranscriptWindow[transcriptToSave].dlg.editor.UpdateCurrentContents('LeaveEditMode')
         return 1
 
     def SaveTranscriptAs(self):
         """Export the Transcript to an RTF file."""
+        # If we're using a Right-To-Left language ...
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+            # ... we can only export to XML format
+            wildcard = _("XML Format (*.xml)|*.xml")
+        # ... whereas with Left-to-Right languages
+        else:
+            # ... we can export both RTF and XML formats
+            wildcard = _("Rich Text Format (*.rtf)|*.rtf|XML Format (*.xml)|*.xml")
         dlg = wx.FileDialog(None, defaultDir=self.defaultExportDir,
-                            wildcard=_("Rich Text Format (*.rtf)|*.rtf|XML Format (*.xml)|*.xml"), style=wx.SAVE)
+                            wildcard=wildcard, style=wx.SAVE)
         if dlg.ShowModal() == wx.ID_OK:
             # The Default Export Directory should use the last-used value for the session but reset to the
             # video root between sessions.
             self.defaultExportDir = dlg.GetDirectory()
             fname = dlg.GetPath()
             # Mac doesn't automatically append the file extension.  Do it if necessary.
-            if (dlg.GetFilterIndex() == 0) and (not fname.upper().endswith(".RTF")):
+            if (TransanaGlobal.configData.LayoutDirection != wx.Layout_RightToLeft) and \
+               (dlg.GetFilterIndex() == 0) and \
+               (not fname.upper().endswith(".RTF")):
                 fname += '.rtf'
             elif (dlg.GetFilterIndex() == 1) and (not fname.upper().endswith(".XML")):
                 fname += '.xml'
@@ -2423,7 +2481,7 @@ class ControlObject(object):
                 prompt = unicode(_("Do you want to add the new keywords to all clips created from Episode %s?"), 'utf8')
                 data = (tmpEpisode.id,)
             # ... build a dialog to prompt the user about adding them to Clips
-            tmpDlg = Dialogs.QuestionDialog(self.MenuWindow, prompt % data,
+            tmpDlg = Dialogs.QuestionDialog(None, prompt % data,
                                             _("Episode Keyword Propagation"), noDefault = True)
             # Prompt the user.  If the user says YES ...
             if tmpDlg.LocalShowModal() == wx.ID_YES:
@@ -2512,14 +2570,16 @@ class ControlObject(object):
             # If we have a transcript window other than the identified one ...
             if trWin.transcriptWindowNumber != transcriptWindowNumber:
                 # ... highlight the full text of the video selection
-                trWin.dlg.editor.scroll_to_time(start)
+                # If I don't use a time ever so slightly earlier than start, the first time-coded segment of the
+                # selection is left out!!
+                trWin.dlg.editor.scroll_to_time(start - 2)
                 trWin.dlg.editor.select_find(str(end))
                 # Check for time codes at the selection boundaries
                 trWin.dlg.editor.CheckTimeCodesAtSelectionBoundaries()
                 
             # Once selections are set (later), update the Selection Text
             wx.CallLater(200, self.UpdateSelectionTextLater, trWin.transcriptWindowNumber)
-                
+
     def MultiPlay(self):
         """ Play the current video based on selections in multiple transcripts """
         # Save the cursors for all transcripts (!)
@@ -2585,39 +2645,143 @@ class ControlObject(object):
             # ... then refresh the Tab
             self.DataWindow.KeywordsTab.Refresh()
 
-    def CreateQuickClip(self):
-        """ Trigger the creation of a Quick Clip from outside of the Database Tree """
+    def UpdateSSLStatus(self, sslValue):
+        """ Update the SSL Status of Transana """
+        self.DataWindow.UpdateSSLStatus(sslValue)
+
+    def CreateTranscriptlessClip(self):
+        """ Trigger the creation of a  Clip without a transcript from outside of the Daabase Tree.
+            If a single Collection is selected in the Database Tree, a Standard Clip will be created.
+            If one or more Keyword records are selected in the Database Tree, a Quick Clip will be created. """
+        # Get the list of selected Nodes in the Database Tree
+        dbTreeSelections = self.DataWindow.DBTab.GetSelectedNodeInfo()
+
+        # If the selection list has ONE Collection, we are creating a Transcript-less Standard Clip
+        if (len(dbTreeSelections) == 1) and (dbTreeSelections[0][3] == 'CollectionNode'):
+
+            # We also need to know the number of the original Transcript Record
+            if self.TranscriptWindow[self.activeTranscript].dlg.editor.TranscriptObj.clip_num == 0:
+                # If we have an Episode Transcript, we need the Transcript Number
+                transcriptNum = self.TranscriptWindow[self.activeTranscript].dlg.editor.TranscriptObj.number
+            else:
+                # If we have a Clip Transcript, we need the original Transcript Number, not the Clip Transcript Number.
+                # We can get that from the ControlObject's "currentObj", which in this case will be the Clip!
+                transcriptNum = self.currentObj.transcripts[self.activeTranscript].source_transcript
+
+            # If our source is an Episode ...
+            if isinstance(self.currentObj, Episode.Episode):
+                # ... we can just use the ControlObject's currentObj's object number
+                episodeNum = self.currentObj.number
+            # If our source is a Clip ...
+            elif isinstance(self.currentObj, Clip.Clip):
+                # ... we need the ControlObject's currentObj's originating episode number
+                episodeNum = self.currentObj.episode_num
+
+            # The Clip's Start and End times can be obtained from the Video Start Point and Video End Point,
+            # which were set by creating the selection in the Waveform.
+            startTime = self.GetVideoStartPoint()
+            endTime = self.GetVideoEndPoint()
+            # Since this is by definition transcript-less, we won't have a transcript.  However, we use this
+            # to signal that we are intentionally leaving the transcript blank.
+            text = u'<(transcript-less clip)>'
+
+            # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
+            clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, text, videoCheckboxData=self.GetVideoCheckboxDataForClips(startTime))
+
+            # let's convert that object into a portable string using cPickle. (cPickle is faster than Pickle.)
+            pdata = cPickle.dumps(clipData, 1)
+            # Create a CustomDataObject with the format of the ClipDragDropData Object
+            cdo = wx.CustomDataObject(wx.CustomDataFormat("ClipDragDropData"))
+            # Put the pickled data object in the wxCustomDataObject
+            cdo.SetData(pdata)
+
+            # Open the Clipboard
+            wx.TheClipboard.Open()
+            # ... then copy the data to the clipboard!
+            wx.TheClipboard.SetData(cdo)
+            # Close the Clipboard
+            wx.TheClipboard.Close()
+
+            # Now we can create the Standard Clip by triggering the DataWindow's add_clip method as if we'd dropped a
+            # selection on the selected Collection
+            self.DataWindow.DBTab.add_clip(dbTreeSelections[0][1])
+
+        # If we have one or more selections that are Keywords ...
+        elif (len(dbTreeSelections) > 0) and (dbTreeSelections[0][3] == 'KeywordNode'):
+            # ... we can create a Quick Clip, using "transcriptless" mode
+            self.CreateQuickClip(transcriptless=True)
+        # If neither of these conditions applies ...
+        else:
+            # ... create an error message
+            msg = _("You must select one Collection in the Data Tree to create a Transcript-less Standard Clip,") + \
+                  '\n' + _("or select one or more Keywords in the Data Tree to create a Transcript-less Quick Clip.")
+            if 'unicode' in wx.PlatformInfo:
+                msg = unicode(msg, 'utf8')
+            # Display the error message and then clean up.
+            dlg = Dialogs.ErrorDialog(None, msg)
+            dlg.ShowModal()
+            dlg.Destroy()
+
+    def CreateQuickClip(self, transcriptless=False):
+        """ Trigger the creation of a Quick Clip from outside of the Database Tree.
+            The "transcriptless" parameter will be True if triggered from the Visualization Window, but will be
+            left off otherwise. """
 
         # Get the list of selected Nodes in the Database Tree
         dbTreeSelections = self.DataWindow.DBTab.GetSelectedNodeInfo()
 
         # The selection list must not be empty , and Keywords MUST be selected, or we don't know what keyword to base the Quick Clip on
         if (len(dbTreeSelections) > 0) and (dbTreeSelections[0][3] == 'KeywordNode'):
-            # Get the Transcript Selection information from the ControlObject, since we can't communicate with the
-            # TranscriptEditor directly.
-            (transcriptNum, startTime, endTime, text) = self.GetTranscriptSelectionInfo()
-            # Initialize the Episode Number to 0
-            episodeNum = 0
-            # If our source is an Episode ...
-            if isinstance(self.currentObj, Episode.Episode):
-                # ... we can just use the ControlObject's currentObj's object number
-                episodeNum = self.currentObj.number
-                # If we are at the end of a transcript and there are no later time codes, Stop Time will be -1.
-                # This is, of course, incorrect, and we must replace it with the Episode Length.
-                if endTime <= 0:
-                    endTime = self.VideoWindow.GetMediaLength()
-            # If our source is a Clip ...
-            elif isinstance(self.currentObj, Clip.Clip):
-                # ... we need the ControlObject's currentObj's originating episode number
-                episodeNum = self.currentObj.episode_num
-                # Sometimes with a clip, we get a startTime of 0 from the TranscriptSelectionInfo() method.
-                # This is, of course, incorrect, and we must replace it with the Clip Start Time.
-                if startTime == 0:
-                    startTime = self.currentObj.clip_start
-                # Sometimes with a clip, we get an endTime of 0 from the TranscriptSelectionInfo() method.
-                # This is, of course, incorrect, and we must replace it with the Clip Stop Time.
-                if endTime <= 0:
-                    endTime = self.currentObj.clip_stop
+            if not transcriptless:
+                # Get the Transcript Selection information from the ControlObject, since we can't communicate with the
+                # TranscriptEditor directly.
+                (transcriptNum, startTime, endTime, text) = self.GetTranscriptSelectionInfo()
+                # Initialize the Episode Number to 0
+                episodeNum = 0
+                # If our source is an Episode ...
+                if isinstance(self.currentObj, Episode.Episode):
+                    # ... we can just use the ControlObject's currentObj's object number
+                    episodeNum = self.currentObj.number
+                    # If we are at the end of a transcript and there are no later time codes, Stop Time will be -1.
+                    # This is, of course, incorrect, and we must replace it with the Episode Length.
+                    if endTime <= 0:
+                        endTime = self.VideoWindow.GetMediaLength()
+                # If our source is a Clip ...
+                elif isinstance(self.currentObj, Clip.Clip):
+                    # ... we need the ControlObject's currentObj's originating episode number
+                    episodeNum = self.currentObj.episode_num
+                    # Sometimes with a clip, we get a startTime of 0 from the TranscriptSelectionInfo() method.
+                    # This is, of course, incorrect, and we must replace it with the Clip Start Time.
+                    if startTime == 0:
+                        startTime = self.currentObj.clip_start
+                    # Sometimes with a clip, we get an endTime of 0 from the TranscriptSelectionInfo() method.
+                    # This is, of course, incorrect, and we must replace it with the Clip Stop Time.
+                    if endTime <= 0:
+                        endTime = self.currentObj.clip_stop
+            else:
+
+                # We also need to know the number of the original Transcript Record
+                if self.TranscriptWindow[self.activeTranscript].dlg.editor.TranscriptObj.clip_num == 0:
+                    # If we have an Episode Transcript, we need the Transcript Number
+                    transcriptNum = self.TranscriptWindow[self.activeTranscript].dlg.editor.TranscriptObj.number
+                else:
+                    # If we have a Clip Transcript, we need the original Transcript Number, not the Clip Transcript Number.
+                    # We can get that from the ControlObject's "currentObj", which in this case will be the Clip!
+                    transcriptNum = self.currentObj.transcripts[self.activeTranscript].source_transcript
+
+                # If our source is an Episode ...
+                if isinstance(self.currentObj, Episode.Episode):
+                    # ... we can just use the ControlObject's currentObj's object number
+                    episodeNum = self.currentObj.number
+                # If our source is a Clip ...
+                elif isinstance(self.currentObj, Clip.Clip):
+                    # ... we need the ControlObject's currentObj's originating episode number
+                    episodeNum = self.currentObj.episode_num
+
+                startTime = self.GetVideoStartPoint()
+                endTime = self.GetVideoEndPoint()
+                text = u'<(transcript-less clip)>'
+
             # We now have enough information to populate a ClipDragDropData object to pass to the Clip Creation method.
             clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, videoCheckboxData=self.GetVideoCheckboxDataForClips(startTime))
 

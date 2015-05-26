@@ -773,7 +773,8 @@ class DatabaseTreeTab(wx.Panel):
             collection.db_save()
  
     def add_clip(self, collection_id):
-        """User interface for adding a Clip to a Collection."""
+        """ User interface for adding a Clip to a Collection. """
+
         # Identify the selected Tree Node and its accompanying data
         sel = self.tree.GetSelections()[0]
         selData = self.tree.GetPyData(sel)
@@ -1999,6 +2000,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                              self.cmd_id_start["SearchSnapshotNode"] + 1]:
             # If "Cut" or "Copy", get the selected item from cutCopyInfo
             sel_item = self.cutCopyInfo['sourceItem']
+            # Reset the DragAndDropObjects' YESTOALL variable, which should no longer indicate that Yes To All has been pressed!
+            DragAndDropObjects.YESTOALL = False
             
         # If this method is not triggered by a "Cut" or "Copy" request, it was fired by the initiation of a Drag.
         else:
@@ -2174,7 +2177,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         elif TransanaGlobal.configData.ssl:
             self.set_image(self.root, "db_locked")
         else:
-            self.set_image(self.root, "db_unlocked")            
+            self.set_image(self.root, "db_unlocked")
         nodedata = _NodeData(nodetype='Root')                    # Identify this as the Root node
         self.SetPyData(self.root, nodedata)                      # Associate this data with the node
       
@@ -2478,7 +2481,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # NOTE:  This would be more efficient if the DBInterface.list_of_keyword_examples() method passed all necessary
         #        information from the database rather than requiring that we load each Clip to determine its ID and parent
         #        Collection.  However, I suspect that Keyword Examples are rare enough that it's not a major issue.
-        
+
         # Iterate through the examples
         for (episodeNum, clipNum, snapshotNum, kwg, kw, example) in keywordExamples:
             # Load the indicated clip.  We can speed the load by not loading the Clip Transcript(s)
@@ -3590,7 +3593,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
         tmpMenu = (_("Cut"), _("Copy"), _("Paste"),
                    _("Add Clip"))
         if TransanaConstants.proVersion:
-            tmpMenu += (_("Add Multi-transcript Clip"), _("Add Snapshot"),)
+            tmpMenu += (_("Add Multi-transcript Clip"), _("Add Snapshot"), _("Batch Snapshot Creation"))
         tmpMenu += (_("Add Nested Collection"), _("Add Collection Note"), _("Delete Collection"),
                     _("Collection Report"), _("Collection Keyword Map"), _("Clip Data Export"), _("Play All Clips"),
                     _("Collection Properties"))
@@ -4834,9 +4837,9 @@ class _DBTreeCtrl(wx.TreeCtrl):
         """Handle menu selections for Collection objects."""
         n = evt.GetId() - self.cmd_id_start['CollectionNode']
         # If we're in the Standard version, we need to adjust the menu numbers
-        # for Add Multi-transcript Clip (4) and Add Snapshot (5)
+        # for Add Multi-transcript Clip (4), Add Snapshot (5), and Batch Snapshot Creation (6)
         if not TransanaConstants.proVersion and (n >= 4):
-            n += 2
+            n += 3
         
         # Get the list of selected items
         selItems = self.GetSelections()
@@ -5004,6 +5007,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
                 # Add the Clip.
                 self.parent.add_clip(coll_name)
             except:
+                if DEBUG:
+                    print sys.exc_info()[0]
+                    print sys.exc_info()[1]
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
+
                 # Create an error message.
                 msg = _('You must make a selection in a transcript to be able to add a Clip.')
                 errordlg = Dialogs.InfoDialog(None, msg)
@@ -5022,14 +5031,118 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Call the Add Snapshot dialog with the current Collection Number
             self.parent.add_snapshot(coll.number)
 
-        elif n == 6:    # Add Nested Collection
+        elif n == 6:    # Batch Snapshot Creation
+            # ... grab that item ...
+            sel = selItems[0]
+            # ... get tthe item's data ...
+            selData = self.GetPyData(sel)
+            # Load the Collection
+            collection = Collection.Collection(selData.recNum)
+            try:
+                # Lock the Collection to prevent it from being deleted out from under the Batch Snapshot Creation
+                collection.lock_record()
+                collectionLocked = True
+            # Handle the exception if the record is already locked by someone else
+            except RecordLockedError, s:
+                # If we can't get a lock on the Collection, it's really not that big a deal.  We only try to get it
+                # to prevent someone from deleting it out from under us, which is pretty unlikely.  But we should 
+                # still be able to add Snapshots even if someone else is editing the Collection properties.
+                collectionLocked = False
+            # Create a dialog to get a list of media files to be processed
+            fileListDlg = BatchFileProcessor.BatchFileProcessor(self, mode="snapshot")
+            # Show the dialog and get the list of files the user selects
+            fileList = fileListDlg.get_input()
+            # Close the dialog
+            fileListDlg.Close()
+            # Destroy the dialog
+            fileListDlg.Destroy()
+            # If the user pressed OK after selecting some files ...
+            if fileList != None:
+                # If there are more than 10 items in the list ...
+                if len(fileList) > 10:
+                    # ... Create a Progess Dialog ..
+                    progress = wx.ProgressDialog(_("Batch Snapshot Creation"), _("Creating Snapshots"), len(fileList), self)
+                    # ... and a file counter to track progress
+                    fileCount = 0
+                # ... iterate through the file list
+                for filename in fileList:
+                    # If there are more than 10 items in the list ...
+                    if len(fileList) > 10:
+                        # ... update the progress dialog
+                        progress.Update(fileCount)
+                        # ... and increment the file counter
+                        fileCount += 1
+                    # Get the file's path
+                    (path, filenameandext) = os.path.split(filename)
+                    # Get the file's root name and extension
+                    (filenameroot, extension) = os.path.splitext(filenameandext)
+                    # Create a blank Snapshot
+                    tmpSnapshot = Snapshot.Snapshot()
+                    # Name the Episode after the root file name
+                    tmpSnapshot.id = filenameroot
+                    # Assign the image file
+                    tmpSnapshot.image_filename = filename
+                    # Assign the Collection number and name
+                    tmpSnapshot.collection_num = collection.number
+                    tmpSnapshot.collection_id = collection.id
+                    # Determine the Sort Order value
+                    maxSortOrder = DBInterface.getMaxSortOrder(collection.number)
+                    # Set the Sort Order
+                    tmpSnapshot.sort_order = maxSortOrder + 1
+                    # Start exception handling
+                    try:
+                        # Save the new Snapshot.  An exception will be generated if a Snapshot with this name already exists.
+                        tmpSnapshot.db_save()
+
+                        # Build the Node List for the new Snapshot
+                        nodeData = (_('Collections'),) +  tmpSnapshot.GetNodeData(True)
+                        # Add the new Snapshot to the database tree
+                        self.add_Node('SnapshotNode', nodeData, tmpSnapshot.number, collection.number, sortOrder=tmpSnapshot.sort_order)
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            # Create an "Add Snapshot" message
+                            msg = "ASnap %s"
+                            # Build the message details
+                            data = (nodeData[1],)
+                            for nd in nodeData[2:]:
+                                msg += " >|< %s"
+                                data += (nd, )
+                            if DEBUG:
+                                print 'Message to send =', msg % data
+                            # If there's a Chat window ...
+                            if TransanaGlobal.chatWindow != None:
+                                # ... send the message
+                                TransanaGlobal.chatWindow.SendMessage(msg % data)
+
+                    # If a Save Error was generated by the Snapshot ...
+                    except SaveError, e:
+                        # Build an error message
+                        msg = _('Transana was unable to import file "%s"\nduring Batch Snapshot Creation.\nA Snapshot named "%s" already exists.')
+                        # Make it Unicode
+                        if 'unicode' in wx.PlatformInfo:
+                            msg = unicode(msg, 'utf8')
+                        # Show the error message, then clean up.
+                        dlg = Dialogs.ErrorDialog(self, msg % (filename, tmpSnapshot.id))
+                        dlg.ShowModal()
+                        dlg.Destroy()
+
+                # If there are more than 10 items in the list ...
+                if len(fileList) > 10:
+                    # ... destroy the progress dialog
+                    progress.Destroy()
+
+            # Unlock the Collection, if we locked it.
+            if collectionLocked:
+                collection.unlock_record()
+
+        elif n == 7:    # Add Nested Collection
             coll = Collection.Collection(coll_name, parent_num)
             self.parent.add_collection(coll.number)
 
-        elif n == 7:    # Add Note
+        elif n == 8:    # Add Note
             self.parent.add_note(collectionNum=selData.recNum)
 
-        elif n == 8:    # Delete
+        elif n == 9:    # Delete
             if (self.parent.ControlObject.NotesBrowserWindow != None) and TransanaConstants.singleUserVersion:
                 # ... make it visible, on top of other windows
                 self.parent.ControlObject.NotesBrowserWindow.Raise()
@@ -5140,7 +5253,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             errordlg.ShowModal()
                             errordlg.Destroy()
 
-        elif n == 9:    # Collection Report
+        elif n == 10:    # Collection Report
 
             # Get the appropriate collection
             coll = Collection.Collection(coll_name, parent_num)
@@ -5165,15 +5278,15 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                             showNested=True,
                                             showHyperlink=True)
 
-        elif n == 10:    # Collection Keyword Map Report
+        elif n == 11:    # Collection Keyword Map Report
             # Call the Collection Keyword Map 
             self.CollectionKeywordMapReport(selData.recNum)
 
-        elif n == 11:    # Clip Data Export
+        elif n == 12:    # Clip Data Export
             # Call Clip Data Export with the Collection Number
             self.ClipDataExport(collectionNum = selData.recNum)
 
-        elif n == 12:    # Play All Clips
+        elif n == 13:    # Play All Clips
             # Get the appropriate collection
             coll = Collection.Collection(coll_name, parent_num)
             # Play All Clips takes the current Collection and the ControlObject as parameters.
@@ -5186,7 +5299,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
             # Let's clear all the Windows, since we don't want to stay in the last Clip played.
             self.parent.ControlObject.ClearAllWindows()
 
-        elif n == 13:    # Properties
+        elif n == 14:    # Properties
             # FIXME: Gracefully handle when we can't load the Collection.
             coll = Collection.Collection(coll_name, parent_num)
             self.parent.edit_collection(coll)

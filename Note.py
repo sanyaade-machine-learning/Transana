@@ -26,6 +26,8 @@ import types
 import DataObject
 # import Transana's Database Interface
 import DBInterface
+# import Transana's Constants
+import TransanaConstants
 # import Transana's Exceptions
 from TransanaExceptions import *
 # import Transana's Globals
@@ -59,24 +61,58 @@ class Note(DataObject.DataObject):
         str = str + "text = %s\n\n" % self.text
         return str.encode('utf8')
 
+    def __eq__(self, other):
+        """ Determine object equality """
+        if other == None:
+            return False
+        else:
+            return self.__dict__ == other.__dict__
 
 # Public methods
     def db_load_by_num(self, num):
         """Load a record by record number."""
-        
+        # Get the database connection
         db = DBInterface.get_db()
+        # Define the query for loading the requested Note
         query = """SELECT * FROM Notes2
                    WHERE NoteNum = %s"""
+        # Adjust the query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Get the Database Cursor
         c = db.cursor()
-        c.execute(query, num)
-        n = c.rowcount
-        if (n != 1):
-            c.close()
-            self.clear()
-            raise RecordNotFoundError, (num, n)
+        # Execute the query
+        c.execute(query, (num, ))
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            # ... so assume one record is returned, for now
+            n = 1
+        # If not sqlite ...
         else:
+            # ... we can use rowcount
+            n = c.rowcount
+        # If something other than one record is returned ...
+        if (n != 1):
+            # ... close the database cursor ...
+            c.close()
+            # ... clear the current Note object ...
+            self.clear()
+            # ... and raise an exception
+            raise RecordNotFoundError, (num, n)
+        # If one record is returned (or sqlite) ...
+        else:
+            # ... get the values from the query ...
             r = DBInterface.fetch_named(c)
+            # ... if sqlite and no data ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current Note object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (num, 0)
+            # ... load the data into the Note object
             self._load_row(r)
+        # Close the database cursor
         c.close()
 
        
@@ -90,7 +126,9 @@ class Note(DataObject.DataObject):
         # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
         if 'unicode' in wx.PlatformInfo:
             note_id = note_id.encode(TransanaGlobal.encoding)
+        # Get the database connection
         db = DBInterface.get_db()
+        # Determine the TYPE of note that has been requested
         if kwargs.has_key("Series"):
             q = "SeriesNum"
         elif kwargs.has_key("Episode"):
@@ -103,31 +141,56 @@ class Note(DataObject.DataObject):
             q = "TranscriptNum"
         elif kwargs.has_key("Snapshot"):
             q = "SnapshotNum"
-
+        # Determine the NUMBER of the record type, i.e. which Series, Episode, etc. the note is attached to.
         num = kwargs.values()[0]
-        
+        # Ensure that the parameter IS a number!
         if type(num) != int and type(num) != long:
             raise ProgrammingError, _("Integer record number required.")
-            
+        # Define the query
         query = """SELECT * FROM Notes2
                    WHERE NoteID = %%s AND
                    %s = %%s""" % q
+        # Get a database cursor
         c = db.cursor()
+        # Adjust the cursor for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Execute the query
         c.execute(query, (note_id, num))
-        n = c.rowcount
+        # rowcount doesn't work for sqlite!
+        if TransanaConstants.DBInstalled == 'sqlite3':
+            # if sqlite, assume one row for now
+            n = 1
+        # If not sqlite ...
+        else:
+            # use rowcount
+            n = c.rowcount
+        # If we don't have one row ...
         if (n != 1):
+            # ... close the database cursor ...
             c.close()
+            # ... clear the current Note object ...
             self.clear()
+            # ... and raise an exception
             raise RecordNotFoundError, (note_id, n)
         else:
+            # Get the object data
             r = DBInterface.fetch_named(c)
+            # If sqlite and not data is returned ...
+            if (TransanaConstants.DBInstalled == 'sqlite3') and (r == {}):
+                # ... close the database cursor ...
+                c.close()
+                # ... clear the current Note object ...
+                self.clear()
+                # ... and raise an exception
+                raise RecordNotFoundError, (note_id, n)
+            # Load the data into the object
             self._load_row(r)
-
+        # Close the database cursor
         c.close()
         
 
-    def db_save(self):
-        """Save the record to the database using Insert or Update as appropriate."""
+    def db_save(self, use_transactions=True):
+        """ Save the record to the database using Insert or Update as appropriate. """
 
         # Sanity Checks
         if ((self.series_num == 0) or (self.series_num == None)) and \
@@ -234,12 +297,15 @@ class Note(DataObject.DataObject):
                               NoteText = %s
                           WHERE NoteNum = %s """ 
             values = values + (self.number,)
-
+        # Get a database cursor
         c = DBInterface.get_db().cursor()
+        # Adjust query for sqlite if needed
+        query = DBInterface.FixQuery(query)
+        # Execute the query
         c.execute(query, values)
-
+        # If this not doesn't have a number, it is a new note.
         if self.number == 0:
-            # If we are dealing with a brand new Clip, it does not yet know its
+            # If we are dealing with a brand new Note, it does not yet know its
             # record number.  It HAS a record number, but it is not known yet.
             # The following query should produce the correct record number.
             query = """ SELECT NoteNum FROM Notes2
@@ -250,15 +316,27 @@ class Note(DataObject.DataObject):
                                 ClipNum = %s AND
                                 TranscriptNum = %s AND
                                 SnapshotNum = %s """
+            # Adjust query for sqlite if needed
+            query = DBInterface.FixQuery(query)
+            # Get a temporary database cursor
             tempDBCursor = DBInterface.get_db().cursor()
-            tempDBCursor.execute(query, (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, \
-                                         self.snapshot_num))
-            if tempDBCursor.rowcount == 1:
-                self.number = tempDBCursor.fetchone()[0]
+            # Execute the query
+            tempDBCursor.execute(query, 
+                                 (id, self.series_num, self.episode_num, self.collection_num, self.clip_num,
+                                  self.transcript_num, self.snapshot_num))
+            # Get the query results
+            data = tempDBCursor.fetchall()
+            # If there is one record ...
+            if len(data) == 1:
+                # ... get the note number
+                self.number = data[0][0]
+            # ... otherwise ...
             else:
-                raise RecordNotFoundError, (self.id, tempDBCursor.rowcount)
+                # ... raise an exception
+                raise RecordNotFoundError, (self.id, len(data))
+            # Close the temporary database cursor
             tempDBCursor.close()
-
+        # Close the main database cursor
         c.close()
 
         

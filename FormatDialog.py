@@ -333,6 +333,8 @@ class FormatDialog(wx.Dialog):
         # Create the main Sizer, which will hold the boxTop, boxMiddle, and boxButton sizers
         box = wx.BoxSizer(wx.VERTICAL)
         notebook = wx.Notebook(self, -1)
+        # The Notebook Background Color prevents a visual anomoly in Arabic!
+        notebook.SetBackgroundColour(wx.WHITE)
         box.Add(notebook, 1, wx.EXPAND, 2)
 
         self.panelFont = FormatFontPanel.FormatFontPanel(notebook, formatData)

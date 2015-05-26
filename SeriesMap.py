@@ -170,13 +170,20 @@ class SeriesMap(wx.Frame):
         self.toolBar.AddTool(T_FILE_FILTER, bmp, shortHelpString=_("Filter"))
         self.toolBar.AddTool(T_FILE_SAVEAS, TransanaImages.SaveJPG16.GetBitmap(), shortHelpString=_('Save As'))
         self.toolBar.AddTool(T_FILE_PRINTSETUP, TransanaImages.PrintSetup.GetBitmap(), shortHelpString=_('Set up Page'))
-        self.toolBar.AddTool(T_FILE_PRINTPREVIEW, TransanaImages.PrintPreview.GetBitmap(), shortHelpString=_('Print Preview'))
+        # Disable Print Setup for Right-To-Left languages
+#        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+#            self.toolBar.EnableTool(T_FILE_PRINTSETUP, False)
 
+        self.toolBar.AddTool(T_FILE_PRINTPREVIEW, TransanaImages.PrintPreview.GetBitmap(), shortHelpString=_('Print Preview'))
         # Disable Print Preview on the PPC Mac and for Right-To-Left languages
         if (platform.processor() == 'powerpc') or (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
             self.toolBar.EnableTool(T_FILE_PRINTPREVIEW, False)
             
         self.toolBar.AddTool(T_FILE_PRINT, TransanaImages.Print.GetBitmap(), shortHelpString=_('Print'))
+        # Disable Print Setup for Right-To-Left languages
+#        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+#            self.toolBar.EnableTool(T_FILE_PRINT, False)
+
         # Get the graphic for Help
         bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
         # create a bitmap button for the Move Down button
@@ -192,6 +199,9 @@ class SeriesMap(wx.Frame):
             self.menuFile.Append(M_FILE_SAVEAS, _("Save &As"), _("Save image in JPEG format"))  # Add "Save As" to File Menu
             self.menuFile.Enable(M_FILE_SAVEAS, False)
             self.menuFile.Append(M_FILE_PRINTSETUP, _("Page Setup"), _("Set up Page")) # Add "Printer Setup" to the File Menu
+            # Disable Print Setup for Right-To-Left languages
+#            if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+#                self.menuFile.Enable(M_FILE_PRINTSETUP, False)
             self.menuFile.Append(M_FILE_PRINTPREVIEW, _("Print Preview"), _("Preview your printed output")) # Add "Print Preview" to the File Menu
             self.menuFile.Enable(M_FILE_PRINTPREVIEW, False)
             self.menuFile.Append(M_FILE_PRINT, _("&Print"), _("Send your output to the Printer")) # Add "Print" to the File Menu
@@ -616,7 +626,15 @@ class SeriesMap(wx.Frame):
         # The horizontal coordinate is the left margin plus the Horizontal Adjustment for Keyword Labels plus
         # position times the scaling factor
         res = marginwidth + hadjust + ((XPos - startVal) * scale)
-        return int(res)
+
+        # If we are in a Right-To-Left Language ...
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+            # ... adjust for a right-to-left graph
+            return int(self.Bounds[2] - self.Bounds[0] - res)
+        # If we are in a Left-To-Right language ...
+        else:
+            # ... just return the calculated value
+            return int(res)
 
     def FindTime(self, x):
         """ Given a horizontal pixel position, determine the corresponding time value from
@@ -802,8 +820,10 @@ class SeriesMap(wx.Frame):
                        WHERE s.SeriesNum = e.SeriesNum AND
                              s.SeriesNum = %s
                        ORDER BY EpisodeID """
-
-        self.DBCursor.execute(SQLText, self.seriesNum)
+        # Adjust the query for sqlite if needed
+        SQLText = DBInterface.FixQuery(SQLText)
+        # Execute the query
+        self.DBCursor.execute(SQLText, (self.seriesNum, ))
 
         for (EpisodeNum, EpisodeID, SeriesNum, MediaFile, EpisodeLength, SeriesID) in self.DBCursor.fetchall():
             EpisodeID = DBInterface.ProcessDBDataForUTF8Encoding(EpisodeID)
@@ -826,7 +846,9 @@ class SeriesMap(wx.Frame):
                                  cl.ClipNum = ck.ClipNum
                            GROUP BY ck.keywordgroup, ck.keyword
                            ORDER BY KeywordGroup, Keyword, ClipStart"""
-            self.DBCursor.execute(SQLText, EpisodeNum)
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
+            self.DBCursor.execute(SQLText, (EpisodeNum, ))
 
             for (kwg, kw) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
@@ -843,7 +865,9 @@ class SeriesMap(wx.Frame):
                                  sn.SnapshotNum = ck.SnapshotNum
                            GROUP BY ck.keywordgroup, ck.keyword
                            ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
-            self.DBCursor.execute(SQLText, EpisodeNum)
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
+            self.DBCursor.execute(SQLText, (EpisodeNum, ))
             for (kwg, kw) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                 kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -859,7 +883,9 @@ class SeriesMap(wx.Frame):
                                  sn.SnapshotNum = ck.SnapshotNum
                            GROUP BY ck.keywordgroup, ck.keyword
                            ORDER BY KeywordGroup, Keyword, SnapshotTimeCode"""
-            self.DBCursor.execute(SQLText, EpisodeNum)
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
+            self.DBCursor.execute(SQLText, (EpisodeNum, ))
             for (kwg, kw) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                 kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -877,8 +903,10 @@ class SeriesMap(wx.Frame):
                            FROM Clips2 cl, ClipKeywords2 ck
                            WHERE cl.EpisodeNum = %s AND
                                  cl.ClipNum = ck.ClipNum
-                           ORDER BY ClipStart, ClipNum, KeywordGroup, Keyword"""
-            self.DBCursor.execute(SQLText, EpisodeNum)
+                           ORDER BY ClipStart, cl.ClipNum, KeywordGroup, Keyword"""
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
+            self.DBCursor.execute(SQLText, (EpisodeNum, ))
             for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                 kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -897,8 +925,10 @@ class SeriesMap(wx.Frame):
                            FROM Snapshots2 sn, ClipKeywords2 ck
                            WHERE sn.EpisodeNum = %s AND
                                  sn.SnapshotNum = ck.SnapshotNum
-                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
-            self.DBCursor.execute(SQLText, EpisodeNum)
+                           ORDER BY SnapshotTimeCode, sn.SnapshotNum, KeywordGroup, Keyword"""
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
+            self.DBCursor.execute(SQLText, (EpisodeNum, ))
             for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                 kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -916,8 +946,10 @@ class SeriesMap(wx.Frame):
                            FROM Snapshots2 sn, SnapshotKeywords2 ck
                            WHERE sn.EpisodeNum = %s AND
                                  sn.SnapshotNum = ck.SnapshotNum
-                           ORDER BY SnapshotTimeCode, SnapshotNum, KeywordGroup, Keyword"""
-            self.DBCursor.execute(SQLText, EpisodeNum)
+                           ORDER BY SnapshotTimeCode, sn.SnapshotNum, KeywordGroup, Keyword"""
+            # Adjust the query for sqlite if needed
+            SQLText = DBInterface.FixQuery(SQLText)
+            self.DBCursor.execute(SQLText, (EpisodeNum, ))
             for (kwg, kw, SnapshotTimeCode, SnapshotDuration, SnapshotNum, SnapshotID, collectNum) in self.DBCursor.fetchall():
                 kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
                 kw = DBInterface.ProcessDBDataForUTF8Encoding(kw)
@@ -953,9 +985,11 @@ class SeriesMap(wx.Frame):
                        WHERE cl.EpisodeNum = %s AND
                              cl.ClipNum = ck.ClipNum AND
                              ep.EpisodeNum = cl.EpisodeNum
-                       ORDER BY ClipStart, ClipNum, KeywordGroup, Keyword"""
+                       ORDER BY ClipStart, cl.ClipNum, KeywordGroup, Keyword"""
+        # Adjust the query for sqlite if needed
+        SQLText = DBInterface.FixQuery(SQLText)
         # Execute the query
-        self.DBCursor.execute(SQLText, self.episodeNum)
+        self.DBCursor.execute(SQLText, (self.episodeNum, ))
         # Iterate through the results ...
         for (kwg, kw, clipStart, clipStop, clipNum, clipID, collectNum, episodeName) in self.DBCursor.fetchall():
             kwg = DBInterface.ProcessDBDataForUTF8Encoding(kwg)
@@ -1206,14 +1240,24 @@ class SeriesMap(wx.Frame):
             prompt = unicode(_('Series: %s'), 'utf8')
         else:
             prompt = _('Series: %s')
-        self.graphic.AddText(prompt % self.seriesName, 2, 2)
+
+        # If we are in a Right-To-Left Language ...
+        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+            self.graphic.AddTextRight(prompt % self.seriesName, self.Bounds[2] - self.Bounds[0] - 2, 2)
+        else:
+            self.graphic.AddText(prompt % self.seriesName, 2, 2)
+
         if self.configName != '':
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                 prompt = unicode(_('Filter Configuration: %s'), 'utf8')
             else:
                 prompt = _('Filter Configuration: %s')
-            self.graphic.AddText(prompt % self.configName, 2, 16)
+            # If we are in a Right-To-Left Language ...
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                self.graphic.AddTextRight(prompt % self.configName, self.Bounds[2] - self.Bounds[0] - 2, 16)
+            else:
+                self.graphic.AddText(prompt % self.configName, 2, 16)
 
         # Initialize a Line Counter, used for vertical positioning
         Count = 0
@@ -1229,7 +1273,11 @@ class SeriesMap(wx.Frame):
         for (episodeName, seriesName, episodeShown) in self.episodeList:
             if episodeShown:
                 # Add the Episode Name to the vertical axis
-                self.graphic.AddText("%s" % episodeName, 4, self.CalcY(Count) - 7)
+                # If we are in a Right-To-Left Language ...
+                if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                    self.graphic.AddTextRight("%s" % episodeName, self.Bounds[2] - self.Bounds[0] - 4, self.CalcY(Count) - 7)
+                else:
+                    self.graphic.AddText("%s" % episodeName, 4, self.CalcY(Count) - 7)
                 # if Keyword Series Sequence Map in multi-line mode ...
                 if (self.reportType == 1) and (not self.singleLineDisplay):
                     # ... add a blank lookup line for the blank line, as this line gets no data for that report.
@@ -1240,27 +1288,46 @@ class SeriesMap(wx.Frame):
                 if (self.reportType == 1) and (not self.singleLineDisplay):
                     # Draw the top Grid Line, if appropriate
                     if self.hGridLines:
-                        self.graphic.AddLines([(10, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
+                        # If we are in a Right-To-Left Language ...
+                        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                            self.graphic.AddLines([(self.Bounds[2] - self.Bounds[0] - 10, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2),
+                                                    self.CalcX(self.endTime), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
+                        else:
+                            self.graphic.AddLines([(10, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
                         gridLineCount = Count
                     Count += 1
                     # Iterate through the Keyword List from the Filter Dialog ...
                     for KWG, KW in self.filteredKeywordList:
                         # ... and add the Keywords to the Vertical Axis.
-                        self.graphic.AddText("%s : %s" % (KWG, KW), 10, self.CalcY(Count) - 7)
+                        # If we are in a Right-To-Left Language ...
+                        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                            self.graphic.AddTextRight("%s : %s" % (KWG, KW), self.Bounds[2] - self.Bounds[0] - 10, self.CalcY(Count) - 7)
+                        else:
+                            self.graphic.AddText("%s : %s" % (KWG, KW), 10, self.CalcY(Count) - 7)
                         # Add this data to the Y Position Lookup dictionary.
                         yValLookup[(episodeName, KWG, KW)] = Count
                         # Add a Lookup Line for this episodeName, Keyword Group, Keyword combination
                         self.epNameKWGKWLookup[self.CalcY(Count) - int((self.barHeight + self.whitespaceHeight)/2)] = (episodeName, KWG, KW)
                         # Add Horizontal Grid Lines, if appropriate
                         if self.hGridLines and ((Count - gridLineCount) % 2 == 0):
-                            self.graphic.AddLines([(10, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
+                            # If we are in a Right-To-Left Language ...
+                            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                                self.graphic.AddLines([(self.Bounds[2] - self.Bounds[0] - 10, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2),
+                                                        self.CalcX(self.endTime), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
+                            else:
+                                self.graphic.AddLines([(10, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.endTime), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
                         # Increment the counter for each Keyword
                         Count = Count + 1
                 # If it's NOT the multi-line Sequence Map, the Gridline rules are different, but still need to be handled.
                 else:
                     # Add Horizontal Grid Lines, if appropriate
                     if self.hGridLines and (Count % 2 == 1):
-                        self.graphic.AddLines([(4, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.timelineMax), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
+                        # If we are in a Right-To-Left Language ...
+                        if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                            self.graphic.AddLines([(self.Bounds[2] - self.Bounds[0] - 4, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2),
+                                                    self.CalcX(self.timelineMax), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
+                        else:
+                            self.graphic.AddLines([(4, self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.timelineMax), self.CalcY(Count) + 6 + int(self.whitespaceHeight / 2))])
                     # Add this data to the Y Position Lookup dictionary.
                     yValLookup[episodeName] = Count
                 # Increment the counter for each Episode.  (This produces a blank line in the Sequence Map, which is OK.)
@@ -1324,7 +1391,12 @@ class SeriesMap(wx.Frame):
             if self.hGridLines:
                 # We want Grid Lines in light gray
                 self.graphic.SetColour('LIGHT GREY')
-                self.graphic.AddLines([(4, self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.timelineMax), self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2))])
+                # If we are in a Right-To-Left Language ...
+                if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                    self.graphic.AddLines([(self.Bounds[2] - self.Bounds[0] - 4, self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2),
+                                            self.CalcX(self.timelineMax), self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2))])
+                else:
+                    self.graphic.AddLines([(4, self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2), self.CalcX(self.timelineMax), self.CalcY(-1) + 6 + int(self.whitespaceHeight / 2))])
 
         # Select the color palate for colors or gray scale as appropriate
         if self.colorOutput:
@@ -1731,7 +1803,12 @@ class SeriesMap(wx.Frame):
                             # and the Clip 's Lookup Value determined above.  Note that this is a bit simpler than for the Sequence Map
                             # because we don't have to worry about overlaps.  Thus, the lookup value can just be a tuple instead of having
                             # to be a list of tuples to accomodate overlapping clip/keyword values.
-                            self.epNameKWGKWLookup[self.CalcY(yValLookup[episodeName]) - int((self.barHeight + self.whitespaceHeight)/2)][(xStart, xEnd)] = (episodeName, kwg, kw, lookupVal)
+
+                            if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
+                                self.epNameKWGKWLookup[self.CalcY(yValLookup[episodeName]) - int((self.barHeight + self.whitespaceHeight)/2)][(self.Bounds[2] - self.Bounds[0] - xStart, self.Bounds[2] - self.Bounds[0] - xEnd)] = \
+                                (episodeName, kwg, kw, lookupVal)
+                            else:
+                                self.epNameKWGKWLookup[self.CalcY(yValLookup[episodeName]) - int((self.barHeight + self.whitespaceHeight)/2)][(xStart, xEnd)] = (episodeName, kwg, kw, lookupVal)
                             # The next bar should start where this bar ends.  No need to adjust for the Percentage Graph -- that's handled
                             # when actually placing the bars.
                             barStart += barData[(episodeName, kwg, kw)]
@@ -1762,7 +1839,11 @@ class SeriesMap(wx.Frame):
             # Set the font for the graphics context
             self.graphic.SetFont(font)
             # Add a label for the legend
-            self.graphic.AddText(_("Legend:"), startX, self.CalcY(Count - 1) - 7)
+            # If we are in a Right-To-Left Language ...
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                self.graphic.AddTextRight(_("Legend:"), self.Bounds[2] - self.Bounds[0] - startX, self.CalcY(Count - 1) - 7)
+            else:
+                self.graphic.AddText(_("Legend:"), startX, self.CalcY(Count - 1) - 7)
             endX = startX + 14 + self.graphic.GetTextExtent(_("Legend:"))[0]
             # We'll use a 14 x 12 block to show color.  Set the line thickness
             self.graphic.SetThickness(12)
@@ -1772,10 +1853,17 @@ class SeriesMap(wx.Frame):
                 colourindex = self.keywordColors[(kwg, kw)]
                 # Set the color of the line, using the color lookup for the appropriate color set
                 self.graphic.SetColour(colorLookup[colorSet[colourindex]])
-                # Add the color box to the graphic
-                self.graphic.AddLines([(startX, self.CalcY(Count), startX + 14, self.CalcY(Count) + 14)])
-                # Add the text associating the keyword with the colored line we just created
-                self.graphic.AddText("%s : %s" % (kwg, kw), startX + 18, self.CalcY(Count) - 7)
+                # If we are in a Right-To-Left Language ...
+                if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                    # Add the color box to the graphic
+                    self.graphic.AddLines([(self.Bounds[2] - self.Bounds[0] - startX, self.CalcY(Count), self.Bounds[2] - self.Bounds[0] - (startX + 14), self.CalcY(Count) + 14)])
+                    # Add the text associating the keyword with the colored line we just created
+                    self.graphic.AddTextRight("%s : %s" % (kwg, kw), self.Bounds[2] - self.Bounds[0] - startX + 12, self.CalcY(Count) - 7)
+                else:
+                    # Add the color box to the graphic
+                    self.graphic.AddLines([(startX, self.CalcY(Count), startX + 14, self.CalcY(Count) + 14)])
+                    # Add the text associating the keyword with the colored line we just created
+                    self.graphic.AddText("%s : %s" % (kwg, kw), startX + 18, self.CalcY(Count) - 7)
                 # If the new text extends past the current right-hand boundary ...
                 if endX < startX + 14 + self.graphic.GetTextExtent("%s : %s" % (kwg, kw))[0]:
                     # ... note the new right-hand boundary for the box that outlines the legend
@@ -1787,9 +1875,17 @@ class SeriesMap(wx.Frame):
             # Set the line color to black and the line thickness to 1 for the legend bounding box
             self.graphic.SetColour("BLACK")
             self.graphic.SetThickness(1)
-            # Draw the legend bounding box, based on the dimensions we've been tracking.
-            self.graphic.AddLines([(startX - 6, startY - 24, endX + 6, startY - 24), (endX + 6, startY - 24, endX + 6, endY - 4),
-                                   (endX + 6, endY - 4, startX - 6, endY - 4), (startX - 6, endY - 4, startX - 6, startY - 24)])            
+            # If we are in a Right-To-Left Language ...
+            if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
+                # Draw the legend bounding box, based on the dimensions we've been tracking.
+                self.graphic.AddLines([(self.Bounds[2] - self.Bounds[0] - (startX - 6), startY - 24, self.Bounds[2] - self.Bounds[0] - (endX + 6), startY - 24),
+                                       (self.Bounds[2] - self.Bounds[0] - (endX + 6), startY - 24, self.Bounds[2] - self.Bounds[0] - (endX + 6), endY - 4),
+                                       (self.Bounds[2] - self.Bounds[0] - (endX + 6), endY - 4, self.Bounds[2] - self.Bounds[0] - (startX - 6), endY - 4),
+                                       (self.Bounds[2] - self.Bounds[0] - (startX - 6), endY - 4, self.Bounds[2] - self.Bounds[0] - (startX - 6), startY - 24)])
+            else:
+                # Draw the legend bounding box, based on the dimensions we've been tracking.
+                self.graphic.AddLines([(startX - 6, startY - 24, endX + 6, startY - 24), (endX + 6, startY - 24, endX + 6, endY - 4),
+                                       (endX + 6, endY - 4, startX - 6, endY - 4), (startX - 6, endY - 4, startX - 6, startY - 24)])            
 
     def DrawTimeLine(self, startVal, endVal):
         """ Draw the time line on the Series Map graphic """
@@ -1990,7 +2086,6 @@ class SeriesMap(wx.Frame):
                 # Once the key val exceeds the Mouse position, we can stop looking.
                 else:
                     break
-
             # Initialize the Episode Name, Keyword Group, and Keyword variables.
             epName = KWG = KW = ''
             # If we have a data record to look at ...

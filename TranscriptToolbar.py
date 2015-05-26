@@ -323,7 +323,10 @@ class TranscriptToolbar(wx.ToolBar):
         can_edit = self.GetToolState(self.CMD_READONLY_ID)
         # If leaving edit mode, prompt for save if necessary.
         if not can_edit:
-            if not self.parent.ControlObject.SaveTranscript(1, transcriptToSave=self.parent.transcriptWindowNumber):
+            if ((TransanaConstants.partialTranscriptEdit) and \
+                (not self.parent.ControlObject.SaveTranscript(1, transcriptToSave=self.parent.transcriptWindowNumber, continueEditing=False))) or \
+               ((not TransanaConstants.partialTranscriptEdit) and \
+                (not self.parent.ControlObject.SaveTranscript(1, transcriptToSave=self.parent.transcriptWindowNumber))):
                 # Reset the Toolbar
                 self.ClearToolbar()
                 # User chose to not save, revert back to database version
@@ -360,6 +363,13 @@ class TranscriptToolbar(wx.ToolBar):
             self.UpdateEditingButtons()
         # if entering Edit Mode ...
         else:
+
+            if TransanaConstants.partialTranscriptEdit:
+                action = 'EnterEditMode'
+                # Send the action to the Editor's UpdateCurrentContents method, which handles
+                # loading and unloading data for editing large transcripts
+                self.parent.editor.UpdateCurrentContents(action)
+
             try:
                 # Remember the original Last Save time
                 oldLastSaveTime = self.parent.editor.TranscriptObj.lastsavetime
