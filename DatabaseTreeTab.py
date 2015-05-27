@@ -7123,10 +7123,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                 if not TransanaConstants.singleUserVersion:
                                     # We need to update the Episode Keyword Visualization
                                     if DEBUG:
-                                        print 'Message to send = "UKV %s %s %s"' % ('Document', quote.source_document_num, 0)
+                                        print 'Message to send = "UKV %s %s %s"' % ('Document', 0, quote.source_document_num)
                                         
                                     if TransanaGlobal.chatWindow != None:
-                                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Document', quote.source_document_num, 0))
+                                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Document', 0, quote.source_document_num))
 
                                 # If we do all this, we don't need to continue any more.
                                 contin = False

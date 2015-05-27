@@ -1443,7 +1443,7 @@ def CreateQuote(quoteData, dropData, tree, dropNode):
                     if not TransanaConstants.singleUserVersion:
                         # We need to update the Document Keyword Visualization
                         if TransanaGlobal.chatWindow != None:
-                            TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Document', tempQuote.source_document_num, 0))
+                            TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Document', 0, tempQuote.source_document_num))
                     
                     # Unlock the parent collection
                     if collectionLocked:

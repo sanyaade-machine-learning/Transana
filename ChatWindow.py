@@ -1450,7 +1450,7 @@ class ChatWindow(wx.Frame):
                             elif msgData[0] == 'Document':
                                 # See if the currently loaded document matches the document number sent from the Message Server
                                 if isinstance(self.ControlObject.currentObj, Document.Document) and \
-                                   self.ControlObject.currentObj.number == int(msgData[1]):
+                                   self.ControlObject.currentObj.number == int(msgData[2]):
                                     # ... we need to update the keyword visualization no matter what.
                                     self.ControlObject.UpdateKeywordVisualization()
                             # if Object Type is Episode ...
