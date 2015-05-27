@@ -90,7 +90,7 @@ class UnitTest(wx.Frame):
     def RunTests(self):
 
         # Basic Information
-        self.txtCtrl.AppendText('Python Version:  %s\n' % sys.version[:5])
+        self.txtCtrl.AppendText('Python Version:  %s\n' % sys.version[:6].strip())
         self.txtCtrl.AppendText('wxPython Version:  %s\n' % wx.VERSION_STRING)
         self.txtCtrl.AppendText('DBInstalled:  %s\n' % TransanaConstants.DBInstalled)
         if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server']:

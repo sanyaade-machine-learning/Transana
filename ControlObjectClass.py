@@ -1415,6 +1415,9 @@ class ControlObject(object):
             self.TranscriptWindow.SetTitle(str)
 
         if closeEverything:
+            # Clear the currently loaded object, as there is none
+            self.currentObj = None
+
             # Reset the ControlObject's TranscriptNum dictionary
             self.TranscriptNum = {}
 
@@ -1432,9 +1435,6 @@ class ControlObject(object):
 
             # Clear the Data Window
             self.DataWindow.ClearData()
-
-            # Clear the currently loaded object, as there is none
-            self.currentObj = None
 
         # Force the screen updates
         # there can be an issue with recursive calls to wxYield, so trap the exception ...

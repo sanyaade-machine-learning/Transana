@@ -190,7 +190,7 @@ class AboutBox(wx.Dialog):
                 import Crypto, ctypes, DBInterface, paramiko, sys, numpy
                 # Build a string that contains the version information for crucial programming components
                 str = '\n            Transana %s uses the following tools:\n\n'% (TransanaConstants.versionNumber)
-                str = '%sPython:  %s\n' % (str, sys.version[:5])
+                str = '%sPython:  %s\n' % (str, sys.version[:6].strip())
                 if 'unicode' in wx.PlatformInfo:
                     str2 = 'unicode'
                 else:

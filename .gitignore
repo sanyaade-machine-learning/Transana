@@ -55,3 +55,32 @@ docs/_build/
 
 # PyBuilder
 target/
+*.po
+app.fil
+DBTest.py
+ffmpeg_Transana (OS X)
+ffmpeg_Transana (Linux)
+ffmpeg_Transana.exe
+disti18n.py
+Fixi18nFiles.py
+Funding-orig.txt
+Funding.txt
+*.bak
+LineCounter.py
+*.iss
+metasetup.py
+mki18n.py
+MySQLforPythonInstaller.py
+*.bat
+profile.txt
+pydoc.py
+TransanaConfigConstantsLab.py
+TransanaConfigConstantsDemo.py
+RegenDocs.py
+setup.py
+setupMac.py
+TransanaConfigConstantsMU.py
+TransanaConfigConstantsPro.py
+TransanaConfigConstantsSU.py
+TransanaConfigConstantsWorkshop.py
+translate.py
