@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -30,15 +30,15 @@ singleUserVersion = False
 # Different Python versions require different database engines!
 if sys.version[:5] == '2.6.6':
     DBInstalled = 'MySQLdb-server'
-elif sys.version[:5] in ['2.7.7', '2.7.8']:
+elif sys.version[:5] in ['2.7.7', '2.7.8', '2.7.9']:
 #    DBInstalled = 'PyMySQL'
     DBInstalled = 'MySQLdb-server'
 
-    print "TransanaConfigConstants.py"
-    print "Python", sys.version[:5]
-    print
-    print DBInstalled, "in use.  Need to fix SSL configuration for PyMySQL."
-    print
+##    print "TransanaConfigConstants.py"
+##    print "Python", sys.version[:5]
+##    print
+##    print DBInstalled, "in use.  Need to fix SSL configuration for PyMySQL."
+##    print
 
 # Define Std vs. Pro feature set
 proVersion = True

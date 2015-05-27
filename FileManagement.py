@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -54,6 +54,7 @@ import SRBConnection     # SRB Connection Parameters dialog box
 import SRBFileTransfer   # SRB File Transfer Progress Box and File Tranfer Logic
 import TransanaConstants # used for getting list of fileTypes
 import TransanaGlobal    # get Transana's globals, used to get current encoding
+import TransanaImages    # Get Transana's images
 
 
 class FMFileDropTarget(wx.FileDropTarget):
@@ -336,12 +337,12 @@ class FileManagement(wx.Dialog):
 
         if TransanaGlobal.configData.LayoutDirection == wx.Layout_LeftToRight:
             # Get the BitMaps for the left and right arrow buttons
-            bmpLeft = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
-            bmpRight = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
+            bmpLeft = TransanaImages.ArtProv_BACK.GetBitmap()
+            bmpRight = TransanaImages.ArtProv_FORWARD.GetBitmap()
         else:
             # Get the BitMaps for the left and right arrow buttons
-            bmpLeft = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
-            bmpRight = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
+            bmpLeft = TransanaImages.ArtProv_FORWARD.GetBitmap()
+            bmpRight = TransanaImages.ArtProv_BACK.GetBitmap()
 
         # Top Spacer
         buttonSizer.Add((1,1), 1)
@@ -696,7 +697,7 @@ class FileManagement(wx.Dialog):
         self.Layout()
         # Enable Auto Layout
         self.SetAutoLayout(True)
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
         # Call OnSize to set the SRB / sFTP directory control size initially
         self.OnSize(None)
 

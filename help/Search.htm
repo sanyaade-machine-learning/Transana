@@ -7,21 +7,47 @@
 
 <H1>Search</H1><HR>
 
-To search for a single keyword, you can right-click a keyword in the <A HREF="datawindow.htm">data window</A>'s database tree and select <B>Quick Search</B> from the popup menu.  A node named after the keyword group : keyword pair will appear under the Search node containing a tree structure with all episode, clip, and snapshot records that have the selected keyword.<P>
+To search for a single <A HREF="keywordproperties.htm">Keyword</A>, you can right-click a Keyword in the <A HREF="datawindow.htm">Data window</A>'s database tree and select <B>Quick Search</B> from the popup menu.  A node named after the Keyword Group : Keyword pair will appear under the Search node containing a tree structure with all <A HREF="quoteproperties.htm">Quote</A>, <A HREF="clipproperties.htm">Clip</A>, and <A HREF="snapshotproperties.htm">Snapshot</A> records that have the selected Keyword.<P>
 
-If you want to do a more complex search, right-click on the Search root node on the database tab of the <A HREF="datawindow.htm">data window</A> and select <B>Search</B> to search your <A HREF="organization.htm">Episodes</A>, <A HREF="organization.htm">Clips</A>, and <A HREF="organization.htm">Snapshots</A> for the presence of assigned keywords.  The Search dialog will appear.<P>
+If you want to do a more complex search, right-click on the Search root node on the database tab of the <A HREF="datawindow.htm">Data window</A> and select <B>Search</B> to search your <A HREF="documentproperties.htm">Documents</A>, <A HREF="episodeproperties.htm">Episodes</A>, <A HREF="quoteproperties.htm">Quotes</A>, <A HREF="clipproperties.htm">Clips</A>, and <A HREF="snapshotproperties.htm">Snapshots</A> for the presence of assigned Keywords.  The Search dialog will appear.<P>
 
 <IMG SRC="images/keywordsearch.gif"  ALT="keywordsearch"   BORDER=0><P>
 
-The Search dialog box has been carefully designed to only allow valid entries and to produce valid searches.  If something you want to choose is not available, it is because you have missed something required to make your specification complete.  For example, if the &quot;Search&quot; button is not enabled, it is most likely because you have not closed a set of parentheses or because you just selected a logical operator and have not yet specified the next Keyword Group : Keyword pair.<P>
+The <B>Keywords Tab</B> of the Search dialog box has been carefully designed to only allow valid entries and to produce valid searches.  If something you want to choose is not available, it is because you have missed something required to make your specification complete.  For example, if the &quot;Search&quot; button is not enabled, it is most likely because you have not closed a set of parentheses or because you just selected a logical operator and have not yet specified the next Keyword Group : Keyword pair.<P>
+
+<IMG SRC="images/keywordsearchcollectionstab.gif"  ALT="keywordsearch"   BORDER=0><P>
+
+The <B>Collections tab</B> of the Search Dialog allows you to specify what <A HREF="collectionproperties.htm">Collections</A> Transana should include or exclude during a Search.  This allows you to limit your Search Results to only a subset of your analysis, should you wish.  This helps <A HREF="collectionproperties.htm">Collections</A> behave more like <A HREF="keywordproperties.htm">Keywords</A> in Transana as far as Search is concerned.<P> 
 
 When you have constructed a valid search query, you can save it for later reuse by pressing the <IMG SRC="images/filesave.gif" ALT="Save Icon"> &nbsp;icon in the lower left corner of the dialog.  You can then load the saved search later using the <IMG SRC="images/fileopen.gif" ALT="Load Icon"> &nbsp;icon or delete it using the <IMG SRC="images/filedelete.gif" ALT="Delete Icon"> &nbsp;icon.<P>
 
-This dialog box allows you to specify complex searches, including using boolean logical operator (AND, OR, and NOT,) but you must do so carefully to be sure to get the results you want.  <P>
+<H3>An Important Note about Searches</H3>
 
-For example, the searches &quot;<CODE><B>(A or B) and C</CODE></B>&quot; and &quot;<CODE><B>A or (B and C)</CODE></B>&quot; produce different results.  The first search will find all Episodes, Clips, and Snapshots that have Keyword C and also have either Keyword A or Keyword B, producing hits on combinations AC, BC, and ABC.  The second search will find all Episodes, Clips, and Snapshots that have Keyword A, as well as those that have both B and C, producing hits on A, AB, AC, BC, and ABC.  These are obviously very different results, with the second search including more results.<P>
+The Search dialog box allows you to specify complex searches, including using boolean logical operator (AND, OR, and NOT,) but you must do so carefully to be sure to get the results you intend.  <P>
 
-This is particularly an issue with the more ambiguous search &quot;<CODE><B>A or B and C</CODE></B>.&quot;  Many people initially expect this to be equivalent to the first query above.  However (because AND is higher than OR in the Boolean &quot;order of operations&quot;), this search is actually equivalent to the second search described above, and will find all Episodes and Clips that have Keyword A, as well as those that have both B and C.  To avoid problems, liberal use of parentheses is recommended.<P>
+For example, the searches 
+
+<UL><LI><CODE><B>(A or B) and C</CODE></B>
+</UL> and <UL> 
+<LI><CODE><B>A or (B and C)</CODE></B>
+</UL> 
+
+produce different results.<P>
+
+The first search will find all Quotes, Clips, and Snapshots that have either Keyword A or Keyword B which also have Keyword C, producing hits on combinations AC, BC, and ABC.<P>
+
+The second search will find all Quotes, Clips, and Snapshots that have Keyword A, as well as those that have both B and C, producing hits on A, AB, AC, BC, and ABC.  These are obviously very different results, with the second search including more results.<P>
+
+You should be particularly careful with something like the more ambiguous search 
+
+<UL><LI><CODE><B>A or B and C</CODE></B>.
+</UL>  
+
+It's the same search terms in the same order as the two searches described above, which produced different results.  So what results should you expect?<P>
+
+Many people initially expect this last search to be equivalent to the first query above.  However, this search is actually equivalent to the second search described above, and will find all Quotes, Clips, and Snapshots that have Keyword A, as well as all those that have both B and C.  This is because <B>AND</B> is higher than <B>OR</B> in the Boolean &quot;order of operations&quot; and is therefore evaluated first by the Search engine.<P>  
+
+To avoid problems, liberal use of parentheses is recommended.<P>
 
 <A HREF="FilterDialog.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;

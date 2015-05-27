@@ -1,4 +1,4 @@
-# Copyright (C) 2006 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2006 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -82,9 +82,7 @@ class VideoPlayer(wx.Panel):
         # If Transana is installed in a folder that contains accented characters, we need to adjust the programDir to handle that
         if ('unicode' in wx.PlatformInfo) and isinstance(TransanaGlobal.programDir, str):
             TransanaGlobal.programDir = TransanaGlobal.programDir.decode('cp1250')
-        # Build the full file name for the Splash Screen image
-#        imgFileName = os.path.join(TransanaGlobal.programDir, 'images', 'splash.gif')
-        # Get the Splash Srceen image
+        # Get the Splash Screen image
         self.splashImage = TransanaImages.splash.GetImage()
         if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
             self.splashImage = self.splashImage.Mirror()

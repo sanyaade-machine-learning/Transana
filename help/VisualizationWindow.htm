@@ -1,0 +1,51 @@
+<HTML>
+<HEAD>
+<TITLE>Visualization Window</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Visualization Window</H1><HR>
+
+Transana's Visualization window shows visual representations of information about your data.  You can interact with your data in a number of ways in this window, and you can zoom in and out of the visualization to see detail or overview as you desire.<P>
+
+<IMG SRC="images/documentvisualization.gif"  ALT="Document Visualization"   BORDER=0><P>
+
+For <A HREF="documentproperties.htm">Documents</A> and <A HREF="quoteproperties.htm">Quotes</A>, the Visualization Window displays coding across the length of the document.  You can click in the visualization to place your document cursor, including selecting a segment of the visualization matching a coding bar to see the segment of the document that bears the coding shown.  The <A HREF="datawindow.htm">Data window</A>'s Selected Items tab allows you to determine what Quotes are associated with the coding at a particular position in this keyword visualization.  Hold your mouse over a colored band to see which <A HREF="keywordproperties.htm">Keyword</A> the band represents.<P> 
+
+For <A HREF="episodeproperties.htm">Episode</A> <A HREF="transcriptproperties.htm">Transcripts</A> and <A HREF="clipproperties.htm">Clips</A>, there are several different visualizations to choose from.  You can select the visualization you would like to use in the &quot;Options&quot; menu under &quot;Media Visualization Style&quot;.<P>
+
+<IMG SRC="images/soundwindow.gif"  ALT="Waveform Visualization"   BORDER=0><P>
+
+The <B>waveform visualization</B> displays a waveform, a visual representation of the intensity of the audio track for a given media file.  This visual representation can be extremely useful during transcription for precise navigation within a video or audio file.  The waveform also facilitates the process of inserting <A HREF="timecodes.htm">time codes</A> accurately.<P>
+
+<IMG SRC="images/KeywordVisualization.gif" ALT="Keyword Visualization" BORDER=0><P>
+
+The <B>keyword visualization</B> shows you the coding you have applied to your media across the media file's time line.  This can be very useful during analysis to see how you have applied keywords to your <A HREF="episodeproperties.htm">Episode</A> as a whole.  The <A HREF="datawindow.htm">Data window</A>'s Selected Items tab allows you to determine what Clips are associated with the coding at a particular position in the keyword visualization.  Hold your mouse over a colored band to see which <A HREF="keywordproperties.htm">Keyword</A> the band represents.<P>
+
+<IMG SRC="images/HybridVisualization.gif" ALT="Hybrid Visualization" BORDER=0><P>
+
+The <B>hybrid visualization</B> shows both waveform and keyword information for media-based data.<P>
+
+The keyword and hybrid visualizations can be customized.  Click the <B>Filter dialog</B> button (<IMG SRC="images/FilterButton.gif" ALT="Filter" BORDER=0>) to load the visualization <A HREF="FilterDialog.htm">Filter dialog</A> box.  In this dialog, you can specify which <A HREF="quoteproperties.htm">Quotes</A>, <A HREF="clipproperties.htm">Clips</A>, <A HREF="snapshotproperties.htm">Snapshots</A>, and <A HREF="keywordproperties.htm">Keywords</A> to include or exclude from the visualization, as well as the color associated with each Keyword.  You can also customize the size of the bars and the amount of whitespace that appears between bars.<P>
+
+Clicking on a spot in the visualization window will position the Document cursor in a Document that is not in Edit mode, and will position the cursor in a Transcript not in Edit mode as well as positioning the media file to the corresponding location.  The Visualization window's status bar gives you precise information about the position of the Document cursor or media cursor in the media file.<P>
+
+You can zoom in and out on the visualization using the zoom buttons with the magnifying glass icons in the lower left-hand corner of the Visualization window.  To zoom in, highlight the portion of the visualization you would like to examine more closely and press the <IMG SRC="images/zoomin.gif"  ALT="zoomin"   BORDER=0> &nbsp;button.  If you zoom in several levels in this way, the <IMG SRC="images/zoomout.gif"  ALT="zoomout"   BORDER=0> &nbsp;button will back you out in the same stages you zoomed in with.  You can also press the &quot;100%&quot; marker at any time to return the visualization to its original size.<P>
+
+<B>When working with media-based data</B>, you can alter your current position in the media file very precisely by pressing the cursor right and cursor left keys within the visualization.  The amount the media moves depends on several things.  If you press the cursor left or cursor right key, the visualization cursor moves one pixel in the direction indicated.  How much time this represents in the media file depends on how long your media file is, how large the visualization window is on your screen, and whether or not you have zoomed in on a portion of the visualization.  <P>
+
+Another alternative is to hold down a modifier key (Shift, Alt, or Ctrl/Cmd) when using the cursor key, which causes the media file to shift a specific time amount.  If you are holding the Shift key when you press the cursor key, the media file moves in one-second increments.  If you are holding the Alt key, the media file moves in 1/2-second increments.  If you hold the Ctrl key on Windows and the Command key on OS X, the media file moves 1/29.97th of a second, or exactly one frame in a standard NTSC video file.<P>
+
+Right-clicking the Visualization window causes the media file to play or pause, starting from the selected position.  You can drag in the Visualization window with your mouse to select a segment of the media file, to set both a start and stop point for playback.  (Alternately, you can click in the waveform to indicate a starting point and hold down the Shift key while clicking a second time to indicate an ending point to make a selection.)<P>
+
+You can create <A HREF="transcriptlessclips.htm">Clips without Transcripts</A> in Transana using the "create transcript-less clip" <IMG SRC="images/ClipIcon.gif" ALT="Create Transcript-less Clip"> &nbsp; button in the Visualization window.  First, make a precise selection within the Visualization window.  Then, to create a transcript-less <A HREF="createclips.htm">Standard Clip</A>, select the destination <A HREF="collectionproperties.htm">Collection</A> in the data tree and press this button.  To create a transcript-less <A HREF="quickclips.htm">Quick Clip</A>, select one or more <A HREF="keywordproperties.htm">Keywords</A> in the data tree and press this button.<P>
+
+The looping button <IMG SRC="images/loopbutton.gif" ALT="Looping"> &nbsp;allows you to play a section of your media file in a loop, which can be very helpful during transcription.  You can make a selection in the Visualization window (zooming in for greater precision) and that selection will loop when you press the looping button.  If you do not make a specific selection, a 5 second segment starting at the current media position will loop.  Pressing the looping button again is the only way to stop the looping process.  Other methods of stopping media playback do not work when looping is in effect.<P>
+
+<A HREF="propagatechildchanges.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="notes.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

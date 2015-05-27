@@ -20,7 +20,7 @@ import Episode
 import KeywordObject
 import MenuWindow
 import ProcessSearch
-import Series
+import Library
 import Snapshot
 import TransanaExceptions
 import Transcript
@@ -233,27 +233,27 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 21 in testsToRun:
-            # Series Saving
-            testName = 'Creating Series : SearchDemo'
+            # Library Saving
+            testName = 'Creating Library : SearchDemo'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                series1 = Series.Series('SearchDemo')
-                # If the Series already exists, consider the test passed.
+                series1 = Library.Library('SearchDemo')
+                # If the Library already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
-            # If the Series doesn't exist ...
+            # If the Library doesn't exist ...
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
-                series1 = Series.Series()
+                series1 = Library.Library()
                 series1.id = 'SearchDemo'
                 series1.owner = 'unit_test_search'
                 series1.comment = 'Created by unit_test_search'
                 series1.keyword_group = 'SearchDemo'
                 try:
                     series1.db_save()
-                    # If we create the Series, consider the test passed.
+                    # If we create the Library, consider the test passed.
                     self.txtCtrl.AppendText('Passed.')
                     self.testsSuccessful += 1
                 except TransanaExceptions.SaveError:
@@ -261,13 +261,13 @@ class FormCheck(wx.Frame):
                     errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
                     errordlg.ShowModal()
                     errordlg.Destroy()
-                    # If we can't create the Series, consider the test failed
+                    # If we can't create the Library, consider the test failed
                     self.txtCtrl.AppendText('FAILED.')
                     self.testsFailed += 1
             except:
                 print sys.exc_info()[0]
                 print sys.exc_info()[1]
-                # If we can't load or create the Series, consider the test failed
+                # If we can't load or create the Library, consider the test failed
                 self.txtCtrl.AppendText('FAILED.')
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))

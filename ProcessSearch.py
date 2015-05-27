@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -21,10 +21,14 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 # Import wxPython
 import wx
 
-# Import the Transana Series Object
-import Series
+# Import the Transana Library Object
+import Library
+# Import the Transana Document Object
+import Document
 # Import the Transana Episode Object
 import Episode
+# Import the Transana Quote Object
+import Quote
 # Import the Transana Collection Object
 import Collection
 # Import the Transana Database Interface
@@ -74,8 +78,12 @@ class ProcessSearch(object):
                 self.collectionList = dlg.GetCollectionList(collTree, collNode, True)
                 # ... and get the search terms from the dialog
                 searchTerms = dlg.searchQuery.GetValue().split('\n')
+                # Get the includeDocuments info
+                includeDocuments = dlg.includeDocuments.IsChecked()
                 # Get the includeEpisodes info
                 includeEpisodes = dlg.includeEpisodes.IsChecked()
+                # Get the includeQuotes info
+                includeQuotes = dlg.includeQuotes.IsChecked()
                 # Get the includeClips info
                 includeClips = dlg.includeClips.IsChecked()
                 # Get the includeSnapshots info
@@ -85,12 +93,16 @@ class ProcessSearch(object):
         elif (searchTerms != None):
             # There's no dialog.  Just say the user said OK.
             result = wx.ID_OK
-            # Include Episodes, Clips, and Snapshots
-            includeEpisodes = True
+            # Include Clips.  Do not include Documents or Episodes
+            includeDocuments = False
+            includeEpisodes = False
             includeClips = True
+            # If Pro, Lab, or MU, include Quotes and Snapshots.  
             if TransanaConstants.proVersion:
+                includeQuotes = True
                 includeSnapshots = True
             else:
+                includeQuotes = False
                 includeSnapshots = False
         # if kwg and kw are passed in, we're doing a Quick Search
         else:
@@ -100,12 +112,16 @@ class ProcessSearch(object):
             searchName = "%s : %s" % (kwg, kw)
             # The Search Terms are just the keyword group and keyword passed in
             searchTerms = ["%s:%s" % (kwg, kw)]
-            # Include Episodes, Clips and Snapshots
-            includeEpisodes = True
+            # Include Clips.  Do not include Documents or Episodes
+            includeDocuments = False
+            includeEpisodes = False
             includeClips = True
+            # If Pro, Lab, or MU, include Quotes and Snapshots.  
             if TransanaConstants.proVersion:
+                includeQuotes = True
                 includeSnapshots = True
             else:
+                includeQuotes = False
                 includeSnapshots = False
 
         # If OK is pressed (or Quick Search), process the requested Search
@@ -150,7 +166,8 @@ class ProcessSearch(object):
                 #  Parameters to be used with the queries.  Parameters are not integrated into the queries 
                 #  in order to allow for automatic processing of apostrophes and other text that could 
                 #  otherwise interfere with the SQL execution.)
-                (episodeQuery, clipQuery, wholeSnapshotQuery, snapshotCodingQuery, params) = self.BuildQueries(searchTerms)
+                (documentQuery, episodeQuery, quoteQuery, clipQuery, wholeSnapshotQuery, snapshotCodingQuery, params) = \
+                    self.BuildQueries(searchTerms)
 
                 # Get a Database Cursor
                 dbCursor = DBInterface.get_db().cursor()
@@ -158,21 +175,21 @@ class ProcessSearch(object):
                 if includeEpisodes:
                     # Adjust query for sqlite, if needed
                     episodeQuery = DBInterface.FixQuery(episodeQuery)
-                    # Execute the Series/Episode query
+                    # Execute the Library/Episode query
                     dbCursor.execute(episodeQuery, tuple(params))
 
-                    # Process the results of the Series/Episode query
+                    # Process the results of the Library/Episode query
                     for line in DBInterface.fetchall_named(dbCursor):
                         # Add the new Transcript(s) to the Database Tree Tab.
                         # To add a Transcript, we need to build the node list for the tree's add_Node method to climb.
-                        # We need to add the Series, Episode, and Transcripts to our Node List, so we'll start by loading
-                        # the current Series and Episode
-                        tempSeries = Series.Series(line['SeriesNum'])
+                        # We need to add the Library, Episode, and Transcripts to our Node List, so we'll start by loading
+                        # the current Library and Episode
+                        tempLibrary = Library.Library(line['SeriesNum'])
                         tempEpisode = Episode.Episode(line['EpisodeNum'])
-                        # Add the Search Root Node, the Search Name, and the current Series and Episode Names.
-                        nodeList = (_('Search'), searchName, tempSeries.id, tempEpisode.id)
+                        # Add the Search Root Node, the Search Name, and the current Library and Episode Names.
+                        nodeList = (_('Search'), searchName, tempLibrary.id, tempEpisode.id)
                         # Find out what Transcripts exist for each Episode
-                        transcriptList = DBInterface.list_transcripts(tempSeries.id, tempEpisode.id)
+                        transcriptList = DBInterface.list_transcripts(tempLibrary.id, tempEpisode.id)
                         # If the Episode HAS defined transcripts ...
                         if len(transcriptList) > 0:
                             # Add each Transcript to the Database Tree
@@ -182,7 +199,54 @@ class ProcessSearch(object):
                         # If the Episode has no transcripts, it still has the keywords and SHOULD be displayed!
                         else:
                             # Add the Transcript-less Episode Node to the Tree.  
-                            self.dbTree.add_Node('SearchEpisodeNode', nodeList, tempEpisode.number, tempSeries.number)
+                            self.dbTree.add_Node('SearchEpisodeNode', nodeList, tempEpisode.number, tempLibrary.number)
+
+                if includeDocuments:
+                    # Adjust query for sqlite, if needed
+                    documentQuery = DBInterface.FixQuery(documentQuery)
+                    # Execute the Library/Document query
+                    dbCursor.execute(documentQuery, tuple(params))
+
+                    # Process the results of the Library/Document query
+                    for line in DBInterface.fetchall_named(dbCursor):
+                        # Add the new Document(s) to the Database Tree Tab.
+                        # To add a Document, we need to build the node list for the tree's add_Node method to climb.
+                        # We need to add the Library and Documents to our Node List, so we'll start by loading
+                        # the current Library
+                        tempLibraryName = DBInterface.ProcessDBDataForUTF8Encoding(line['SeriesID'])
+                        tempDocument = Document.Document(line['DocumentNum'])
+                        # Add the Search Root Node, the Search Name, and the current Library Name.
+                        nodeList = (_('Search'), searchName, tempLibraryName)
+                        # Add the Document Node to the Tree.
+                        self.dbTree.add_Node('SearchDocumentNode', nodeList + (tempDocument.id,), tempDocument.number, tempDocument.library_num)
+
+                if includeQuotes:
+                    # Adjust query for sqlite, if needed
+                    quoteQuery = DBInterface.FixQuery(quoteQuery)
+                    # Execute the Collection/Quote query
+                    dbCursor.execute(quoteQuery, params)
+
+                    # Process all results of the Collection/Quote query 
+                    for line in DBInterface.fetchall_named(dbCursor):
+                        # Add the new Quote to the Database Tree Tab.
+                        # To add a Quote, we need to build the node list for the tree's add_Node method to climb.
+                        # We need to add all of the Collection Parents to our Node List, so we'll start by loading
+                        # the current Collection
+                        tempCollection = Collection.Collection(line['CollectNum'])
+
+                        # Add the current Collection Node Data
+                        nodeList = tempCollection.GetNodeData()                        
+                        # Get the DB Values
+                        tempID = line['QuoteID']
+                        # If we're in Unicode mode, format the strings appropriately
+                        if 'unicode' in wx.PlatformInfo:
+                            tempID = DBInterface.ProcessDBDataForUTF8Encoding(tempID)
+                        # Now add the Search Root Node and the Search Name to the front of the Node List and the
+                        # Quote Name to the back of the Node List
+                        nodeList = (_('Search'), searchName) + nodeList + (tempID, )
+
+                        # Add the Node to the Tree
+                        self.dbTree.add_Node('SearchQuoteNode', nodeList, line['QuoteNum'], line['CollectNum'], sortOrder=line['SortOrder'])
 
                 if includeClips:
                     # Adjust query for sqlite, if needed
@@ -198,14 +262,8 @@ class ProcessSearch(object):
                         # the current Collection
                         tempCollection = Collection.Collection(line['CollectNum'])
 
-                        # Add the current Collection Name, and work backwards from here.
-                        nodeList = (tempCollection.id,)
-                        # Repeat this process as long as the Collection we're looking at has a defined Parent...
-                        while tempCollection.parent > 0:
-                           # Load the Parent Collection
-                           tempCollection = Collection.Collection(tempCollection.parent)
-                           # Add this Collection's name to the FRONT of the Node List
-                           nodeList = (tempCollection.id,) + nodeList
+                        # Add the current Collection Node Data
+                        nodeList = tempCollection.GetNodeData()                        
                         # Get the DB Values
                         tempID = line['ClipID']
                         # If we're in Unicode mode, format the strings appropriately
@@ -236,14 +294,8 @@ class ProcessSearch(object):
                         # the current Collection
                         tempCollection = Collection.Collection(line['CollectNum'])
 
-                        # Add the current Collection Name, and work backwards from here.
-                        nodeList = (tempCollection.id,)
-                        # Repeat this process as long as the Collection we're looking at has a defined Parent...
-                        while tempCollection.parent > 0:
-                           # Load the Parent Collection
-                           tempCollection = Collection.Collection(tempCollection.parent)
-                           # Add this Collection's name to the FRONT of the Node List
-                           nodeList = (tempCollection.id,) + nodeList
+                        # Add the current Collection Node Data
+                        nodeList = tempCollection.GetNodeData()                        
                         # Get the DB Values
                         tempID = line['SnapshotID']
                         # If we're in Unicode mode, format the strings appropriately
@@ -275,14 +327,8 @@ class ProcessSearch(object):
                             # the current Collection
                             tempCollection = Collection.Collection(line['CollectNum'])
 
-                            # Add the current Collection Name, and work backwards from here.
-                            nodeList = (tempCollection.id,)
-                            # Repeat this process as long as the Collection we're looking at has a defined Parent...
-                            while tempCollection.parent > 0:
-                               # Load the Parent Collection
-                               tempCollection = Collection.Collection(tempCollection.parent)
-                               # Add this Collection's name to the FRONT of the Node List
-                               nodeList = (tempCollection.id,) + nodeList
+                            # Add the current Collection Node Data
+                            nodeList = tempCollection.GetNodeData()                        
                             # Get the DB Values
                             tempID = line['SnapshotID']
                             # If we're in Unicode mode, format the strings appropriately
@@ -442,6 +488,7 @@ class ProcessSearch(object):
         # made on the Collections tab of the Search Form
 
         if len(self.collectionList) > 0:
+            paramsQ = ()
             paramsCl = ()
             paramsSn = ()
             collectionSQL = ' AND ('
@@ -449,15 +496,20 @@ class ProcessSearch(object):
                 collectionSQL += "(%%s.CollectNum = %d) " % coll[0]
                 if coll != self.collectionList[-1]:
                     collectionSQL += "or "
-                paramsCl+= ('Cl',)
+                paramsQ += ('Q',)
+                paramsCl += ('Cl',)
                 paramsSn += ('Sn',)
             collectionSQL += ") "
 
         # Now that all the pieces (countStrings, params, and the havingStr) are assembled, we can build the
         # SQL Statements for the searches.
 
-        # Define the start of the Series/Episode Query
+        # Define the start of the Library/Document Query
+        documentSQL = 'SELECT Doc.LibraryNum, SeriesID, Doc.DocumentNum, DocumentID, '
+        # Define the start of the Library/Episode Query
         episodeSQL = 'SELECT Ep.SeriesNum, SeriesID, Ep.EpisodeNum, EpisodeID, '
+        # Define the start of the Collection/Quote Query
+        quoteSQL = 'SELECT Q.CollectNum, ParentCollectNum, Q.QuoteNum, CollectID, QuoteID, SortOrder, '
         # Define the start of the Collection/Clip Query
         clipSQL = 'SELECT Cl.CollectNum, ParentCollectNum, Cl.ClipNum, CollectID, ClipID, SortOrder, '
         # Define the start of the Whole Snapshot Query
@@ -474,8 +526,12 @@ class ProcessSearch(object):
             else:
                 tempStr = ' '
 
-            # Add the SQL "COUNT" Line and seperator to the Series/Episode Query
+            # Add the SQL "COUNT" Line and seperator to the Library/Document Query
+            documentSQL += countStrings[lineNum] + tempStr
+            # Add the SQL "COUNT" Line and seperator to the Library/Episode Query
             episodeSQL += countStrings[lineNum] + tempStr
+            # Add the SQL "COUNT" Line and seperator to the Collection/Quote Query
+            quoteSQL += countStrings[lineNum] + tempStr
             # Add the SQL "COUNT" Line and seperator to the Collection/Clip Query
             clipSQL += countStrings[lineNum] + tempStr
             # Add the SQL "COUNT" Line and seperator to the Whole Snapshot Query
@@ -483,7 +539,17 @@ class ProcessSearch(object):
             # Add the SQL "COUNT" Line and seperator to the Snapshot Coding Query
             snapshotCodingSQL += countStrings[lineNum] + tempStr
 
-        # Now add the rest of the SQL for the Series/Episode Query
+        # Now add the rest of the SQL for the Library/Document Query
+        documentSQL += 'FROM ClipKeywords2 CK1, Series2 Se, Documents2 Doc '
+        documentSQL += 'WHERE (Doc.DocumentNum = CK1.DocumentNum) AND '
+        documentSQL += '(Doc.LibraryNum = Se.SeriesNum) AND '
+        documentSQL += '(CK1.DocumentNum > 0) '
+        documentSQL += 'GROUP BY Doc.LibraryNum, SeriesID, Doc.DocumentNum, DocumentID '
+        # Add in the SQL "HAVING" Clause that was constructed above
+        documentSQL += 'HAVING %s ' % havingStr
+        documentSQL += 'ORDER BY SeriesID, DocumentID'
+
+        # Now add the rest of the SQL for the Library/Episode Query
         episodeSQL += 'FROM ClipKeywords2 CK1, Series2 Se, Episodes2 Ep '
         episodeSQL += 'WHERE (Ep.EpisodeNum = CK1.EpisodeNum) AND '
         episodeSQL += '(Ep.SeriesNum = Se.SeriesNum) AND '
@@ -491,6 +557,19 @@ class ProcessSearch(object):
         episodeSQL += 'GROUP BY Ep.SeriesNum, SeriesID, Ep.EpisodeNum, EpisodeID '
         # Add in the SQL "HAVING" Clause that was constructed above
         episodeSQL += 'HAVING %s ' % havingStr
+
+        # Now add the rest of the SQL for the Collection/Quote Query
+        quoteSQL += 'FROM ClipKeywords2 CK1, Collections2 Co, Quotes2 Q '
+        quoteSQL += 'WHERE (Q.QuoteNum = CK1.QuoteNum) AND '
+        quoteSQL += '(Q.CollectNum = Co.CollectNum) AND '
+        quoteSQL += '(CK1.QuoteNum > 0) '
+        if len(self.collectionList) > 0:
+            quoteSQL += collectionSQL % paramsQ
+        quoteSQL += 'GROUP BY Q.CollectNum, CollectID, QuoteID '
+        # Add in the SQL "HAVING" Clause that was constructed above
+        quoteSQL += 'HAVING %s ' % havingStr
+        # Add an "ORDER BY" Clause to preserve Quote Sort Order
+        quoteSQL += 'ORDER BY CollectID, SortOrder'
 
         # Now add the rest of the SQL for the Collection/Clip Query
         clipSQL += 'FROM ClipKeywords2 CK1, Collections2 Co, Clips2 Cl '
@@ -533,13 +612,21 @@ class ProcessSearch(object):
         # Add an "ORDER BY" Clause to preserve Snapshot Sort Order
         snapshotCodingSQL += 'ORDER BY CollectID, SortOrder'
 
-#        tempParams = ()
-#        for p in params:
-#            tempParams = tempParams + (p,)
+        tempParams = ()
+        for p in params:
+            tempParams = tempParams + (p,)
             
-        # dlg = wx.TextEntryDialog(None, "Transana Series/Episode SQL Statement:", "Transana", episodeSQL % tempParams, style=wx.OK)
-        # dlg.ShowModal()
-        # dlg.Destroy()
+#        dlg = wx.TextEntryDialog(None, "Transana Library/Document SQL Statement:", "Transana", documentSQL % tempParams, style=wx.OK)
+#        dlg.ShowModal()
+#        dlg.Destroy()
+
+#        dlg = wx.TextEntryDialog(None, "Transana Library/Episode SQL Statement:", "Transana", episodeSQL % tempParams, style=wx.OK)
+#        dlg.ShowModal()
+#        dlg.Destroy()
+
+#        dlg = wx.TextEntryDialog(None, "Transana Collection/Quote SQL Statement:", "Transana", quoteSQL % tempParams, style=wx.OK)
+#        dlg.ShowModal()
+#        dlg.Destroy()
 
 #        dlg = wx.TextEntryDialog(None, "Transana Collection/Clip SQL Statement:", "Transana", clipSQL % tempParams, style=wx.OK)
 #        dlg.ShowModal()
@@ -553,6 +640,6 @@ class ProcessSearch(object):
 #        dlg.ShowModal()
 #        dlg.Destroy()
 
-        # Return the Series/Episode Query, the Collection/Clip Query, the Whole Snapshot Query, the Snapshot Coding Query, 
+        # Return the Library/Episode Query, the Collection/Clip Query, the Whole Snapshot Query, the Snapshot Coding Query, 
         # and the list of parameters to use with these queries to the calling routine.
-        return (episodeSQL, clipSQL, wholeSnapshotSQL, snapshotCodingSQL, params)
+        return (documentSQL, episodeSQL, quoteSQL, clipSQL, wholeSnapshotSQL, snapshotCodingSQL, params)

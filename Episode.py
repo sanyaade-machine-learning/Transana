@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -81,8 +81,8 @@ class Episode(DataObject.DataObject):
             str += '  %s  %s %s %s\n' % (addFile['filename'], addFile['offset'], addFile['length'], addFile['audio'])
         str += "Total adjusted Episode Length = %d (%s)\n" % (self.episode_length(), Misc.time_in_ms_to_str(self.episode_length()))
         str = str + "Date = %s\n" % self.tape_date
-        str = str + "Series ID = %s\n" % self.series_id
-        str = str + "Series Num = %s\n" % self.series_num
+        str = str + "Library ID = %s\n" % self.series_id
+        str = str + "Library Num = %s\n" % self.series_num
         str += "Keywords:\n"
         for kw in self._kwlist:
             str += '  ' + kw.keywordPair + '\n'
@@ -107,11 +107,11 @@ class Episode(DataObject.DataObject):
         
 # Public methods
 
-    def db_load_by_name(self, series, episode):
+    def db_load_by_name(self, library, episode):
         """Load a record by ID / Name."""
         # If we're in Unicode mode, we need to encode the parameters so that the query will work right.
         if 'unicode' in wx.PlatformInfo:
-            series = series.encode(TransanaGlobal.encoding)
+            library = library.encode(TransanaGlobal.encoding)
             episode = episode.encode(TransanaGlobal.encoding)
         # Get a database connection
         db = DBInterface.get_db()
@@ -126,7 +126,7 @@ class Episode(DataObject.DataObject):
         # Get a database cursor
         c = db.cursor()
         # Execute the query
-        c.execute(query, (episode, series))
+        c.execute(query, (episode, library))
         # Get the number of rows returned
         # rowcount doesn't work for sqlite!
         if TransanaConstants.DBInstalled == 'sqlite3':
@@ -244,7 +244,7 @@ class Episode(DataObject.DataObject):
         if self.id == "":
             raise SaveError, _("Episode ID is required.")
         elif self.series_num == 0:
-            raise SaveError, _("This Episode is not associated properly with a Series.")
+            raise SaveError, _("This Episode is not associated properly with a Library.")
         elif self.media_filename == "":
             raise SaveError, _("Media Filename is required.")
         else:
@@ -285,15 +285,23 @@ class Episode(DataObject.DataObject):
                     self.tape_length, self.tape_date_db, comment)
         # Start the Save Process (inherited).  If we have a NEW Episode ...
         if (self._db_start_save() == 0):
-            # Duplicate Episode IDs within a Series are not allowed.
-            if DBInterface.record_match_count("Episodes2", \
-                    ("EpisodeID", "SeriesNum"),
+            # Duplicate Episode IDs within a Library are not allowed.
+            if DBInterface.record_match_count("Episodes2", ("EpisodeID", "SeriesNum"),
                     (id, self.series_num)) > 0:
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.'), 'utf8')
+                    prompt = unicode(_('An Episode named "%s" already exists in Library "%s".\nPlease enter a different Episode ID.'), 'utf8')
                 else:
-                    prompt = _('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.')
+                    prompt = _('An Episode named "%s" already exists in Library "%s".\nPlease enter a different Episode ID.')
+                raise SaveError, prompt % (self.id, self .series_id)
+            # Duplicate Episode ID with a Document ID within a Library are not allowed.
+            if DBInterface.record_match_count("Documents2", ("DocumentID", "LibraryNum"),
+                    (id, self.series_num)) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Document named "%s" already exists in Library "%s".\nPlease enter a different Episode ID.'), 'utf8')
+                else:
+                    prompt = _('A Document named "%s" already exists in Library "%s".\nPlease enter a different Episode ID.')
                 raise SaveError, prompt % (self.id, self .series_id)
 
             # insert the new record
@@ -309,14 +317,22 @@ class Episode(DataObject.DataObject):
         # If we have an existing Episode ...
         else:
             # check for dupes
-            if DBInterface.record_match_count("Episodes2", \
-                    ("EpisodeID", "SeriesNum", "!EpisodeNum"),
+            if DBInterface.record_match_count("Episodes2", ("EpisodeID", "SeriesNum", "!EpisodeNum"),
                     (id, self.series_num, self.number) ) > 0:
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.'), 'utf8')
+                    prompt = unicode(_('An Episode named "%s" already exists in Library "%s".\nPlease enter a different Episode ID.'), 'utf8')
                 else:
-                    prompt = _('An Episode named "%s" already exists in Series "%s".\nPlease enter a different Episode ID.')
+                    prompt = _('An Episode named "%s" already exists in Library "%s".\nPlease enter a different Episode ID.')
+                raise SaveError, prompt % (self.id, self.series_id)
+            # check for dupes in Documents
+            if DBInterface.record_match_count("Documents2", ("DocumentID", "LibraryNum"),
+                    (id, self.series_num) ) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Document named "%s" already exists in Library "%s".\nPlease enter a different Episode ID.'), 'utf8')
+                else:
+                    prompt = _('A Document named "%s" already exists in Library "%s".\nPlease enter a different Episode ID.')
                 raise SaveError, prompt % (self.id, self.series_id)
             
             # OK to update the episode record
@@ -364,7 +380,7 @@ class Episode(DataObject.DataObject):
             numberChanged = False
             # If we are dealing with an existing Episode, delete all the Keywords
             # in anticipation of putting them all back later
-            DBInterface.delete_all_keywords_for_a_group(self.number, 0, 0)
+            DBInterface.delete_all_keywords_for_a_group(self.number, 0, 0, 0, 0)
 
         # To save the additional video file names, we must first delete them from the database!
         # Craft a query to remove all existing Additonal Videos
@@ -396,7 +412,7 @@ class Episode(DataObject.DataObject):
         # Add the Episode keywords back.  Iterate through the Keyword List
         for kws in self._kwlist:
             # Try to add the Clip Keyword record.  If it is NOT added, the keyword has been changed by another user!
-            if not DBInterface.insert_clip_keyword(self.number, 0, 0, kws.keywordGroup, kws.keyword, kws.example):
+            if not DBInterface.insert_clip_keyword(self.number, 0, 0, 0, 0, kws.keywordGroup, kws.keyword, kws.example):
                 # if the prompt isn't blank ...
                 if prompt != '':
                     # ... add a couple of line breaks to it
@@ -437,9 +453,9 @@ class Episode(DataObject.DataObject):
             (db, c) = self._db_start_delete(use_transactions)
 
             # Delete all Episode-based Filter Configurations
-            #   Delete Keyword Map records
+            #   Delete Episode Keyword Map records
             DBInterface.delete_filter_records(1, self.number)
-            #   Delete Keyword Visualization records
+            #   Delete Episode Keyword Visualization records
             DBInterface.delete_filter_records(2, self.number)
             #   Delete Episode Clip Data Export records
             DBInterface.delete_filter_records(3, self.number)
@@ -465,7 +481,7 @@ class Episode(DataObject.DataObject):
 
             # Delete all related references in the ClipKeywords table
             if result:
-                DBInterface.delete_all_keywords_for_a_group(self.number, 0, 0)
+                DBInterface.delete_all_keywords_for_a_group(self.number, 0, 0, 0, 0)
 
             if result:
                 # Craft a query to remove all existing Additonal Videos
@@ -637,10 +653,10 @@ class Episode(DataObject.DataObject):
 # Private methods
 
     def _sync_series(self):
-        """Synchronize the Series ID property to reflect the current state
-        of the Series Number property."""
-        from Series import Series
-        s = Series(self.series_num)
+        """Synchronize the Library ID property to reflect the current state
+        of the Library Number property."""
+        from Library import Library
+        s = Library(self.series_num)
         self.series_id = s.id
 
     def _load_row(self, r):
@@ -651,7 +667,7 @@ class Episode(DataObject.DataObject):
         self.tape_length = r['EpLength']
         self.tape_date = r['TapingDate']
         
-        # These come from the Series record
+        # These come from the Library record
         self.series_id = r['SeriesID']
         self.series_num = r['SeriesNum']
         
@@ -816,9 +832,9 @@ class Episode(DataObject.DataObject):
 
 # Public properties
     series_num = property(_get_ser_num, _set_ser_num, _del_ser_num,
-                        """The number of the series to which the episode belongs.""")
+                        """The number of the Library to which the episode belongs.""")
     series_id = property(_get_ser_id, _set_ser_id, _del_ser_id,
-                        """The name of the series to which the episode belongs.""")
+                        """The name of the Library to which the episode belongs.""")
     media_filename = property(_get_fname, _set_fname, _del_fname,
                         """The name (including path) of the media file.""")
     additional_media_files = property(_get_additional_media, _set_additional_media, _del_additional_media,

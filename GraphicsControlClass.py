@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2014  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2015  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -205,7 +205,6 @@ class GraphicsControl(wx.ScrolledWindow):
 
         # Clear the Cursor Position
         self.cursorPosition = None
-
         self.startTime = 0.0
         self.endTime = 0.0
 
@@ -658,9 +657,6 @@ class GraphicsControl(wx.ScrolledWindow):
     def TransanaOnMotion(self, event):
         self.x = event.GetX() + (self.GetViewStart()[0] * self.GetScrollPixelsPerUnit()[0])
         self.y = event.GetY() + (self.GetViewStart()[1] * self.GetScrollPixelsPerUnit()[1])
-
-#        print "GraphicsControlClass.TransanaOnMotion():", self.x, event.GetX(), self.GetViewStart()[0], self.GetScrollPixelsPerUnit()[0]
-        
         self.parent.OnMouseOver(self.x, self.y, float(self.x)/self.canvassize[0], float(self.y)/self.canvassize[1])
 
         # When dragging in Transana Mode, we are making a selection in the Waveform Diagram.  
@@ -882,7 +878,35 @@ class GraphicsControl(wx.ScrolledWindow):
             self.cursorPosition = len(self.lines2) - 1
         
         self.reInitBuffer = True
- 
+
+    def DrawSelection(self, startPosition, endPosition):
+        # If we are in a Right-To-Left Language ...
+        if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft) and \
+           (TransanaGlobal.configData.visualizationStyle in ['Keyword', 'Hybrid']):
+            # ... reverse the Visualization Cursor position
+            currentPosition = 1.0 - currentPosition
+        (width, height) = self.GetSizeTuple()
+        x = int(currentPosition * self.canvassize[0])
+        # If there is an existing cursor, eliminate it.  (It would be in the temporary (lines2[]) layer)
+        if (self.cursorPosition != None) and (len(self.lines2) > self.cursorPosition):
+            del(self.lines2[self.cursorPosition])
+        # If there is NO entry for the cursor in self.lines2, and as long as the CURRENT POSITION wasn't just inserted, we add a temporary
+        # line for the cursor
+        if (len(self.lines2) == 0) or ((len(self.lines2) > 0) and (int(x) != self.lines2[-1][2][0][0]) and (int(x) != self.lines2[-1][2][0][0] + 1)):
+            # Remember the original color
+            oldColour = self.colour
+            # Change the color to grey for the cursor
+            self.colour = "GREY"
+            # Draw the new cursor to the temporary (lines2[]) layer
+            self.AddLines2([(int(x), 0, int(x), int(height-6))])
+            # Restore the original color
+            self.colour = oldColour
+        # As long as the cursor entry has been made to the self.lines2 list ...
+        if len(self.lines2) > 0:
+            # ... remember the cursor position in the "lines" structure so that it can be removed
+            self.cursorPosition = len(self.lines2) - 1
+        
+        self.reInitBuffer = True
 
 
 # If this class is run independently (for testing), create an

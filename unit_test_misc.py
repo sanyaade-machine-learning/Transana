@@ -7,9 +7,11 @@ import gettext
 __builtins__._ = wx.GetTranslation
 
 
+import ConfigData
 import Dialogs
 import Misc
 import TransanaConstants
+import TransanaGlobal
 
 
 MENU_FILE_EXIT = 101
@@ -19,6 +21,9 @@ class FormCheck(wx.Frame):
     def __init__(self,parent,id,title):
 
         wx.SetDefaultPyEncoding('utf8')
+
+        # Define the Configuration Data
+        TransanaGlobal.configData = ConfigData.ConfigData()
 
         wx.Frame.__init__(self,parent,-1, title, size = (800,600), style=wx.DEFAULT_FRAME_STYLE|wx.NO_FULL_REPAINT_ON_RESIZE)
         self.testsRun = 0
@@ -95,13 +100,13 @@ class FormCheck(wx.Frame):
             self.presLan_en.install()
             self.locale = wx.Locale(lang)
             self.locale.AddCatalog("Transana")
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
             self.ConfirmTest(prompt, testName)
 
-        if 110 in testsToRun:
+        if ('wxMac' not in wx.PlatformInfo) and (110 in testsToRun):
             # Arabic
             testName = 'Arabic translation'
             langName = 'ar'
@@ -109,7 +114,7 @@ class FormCheck(wx.Frame):
             self.presLan_ar = gettext.translation('Transana', 'locale', languages=['ar']) # Arabic
             self.presLan_ar.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
@@ -123,7 +128,7 @@ class FormCheck(wx.Frame):
             self.presLan_da = gettext.translation('Transana', 'locale', languages=['da']) # Danish
             self.presLan_da.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
@@ -137,7 +142,7 @@ class FormCheck(wx.Frame):
             self.presLan_de = gettext.translation('Transana', 'locale', languages=['de']) # German
             self.presLan_de.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
@@ -151,7 +156,7 @@ class FormCheck(wx.Frame):
             self.presLan_es = gettext.translation('Transana', 'locale', languages=['es']) # Spanish
             self.presLan_es.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
@@ -165,7 +170,7 @@ class FormCheck(wx.Frame):
             self.presLan_fr = gettext.translation('Transana', 'locale', languages=['fr']) # French
             self.presLan_fr.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
@@ -179,7 +184,7 @@ class FormCheck(wx.Frame):
             self.presLan_it = gettext.translation('Transana', 'locale', languages=['it']) # Italian
             self.presLan_it.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
@@ -193,7 +198,7 @@ class FormCheck(wx.Frame):
             self.presLan_nl = gettext.translation('Transana', 'locale', languages=['nl']) # Dutch
             self.presLan_nl.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
@@ -210,7 +215,7 @@ class FormCheck(wx.Frame):
             self.presLan_nb = gettext.translation('Transana', 'locale', languages=['nb']) # Norwegian Bokmal
             self.presLan_nb.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
@@ -227,7 +232,7 @@ class FormCheck(wx.Frame):
             self.presLan_nn = gettext.translation('Transana', 'locale', languages=['nn']) # Norwegian Nynorsk
             self.presLan_nn.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
@@ -241,7 +246,7 @@ class FormCheck(wx.Frame):
             self.presLan_sv = gettext.translation('Transana', 'locale', languages=['sv']) # Swedish
             self.presLan_sv.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))
@@ -255,7 +260,7 @@ class FormCheck(wx.Frame):
             self.presLan_zh = gettext.translation('Transana', 'locale', languages=['zh']) # Chinese Simplified
             self.presLan_zh.install()
             self.locale = wx.Locale(lang)
-            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Series'),     type(_('Series')))
+            prompt  = '%s:  Series     = %s (%s)\n' % (langName, _('Libraries'),  type(_('Libraries')))
             prompt += '     Collection = %s (%s)\n' % (          _('Collection'), type(_('Collection')))
             prompt += '     Keyword    = %s (%s)\n' % (          _('Keyword'),    type(_('Keyword')))
             prompt += '     Search     = %s (%s)\n' % (          _('Search'),     type(_('Search')))

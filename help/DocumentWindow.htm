@@ -1,0 +1,68 @@
+<HTML>
+<HEAD>
+<TITLE>Document Window</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Document Window</H1><HR>
+
+The Document Window is where you can view and edit your <A HREF="documentproperties.htm">Documents</A>, <A HREF="transcriptproperties.htm">Transcripts</A>, <A HREF="quoteproperties.htm">Quotes</A>, and <A HREF="clipproperties.htm">Clips</A>.  <P>
+
+<IMG SRC="images/documentwindow.gif"  ALT="documentwindow"   BORDER=0><P>
+
+The Document Window is like a standard word processor for Documents.  It can display multiple Documents on different tabs, and can even display multiple Transcripts within adjustable panes within a single tab.<P> 
+
+The Document Window has some special features build in to make the act of transcribing media files and working with media files linked to Transcripts easier.  For example, you can add <A HREF="timecodes.htm">time codes</A>, which link a location in the media file to a position in the Transcript.  Once this is done, the highlight in the Transcript will move as the video is played, highlighting the appropriate section of the Transcript (if the Transcript is not in &quot;Edit Mode.&quot;)  <P>
+
+The Document Window toolbar includes speed buttons for inserting symbols commonly used in Jeffersonian Transcript Annotation.  These symbols are <IMG SRC="images/risingintonation.gif"  ALT="risingintonation"   BORDER=0>, which indicates rising intonation, <IMG SRC="images/fallingintonation.gif"  ALT="fallingintonation"   BORDER=0>, which indicates falling intonation, <IMG SRC="images/inhale.gif"  ALT="inhale"   BORDER=0>, which signifies an audible intake of breath, and <IMG SRC="images/whisper.gif"  ALT="whisper"   BORDER=0>, which signifies a whisper or quieted speech.  (See <A HREF="transcriptnotation.htm">Transcript Notation</A> in Transana's Help Menu for more information about Jeffersonian Transcription Symbols.)<P>
+
+The next set of buttons are the Show/Hide Time Codes toggle, denoted by the <A HREF="timecodes.htm">time code</A> icon <IMG SRC="images/timecode.gif"  ALT="timecodebutton"   BORDER=0>, and the Show/Hide Time Code Values, denoted by the <IMG SRC="images/timecodedata.gif"  ALT="timecodevaluesbutton"   BORDER=0> &nbsp;icon.  The first of these buttons controls whether the time code <I>symbol</I> is displayed in Transcripts, while the second one controls whether the time code <I>value</I>, in human-readable form, is displayed.  (Please note that it is not a good idea to edit the time code value text.  This will not affect the underlying time code, but may cause display problems when Transana tries to hide this automatically-generated text.)<P>
+
+The Edit Mode/Read-Only toggle, denoted by the <IMG SRC="images/editbutton.gif"  ALT="editbutton"   BORDER=0> &nbsp;icon, is next.  Please note that Transana starts up in "read-only" mode, where Documents and Transcripts are not editable and the highlight selection in a Transcript moves with the media file as it plays.  Pressing this button toggles you into the "edit mode," where you can edit Documents and transcribe and insert <A HREF="timecodes.htm">time codes</A> into Transcripts.  Having the Transcript highlight track the media file position is very useful when you are watching or listening to your media file, but when you are editing a Transcript, you don't want the cursor moving around in the Transcript when you play video, as this is very disruptive to editing.<P>
+
+The next set of buttons in the Document Window toolbar are: the Create Quick Quotes and Clips button <IMG SRC="images/quickclipicon.gif"  ALT="quickclipicon"   BORDER=0>, which allows you to create Quick Quote and Quick Clips if you have a Keyword selected in the Database Tree; the Keyword button <IMG SRC="images/keywordsnodeicon.gif"  ALT="keywordsnodeicon"   BORDER=0>, which allows you to edit the Keyword List associated with the currently-loaded Document, Episode, Quote, or Clip; and the Save button <IMG SRC="images/saveicon.gif"  ALT="saveicon"   BORDER=0>, which saves the current Document or Transcript.<P>
+
+The Propagate Changes button is next, as indicated by <IMG SRC="images/propagatebutton.gif">, which allows you to push <A HREF="propagateparentchanges.htm">changes in a Document</A> out to the appropriate Quote,  and <A HREF="propagateparentchanges.htm">changes in an Episode Transcript</A> out to the appropriate Clips, or to push <A HREF="propagatechildchanges.htm">changes in a Quote</A> out to exact copies of that quote and <A HREF="propagatechildchanges.htm">changes in a Clip Transcript</A> out to exact copies of that Clip.<P>
+
+The Match Selection in Other Transcripts button, shown by the <IMG SRC="images/multiselectbutton.gif"> &nbsp;icon, causes all Transcript selections to match the one in the selected Transcript pane when <A HREF="multitrans.htm">multiple Transcripts</A> are open at the same time.  The Play Multiple Transcript Selection button, shown by the <IMG SRC="images/multiplaybutton.gif"> &nbsp;icon, causes the current selections in <A HREF="multitrans.htm">multiple-Transcript clips</A> to be played as a way of previewing the Multiple Transcript Clip that would be created from the current set of selections.<P>
+
+If you have <A HREF="timecodes.htm">time codes</A> in a Transcript, you can right-click the Transcript to play the section of the associated media file(s) between the nearest <A HREF="timecodes.htm">time codes</A> where the cursor is currently placed.  You can also highlight a larger section of the Transcript if you want to play a portion that crosses <A HREF="timecodes.htm">time codes</A>.  In addition, if you would like to play from the current position in the Transcript to the end of the loaded Episode or Clip, you can hold down the Ctrl key and right-click the Transcript on Windows or the Ctrl and &quot;Command&quot; key and click the Transcript on the Mac.<P>
+
+During transcription of Episodes, you may find it easiest to use <B>Ctrl-S</B> to start and stop video playback.  This causes the video to be played in Transcription Mode, which causes an auto-rewind to be performed when play is initiated.  (You can set the amount of the rewind, as well as the playback speed, using the <A HREF="programoptions.htm">Transcriber Settings</A> tab on the Program Settings dialog.)  In addition, <B>Ctrl-D</B> will pause and restart the video playback without auto-rewinding, <B>Ctrl-A</B> will rewind the video by 10 seconds, and <B>Ctrl-F</B> will fast-forward the video by 10 seconds.  <B>Ctrl-N</B> will cause the next time-coded segment to be played, and <B>Ctrl-P</B> will cause the previous time-coded segment to be played.  Finally, <B>Ctrl-T</B> will cause a time code for the current video position (as indicated in the Visualization Window) to be inserted at the current cursor position in the Transcript.<P>
+
+Here is a summary of the keyboard shortcuts available in the Transcription Window:<P>
+<TABLE BORDER=3>
+  <TR><TH>Windows</TH><TH>OS X</TH><TH>Result</TH></TR>
+  <TR><TD VALIGN=TOP>Ctrl-Z</TD><TD VALIGN=TOP>Cmd-Z</TD><TD VALIGN=TOP>Undo edit.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-X</TD><TD VALIGN=TOP>Cmd-X</TD><TD VALIGN=TOP>Cut highlighted text.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-C</TD><TD VALIGN=TOP>Cmd-C</TD><TD VALIGN=TOP>Copy highlighted text.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-V</TD><TD VALIGN=TOP>Cmd-V</TD><TD VALIGN=TOP>Paste text.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-A</TD><TD VALIGN=TOP>Cmd-A</TD><TD VALIGN=TOP>Rewind 10 seconds and play video.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-S</TD><TD VALIGN=TOP>Cmd-S</TD><TD VALIGN=TOP>If video is playing, pause it.  If not, rewind video by the amount of the Transcription Setback setting in Program Settings (2 seconds by default) and play it.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-D</TD><TD VALIGN=TOP>Cmd-D</TD><TD VALIGN=TOP>If video is playing, pause it.  If not, play it with no rewind.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-F</TD><TD VALIGN=TOP>Cmd-F</TD><TD VALIGN=TOP>Fast-Forward the video 10 seconds and play it.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-P</TD><TD VALIGN=TOP>Cmd-P</TD><TD VALIGN=TOP>Play the previous time-coded segment.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-N</TD><TD VALIGN=TOP>Cmd-N</TD><TD VALIGN=TOP>Play the next time-coded segment.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-B</TD><TD VALIGN=TOP>Cmd-B</TD><TD VALIGN=TOP>Toggle Bold character formatting.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-I</TD><TD VALIGN=TOP>Cmd-I</TD><TD VALIGN=TOP>Toggle Italics character formatting.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-U</TD><TD VALIGN=TOP>Cmd-U</TD><TD VALIGN=TOP>Toggle Underline character formatting.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-Cursor Up</TD><TD VALIGN=TOP>Cmd-Cursor Up</TD><TD VALIGN=TOP>Insert Rising Intonation symbol.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-Cursor Down</TD><TD VALIGN=TOP>Cmd-Cursor Down</TD><TD VALIGN=TOP>Insert Falling Intonation symbol.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-H</TD><TD VALIGN=TOP>Cmd-J</TD><TD VALIGN=TOP>Insert Audible Breath symbol.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-O</TD><TD VALIGN=TOP>Cmd-O</TD><TD VALIGN=TOP>Insert Whispered Speech symbol.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-T</TD><TD VALIGN=TOP>Cmd-T</TD><TD VALIGN=TOP>Insert a Time Code.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-K</TD><TD VALIGN=TOP>Cmd-K</TD><TD VALIGN=TOP>Create a Quick Clip, if a Keyword is selected in the Database Tree.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-(comma)</TD><TD VALIGN=TOP>Cmd-(comma)</TD><TD VALIGN=TOP>Slow video playback down by 10% of normal speed, if allowed.</TD></TR>
+  <TR><TD VALIGN=TOP>Ctrl-(period)</TD><TD VALIGN=TOP>Cmd-(period)</TD><TD VALIGN=TOP>Speed video playback up by 10% of normal speed, if allowed.</TD></TR>
+  <TR><TD VALIGN=TOP>F12</TD><TD VALIGN=TOP>Cmd-F12</TD><TD VALIGN=TOP>Quick Save</TD></TR>
+</TABLE><P>
+
+<FONT COLOR="red">Advanced Topic:</FONT>  If you are interested in formatting your transcript, for example setting up the left-hanging time code and speaker identifiers shown in the transcript above, you can learn how to set this up by going to the Transana Web site (http://www.transana.org), going to the "Support" menu, and choosing "ScreenCasts."  Watch the ScreenCast called "Transcript Formatting and Transcript Templates."<P>
+
+<A HREF="mediawindow.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="timecodes.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

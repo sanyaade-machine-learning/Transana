@@ -21,15 +21,19 @@ import ControlObjectClass
 import CoreData
 import DBInterface
 import Dialogs
+import Document
+import DocumentPropertiesForm
 import Episode
 import EpisodePropertiesForm
 import KeywordObject
 import KeywordPropertiesForm
+import Library
+import LibraryPropertiesForm
 import MenuWindow
 import Note
 import NotePropertiesForm
-import Series
-import SeriesPropertiesForm
+import Quote
+import QuotePropertiesForm
 import Snapshot
 import SnapshotPropertiesForm
 import TransanaExceptions
@@ -58,9 +62,9 @@ class FormCheck(wx.Frame):
         # Set essential global color manipulation data structures once the ConfigData object exists.
         (TransanaGlobal.transana_colorNameList, TransanaGlobal.transana_colorLookup, TransanaGlobal.keywordMapColourSet) = TransanaGlobal.SetColorVariables()
         if 'wxMSW' in wx.PlatformInfo:
-            TransanaGlobal.configData.videoPath = 'C:\\Users\\DavidWoods\\Video'
+            TransanaGlobal.configData.videoPath = 'C:\\Users\\DavidWoods\\Video\\'
         elif 'wxMac' in wx.PlatformInfo:
-            TransanaGlobal.configData.videoPath = u'/Volumes/Vidëo'
+            TransanaGlobal.configData.videoPath = u'/Volumes/Vidëo/'
 
         print "Modified videoPath:", TransanaGlobal.configData.videoPath
         
@@ -99,20 +103,23 @@ class FormCheck(wx.Frame):
         self.SetStatusText("")
         self.Show(True)
         self.RunTests()
+        self.Close()
 
     def RunTests(self):
         # Tests defined:
         # 1 - 100     Basic Dialogs
         # 101 - 200    Database Connetion
         # 201 - 300    Keyword
-        # 301 - 400    Series
+        # 301 - 350    Library
+        # 351 - 400    Document
         # 401 - 500    Episode
         # 501 - 600    Transcript
-        # 601 - 700    Collection
+        # 601 - 650    Collection
+        # 651 - 700    Quote
         # 701 - 800    Clip
         # 801 - 900    Snapshot
         # 901 - 1000   Note
-        testsNotToSkip = [102, 201, 213, 301, 401, 501, 601, 603, 701, 801, 901]
+        testsNotToSkip = [102, 201, 213, 301, 351, 401, 501, 601, 603, 651, 652, 701, 801, 901]
         startAtTest = 1  # Should start at 1, not 0!
         endAtTest = 1000   # Should be one more than the last test to be run!
         testsToRun = testsNotToSkip + range(startAtTest, endAtTest)
@@ -655,7 +662,7 @@ class FormCheck(wx.Frame):
             self.SetStatusText(testName)
             keyword2 = KeywordObject.Keyword()
             keyword2.keywordGroup = 'A very long keyword group name meant to challenge form layout'
-            keyword2.keyword = 'A very long keyword name meant to challenge form layout'
+            keyword2.keyword = 'DO NOT USE THIS!!! It is a very long keyword name meant to challenge form layout'
 
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
@@ -709,7 +716,7 @@ class FormCheck(wx.Frame):
             self.SetStatusText(testName)
             keyword2 = KeywordObject.Keyword()
             keyword2.keywordGroup = keyword1.keywordGroup
-            keyword2.keyword = 'This is a very long keyword name meant to challenge form layout'
+            keyword2.keyword = 'DO NOT USE THIS!!! It is a very long keyword name meant to challenge form layout'
 
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
@@ -726,171 +733,171 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        series1 = None
+        library1 = None
         if 301 in testsToRun:
-            # Series Properties Form
-            testName = 'Add Series > OK'
+            # Library Properties Form
+            testName = 'Add Library > OK'
             self.SetStatusText(testName)
-            msg = 'You will see an Add Series Form.'
+            msg = 'You will see an Add Library Form.'
             msg += '\n\n'
             msg += 'Enter distinct values for all fields.'
             self.ShowMessage(msg)
-            dlg = SeriesPropertiesForm.AddSeriesDialog(self, -1)
+            dlg = LibraryPropertiesForm.AddLibraryDialog(self, -1)
             result = dlg.get_input()
             dlg.Destroy()
-            msg = 'Do you see the correct Series data?\n\n'
+            msg = 'Do you see the correct Library data?\n\n'
             if result == None:
                 msg += 'You pressed Cancel.'
             else:
-                series1 = result
-                series1.db_save()
-                msg += 'You pressed OK!\n\n' + series1.__repr__()
+                library1 = result
+                library1.db_save()
+                msg += 'You pressed OK!\n\n' + library1.__repr__()
             self.ConfirmTest(msg, testName)
 
         if 302 in testsToRun:
-            # Series Properties Form
-            testName = 'Add Series > Cancel'
+            # Library Properties Form
+            testName = 'Add Library > Cancel'
             self.SetStatusText(testName)
-            msg = 'You will see an Add Series Form.'
+            msg = 'You will see an Add Library Form.'
             msg += '\n\n'
             msg += 'Press CANCEL.'
             self.ShowMessage(msg)
-            dlg = SeriesPropertiesForm.AddSeriesDialog(self, -1)
+            dlg = LibraryPropertiesForm.AddLibraryDialog(self, -1)
             result = dlg.get_input()
             dlg.Destroy()
             msg = 'Does this say you pressed Cancel?\n\n'
             if result == None:
                 msg += 'You pressed Cancel.'
-                if series1 != None:
-                    msg += '\n\n' + series1.__repr__()
+                if library1 != None:
+                    msg += '\n\n' + library1.__repr__()
             else:
-                series1 = result
-                series1.db_save()
-                msg += 'You pressed OK!\n\n' + series1.__repr__()
+                library1 = result
+                library1.db_save()
+                msg += 'You pressed OK!\n\n' + library1.__repr__()
             self.ConfirmTest(msg, testName)
 
         if 303 in testsToRun:
-            # Series Properties Form
-            testName = 'Series Properties Form > Help'
+            # Library Properties Form
+            testName = 'Library Properties Form > Help'
             self.SetStatusText(testName)
-            msg = 'You will see an Add Series Form.'
+            msg = 'You will see an Add Library Form.'
             msg += '\n\n'
             msg += 'Press HELP, then CANCEL.'
             self.ShowMessage(msg)
-            dlg = SeriesPropertiesForm.AddSeriesDialog(self, -1)
+            dlg = LibraryPropertiesForm.AddLibraryDialog(self, -1)
             result = dlg.get_input()
             dlg.Destroy()
-            msg = 'Did you see the Series Properties Help?\n\n'
+            msg = 'Did you see the Library Properties Help?\n\n'
             self.ConfirmTest(msg, testName)
 
         if 304 in testsToRun:
-            # Series Properties Form
-            testName = 'Edit Series > OK'
+            # Library Properties Form
+            testName = 'Edit Library > OK'
             self.SetStatusText(testName)
-            msg = 'You will see an Edit Series Form.'
+            msg = 'You will see an Edit Library Form.'
             msg += '\n\n'
             msg += 'Edit values for all fields and press OK.'
             self.ShowMessage(msg)
-            series1.lock_record()
-            dlg = SeriesPropertiesForm.EditSeriesDialog(self, -1, series1)
+            library1.lock_record()
+            dlg = LibraryPropertiesForm.EditLibraryDialog(self, -1, library1)
             result = dlg.get_input()
             dlg.Destroy()
-            msg = 'Do you see the correct Series data?\n\n'
+            msg = 'Do you see the correct Library data?\n\n'
             if result == None:
                 msg += 'You pressed Cancel.'
-                if series1 != None:
-                    msg += '\n\n' + series1.__repr__()
+                if library1 != None:
+                    msg += '\n\n' + library1.__repr__()
             else:
-                series1 = result
-                series1.db_save()
-                msg += 'You pressed OK!\n\n' + series1.__repr__()
-            series1.unlock_record()
+                library1 = result
+                library1.db_save()
+                msg += 'You pressed OK!\n\n' + library1.__repr__()
+            library1.unlock_record()
             self.ConfirmTest(msg, testName)
 
         if 305 in testsToRun:
-            # Series Properties Form
-            testName = 'EDIT Series > Cancel'
+            # Library Properties Form
+            testName = 'EDIT Library > Cancel'
             self.SetStatusText(testName)
-            msg = 'You will see an Edit Series Form.'
+            msg = 'You will see an Edit Library Form.'
             msg += '\n\n'
             msg += 'Edit the values for all fields, then press CANCEL.'
             self.ShowMessage(msg)
-            series1.lock_record()
-            dlg = SeriesPropertiesForm.EditSeriesDialog(self, -1, series1)
+            library1.lock_record()
+            dlg = LibraryPropertiesForm.EditLibraryDialog(self, -1, library1)
             result = dlg.get_input()
             dlg.Destroy()
-            msg = 'Does this indicate you pressed Cancel, having left your Series unchanged?\n\n'
+            msg = 'Does this indicate you pressed Cancel, having left your Library unchanged?\n\n'
             if result == None:
                 msg += 'You pressed Cancel.'
-                if series1 != None:
-                    msg += '\n\n' + series1.__repr__()
+                if library1 != None:
+                    msg += '\n\n' + library1.__repr__()
             else:
-                series1 = result
-                series1.db_save()
-                msg += 'You pressed OK!\n\n' + series1.__repr__()
-            series1.unlock_record()
+                library1 = result
+                library1.db_save()
+                msg += 'You pressed OK!\n\n' + library1.__repr__()
+            library1.unlock_record()
             self.ConfirmTest(msg, testName)
 
         if 306 in testsToRun:
-            # Series Loading
-            testName = 'Series.db_load_by_num()'
+            # Library Loading
+            testName = 'Library.db_load_by_num()'
             self.SetStatusText(testName)
-            series2 = Series.Series(series1.number)
+            library2 = Library.Library(library1.number)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
-            if self.Compare(series1, series2, True):
+            if self.Compare(library1, library2, True):
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
             else:
                 self.txtCtrl.AppendText('FAILED.')
                 self.testsFailed += 1
 
-                print "Series.db_load_by_num():"
-                print series1
-                print series2
-                print self.Compare(series1, series2, True)
+                print "Library.db_load_by_num():"
+                print library1
+                print library2
+                print self.Compare(library1, library2, True)
                 print
 
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
-            del(series2)
+            del(library2)
                 
         if 307 in testsToRun:
-            # Series Loading
-            testName = 'Series.db_load_by_name()'
+            # Library Loading
+            testName = 'Library.db_load_by_name()'
             self.SetStatusText(testName)
-            series2 = Series.Series(series1.id)
+            library2 = Library.Library(library1.id)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
-            if self.Compare(series1, series2, True):
+            if self.Compare(library1, library2, True):
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
             else:
                 self.txtCtrl.AppendText('FAILED.')
                 self.testsFailed += 1
 
-                print "Series.db_load_by_name():"
-                print series1
-                print series2
-                print self.Compare(series1, series2, True)
+                print "Library.db_load_by_name():"
+                print library1
+                print library2
+                print self.Compare(library1, library2, True)
                 print
 
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
-            del(series2)
+            del(library2)
                 
         if 308 in testsToRun:
             msg = "You should now see several error messages!"
             dlg = Dialogs.InfoDialog(self, msg, dlgTitle='Unit Test 1: Objects and Forms')
             dlg.ShowModal()
             dlg.Destroy()
-            # Series Saving
-            testName = 'Save Series with no ID'
+            # Library Saving
+            testName = 'Save Library with no ID'
             self.SetStatusText(testName)
-            series2 = Series.Series()
+            library2 = Library.Library()
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
                 # A SaveError should be raised!
-                series2.db_save()
+                library2.db_save()
                 self.txtCtrl.AppendText('FAILED.')
                 self.testsFailed += 1
             except TransanaExceptions.SaveError:
@@ -901,19 +908,19 @@ class FormCheck(wx.Frame):
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
-            del(series2)
+            del(library2)
                 
         if 309 in testsToRun:
-            # Series Saving
-            testName = 'Save Series with duplicate ID'
+            # Library Saving
+            testName = 'Save Library with duplicate ID'
             self.SetStatusText(testName)
-            series2 = Series.Series()
-            series2.id = series1.id
+            library2 = Library.Library()
+            library2.id = library1.id
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
                 # A SaveError should be raised!
-                series2.db_save()
+                library2.db_save()
                 self.txtCtrl.AppendText('FAILED.')
                 self.testsFailed += 1
             except TransanaExceptions.SaveError:
@@ -924,21 +931,21 @@ class FormCheck(wx.Frame):
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
-            del(series2)
+            del(library2)
 
         if 310 in testsToRun:
-            # Series Saving
-            testName = 'Save a second Series'
+            # Library Saving
+            testName = 'Save a second Library'
             self.SetStatusText(testName)
-            series2 = Series.Series()
-            series2.id = series1.id + ' - Duplicate'
-            series2.comment = 'This Series was created automatically'
-            series2.owner = 'Unit Test Form Check'
+            library2 = Library.Library()
+            library2.id = library1.id + ' - Duplicate'
+            library2.comment = 'This Library was created automatically'
+            library2.owner = 'Unit Test Form Check'
             
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                series2.db_save()
+                library2.db_save()
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
             except TransanaExceptions.SaveError:
@@ -949,7 +956,333 @@ class FormCheck(wx.Frame):
                 self.txtCtrl.AppendText('FAILED.')
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
-            del(series2)
+            del(library2)
+
+        document1 = None
+        if 351 in testsToRun:
+            # Document Properties Form
+            testName = 'Add Document > OK'
+            self.SetStatusText(testName)
+            msg = 'You will see an Add Document Form.'
+            msg += '\n\n'
+            msg += 'Enter distinct values for all fields.'
+            self.ShowMessage(msg)
+            dlg = DocumentPropertiesForm.AddDocumentDialog(self, -1, library1)
+            proceed = False
+            while not proceed:
+                result = dlg.get_input()
+                msg = 'Do you see the correct Document data?\n\n'
+                if result == None:
+                    msg += 'You pressed Cancel.'
+                else:
+                    document1 = result
+                    try:
+                        document1.db_save()
+                        proceed = True
+                        dlg.Destroy()
+                        msg += 'You pressed OK!\n\n' + document1.__repr__()
+                    except TransanaExceptions.SaveError:
+                        # Display the Error Message, allow "continue" flag to remain true
+                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+            self.ConfirmTest(msg, testName)
+
+        if 352 in testsToRun:
+            # Document Properties Form
+            testName = 'Add Document > Cancel'
+            self.SetStatusText(testName)
+            msg = 'You will see an Add Document Form.'
+            msg += '\n\n'
+            msg += 'Press CANCEL.'
+            self.ShowMessage(msg)
+            dlg = DocumentPropertiesForm.AddDocumentDialog(self, -1, library1)
+            result = dlg.get_input()
+            dlg.Destroy()
+            msg = 'Does this say you pressed Cancel?\n\n'
+            if result == None:
+                msg += 'You pressed Cancel.'
+                if document1 != None:
+                    document1.refresh_keywords()
+                    msg += '\n\n' + document1.__repr__()
+            else:
+                document1 = result
+                document1.db_save()
+                msg += 'You pressed OK!\n\n' + document1.__repr__()
+            self.ConfirmTest(msg, testName)
+
+        if 353 in testsToRun:
+            # Document Properties Form
+            testName = 'Document Properties Form > Help'
+            self.SetStatusText(testName)
+            msg = 'You will see an Add Document Form.'
+            msg += '\n\n'
+            msg += 'Press HELP, then CANCEL.'
+            self.ShowMessage(msg)
+            dlg = DocumentPropertiesForm.AddDocumentDialog(self, -1, library1)
+            result = dlg.get_input()
+            dlg.Destroy()
+            msg = 'Did you see the Document Properties Help?\n\n'
+            self.ConfirmTest(msg, testName)
+
+        if 354 in testsToRun:
+            # Document Properties Form
+            testName = 'Edit Document > OK'
+            self.SetStatusText(testName)
+            msg = 'You will see an Edit Document Form.'
+            msg += '\n\n'
+            msg += 'Edit values for all fields and press OK.'
+            self.ShowMessage(msg)
+            document1.lock_record()
+            dlg = DocumentPropertiesForm.EditDocumentDialog(self, -1, document1)
+            result = dlg.get_input()
+            dlg.Destroy()
+            msg = 'Do you see the correct Document data?\n\n'
+            if result == None:
+                msg += 'You pressed Cancel.'
+                if document1 != None:
+                    document1.refresh_keywords()
+                    msg += '\n\n' + document1.__repr__()
+            else:
+                document1 = result
+                document1.db_save()
+                msg += 'You pressed OK!\n\n' + document1.__repr__()
+            document1.unlock_record()
+            self.ConfirmTest(msg, testName)
+
+        if 355 in testsToRun:
+            # Document Properties Form
+            testName = 'EDIT Document > Cancel'
+            self.SetStatusText(testName)
+            msg = 'You will see an Edit Document Form.'
+            msg += '\n\n'
+            msg += 'Edit the values for all fields, then press CANCEL.'
+            self.ShowMessage(msg)
+            document1.lock_record()
+            dlg = DocumentPropertiesForm.EditDocumentDialog(self, -1, document1)
+            result = dlg.get_input()
+            dlg.Destroy()
+            msg = 'Does this indicate you pressed Cancel, having left your Document unchanged?\n\n'
+            if result == None:
+                msg += 'You pressed Cancel.'
+                if document1 != None:
+                    document1.refresh_keywords()
+                    msg += '\n\n' + document1.__repr__()
+            else:
+                document1 = result
+                document1.db_save()
+                msg += 'You pressed OK!\n\n' + document1.__repr__()
+            document1.unlock_record()
+            self.ConfirmTest(msg, testName)
+
+        if 356 in testsToRun:
+            # Document Loading
+            testName = 'Document.db_load_by_num()'
+            self.SetStatusText(testName)
+            document2 = Document.Document(num=document1.number)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            if self.Compare(document1, document2, True):
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+
+                print "Document.db_load_by_num():"
+                print document1
+                print document2
+                print self.Compare(document1, document2, True)
+                print
+
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+            del(document2)
+
+        if 357 in testsToRun:
+            # Document Loading
+            testName = 'Document.db_load_by_name()'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                document2 = Document.Document(libraryID=document1.library_id, documentID=document1.id)
+                if self.Compare(document1, document2, True):
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                else:
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                    
+                    print "Document.db_load_by_name():"
+                    print document1
+                    print document2
+                    print self.Compare(document1, document2, True)
+                    print
+
+            except:
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1])
+                errordlg.ShowModal()
+                errordlg.Destroy()
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+            del(document2)
+                
+        if 358 in testsToRun:
+            msg = "You should now see several error messages!"
+            dlg = Dialogs.InfoDialog(self, msg, dlgTitle='Unit Test 1: Objects and Forms')
+            dlg.ShowModal()
+            dlg.Destroy()
+            # Document Saving
+            testName = 'Save Document with no ID'
+            self.SetStatusText(testName)
+            document2 = Document.Document(num=document1.number)
+            document2.id = ''
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                # A SaveError should be raised!
+                document2.db_save()
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            except TransanaExceptions.SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+            del(document2)
+                
+        if 359 in testsToRun:
+            # Document Saving
+            testName = 'Save Document with no Library'
+            self.SetStatusText(testName)
+            document2 = Document.Document(num=document1.number)
+            document2.library_num = 0
+            document2.library_id = ''
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                # A SaveError should be raised!
+                document2.db_save()
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            except TransanaExceptions.SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+            del(document2)
+                
+        if 360 in testsToRun:
+            # Document Saving
+            testName = 'Save Document with duplicate ID'
+            self.SetStatusText(testName)
+            document2 = Document.Document(document1.number)
+            document2.number = 0
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                # A SaveError should be raised!
+                document2.db_save()
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            except TransanaExceptions.SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+            del(document2)
+
+        if 361 in testsToRun:
+            # Document Keyword Manipulation
+            testName = 'Add Keyword to Document'
+            self.SetStatusText(testName)
+            document2 = Document.Document(document1.number)
+            document2.clear_keywords()
+            numKeywords = len(document2._kwlist)
+            hasKeyword = document2.has_keyword(keyword2.keywordGroup, keyword2.keyword)
+            document2.add_keyword(keyword2.keywordGroup, keyword2.keyword)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            if (not hasKeyword) and (len(document2._kwlist) == numKeywords + 1):
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+                self.txtCtrl.AppendText('FAILED.  ')
+                if hasKeyword:
+                    self.txtCtrl.AppendText('Keyword present when it should not have been!')
+                else:
+                    self.txtCtrl.AppendText('Keyword NOT added correctly!')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 362 in testsToRun:
+            # Document Keyword Manipulation
+            testName = 'Document has Keyword'
+            self.SetStatusText(testName)
+            hasKeyword = document2.has_keyword(keyword2.keywordGroup, keyword2.keyword)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            if hasKeyword:
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+                self.txtCtrl.AppendText('FAILED.  ')
+                self.txtCtrl.AppendText('Document.has_keyword() failed to detect keyword that should be present!')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 362 in testsToRun:
+            # Document Keyword Manipulation
+            testName = 'Remove Keyword from Document'
+            self.SetStatusText(testName)
+            numKeywords = len(document2._kwlist)
+            hasKeyword = document2.has_keyword(keyword2.keywordGroup, keyword2.keyword)
+            document2.remove_keyword(keyword2.keywordGroup, keyword2.keyword)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            if (hasKeyword) and (len(document2._kwlist) == numKeywords - 1):
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+                self.txtCtrl.AppendText('FAILED.  ')
+                if not hasKeyword:
+                    self.txtCtrl.AppendText('Keyword NOT present when it should not have been!')
+                else:
+                    self.txtCtrl.AppendText('Keyword NOT removed correctly!')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 363 in testsToRun:
+            # Document Keyword Manipulation
+            testName = 'Document Clear Keywords'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            document2.add_keyword(keyword1.keywordGroup, keyword1.keyword)
+            document2.add_keyword(keyword2.keywordGroup, keyword2.keyword)
+            hasKeyword = (len(document2._kwlist) >= 2)
+            document2.clear_keywords()
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            if hasKeyword and (len(document2._kwlist) == 0):
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+                self.txtCtrl.AppendText('FAILED.  ')
+                self.txtCtrl.AppendText('Document.clear_keywords()!')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+            del(document2)
 
         episode1 = None
         if 401 in testsToRun:
@@ -960,16 +1293,25 @@ class FormCheck(wx.Frame):
             msg += '\n\n'
             msg += 'Enter distinct values for all fields.'
             self.ShowMessage(msg)
-            dlg = EpisodePropertiesForm.AddEpisodeDialog(self, -1, series1)
-            result = dlg.get_input()
-            dlg.Destroy()
-            msg = 'Do you see the correct Episode data?\n\n'
-            if result == None:
-                msg += 'You pressed Cancel.'
-            else:
-                episode1 = result
-                episode1.db_save()
-                msg += 'You pressed OK!\n\n' + episode1.__repr__()
+            dlg = EpisodePropertiesForm.AddEpisodeDialog(self, -1, library1)
+            proceed = False
+            while not proceed:
+                result = dlg.get_input()
+                msg = 'Do you see the correct Episode data?\n\n'
+                if result == None:
+                    msg += 'You pressed Cancel.'
+                else:
+                    episode1 = result
+                    try:
+                        episode1.db_save()
+                        proceed = True
+                        dlg.Destroy()
+                        msg += 'You pressed OK!\n\n' + episode1.__repr__()
+                    except TransanaExceptions.SaveError:
+                        # Display the Error Message, allow "continue" flag to remain true
+                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
             self.ConfirmTest(msg, testName)
 
         if 402 in testsToRun:
@@ -980,7 +1322,7 @@ class FormCheck(wx.Frame):
             msg += '\n\n'
             msg += 'Press CANCEL.'
             self.ShowMessage(msg)
-            dlg = EpisodePropertiesForm.AddEpisodeDialog(self, -1, series1)
+            dlg = EpisodePropertiesForm.AddEpisodeDialog(self, -1, library1)
             result = dlg.get_input()
             dlg.Destroy()
             msg = 'Does this say you pressed Cancel?\n\n'
@@ -1003,7 +1345,7 @@ class FormCheck(wx.Frame):
             msg += '\n\n'
             msg += 'Press HELP, then CANCEL.'
             self.ShowMessage(msg)
-            dlg = EpisodePropertiesForm.AddEpisodeDialog(self, -1, series1)
+            dlg = EpisodePropertiesForm.AddEpisodeDialog(self, -1, library1)
             result = dlg.get_input()
             dlg.Destroy()
             msg = 'Did you see the Episode Properties Help?\n\n'
@@ -1093,7 +1435,7 @@ class FormCheck(wx.Frame):
 
         if 407 in testsToRun:
             # Episode Properties Form
-            testName = 'EDIT Episode > Cancel'
+            testName = 'EDIT Episode > Core Data > Cancel'
             self.SetStatusText(testName)
             msg = 'You will see an Edit Episode Form.'
             msg += '\n\n'
@@ -1199,7 +1541,7 @@ class FormCheck(wx.Frame):
                 
         if 411 in testsToRun:
             # Episode Saving
-            testName = 'Save Episode with no Series'
+            testName = 'Save Episode with no Library'
             self.SetStatusText(testName)
             episode2 = Episode.Episode(episode1.number)
             episode2.series_num = 0
@@ -1963,6 +2305,264 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
             del(collection3)
 
+        if 651 in testsToRun:
+            # Prepare the Quote Object, which would be passed in
+            quote1 = Quote.Quote()
+            quote1.collection_num = collection1.number
+            quote1.collection_id = collection1.id
+            quote1.source_document_num = document1.number
+            quote1.start_char = 50
+            quote1.end_char = 100
+            quote1.sort_order = DBInterface.getMaxSortOrder(collection1.number) + 1
+            for quoteKeyword in document1.keyword_list:
+                quote1.add_keyword(quoteKeyword.keywordGroup, quoteKeyword.keyword)
+
+            # Prepare the Quote Text which would be passed in
+            quote1.text = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" fontsize="8" fontstyle="90" fontweight="90" fontunderlined="0" fontface="MS Shell Dlg 2" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10">
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New" alignment="1" leftindent="0" leftsubindent="443" rightindent="0" parspacingafter="62" parspacingbefore="0" linespacing="10" tabs="317,444">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">This is the Quote Text</text>
+      <text></text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>"""
+
+            quote2 = quote1.duplicate()
+
+        if 652 in testsToRun:
+            # Quote Properties Form
+            testName = 'Add Quote > OK'
+            self.SetStatusText(testName)
+            msg = 'You will see an Add Quote Form.'
+            msg += '\n\n'
+            msg += 'Enter distinct values for all fields.'
+            self.ShowMessage(msg)
+            dlg = QuotePropertiesForm.AddQuoteDialog(self, -1, quote1)
+            result = dlg.get_input()
+            dlg.Destroy()
+            msg = 'Do you see the correct Quote data?\n\n'
+            if result == None:
+                msg += 'You pressed Cancel.'
+            else:
+                quote1 = result
+                quote1.db_save()
+                msg += 'You pressed OK!\n\n' + quote1.__repr__()
+            self.ConfirmTest(msg, testName)
+
+        if 653 in testsToRun:
+            # Quote Properties Form
+            testName = 'Add Quote > Cancel'
+            self.SetStatusText(testName)
+            msg = 'You will see an Add Quote Form.'
+            msg += '\n\n'
+            msg += 'Press CANCEL.'
+            self.ShowMessage(msg)
+            dlg = QuotePropertiesForm.AddQuoteDialog(self, -1, quote2)
+            result = dlg.get_input()
+            dlg.Destroy()
+            msg = 'Does this say you pressed Cancel?\n\n'
+            if result == None:
+                msg += 'You pressed Cancel.'
+                msg += '\n\n' + quote1.__repr__()
+            else:
+                quote2 = result
+                quote2.db_save()
+                msg += 'You pressed OK!\n\n' + quote2.__repr__()
+            self.ConfirmTest(msg, testName)
+
+        if 654 in testsToRun:
+            # Quote Properties Form
+            testName = 'Quote Properties Form > Help'
+            self.SetStatusText(testName)
+            msg = 'You will see an Add Quote Form.'
+            msg += '\n\n'
+            msg += 'Press HELP, then CANCEL.'
+            self.ShowMessage(msg)
+            dlg = QuotePropertiesForm.AddQuoteDialog(self, -1, quote2)
+            result = dlg.get_input()
+            dlg.Destroy()
+            msg = 'Did you see the Quote Properties Help?\n\n'
+            self.ConfirmTest(msg, testName)
+        del(quote2)
+
+        if 655 in testsToRun:
+            # Quote Properties Form
+            testName = 'Edit Quote > OK'
+            self.SetStatusText(testName)
+            msg = 'You will see an Edit Quote Form.'
+            msg += '\n\n'
+            msg += 'Edit values for all fields and press OK.'
+            self.ShowMessage(msg)
+            quote1.lock_record()
+            dlg = QuotePropertiesForm.EditQuoteDialog(self, -1, quote1)
+            result = dlg.get_input()
+            dlg.Destroy()
+            msg = 'Do you see the correct Quote data?\n\n'
+            if result == None:
+                quote1 = Quote.Quote(quote1.number)
+                msg += 'You pressed Cancel.'
+                msg += '\n\n' + quote1.__repr__()
+            else:
+                quote1 = result
+                quote1.db_save()
+                msg += 'You pressed OK!\n\n' + quote1.__repr__()
+            quote1.unlock_record()
+            self.ConfirmTest(msg, testName)
+
+        if 656 in testsToRun:
+            # Quote Properties Form
+            testName = 'EDIT Quote > Cancel'
+            self.SetStatusText(testName)
+            msg = 'You will see an Edit Quote Form.'
+            msg += '\n\n'
+            msg += 'Edit the values for all fields, then press CANCEL.'
+            self.ShowMessage(msg)
+            quote1.lock_record()
+            dlg = QuotePropertiesForm.EditQuoteDialog(self, -1, quote1)
+            result = dlg.get_input()
+            dlg.Destroy()
+            msg = 'Does this indicate you pressed Cancel, having left your Quote unchanged?\n\n'
+            if result == None:
+                quote1 = Quote.Quote(quote1.number)
+                msg += 'You pressed Cancel.'
+                msg += '\n\n' + quote1.__repr__()
+            else:
+                quote1 = result
+                quote1.db_save()
+                msg += 'You pressed OK!\n\n' + quote1.__repr__()
+            quote1.unlock_record()
+            self.ConfirmTest(msg, testName)
+
+        if 657 in testsToRun:
+            # Quote Loading
+            testName = 'Quote.db_load_by_num()'
+            self.SetStatusText(testName)
+            quote2 = Quote.Quote(num=quote1.number)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            if self.Compare(quote1, quote2, True):
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+
+                print "Quote.db_load_by_num():"
+                print quote1
+                print quote2
+                print self.Compare(quote1, quote2, True)
+                print
+
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+            del(quote2)
+
+        if 658 in testsToRun:
+            # Quote Loading
+            testName = 'Quote.db_load_by_name()'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                collection3 = Collection.Collection(quote1.collection_num)
+                quote2 = Quote.Quote(quoteID=quote1.id, collectionID=quote1.collection_id, collectionParent=collection3.parent)
+                if self.Compare(quote1, quote2, True):
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                else:
+                    self.txtCtrl.AppendText('FAILED (comparison).')
+                    self.testsFailed += 1
+
+                    print "Quote.db_load_by_name():"
+                    print quote1
+                    print quote2
+                    print self.Compare(quote1, quote2, True)
+                    print
+
+            except:
+                self.txtCtrl.AppendText('FAILED (exception).')
+                self.testsFailed += 1
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+            del(collection3)
+            del(quote2)
+                
+        if 659 in testsToRun:
+            msg = "You should now see several error messages!"
+            dlg = Dialogs.InfoDialog(self, msg, dlgTitle='Unit Test 1: Objects and Forms')
+            dlg.ShowModal()
+            dlg.Destroy()
+            # Quote Saving
+            testName = 'Save Quote with no ID'
+            self.SetStatusText(testName)
+            quote2 = Quote.Quote(quote1.number)
+            quote2.id = ''
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                # A SaveError should be raised!
+                quote2.db_save()
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            except TransanaExceptions.SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+            del(quote2)
+
+        if 660 in testsToRun:
+            # Quote Saving
+            testName = 'Save Quote without Collection'
+            self.SetStatusText(testName)
+            quote2 = Quote.Quote(quote1.number)
+            quote2.collection_num = 0
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                # A SaveError should be raised!
+                quote2.db_save()
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            except TransanaExceptions.SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+            del(quote2)
+
+        if 661 in testsToRun:
+            # Quote Saving
+            testName = 'Save Quote with Duplicate ID'
+            self.SetStatusText(testName)
+            quote2 = Quote.Quote(quote1.number)
+            quote2.number = 0
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                # A SaveError should be raised!
+                quote2.db_save()
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            except TransanaExceptions.SaveError:
+                # Display the Error Message, allow "continue" flag to remain true
+                errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                errordlg.ShowModal()
+                errordlg.Destroy()
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+            del(quote2)
+
         if 701 in testsToRun:
             # Prepare the Clip Object, which would be passed in
             clip1 = Clip.Clip()
@@ -2069,7 +2669,6 @@ class FormCheck(wx.Frame):
             msg = 'Do you see the correct Clip data?\n\n'
             if result == None:
                 clip1 = Clip.Clip(clip1.number)
-#                clip1.refresh_keywords()
                 msg += 'You pressed Cancel.'
                 msg += '\n\n' + clip1.__repr__()
             else:
@@ -2600,13 +3199,13 @@ class FormCheck(wx.Frame):
         note1 = None
         if 901 in testsToRun:
             # Note Properties Form
-            testName = 'Add Series Note Properties > OK'
+            testName = 'Add Library Note Properties > OK'
             self.SetStatusText(testName)
-            msg = 'You will see an Add Series Note Properties Form.'
+            msg = 'You will see an Add Library Note Properties Form.'
             msg += '\n\n'
             msg += 'Enter distinct values for all fields.'
             self.ShowMessage(msg)
-            dlg = NotePropertiesForm.AddNoteDialog(self, -1, series1.number, 0, 0, 0, 0, 0)
+            dlg = NotePropertiesForm.AddNoteDialog(self, -1, library1.number, 0, 0, 0, 0, 0)
             result = dlg.get_input()
             dlg.Destroy()
             msg = 'Do you see the correct Note data?\n\n'
@@ -2620,13 +3219,13 @@ class FormCheck(wx.Frame):
 
         if 902 in testsToRun:
             # Note Properties Form
-            testName = 'Add Series Note Properties > Cancel'
+            testName = 'Add Library Note Properties > Cancel'
             self.SetStatusText(testName)
-            msg = 'You will see an Add Series Note Properties Form.'
+            msg = 'You will see an Add Library Note Properties Form.'
             msg += '\n\n'
             msg += 'Press CANCEL.'
             self.ShowMessage(msg)
-            dlg = NotePropertiesForm.AddNoteDialog(self, -1, series1.number, 0, 0, 0, 0, 0)
+            dlg = NotePropertiesForm.AddNoteDialog(self, -1, library1.number, 0, 0, 0, 0, 0)
             result = dlg.get_input()
             dlg.Destroy()
             msg = 'Does this say you pressed Cancel?\n\n'
@@ -2648,7 +3247,7 @@ class FormCheck(wx.Frame):
             msg += '\n\n'
             msg += 'Press HELP, then CANCEL.'
             self.ShowMessage(msg)
-            dlg = NotePropertiesForm.AddNoteDialog(self, -1, series1.number, 0, 0, 0, 0, 0)
+            dlg = NotePropertiesForm.AddNoteDialog(self, -1, library1.number, 0, 0, 0, 0, 0)
             result = dlg.get_input()
             dlg.Destroy()
             msg = 'Did you see the Note Properties Help?\n\n'
@@ -2656,9 +3255,9 @@ class FormCheck(wx.Frame):
 
         if 904 in testsToRun:
             # Note Properties Form
-            testName = 'Edit Series Note Properties > OK'
+            testName = 'Edit Library Note Properties > OK'
             self.SetStatusText(testName)
-            msg = 'You will see an Edit Series Note Properties Form.'
+            msg = 'You will see an Edit Library Note Properties Form.'
             msg += '\n\n'
             msg += 'Edit values for all fields and press OK.'
             self.ShowMessage(msg)
@@ -2680,9 +3279,9 @@ class FormCheck(wx.Frame):
 
         if 905 in testsToRun:
             # Note Properties Form
-            testName = 'EDIT Series Note Properties > Cancel'
+            testName = 'EDIT Library Note Properties > Cancel'
             self.SetStatusText(testName)
-            msg = 'You will see an Edit Series Note Properties Form.'
+            msg = 'You will see an Edit Library Note Properties Form.'
             msg += '\n\n'
             msg += 'Edit the values for all fields, then press CANCEL.'
             self.ShowMessage(msg)
@@ -2729,7 +3328,7 @@ class FormCheck(wx.Frame):
             # Note Loading
             testName = 'Note.db_load_by_name()'
             self.SetStatusText(testName)
-            note2 = Note.Note(note1.id, Series=note1.series_num)
+            note2 = Note.Note(note1.id, Library=note1.series_num)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             if self.Compare(note1, note2, True):
@@ -2754,7 +3353,7 @@ class FormCheck(wx.Frame):
             dlg.ShowModal()
             dlg.Destroy()
             # Note Saving
-            testName = 'Save Series Note with no ID'
+            testName = 'Save Library Note with no ID'
             self.SetStatusText(testName)
             note2 = Note.Note(note1.number)
             note2.id = ''
@@ -2800,12 +3399,12 @@ class FormCheck(wx.Frame):
 
         if 910 in testsToRun:
             # Note Saving
-            testName = 'Save Series Note with duplicate ID'
+            testName = 'Save Library Note with duplicate ID'
             self.SetStatusText(testName)
             note2 = Note.Note()
             note2.id = note1.id
             note2.series_num = note1.series_num
-            note2.text = 'This is a duplicate Series Note'
+            note2.text = 'This is a duplicate Library Note'
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
@@ -2825,16 +3424,16 @@ class FormCheck(wx.Frame):
 
         if 911 in testsToRun:
             # Note Saving
-            testName = 'Save another Series Note'
+            testName = 'Save another Library Note'
             self.SetStatusText(testName)
             note2 = Note.Note()
-            if note1.id == 'Series Note':
+            if note1.id == 'Library Note':
                 note2.id = note1.id + ' - Duplicate'
             else:
-                note2.id = 'Series Note'
-            note2.series_num = series1.number
+                note2.id = 'Library Note'
+            note2.series_num = library1.number
             note2.author = 'unit_test_form_check'
-            note2.text = 'This is a Series Note generated by unit_test_form_check.'
+            note2.text = 'This is a Library Note generated by unit_test_form_check.'
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
@@ -3017,8 +3616,8 @@ class FormCheck(wx.Frame):
             return False
         result = True
         objType = None
-        if isinstance(obj1, Series.Series):
-            objType = 'Series'
+        if isinstance(obj1, Library.Library):
+            objType = 'Libraries'
         elif isinstance(obj1, Episode.Episode):
             objType = 'Episode'
         elif isinstance(obj1, Transcript.Transcript):
@@ -3034,12 +3633,12 @@ class FormCheck(wx.Frame):
         elif isinstance(obj1, Note.Note):
             objType = 'Note'
             
-        if objType in ['Series', 'Episode', 'Transcript', 'Collection', 'Clip', 'Snapshot', 'Note']:
+        if objType in ['Libraries', 'Episode', 'Transcript', 'Collection', 'Clip', 'Snapshot', 'Note']:
             if incNumber:
                 result = result and (obj1.number == obj2.number)
             result = result and (obj1.id == obj2.id)
             result = result and (obj1.comment == obj2.comment)
-        if objType in ['Series', 'Collection']:
+        if objType in ['Libraries', 'Collection']:
             result = result and (obj1.owner == obj2.owner)
             result = result and (obj1.keyword_group == obj2.keyword_group)
         if objType in ['Episode']:

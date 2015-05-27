@@ -1,0 +1,37 @@
+<HTML>
+<HEAD>
+<TITLE>Propagate Document and Episode Transcript Changes</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Propagate Document and Episode Transcript Changes</H1><HR>
+
+You will most likely need to change existing <A HREF="documentproperties.htm">Documents</A> and <A HREF="transcriptproperties.htm">Transcripts</A> at some point during your analysis.  However, when you create a <A HREF="quoteproperties.htm">Quote</A> or <A HREF="clipproperties.htm">Clip</A> in Transana, you create a copy of the source <A HREF="documentproperties.htm">Document</A> or <A HREF="transcriptproperties.htm">Transcript</A>, so changes in your <A HREF="documentproperties.htm">Document</A> or <A HREF="episodeproperties.htm">Episode</A> <A HREF="transcriptproperties.htm">Transcript</A> are not automatically reflected in your <A HREF="quoteproperties.htm">Quotes</A> or <A HREF="clipproperties.htm">Clips</A>.  (There are some analytic circumstances where you may want a Quote or Clip Transcript to differ from the original source Document or Transcript.)  However, there are many instances where it would be nice to be able to make an edit once and have the changes show up in all of the appropriate places.<P>
+
+The &quot;Propagate Document and Transcript Changes&quot; function allows a researcher to synchronize Documents with Quotes and Episode Transcripts with Clip Transcripts when desired.  When you make a change to a Document or Episode Transcript that you would like to propagate out to the relevant Qutoes or Clips, place your Document cursor within the edited segment and press the <IMG SRC="images/propagatebutton.gif" ALT="Change Propagation Button"> &nbsp;button in the <A HREF="documentwindow.htm">Document window</A> toolbar.<P>
+
+(Please see <A HREF="propagatechildchanges.htm">Propagate Quote and Clip Changes</a> for a mechanism for keeping copies of Quotes and Clips synchronized with each other without editing the source Document or Transcript.)<P>
+
+<IMG SRC="images/reviewtranscriptchanges.gif" ALT="Review Transcript Changes"><P>
+
+The &quot;Review Quote Changes&quot; or &quot;Review Transcript Changes&quot; screen will be displayed for each Quote or Clip created from the same Document or Transcript that overlaps the current cursor position.  Press &quot;Update&quot; to replace the Quote or Clip Transcript with the new text. &quot;Update All&quot; will apply the text changes to all Quotes or Clips from the same source Document or Transcript that overlap the current cursor position.  (Use this button with caution!) &quot;Skip&quot; will prevent changes from being made to the current Quote or Clip, while &quot;Cancel&quot; will stop the change propagation process and revert all Quotes or Clips back to their original form.<P>
+
+This process sometimes yields results that differ from what you might expect.  When you look at the &quot;Selected Items&quot; tab in the data window, it shows you all of the Quotes or Clips that have been defined that include the current position of the current Document or Transcript.  However, you cannot assume that Transana will (or should) update all of these items if you select &quot;Propagate Changes.&quot;  Instead, take a moment to review the &quot;Change Propagation&quot; report.<P>
+
+<IMG SRC="images/episodepropagateresults.gif" ALT="Episode Transcript Change Propagation Report"><P>
+
+If you have multiple Transcripts for an Episode, only those Clips derived from the current Transcript will be updated.  If you want to update Clips derived from another Episode Transcript, update the other Transcript and then select the propagate button.<P>
+
+If the time codes in a Transcript have changed, Transana may not be able to locate the exact starting or ending points for a Clip.  If this occurs, the Clip will not be updated during change propagation.  It is a good idea to avoid deleting time codes once you have started creating Clips from a Transcript.<P>
+
+If a Quote or Clip Transcript is locked by another user in multi-user Transana, that Quote or Clip Transcript will also not be updated.  You will need to wait until the other user releases the record lock, then repeat the change propagation process.<P>
+
+NOTE:  If you are in a Quote or Clip when you notice the need to change your text, right-click the Quote or Clip in the <A HREF="datawindow.htm">Data window</A>'s database tree and choose &quot;Locate Quote in Document&quot; or &quot;Locate Clip in Episode.&quot;  Edit the original Document or Episode Transcript.  Then press the <IMG SRC="images/propagatebutton.gif" ALT="Change Propagation Button"> &nbsp;button to propagate the changes out to the appropriate items.<P>
+
+<A HREF="synchronize.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="propagatechildchanges.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

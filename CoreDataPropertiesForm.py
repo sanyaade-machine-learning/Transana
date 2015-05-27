@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -26,6 +26,7 @@ import CoreData
 import DBInterface
 # Import the Dialogs module from which this form inherits
 import Dialogs
+import TransanaGlobal
 
 # import wxPython
 import wx
@@ -332,7 +333,7 @@ class CoreDataPropertiesForm(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size
         self.SetSizeHints(max(self.width, width), height)
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # Set focus to Title
         title_edit.SetFocus()

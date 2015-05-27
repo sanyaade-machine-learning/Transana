@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -40,8 +40,8 @@ import Episode
 import Misc
 # import Transana's Note Object
 import Note
-# import Transana's Series Object
-import Series
+# import Transana's Library Object
+import Library
 # Import Transana's exceptions
 from TransanaExceptions import *
 # Import the Transana Constants
@@ -103,8 +103,8 @@ class Snapshot(DataObject.DataObject):
         str += "  image_scale      = %15.9f\n" % self.image_scale
         str += "  image_coords     = (%15.5f, %15.5f)\n" % self.image_coords
         str += "  image_size       = (%d, %d)\n" % self.image_size
-        str += "  series_num       = %s\n" % self.series_num
-        str += "  series_id        = %s\n" % self.series_id
+        str += "  Library_num       = %s\n" % self.series_num
+        str += "  Library_id        = %s\n" % self.series_id
         str += "  episode_num      = %s\n" % self.episode_num
         str += "  episode_id       = %s\n" % self.episode_id
         str += "  transcript_num   = %s\n" % self.transcript_num
@@ -188,7 +188,7 @@ class Snapshot(DataObject.DataObject):
                 # ... clear the current Snapshot object ...
                 self.clear()
                 # ... and raise an exception
-                raise RecordNotFoundError, (name, 0)
+                raise RecordNotFoundError, (num, 0)
             # ... load the data into the Snapshot Object
             self._load_row(r)
             # Refresh the Keywords
@@ -503,7 +503,7 @@ class Snapshot(DataObject.DataObject):
             numberChanged = False
             # If we are dealing with an existing Snapshot, delete all the Keywords
             # in anticipation of putting them all back in
-            DBInterface.delete_all_keywords_for_a_group(0, 0, self.number)
+            DBInterface.delete_all_keywords_for_a_group(0, 0, 0, 0, self.number)
             # Define the query for deleting Snapshot Keywords
             query = "DELETE FROM SnapshotKeywords2 WHERE SnapshotNum = %s"
             # Adjust the query for sqlite if needed
@@ -522,7 +522,7 @@ class Snapshot(DataObject.DataObject):
         # Add the Snapshot keywords back.  Iterate through the Keyword List
         for kws in self._kwlist:
             # Try to add the Snapshot Keyword record.  If it is NOT added, the keyword has been changed by another user!
-            if not DBInterface.insert_clip_keyword(0, 0, self.number, kws.keywordGroup, kws.keyword, kws.example):
+            if not DBInterface.insert_clip_keyword(0, 0, 0, 0, self.number, kws.keywordGroup, kws.keyword, kws.example):
                 # if the prompt isn't blank ...
                 if prompt != '':
                     # ... add a couple of line breaks to it
@@ -690,7 +690,7 @@ class Snapshot(DataObject.DataObject):
             # Styles tables.
             if result:
                 # Delete Clip Keywords
-                DBInterface.delete_all_keywords_for_a_group(0, 0, self.number)
+                DBInterface.delete_all_keywords_for_a_group(0, 0, 0, 0, self.number)
                 # Create the query to delete Snapshot Keywords
                 query = "DELETE FROM SnapshotKeywords2 WHERE SnapshotNum = %s"
                 # Adjust the query for sqlite if needed
@@ -910,7 +910,7 @@ class Snapshot(DataObject.DataObject):
             try:
                 # Load the Episode
                 tempEpisode = Episode.Episode(self.episode_num)
-                # Get the Episode ID and the Series Information
+                # Get the Episode ID and the Library Information
                 self.episode_id = tempEpisode.id
                 self.series_num = tempEpisode.series_num
                 self.series_id = tempEpisode.series_id
@@ -944,7 +944,7 @@ class Snapshot(DataObject.DataObject):
         else:
             # ... then there's no Episode ID ...
             self.episode_id = ''
-            # ... and there's no Series number or ID
+            # ... and there's no Library number or ID
             self.series_num = 0
             self.series_id = ''
             # There can't be Transcript information either

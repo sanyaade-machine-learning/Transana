@@ -1,0 +1,61 @@
+<HTML>
+<HEAD>
+<TITLE>Library Keyword Graphs</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Library Keyword Maps and Graphs</H1><HR>
+
+Please note that the Standard version of Transana does not support the Library Keyword Maps and Graphs.  To use this feature, you must be using the Professionsal, Computer Lab, or Multi-User version of Transana.<P> 
+
+<P>The Library Keyword Maps and Graphs allow for the comparison of <A HREF="keywordproperties.htm">Keyword</A> usage across multiple <A HREF="episodeproperties.htm">Episodes</A> in a <A HREF="libraryproperties.htm">Library</A>.  This facilitates a number of common analytic tasks, such as looking for change over time in longitudinal analyses of media files.  These Maps and Graphs apply only to Episodes; Documents in the Library are not included in these Maps and Graphs.</P>
+
+<P>There are two styles of Library Keyword charts: Library Keyword Maps and Library Keyword Graphs.  These two styles complement each other and are designed to accomplish different analytic tasks.  Library Keyword Sequence Maps show the sequence of Keywords across the media timeline, while Library Keyword Graphs show the distribution of Keywords without regard to specific time positions, like a bar chart.  Clicking on a bar in a Map opens the underlying Clip.  Graphs cannot have this functionality because the bars don't represent individual Clips.  Using the <A HREF="FilterDialog.htm">filter dialog</A>, it is possible to filter which Episodes, Clips, or Keywords appear in the charts and to change a number of settings, including the width, spacing, and color of the bars being displayed.</P>
+
+<P>To display these Maps and Graphs, right-click a <A HREF="libraryproperties.htm">Library</A> in the <A HREF="datawindow.htm">Data window</A>'s database tree and select the report you want from the resulting menu.</P>
+
+<H3>LIbrary Keyword Sequence Maps</H3>
+
+<P>Like a <A HREF="keywordmap.htm">Episode Keyword Map</A> for a single Episode, the Library Keyword Sequence Map displays Keywords in sequence along a time line which, by default, is equal to the longest Episode in the map.  This type of map is useful for comparing patterns such as the density, co-occurrence, and proximity of Keywords.</P>
+
+<P>The Library Keyword Sequence Map comes in two forms.</P>
+
+<H4>The Multi-line Library Keyword Sequence Map</H4>
+
+The multi-line version displays a set of standardized <A HREF="keywordmap.htm">Episode Keyword Maps</A>, one for each Episode in the Library, each displaying the same Keywords in the same order and using the same color scheme.  This format facilitates the examination of Episodes where the Clips and Snapshots displayed have a significant amount of overlapping coding.<P>
+
+<IMG SRC="images/LibraryKeywordSequenceMapMultiLine.gif">
+
+<H4>The Single-line Library Keyword Sequence Map</H4>
+
+The single-line version of the Library Keyword Sequence Map presents the same information in a more compressed form, with the Keywords for each Episode displayed on a single line.  This form of the Sequence Map is primarily useful when you avoid overlapping coding or remove it using the <A HREF="FilterDialog.htm">filter dialog</A>.  When this is done, the single-line version of the display allows for the visual evaluation of Keyword patterns across a large amount of data within a much more compact matrix than is possible with the multi-line version.<P>
+
+<IMG SRC="images/LibraryKeywordSequenceMapSingleLine.gif">
+
+<P>To change between the multi-line display and the single-line display, change the appropriate checkbox on the options tab of the <A HREF="FilterDialog.htm">Filter dialog</A>.</P>
+
+<H3>Library Keyword Bar and Percentage Graphs</H3>
+
+<P>The Library Keyword Bar Graphs display the distribution of Keywords in relation to the total Episode.  There are two styles of graphs:  bar graphs and percentage graphs.</P>
+
+<H4>The Library Keyword Bar Graph</H4>
+
+The Library Keyword Bar Graph presents a horizontal stacked bar graph of the coding applied to each Episode in a Library.  This allows for an evaluation of the keyword density across all Episodes in a Library.<P>
+
+<IMG SRC="images/LibraryKeywordBarGraph.gif">
+
+<H4>The Library Keyword Percentage Graph</H4>
+
+The Library Keyword Percentage Graph presents the same data as the Library Keyword Bar Graph, but the data for each Episode is normalized to a common width of 100%.  This allows you to compare coding for Episodes of different lengths, adjusting each Episode for Episode length and coding density.<P>
+
+<IMG SRC="images/LibraryKeywordPercentageGraph.gif">
+
+<P>Library Keyword Graphs may have bars that are more than the total length of the Episode if Clips have multiple or overlaping Keywords.  Likewise, those Episodes in the Library that are not fully Keyworded will have bars that are shorter than the total length of the Episode.  Because Clips and Snapshots can have multiple Keywords and can overlap, it is important to understand how Transana handles overlapping coding in compiling the data for this graph.  When two different Keywords overlap the same portion of the media file, the time for both Keywords is counted in full.  Therefore, the total amount of coding may exceed the length of the media file to which it has been applied.  However, when two clips with the <I>same</i> Keyword overlap, the overlapping portion of coding is counted only once.  This prevents duplicate Clips from artificially inflating the perceived importance of their Keywords.</P>
+
+<P><A HREF="keywordmap.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="exportdataitems.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A></P>
+
+</BODY>
+</HTML>

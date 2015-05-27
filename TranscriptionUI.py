@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -267,8 +267,7 @@ class _TranscriptDialog(wx.Dialog):
 
         # Add Quick Search tools
         self.CMD_SEARCH_BACK_ID = wx.NewId()
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
-        self.searchBack = wx.BitmapButton(self, self.CMD_SEARCH_BACK_ID, bmp, style=wx.NO_BORDER)
+        self.searchBack = wx.BitmapButton(self, self.CMD_SEARCH_BACK_ID, TransanaImages.ArtProv_BACK.GetBitmap(), style=wx.NO_BORDER)
         hsizer.Add(self.searchBack, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
         wx.EVT_BUTTON(self, self.CMD_SEARCH_BACK_ID, self.OnSearch)
         hsizer.Add((10, 1), 0)
@@ -281,8 +280,7 @@ class _TranscriptDialog(wx.Dialog):
         hsizer.Add((10, 1), 0)
         
         self.CMD_SEARCH_NEXT_ID = wx.NewId()
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
-        self.searchNext = wx.BitmapButton(self, self.CMD_SEARCH_NEXT_ID, bmp, style=wx.NO_BORDER)
+        self.searchNext = wx.BitmapButton(self, self.CMD_SEARCH_NEXT_ID, TransanaImages.ArtProv_FORWARD.GetBitmap(), style=wx.NO_BORDER)
         hsizer.Add(self.searchNext, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER_VERTICAL, 10)
         wx.EVT_BUTTON(self, self.CMD_SEARCH_NEXT_ID, self.OnSearch)
         self.searchNextToolTip = wx.ToolTip(_("Search forwards"))

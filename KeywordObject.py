@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -186,7 +186,8 @@ class Keyword(object):
         
     def removeDuplicatesForMerge(self):
         """  When merging keywords, we need to remove instances of the OLD keyword that already exist in
-             Episodes, Clips, or Snapshots that also contain the NEW keyword.  (Doing it this way reduces overhead.) """
+             Documents, Episodes, Quotes, Clips, or Snapshots that also contain the NEW keyword.  (Doing
+             it this way reduces overhead.) """
         # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
         if 'unicode' in wx.PlatformInfo:
             # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
@@ -203,13 +204,16 @@ class Keyword(object):
             keyword = self.keyword
 
         # Look for Episodes, Clips, and Whole-Snapshots that have BOTH the original and the merge keywords
-        query = """SELECT * FROM ClipKeywords2 a, ClipKeywords2 b
+        query = """SELECT a.EpisodeNum, a.DocumentNum, a.ClipNum, a.QuoteNum, a.SnapshotNum, a.KeywordGroup, a.Keyword
+                     FROM ClipKeywords2 a, ClipKeywords2 b
                      WHERE a.KeywordGroup = %s AND
                            a.Keyword = %s AND
                            b.KeywordGroup = %s AND
                            b.Keyword = %s AND
                            a.EpisodeNum = b.EpisodeNum AND
+                           a.DocumentNum = b.DocumentNum AND
                            a.ClipNum = b.ClipNum AND
+                           a.QuoteNum = b.QuoteNum AND
                            a.SnapshotNum = b.SnapshotNum"""
         values = (originalKeywordGroup, originalKeyword, keywordGroup, keyword)
         c = DBInterface.get_db().cursor()
@@ -221,7 +225,9 @@ class Keyword(object):
         # Prepare a query for deleting the duplicate
         query = """ DELETE FROM ClipKeywords2
                       WHERE EpisodeNum = %s AND
+                            DocumentNum = %s AND
                             ClipNum = %s AND
+                            QuoteNum = %s AND 
                             SnapshotNum = %s AND
                             KeywordGroup = %s AND
                             Keyword = %s """
@@ -229,7 +235,7 @@ class Keyword(object):
         # Go through the list of duplicates ...
         for line in result:
             # ... and delete the original keyword listing, leaving the other (merge) record untouched.
-            values = (line[0], line[1], line[2], line[3], line[4])
+            values = (line[0], line[1], line[2], line[3], line[4], line[5], line[6])
             c.execute(query, values)
 
         # For Snapshot Coding, we don't want to LOSE any of the drawn shapes, so we rename the OLD
@@ -584,8 +590,8 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
                     # If we make it this far, we can commit the transaction, 'cause we're done.
                     query = 'COMMIT'
                     c.execute(query)
-                if TransanaConstants.DBInstalled in ['sqlite3']:
-                    c.commit()
+##                if TransanaConstants.DBInstalled in ['sqlite3']:
+##                    c.commit()
                 c.close()
                 # If the save is successful, we need to update the "original" values to reflect the new record key.
                 # Otherwise, we can't unlock the proper record, among other things.
@@ -714,7 +720,7 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
         else:
             # Verify record lock is still good
             db = DBInterface.get_db()
-            
+
             if ((self.originalKeywordGroup == None) and \
                 (self.originalKeyword == None)) or \
                ((self.record_lock == DBInterface.get_username()) and
@@ -922,7 +928,22 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
         return self._get_db_fields(('RecordLock',))[0]
 
     def _get_lt(self):
-        return self._get_db_fields(('LockTime',))[0]
+        # Get the Record Lock Time from the Database
+        lt = self._get_db_fields(('LockTime',))
+        # If a Lock Time has been specified ...
+        if len(lt) > 0:
+            # ... If we're using sqlite, we get a string and need to convert it to a datetime object
+            if TransanaConstants.DBInstalled in ['sqlite3']:
+                import datetime
+                tempDate = datetime.datetime.strptime(lt[0], '%Y-%m-%d %H:%M:%S.%f')
+                return tempDate
+            # ... If we're using MySQL, we get a MySQL DateTime value
+            else:
+                return lt[0]
+        # If we don't get a Lock Time ...
+        else:
+            # ... return the current Server Time
+            return DBInterface.ServerDateTime()
 
 # Public properties
     keywordGroup = property(_get_keywordGroup, _set_keywordGroup, _del_keywordGroup,

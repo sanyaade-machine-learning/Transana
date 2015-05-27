@@ -7,13 +7,26 @@
 
 <H1>Filter Dialog<P></H1>
 
-Transana's filter dialog allows you to customize the contents of Transana's reports.  For example, the image below shows the filter dialog when it is being used for the keyword map.  Depending on which report is using the dialog, it offers a variety of options.<P>
+Transana's filter dialog allows you to customize the contents of Transana's reports.  For example, the image below shows the filter dialog when it is being used for the <A HREF="keywordmap.htm">Episode Keyword Map</A>.  Depending on which report is using the dialog, it offers a variety of options.<P>
 
 <IMG SRC="images/FilterDialog.gif" ALT="Filter Dialog" BORDER=0><P>
 
-The Filter dialog may have one or more of the following tabs: a <B>report contents</b> tab for specifying optional report content, an <B>episodes</B> tab for selecting episodes to include in a report, a <B>clips</B> tab for selecting clips to include in a report, a <b>snapshots</b> tab for selecting snapshots to include in a report, a <B>keyword groups</B> tab for selecting keyword groups to include, a <B>keywords</B> tab for selecting keywords to include, and an <B>options</B> tab for specifying a variety of options that affect the report display.  Some, but not all, reports allow the user to alter the order in which episodes, clips, snapshots, or keywords are displayed in the report.<P>
+The Filter dialog may have one or more of the following tabs:
+<UL>
+<LI>a <B>Report Contents</b> tab for specifying optional report content
+<LI>a <B>Documents</B> tab for selecting <A HREF="documentproperties.htm">Documents</A> to include in the report
+<LI>an <B>Episodes</B> tab for selecting <A HREF="episodeproperties.htm">Episodes</A> to include in a report
+<LI>a <B>Quotes</B> tab for selecting <A HREF="quoteproperties.htm">Quotes</A> to include in a report
+<LI>a <B>Clips</B> tab for selecting <A HREF="clipproperties.htm">Clips</A> to include in a report
+<LI>a <b>Snapshots</b> tab for selecting <A HREF="snapshotproperties.htm">Snapshots</A> to include in a report
+<LI>a <B>Keyword Groups</B> tab for selecting <A HREF="keywordproperties.htm">Keyword Groups</A> to include
+<LI>a <B>Keywords</B> tab for selecting <A HREF="keywordproperties.htm">Keywords</A> to include, and
+<LI> an <B>Options</B> tab for specifying a variety of options that affect the report display.<P>
+</UL>  
 
-To include an episode, a clip, a snapshot, or a keyword, make sure the episode, clip, snapshot, or keyword is checked on the appropriate tab.  To exclude an item, make sure the item is not checked.<P>
+Some, but not all, reports allow the user to alter the order in which Document, Episodes, Quotes, Clips, Snapshots, or Keywords are displayed in the report.<P>
+
+To include a Document, an Episode, a Quote, a Clip, a Snapshot, or a Keyword, make sure the Document, Episode, Quote, Clip, Snapshot, or Keyword is checked on the appropriate tab.  To exclude an item, make sure the item is not checked.<P>
 
 To alter the order of items, first click an item to select it, then move that item up or down in the list using the arrow keys on the right side of the dialog box.  If there are no arrows on the right side of the dialog, you cannot control the order of items in the report you are currently customizing.<P>
 
@@ -21,15 +34,15 @@ To alter the order of items, first click an item to select it, then move that it
 
 In some circumstances, you can specify the color that is associated with an item.  Instead of showing a check mark, a block of color shows that an item is selected to be displayed in the color shown.  To select or de-select an item, click on the box in front of the item.  To specify the color for an item, select the item text, then click on the desired color from the color options presented at the bottom of the dialog box.<P>
 
-The options tab shows the options available for the report you are customizing.  On some reports, you can enter start and end times that control the scope of the report.  This allows you, for example, to zoom in on a keyword map report, so that you can see considerably more detail regarding the placement of keywords in a long video.  Values should be specified in H:M:S.s format, for example using &quot;20&quot; to indicate 20 seconds, &quot;15:44.6&quot; to indicate 15 minutes and 44.6 seconds, and &quot;1:00:00&quot; to indicate exactly 1 hour.<P>
+The Options tab shows the options available for the report you are customizing.  On some reports, you can enter start and end positions that control the scope of the report.  This allows you, for example, to zoom in on an Episode Keyword Map report, so that you can see considerably more detail regarding the placement of Keywords across a long media file.  Time values should be specified in H:M:S.s format, for example using &quot;20&quot; to indicate 20 seconds, &quot;15:44.6&quot; to indicate 15 minutes and 44.6 seconds, and &quot;1:00:00&quot; to indicate exactly 1 hour.<P>
 
-You can save settings in a filter dialog.  If you want to save (<IMG SRC="images/FileSave.gif" ALT="Save Filter Configuration" BORDER=0>) or load (<IMG SRC="images/FileOpen.gif" ALT="Load Filter Configuration" BORDER=0>) your settings in a filter dialog, use the first two buttons in the tool bar.  These allow users to easily create customized reports.  Unlike most information in Transana, changes to filter configurations are not automatically saved.  Transana assumes that a saved configuration should not automatically preserve changes, so be sure to press the &quot;Save&quot; button if you intend for changes to a configuration to be permanent.  You can also delete filter configurations using the delete (<IMG SRC="images/FileDelete.gif" ALT="Delete Filter Configuration" BORDER=0>) button on the toolbar (the third button).  Please also note that some setting on the options tab are not saved.<P>
+You can save settings in a Filter dialog.  If you want to save (<IMG SRC="images/FileSave.gif" ALT="Save Filter Configuration" BORDER=0>) or load (<IMG SRC="images/FileOpen.gif" ALT="Load Filter Configuration" BORDER=0>) your settings in a Filter dialog, use the first two buttons in the tool bar.  These allow users to easily create customized reports.  Unlike most information in Transana, changes to filter configurations are not automatically saved.  Transana assumes that a saved configuration should not automatically preserve changes, so be sure to press the &quot;Save&quot; button if you intend for changes to a configuration to be permanent.  You can also delete filter configurations using the delete (<IMG SRC="images/FileDelete.gif" ALT="Delete Filter Configuration" BORDER=0>) button on the toolbar (the third button).  Please also note that some setting on the options tab are not saved.<P>
 
-If you save a filter configuration using &quot;Default&quot; at the filter name, that filter configuration will be automatically loaded.  For example, if you create a color scheme and keyword order for an episode's Keyword Visualization that works particularly well, you could save it with the name &quot;Default&quot; so that it will be loaded automatically every time you load that episode.  If you decide you no longer want that as your default filter configuration, you will need to delete the &quot;Default&quot; configuration file.<P>
+If you save a filter configuration using &quot;Default&quot; at the filter name, that filter configuration will be automatically loaded.  For example, if you create a color scheme and Keyword order for an Episode's Keyword Visualization that works particularly well, you could save it with the name &quot;Default&quot; so that it will be loaded automatically every time you load that Episode.  If you decide you no longer want that as your default filter configuration, you will need to delete the &quot;Default&quot; configuration file.<P>
 
 The fourth and fifth buttons on the toolbar allow you to select (<IMG SRC="images/FilterCheckAll.gif" ALT="Select All" BORDER=0>) or deselect (<IMG SRC="images/FilterCheckNone.gif" ALT="De-select All" BORDER=0>) all items on a particular tab.  Please note that these buttons affect only the currently selected tab in the filter dialog. <P>
 
-<A HREF="ExportClip.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+<A HREF="exportdataitems.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 <A HREF="Search.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
 

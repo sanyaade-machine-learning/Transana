@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -36,10 +36,14 @@ import TransanaGlobal
 import WaveformProgress
 # import Python's locale module
 import locale
+# import Python's multiprocessing module
+import multiprocessing
 # import Python's os module
 import os
 # import Python's sys module
 import sys
+
+ID_PROCESSTIMER = wx.NewId()
 
 class BatchFileProcessor(Dialogs.GenForm):
     """ Batch File Processor, used for Batch Waveform Generator and Batch Episode Creation """
@@ -56,6 +60,9 @@ class BatchFileProcessor(Dialogs.GenForm):
         elif self.mode == 'episode':
             formTitle = _("Batch Episode Creation")
             helpContext = 'Batch Episode Creation'
+        elif self.mode == 'document':
+            formTitle = _("Batch Document Creation")
+            helpContext = 'Batch Document Creation'
         elif self.mode == 'snapshot':
             formTitle = _("Batch Snapshot Creation")
             helpContext = 'Batch Snapshot Creation'
@@ -192,7 +199,11 @@ class BatchFileProcessor(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size, and define height as unchangeable
         self.SetSizeHints(max(500, width), max(500, height))
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
+        # Initialize the dictionary of running conversions
+        self.runningConversions = {}
+        # Initialize the process variable
+        self.process = None
 
     def get_input(self):
         """ Get the Input values from the Batch Waveform Generator form and process the selected files """
@@ -206,42 +217,7 @@ class BatchFileProcessor(Dialogs.GenForm):
             # to do waveform extraction.  (This logic could just as easily be part of the calling
             # routine -- we'd just need to pass teh file list and the value of the "overwrite" checkbox.)
             if self.mode == "waveform":
-                # Iterate through the file list
-                for loop in range(0, self.fileList.GetCount()):
-                    # Get the current filename
-                    filename = self.fileList.GetString(loop)
-                    # Remember the original File Name that is passed in
-                    originalFilename = filename
-                    # Split the path off of the file name
-                    (path, filename) = os.path.split(filename)
-                    # Split the extension off the file name
-                    (filenameroot, extension) = os.path.splitext(filename)
-                    # Build the progress box's label
-                    if 'unicode' in wx.PlatformInfo:
-                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                        prompt = unicode(_("Extracting %s\nfrom %s"), 'utf8')
-                    else:
-                        prompt = _("Extracting %s\nfrom %s")
-                    # Build the filename for the extracted audio out of the filename parts
-                    self.waveFilename = os.path.join(TransanaGlobal.configData.visualizationPath, filenameroot + '.wav')
-                    # If there is no extracted audio file, OR if we're over-writing extracted audio ...
-                    if not(os.path.exists(self.waveFilename)) or self.overwrite.GetValue():
-                        # Build the correct filename for the Waveform Graphic
-                        self.waveformFilename = os.path.join(TransanaGlobal.configData.visualizationPath, filenameroot + '.png')
-                        # Create the Waveform Progress Dialog
-                        self.progressDialog = WaveformProgress.WaveformProgress(self, prompt % (self.waveFilename, originalFilename))
-                        # Tell the Waveform Progress Dialog to handle the audio extraction modally.
-                        self.progressDialog.Extract(originalFilename, self.waveFilename)
-                        # Get the Error Log that may have been created
-                        errorLog = self.progressDialog.GetErrorMessages()
-                        # Okay, we're done with the Progress Dialog here!
-                        self.progressDialog.Destroy()
-                        # If the user cancelled the audio extraction ...
-                        if (len(errorLog) == 1) and (errorLog[0] == 'Cancelled'):
-                            break
-                    else:
-                        continue
-            
+                self.AudioExtract(data)
             # We don't DO anything here for the Batch Episode Creation routine.  We just
             # return the File List to the calling routine for processing!!  The calling routine
             # knows about the database tree, whereas this object doesn't.
@@ -250,17 +226,91 @@ class BatchFileProcessor(Dialogs.GenForm):
         else:
             return None     # Cancel
 
+    def AudioExtract(self, data):
+        """ Perform Audio Extraction using as many threads as possible """
+        # Set the list of data files to be processed
+        self.processFileList = data
+        # Create a Timer to control the multi-thread audio extraction process
+        self.processTimer = wx.Timer(self, ID_PROCESSTIMER)
+        wx.EVT_TIMER(self, ID_PROCESSTIMER, self.OnTimer)
+        # Run the time every half second
+        self.processTimer.Start(500)
+
+    def OnTimer(self, event):
+        """ Check the threads to see if we need to add more extraction processes """
+        # While there are processors free and files to process ...
+        while (len(self.runningConversions) < multiprocessing.cpu_count()) and (len(self.processFileList) > 0):
+            # Get the current filename
+            filename = self.processFileList[0]
+            # Remember the original File Name that is passed in
+            originalFilename = filename
+            # Split the path off of the file name
+            (path, filename) = os.path.split(filename)
+            # Split the extension off the file name
+            (filenameroot, extension) = os.path.splitext(filename)
+            # Build the progress box's label
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_("Extracting %s\nfrom %s"), 'utf8')
+            # Build the filename for the extracted audio out of the filename parts
+            self.waveFilename = os.path.join(TransanaGlobal.configData.visualizationPath, filenameroot + '.wav')
+            # If there is no extracted audio file, OR if we're over-writing extracted audio ...
+            if not(os.path.exists(self.waveFilename)) or self.overwrite.GetValue():
+                # Create the Progress Dialog, allowing MULTIPLE THREADS
+                progressDialog = WaveformProgress.WaveformProgress(self,
+                                                                   prompt % (self.waveFilename, originalFilename),
+                                                                   showModally=False)
+                # If there are NO currently-running conversions ...
+                if self.runningConversions == {}:
+                    # ... then set the index to 1
+                    indexNum = 1
+                # If there are currently-running conversions ...
+                else:
+                    # ... then set the index to 1 more than the largest current number
+                    indexNum = max(self.runningConversions) + 1
+                # Have the Progress Dialog remember its index number
+                progressDialog.indexNum = indexNum
+                # Have the Progress Dialog remember the name of the file being converted
+                progressDialog.originalFilename = originalFilename
+                # Add the Progress Dialog to the dictionary that holds the running conversions
+                self.runningConversions[indexNum] = progressDialog
+                # Tell the Waveform Progress Dialog to handle the audio extraction modally.
+                progressDialog.Extract(originalFilename, self.waveFilename)
+            # Remove the file from the list
+            self.processFileList = self.processFileList[1:]
+
+        # If we've requested extractio for all Files, we can stop the timer.
+        if len(self.processFileList) == 0:
+            self.processTimer.Stop()
+
+    def OnConvertComplete(self, progressDlg):
+        # Remove this conversion from the dictionary of running conversions
+        del(self.runningConversions[progressDlg.indexNum])
+        # If we have NO MORE running conversions ...
+        if len(self.runningConversions) == 0:
+            # Close and destroy the Batch File Processor
+            self.Close()
+            self.Destroy()
+
     def OnBrowse(self, evt):
         """ Invoked when the user presses the Get Files button. """
-        if self.mode == "snapshot":
+        if self.mode == "document":
+            # Define the File Dialog Prompt
+            prompt = _('Select a document file to process:')
+            # Get Transana's Document File Filter definitions
+            fileTypesString = TransanaConstants.documentFileTypesString
+        elif self.mode == "snapshot":
+            # Define the File Dialog Prompt
+            prompt = _('Select an image file to process:')
             # Get Transana's Image File Filter definitions
             fileTypesString = TransanaConstants.imageFileTypesString
         else:
+            # Define the File Dialog Prompt
+            prompt = _('Select a media file to process:')
             # Get Transana's Media File Filter definitions
             fileTypesString = TransanaConstants.fileTypesString
         # Create a File Open dialog.
         # Changed from FileSelector to FileDialog to allow multiple file selections.
-        fs = wx.FileDialog(self, _('Select a media file to process:'),
+        fs = wx.FileDialog(self, prompt,
                         self.lastPath,
                         "",
                         fileTypesString, 
@@ -283,7 +333,7 @@ class BatchFileProcessor(Dialogs.GenForm):
     def BrowseDirectories(self, evt):
         """ Invoked when the user presses the Get Directory button """
         # Build a dialog that requests that the user select a directory
-        dlg = wx.DirDialog(self, _('Select a directory that contains video or audio files:'), self.lastPath, style=wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON)
+        dlg = wx.DirDialog(self, _('Select a directory that contains the desired files:'), self.lastPath, style=wx.DD_DEFAULT_STYLE | wx.DD_NEW_DIR_BUTTON)
         # Show the dialog and see if the user pressed OK
         if dlg.ShowModal() == wx.ID_OK:
             # Find all teh medica files in the specified path
@@ -312,7 +362,9 @@ class BatchFileProcessor(Dialogs.GenForm):
 
     def FindMediaFiles(self, directory):
         """ Find files in a given directory with extensions that match those found in TransanaConstants.mediaFileTypes. """
-        if self.mode == "snapshot":
+        if self.mode == "document":
+            filetypes = TransanaConstants.documentFileTypes
+        elif self.mode == "snapshot":
             filetypes = TransanaConstants.imageFileTypes
         else:
             filetypes = TransanaConstants.mediaFileTypes

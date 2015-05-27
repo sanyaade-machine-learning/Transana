@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -26,6 +26,8 @@ import wx.lib.colourselect
 import Dialogs
 # import the TransanaGlobal variables
 import TransanaGlobal
+# import Transana's images
+import TransanaImages
 # import Python's codecs module to make reading and writing UTF-8 text files 
 import codecs
 # Import Python's os and sys modules
@@ -71,10 +73,8 @@ class ColorConfig(wx.Dialog):
         # Add an expandable top spacer
         boxR1C2.Add((1, 1), 1, wx.EXPAND)
         
-        # Get the graphic for the Move Up button
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_UP, wx.ART_TOOLBAR, (16,16))
         # Create a bitmap button for the Move Up button
-        self.btnUp = wx.BitmapButton(self, -1, bmp)
+        self.btnUp = wx.BitmapButton(self, -1, TransanaImages.ArtProv_UP.GetBitmap())
         # Set the Tool Tip for the Move Up button
         self.btnUp.SetToolTipString(_("Move up"))
         # Bind the button event for the Move Up button
@@ -82,10 +82,8 @@ class ColorConfig(wx.Dialog):
         # Add Move Up to the Sizer
         boxR1C2.Add(self.btnUp, 0, wx.ALIGN_CENTER | wx.RIGHT | wx.BOTTOM, 10)
         
-        # Get the graphic for the Move Down button
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_DOWN, wx.ART_TOOLBAR, (16,16))
         # Create a bitmap button for the Move Down button
-        self.btnDown = wx.BitmapButton(self, -1, bmp)
+        self.btnDown = wx.BitmapButton(self, -1, TransanaImages.ArtProv_DOWN.GetBitmap())
         # Set the Tool Tip for the Move Down button
         self.btnDown.SetToolTipString(_("Move down"))
         # Bind the button event for the Move Down button
@@ -169,19 +167,15 @@ class ColorConfig(wx.Dialog):
         # Create the boxButtons sizer, which will hold the dialog box's buttons
         boxButtons = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Get the image for File Open
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_FILE_OPEN, wx.ART_TOOLBAR, (16,16))
         # Create the File Open button
-        self.btnFileOpen = wx.BitmapButton(self, -1, bmp)
+        self.btnFileOpen = wx.BitmapButton(self, -1, TransanaImages.ArtProv_FILEOPEN.GetBitmap())
         self.btnFileOpen.SetToolTip(wx.ToolTip(_('Open Color Configuration')))
         # Bind the Button to the appropriate Event handler
         self.btnFileOpen.Bind(wx.EVT_BUTTON, self.OnFileOpen)
         boxButtons.Add(self.btnFileOpen, 0, wx.ALIGN_LEFT | wx.LEFT | wx.TOP, 10)
 
-        # Get the image for File Save
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_FILE_SAVE, wx.ART_TOOLBAR, (16,16))
         # Create the File Save button
-        self.btnFileSave = wx.BitmapButton(self, -1, bmp)
+        self.btnFileSave = wx.BitmapButton(self, -1, TransanaImages.ArtProv_FILESAVE.GetBitmap())
         self.btnFileSave.SetToolTip(wx.ToolTip(_('Save Color Configuration')))
         # Bind the button to the appropriate event handler
         self.btnFileSave.Bind(wx.EVT_BUTTON, self.OnFileSave)

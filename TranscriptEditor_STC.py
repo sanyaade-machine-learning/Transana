@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -103,13 +103,12 @@ class TranscriptEditor(RichTextEditCtrl.RichTextEditCtrl):
 
         # Initialize Mouse Position to avoid problems later
         self.mousePosition = None
-        
-        # Remove Drag-and-Drop reference on the mac due to the Quicktime Drag-Drop bug
-        if TransanaConstants.macDragDrop or (not '__WXMAC__' in wx.PlatformInfo):
-            dt = TranscriptEditorDropTarget(self)
-            self.SetDropTarget(dt)
 
-            self.SetDragEvent(id, self.OnStartDrag)
+        # make the Transcript Editor a Drop Target        
+        dt = TranscriptEditorDropTarget(self)
+        self.SetDropTarget(dt)
+        # Define the Start Drag Event
+        self.SetDragEvent(id, self.OnStartDrag)
             
         # We need to trap both the EVT_KEY_DOWN and the EVT_CHAR event.
         # EVT_KEY_DOWN processes NON-ASCII keys, such as cursor keys and Ctrl-key combinations.
@@ -2660,7 +2659,7 @@ class TranscriptEditorDropTarget(wx.PyDropTarget):
             # If a Keyword Node is dropped ...
             if sourceData.nodetype == 'KeywordNode':
                 # See if we're creating a QuickClip
-                if (TransanaConstants.macDragDrop or ('wxMac' in wx.PlatformInfo)) and TransanaGlobal.configData.quickClipMode:
+                if TransanaGlobal.configData.quickClipMode:
                     # Get the clip start and stop times from the transcript
                     (startTime, endTime) = self.editor.get_selected_time_range()
                     # Initialize the Keyword List

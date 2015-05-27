@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -261,7 +261,7 @@ class KeywordPropertiesForm(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size
         self.SetSizeHints(max(self.width, width), max(self.height, height))
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # We need to set some minimum sizes so the sizers will work right
         self.kwg_choice.SetSizeHints(minW = 50, minH = 20)

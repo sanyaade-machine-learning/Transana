@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -38,11 +38,13 @@ import Collection
 import CoreData
 import DBInterface
 import Dialogs
+import Document
 import Episode
 import KeywordObject as Keyword
 import Misc
 import Note
-import Series
+import Quote
+import Library
 import Snapshot
 import TransanaConstants
 import TransanaGlobal
@@ -207,7 +209,7 @@ class XMLImport(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size, and define height as unchangeable
         self.SetSizeHints(max(550, width), height, -1, height)
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # Set focus to the XML file field
         self.XMLFile.SetFocus()
@@ -255,14 +257,17 @@ class XMLImport(Dialogs.GenForm):
        self.XMLVersionNumber = 0.0
        # Initialize dictionary variables used to keep track of data values that may change during import.
        recNumbers = {}
-       recNumbers['Series'] = {0:0}
+       recNumbers['Libraries'] = {0:0}
+       recNumbers['Document'] = {0:0}
        recNumbers['Episode'] = {0:0}
        recNumbers['Transcript'] = {0:0}
        recNumbers['Collection'] = {0:0}
+       recNumbers['Quote'] = {0:0}
        recNumbers['Clip'] = {0:0}
        recNumbers['OldClip'] = {0:0}
        recNumbers['Snapshot'] = {0:0}
        recNumbers['Note'] = {0:0}
+       quotePosition = {}
        clipTranscripts = {}
        clipStartStop = {}
 
@@ -294,6 +299,155 @@ class XMLImport(Dialogs.GenForm):
            # Fix that.
            transcriptCount = 0
 
+       # Define some dictionaries for processing XML tags
+       MainHeads = {}
+       MainHeads['<SERIESFILE>'] =               { 'progPct' : 0,
+                                                   'progPrompt' : _('Importing Library records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<DOCUMENTFILE>'] =             { 'progPct' : 5,
+                                                   'progPrompt' : _('Importing Document records (This may be slow because of the size of Document records.)'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<EPISODEFILE>'] =              { 'progPct' : 10,
+                                                   'progPrompt' : _('Importing Episode records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<COREDATAFILE>'] =             { 'progPct' : 14,
+                                                   'progPrompt' : _('Importing Core Data records'),
+                                                   'skipCheck' : True,
+                                                   'skipValue' : False }
+       MainHeads['<COLLECTIONFILE>'] =           { 'progPct' : 19,
+                                                   'progPrompt' : _('Importing Collection records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<QUOTEFILE>'] =                { 'progPct' : 24,
+                                                   'progPrompt' : _('Importing Quote records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<QUOTEPOSITIONFILE>'] =        { 'progPct' : 29,
+                                                   'progPrompt' : _('Importing Quote Position records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<CLIPFILE>'] =                 { 'progPct' : 33,
+                                                   'progPrompt' : _('Importing Clip records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<ADDITIONALVIDSFILE>'] =       { 'progPct' : 38,
+                                                   'progPrompt' : _('Importing Additional Video records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<TRANSCRIPTFILE>'] =           { 'progPct' : 43,
+                                                   'progPrompt' : _('Importing Transcript records (This may be slow because of the size of Transcript records.)'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<SNAPSHOTFILE>'] =             { 'progPct' : 48,
+                                                   'progPrompt' : _('Importing Snapshot records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<KEYWORDFILE>'] =              { 'progPct' : 52,
+                                                   'progPrompt' : _('Importing Keyword records'),
+                                                   'skipCheck' : True,
+                                                   'skipValue' : False }
+       MainHeads['<CLIPKEYWORDFILE>'] =          { 'progPct' : 57,
+                                                   'progPrompt' : _('Importing Clip Keyword records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<SNAPSHOTKEYWORDFILE>'] =      { 'progPct' : 62,
+                                                   'progPrompt' : _('Importing Snapshot Keyword records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<SNAPSHOTKEYWORDSTYLEFILE>'] = { 'progPct' : 67,
+                                                   'progPrompt' : _('Importing Snapshot Coding Style records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<NOTEFILE>'] =                 { 'progPct' : 71,
+                                                   'progPrompt' : _('Importing Note records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+       MainHeads['<FILTERFILE>'] =               { 'progPct' : 76,
+                                                   'progPrompt' : _('Importing Filter records'),
+                                                   'skipCheck' : False,
+                                                   'skipValue' : False }
+
+       # Because Definition, Description, FilterData, NoteText, RTFText, XMLText can be many lines long, we need to 
+       # explicitly close these datatypes when the closing XML tag is found
+       DataTypes = { '<AUDIO>'               : 'Audio',
+                     '<CLIPNUM>'             : 'ClipNum',
+                     '<CLIPSTART>'           : 'ClipStart',
+                     '<CLIPSTOP>'            : 'ClipStop',
+                     '<CREATOR>'             : 'Creator',
+                     '<COLLECTNUM>'          : 'CollectNum',
+                     '<COLORDEF>'            : 'ColorDef',
+                     '<COLORNAME>'           : 'ColorName',
+                     '<COMMENT>'             : 'Comment',
+                     '<CONFIGNAME>'          : 'ConfigName',
+                     '<CONTRIBUTOR>'         : 'Contributor',
+                     '<COVERAGE>'            : 'Coverage',
+                     '<DATE>'                : 'date',
+                     '<DEFAULTKEYWORDGROUP>' : 'DKG',
+                     '<DEFINITION>'          : 'Definition',
+                     '</DEFINITION>'         : None,
+                     '<DESCRIPTION>'         : 'Description',
+                     '</DESCRIPTION>'        : None,
+                     '<DOCUMENTNUM>'         : 'DocumentNum',
+                     '<DRAWMODE>'            : 'DrawMode',
+                     '<ENDCHAR>'             : 'EndChar',
+                     '<EPISODENUM>'          : 'EpisodeNum',
+                     '<EXAMPLE>'             : 'Example',
+                     '<FILTERDATA>'          : 'FilterData',
+                     '</FILTERDATA>'         : None,
+                     '<FILTERDATATYPE>'      : 'FilterDataType',
+                     '<FORMAT>'              : 'Format',
+                     '<ID>'                  : 'ID',
+                     '<IMAGECOORDSX>'        : 'ImageCoordsX',
+                     '<IMAGECOORDSY>'        : 'ImageCoordsY',
+                     '<IMAGESCALE>'          : 'ImageScale',
+                     '<IMAGESIZEH>'          : 'ImageSizeH',
+                     '<IMAGESIZEW>'          : 'ImageSizeW',
+                     '<KEYWORD>'             : 'KW',
+                     '<KEYWORDGROUP>'        : 'KWG',
+                     '<LANGUAGE>'            : 'Language',
+                     '<LENGTH>'              : 'Length',
+                     '<LINESTYLE>'           : 'LineStyle',
+                     '<LINEWIDTH>'           : 'LineWidth',
+                     '<MEDIAFILE>'           : 'MediaFile',
+                     '<MINTRANSCRIPTWIDTH>'  : 'MinTranscriptWidth',
+                     '<NOTETAKER>'           : 'NoteTaker',
+                     '<NOTETEXT>'            : 'NoteText',
+                     '</NOTETEXT>'           : None,
+                     '<NUM>'                 : 'Num',
+                     '<OFFSET>'              : 'Offset',
+                     '<OWNER>'               : 'Owner',
+                     '<PARENTCOLLECTNUM>'    : 'ParentCollectNum',
+                     '<PUBLISHER>'           : 'Publisher',
+                     '<QUOTENUM>'            : 'QuoteNum',
+                     '<RELATION>'            : 'Relation',
+                     '<REPORTSCOPE>'         : 'ReportScope',
+                     '<REPORTTYPE>'          : 'ReportType',
+                     '<RIGHTS>'              : 'Rights',
+                     '<RTFTEXT>'             : 'RTFText',
+                     '</RTFTEXT>'            : None,
+                     '<SERIESNUM>'           : 'SeriesNum',
+                     '<SNAPSHOTDURATION>'    : 'SnapshotDuration',
+                     '<SNAPSHOTNUM>'         : 'SnapshotNum',
+                     '<SNAPSHOTTIMECODE>'    : 'SnapshotTimeCode',
+                     '<SORTORDER>'           : 'SortOrder',
+                     '<SOURCE>'              : 'Source',
+                     '<STARTCHAR>'           : 'StartChar',
+                     '<SUBJECT>'             : 'Subject',
+                     '<TITLE>'               : 'Title',
+                     '<TRANSCRIBER>'         : 'Transcriber',
+                     '<TRANSCRIPTNUM>'       : 'TranscriptNum',
+                     '<TYPE>'                : 'Type',
+                     '<VISIBLE>'             : 'Visible',
+                     '<X1>'                  : 'X1',
+                     '<X2>'                  : 'X2',
+                     '<XMLTEXT>'             : 'XMLText',
+                     '</XMLTEXT>'            : None,
+                     '<Y1>'                  : 'Y1',
+                     '<Y2>'                  : 'Y2' }
+
        # Start exception handling
        try:
            # Assume we're good to continue unless informed otherwise
@@ -312,16 +466,12 @@ class XMLImport(Dialogs.GenForm):
            # Let's keep a list of instances of when this occurs so we can fix it after all the collections are read.
            collectionsToUpdate = []
 
-
-           tmpDict = {}
-           
-           
            # For each line in the file ...
            for line in f:
                # ... increment the line counter
                lineCount += 1
                # If we DON'T have RTF Text or Note Text ...
-               if not (dataType in  ['RTFText', 'NoteText']):
+               if not (dataType in  ['XMLText', 'RTFText', 'NoteText']):
                    # ... we can't just use strip() here.  Strings ending with the a with a grave (Alt-133) get corrupted!
                    line = Misc.unistrip(line)
                # If we have RTF Text or Note Text, we don't want to strip leading white space ...
@@ -340,82 +490,20 @@ class XMLImport(Dialogs.GenForm):
                # then figure out what object property we're importing (dataType) and then we
                # import the data.  But of course, there's a bit more to it than that.
 
-               # For the same of simple optimization, let's see if we're dealing with an XML command to start with
+               # For the sake of simple optimization, let's see if we're dealing with an XML command to start with
 
-               if ((line != '') and (dataType != 'RTFText') and (line[0] == '<')) or \
+               if ((line != '') and not (dataType in ['XMLText', 'RTFText']) and (line[0] == '<')) or \
                   ((dataType == 'NoteText') and (lineUpper.lstrip() == '</NOTETEXT>')):
 
                    # Code for updating the Progress Bar
-                   if lineUpper == '<SERIESFILE>':
-                       progress.Update(0, _('Importing Series records'))
+                   if lineUpper in MainHeads.keys():
+                       progress.Update(MainHeads[lineUpper]['progPct'], MainHeads[lineUpper]['progPrompt'])
                        # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<EPISODEFILE>':
-                       progress.Update(7, _('Importing Episode records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<COREDATAFILE>':
-                       progress.Update(14, _('Importing Core Data records'))
-                       # These records MAY skip error messages
-                       skipCheck = True
-                       skipValue = False
-                   elif lineUpper == '<COLLECTIONFILE>':
-                       progress.Update(21, _('Importing Collection records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<CLIPFILE>':
-                       progress.Update(29, _('Importing Clip records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<ADDITIONALVIDSFILE>':
-                       progress.Update(36, _('Importing Additional Video records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<TRANSCRIPTFILE>':
-                       progress.Update(43, _('Importing Transcript records (This may be slow because of the size of Transcript records.)'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<SNAPSHOTFILE>':
-                       progress.Update(50, _('Importing Snapshot records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<KEYWORDFILE>':
-                       progress.Update(57, _('Importing Keyword records'))
-                       # These records MAY skip error messages
-                       skipCheck = True
-                       skipValue = False
-                   elif lineUpper == '<CLIPKEYWORDFILE>':
-                       progress.Update(64, _('Importing Clip Keyword records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<SNAPSHOTKEYWORDFILE>':
-                       progress.Update(71, _('Importing Snapshot Keyword records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<SNAPSHOTKEYWORDSTYLEFILE>':
-                       progress.Update(79, _('Importing Snapshot Coding Style records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<NOTEFILE>':
-                       progress.Update(86, _('Importing Note records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
-                   elif lineUpper == '<FILTERFILE>':
-                       progress.Update(93, _('Importing Filter records'))
-                       # These records should NEVER skip error messages
-                       skipCheck = False
-                       skipValue = False
+                       skipCheck = MainHeads[lineUpper]['skipCheck']
+                       skipValue = MainHeads[lineUpper]['skipValue']
+
+                   elif lineUpper.lstrip() in DataTypes.keys():
+                       dataType = DataTypes[lineUpper.lstrip()]
 
                    # When we finish the Collections import section ...
                    elif lineUpper == '</COLLECTIONFILE>':
@@ -453,6 +541,7 @@ class XMLImport(Dialogs.GenForm):
                        # Version 1.6 -- Added MinTranscriptWidth, XML format for transcripts, and character escapes for Transana 2.50 release
                        # Version 1.7 -- Added Snapshots, Snapshot Keywords, and Snapshot Coding Styles for Transana 2.60
                        # Version 1.8 -- Character Encoding Rules changed completely!!
+                       # Version 2.0 -- Transana 3.0.  Documents and Quotes added
 
                        # Transana-XML version 1.0 ...
                        if self.XMLVersionNumber == '1.0':
@@ -463,7 +552,7 @@ class XMLImport(Dialogs.GenForm):
                            # ... use the encoding selected by the user
                            self.importEncoding = self.encodingOptions[self.chImportEncoding.GetSelection()]
                        # Transana-XML version 1.6 ...
-                       elif self.XMLVersionNumber in ['1.6', '1.7', '1.8']:
+                       elif self.XMLVersionNumber in ['1.6', '1.7', '1.8', '2.0']:
                            # ... use UTF8 encoding
                            self.importEncoding = 'utf8'
                        # All other Transana XML versions ...
@@ -479,8 +568,13 @@ class XMLImport(Dialogs.GenForm):
                            break
                    # Code for Creating and Saving Objects
                    elif lineUpper == '<SERIES>':
-                       currentObj = Series.Series()
-                       objectType = 'Series'
+                       currentObj = Library.Library()
+                       objectType = 'Libraries'
+                       dataType = None
+
+                   elif lineUpper == '<DOCUMENT>':
+                       currentObj = Document.Document()
+                       objectType = 'Document'
                        dataType = None
 
                    elif lineUpper == '<EPISODE>':
@@ -501,6 +595,21 @@ class XMLImport(Dialogs.GenForm):
                    elif lineUpper == '<COLLECTION>':
                        currentObj = Collection.Collection()
                        objectType = 'Collection'
+                       dataType = None
+
+                   elif lineUpper == '<QUOTE>':
+                       currentObj = Quote.Quote()
+                       objectType = 'Quote'
+                       dataType = None
+
+                   elif lineUpper == '<QUOTEPOSITION>':
+                       # There is not an Object for the Snapshot Keywords table.  We have to create the data record by hand.
+                       currentObj = None
+                       self.snapshotKeyword = { 'QuoteNum'     :  0,
+                                                'DocumentNum'  :  0,
+                                                'StartChar'    :  -1,
+                                                'EndChar'      :  -1 }
+                       objectType = 'QuotePosition'
                        dataType = None
 
                    elif lineUpper == '<CLIP>':
@@ -576,10 +685,13 @@ class XMLImport(Dialogs.GenForm):
 
                    # If we're closing a data record in the XML, we need to SAVE the data object.
                    elif lineUpper == '</SERIES>' or \
+                        lineUpper == '</DOCUMENT>' or \
                         lineUpper == '</EPISODE>' or \
                         lineUpper == '</COREDATA>' or \
                         lineUpper == '</TRANSCRIPT>' or \
                         lineUpper == '</COLLECTION>' or \
+                        lineUpper == '</QUOTE>' or \
+                        lineUpper == '</QUOTEPOSITION>' or \
                         lineUpper == '</CLIP>' or \
                         lineUpper == '</SNAPSHOT>' or \
                         lineUpper == '</SNAPSHOTKEYWORD>' or \
@@ -598,10 +710,12 @@ class XMLImport(Dialogs.GenForm):
                            # Objects use the presence of a number to update rather than insert, and we need to
                            # insert here.  Therefore, we'll strip the record number here, but remember it for
                            # user later.
-                           if objectType == 'Series' or \
+                           if objectType == 'Libraries' or \
+                              objectType == 'Document' or \
                               objectType == 'Episode' or \
                               objectType == 'Transcript' or \
                               objectType == 'Collection' or \
+                              objectType == 'Quote' or \
                               objectType == 'Clip' or \
                               objectType == 'Snapshot' or \
                               objectType == 'Note':
@@ -661,8 +775,12 @@ class XMLImport(Dialogs.GenForm):
                                    print "XMLImport 2:  Saving ", type(currentObj), objCountNumber
                                    objCountNumber += 1;
 
-                               # Save the data object
-                               currentObj.db_save(use_transactions=False)
+                               if objectType == 'Document':
+                                   # Save the data object
+                                   currentObj.db_save(use_transactions=False, ignore_filename=True)
+                               else:
+                                   # Save the data object
+                                   currentObj.db_save(use_transactions=False)
                                # Let's keep a record of the old and new object numbers for each object saved.
                                recNumbers[objectType][oldNumber] = currentObj.number
 
@@ -672,6 +790,16 @@ class XMLImport(Dialogs.GenForm):
                                    # number based on it's new number.  This must be post-save, as that's when
                                    # the new object number gets assigned.
                                    recNumbers['OldClip'][currentObj.number] = oldNumber
+
+                           elif objectType == 'QuotePosition':
+                               # Define the query to update the Quote Position data in the database.
+                               # (This should be faster than loading the Quote, adding the position values, and saving the Quote.
+                               query = "UPDATE QuotePositions2 SET DocumentNum = %s, StartChar = %s, EndChar = %s WHERE QuoteNum = %s"
+                               query = DBInterface.FixQuery(query)
+                               # Get the data for each insert query
+                               data = (quotePosition['DocumentNum'], quotePosition['StartChar'], quotePosition['EndChar'], quotePosition['QuoteNum'])
+                               # Execute the query
+                               dbCursor.execute(query, data)
 
                            elif objectType == 'AddVid':
                                # Additional Video records don't have a proper object type, so we have to do the saves the hard way.
@@ -687,7 +815,7 @@ class XMLImport(Dialogs.GenForm):
                                if not currentObj.has_key('Audio'):
                                    currentObj['Audio'] = 0
 
-                               # Define the query to insert the additional media files into the databse
+                               # Define the query to insert the additional media files into the database
                                query = "INSERT INTO AdditionalVids2 (EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio) VALUES (%s, %s, %s, %s, %s, %s)"
                                query = DBInterface.FixQuery(query)
                                # Substitute the generic OS seperator "/" for the Windows "\".
@@ -717,7 +845,11 @@ class XMLImport(Dialogs.GenForm):
                                currentObj.db_save(use_transactions=False)
                                
                            elif objectType == 'ClipKeyword':
-                               if (currentObj.episodeNum != 0) or (currentObj.clipNum != 0) or (currentObj.snapshotNum != 0):
+                               if (currentObj.documentNum != 0) or \
+                                  (currentObj.episodeNum != 0) or \
+                                  (currentObj.quoteNum != 0) or \
+                                  (currentObj.clipNum != 0) or \
+                                  (currentObj.snapshotNum != 0):
 
                                    if DEBUG_Exceptions:
                                        print "XMLImport 5:  Saving ", type(currentObj), objCountNumber
@@ -742,7 +874,7 @@ class XMLImport(Dialogs.GenForm):
                                              self.snapshotKeyword['X2'],
                                              self.snapshotKeyword['Y2'],
                                              self.snapshotKeyword['Visible'])
-                                   # Save the Filter data
+                                   # Save the Snapshot Keyword data
                                    if db != None:
                                        dbCursor.execute(query, values)
                                    
@@ -763,14 +895,16 @@ class XMLImport(Dialogs.GenForm):
                                              self.snapshotKeywordStyle['ColorDef'],
                                              self.snapshotKeywordStyle['LineWidth'],
                                              self.snapshotKeywordStyle['LineStyle'])
-                                   # Save the Filter data
+                                   # Save the Snapshot Keyword Style data
                                    if db != None:
                                        dbCursor.execute(query, values)
                                    
                            elif objectType == 'Filter':
                                # Starting with XML Version 1.3, we have to deal with encoding issues for the Filter data
                                if not self.XMLVersionNumber in ['1.0', '1.1', '1.2']:
-                                   if self.FilterFilterDataType in ['1', '2', '3', '5', '6', '7']:
+                                   # With XML version 2.0, additional filter data types need to be unpickled
+                                   if (self.FilterFilterDataType in ['1', '2', '3', '5', '6', '7']) or \
+                                      ((self.XMLVersionNumber in ['2.0']) and (self.FilterFilterDataType in ['8', '18', '19', '20'])):
                                        # Unpack the pickled data, which must be done differently depending on its current form
                                        if type(self.FilterFilterData).__name__ == 'array':
                                            data = cPickle.loads(self.FilterFilterData.tostring())
@@ -799,12 +933,13 @@ class XMLImport(Dialogs.GenForm):
                                # Encode the Filter Configuration Name using the file encoding
                                self.FilterConfigName = self.FilterConfigName.encode(TransanaGlobal.encoding)
 
-#                               print "Filter Rec:", type(self.FilterReportType), self.FilterReportType, type(self.FilterScope), self.FilterScope
+                               if DEBUG:
+                                   print "Filter Rec:", self.FilterReportType, self.FilterScope, self.FilterFilterDataType
 
                                # Certain FilterDataTypes need to have their DATA adjusted for the new object numbers!
                                # This should be done before the save.
                                # So if we have Clips or Notes Filter Data ...
-                               if (self.FilterFilterDataType in ['2', '8']) or \
+                               if (self.FilterFilterDataType in ['2', '8', '20']) or \
                                   ((self.FilterReportType == '15') and (self.FilterScope == 1)):
                                    # ... initialize a List for accepting the altered Filter Data
                                    filterData = []
@@ -843,6 +978,14 @@ class XMLImport(Dialogs.GenForm):
                                                collNum = recNumbers['Collection'][dataRec[0]]
                                                # ... and substitute it into the data record
                                                filterData.append((collNum, dataRec[1]))
+                                       # If we have a Save Quotes record ...
+                                       elif self.FilterFilterDataType == '20':
+                                           # ... and if the Colllection Number still exists in the new data set ...
+                                           if recNumbers['Collection'].has_key(dataRec[1]):
+                                               # ... get the new Collection Number ...
+                                               collNum = recNumbers['Collection'][dataRec[1]]
+                                               # ... and substitute it into the data record
+                                               filterData.append((dataRec[0], collNum, dataRec[2]))
                                    # Now re-pickle the filter data
                                    self.FilterFilterData = cPickle.dumps(filterData)
                                # Create the query to save the Filter record    
@@ -852,8 +995,9 @@ class XMLImport(Dialogs.GenForm):
                                                (%s, %s, %s, %s, %s) """
                                query = DBInterface.FixQuery(query)
 
-#                               print 'XMLImport: Saving Filter Record:', self.FilterReportType, self.FilterScope, \
-#                                     self.FilterConfigName, self.FilterFilterDataType, type(self.FilterFilterData)
+                               if DEBUG:
+                                   print 'XMLImport: Saving Filter Record:', self.FilterReportType, self.FilterScope, \
+                                         self.FilterConfigName, self.FilterFilterDataType, type(self.FilterFilterData)
                                
                                # Build the values to match the query, including the pickled Clip data
                                values = (self.FilterReportType, self.FilterScope, self.FilterConfigName, self.FilterFilterDataType,
@@ -897,7 +1041,10 @@ class XMLImport(Dialogs.GenForm):
                                    msg = msg + '\n\n' + prompt % (currentObj.id)
                                    # So the keyword already exists.  Let's continue the import anyway!  This is a minor issue.
                                    contin = True
-                                   
+
+                               elif objectType == 'QuotePosition':
+                                   prompt = unicode('for Quote %s.', 'utf8')
+                                   msg = msg +  ' ' + prompt % quotePosition['QuoteNum']
                                elif (not objectType in ['AddVid', 'Keyword', 'ClipKeyword', 'Filter']) and (currentObj.id != ''):
                                    if 'unicode' in wx.PlatformInfo:
                                        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -970,243 +1117,19 @@ class XMLImport(Dialogs.GenForm):
                        currentObj = None
                        objectType = None
 
-                   # Code for determining Property Type for populating Object Properties
-                   elif lineUpper == '<NUM>':
-                       dataType = 'Num'
-
-                   elif lineUpper == '<ID>':
-                       dataType = 'ID'
-
-                   elif lineUpper == '<COMMENT>':
-                       dataType = 'Comment'
-
-                   elif lineUpper == '<OWNER>':
-                       dataType = 'Owner'
-
-                   elif lineUpper == '<DEFAULTKEYWORDGROUP>':
-                       dataType = 'DKG'
-
-                   elif lineUpper == '<SERIESNUM>':
-                       dataType = 'SeriesNum'
-
-                   elif lineUpper == '<EPISODENUM>':
-                       dataType = 'EpisodeNum'
-
-                   elif lineUpper == '<TRANSCRIPTNUM>':
-                       dataType = 'TranscriptNum'
-
-                   elif lineUpper == '<COLLECTNUM>':
-                       dataType = 'CollectNum'
-
-                   elif lineUpper == '<CLIPNUM>':
-                       dataType = 'ClipNum'
-
-                   elif lineUpper == '<SNAPSHOTNUM>':
-                       dataType = 'SnapshotNum'
-
-                   elif lineUpper == '<DATE>':
-                       dataType = 'date'
-
-                   elif lineUpper == '<MEDIAFILE>':
-                       dataType = 'MediaFile'
-
-                   elif lineUpper == '<LENGTH>':
-                       dataType = 'Length'
-
-                   elif lineUpper == '<OFFSET>':
-                       dataType = 'Offset'
-
-                   elif lineUpper == '<AUDIO>':
-                       dataType = 'Audio'
-
-                   elif lineUpper == '<TITLE>':
-                       dataType = 'Title'
-
-                   elif lineUpper == '<CREATOR>':
-                       dataType = 'Creator'
-
-                   elif lineUpper == '<SUBJECT>':
-                       dataType = 'Subject'
-
-                   elif lineUpper == '<DESCRIPTION>':
-                       dataType = 'Description'
-
-                   # Because Description can be many lines long, we need to explicitly close this datatype when
-                   # the closing XML tag is found
-                   elif lineUpper == '</DESCRIPTION>':
-                       dataType = None
-
-                   elif lineUpper == '<PUBLISHER>':
-                       dataType = 'Publisher'
-
-                   elif lineUpper == '<CONTRIBUTOR>':
-                       dataType = 'Contributor'
-
-                   elif lineUpper == '<TYPE>':
-                       dataType = 'Type'
-
-                   elif lineUpper == '<FORMAT>':
-                       dataType = 'Format'
-
-                   elif lineUpper == '<SOURCE>':
-                       dataType = 'Source'
-
-                   elif lineUpper == '<LANGUAGE>':
-                       dataType = 'Language'
-
-                   elif lineUpper == '<RELATION>':
-                       dataType = 'Relation'
-
-                   elif lineUpper == '<COVERAGE>':
-                       dataType = 'Coverage'
-
-                   elif lineUpper == '<RIGHTS>':
-                       dataType = 'Rights'
-
-                   elif lineUpper == '<TRANSCRIBER>':
-                       dataType = 'Transcriber'
-
-                   elif lineUpper == '<RTFTEXT>':
-                       dataType = 'RTFText'
-
-                   # Because RTF Text can be many lines long, we need to explicitly close this datatype when
-                   # the closing XML tag is found.  Since left stripping is skipped during RTFText reads, we need
-                   # to add the lstrip() call here.
-                   elif lineUpper.lstrip() == '</RTFTEXT>':
-                       dataType = None
-
-                   elif lineUpper == '<PARENTCOLLECTNUM>':
-                       dataType = 'ParentCollectNum'
-
-                   elif lineUpper == '<CLIPSTART>':
-                       dataType = 'ClipStart'
-
-                   elif lineUpper == '<CLIPSTOP>':
-                       dataType = 'ClipStop'
-
-                   elif lineUpper == '<MINTRANSCRIPTWIDTH>':
-                       dataType = 'MinTranscriptWidth'
-
-                   elif lineUpper == '<SORTORDER>':
-                       dataType = 'SortOrder'
-
-                   elif lineUpper == '<IMAGESCALE>':
-                       dataType = 'ImageScale'
-
-                   elif lineUpper == '<IMAGECOORDSX>':
-                       dataType = 'ImageCoordsX'
-
-                   elif lineUpper == '<IMAGECOORDSY>':
-                       dataType = 'ImageCoordsY'
-
-                   elif lineUpper == '<IMAGESIZEW>':
-                       dataType = 'ImageSizeW'
-
-                   elif lineUpper == '<IMAGESIZEH>':
-                       dataType = 'ImageSizeH'
-
-                   elif lineUpper == '<IMAGESIZEW>':
-                       dataType = 'ImageSizeW'
-
-                   elif lineUpper == '<SNAPSHOTTIMECODE>':
-                       dataType = 'SnapshotTimeCode'
-
-                   elif lineUpper == '<SNAPSHOTDURATION>':
-                       dataType = 'SnapshotDuration'
-
-                   elif lineUpper == '<X1>':
-                       dataType = 'X1'
-
-                   elif lineUpper == '<Y1>':
-                       dataType = 'Y1'
-
-                   elif lineUpper == '<X2>':
-                       dataType = 'X2'
-
-                   elif lineUpper == '<Y2>':
-                       dataType = 'Y2'
-
-                   elif lineUpper == '<VISIBLE>':
-                       dataType = 'Visible'
-                       
-                   elif lineUpper == '<DRAWMODE>':
-                       dataType = 'DrawMode'
-
-                   elif lineUpper == '<COLORNAME>':
-                       dataType = 'ColorName'
-
-                   elif lineUpper == '<COLORDEF>':
-                       dataType = 'ColorDef'
-
-                   elif lineUpper == '<LINEWIDTH>':
-                       dataType = 'LineWidth'
-
-                   elif lineUpper == '<LINESTYLE>':
-                       dataType = 'LineStyle'
-
-                   elif lineUpper == '<KEYWORDGROUP>':
-                       dataType = 'KWG'
-
-                   elif lineUpper == '<KEYWORD>':
-                       dataType = 'KW'
-
-                   elif lineUpper == '<DEFINITION>':
-                       dataType = 'Definition'
-
-                   # Because Definition Text can be many lines long, we need to explicitly close this datatype when
-                   # the closing XML tag is found
-                   elif lineUpper == '</DEFINITION>':
-                       dataType = None
-
-                   elif lineUpper == '<EXAMPLE>':
-                       dataType = 'Example'
-
-                   elif lineUpper == '<NOTETAKER>':
-                       dataType = 'NoteTaker'
-
-                   elif lineUpper == '<NOTETEXT>':
-                       dataType = 'NoteText'
-
-                   # Because Note Text can be many lines long, we need to explicitly close this datatype when
-                   # the closing XML tag is found.  Since left stripping is skipped during NoteText reads, we need
-                   # to add the lstrip() call here.
-                   elif lineUpper.lstrip() == '</NOTETEXT>':
-                       dataType = None
-
-                   elif lineUpper == '<REPORTTYPE>':
-                       dataType = 'ReportType'
-
-                   elif lineUpper == '<REPORTSCOPE>':
-                       dataType = 'ReportScope'
-
-                   elif lineUpper == '<CONFIGNAME>':
-                       dataType = 'ConfigName'
-
-                   elif lineUpper == '<FILTERDATATYPE>':
-                       dataType = 'FilterDataType'
-
-                   elif lineUpper == '<FILTERDATA>':
-                       dataType = 'FilterData'
-
-                   # Because Filter Data can be many lines long, we need to explicitly close this datatype when
-                   # the closing XML tag is found
-                   elif lineUpper == '</FILTERDATA>':
-                       dataType = None
-
-
                else:
 
-                    # Also for tthe sake of minimalist optimization, let's deal with the RTFText datatype
-                    # first, because we spend a LOT of time here in most imports.  Let's find this with
-                    # fewer preliminary "if" checks!
+                   # Also for the sake of minimalist optimization, let's deal with the RTFText and XMLTest 
+                   # datatypes first, because we spend a LOT of time here in most imports.  Let's find 
+                   # this with fewer preliminary "if" checks!
 
-                   # Because RTF Text can be many lines long, we need to explicitly close this datatype when
-                   # the closing XML tag is found.  Since left stripping is skipped during RTFText reads, we need
+                   # Because XML Text can be many lines long, we need to explicitly close this datatype when
+                   # the closing XML tag is found.  Since left stripping is skipped during XMLText reads, we need
                    # to add the lstrip() call here.
-                   if lineUpper.lstrip() == '</RTFTEXT>':
+                   if lineUpper.lstrip() in ['</XMLTEXT>', '</RTFTEXT>']:
                        dataType = None
 
-                   elif dataType == 'RTFText':
+                   elif dataType in ['XMLText', 'RTFText']:
                        # Add Line Breaks to the text to match the incoming lines.
                        # Otherwise, the transcript might be messed up, with the first word of the next line
                        # being truncated.
@@ -1219,6 +1142,7 @@ class XMLImport(Dialogs.GenForm):
                                currentObj.text = '<?xml version="1.0" encoding="UTF-8"?>\n'
                        else:
                            currentObj.text = currentObj.text + '\n'
+
                        currentObj.text = currentObj.text + line
                        # We DO NOT reset DataType here, as RTFText may be many lines long!
                        # dataType = None
@@ -1231,15 +1155,26 @@ class XMLImport(Dialogs.GenForm):
                    # Unless data can stretch across mulitple lines, we should explicity undefine the dataType
                    # once the data is captured.
                    elif dataType == 'Num':
-                       if objectType != 'AddVid':
+                       if not objectType in ['QuotePosition', 'AddVid']:
                            currentObj.number = int(line)
-                       else:
+                       elif objectType == 'QuotePosition':
+                           quotePosition['QuoteNum'] = recNumbers['Quote'][int(line)]
+                       elif objectType == 'AddVid':
                            currentObj['AddVidNum'] = int(line)
                        dataType = None
 
                    elif dataType == 'ID':
                        currentObj.id = self.ProcessLine(line)
                        dataType = None
+
+                       if objectType == 'Document':
+                           st = _('Importing Document records (This may be slow because of the size of Document records.)')
+                           st += '\n  '
+                           st += _("Document")
+                           st += ' '
+                           st += currentObj.id.encode(TransanaGlobal.encoding)
+                           st += '  (%d)' % currentObj.number
+                           progress.Update(5, st)
 
                        if objectType == 'Transcript':
                            st = _('Importing Transcript records (This may be slow because of the size of Transcript records.)')
@@ -1263,11 +1198,41 @@ class XMLImport(Dialogs.GenForm):
                        dataType = None
 
                    elif dataType == 'SeriesNum':
-                       # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
-                       try:
-                           currentObj.series_num = recNumbers['Series'][int(line)]
-                       except:
-                           pass
+                       if objectType in ['Document']:
+                           # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                           try:
+                               currentObj.library_num = recNumbers['Libraries'][int(line)]
+                           except:
+                               pass
+                       else:
+                           # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                           try:
+                               currentObj.series_num = recNumbers['Libraries'][int(line)]
+                           except:
+                               pass
+                       dataType = None
+
+                   elif dataType == 'DocumentNum':
+                       if objectType in ['Quote']:
+                           # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                           try:
+                               currentObj.source_document_num = recNumbers['Document'][int(line)]
+                           except:
+                               pass
+                       elif objectType == 'QuotePosition':
+                           quotePosition['DocumentNum'] = recNumbers['Document'][int(line)]
+                       elif objectType == 'ClipKeyword':
+                           # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                           try:
+                               currentObj.documentNum = recNumbers['Document'][int(line)]
+                           except:
+                               pass
+                       else:
+                           # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                           try:
+                               currentObj.document_num = recNumbers['Document'][int(line)]
+                           except:
+                               pass
                        dataType = None
 
                    elif dataType == 'EpisodeNum':
@@ -1351,6 +1316,21 @@ class XMLImport(Dialogs.GenForm):
                            pass
                        dataType = None
 
+                   elif dataType == 'QuoteNum':
+                       if objectType == 'ClipKeyword':
+                           # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                           try:
+                               currentObj.quoteNum = recNumbers['Quote'][int(line)]
+                           except:
+                               pass
+                       else:
+                           # "line" may not be an integer, but could be "None".  Trap this and skip it if so.
+                           try:
+                               currentObj.quote_num = recNumbers['Quote'][int(line)]
+                           except:
+                               pass
+                       dataType = None
+
                    elif dataType == 'ClipNum':
                        # Handle object property naming inconsistency here!
                        if objectType in ['Transcript', 'Note']:
@@ -1408,6 +1388,8 @@ class XMLImport(Dialogs.GenForm):
                    elif dataType == 'date':
                        # Importing dates can be a little tricky.  Let's trap conversion errors
                        try:
+                           if objectType in ['Document']:
+                               currentObj.import_date = self.ProcessLine(line)
                            # If we're dealing with an Episode record ...
                            if objectType == 'Episode':
                                # Make sure it's in a form we recognize
@@ -1474,7 +1456,9 @@ class XMLImport(Dialogs.GenForm):
                        dataType = None
 
                    elif dataType == 'MediaFile':
-                       if objectType == 'AddVid':
+                       if objectType in ['Document']:
+                           currentObj.imported_file = self.ProcessLine(line)
+                       elif objectType == 'AddVid':
                            currentObj['MediaFile'] = self.ProcessLine(line)
                        elif objectType == 'Snapshot':
                            currentObj.image_filename = self.ProcessLine(line)
@@ -1483,7 +1467,9 @@ class XMLImport(Dialogs.GenForm):
                        dataType = None
 
                    elif dataType == 'Length':
-                       if objectType != 'AddVid':
+                       if objectType == 'Document':
+                           currentObj.document_length = line
+                       elif objectType != 'AddVid':
                            currentObj.tape_length = line
                        else:
                            currentObj['VidLength'] = line
@@ -1578,6 +1564,14 @@ class XMLImport(Dialogs.GenForm):
                            
                        dataType = None
 
+                   elif dataType == 'StartChar':
+                       if objectType == 'QuotePosition':
+                           quotePosition['StartChar'] = int(line)
+
+                   elif dataType == 'EndChar':
+                       if objectType == 'QuotePosition':
+                           quotePosition['EndChar'] = int(line)
+
                    elif dataType == 'ClipStart':
                        currentObj.clip_start = int(line)
                        # If we have a Clip object ...
@@ -1645,19 +1639,19 @@ class XMLImport(Dialogs.GenForm):
                        dataType = None
 
                    elif dataType == 'X1':
-                       self.snapshotKeyword['X1'] = int(line)
+                       self.snapshotKeyword['X1'] = round(float(line))
                        dataType = None
 
                    elif dataType == 'Y1':
-                       self.snapshotKeyword['Y1'] = int(line)
+                       self.snapshotKeyword['Y1'] = round(float(line))
                        dataType = None
 
                    elif dataType == 'X2':
-                       self.snapshotKeyword['X2'] = int(line)
+                       self.snapshotKeyword['X2'] = round(float(line))
                        dataType = None
 
                    elif dataType == 'Y2':
-                       self.snapshotKeyword['Y2'] = int(line)
+                       self.snapshotKeyword['Y2'] = round(float(line))
                        dataType = None
 
                    elif dataType == 'Visible':
@@ -1755,7 +1749,9 @@ class XMLImport(Dialogs.GenForm):
 
                    elif dataType == 'ReportScope':
                         if self.FilterReportType in ['5', '6', '7', '10', '14']:
-                            self.FilterScope = recNumbers['Series'][int(line)]
+                            self.FilterScope = recNumbers['Libraries'][int(line)]
+                        elif self.FilterReportType in ['17', '18', '19', '20']:
+                            self.FilterScope = recNumbers['Document'][int(line)]
                         elif self.FilterReportType in ['1', '2', '3', '8', '11']:
                             self.FilterScope = recNumbers['Episode'][int(line)]
                         # Collection Clip Data Export (ReportType 4) only needs translation if ReportScope != 0
@@ -1817,7 +1813,7 @@ class XMLImport(Dialogs.GenForm):
            if contin: 
                # Since Clips were imported before Transcripts, the Originating Transcript Numbers in the Clip Records
                # are incorrect.  We must update them now.
-               progress.Update(93, _('Updating Source Transcript Numbers in Clip Transcript records'))
+               progress.Update(81, _('Updating Source Transcript Numbers in Clip Transcript records'))
                if db != None:
                    dbCursor2 = db.cursor()
                    # Get all NEW transcript records.  We DON'T want to process transcript records that were in the database prior
@@ -1839,6 +1835,58 @@ class XMLImport(Dialogs.GenForm):
                            recNumbers['Transcript'][SourceTranscriptNum] = 0
                        dbCursor2.execute(SQLText, (recNumbers['Transcript'][SourceTranscriptNum], TranscriptNum))
 
+                   dbCursor2.close()
+
+               if db != None:
+
+                   # Hyperlinks in Documents
+
+                   # We need a secong database cursor for updates
+                   dbCursor2 = db.cursor()
+                   
+                   progress.Update(86, _('Updating HyperLinks in Documents'))
+                   # Get all Document records
+                   SQLText = 'SELECT DocumentNum, XMLText FROM Documents2'
+                   SQLText = DBInterface.FixQuery(SQLText)
+                   dbCursor.execute(SQLText)
+                   # create the SQL for updating the XMLText of the Document
+                   SQLText = """ UPDATE Documents2
+                                 SET XMLText = %s
+                                 WHERE DocumentNum = %s """
+                   SQLText = DBInterface.FixQuery(SQLText)
+                   # For each Document record ...
+                   for (DocumentNum, XMLText) in dbCursor.fetchall():
+                       dbCursor2.execute(SQLText, (self.UpdateHyperlinks(XMLText, recNumbers), DocumentNum))
+
+                   progress.Update(90, _('Updating HyperLinks in Quotes'))
+                   # Get all Quote records
+                   SQLText = 'SELECT QuoteNum, XMLText FROM Quotes2'
+                   SQLText = DBInterface.FixQuery(SQLText)
+                   dbCursor.execute(SQLText)
+                   # create the SQL for updating the XMLText of the Quote
+                   SQLText = """ UPDATE Quotes2
+                                 SET XMLText = %s
+                                 WHERE QuoteNum = %s """
+                   SQLText = DBInterface.FixQuery(SQLText)
+                   # For each Quote record ...
+                   for (QuoteNum, XMLText) in dbCursor.fetchall():
+                       dbCursor2.execute(SQLText, (self.UpdateHyperlinks(XMLText, recNumbers), QuoteNum))
+
+                   progress.Update(95, _('Updating HyperLinks in Transcripts'))
+                   # Get all Transcript records
+                   SQLText = 'SELECT TranscriptNum, RTFText FROM Transcripts2'
+                   SQLText = DBInterface.FixQuery(SQLText)
+                   dbCursor.execute(SQLText)
+                   # create the SQL for updating the RTFText of the Transcript
+                   SQLText = """ UPDATE Transcripts2
+                                 SET RTFText = %s
+                                 WHERE TranscriptNum = %s """
+                   SQLText = DBInterface.FixQuery(SQLText)
+                   # For each Transcript record ...
+                   for (QuoteNum, XMLText) in dbCursor.fetchall():
+                       dbCursor2.execute(SQLText, (self.UpdateHyperlinks(XMLText, recNumbers), QuoteNum))
+
+                   # Close the secondary database cursor
                    dbCursor2.close()
 
                # If we made it this far, we can commit the database transaction
@@ -1961,6 +2009,57 @@ class XMLImport(Dialogs.GenForm):
         # Return the encoded text to the calling method
         return(txt)
 
+    def UpdateHyperlinks(self, XMLText, recNumbers):
+
+        if not ('url="transana:' in XMLText):
+            return XMLText
+
+        lines = XMLText.split('\n')
+        XMLText = ''
+        for line in lines:
+            
+
+           # We need to catch and update Hyperlinks!!  (A single line may have more than one Hyperlink!)
+           if ('url="transana:' in line):
+
+##               print line
+               
+               # Let's build a List of the parts of this line, to rebuild it later!
+               lineArray = []
+               while 'url="transana:' in line:
+                   # Get the section BEFORE the URL
+                   lineArray.append(line[:line.find('url="transana:')])
+                   line = line[line.find('url="transana:'):]
+                   # Get the first part of the URL
+                   lineArray.append(line[:line.find(':') + 1])
+                   line = line[line.find(':') + 1:]
+                   # Process object by Type
+                   if line[:5] == 'Quote':
+                       linkType = 'Quote'
+                   elif line[:4] == 'Clip':
+                       linkType = 'Clip'
+                   elif line[:8] == 'Snapshot':
+                       linkType = 'Snapshot'
+                   elif line[:4] == 'Note':
+                       linkType = 'Note'
+
+                   # Get the object type
+                   lineArray.append(line[:len(linkType) + 1])
+                   line = line[len(linkType) + 1:]
+                   linkNum = int(line[:line.find('"')])
+                   lineArray.append("%s" % recNumbers[linkType][linkNum])
+                   line = line[line.find('"'):]
+                   
+               lineArray.append(line)
+               line = ''
+               for x in range(len(lineArray)):
+                   line += "%s" % lineArray[x]
+
+##               print line
+##               print
+
+           XMLText += line
+        return XMLText
 
     def OnBrowse(self, evt):
         """Invoked when the user activates the Browse button."""

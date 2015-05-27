@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -167,8 +167,8 @@ class ClipPropertiesForm(Dialogs.GenForm):
 
         # Create a VERTICAL sizer for the next element
         v3 = wx.BoxSizer(wx.VERTICAL)
-        # Series ID
-        series_edit = self.new_edit_box(_("Series ID"), v3, self.obj.series_id)
+        # Library ID
+        series_edit = self.new_edit_box(_("Library ID"), v3, self.obj.series_id)
         # Add the element to the sizer
         r2Sizer.Add(v3, 1, wx.EXPAND)
         series_edit.Enable(False)
@@ -468,7 +468,7 @@ class ClipPropertiesForm(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size
         self.SetSizeHints(max(minWidth, width), min(max(minHeight, height), rect[3]))
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # We need to set some minimum sizes so the sizers will work right
         self.kw_group_lb.SetSizeHints(minW = 50, minH = 20)
@@ -573,10 +573,11 @@ class ClipPropertiesForm(Dialogs.GenForm):
         """Refresh the keywords listbox."""
         sel = self.kw_group_lb.GetStringSelection()
         if sel:
-            self.kw_list = \
-                DBInterface.list_of_keywords_by_group(sel)
+            self.kw_list = DBInterface.list_of_keywords_by_group(sel)
             self.kw_lb.Clear()
-            self.kw_lb.InsertItems(self.kw_list, 0)
+            if len(self.kw_list) > 0:
+                self.kw_lb.InsertItems(self.kw_list, 0)
+                self.kw_lb.EnsureVisible(0) 
         
     def highlight_bad_keyword(self):
         """ Highlight the first bad keyword in the keyword list """

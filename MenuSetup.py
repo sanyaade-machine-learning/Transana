@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -45,25 +45,29 @@ MENU_FILE_EXIT                  =  wx.ID_EXIT   # Constant used to improve Mac s
 # Trasncript Menu
 MENU_TRANSCRIPT_EDIT            =  wx.NewId()
 MENU_TRANSCRIPT_EDIT_UNDO       =  wx.NewId()
-# 2.51 - the Standard IDs don't work on the Mac.  Menu elements don't get enabled or disabled properly!
-if 'wxMac' in wx.PlatformInfo:
-    MENU_TRANSCRIPT_EDIT_CUT        =  wx.NewId()  # wx.ID_CUT
-    MENU_TRANSCRIPT_EDIT_COPY       =  wx.NewId()  # wx.ID_COPY
-    MENU_TRANSCRIPT_EDIT_PASTE      =  wx.NewId()  # wx.ID_PASTE
-else:
-    MENU_TRANSCRIPT_EDIT_CUT        =  wx.ID_CUT
-    MENU_TRANSCRIPT_EDIT_COPY       =  wx.ID_COPY
-    MENU_TRANSCRIPT_EDIT_PASTE      =  wx.ID_PASTE
+
+### 2.51 - the Standard IDs don't work on the Mac.  Menu elements don't get enabled or disabled properly!
+##if 'wxMac' in wx.PlatformInfo:
+##    MENU_TRANSCRIPT_EDIT_CUT        =  wx.NewId()  # wx.ID_CUT
+##    MENU_TRANSCRIPT_EDIT_COPY       =  wx.NewId()  # wx.ID_COPY
+##    MENU_TRANSCRIPT_EDIT_PASTE      =  wx.NewId()  # wx.ID_PASTE
+##else:
+MENU_TRANSCRIPT_EDIT_CUT        =  wx.ID_CUT
+MENU_TRANSCRIPT_EDIT_COPY       =  wx.ID_COPY
+MENU_TRANSCRIPT_EDIT_PASTE      =  wx.ID_PASTE
+
 MENU_TRANSCRIPT_FONT            =  wx.NewId()
 MENU_TRANSCRIPT_PARAGRAPH       =  wx.NewId()
 MENU_TRANSCRIPT_TABS            =  wx.NewId()
 MENU_TRANSCRIPT_INSERT_IMAGE    =  wx.NewId()
 MENU_TRANSCRIPT_PRINT           =  wx.NewId()
 MENU_TRANSCRIPT_PRINTERSETUP    =  wx.NewId()
+MENU_TRANSCRIPT_ORIENTATION     =  wx.NewId()
 MENU_TRANSCRIPT_CHARACTERMAP    =  wx.NewId()
 MENU_TRANSCRIPT_AUTOTIMECODE    =  wx.NewId()
 MENU_TRANSCRIPT_ADJUSTINDEXES   =  wx.NewId()
 MENU_TRANSCRIPT_TEXT_TIMECODE   =  wx.NewId()
+MENU_TRANSCRIPT_CLOSE_CURRENT   =  wx.NewId()
 
 # Tools Menu
 MENU_TOOLS_NOTESBROWSER         =  wx.NewId()
@@ -103,11 +107,10 @@ MENU_OPTIONS_LANGUAGE_ZH        =  wx.NewId()  # Chinese
 
 # NOTE:  Adding languages?  Don't forget to update the EVT_MENU_RANGE settings.
 #        If you scan through MenuSetup.py and MenuWindow.py for language code and add the language for MySQL
-#        in DBInterface.InitializeSingleUserDatabase(), set export encoding in ClipDataExport, set GetNewData()
+#        in DBInterface.InitializeSingleUserDatabase(), set export encoding in AnalyticDataExport, set GetNewData()
 #        and ChangeLanguages() in ControlObjectClass, you should be all set.
 
-if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
-    MENU_OPTIONS_QUICK_CLIPS    =  wx.NewId()
+MENU_OPTIONS_QUICK_CLIPS    =  wx.NewId()
 MENU_OPTIONS_QUICKCLIPWARNING   =  wx.NewId()
 MENU_OPTIONS_WORDTRACK          =  wx.NewId()
 MENU_OPTIONS_AUTOARRANGE        =  wx.NewId()
@@ -118,7 +121,7 @@ MENU_OPTIONS_VISUALIZATION_WAVEFORM =  wx.NewId()
 MENU_OPTIONS_VISUALIZATION_KEYWORD  =  wx.NewId()
 MENU_OPTIONS_VISUALIZATION_HYBRID   =  wx.NewId()
 # Options menu continued
-# Options Video Size menu
+# Options Media Size menu
 MENU_OPTIONS_VIDEOSIZE          =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_50       =  wx.NewId()
 MENU_OPTIONS_VIDEOSIZE_66       =  wx.NewId()
@@ -167,10 +170,10 @@ class MenuSetup(wx.MenuBar):
         self.filemenu.Append(MENU_FILE_NEWDATABASE, _("&Change Database"))
         self.filemenu.Append(MENU_FILE_FILEMANAGEMENT, _("File &Management"))
         self.filemenu.AppendSeparator()
-        self.filemenu.Append(MENU_FILE_SAVE, _("&Save Transcript"))
-        self.filemenu.Append(MENU_FILE_SAVEAS, _("Save Transcript &As"))
+        self.filemenu.Append(MENU_FILE_SAVE, _("&Save Document"))
+        self.filemenu.Append(MENU_FILE_SAVEAS, _("Save Document &As"))
         self.filemenu.AppendSeparator()
-        self.filemenu.Append(MENU_FILE_PRINTTRANSCRIPT, _("&Print Transcript"))
+        self.filemenu.Append(MENU_FILE_PRINTTRANSCRIPT, _("&Print Document"))
         self.filemenu.Append(MENU_FILE_PRINTERSETUP, _("P&rinter Setup"))
         self.filemenu.AppendSeparator()
         self.filemenu.Append(MENU_FILE_CLOSE_SNAPSHOTS, _("Close All Snapshots"))
@@ -178,7 +181,7 @@ class MenuSetup(wx.MenuBar):
         self.filemenu.Append(MENU_FILE_EXIT, _("E&xit"))
         self.Append(self.filemenu, _("&File"))
 
-        # Build the Transcript menu
+        # Build the Document menu
         self.transcriptmenu = wx.Menu()
         self.transcriptmenu.Append(MENU_TRANSCRIPT_EDIT_UNDO, _("&Undo\tCtrl-Z"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_EDIT_CUT, _("Cu&t\tCtrl-X"))
@@ -202,10 +205,13 @@ class MenuSetup(wx.MenuBar):
         #     with Unicode at this point.
         # Let's just disable it completely for now.
         # self.transcriptmenu.Append(MENU_TRANSCRIPT_CHARACTERMAP, _("&Character Map"))
+        self.transcriptmenu.Append(MENU_TRANSCRIPT_ORIENTATION, _("Change Document Splitter Orientation"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_AUTOTIMECODE, _("F&ixed-Increment Time Codes"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_TEXT_TIMECODE, _("Text Time Code Conversion"))
         self.transcriptmenu.Append(MENU_TRANSCRIPT_ADJUSTINDEXES, _("&Adjust Indexes"))
-        self.Append(self.transcriptmenu, _("&Transcript"))
+        self.transcriptmenu.AppendSeparator()
+        self.transcriptmenu.Append(MENU_TRANSCRIPT_CLOSE_CURRENT, _("Close Current Document"))
+        self.Append(self.transcriptmenu, _("&Document"))
 
         # Built the Tools menu
         self.toolsmenu = wx.Menu()
@@ -294,12 +300,12 @@ class MenuSetup(wx.MenuBar):
             self.optionslanguagemenu.Append(MENU_OPTIONS_LANGUAGE_ZH, _("&Chinese - Simplified"), kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_LANGUAGE, _("&Language"), self.optionslanguagemenu)
         self.optionsmenu.AppendSeparator()
-        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
-            self.optionsmenu.Append(MENU_OPTIONS_QUICK_CLIPS, _("&Quick Clip Mode"), kind=wx.ITEM_CHECK)
-        self.optionsmenu.Append(MENU_OPTIONS_QUICKCLIPWARNING, _("Show Quick Clip Warning"), kind=wx.ITEM_CHECK)
+        self.optionsmenu.Append(MENU_OPTIONS_QUICK_CLIPS, _("&Quick Quote and Clip Mode"), kind=wx.ITEM_CHECK)
+        self.optionsmenu.Append(MENU_OPTIONS_QUICKCLIPWARNING, _("Show Quick Quote and Clip Warning"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_WORDTRACK, _("Auto Word-&tracking"), kind=wx.ITEM_CHECK)
         self.optionsmenu.Append(MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"), kind=wx.ITEM_CHECK)
-        self.optionsmenu.Append(MENU_OPTIONS_LONGTRANSCRIPTEDIT, _("Long Transcript Editing"), kind=wx.ITEM_CHECK)
+#        self.optionsmenu.Append(MENU_OPTIONS_LONGTRANSCRIPTEDIT, _("Long Document Editing"), kind=wx.ITEM_CHECK)
+#        self.optionsmenu.Enable(MENU_OPTIONS_LONGTRANSCRIPTEDIT, False)
         
         self.optionsmenu.AppendSeparator()
         
@@ -308,7 +314,7 @@ class MenuSetup(wx.MenuBar):
         self.optionsvisualizationmenu.Append(MENU_OPTIONS_VISUALIZATION_WAVEFORM, _("&Waveform"), kind=wx.ITEM_RADIO)
         self.optionsvisualizationmenu.Append(MENU_OPTIONS_VISUALIZATION_KEYWORD, _("&Keyword"), kind=wx.ITEM_RADIO)
         self.optionsvisualizationmenu.Append(MENU_OPTIONS_VISUALIZATION_HYBRID, _("&Hybrid"), kind=wx.ITEM_RADIO)
-        self.optionsmenu.AppendMenu(MENU_OPTIONS_VISUALIZATION, _("Vi&sualization Style"), self.optionsvisualizationmenu)
+        self.optionsmenu.AppendMenu(MENU_OPTIONS_VISUALIZATION, _("Media Vi&sualization Style"), self.optionsvisualizationmenu)
         
         self.optionsvideomenu = wx.Menu()
         self.optionsvideomenu.Append(MENU_OPTIONS_VIDEOSIZE_50, "&50%", kind=wx.ITEM_RADIO)
@@ -316,11 +322,11 @@ class MenuSetup(wx.MenuBar):
         self.optionsvideomenu.Append(MENU_OPTIONS_VIDEOSIZE_100, "&100%", kind=wx.ITEM_RADIO)
         self.optionsvideomenu.Append(MENU_OPTIONS_VIDEOSIZE_150, "15&0%", kind=wx.ITEM_RADIO)
         self.optionsvideomenu.Append(MENU_OPTIONS_VIDEOSIZE_200, "&200%", kind=wx.ITEM_RADIO)
-        self.optionsmenu.AppendMenu(MENU_OPTIONS_VIDEOSIZE, _("&Video Size"), self.optionsvideomenu)
+        self.optionsmenu.AppendMenu(MENU_OPTIONS_VIDEOSIZE, _("&Media Size"), self.optionsvideomenu)
         self.optionspresentmenu = wx.Menu()
         self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_ALL, _("&All Windows"), kind=wx.ITEM_RADIO)
-        self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_VIDEO, _("&Video Only"), kind=wx.ITEM_RADIO)
-        self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_TRANS, _("Video and &Transcript Only"), kind=wx.ITEM_RADIO)
+        self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_VIDEO, _("&Media Only"), kind=wx.ITEM_RADIO)
+        self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_TRANS, _("Media and &Transcript Only"), kind=wx.ITEM_RADIO)
         self.optionspresentmenu.Append(MENU_OPTIONS_PRESENT_AUDIO, _("A&udio and Transcript Only"), kind=wx.ITEM_RADIO)
         self.optionsmenu.AppendMenu(MENU_OPTIONS_PRESENT, _("&Presentation Mode"), self.optionspresentmenu)
         self.Append(self.optionsmenu, _("&Options"))
@@ -329,8 +335,7 @@ class MenuSetup(wx.MenuBar):
         self.SetLanguageMenuCheck(TransanaGlobal.configData.language)
             
         # Set Options Menu items to their initial values based on Configuration Data
-        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
-            self.optionsmenu.Check(MENU_OPTIONS_QUICK_CLIPS, TransanaGlobal.configData.quickClipMode)
+        self.optionsmenu.Check(MENU_OPTIONS_QUICK_CLIPS, TransanaGlobal.configData.quickClipMode)
         self.optionsmenu.Check(MENU_OPTIONS_QUICKCLIPWARNING, TransanaGlobal.configData.quickClipWarning)
         self.optionsmenu.Check(MENU_OPTIONS_WORDTRACK, TransanaGlobal.configData.wordTracking)
         self.optionsmenu.Check(MENU_OPTIONS_AUTOARRANGE, TransanaGlobal.configData.autoArrange)
@@ -366,8 +371,8 @@ class MenuSetup(wx.MenuBar):
         self.windowMenu.Append(MENU_WINDOW_CLOSE_REPORTS, _("Close All Reports"))
         self.windowMenu.AppendSeparator()
         self.windowMenu.Append(MENU_WINDOW_DATA, _("Data"))
-        self.windowMenu.Append(MENU_WINDOW_VIDEO, _("Video"))
-        self.windowMenu.Append(MENU_WINDOW_TRANSCRIPT, _("Transcript"))
+        self.windowMenu.Append(MENU_WINDOW_VIDEO, _("Media"))
+        self.windowMenu.Append(MENU_WINDOW_TRANSCRIPT, _("Document"))
         self.windowMenu.Append(MENU_WINDOW_VISUALIZATION, _("Visualization"))
         self.windowMenu.Append(MENU_WINDOW_NOTESBROWSER, _("Notes Browser"))
         if not TransanaConstants.singleUserVersion:

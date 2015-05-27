@@ -9,17 +9,19 @@
 
 <H3>Sharing single-user databases</H3>
 
-Although the single-user version of Transana is designed for independent analysis work, you can share an entire database with a colleague for the purposes of consultation.  If you have not already done so, the first thing you should do is <A HREF="firstuse.htm">configure your Video Root directory</A>.  In the Tools menu, you will find <B>Export Database</B>, which requests a file name  and instructs Transana to create a copy of your data in a text file that can be read by other copies of Transana.  (Technically, that file is in "Transana-XML format" with a .tra file extension.)  This *.tra file contains all of the analytic information in your Transana database, which is all of your data except your original media files.  When you send your data to a colleague, you need to send both the *.tra file and all of the media files the data refers to.<P>
+Although the single-user version of Transana is designed for independent analysis work, you can share an entire database with a colleague for the purposes of consultation.  If you have not already done so, the first thing you should do is <A HREF="firstuse.htm">configure your Media Library directory</A>.  In the Tools menu, you will find <B>Export Database</B>, which requests a file name  and instructs Transana to create a copy of your data in a text file that can be read by other copies of Transana.  (Technically, that file is in "Transana-XML format" with a .tra file extension.)  This *.tra file contains all of the analytic information in your Transana database, which is all of your data except your original media and image files.  When you send your data to a colleague, you need to send the *.tra file and all of the media and image files the data refers to.<P>
 
-Your colleague can import your data by creating a new database in their copy of Transana, and <A HREF="firstuse.htm">set the Video Root directory</A> to where they have stored your media files.  Then they should go to the Tools menu and choose <B>Import Database</B>, and select the *.tra file you sent.  This will read your data from the file and build a new Transana database that exactly matches yours when you exported it.  <P>
+Your colleague can import your data by creating a new database in their copy of Transana, and <A HREF="firstuse.htm">setting the Media Library directory</A> to where they have stored your media files.  Then they should go to the Tools menu and choose <B>Import Database</B>, and select the *.tra file you sent.  This will read your data from the file and build a new Transana database that exactly matches yours when you exported it.  <P>
 
 Please note that there is not currently any mechanism that allows your colleage to share changes to your database with you short of sending back an entire database.  There is no way to integrate two databases that have both been edited since the database export operation was initiated.  Therefore, this procedure should be thought of as useful for consultation but not full collaboration.<P>
 
-<H3>Sharing media files across the Internet</H3>
+<H3>Sharing data files across the Internet</H3>
 
-If your data is confidential or subject to Human Subjects restrictions, you should not send your media files to others via e-mail, FTP, or HTTP download.  Those methods of transferring data through the Internet are not secure.<P>
+If your data is confidential or subject to Human Subjects restrictions, you should not send your database, media, or image files to others via e-mail, FTP, or HTTP download.  Those methods of transferring data through the Internet are not secure.<P>
 
-Transana does provide a built-in solution that allows the secure, encrypted transfer of large media files using the Internet.  Transana's <B>File Management</B> tool provides a mechanism for connecting to a <B>Storage Resource Broker</B>, or SRB, which facilitates the secure transfer of confidential data.  See <A HREF="filemanagement.htm">File Management</A> for more information.  You can also contact the Transana development team through the Transana Web Site to request a SRB account for academic use.<P>
+Fortunately, a number of services have arisen in the past few years that help with secure sharing of large files.  Copy, Box, and Dropbox are the most well-known of these services, although there are others.  However, it is important to note that you should not use such services with Transana database files, as data corruption, with total data loss, can occur.  You can use these services to transfer the files between users, but not to connect to while using Transana.<P>
+
+Transana does provide a built-in solution that allows the secure, encrypted transfer of large media files using the Internet.  Transana's <B>File Management</B> tool provides a mechanism for connecting to a <B>Secure File Transfer Protocol (sFTP) Server</B>, which facilitates the secure transfer of confidential data.  See <A HREF="filemanagement.htm">File Management</A> for more information.  This option requires that you have access to an sFTP server with adequate storage for your files.<P>
 
 <H3>Multi-user Transana: Sharing data in real time</H3>
 
@@ -27,7 +29,7 @@ Transana offers a multi-user version that allows multiple researchers to connect
 
 As you might imagine, the multi-user version requires a more complex setup procedure than does the single-user version.  For more information on the multi-user version of Transana, please see the Transana web site.<P>
 
-<A HREF="workingwithnotes.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+<A HREF="workingwithjournals.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 <A HREF="presentation.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
 

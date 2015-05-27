@@ -1,9 +1,9 @@
 <ul>
 
   <li> <object type="text/sitemap">
-           <param name="Name" value="Welcome">
+           <param name="Name" value="Transana Manual">
            <param name="ID" value=10>
-           <param name="Local" value="MainPage.htm">
+           <param name="Local" value="Manual.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Introduction and Overview">
@@ -26,218 +26,233 @@
            <param name="Local" value="DataWindow.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Series Properties">
+           <param name="Name" value="Library Properties">
            <param name="ID" value=60>
-           <param name="Local" value="AddSeries.htm">
+           <param name="Local" value="LibraryProperties.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Document Properties">
+           <param name="ID" value=70>
+           <param name="Local" value="DocumentProperties.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Episode Properties">
-           <param name="ID" value=70>
-           <param name="Local" value="AddEpisode.htm">
+           <param name="ID" value=80>
+           <param name="Local" value="EpisodeProperties.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Core Data Properties">
-           <param name="ID" value=80>
+           <param name="ID" value=90>
            <param name="Local" value="CoreData.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Transcript Properties">
-           <param name="ID" value=90>
-           <param name="Local" value="AddTranscript.htm">
+           <param name="ID" value=100>
+           <param name="Local" value="TranscriptProperties.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Collection Properties">
-           <param name="ID" value=100>
-           <param name="Local" value="AddCollection.htm">
+           <param name="ID" value=110>
+           <param name="Local" value="CollectionProperties.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Quote Properties">
+           <param name="ID" value=120>
+           <param name="Local" value="QuoteProperties.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Quote Merge">
+           <param name="ID" value=130>
+           <param name="Local" value="QuoteMerge.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Clip Properties">
-           <param name="ID" value=110>
-           <param name="Local" value="AddClip.htm">
+           <param name="ID" value=140>
+           <param name="Local" value="ClipProperties.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Clip Merge">
-           <param name="ID" value=115>
+           <param name="ID" value=150>
            <param name="Local" value="ClipMerge.htm">
        </object>
   <li><object type="text/sitemap">
            <param name="Name" value="Snapshot Properties">
-           <param name="ID" value=117>
-           <param name="Local" value="AddSnapshot.htm">
+           <param name="ID" value=160>
+           <param name="Local" value="SnapshotProperties.htm">
        </object>
   <li><object type="text/sitemap">
            <param name="Name" value="Snapshot Window">
-           <param name="ID" value=118>
+           <param name="ID" value=170>
            <param name="Local" value="SnapshotWindow.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Keyword Management">
-           <param name="ID" value=120>
-           <param name="Local" value="KWMgt.htm">
-       </object>
-  <li> <object type="text/sitemap">
            <param name="Name" value="Keyword Properties">
-           <param name="ID" value=130>
-           <param name="Local" value="AddKeyword.htm">
-       </object>
-  <li> <object type="text/sitemap">
-           <param name="Name" value="Merge Keywords">
-           <param name="ID" value=135>
-           <param name="Local" value="MergeKeywords.htm">
+           <param name="ID" value=180>
+           <param name="Local" value="KeywordProperties.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Edit Keywords">
-           <param name="ID" value=140>
+           <param name="ID" value=190>
            <param name="Local" value="EditKeywords.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Video Window">
-           <param name="ID" value=150>
-           <param name="Local" value="VideoWindow.htm">
+           <param name="Name" value="Merge Keywords">
+           <param name="ID" value=200>
+           <param name="Local" value="MergeKeywords.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Transcript Window">
-           <param name="ID" value=160>
-           <param name="Local" value="TranscriptWindow.htm">
+           <param name="Name" value="Keyword Management">
+           <param name="ID" value=210>
+           <param name="Local" value="KeywordMgt.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Media Window">
+           <param name="ID" value=220>
+           <param name="Local" value="MediaWindow.htm">
+       </object>
+  <li> <object type="text/sitemap">
+           <param name="Name" value="Document Window">
+           <param name="ID" value=230>
+           <param name="Local" value="DocumentWindow.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Time Codes">
-           <param name="ID" value=170>
+           <param name="ID" value=240>
            <param name="Local" value="TimeCodes.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Batch Episode Creation">
-           <param name="ID" value=180>
-           <param name="Local" value="BatchEpisodeCreation.htm">
+           <param name="Name" value="Batch Item Creation">
+           <param name="ID" value=250>
+           <param name="Local" value="BatchItemCreation.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Working with Multiple Transcripts">
-           <param name="ID" value=190>
+           <param name="ID" value=260>
            <param name="Local" value="MultiTrans.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Working with Multiple Media Files">
-           <param name="ID" value=193>
+           <param name="ID" value=270>
            <param name="Local" value="MultiMedia.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Synchronize Media Files">
-           <param name="ID" value=197>
+           <param name="ID" value=280>
            <param name="Local" value="Synchronize.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Propagate Transcript Changes">
-           <param name="ID" value=200>
-           <param name="Local" value="PropagateEpisodeChanges.htm">
+           <param name="Name" value="Propagate Document and Transcript Changes">
+           <param name="ID" value=290>
+           <param name="Local" value="PropagateParentChanges.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Propagate Clip Changes">
-           <param name="ID" value=210>
-           <param name="Local" value="PropagateClipChanges.htm">
+           <param name="Name" value="Propagate Quote and Clip Changes">
+           <param name="ID" value=300>
+           <param name="Local" value="PropagateChildChanges.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Visualization Window">
-           <param name="ID" value=220>
-           <param name="Local" value="SoundWindow.htm">
+           <param name="ID" value=310>
+           <param name="Local" value="VisualizationWindow.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Notes">
-           <param name="ID" value=230>
+           <param name="ID" value=320>
            <param name="Local" value="Notes.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Notes Browser">
-           <param name="ID" value=240>
+           <param name="ID" value=330>
            <param name="Local" value="NotesBrowser.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Keyword Summary Report">
-           <param name="ID" value=250>
+           <param name="ID" value=340>
            <param name="Local" value="KeywordSummaryReport.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Series, Episode, Collection, and Notes Reports">
-           <param name="ID" value=260>
-           <param name="Local" value="SECReports.htm">
+           <param name="Name" value="Transana's Text Reports">
+           <param name="ID" value=350>
+           <param name="Local" value="TextReports.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Keyword Map">
-           <param name="ID" value=270>
+           <param name="Name" value="Keyword Maps">
+           <param name="ID" value=360>
            <param name="Local" value="KeywordMap.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Series Keyword Graphs">
-           <param name="ID" value=280>
-           <param name="Local" value="SeriesMap.htm">
+           <param name="Name" value="Library Keyword Graphs">
+           <param name="ID" value=370>
+           <param name="Local" value="LibraryMap.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Clip Data Export">
-           <param name="ID" value=290>
-           <param name="Local" value="ExportClip.htm">
+           <param name="Name" value="Analytic Data Export">
+           <param name="ID" value=380>
+           <param name="Local" value="ExportDataItems.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Filter Dialog">
-           <param name="ID" value=300>
+           <param name="ID" value=390>
            <param name="Local" value="FilterDialog.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Search">
-           <param name="ID" value=310>
+           <param name="ID" value=400>
            <param name="Local" value="Search.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Converting a Search Result to a Collection">
-           <param name="ID" value=320>
+           <param name="ID" value=410>
            <param name="Local" value="Convert.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="File Management">
-           <param name="ID" value=330>
+           <param name="ID" value=420>
            <param name="Local" value="FileManagement.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Program Settings">
-           <param name="ID" value=340>
-           <param name="Local" value="ProgramOptionsMU.htm">
+           <param name="ID" value=430>
+           <param name="Local" value="ProgramOptions.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Media File Conversion">
-           <param name="ID" value=345>
+           <param name="ID" value=440>
            <param name="Local" value="MediaConvert.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Export Database">
-           <param name="ID" value=350>
-           <param name="Local" value="Export.htm">
+           <param name="ID" value=450>
+           <param name="Local" value="ExportDatabase.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Import Database">
-           <param name="ID" value=360>
-           <param name="Local" value="Import.htm">
+           <param name="ID" value=460>
+           <param name="Local" value="ImportDatabase.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Graphics Color Configuration">
-           <param name="ID" value=365>
+           <param name="ID" value=470>
            <param name="Local" value="ColorConfiguration.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Batch Waveform Generator">
-           <param name="ID" value=370>
+           <param name="ID" value=480>
            <param name="Local" value="BatchWaveform.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Other Functions">
-           <param name="ID" value=380>
+           <param name="ID" value=490>
            <param name="Local" value="Other.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="Contact Us">
-           <param name="ID" value=390>
+           <param name="ID" value=500>
            <param name="Local" value="ContactUs.htm">
        </object>
   <li> <object type="text/sitemap">
            <param name="Name" value="License Agreement">
-           <param name="ID" value=400>
+           <param name="ID" value=510>
            <param name="Local" value="License.htm">
        </object>
 

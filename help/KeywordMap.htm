@@ -5,28 +5,40 @@
 
 <BODY>
 
-<H1>Keyword Map</H1><HR>
+<H1>Keyword Maps</H1><HR>
 
-<IMG SRC="images/keywordmap.gif"  ALT="Keyword Map"   BORDER=0><P>
+<H3>Document Keyword Map</H3>
 
-The <B>Keyword Map</B> presents a visual display of where keywords have been assigned to clips created from the selected episode.  If snapshots have been associated with particular spots in the episode, the snapshot coding is also displayed.  Each colored band in the Keyword Map shows the start and stop points of a clip or snapshot association, along the horizontal timeline of the episode, where a particular keyword, along the vertical axis, has been applied.  When configured so that color represents clips, bands of the same color with the same starting and ending points indicate that a single clip or snapshot was assigned multiple keywords.  A tri-color band indicates where multiple clips or snapshots have been coded with the same keyword at the same time period.<P>
+<IMG SRC="images/documentkeywordmap.gif"  ALT="Keyword Map"   BORDER=0><P>
 
-If you hold your cursor over a band in the Keyword Map, you will see a popup hint that indicates the name and length of the clip or snapshot that the band represents.  Left-clicking on a band will load the appropriate clip or snapshot in Transana and close the Keyword Map, while right-clicking a band will load the clip or snapshot, leaving the Keyword Map open but moving it to the background.<P>
+The <B>Document Keyword Map</B> presents a visual display of where <A HREF="keywordproperties.htm">Keywords</A> have been assigned to <A HREF="quoteproperties.htm">Quotes</A> created from the selected <A HREF="documentproperties.htm">Document</A>.  Each colored band in the Document Keyword Map shows the start and stop points of a Quote along the horizontal axis of character position in the Document, with Keywords along the vertical axis.  When configured so that color represents Quotes, bands of the same color with the same starting and ending points indicate that a single Quote was assigned multiple Keywords.  A tri-color band indicates where multiple Quotes have been coded with the same Keyword at the same character position.<P>
 
-The Keyword Map has several options in its toolbar (and the menu on Windows only.)  You can customize the content using the <A HREF="FilterDialog.htm">Filter Dialog</A>.  You can save a copy of the Keyword Map diagram in JPEG format.  The JPEG image created will have the same width and at least the same height as the Keyword Map window on the screen, so you may want to resize the window prior to saving your image.  Similarly, the dimensions of the window on screen affect the overall shape of the printout when Print Preview or Print is selected from the toolbar or menu.  Some experimentation may be required to get the exact image size and proportions you desire in a saved graphic or a printout.<P>
+If you hold your cursor over a band in the Document Keyword Map, you will see a popup hint that indicates the name and length of the Quote that the band represents.  Left-clicking on a band will load the appropriate Quote in Transana and close the Document Keyword Map.  Ctrl-left-clicking on Windows / Cmd-left-clicking on OS X will load the Clip in the context of the Document and close the Document Keyword Map.  Right-clicking a band will load the Quote, leaving the Document Keyword Map open but moving it to the background, and Ctrl- or Cmd-right-clicking will load the Quote in context without closing the Document Keyword Map.<P>
 
-<H1>Collection Keyword Map</H1><HR>
+The Document Keyword Map has several options in its toolbar (and the menu on Windows only.)  You can customize the content using the <A HREF="FilterDialog.htm">Filter Dialog</A>.  You can save a copy of the Document Keyword Map diagram in JPEG format.  The JPEG image created will have the same width and at least the same height as the Document Keyword Map window on the screen, so you may want to resize the window prior to saving your image.  Similarly, the dimensions of the window on screen affect the overall shape of the printout when Print Preview or Print is selected from the toolbar or menu.  Some experimentation may be required to get the exact image size and proportions you desire in a saved graphic or a printout.<P>
+
+<HR><H3>Episode Keyword Map</H3>
+
+<IMG SRC="images/episodekeywordmap.gif"  ALT="Keyword Map"   BORDER=0><P>
+
+The <B>Episode Keyword Map</B> presents a visual display of where <A HREF="keywordproperties.htm">Keywords</A> have been assigned to <A HREF="clipproperties.htm">Clips</A> created from the selected <A HREF="episodeproperties.htm">Episode</A>.  If <A HREF="snapshotproperties.htm">Snapshots</A> have been associated with particular spots in the Episode, the Snapshot coding is also displayed.  Each colored band in the Episode Keyword Map shows the start and stop points of a Clip or Snapshot association, along the horizontal timeline of the Episode, where a particular Keyword, along the vertical axis, has been applied.  When configured so that color represents Clips, bands of the same color with the same starting and ending points indicate that a single Clip or snapshot was assigned multiple Keywords.  A tri-color band indicates where multiple Clips or Snapshots have been coded with the same Keyword at the same time period.<P>
+
+If you hold your cursor over a band in the Episode Keyword Map, you will see a popup hint that indicates the name and length of the Clip or Snapshot that the band represents.  Left-clicking on a band will load the appropriate Clip or Snapshot in Transana and close the Episode Keyword Map, while right-clicking a band will load the Clip or Snapshot, leaving the Episode Keyword Map open but moving it to the background.<P>
+
+The Episode Keyword Map has several options in its toolbar (and the menu on Windows only.)  You can customize the content using the <A HREF="FilterDialog.htm">Filter Dialog</A>.  You can save a copy of the Episode Keyword Map diagram in JPEG format.  The JPEG image created will have the same width and at least the same height as the Episode Keyword Map window on the screen, so you may want to resize the window prior to saving your image.  Similarly, the dimensions of the window on screen affect the overall shape of the printout when Print Preview or Print is selected from the toolbar or menu.  Some experimentation may be required to get the exact image size and proportions you desire in a saved graphic or a printout.<P>
+
+<HR><H3>Collection Keyword Map</H3>
 
 <IMG SRC="images/collectionkeywordmap.gif"  ALT="Collection Keyword Map"   BORDER=0><P>
 
-The <B>Collection Keyword Map</B> provides a graphical display of the coding for all clips and snapshots that have been gathered together into a collection.  Since clips can be taken from many different episodes, Transana constructs an artificial time line for this report by placing the clips and snapshots next to each other.  Snapshots without a defined duration are assigned a duration of 10 seconds in this time line.  Whether this time line is meaningful and can be interpreted depends upon whether the order of the clips in your collection is meaningful.<P>
+The <B>Collection Keyword Map</B> provides a graphical display of the coding for all <A HREF="clipproperties.htm">Clips</A> and <A HREF="snapshotproperties.htm">Snapshots</A> that have been gathered together into a <A HREF="collectionproperties.htm">Collection</A>.  At this time, <A HREF="quoteproperties.htm">Quotes</A> are <B>NOT</B> included in the Collection Keyword Map.  Since Clips can be taken from many different <A HREF="episodeproperties.htm">Episodes</A>, Transana constructs an artificial time line for this report by placing the Clips and Snapshots next to each other.  Snapshots without a defined duration are assigned a duration of 10 seconds in this time line.  Whether this time line is meaningful and can be interpreted depends upon whether the order of the Clips in your Collection is meaningful.<P>
 
 The Collection Keyword Map can be customized in a variety of ways using the <A HREF="filterdialog.htm">filter dialog</A>.  It can be saved in JPEG format and printed.  In addition, if you click a band in the report, the associated clip will be loaded in Transana.<P>
 
 
-<A HREF="SECReports.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+<A HREF="textreports.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-<A HREF="SeriesMap.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+<A HREF="librarymap.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
 
 </BODY>
 </HTML>

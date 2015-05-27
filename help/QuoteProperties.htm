@@ -1,0 +1,55 @@
+<HTML>
+<HEAD>
+<TITLE>Quote Properties</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Quote Properties</H1><HR>
+
+Please note that the Standard version of Transana does not support Quotes.  To use this feature, you must be using the Professionsal, Computer Lab, or Multi-User version of Transana.<P> 
+
+A <A HREF="organization.htm">Quote</A> in Transana is a basic analytic unit for text.  It is a small segment of text taken from a <A HREF="documentproperties.htm">Document</A>.  The Quote is selected as analytically important and is coded by placing it in a <A HREF="collectionproperties.htm">Collection</A> and by adding <A HREF="keywordproperties.htm">Keywords</A> to it.<P>
+
+There are two types of Quotes in Transana, <A HREF="createquotes.htm">Standard Quotes</A> and <A HREF="quickquotes.htm">Quick Quotes</A>.  Please see the linked pages in the <A HREF="tutorial.htm">Tutorial</A> for further information about the similarities and differences between these types of Quotes.<P>
+
+There are several ways to trigger the creation of a Quote:<P>
+
+<UL>
+<LI><B>Indicate the contents you want included in the Quote</B>:<P>
+<UL>
+<LI>If you do not make a selection in the Document text, Transana will automatically select the sentence surrounding the current cursor position for the Quote text.<P>
+<LI>- or - If you make a selection in the Document text, Transana will use the highlighted text as the Quote text.<P>
+</UL>
+<LI><B>To create a Standard Quote</B>:<P>
+<UL>
+<LI>You can double-click the target <A HREF="collectionproperties.htm">Collection</A>.  Doing this will add the Quote to the end of the list of data objects in the Collection. <P>
+<LI>- or - You can right-click (Ctrl-click on the Mac) on the <A HREF="collectionproperties.htm">Collection</A> where you want to place the Quote and select &quot;Add Quote&quot; from the popup menu.  Doing this will add the Quote to the end of the list of data objects in the Collection.<P>
+<LI>- or - You can drag the selected text from the <A HREF="documentproperties.htm">Document</A> and drop it on a <A HREF="collectionproperties.htm">Collection</A> on the database tab of the <A HREF="datawindow.htm">data window</A>.  Doing this will add the Quote to the end of the list of data objects in the Collection.<P>
+<LI>- or - You can right-click (Ctrl-click on the Mac) on an existing <A HREF="quoteproperties.htm">Quote</A>, <A HREF="clipproperties.htm">Clip</A>, or <A HREF="snapshotproperties.htm">Snapshot</A> in a <A HREF="collectionproperties.htm">Collection</A> and select &quot;Add Quote&quot; from the popup menu.  Doing this will add the Quote to the list of data objects in the Collection just above the selected item.<P>
+<LI>- or - You can drag the selected text from the <A HREF="documentproperties.htm">Document</A> and drop it on an existing <A HREF="quoteproperties.htm">Quote</A>, <A HREF="clipproperties.htm">Clip</A>, or <A HREF="snapshotproperties.htm">Snapshot</A> in a <A HREF="collectionproperties.htm">Collection</A> on the database tab of the <A HREF="datawindow.htm">data window</A>.  Doing this will add the Quote to the list of data objects in the Collection just above the selected item.<P>
+</UL>
+<LI>- or - <B>To create a Quick Quote</B>:<P>
+<UL>
+<LI>You can double-click the a <A HREF="keywordproperties.htm">Keyword</A>.<P>
+<LI>- or - You can right-click (Ctrl-click on the Mac) on the <A HREF="keywordproperties.htm">Keyword</A> and select &quot;Add Quick Quote&quot; from the popup menu.<P>
+<LI>- or - You can drag the selected text from the <A HREF="documentproperties.htm">Document</A> and drop it on a <A HREF="keywordproperties.htm">Keyword</A> on the database tab of the <A HREF="datawindow.htm">data window</A>.<P>
+</UL>
+</UL>   
+
+If you are creating a Standard Quote, you will then see the Quote Properties dialog box.  (Skipping this dialog box is what makes a Quick Quote quick!)<P>
+
+<IMG SRC="images/quoteproperties.gif"  ALT="quoteproperties"   BORDER=0><P>
+
+The only required field is the &quot;Quote ID,&quot; which must be unique within the parent Collection.  &quot;Comment&quot; can be used in any way you wish.  By selecting a Keyword group and Keyword, then clicking the <IMG SRC="images/addkw.gif"  ALT="addkw"   BORDER=0> &nbsp;button, you can add as many analytic keywords as you wish to each Quote, enabling you to find this Quote later when doing keyword searches.  The <IMG SRC="images/delkw.gif"  ALT="delkw"   BORDER=0> &nbsp;button allows you to delete keywords from the list, and the <IMG SRC="images/keywordmanagementbutton.gif"  ALT="keywordmanagementbutton"   BORDER=0> &nbsp;button allows you to access <A HREF="keywordmgt.htm">Keyword Management</A> to edit your keywords in the middle of creating a Quote.  The &quot;Collection ID,&quot; &quot;Library ID,&quot; &quot;Document ID,&quot; &quot;Quote Start Character,&quot; &quot;Quote End Character,&quot; and &quot;Quote Length&quot; fields are all maintained by Transana and cannot be edited.  While you can edit the Quote text if you like, it is not recommended.  Changes made here are not reflected in the original Document text.<P>
+
+When you edit a Quote using Quote Properties from the Quote's right-click menu, the <IMG SRC="images/propagatebutton.gif"> &nbsp;button will be visible.  This button is used to locate copies that match the original Quote ID, source Document number, Quote start character, and quote end character, and to update those copies so that they are identical to the current Quote.  See <A HREF="propagatechildchanges.htm">Propagate Quote and Clip Changes</A> for more information.<P>
+
+One final note:  Unlike other branches of the database tree, items within a Collection have an &quot;order&quot; that can be altered by the user.  (In some forms of Qualitative analysis, such as Narrative Analysis, the order of data objects can be very important.  This order is reflected in the Collection Report.)  If you choose &quot;Add Quote&quot; or drop your text on a Collection name, your new Quote will be added to the end of the list of Quotes, Clips, and Snapshots within the Collection.  However, if you choose &quot;Add Quote&quot; or drop your text on a Quote, Clip, or Snapshot, the new Quote will be inserted in the list above the item where the text is dropped.  The order of Quotes, Clips, and Snapshots within a Collection can be altered using cut-and-paste or drag-and-drop within the Collection.<P>
+
+<A HREF="collectionproperties.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A  HREF="quotemerge.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

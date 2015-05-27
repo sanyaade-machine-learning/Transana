@@ -7,61 +7,77 @@
 
 <H2><I>Starting Transana</I><HR></H2>
 
-You should run Transana while you do this tutorial so that you can perform the tasks as they are explained. If you are already running the tutorial from within Transana, skip ahead to the next page now. <P>
+You should run Transana while you do this tutorial so that you can perform the activities as they are described. <P>
 
-<FONT COLOR="Red">Microsoft Windows Activity: </FONT>To start Transana, click Start on the Taskbar, point to Programs, select the Transana 2 Program Group, then click Transana 2.x from the submenu. <P>
+<FONT COLOR="Red">Microsoft Windows Activity: </FONT>To start Transana, click Start on the Taskbar, point to Programs, select the Transana 3 Program Group, then click Transana 3.x from the submenu. <P>
 
-<FONT COLOR="Red">Macintosh Activity:</FONT> To start Transana, open your Applications folder, double-click the Transana 2 folder, and then double-click the Transana program icon. <P>
+<FONT COLOR="Red">Macintosh Activity:</FONT> To start Transana, open your Applications folder, double-click the Transana 3 folder, and then double-click the Transana program icon. <P>
 
-<H3>Single-user Transana</H3>
+The first time you start Transana, you will be prompted to select a language for Transana's interface.  Your data does not need to be in the same language as Transana's interface, but does need the same language directionality.  That is, if you want to work with data in a right-to-left language, you will need to select a right-to-left language for Transana's interface as well.<P>
 
-The <B>single-user </B>version of Transana prompts you to select a database.<P>
+<H2>Different Versions of Transana</H2>
+
+There are four different versions of Transana that share this Tutorial: <B>Transana Standard</B>, <B>Transana Professional</B>, <B>Multi-user Transana</B>, and <B>Transana for Computer Labs</B>.<P>
+
+<B>Transana Standard</B> is designed for the straight-forward analysis of individual media files.  It is designed for students and researchers just starting out with the Qualitative Analysis of media (video and audio) files, researchers with fairly simple data sets made up only of media files and not requiring the advanced tools and techniques supported by the Professional version.<P>  
+
+<B>Transana Professional</P> is significantly more powerful than the Standard version.  Transana Professional supports the analysis of text and still image files, as well as supporting more complex analysis of more complex media data.  Examples of more complex analysis include using multiple simultaneous media files, multiple simultaneous transcripts, and performing graphical cross-media-file comparisons as in longitudinal qualitative analysis.<P>
+
+<B>Multi-user Transana</B> allows multiple researchers to share data at the same time and work collaboratively.  When properly set up, researchers from different locations can work together simultaneously on analytic projects.  Multi-user Transana offers all of the features of Transana Professional.<P>
+
+ <B>Transana for Computer Labs</B> is designed for use in computer labs where personal data should not be stored on the computer that is running Transana.  It is designed to collect necessary configuration information during startup that may change from session to session.  Transana for Computer Labs offers all of the features of Transana Professional.<P>
+ 
+One of the major differences between these versions of Transana is immediately evident when starting the program.<P>
+
+<H3>Transana Standard and Transana Professional</H3>
+
+The <B>single-user </B>versions of Transana prompt you to select a database.<P>
 
 <IMG SRC="images/selectdatabasesu.gif"  ALT="selectdatabasesu"   BORDER=0><P>
 
-If you already have a tutorial database, select that from the list.  If you don't already have a tutorial database, you can make up a database name, such as your initials followed by the word &quot;Tutorial&quot; and click OK. (Please note that spaces and punctuation symbols are not allowed in database names.)  Transana creates the appropriate database files for you automatically.<P>
+If you already have a tutorial database, select that from the list.  If you don't already have a tutorial database, you can make up a database name, such as your initials followed by the word &quot;Tutorial&quot;, type it in, and click OK. (Please note that spaces and punctuation symbols are not allowed in database names.)  Transana creates the appropriate database files for you automatically.<P>
 
 <H3>Multi-user Transana</H3>
 
 The <B>multi-user </B>version of Transana requires more information.  This information should be provided to you by your project administrator or your technical support representative.<P>   
 
-On the first tab, you specify how to connect to your database.  Transana prompts you for your user name, password, database server, and database name.  If your database server supports it, you also have the option of using a secure SSL connection to the database.<P>
+On the first tab, you specify how to connect to your database.  Transana prompts you for your user name, password, database server, port, and database name.  If your database server supports it, you also have the option of using a secure SSL connection to the database.  We strongly recommend using SSL if possible to maximize data security while using multi-user Transana.<P>
 
 <IMG SRC="images/selectdatabasemu.gif"  ALT="selectdatabasemu"   BORDER=0><P>
 
-On the second tab, you specify how to connect to your Message Server.  Transana requires the name of the message server and the port to connect on.<P>
+On the second tab, you specify how to connect to your Message Server.  Transana requires the name of the Message Server and the port on which to connect.<P>
 
 <IMG SRC="images/selectmessageserver.gif"  ALT="selectmessageserver"   BORDER=0><P>
 
-If you selected a secure SSL connection on the first tab, you can select the client certificate and client key files this connection requires, which you should have received from your project administrator or technical support representative.<P>
+If you selected a secure SSL connection on the first tab, you can select the client certificate, client key, and Message Server certificate files this connection requires.  You should have received these files from your project administrator or technical support representative, or have run the configuration tool if you are using the Transana Cloud Service.<P>
 
 <IMG SRC="images/selectssl.gif"  ALT="selectssl"   BORDER=0><P>
 
-If a tutorial database exists and your account has permission to access it, select that from the list.  If you don't have a tutorial database, you can use your project database, but should clearly identify the data objects you create during the tutorial as being related to the tutorial.  Then, when you are done with the Tutorial, you should delete all of your personal Tutorial data.<P>
+When using Multi-user Transana, your database administrator will need to have set up a database and user account for you ahead of time.  If this is your first time accessing the project database, you may need to type the database in, but after that, you should be able to select it from database list.  If you don't have a separate Tutorial database, you should clearly identify the data objects you create during the Tutorial as being related to the Tutorial.  When you are done with the Tutorial, you should delete all of your personal Tutorial data as a courtesy to your colleagues.<P>
 
-<H3>Computer-lab version of Transana</H3>
+<H3>Computer Lab version of Transana</H3>
 
-When you use Transana in a public computer lab, you need to start by letting Transana know where to look for and store your data.  If you are using the computer lab version, it's because you are using a computer where you should not store your personal data, probably for confidentiality reasons and because many computer labs prohibit permanent data storage on lab computers.<P>
+When you use Transana in a public computer lab, you need to start by letting Transana know where to look for and store your data.  If you are using the Computer Lab version, it's because you are using a computer where you should not store your personal data, probably for confidentiality reasons and because many computer labs prohibit permanent data storage on lab computers.<P>
 
-In this situation, you need to have your own storage device, such as an external hard drive, a large flash disk, or a network storage location you can access from the lab, where you will keep your media files and your analytic data.  You need to connect your drive to the lab computer and make sure you know how to access it prior to starting Transana.  It might be the "H:" drive on Windows, and it might be called "MyDrive" on OS X.<P>
+In this situation, you need to have your own storage device, such as an external hard drive, a large flash disk, or a network storage location you can access from the lab, where you will keep your source data files and your analytic database files.  You need to connect your drive to the lab computer and make sure you know how to access it prior to starting Transana.  For example, it might be the "H:" drive on Windows, and it might be called "MyDrive" on OS X.<P>
 
-When you start the <B>computer-lab</B> version of Transana, the following dialog is the first to appear:<P>
+When you start the Computer Lab version of Transana, the following dialog is the first to appear:<P>
 
 <IMG SRC="images/complabsetup.gif"  ALT="Computer Lab Setup Dialog"   BORDER=0><P>
 
-The <B>video root directory</B> setting tells Transana where to find your media files.  Assuming you have attached a Drive "H:" or a "MyDrive" volume as described earlier, you might browse to "H:\Video" on Windows or "/Volumes/MyDrive/Video" on the Mac.<P>
+The <B>Media Library Directory</B> setting tells Transana where to find your original data files.  Assuming you have attached a Drive "H:" or a "MyDrive" volume as described earlier, you might browse to "H:\Data" on Windows or "/Volumes/MyDrive/Data" on the Mac.<P>
 
-The <B>waveform directory</B> setting tells Transana where to store your extracted audio files, used for creating the waveform diagrams.  Browse to "H:/Video/waveforms" on Windows or "/Volumes/MyDrive/Video/waveforms" on OS X.  You should not store these files on a public computer, as this could compromise the confidentiality of your subjects.<P>
+The <B>Waveform Directory</B> setting tells Transana where to store your extracted audio files, used for creating the waveform diagrams used in working with media data.  Browse to "H:/Video/waveforms" on Windows or "/Volumes/MyDrive/Video/waveforms" on OS X.  You should not store these files on a public computer, as this could compromise the confidentiality of your research participants.<P>
 
-The <B>database directory</B> setting is where Transana will look for the files that contain the analytic data you have created in Transana.  Browse to "H:\database" or "/Volumes/MyDrive/database".<P>
+The <B>Database Directory</B> setting is where Transana will look for the database files that contain the analytic data you create within Transana.  Browse to "H:\databases" or "/Volumes/MyDrive/databases".<P>
 
-Once you have entered the directory information, the <B>computer-lab </B>version of Transana prompts you to select a database.<P>
+Once you have entered the directory information, the Computer Lab version of Transana prompts you to select a database.<P>
 
 <IMG SRC="images/selectdatabasesu.gif"  ALT="selectdatabasesu"   BORDER=0><P>
 
 If you already have a tutorial database, type in the name of the database.  Transana will not remember the name of your database from one session to the next, as such configuration information should not be stored on a public computer.  If you don't already have a tutorial database, you can make up a database name, such as your initials followed by the word &quot;Tutorial&quot; and click OK. (Please note that spaces and punctuation symbols are not allowed in database names.)  Transana creates the appropriate database files for you automatically if needed.<P>
 
-<A HREF="samplevideo.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+<A HREF="sampledata.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
 <A HREF="transanawindow.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
 

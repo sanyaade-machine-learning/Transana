@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -23,7 +23,7 @@ DEBUG = False
 if DEBUG:
     print "ChatWindow DEBUG is ON!"
 
-VERSION = 261
+VERSION = 300
 
 # import wxPython
 import wx
@@ -49,14 +49,18 @@ import TransanaImages
 import DBInterface
 # import Transana Dialogs
 import Dialogs
-# import Transana's Series object
-import Series
+# import Transana's Document Object
+import Document
+# import Transana's Library object
+import Library
 # import Transana's Episode object
 import Episode
 # import Transana's Transcript object
 import Transcript
 # import Transana's Collection object
 import Collection
+# import Transana's Quote object
+import Quote
 # import Transana's Clip object
 import Clip
 # import Transana's Snapshot object
@@ -496,6 +500,12 @@ class ChatWindow(wx.Frame):
             wx.PostEvent(self.window, MessageServerLostEvent())
             # Close the Chat Window if the connection's been broken.
             self.Close()
+        except:
+            print sys.exc_info()[0]
+            print sys.exc_info()[1]
+            import traceback
+            traceback.print_exc(file=sys.stdout)
+            
 
     def OnSend(self, event):
         """ Send Message handler """
@@ -747,17 +757,17 @@ class ChatWindow(wx.Frame):
                     currentSelection = self.ControlObject.DataWindow.DBTab.tree.GetSelections()
                     # The Control Object MUST be defined (and always will be)
                     if self.ControlObject != None:
-                        # Add Series Message
+                        # Add Library Message
                         if messageHeader == 'AS':
-                            tempSeries = Series.Series(message)
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('SeriesNode', (_('Series'), message), tempSeries.number, None, expandNode=False, avoidRecursiveYields = True)
+                            tempLibrary = Library.Library(message)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('LibraryNode', (_('Libraries'), message), tempLibrary.number, None, expandNode=False, avoidRecursiveYields = True)
                             
                         # Add Episode Message
                         elif messageHeader == 'AE':
                             # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             tempEpisode = Episode.Episode(series=nodelist[0], episode=nodelist[1])
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('EpisodeNode', (_('Series'),) + nodelist, tempEpisode.number, tempEpisode.series_num, expandNode=False, avoidRecursiveYields = True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('EpisodeNode', (_('Libraries'),) + nodelist, tempEpisode.number, tempEpisode.series_num, expandNode=False, avoidRecursiveYields = True)
 
                         # Add Transcript Message
                         elif messageHeader == 'AT':
@@ -766,7 +776,14 @@ class ChatWindow(wx.Frame):
                             tempEpisode = Episode.Episode(series=nodelist[0], episode=nodelist[1])
                             # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
                             tempTranscript = Transcript.Transcript(nodelist[-1], ep=tempEpisode.number, skipText=True)
-                            self.ControlObject.DataWindow.DBTab.tree.add_Node('TranscriptNode', (_('Series'),) + nodelist, tempTranscript.number, tempEpisode.number, expandNode=False, avoidRecursiveYields = True)
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('TranscriptNode', (_('Libraries'),) + nodelist, tempTranscript.number, tempEpisode.number, expandNode=False, avoidRecursiveYields = True)
+
+                        # Add Document Message
+                        elif messageHeader == 'AD':
+                            # Convert the Message to a Node List
+                            nodelist = ConvertMessageToNodeList(message)
+                            tempDocument = Document.Document(libraryID=nodelist[0], documentID=nodelist[1])
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('DocumentNode', (_('Libraries'),) + nodelist, tempDocument.number, tempDocument.library_num, expandNode=False, avoidRecursiveYields = True)
 
                         # Add Collection Message
                         elif messageHeader == 'AC':
@@ -778,6 +795,30 @@ class ChatWindow(wx.Frame):
                                 parentNum = tempCollection.number
                             # avoidRecursiveYields added to try to prevent a problem on the Mac when converting Searches
                             self.ControlObject.DataWindow.DBTab.tree.add_Node('CollectionNode', (_('Collections'),) + nodelist, tempCollection.number, tempCollection.parent, expandNode=False, avoidRecursiveYields=True)
+
+                        # Add Quote Message
+                        elif messageHeader == 'AQ':
+                            # Convert the Message to a Node List
+                            nodelist = ConvertMessageToNodeList(message)
+                            parentNum = 0
+                            for coll in nodelist[:-1]:
+                                tempCollection = Collection.Collection(coll, parentNum)
+                                parentNum = tempCollection.number
+                            # Get a temporary copy of the Quote.  We don't need the quote's text, which speeds this up.
+                            tempQuote = Quote.Quote(quoteID=nodelist[-1], collectionID=tempCollection.id, collectionParent=tempCollection.parent, skipText=True)
+                            # avoidRecursiveYields added to try to prevent a problem on the Mac when converting Searches
+                            self.ControlObject.DataWindow.DBTab.tree.add_Node('QuoteNode', (_('Collections'),) + nodelist, tempQuote.number, tempCollection.number, sortOrder=tempQuote.sort_order, expandNode=False, avoidRecursiveYields=True)
+                            # If the Quote's Document is open, it needs to be updated with the Quote information!
+                            self.ControlObject.AddQuoteToOpenDocument(tempQuote)
+                            # If we are moving a Quote, the quote's Notes need to travel with the Quote.  The first step is to
+                            # get a list of those Notes.
+                            noteList = DBInterface.list_of_notes(Quote=tempQuote.number)
+                            # If there are Quote Notes, we need to make sure they travel with the Quote
+                            if noteList != []:
+                                insertNode = self.ControlObject.DataWindow.DBTab.tree.select_Node((_('Collections'),) + nodelist, 'QuoteNode', ensureVisible=False)
+                                # We accomplish this using the TreeCtrl's "add_note_nodes" method
+                                self.ControlObject.DataWindow.DBTab.tree.add_note_nodes(noteList, insertNode, Quote=tempQuote.number)
+                                self.ControlObject.DataWindow.DBTab.tree.Refresh()
 
                         # Add Clip Message
                         elif messageHeader == 'ACl':
@@ -862,7 +903,7 @@ class ChatWindow(wx.Frame):
                                 self.ControlObject.DataWindow.DBTab.tree.Refresh()
 
                         # Add Note Message
-                        elif messageHeader in ['ASN', 'AEN', 'ATN', 'ACN', 'AClN', 'ASnN']:
+                        elif messageHeader in ['ASN', 'ADN', 'AEN', 'ATN', 'ACN', 'AQN', 'AClN', 'ASnN']:
                             # Convert the Message to a Node List
                             nodelist = ConvertMessageToNodeList(message)
                             # Initialize variables
@@ -876,19 +917,39 @@ class ChatWindow(wx.Frame):
                             for node in nodelist[:-1]:
                                 # Count how far into the list we are
                                 nodeCount += 1
-                                # If the first entry in the node list is the "Series" Root Node ...
-                                if (objectType == None) and (node == 'Series'):
-                                    # ... then we're climbing up the Series branch, and are at a Series record.
-                                    objectType = 'Series'
-                                # If we're already at a Series record ...
-                                elif (objectType == 'Series'):
+                                # If the first entry in the node list is the "Library" Root Node ...
+                                if (objectType == None) and (node == 'Libraries'):
+                                    # ... then we're climbing up the Library branch, and are at a Library record.
+                                    objectType = 'Library'
+                                # If we're already at a Library record and we have an Episode or Transcript Note ...
+                                elif (objectType == 'Library') and (messageHeader in ['ASN', 'AEN', 'ATN']):
                                     # ... then we're moving on to an Episode next
                                     objectType = 'Episode'
-                                    # We might have a Series Note, at least if we stop here!
-                                    nodeType = 'SeriesNoteNode'
-                                    # Let's load the Series record ...
-                                    tempObj = Series.Series(node)
-                                    # .. and note that the parent of the NEXT object is this series' number!
+                                    # We might have a Library Note, at least if we stop here!
+                                    nodeType = 'LibraryNoteNode'
+                                    # Let's load the Library record ...
+                                    tempObj = Library.Library(node)
+                                    # .. and note that the parent of the NEXT object is this Library's number!
+                                    parentNum = tempObj.number
+                                # If we're already at a Library record and we have a Document Note ...
+                                elif (objectType == 'Library') and (messageHeader in ['ADN']):
+                                    # ... then we're moving on to an Document next
+                                    objectType = 'Document'
+                                    # We might have a Library Note, at least if we stop here!
+                                    nodeType = 'LibraryNoteNode'
+                                    # Let's load the Library record ...
+                                    tempObj = Library.Library(node)
+                                    # .. and note that the parent of the NEXT object is this Library's number!
+                                    parentNum = tempObj.number
+                                # If we're already at a Document record ...
+                                elif (objectType == 'Document'):
+                                    # ... then we're looking at a Document
+                                    objectType = 'Document Note'
+                                    # we have a Document Note if we stop here!
+                                    nodeType = 'DocumentNoteNode'
+                                    # Let's load the Document Record
+                                    tempObj = Document.Document(libraryID=tempObj.id, documentID=node)
+                                    # .. and note that the parent of the NEXT object is this Document's number!
                                     parentNum = tempObj.number
                                 # If we're already at an Episode record ...
                                 elif (objectType == 'Episode'):
@@ -915,9 +976,9 @@ class ChatWindow(wx.Frame):
                                 elif (objectType == None) and (node == 'Collections'):
                                     # ... then the first level of object we're looking at is a Collection.
                                     objectType = 'Collections'
-                                # if we're looking at a Collection and either we don't have a Clip / Snapshot Note
+                                # if we're looking at a Collection and either we don't have a Quote / Clip / Snapshot Note
                                 # or we're not at the end of the list yet...
-                                elif (objectType == 'Collections') and (not (messageHeader in ['AClN', 'ASnN']) or (nodeCount < len(nodelist) - 1)):
+                                elif (objectType == 'Collections') and (not (messageHeader in ['AQN', 'AClN', 'ASnN']) or (nodeCount < len(nodelist) - 1)):
                                     # ... then we're still looking at a Collection
                                     objectType = 'Collections'
                                     # ... and if we stop here, we've got a Collection Note
@@ -925,6 +986,16 @@ class ChatWindow(wx.Frame):
                                     # Load the Collection
                                     tempObj = Collection.Collection(node, parentNum)
                                     # ... and note that the collection is the parent of the NEXT object.
+                                    parentNum = tempObj.number
+                                # if we're looking at a Collection and we have a Quote Note and we're at the end of the list ...
+                                elif (objectType == 'Collections') and (messageHeader == 'AQN') and (nodeCount == len(nodelist) - 1):
+                                    # ... then we're looking at a Quote
+                                    objectType = 'Quote'
+                                    # ... and we're dealing with a Quote Note
+                                    nodeType = 'QuoteNoteNode'
+                                    # Get a temporary copy of the Quote.  We don't need the Quote's transcript, which speeds this up.
+                                    tempObj = Quote.Quote(quoteID=node, collectionID=tempObj.id, collectionParent=tempObj.parent, skipText=True)
+                                    # ... and note its number as the parent number of the Note
                                     parentNum = tempObj.number
                                 # if we're looking at a Collection and we have a Clip Note and we're at the end of the list ...
                                 elif (objectType == 'Collections') and (messageHeader == 'AClN') and (nodeCount == len(nodelist) - 1):
@@ -949,14 +1020,18 @@ class ChatWindow(wx.Frame):
                             # Initialize the Temporary Note object
                             tempNote = None
                             # Load the Note, which we do a bit differently based on what kind of parent object we have.
-                            if nodeType == 'SeriesNoteNode':
-                                tempNote = Note.Note(nodelist[-1], Series=tempObj.number)
+                            if nodeType == 'LibraryNoteNode':
+                                tempNote = Note.Note(nodelist[-1], Library=tempObj.number)
+                            elif nodeType == 'DocumentNoteNode':
+                                tempNote = Note.Note(nodelist[-1], Document=tempObj.number)
                             elif nodeType == 'EpisodeNoteNode':
                                 tempNote = Note.Note(nodelist[-1], Episode=tempObj.number)
                             elif nodeType == 'TranscriptNoteNode':
                                 tempNote = Note.Note(nodelist[-1], Transcript=tempObj.number)
                             elif nodeType == 'CollectionNoteNode':
                                 tempNote = Note.Note(nodelist[-1], Collection=tempObj.number)
+                            elif nodeType == 'QuoteNoteNode':
+                                tempNote = Note.Note(nodelist[-1], Quote=tempObj.number)
                             elif nodeType == 'ClipNoteNode':
                                 tempNote = Note.Note(nodelist[-1], Clip=tempObj.number)
                             elif nodeType == 'SnapshotNoteNode':
@@ -1060,8 +1135,8 @@ class ChatWindow(wx.Frame):
                                         win.OnEnterWindow(event)
 
                             # If we're renaming a Note ...
-                            elif nodelist[0] in ['SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode',
-                                                 'CollectionNoteNode', 'ClipNoteNode', 'SnapshotNoteNode']:
+                            elif nodelist[0] in ['LibraryNoteNode', 'DocumentNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode',
+                                                 'CollectionNoteNode', 'QuoteNoteNode', 'ClipNoteNode', 'SnapshotNoteNode']:
                                 # ... if the Notes Browser is open, we need to update the note there as well.
                                 if self.ControlObject.NotesBrowserWindow != None:
                                     # The first element in the nodelist is the NOTE Node Type.
@@ -1079,17 +1154,29 @@ class ChatWindow(wx.Frame):
                                     for node in nodelist[:-2]:
                                         # Keep track of our position in the list.
                                         nodeCount += 1
-                                        # If the first entry in the node list is the "Series" Root Node ...
-                                        if (objectType == None) and (node == unicode(_('Series'), 'utf8')):
-                                            # ... then we're climbing up the Series branch, and are at a Series record.
-                                            objectType = 'Series'
-                                        # If we're already at a Series record ...
-                                        elif (objectType == 'Series'):
-                                            # ... then we're moving on to an Episode next
-                                            objectType = 'Episode'
-                                            # Let's load the Series record ...
-                                            tempObj = Series.Series(node)
-                                            # .. and note that the parent of the NEXT object is this series' number!
+                                        # If the first entry in the node list is the "Library" Root Node ...
+                                        if (objectType == None) and (node == unicode(_('Libraries'), 'utf8')):
+                                            # ... then we're climbing up the Library branch, and are at a Library record.
+                                            objectType = 'Library'
+                                        # If we're already at a Library record and we're NOT looking for a Document Note ...
+                                        elif (objectType == 'Library'):
+                                            if (nodeType == 'DocumentNoteNode'):
+                                                # ... then we're looking at a Document
+                                                objectType = 'Document'
+                                            else:
+                                                # ... then we're moving on to an Episode next
+                                                objectType = 'Episode'
+                                            # Let's load the Library record ...
+                                            tempObj = Library.Library(node)
+                                            # .. and note that the parent of the NEXT object is this Library's number!
+                                            parentNum = tempObj.number
+                                        # if we're looking at a Library and we have a Document Note and we're at the end of the list ...
+                                        elif (objectType == 'Document'):
+                                            # ... then we're looking at a Document
+                                            objectType = 'Document Note'
+                                            # Get a temporary copy of the Document.  We don't need the Document's transcript, which speeds this up.
+                                            tempObj = Document.Document(node, libraryID=tempObj.id, documentID=node, skipText=True)
+                                            # ... and note its number as the parent number of the Note
                                             parentNum = tempObj.number
                                         # If we're already at an Episode record ...
                                         elif (objectType == 'Episode'):
@@ -1120,6 +1207,14 @@ class ChatWindow(wx.Frame):
                                             tempObj = Collection.Collection(node, parentNum)
                                             # ... and note that the collection is the parent of the NEXT object.
                                             parentNum = tempObj.number
+                                        # if we're looking at a Collection and we have a Quote Note and we're at the end of the list ...
+                                        elif (objectType == 'Collections') and (nodeType == 'QuoteNoteNode') and (nodeCount == len(nodelist) - 2):
+                                            # ... then we're looking at a Quote
+                                            objectType = 'Quote'
+                                            # Get a temporary copy of the Quote.  We don't need the Quote's transcript, which speeds this up.
+                                            tempObj = Quote.Quote(node, quoteID=node, collectionID=tempObj.id, collectionParent=tempObj.parent, skipText=True)
+                                            # ... and note its number as the parent number of the Note
+                                            parentNum = tempObj.number
                                         # if we're looking at a Collection and we have a Clip Note and we're at the end of the list ...
                                         elif (objectType == 'Collections') and (nodeType == 'ClipNoteNode') and (nodeCount == len(nodelist) - 2):
                                             # ... then we're looking at a Clip
@@ -1139,14 +1234,18 @@ class ChatWindow(wx.Frame):
                                     # Initialize the Temporary Note object
                                     tempNote = None
                                     # Load the Note, which we do a bit differently based on what kind of parent object we have.
-                                    if nodeType == 'SeriesNoteNode':
-                                        tempNote = Note.Note(nodelist[-1], Series=tempObj.number)
+                                    if nodeType == 'LibraryNoteNode':
+                                        tempNote = Note.Note(nodelist[-1], Library=tempObj.number)
+                                    elif nodeType == 'DocumentNoteNode':
+                                        tempNote = Note.Note(nodelist[-1], Document=tempObj.number)
                                     elif nodeType == 'EpisodeNoteNode':
                                         tempNote = Note.Note(nodelist[-1], Episode=tempObj.number)
                                     elif nodeType == 'TranscriptNoteNode':
                                         tempNote = Note.Note(nodelist[-1], Transcript=tempObj.number)
                                     elif nodeType == 'CollectionNoteNode':
                                         tempNote = Note.Note(nodelist[-1], Collection=tempObj.number)
+                                    elif nodeType == 'QuoteNoteNode':
+                                        tempNote = Note.Note(nodelist[-1], Quote=tempObj.number)
                                     elif nodeType == 'ClipNoteNode':
                                         tempNote = Note.Note(nodelist[-1], Clip=tempObj.number)
                                     elif nodeType == 'SnapshotNoteNode':
@@ -1183,6 +1282,25 @@ class ChatWindow(wx.Frame):
                         elif messageHeader == 'DN':
                             # Extract the node list from the message
                             nodelist = ConvertMessageToNodeList(message)
+
+##                            print
+##                            print "ChatWindow.OnPostMessage():  Delete Node"
+##                            print "Removing a Quote Node"
+##                            print message
+##                            print nodelist
+##                            print
+##                            print "DONE  1.  If the Document is open, remove this Quote from the quote_dict"
+##                            print "DONE  2.  If the Quote is open, close it!"
+##                            print "DONE  3.  Check about Deleting a Document -- we should close the Document!"
+##                            print "DONE  4.  Check about Deleting a Clip -- we should close the Clip!"
+##                            print "DONE  5.  Check about deleting an Episode -- we should close the Episode!"
+##                            print "DONE  6.  Check about deleting a Transcript -- we should close the Transcript!"
+##                            print "DONE  7.  Check about deleting a Library - we should close ALL Docs and Episodes!"
+##                            print "DONE  8.  Check about deleting a Collection - close ALL Quotes, Clips, and Snaps!"
+##                            print "DONE  9.  Check about deleting a Snapshot -- we should close the Snapshot!"
+##                            print "10.  And what about Keywords?  We can remove them from open objects!!"
+##                            print
+
                             # Check the TYPE of the translated second element.
                             if type(_(nodelist[1])).__name__ == 'str':
                                 # If string, translate it and convert it to unicode
@@ -1199,10 +1317,12 @@ class ChatWindow(wx.Frame):
                                 nodelist = nodelist[:-1]
                                 # ... and call delete_Node, passing the clip number.  We don't want messages sent further.
                                 self.ControlObject.DataWindow.DBTab.tree.delete_Node(nodelist[1:], nodelist[0], exampleClipNum = exampleClipNum, sendMessage=False)
-                            # If we DON'T have a Keyword Example ...
+                            # If we are removing any other kind of Node ...
                             else:
+
                                 # ... delete the node without passing further messages
                                 self.ControlObject.DataWindow.DBTab.tree.delete_Node(nodelist[1:], nodelist[0], sendMessage=False)
+
                             # If we're removing a Keyword Group ...
                             if nodelist[0] == 'KeywordGroupNode':
                                 # ... we need to update the Keyword Groups Data Structure
@@ -1265,13 +1385,13 @@ class ChatWindow(wx.Frame):
                                         win.OnEnterWindow(event)
 
                             # If we're deleting a Note Node ...
-                            elif nodelist[0] in ['SeriesNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode',
-                                                 'ClipNoteNode', 'SnapshotNoteNode']:
+                            elif nodelist[0] in ['LibraryNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode',
+                                                 'ClipNoteNode', 'SnapshotNoteNode', 'DocumentNoteNode']:
                                 # ... and the Notes Browser is open, we need to delete the Note from there too.
                                 if self.ControlObject.NotesBrowserWindow != None:
                                     # Determine the Note Browser's root node based on the type of Note we're deleting
-                                    if nodelist[0] == 'SeriesNoteNode':
-                                        nodeType = 'Series'
+                                    if nodelist[0] == 'LibraryNoteNode':
+                                        nodeType = 'Library'
                                     elif nodelist[0] == 'EpisodeNoteNode':
                                         nodeType = 'Episode'
                                     elif nodelist[0] == 'TranscriptNoteNode':
@@ -1282,14 +1402,16 @@ class ChatWindow(wx.Frame):
                                         nodeType = 'Clip'
                                     elif nodelist[0] == 'SnapshotNoteNode':
                                         nodeType = 'Snapshot'
+                                    elif nodelist[0] == 'DocumentNoteNode':
+                                        nodeType = 'Document'
                                     else:
                                         nodeType = None
                                     # Signal the Notes Browser to delete the Note.  Shorten the node list by 1 element
                                     # so it does not conflict with DatabaseTreeTab.py calls.
                                     if nodeType != None:
                                         self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('D', (nodeType, nodelist[1:]))
-                            # Otherwise, if a Series, Episode, Transcript, Collection, Clip, or Snapshot node is deleted ...
-                            elif nodelist[0] in ['SeriesNode', 'EpisodeNode', 'TranscriptNode', 'CollectionNode', 'ClipNode', 'SnapshotNode']:
+                            # Otherwise, if a Library, Episode, Transcript, Collection, Clip, or Snapshot node is deleted ...
+                            elif nodelist[0] in ['LibraryNode', 'EpisodeNode', 'TranscriptNode', 'CollectionNode', 'ClipNode', 'SnapshotNode']:
                                 # ... and if the Notes Browser is open, ...
                                 if self.ControlObject.NotesBrowserWindow != None:
                                     # ... we need to CHECK to see if any notes were deleted.
@@ -1303,7 +1425,11 @@ class ChatWindow(wx.Frame):
                             if ((isinstance(self.ControlObject.currentObj, Episode.Episode) and \
                                  (msgData[0] == 'Episode')) or \
                                 (isinstance(self.ControlObject.currentObj, Clip.Clip) and \
-                                 (msgData[0] == 'Clip'))) and \
+                                 (msgData[0] == 'Clip')) or \
+                                (isinstance(self.ControlObject.currentObj, Document.Document) and \
+                                 (msgData[0] == 'Document')) or \
+                                (isinstance(self.ControlObject.currentObj, Quote.Quote) and \
+                                 (msgData[0] == 'Quote'))) and \
                                (self.ControlObject.currentObj.number == int(msgData[1])):
                                 # Let's see if the Keywords Tab is being shown
                                 if self.ControlObject.DataWindow.nb.GetPageText(self.ControlObject.DataWindow.nb.GetSelection()) == unicode(_('Keywords'), 'utf8'):
@@ -1320,12 +1446,29 @@ class ChatWindow(wx.Frame):
                             if msgData[0] == 'None':
                                 # ... we need to update the keyword visualization no matter what.
                                 self.ControlObject.UpdateKeywordVisualization()
+                            # if Object Type is Document ...
+                            elif msgData[0] == 'Document':
+                                # See if the currently loaded document matches the document number sent from the Message Server
+                                if isinstance(self.ControlObject.currentObj, Document.Document) and \
+                                   self.ControlObject.currentObj.number == int(msgData[1]):
+                                    # ... we need to update the keyword visualization no matter what.
+                                    self.ControlObject.UpdateKeywordVisualization()
                             # if Object Type is Episode ...
                             elif msgData[0] == 'Episode':
                                 # See if the currently loaded episode matches the episode number sent from the Message Server
                                 if isinstance(self.ControlObject.currentObj, Episode.Episode) and \
                                    self.ControlObject.currentObj.number == int(msgData[1]):
                                     # ... we need to update the keyword visualization no matter what.
+                                    self.ControlObject.UpdateKeywordVisualization()
+                            # if Object Type is Quote ...
+                            elif msgData[0] == 'Quote':
+                                # See if the currently loaded Document matches the Document number sent from the Message Server
+                                # or the currently loaded Quote matches the Quote Number sent from the Message Server
+                                if (isinstance(self.ControlObject.currentObj, Document.Document) and \
+                                   self.ControlObject.currentObj.number == int(msgData[2])) or \
+                                   (isinstance(self.ControlObject.currentObj, Quote.Quote) and \
+                                   self.ControlObject.currentObj.number == int(msgData[1])):
+                                    # ... we need to update the keyword visualization.
                                     self.ControlObject.UpdateKeywordVisualization()
                             # if Object Type is Clip ...
                             elif msgData[0] == 'Clip':
@@ -1337,6 +1480,11 @@ class ChatWindow(wx.Frame):
                                    self.ControlObject.currentObj.number == int(msgData[1])):
                                     # ... we need to update the keyword visualization.
                                     self.ControlObject.UpdateKeywordVisualization()
+
+                            else:
+
+                                print "ChatWindow.OnPostMessage():  UKV not processed for ", msgData[0]
+                                print
                                     
                         else:
                             if DEBUG:

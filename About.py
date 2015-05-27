@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -82,7 +82,7 @@ class AboutBox(wx.Dialog):
         mainSizer.Add(version, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
 
         # Create a label for the Program Copyright
-        str = _("Copyright 2002-2014\nThe Board of Regents of the University of Wisconsin System")
+        str = _("Copyright 2002-2015\nThe Board of Regents of the University of Wisconsin System")
         copyright = wx.StaticText(self, -1, str, style=wx.ALIGN_CENTRE)
         # Apply the last specified font (from Program Version) to the copyright label
         font = self.GetFont()
@@ -186,8 +186,8 @@ class AboutBox(wx.Dialog):
             key = event.GetKeyCode()
             # If F11 is pressed, show COMPONENT VERSION information
             if (key == wx.WXK_F11) or (key in [ord('S'), ord('s')]):
-                # Import Python's ctypes, Transana's DBInterface, and Python's sys modules
-                import Crypto, ctypes, DBInterface, paramiko, sys
+                # Import Python's ctypes, Transana's DBInterface, Python's sys modules, and numpy
+                import Crypto, ctypes, DBInterface, paramiko, sys, numpy
                 # Build a string that contains the version information for crucial programming components
                 str = '\n            Transana %s uses the following tools:\n\n'% (TransanaConstants.versionNumber)
                 str = '%sPython:  %s\n' % (str, sys.version[:5])
@@ -219,6 +219,7 @@ class AboutBox(wx.Dialog):
                 str = "%sctypes:  %s\n" % (str, ctypes.__version__)
                 str = "%sCrypto:  %s\n" % (str, Crypto.__version__)
                 str = "%sparamiko:  %s\n" % (str, paramiko.__version__)
+                str = "%snumpy:     %s\n" % (str, numpy.__version__)
                 str = "%sEncoding:  %s\n" % (str, TransanaGlobal.encoding)
                 str = "%sLanguage:  %s\n" % (str, TransanaGlobal.configData.language)
                 # Replace the Description text with the version information text

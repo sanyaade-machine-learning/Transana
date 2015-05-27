@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -302,7 +302,7 @@ class Clip(DataObject.DataObject):
         # Sanity checks
         if self.id == "":
             raise SaveError, _("Clip ID is required.")
-        if (self.collection_num == 0):
+        elif (self.collection_num == 0):
             raise SaveError, _("Parent Collection number is required.")
         elif self.media_filename == "":
             raise SaveError, _("Media Filename is required.")
@@ -342,15 +342,22 @@ class Clip(DataObject.DataObject):
                       self.clip_start, self.clip_stop, self.offset, self.audio, comment, \
                       self.sort_order)
         if (self._db_start_save() == 0):
-            if DBInterface.record_match_count("Clips2", \
-                                ("ClipID", "CollectNum"), \
-                                (id, self.collection_num) ) > 0:
+            if DBInterface.record_match_count("Clips2", ("ClipID", "CollectNum"), (id, self.collection_num) ) > 0:
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_('A Clip named "%s" already exists in this Collection.\nPlease enter a different Clip ID.'), 'utf8') % self.id
                 else:
                     prompt = _('A Clip named "%s" already exists in this Collection.\nPlease enter a different Clip ID.') % self.id
                 raise SaveError, prompt
+            # Duplicate Clip IDs with a Quote ID within a Collection are not allowed.
+            if DBInterface.record_match_count("Quotes2", ("QuoteID", "CollectNum"), (id, self.collection_num)) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Quote named "%s" already exists in this Collection.\nPlease enter a different Clip ID.'), 'utf8')
+                else:
+                    prompt = _('A Quote named "%s" already exists in this Collection.\nPlease enter a different Clip ID.')
+                raise SaveError, prompt % self.id
+
             # insert the new record
             query = """
             INSERT INTO Clips2
@@ -361,15 +368,23 @@ class Clip(DataObject.DataObject):
                 (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
         else:
-            if DBInterface.record_match_count("Clips2", \
-                            ("ClipID", "CollectNum", "!ClipNum"), \
-                            (id, self.collection_num, self.number)) > 0:
+            if DBInterface.record_match_count("Clips2", ("ClipID", "CollectNum", "!ClipNum"),
+                                              (id, self.collection_num, self.number)) > 0:
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_('A Clip named "%s" already exists in this Collection.\nPlease enter a different Clip ID.'), 'utf8') % self.id
                 else:
                     prompt = _('A Clip named "%s" already exists in this Collection.\nPlease enter a different Clip ID.') % self.id
                 raise SaveError, prompt
+            # Duplicate Clip ID with Quote ID within a Collection are not allowed.
+            if DBInterface.record_match_count("Quotes2", ("QuoteID", "CollectNum"),
+                                             (id, self.collection_num)) > 0:
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A Quote named "%s" already exists in this Collection.\nPlease enter a different Clip ID.'), 'utf8')
+                else:
+                    prompt = _('A Quote named "%s" already exists in this Collection.\nPlease enter a different Clip ID.')
+                raise SaveError, prompt % self.id
 
             # update the record
             query = """
@@ -440,7 +455,7 @@ class Clip(DataObject.DataObject):
             # If we are dealing with an existing Clip, delete all the Keywords
             # in anticipation of putting them all back in after we deal with the
             # Clip Transcript
-            DBInterface.delete_all_keywords_for_a_group(0, self.number, 0)
+            DBInterface.delete_all_keywords_for_a_group(0, 0, self.number, 0, 0)
             
         # Now let's deal with the Clip's Transcripts
 
@@ -491,7 +506,7 @@ class Clip(DataObject.DataObject):
         # Add the Clip keywords back.  Iterate through the Keyword List
         for kws in self._kwlist:
             # Try to add the Clip Keyword record.  If it is NOT added, the keyword has been changed by another user!
-            if not DBInterface.insert_clip_keyword(0, self.number, 0, kws.keywordGroup, kws.keyword, kws.example):
+            if not DBInterface.insert_clip_keyword(0, 0, self.number, 0, 0, kws.keywordGroup, kws.keyword, kws.example):
                 # if the prompt isn't blank ...
                 if prompt != '':
                     # ... add a couple of line breaks to it
@@ -502,7 +517,7 @@ class Clip(DataObject.DataObject):
 
         # If there is an error prompt ...
         if prompt != '':
-            # If the Episode Number was changed ...
+            # If the Clip's Number was changed ...
             if numberChanged:
                 # ... change it back to zero!!
                 self.number = 0
@@ -609,7 +624,7 @@ class Clip(DataObject.DataObject):
 
             # Delete all related references in the ClipKeywords table
             if result:
-                DBInterface.delete_all_keywords_for_a_group(0, self.number, 0)
+                DBInterface.delete_all_keywords_for_a_group(0, 0, self.number, 0, 0)
 
             if result:
                 # Craft a query to remove all existing Additonal Videos

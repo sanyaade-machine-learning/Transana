@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -35,7 +35,7 @@ import pickle
 class Help(object):
     """ This class implements Help Calls to the Transana Manual """
     # Show the Manual's Welcome page if no context is supplied
-    def __init__(self, HelpContext='Welcome'):
+    def __init__(self, HelpContext='Manual'):
         self.help = wx.html.HtmlHelpController()
 
         # This has emerged as the "preferred" method on the wxPython-users list.
@@ -101,6 +101,7 @@ class Help(object):
         self.help.AddBook(os.path.join(programDir, 'help', 'Manual.hhp'))
         self.help.AddBook(os.path.join(programDir, 'help', 'Tutorial.hhp'))
         self.help.AddBook(os.path.join(programDir, 'help', 'TranscriptNotation.hhp'))
+
         # And finally, we display the Help Control, showing the current contents.
         self.help.Display(HelpContext)
 
@@ -174,7 +175,7 @@ if __name__ == '__main__':
             # If no help context is provided ...
             if helpContext == '':
                 # ... use the default Help Context
-                helpContext = 'Welcome'
+                helpContext = 'Manual'
             # Create the frame, passing the help context
             self.frame = Help(helpContext.strip())
             return True

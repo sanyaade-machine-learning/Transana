@@ -1,0 +1,29 @@
+<HTML>
+<HEAD>
+<TITLE>Propagate Quote and Clip Changes</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Propagate Quote and Clip Changes</H1><HR>
+
+As you work with your data in Transana, you may find that you end up with multiple copies of some <A HREF="quoteproperties.htm">Quotes</A> and <A HREF="clipproperties.htm">Clips</A>.  You may copy items because they fit into several places in your analytic structure, or you may create copies of Quote and Clips as a result of converting <A HREF="search.htm">Search</A> results to <A HREF="collectionproperties.htm">Collections</A>.  You may find that you want to make identical changes to all copies of a particular Quote or Clip.  The &quot;Propagate Quote and Clip Changes&quot; function allows a researcher to synchronize copies of Quotes and Clips if desired.<P>
+
+(Please see <A HREF="propagateparentchanges.htm">Propagate Document and Episode Changes</a> for a mechanism for keeping your <A HREF="quoteproperties.htm">Quotes</A> and <A HREF="clipproperties.htm">Clip</A> Transcripts synchronized with your source <A HREF="documentproperties.htm">Documents</A> and <A HREF="episodeproperties.htm">Episode</A> <A HREF="transcriptproperties.htm">Transcript</A>.  The techniques discussed here do not affect the source Document or Episode Transcript.)<P>
+
+If you only need to update a Quote's text or the Transcript of a Clip, you can load one copy of the Quote or Clip into Transana's main interface, edit the text, and press the <IMG SRC="images/propagatebutton.gif" ALT="Change Propagation Button"> &nbsp;button in the <A HREF="documentwindow.htm">Document Window</A>'s toolbar.  Transana will locate all Quotes taken from the same Document or all Clips taken from the same Episode Transcript with the same Quote or Clip ID and the same start and end points, and will change the appropriate text to match.<P>
+
+If you are interested in making broader changes to all copies of a Quote or Clip, you can load the Quote in the <A HREF="quoteproperties.htm">Quote Properties form</A> or the Clip in the <A HREF="clipproperties.htm">Clip Properties form</A>.  You can then change the item's ID, text, and keywords.  Then press the <IMG SRC="images/propagatebutton.gif" ALT="Change Propagation Button"> &nbsp;button on the dialog box.  Transana will locate items with the original ID and the same start and end points that were created from the same source Document or Episode Transcript, and it will alter them so that the ID, text, and keywords match the current item.  Please note that this function does NOT alter the original Document or Episode Transcript, and it does not affect copies of the item that have different IDs, nor will it remove keywords that designate a Clip as Keyword Examples.<P>
+
+<IMG SRC="images/reviewtranscriptchangesclip.gif" ALT="Review Transcript Changes"><P>
+
+The &quot;Review Changes&quot; screen will be displayed for each copy of the item Transana is able to identify.  Press &quot;Update&quot; to replace the ID, text, and keywords and then move on to the next item copy. &quot;Update All&quot; will apply the changes to all copies of the item.  (Use this button with caution!) &quot;Skip&quot; will prevent changes from being made to the current item, while &quot;Cancel&quot; will stop the change propagation process and revert all Quote or Clip copies back to their original form.  The item you edited, however, will retain your changes.<P>
+
+A variety of errors can occur during the change propagation process, and the results may differ from what you might expect.  Please take a moment to review the &quot;Change Propagation&quot; report to ensure that all item copies were correctly updated.  For example, if a Quote or a Clip Transcript is locked by another user in multi-user Transana, that item will not be updated.  You will need to wait until the other user releases the record lock, then repeat the change propagation or edit that item individually.<P>
+
+<A HREF="propagateparentchanges.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="visualizationwindow.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

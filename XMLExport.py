@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -146,7 +146,7 @@ class XMLExport(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size, and define height as unchangeable
         self.SetSizeHints(max(550, width), height, -1, height)
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
         # Set focus to the XML file field
         self.XMLFile.SetFocus()
 
@@ -226,13 +226,14 @@ class XMLExport(Dialogs.GenForm):
             # Version 1.6 -- Added XML format for transcripts and character escapes for Transana 2.50 release
             # Version 1.7 -- Database Structure changed for Still Image Snapshots for Transana 2.60 release
             # Version 1.8 -- Character Encoding Rules changed completely!!
+            # Version 2.0 -- Transana 3.0, Documents and Quotes added
             if ENCODE_PROPERLY:
-                f.write('    1.8\n')
+                f.write('    2.0\n')
             else:
                 f.write('    1.7\n')
             f.write('  </TransanaXMLVersion>\n')
 
-            progress.Update(7, _('Writing Series Records'))
+            progress.Update(5, _('Writing Library Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT SeriesNum, SeriesID, SeriesComment, SeriesOwner, DefaultKeywordGroup FROM Series2'
@@ -245,7 +246,20 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </SeriesFile>\n')
                 dbCursor.close()
 
-            progress.Update(13, _('Writing Episode Records'))
+            progress.Update(11, _('Writing Document Records  (This will seem slow because of the size of the Document Records.)'))
+            if db != None:
+                dbCursor = db.cursor()
+                SQLText = 'SELECT DocumentNum, DocumentID, LibraryNum, Author, Comment, ImportedFile, ImportDate, DocumentLength, XMLText FROM Documents2'
+                dbCursor.execute(SQLText)
+                data = dbCursor.fetchall()
+                if len(data) > 0:
+                    f.write('  <DocumentFile>\n')
+                    for documentRec in data:
+                        self.WriteDocumentRec(f, progress, documentRec)
+                    f.write('  </DocumentFile>\n')
+                dbCursor.close()
+
+            progress.Update(17, _('Writing Episode Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT EpisodeNum, EpisodeID, SeriesNum, TapingDate, MediaFile, EpLength, EpComment FROM Episodes2'
@@ -258,7 +272,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </EpisodeFile>\n')
                 dbCursor.close()
 
-            progress.Update(20, _('Writing Core Data Records'))
+            progress.Update(23, _('Writing Core Data Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = """SELECT CoreDataNum, Identifier, Title, Creator, Subject, Description, Publisher,
@@ -273,7 +287,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </CoreDataFile>\n')
                 dbCursor.close()
 
-            progress.Update(27, _('Writing Collection Records'))
+            progress.Update(28, _('Writing Collection Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT CollectNum, CollectID, ParentCollectNum, CollectComment, CollectOwner, DefaultKeywordGroup FROM Collections2'
@@ -286,7 +300,33 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </CollectionFile>\n')
                 dbCursor.close()
 
-            progress.Update(33, _('Writing Clip Records'))
+            progress.Update(34, _('Writing Quote Records'))
+            if db != None:
+                dbCursor = db.cursor()
+                SQLText = 'SELECT QuoteNum, QuoteID, CollectNum, SourceDocumentNum, SortOrder, Comment, XMLText FROM Quotes2'
+                dbCursor.execute(SQLText)
+                data = dbCursor.fetchall()
+                if len(data) > 0:
+                    f.write('  <QuoteFile>\n')
+                    for quoteRec in data:
+                        self.WriteQuoteRec(f, quoteRec)
+                    f.write('  </QuoteFile>\n')
+                dbCursor.close()
+
+            progress.Update(39, _('Writing Quote Position Records'))
+            if db != None:
+                dbCursor = db.cursor()
+                SQLText = 'SELECT QuoteNum, DocumentNum, StartChar, EndChar FROM QuotePositions2'
+                dbCursor.execute(SQLText)
+                data = dbCursor.fetchall()
+                if len(data) > 0:
+                    f.write('  <QuotePositionFile>\n')
+                    for quotePosRec in data:
+                        self.WriteQuotePosRec(f, quotePosRec)
+                    f.write('  </QuotePositionFile>\n')
+                dbCursor.close()
+
+            progress.Update(45, _('Writing Clip Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT ClipNum, ClipID, CollectNum, EpisodeNum, MediaFile, ClipStart, ClipStop, ClipOffset, Audio, '
@@ -300,7 +340,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </ClipFile>\n')
                 dbCursor.close()
 
-            progress.Update(40, _('Writing Additional Media File Records'))
+            progress.Update(50, _('Writing Additional Media File Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT AddVidNum, EpisodeNum, ClipNum, MediaFile, VidLength, Offset, Audio FROM AdditionalVids2'
@@ -313,7 +353,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </AdditionalVidsFile>\n')
                 dbCursor.close()
 
-            progress.Update(47, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
+            progress.Update(56, _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT TranscriptNum, TranscriptID, EpisodeNum, SourceTranscriptNum, ClipNum, SortOrder, Transcriber, '
@@ -327,7 +367,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </TranscriptFile>\n')
                 dbCursor.close()
 
-            progress.Update(53, _('Writing Snapshot Records'))
+            progress.Update(62, _('Writing Snapshot Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT SnapshotNum, SnapshotID, CollectNum, ImageFile, ImageScale, ImageCoordsX, ImageCoordsY, '
@@ -342,7 +382,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </SnapshotFile>\n')
                 dbCursor.close()
 
-            progress.Update(60, _('Writing Keyword Records'))
+            progress.Update(68, _('Writing Keyword Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT KeywordGroup, Keyword, Definition, LineColorName, LineColorDef, DrawMode, LineWidth, LineStyle FROM Keywords2'
@@ -355,10 +395,10 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </KeywordFile>\n')
                 dbCursor.close()
 
-            progress.Update(67, _('Writing Clip Keyword Records'))
+            progress.Update(73, _('Writing Clip Keyword Records'))
             if db != None:
                 dbCursor = db.cursor()
-                SQLText = 'SELECT EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example FROM ClipKeywords2'
+                SQLText = 'SELECT EpisodeNum, DocumentNum, ClipNum, QuoteNum, SnapshotNum, KeywordGroup, Keyword, Example FROM ClipKeywords2'
                 dbCursor.execute(SQLText)
                 data = dbCursor.fetchall()
                 if len(data) > 0:
@@ -368,7 +408,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </ClipKeywordFile>\n')
                 dbCursor.close()
 
-            progress.Update(73, _('Writing Snapshot Keywords Records'))
+            progress.Update(79, _('Writing Snapshot Keywords Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT SnapshotNum, KeywordGroup, Keyword, x1, y1, x2, y2, visible FROM SnapshotKeywords2'
@@ -381,7 +421,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </SnapshotKeywordFile>\n')
                 dbCursor.close()
 
-            progress.Update(80, _('Writing Snapshot Coding Style Records'))
+            progress.Update(84, _('Writing Snapshot Coding Style Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT SnapshotNum, KeywordGroup, Keyword, DrawMode, LineColorName, LineColorDef, LineWidth, LineStyle '
@@ -395,11 +435,11 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </SnapshotKeywordStyleFile>\n')
                 dbCursor.close()
 
-            progress.Update(87, _('Writing Note Records'))
+            progress.Update(90, _('Writing Note Records'))
             if db != None:
                 dbCursor = db.cursor()
-                SQLText = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, SnapshotNum, TranscriptNum, '
-                SQLText += 'NoteTaker, NoteText FROM Notes2'
+                SQLText = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, SnapshotNum, DocumentNum, '
+                SQLText += 'QuoteNum, TranscriptNum, NoteTaker, NoteText FROM Notes2'
                 dbCursor.execute(SQLText)
                 data = dbCursor.fetchall()
                 if len(data) > 0:
@@ -409,7 +449,7 @@ class XMLExport(Dialogs.GenForm):
                     f.write('  </NoteFile>\n')
                 dbCursor.close()
 
-            progress.Update(93, _('Writing Filter Records'))
+            progress.Update(95, _('Writing Filter Records'))
             if db != None:
                 dbCursor = db.cursor()
                 SQLText = 'SELECT ReportType, ReportScope, ConfigName, FilterDataType, FilterData FROM Filters2'
@@ -466,12 +506,18 @@ class XMLExport(Dialogs.GenForm):
         f.write('\n')
         f.write('  <!ELEMENT Series (#PCDATA|Num|ID|Comment|Owner|DefaultKeywordGroup)*>\n')
         f.write('\n')
-        f.write('  <!ELEMENT EpisodeFile (Episode)*>\n')
+        f.write('  <!ELEMENT DocumentFile (Document)*>\n')
         f.write('\n')
         f.write('  <!ELEMENT SeriesNum (#PCDATA)>\n')
-        f.write('  <!ELEMENT Date (#PCDATA)>\n')
+        f.write('  <!ELEMENT NoteTaker (#PCDATA)>\n')
         f.write('  <!ELEMENT MediaFile (#PCDATA)>\n')
+        f.write('  <!ELEMENT Date (#PCDATA)>\n')
         f.write('  <!ELEMENT Length (#PCDATA)>\n')
+        f.write('  <!ELEMENT XMLText (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Document (#PCDATA|Num|ID|SeriesNum|Author|Comment|MediaFile|Date|Length|XMLText)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT EpisodeFile (Episode)*>\n')
         f.write('\n')
         f.write('  <!ELEMENT Episode (#PCDATA|Num|ID|SeriesNum|Date|MediaFile|Length|Comment)*>\n')
         f.write('\n')
@@ -513,6 +559,19 @@ class XMLExport(Dialogs.GenForm):
         f.write('\n')
         f.write('  <!ELEMENT Collection (#PCDATA|Num|ID|ParentCollectNum|Comment|Owner|DefaultKeywordGroup)*>\n')
         f.write('\n')
+        f.write('  <!ELEMENT QuoteFile (Quote)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT DocumentNum (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT Quote (#PCDATA|Num|ID|CollectNum|DocumentNum|SortOrder|Comment|XMLText)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT QuotePositionFile (QuotePosition)*>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT StartChar (#PCDATA)>\n')
+        f.write('  <!ELEMENT EndChar (#PCDATA)>\n')
+        f.write('\n')
+        f.write('  <!ELEMENT QuotePosition (#PCDATA|Num|DocumentNum|StartChar|EndChar)*>\n')
+        f.write('\n')
         f.write('  <!ELEMENT ClipFile (Clip)*>\n')
         f.write('\n')
         f.write('  <!ELEMENT CollectNum (#PCDATA)>\n')
@@ -552,9 +611,12 @@ class XMLExport(Dialogs.GenForm):
         f.write('\n')
         f.write('  <!ELEMENT ClipKeywordFile (ClipKeyword)*>\n')
         f.write('\n')
+        f.write('  <!ELEMENT DocumentNum (#PCDATA)>\n')
+        f.write('  <!ELEMENT QuoteNum (#PCDATA)>\n')
+        f.write('  <!ELEMENT SnapshotNum (#PCDATA)>\n')
         f.write('  <!ELEMENT Example (#PCDATA)>\n')
         f.write('\n')
-        f.write('  <!ELEMENT ClipKeyword (#PCDATA|EpisodeNum|ClipNum|KeywordGroup|Keyword|Example)*>\n')
+        f.write('  <!ELEMENT ClipKeyword (#PCDATA|EpisodeNum|DocumentNum|ClipNum|QuoteNum|SnapshotNum|KeywordGroup|Keyword|Example)*>\n')
         f.write('\n')
         f.write('  <!ELEMENT SnapshotKeywordFile (SnapshotKeyword)*>\n')
         f.write('\n')
@@ -572,7 +634,6 @@ class XMLExport(Dialogs.GenForm):
         f.write('\n')
         f.write('  <!ELEMENT NoteFile (Note)*>\n')
         f.write('\n')
-        f.write('  <!ELEMENT NoteTaker (#PCDATA)>\n')
         f.write('  <!ELEMENT NoteText (#PCDATA)>\n')
         f.write('\n')
         f.write('  <!ELEMENT Note (#PCDATA|Num|ID|SeriesNum|EpisodeNum|CollectNum|ClipNum|TranscriptNum|NoteTaker|NoteText)*>\n')
@@ -622,6 +683,105 @@ class XMLExport(Dialogs.GenForm):
             f.write('        %s\n' % self.Escape(DefaultKeywordGroup.encode(EXPORT_ENCODING)))
             f.write('      </DefaultKeywordGroup>\n')
         f.write('    </Series>\n')
+
+    def WriteDocumentRec(self, f, progress, documentRec):
+        (DocumentNum, DocumentID, LibraryNum, Author, Comment, ImportedFile, ImportDate, DocumentLength, XMLText) = documentRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            DocumentID = DBInterface.ProcessDBDataForUTF8Encoding(DocumentID)
+            Author = DBInterface.ProcessDBDataForUTF8Encoding(Author)
+            Comment = DBInterface.ProcessDBDataForUTF8Encoding(Comment)
+            ImportedFile = DBInterface.ProcessDBDataForUTF8Encoding(ImportedFile)
+
+        f.write('    <Document>\n')
+        f.write('      <Num>\n')
+        f.write('        %s\n' % DocumentNum)
+        f.write('      </Num>\n')
+        f.write('      <ID>\n')
+        f.write('        %s\n' % self.Escape(DocumentID.encode(EXPORT_ENCODING)))
+
+        if DEBUG:
+            try:
+                print "Document ID ", DocumentID
+            except:
+                print "Document Number ", DocumentNum
+                
+        f.write('      </ID>\n')
+        f.write('      <SeriesNum>\n')
+        f.write('        %s\n' % LibraryNum)
+        f.write('      </SeriesNum>\n')
+        if (Author != None) and (Author != ''):
+            f.write('      <NoteTaker>\n')
+            f.write('        %s\n' % self.Escape(Author.encode(EXPORT_ENCODING)))
+            f.write('      </NoteTaker>\n')
+        if (Comment != None) and (Comment != ''):
+            f.write('      <Comment>\n')
+            f.write('        %s\n' % self.Escape(Comment.encode(EXPORT_ENCODING)))
+            f.write('      </Comment>\n')
+        if (ImportedFile != None) and (ImportedFile != ''):
+            f.write('      <MediaFile>\n')
+            f.write('        %s\n' % self.Escape(ImportedFile.encode(EXPORT_ENCODING)))
+            f.write('      </MediaFile>\n')
+        if ImportDate != None:
+            f.write('      <Date>\n')
+            f.write('        %s\n' % ImportDate)
+            f.write('      </Date>\n')
+        if (DocumentLength != '') and (DocumentLength > 0):
+            f.write('      <Length>\n')
+            f.write('        %s\n' % DocumentLength)
+            f.write('      </Length>\n')
+        if XMLText != '':
+            # Extract the XML Text from the DB's array structure, if needed
+            # Okay, this isn't so straight-forward any more.
+            # With MySQL for Python 0.9.x, XMLText is of type str.
+            # With MySQL for Python 1.2.0, XMLText is of type array.  It could then either be a
+            # character string (typecode == 'c') or a unicode string (typecode == 'u'), which then
+            # need to be interpreted differently.
+            if type(XMLText).__name__ == 'array':
+                if XMLText.typecode == 'u':
+                    XMLText = XMLText.tounicode()
+                else:
+                    XMLText = XMLText.tostring()
+            elif isinstance(XMLText, unicode):
+
+                XMLText = XMLText.encode('utf8')
+                
+            f.write('      <XMLText>\n')
+
+            if DEBUG2:
+                print "type(XMLText) =", type(XMLText),
+
+            # Unlike with Transcripts, we should *ALWAYS* have XML Text here
+            if (type(XMLText).__name__ != 'NoneType') and (len(XMLText) > 5) and (XMLText[:5].upper() == '<?XML'):
+
+                if DEBUG2:
+                    print "XML Type"
+                    
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt1 = unicode(_('Writing Document Records  (This will seem slow because of the size of the Document Records.)'), 'utf8')
+                prompt2 = '\n' + unicode(_('Exporting %s'), 'utf8')
+
+                progress.Update(11, prompt1 + prompt2 % DocumentID)
+                progress.Refresh()
+
+                # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
+                xmlData = XMLText[39:]
+
+            # now simply write the XML data to the file.  (This does NOT need to be encoded, as the XML already is!)
+            # (but check to make sure there's actually XML data there!)
+            if xmlData != None:
+                f.write('%s' % xmlData.rstrip())
+            # ... add an extra line break here!
+            f.write('\n')
+            f.write('      </XMLText>\n')
+
+            # On exporting old, huge databases, you can end up with hundreds of "Importing" popups.
+            # This hopefully will allow them to close properly rather than building up.
+            wx.YieldIfNeeded()
+
+        f.write('    </Document>\n')
 
     def WriteEpisodeRec(self, f, episodeRec):
         (EpisodeNum, EpisodeID, SeriesNum, TapingDate, MediaFile, EpLength, EpComment) = episodeRec
@@ -786,6 +946,108 @@ class XMLExport(Dialogs.GenForm):
             f.write('        %s\n' % self.Escape(DefaultKeywordGroup.encode(EXPORT_ENCODING)))
             f.write('      </DefaultKeywordGroup>\n')
         f.write('    </Collection>\n')
+
+    def WriteQuoteRec(self, f, quoteRec):
+        (QuoteNum, QuoteID, CollectNum, SourceDocumentNum, SortOrder, Comment, XMLText) = quoteRec
+
+        # If we're encoding things (for 1.8 format) and we're using MySQL ...
+        if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+            # ... encode the value
+            QuoteID = DBInterface.ProcessDBDataForUTF8Encoding(QuoteID)
+            Comment = DBInterface.ProcessDBDataForUTF8Encoding(Comment)
+
+        f.write('    <Quote>\n')
+        f.write('      <Num>\n')
+        f.write('        %s\n' % QuoteNum)
+        f.write('      </Num>\n')
+        f.write('      <ID>\n')
+        f.write('        %s\n' % self.Escape(QuoteID.encode(EXPORT_ENCODING)))
+        f.write('      </ID>\n')
+        if CollectNum != None:
+            f.write('      <CollectNum>\n')
+            f.write('        %s\n' % CollectNum)
+            f.write('      </CollectNum>\n')
+        if SourceDocumentNum != None:
+            f.write('      <DocumentNum>\n')
+            f.write('        %s\n' % SourceDocumentNum)
+            f.write('      </DocumentNum>\n')
+        if (SortOrder != '') and (SortOrder != 0):
+            f.write('      <SortOrder>\n')
+            f.write('        %s\n' % SortOrder)
+            f.write('      </SortOrder>\n')
+        if Comment != '':
+            f.write('      <Comment>\n')
+            f.write('        %s\n' % self.Escape(Comment.encode(EXPORT_ENCODING)))
+            f.write('      </Comment>\n')
+        if XMLText != '':
+            # Extract the XML Text from the DB's array structure, if needed
+            # Okay, this isn't so straight-forward any more.
+            # With MySQL for Python 0.9.x, XMLText is of type str.
+            # With MySQL for Python 1.2.0, XMLText is of type array.  It could then either be a
+            # character string (typecode == 'c') or a unicode string (typecode == 'u'), which then
+            # need to be interpreted differently.
+            if type(XMLText).__name__ == 'array':
+                if XMLText.typecode == 'u':
+                    XMLText = XMLText.tounicode()
+                else:
+                    XMLText = XMLText.tostring()
+            elif isinstance(XMLText, unicode):
+
+                XMLText = XMLText.encode('utf8')
+                
+            f.write('      <XMLText>\n')
+
+            if DEBUG2:
+                print "type(XMLText) =", type(XMLText),
+
+            # Unlike with Transcripts, we should *ALWAYS* have XML Text here
+            if (type(XMLText).__name__ != 'NoneType') and (len(XMLText) > 5) and (XMLText[:5].upper() == '<?XML'):
+
+                if DEBUG2:
+                    print "XML Type"
+                    
+##                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+##                prompt1 = unicode(_('Writing Document Records  (This will seem slow because of the size of the Document Records.)'), 'utf8')
+##                prompt2 = '\n' + unicode(_('Exporting %s'), 'utf8')
+
+##                progress.Update(11, prompt1 + prompt2 % DocumentID)
+##                progress.Refresh()
+
+                # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
+                xmlData = XMLText[39:]
+
+            # now simply write the XML data to the file.  (This does NOT need to be encoded, as the XML already is!)
+            # (but check to make sure there's actually XML data there!)
+            if xmlData != None:
+                f.write('%s' % xmlData.rstrip())
+            # ... add an extra line break here!
+            f.write('\n')
+            f.write('      </XMLText>\n')
+
+            # On exporting old, huge databases, you can end up with hundreds of "Importing" popups.
+            # This hopefully will allow them to close properly rather than building up.
+            wx.YieldIfNeeded()
+
+        f.write('    </Quote>\n')
+
+    def WriteQuotePosRec(self, f, quotePosRec):
+        (QuoteNum, DocumentNum, StartChar, EndChar) = quotePosRec
+
+        f.write('    <QuotePosition>\n')
+        f.write('      <Num>\n')
+        f.write('        %s\n' % QuoteNum)
+        f.write('      </Num>\n')
+        if (DocumentNum != None) and (DocumentNum > 0):
+            f.write('      <DocumentNum>\n')
+            f.write('        %s\n' % DocumentNum)
+            f.write('      </DocumentNum>\n')
+        f.write('      <StartChar>\n')
+        f.write('        %s\n' % StartChar)
+        f.write('      </StartChar>\n')
+        f.write('      <EndChar>\n')
+        f.write('        %s\n' % EndChar)
+        f.write('      </EndChar>\n')
+        f.write('    </QuotePosition>\n')
 
     def WriteClipRec(self, f, clipRec):
         (ClipNum, ClipID, CollectNum, EpisodeNum, MediaFile, ClipStart, ClipStop, ClipOffset, ClipAudio, ClipComment, SortOrder) = clipRec
@@ -1028,15 +1290,11 @@ class XMLExport(Dialogs.GenForm):
                 if DEBUG2:
                     print "XML Type"
                     
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
-                    prompt2 = '\n' + unicode(_('Exporting %s'), 'utf8')
-                else:
-                    prompt1 = _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)')
-                    prompt2 = '\n' + _('Exporting %s')
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
+                prompt2 = '\n' + unicode(_('Exporting %s'), 'utf8')
 
-                progress.Update(47, prompt1 + prompt2 % TranscriptID)
+                progress.Update(56, prompt1 + prompt2 % TranscriptID)
                 progress.Refresh()
 
                 # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
@@ -1047,15 +1305,11 @@ class XMLExport(Dialogs.GenForm):
                 if DEBUG2:
                     print "RTF Type"
                     
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
-                    prompt2 = unicode(_('\nConverting %s'), 'utf8')
-                else:
-                    prompt1 = _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)')
-                    prompt2 = _('\nConverting %s')
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
+                prompt2 = unicode(_('\nConverting %s'), 'utf8')
 
-                progress.Update(47, prompt1 + prompt2 % TranscriptID)
+                progress.Update(56, prompt1 + prompt2 % TranscriptID)
 
                 # If RTF  ...
                 # If we're using the RichTextCtrl ...
@@ -1081,16 +1335,12 @@ class XMLExport(Dialogs.GenForm):
 
                 if DEBUG2:
                     print "STC Type"
-                    
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
-                    prompt2 = unicode(_('\nConverting %s'), 'utf8')
-                else:
-                    prompt1 = _('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)')
-                    prompt2 = _('\nConverting %s')
 
-                progress.Update(47, prompt1 + prompt2 % TranscriptID)
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt1 = unicode(_('Writing Transcript Records  (This will seem slow because of the size of the Transcript Records.)'), 'utf8')
+                prompt2 = unicode(_('\nConverting %s'), 'utf8')
+
+                progress.Update(56, prompt1 + prompt2 % TranscriptID)
 
                 # unpickle the text and style info
                 (bufferContents, specs, attrs) = pickle.loads(RTFText)
@@ -1201,7 +1451,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('    </KeywordRec>\n')
 
     def WriteClipKeywordRec(self, f, clipKeywordRec):
-        (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example) = clipKeywordRec
+        (EpisodeNum, DocumentNum, ClipNum, QuoteNum, SnapshotNum, KeywordGroup, Keyword, Example) = clipKeywordRec
 
         # If we're encoding things (for 1.8 format) and we're using MySQL ...
         if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
@@ -1214,10 +1464,18 @@ class XMLExport(Dialogs.GenForm):
             f.write('      <EpisodeNum>\n')
             f.write('        %s\n' % EpisodeNum)
             f.write('      </EpisodeNum>\n')
+        if (DocumentNum != '') and (DocumentNum != 0):
+            f.write('      <DocumentNum>\n')
+            f.write('        %s\n' % DocumentNum)
+            f.write('      </DocumentNum>\n')
         if (ClipNum != '') and (ClipNum != 0):
             f.write('      <ClipNum>\n')
             f.write('        %s\n' % ClipNum)
             f.write('      </ClipNum>\n')
+        if (QuoteNum != '') and (QuoteNum != 0):
+            f.write('      <QuoteNum>\n')
+            f.write('        %s\n' % QuoteNum)
+            f.write('      </QuoteNum>\n')
         if (SnapshotNum != '') and (SnapshotNum != 0):
             f.write('      <SnapshotNum>\n')
             f.write('        %s\n' % SnapshotNum)
@@ -1228,7 +1486,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('      <Keyword>\n')
         f.write('        %s\n' % self.Escape(Keyword.encode(EXPORT_ENCODING)))
         f.write('      </Keyword>\n')
-        if (Example != '') and (Example != 0):
+        if (Example != '') and (Example != 0) and (Example != u'0'):
             f.write('      <Example>\n')
             f.write('        %s\n' % Example)
             f.write('      </Example>\n')
@@ -1308,7 +1566,8 @@ class XMLExport(Dialogs.GenForm):
         f.write('    </SnapshotKeywordStyle>\n')
 
     def WriteNoteRec(self, f, noteRec):
-        (NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, SnapshotNum, TranscriptNum, NoteTaker, NoteText) = noteRec
+        (NoteNum, NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, SnapshotNum, DocumentNum, QuoteNum, TranscriptNum, \
+         NoteTaker, NoteText) = noteRec
 
         # If we're encoding things (for 1.8 format) and we're using MySQL ...
         if ENCODE_PROPERLY and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
@@ -1324,7 +1583,7 @@ class XMLExport(Dialogs.GenForm):
         f.write('      <ID>\n')
         f.write('        %s\n' % self.Escape(NoteID.encode(EXPORT_ENCODING)))
         f.write('      </ID>\n')
-        # Note Series Numbers could be None instead of 0.
+        # Note Library Numbers could be None instead of 0.
         if (SeriesNum != 0) and (SeriesNum != None):
             f.write('      <SeriesNum>\n')
             f.write('        %s\n' % SeriesNum)
@@ -1344,6 +1603,16 @@ class XMLExport(Dialogs.GenForm):
             f.write('      <ClipNum>\n')
             f.write('        %s\n' % ClipNum)
             f.write('      </ClipNum>\n')
+        # Note Document Numbers could be None instead of 0.
+        if (DocumentNum != 0) and (DocumentNum != None):
+            f.write('      <DocumentNum>\n')
+            f.write('        %s\n' % DocumentNum)
+            f.write('      </DocumentNum>\n')
+        # Note Quote Numbers could be None instead of 0.
+        if (QuoteNum != 0) and (QuoteNum != None):
+            f.write('      <QuoteNum>\n')
+            f.write('        %s\n' % QuoteNum)
+            f.write('      </QuoteNum>\n')
         # Note Snapshot Numbers could be None instead of 0.
         if (SnapshotNum != 0) and (SnapshotNum != None):
             f.write('      <SnapshotNum>\n')
@@ -1440,8 +1709,8 @@ class XMLExport(Dialogs.GenForm):
             # unpickling and repickling the data.  We're converting it to a form that's more friendly for output.
 
             # For FilterDataTypes for Episodes (1), Clips (2), Keywords(3), Keyword Groups (5), Transcripts (6),
-            # and Collection (7), we have LIST data to process.
-            if FilterDataType in [1, 2, 3, 5, 6, 7]:
+            # Collection (7), Notes(8), Snapshots (18), Documents (19), or Quotes (20), we have LIST data to process.
+            if FilterDataType in [1, 2, 3, 5, 6, 7, 8, 18, 19, 20]:
                 # Initialize the fileterDataList to None, in case there's an unpickling error
                 filterDataList = None
                 # Because of the BLOB size problem, some filter data may not unpickle correctly.  Better trap it.
@@ -1470,21 +1739,21 @@ class XMLExport(Dialogs.GenForm):
                     elif ReportType == 2:
                         errorMsg += "   (" + _("Keyword Visualization") + ")"
                     elif ReportType == 3:
-                        errorMsg += "   (" + _("Episode Clip Data Export") + ")"
+                        errorMsg += "   (" + _("Episode Analytic Data Export") + ")"
                     elif ReportType == 4:
-                        errorMsg += "   (" + _("Collection Clip Data Export") + ")"
+                        errorMsg += "   (" + _("Collection Analytic Data Export") + ")"
                     elif ReportType == 5:
-                        errorMsg += "   (" + _("Series Keyword Sequence Map") + ")"
+                        errorMsg += "   (" + _("Library Keyword Sequence Map") + ")"
                     elif ReportType == 6:
-                        errorMsg += "   (" + _("Series Keyword Bar Graph") + ")"
+                        errorMsg += "   (" + _("Library Keyword Bar Graph") + ")"
                     elif ReportType == 7:
-                        errorMsg += "   (" + _("Series Keyword Percentage Map") + ")"
+                        errorMsg += "   (" + _("Library Keyword Percentage Map") + ")"
                     elif ReportType == 8:
-                        errorMsg += "   (" + _("Episode Clip Data Coder Reliability Export") + ")"
+                        errorMsg += "   (" + _("Episode  Data Coder Reliability Export") + ")"
                     elif ReportType == 9:
                         errorMsg += "   (" + _("Keyword Summary Report") + ")"
                     elif ReportType == 10:
-                        errorMsg += "   (" + _("Series Report") + ")"
+                        errorMsg += "   (" + _("Library Report") + ")"
                     elif ReportType == 11:
                         errorMsg += "   (" + _("Episode Report") + ")"
                     elif ReportType == 12:
@@ -1492,16 +1761,26 @@ class XMLExport(Dialogs.GenForm):
                     elif ReportType == 13:
                         errorMsg += "   (" + _("Notes Report") + ")"
                     elif ReportType == 14:
-                        errorMsg += "   (" + _("Series Clip Data Export") + ")"
+                        errorMsg += "   (" + _("Library Analytic Data Export") + ")"
                     elif ReportType == 15:
                         errorMsg += "   (" + _("Saved Search") + ")"
+                    elif ReportType == 16:
+                        errorMsg += "   (" + _("Collection Keyword Map") + ")"
+                    elif ReportType == 17:
+                        errorMsg += "   (" + _("Document Keyword Map") + ")"
+                    elif ReportType == 18:
+                        errorMsg += "   (" + _("Document Keyword Visualization") + ")"
+                    elif ReportType == 19:
+                        errorMsg += "   (" + _("Document Report") + ")"
+                    elif ReportType == 20:
+                        errorMsg += "   (" + _("Document Analytic Data Export") + ")"
                     errorMsg += "\n"
                     # Tell the user which data object is having a problem.
                     errorMsg += "  " + _("ReportScope:     %s")
                     if ReportType in [5, 6, 7, 10, 14]:
-                        import Series
-                        tempSeries = Series.Series(ReportScope)
-                        errorMsg += "  (" + _("Series") + ' "%s")' % tempSeries.id
+                        import Library
+                        tempLibrary = Library.Library(ReportScope)
+                        errorMsg += "  (" + _('Library') + ' "%s")' % tempLibrary.id
                     elif ReportType in [1, 2, 3, 8, 11]:
                         import Episode
                         tempEpisode = Episode.Episode(ReportScope)
@@ -1515,7 +1794,7 @@ class XMLExport(Dialogs.GenForm):
                         if ReportScope == 1:
                             errorMsg += "  " + _("(All Notes)")
                         elif ReportScope == 2:
-                            errorMsg += "  " + _("(Series Notes)")
+                            errorMsg += "  " + _("(Library Notes)")
                         elif ReportScope == 3:
                             errorMsg += "  " + _("(Episode Notes)")
                         elif ReportScope == 4:
@@ -1524,6 +1803,17 @@ class XMLExport(Dialogs.GenForm):
                             errorMsg += "  " + _("(Collection Notes)")
                         elif ReportScope == 6:
                             errorMsg += "  " + _("(Clip Notes)")
+                        elif ReportScope == 7:
+                            errorMsg += "  " + _("(Snapshot Notes)")
+                        elif ReportScope == 8:
+                            errorMsg += "  " + _("(Document Notes)")
+                        elif ReportScope == 9:
+                            errorMsg += "  " + _("(Quote Notes)")
+                    elif ReportType in [17, 18, 19, 20]:
+                        if ReportScope > 0:
+                            import Document
+                            tempDocument = Document.Document(ReportScope)
+                            errorMsg += "  (" + _("Document") + ' "%s")' % tempDocument.id
                     errorMsg += "\n"
                     # Tell the user which config file is having the problem.
                     errorMsg += "  " + _("ConfigName:      %s") + "\n"
@@ -1539,6 +1829,12 @@ class XMLExport(Dialogs.GenForm):
                         errorMsg += "   (" + _("Keyword Colors") + ")"
                     elif FilterDataType == 8:
                         errorMsg += "   (" + _("Notes") + ")"
+                    elif FilterDataType == 18:
+                        errorMsg += "   (" + _("Snapshots") + ")"
+                    elif FilterDataType == 19:
+                        errorMsg += "   (" + _("Documents") + ")"
+                    elif FilterDataType == 20:
+                        errorMsg += "   (" + _("Quotes") + ")"
                     errorMsg += "\n\n"
                     errorMsg += _("This Filter Configuration needs to be corrected or the data record needs to be removed from the export file.")
                     # Convert the error message to Unicode
@@ -1574,8 +1870,8 @@ class XMLExport(Dialogs.GenForm):
                 else:
                     filterDataList = FilterData
 
-            # If we have data from FilterDataTypes 1, 2, 3, 5, 6, or 7 ...
-            if FilterDataType in [1, 2, 3, 5, 6, 7]:
+            # If we have data from FilterDataTypes 1, 2, 3, 5, 6, 7, 8, 18, 19, 20 ...
+            if FilterDataType in [1, 2, 3, 5, 6, 7, 8, 18, 19, 20]:
                 # ... we need to re-pickle the data
                 FilterData = cPickle.dumps(filterDataList)
             # Otherwise ...

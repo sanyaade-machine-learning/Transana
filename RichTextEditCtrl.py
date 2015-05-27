@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -131,11 +131,6 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         stc.EVT_STC_UPDATEUI(self, id, self.OnUpdateUI)
         # STC Modified event
         stc.EVT_STC_MODIFIED(self, id, self.OnModified)
-        # Remove Drag-and-Drop reference on the Mac due to the Quicktime Drag-Drop bug.
-        # (On the Mac, any use of Drag and Drop causes the Video Component to jump to the wrong
-        #  Window!  Therefore, we must disable Drag and Drop wherever we can on the Mac.)
-        if (not TransanaConstants.macDragDrop) and ("__WXMAC__" in wx.PlatformInfo):
-            stc.EVT_STC_START_DRAG(self, id, self.OnKillDrag)
 
         # Initialzations:
         # We need to know if a style has been changed, as this can indicate the need for a Save.
@@ -1481,14 +1476,6 @@ class RichTextEditCtrl(stc.StyledTextCtrl):
         # Note: No modifications may be performed when servicing this event!
         if event.GetModificationType() & wx.stc.STC_MOD_CHANGESTYLE:
             self.stylechange = 1
-
-    # Remove Drag-and-Drop reference on the Mac due to the Quicktime Drag-Drop bug
-    if not TransanaConstants.macDragDrop and ("__WXMAC__" in wx.PlatformInfo):
-        def OnKillDrag(self, event):
-            """ This method KILLS Drag-and-Drop functionality on the Mac. """
-            # According to Robin Dunn, the way to kill Drag-and-Drop in the wxSTC is to blank out the Drag Text
-            # He notes that this is an undocumented "hidden feature" of the START_DRAG event
-            event.SetDragText("")
 
     def SetSavePoint(self):
         """Override the existing SetSavePoint to account for style changes."""

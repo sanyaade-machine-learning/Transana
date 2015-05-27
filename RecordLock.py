@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -41,7 +41,7 @@ class RecordLock(wx.Dialog):
         # Get the username from the TransanaGlobal module
         self.userName = TransanaGlobal.userName
         # Define the main Frame for the Chat Window
-        wx.Dialog.__init__(self, parent, -1, title, size = (710,450), style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER|wx.NO_FULL_REPAINT_ON_RESIZE)
+        wx.Dialog.__init__(self, parent, -1, title, size = (710,650), style=wx.DEFAULT_DIALOG_STYLE|wx.RESIZE_BORDER|wx.NO_FULL_REPAINT_ON_RESIZE)
         # Set the background to White
         self.SetBackgroundColour(wx.WHITE)
         # To look right, the Mac needs the Small Window Variant.
@@ -196,7 +196,7 @@ class RecordLock(wx.Dialog):
         # Start by clearing the list of users with locks that can be cleared.
         self.usersWithLocksThatCanBeCleared.Clear()
         # Determine if the user currently has a Transcript in Edit Mode.
-        inReadOnlyMode = TransanaGlobal.menuWindow.ControlObject.TranscriptWindow[TransanaGlobal.menuWindow.ControlObject.activeTranscript].dlg.editor.get_read_only()
+        inReadOnlyMode = TransanaGlobal.menuWindow.ControlObject.TranscriptWindow.dlg.editor.get_read_only()
         # If the current user has records locked and if there is only one instance of the current user 
         # in the UserName list, then allow the user to unlock his/her own records.  If there are multiple
         # instances of the current user's account in use, we better not clear ANY locks for this user.

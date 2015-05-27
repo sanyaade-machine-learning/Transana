@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -56,9 +56,7 @@ class ErrorDialog(wx.Dialog):
         box2 = wx.BoxSizer(wx.HORIZONTAL)
 
         # Display the Error graphic in the dialog box
-        bitmap = wx.EmptyBitmap(32, 32)
-        bitmap = wx.ArtProvider_GetBitmap(wx.ART_ERROR, wx.ART_MESSAGE_BOX, (32, 32))
-        graphic = wx.StaticBitmap(self, -1, bitmap)
+        graphic = wx.StaticBitmap(self, -1, TransanaImages.ArtProv_ERROR.GetBitmap())
         # Add the graphic to the Sizers
         box2.Add(graphic, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, 10)
 
@@ -91,7 +89,9 @@ class ErrorDialog(wx.Dialog):
         # Perform the Layout
         self.Layout()
         # Center the dialog on the screen
-        self.CentreOnScreen()
+#        self.CentreOnScreen()
+        # That's not working.  Let's try this ...
+        TransanaGlobal.CenterOnPrimary(self)
 
     def GetSkipCheck(self):
         """ Provide the value of the Skip Checkbox """
@@ -127,9 +127,7 @@ class InfoDialog(wx.MessageDialog):
         box2 = wx.BoxSizer(wx.HORIZONTAL)
 
         # Display the Information graphic in the dialog box
-        bitmap = wx.EmptyBitmap(32, 32)
-        bitmap = wx.ArtProvider_GetBitmap(wx.ART_INFORMATION, wx.ART_MESSAGE_BOX, (32, 32))
-        graphic = wx.StaticBitmap(self, -1, bitmap)
+        graphic = wx.StaticBitmap(self, -1, TransanaImages.ArtProv_INFORMATION.GetBitmap())
         # Add the graphic to the Sizers
         box2.Add(graphic, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, 10)
         
@@ -156,7 +154,9 @@ class InfoDialog(wx.MessageDialog):
         # Perform the Layout
         self.Layout()
         # Center the dialog on the screen
-        self.CentreOnScreen()
+#        self.CentreOnScreen()
+        # That's not working.  Let's try this ...
+        TransanaGlobal.CenterOnPrimary(self)
 
 
 class QuestionDialog(wx.MessageDialog):
@@ -202,10 +202,8 @@ class QuestionDialog(wx.MessageDialog):
 
         # Create an empty bitmap for the question mark graphic
         bitmap = wx.EmptyBitmap(32, 32)
-        # Get the Question mark graphic and put it in the bitmap
-        bitmap = wx.ArtProvider_GetBitmap(wx.ART_QUESTION, wx.ART_MESSAGE_BOX, (32, 32))
         # Create a bitmap screen object for the graphic
-        graphic = wx.StaticBitmap(self, -1, bitmap)
+        graphic = wx.StaticBitmap(self, -1, TransanaImages.ArtProv_QUESTION.GetBitmap())
         # Add the graphic to the first row horizontal sizer
         box2.Add(graphic, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, 10)
 
@@ -324,7 +322,9 @@ class QuestionDialog(wx.MessageDialog):
         # Lay the form out
         self.Layout()
         # Center the form on screen
-        self.CentreOnScreen()
+#        self.CentreOnScreen()
+        # That's not working.  Let's try this ...
+        TransanaGlobal.CenterOnPrimary(self)
 
     def OnButton(self, event):
         """ Button Event Handler """
@@ -362,9 +362,7 @@ class PopupDialog(wx.Dialog):
         box = wx.BoxSizer(wx.VERTICAL)
         box2 = wx.BoxSizer(wx.HORIZONTAL)
         # Add an Info graphic
-        bitmap = wx.EmptyBitmap(32, 32)
-        bitmap = wx.ArtProvider_GetBitmap(wx.ART_INFORMATION, wx.ART_MESSAGE_BOX, (32, 32))
-        graphic = wx.StaticBitmap(self, -1, bitmap)
+        graphic = wx.StaticBitmap(self, -1, TransanaImages.ArtProv_INFORMATION.GetBitmap())
         box2.Add(graphic, 0, wx.EXPAND | wx.ALIGN_CENTER | wx.ALL, 10)
         # Add the message
         message = wx.StaticText(self, -1, msg)
@@ -697,84 +695,144 @@ class GenForm(wx.Dialog):
 
         return new
 
-        
+
 
 ########################################
 # Miscellaneous dialog functions
 ########################################
 
-def add_kw_group_ui(parent, kw_groups):
-    """User interface dialog and logic for adding a new keyword group.
-    Return the name of the new keyword group to add, or None if cancelled."""
+class add_kw_group_ui(wx.Dialog):
+    """ User interface dialog and logic for adding a new keyword group. """
 
-    # ALSO SEE Keyword._set_keywordGroup().  The same errors are caught there.
+    def __init__(self, parent, kw_groups):
 
-    # initialize local variables
-    s = ""
-    ok = False
+        # ALSO SEE Keyword._set_keywordGroup().  The same errors are caught there.
 
-    # Let's get a copy of kw_groups that's all upper case
-    kw_groups_upper = []
-    for kwg in kw_groups:
-        kw_groups_upper.append(kwg.upper())
+        # Let's get a copy of kw_groups that's all upper case
+        self.kw_groups_upper = []
+        for kwg in kw_groups:
+            self.kw_groups_upper.append(kwg.upper())
 
-    # Repeat until no error is found
-    while not ok:
-        # Get a Keyword Group name from the user
-        s = string.strip(wx.GetTextFromUser(_("New Keyword Group:"), _("Add Keyword Group"), s))
+        # Define the default Window style
+        dlgStyle = wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP | wx.DIALOG_NO_PARENT
+        # Create a small dialog box
+        wx.Dialog.__init__(self, parent, -1, _("Add Keyword Group"), size=(350, 145), style=dlgStyle)
+        # Create a main vertical sizer
+        box = wx.BoxSizer(wx.VERTICAL)
+        # Create a horizontal sizer for the buttons
+        boxButtons = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Check (case-insensitively) whether the Keyword Group already exists.
-        if kw_groups_upper.count(s.upper()) != 0:
-            msg = _('A Keyword Group by that name already exists.')
-            dlg = ErrorDialog(parent, msg)
+        # Create a text screen object for the dialog text
+        message = wx.StaticText(self, -1, _("New Keyword Group:"))
+        # Add the first row to the main sizer
+        box.Add(message, 0, wx.EXPAND | wx.ALL, 10)
+
+        # Create a TextCtrl for the Keyword Group name
+        self.kwGroup = wx.TextCtrl(self, -1, "")
+        box.Add(self.kwGroup, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        # Do error-checking in the EVT_TEXT event
+        self.kwGroup.Bind(wx.EVT_TEXT, self.OnText)
+
+        # Create the first button, which is OK
+        btnOK = wx.Button(self, wx.ID_OK, _("OK"))
+        # Set as the Default to handle ENTER keypress
+        btnOK.SetDefault()
+        # Bind the button event to its method
+        btnOK.Bind(wx.EVT_BUTTON, self.OnButton)
+
+        # Create the second button, which is Cancel
+        btnCancel = wx.Button(self, wx.ID_CANCEL, _("Cancel"))
+        # Add an expandable spacer to the button sizer
+        boxButtons.Add((20,1), 1)
+        # If we're on the Mac, we want Cancel then OK
+        if "__WXMAC__" in wx.PlatformInfo:
+            # Add No first
+            boxButtons.Add(btnCancel, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+            # Add a spacer
+            boxButtons.Add((20,1))
+            # Then add Yes
+            boxButtons.Add(btnOK, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        # If we're not on the Mac, we want OK then Cancel
+        else:
+            # Add Yes first
+            boxButtons.Add(btnOK, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+            # Add a spacer
+            boxButtons.Add((20,1))
+            # Then add No
+            boxButtons.Add(btnCancel, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        # Add a final expandable spacer
+        boxButtons.Add((20,1), 1)
+        # Add the button bar to the main sizer
+        box.Add(boxButtons, 0, wx.ALIGN_RIGHT | wx.EXPAND)
+
+        # Turn AutoLayout On
+        self.SetAutoLayout(True)
+        # Set the form's main sizer
+        self.SetSizer(box)
+        # Fit the form
+        self.Fit()
+        # Lay the form out
+        self.Layout()
+        # Center the form on screen
+    #        self.CentreOnScreen()
+        # That's not working.  Let's try this ...
+        TransanaGlobal.CenterOnPrimary(self)
+
+
+    def OnText(self, event):
+
+        text = self.kwGroup.GetValue()
+        # Parentheses are not allowed
+        if '(' in text or ')' in text:
+            text = text.replace('(', '')
+            text = text.replace(')', '')
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Keyword Groups cannot contain parenthesis characters.'), 'utf8')
+            dlg = ErrorDialog(None, prompt)
             dlg.ShowModal()
             dlg.Destroy()
+            self.kwGroup.SetValue(text)
+            self.kwGroup.SetInsertionPointEnd()
+            self.kwGroup.SetFocus()
+
+        # Colons are not allowed in Keyword Groups.  Remove them if necessary.
+        if ':' in text:
+            text = text.replace(':', '')
+            msg = unicode(_('You may not use a colon (":") in the Keyword Group name.'), 'utf8')
+            dlg = ErrorDialog(None, msg)
+            dlg.ShowModal()
+            dlg.Destroy()
+            self.kwGroup.SetValue(text)
+            self.kwGroup.SetInsertionPointEnd()
+            self.kwGroup.SetFocus()
+
+        # Let's make sure we don't exceed the maximum allowed length for a Keyword Group.
+        # First, let's see what the max length is.
+        maxLen = TransanaGlobal.maxKWGLength
+        # Check to see if we've exceeded the max length
+        if len(text) > maxLen:
+            ip = self.kwGroup.GetInsertionPoint()
+            # If so, truncate the Keyword Group
+            text = text[:maxLen]
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            msg = unicode(_('Keyword Group is limited to %d characters.'), 'utf8')
+            dlg = ErrorDialog(None, msg % maxLen)
+            dlg.ShowModal()
+            dlg.Destroy()
+            self.kwGroup.SetValue(text)
+            self.kwGroup.SetInsertionPoint(ip)
+            self.kwGroup.SetFocus()
+
+    def OnButton(self, event):
+        text = self.kwGroup.GetValue()
+        # Check (case-insensitively) whether the Keyword Group already exists.
+        if self.kw_groups_upper.count(text.upper()) != 0:
+            msg = _('A Keyword Group by that name already exists.')
+            dlg = ErrorDialog(None, msg)
+            dlg.ShowModal()
+            dlg.Destroy()
+            self.kwGroup.SetFocus()
         else:
-            # Make sure parenthesis characters are not allowed in Keyword Group.  Remove them if necessary.
-            if (s.find('(') > -1) or (s.find(')') > -1):
-                s = s.replace('(', '')
-                s = s.replace(')', '')
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    prompt = unicode(_('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".'), 'utf8')
-                else:
-                    prompt = _('Keyword Groups cannot contain parenthesis characters.\nYour Keyword Group has been renamed to "%s".')
-                dlg = ErrorDialog(None, prompt % s)
-                dlg.ShowModal()
-                dlg.Destroy()
-                
-            # Colons are not allowed in Keyword Groups.  Remove them if necessary.
-            if s.find(":") > -1:
-                s = s.replace(':', '')
-                if 'unicode' in wx.PlatformInfo:
-                    msg = unicode(_('You may not use a colon (":") in the Keyword Group name.  Your Keyword Group has been changed to\n"%s"'), 'utf8')
-                else:
-                    msg = _('You may not use a colon (":") in the Keyword Group name.  Your Keyword Group has been changed to\n"%s"')
-                dlg = ErrorDialog(parent, msg % s)
-                dlg.ShowModal()
-                dlg.Destroy()
-                
-            # Let's make sure we don't exceed the maximum allowed length for a Keyword Group.
-            # First, let's see what the max length is.
-            maxLen = TransanaGlobal.maxKWGLength
-            # Check to see if we've exceeded the max length
-            if len(s) > maxLen:
-                # If so, truncate the Keyword Group
-                s = s[:maxLen]
-                # Display a message to the user describing the trunctions
-                if 'unicode' in wx.PlatformInfo:
-                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                    msg = unicode(_('Keyword Group is limited to %d characters.  Your Keyword Group has been changed to\n"%s"'), 'utf8')
-                else:
-                    msg = _('Keyword Group is limited to %d characters.  Your Keyword Group has been changed to\n"%s"')
-                dlg = ErrorDialog(parent, msg % (maxLen, s))
-                dlg.ShowModal()
-                dlg.Destroy()
-            # If we hit here, there's no reason to block the closing of the dialog box.  (Parens, Colons, and Length violation should not block close.)
-            ok = True
-             
-    # If the user cancelled
-    if s == "":
-        return None
-    else:
-        return s
+            event.Skip()
+            
+

@@ -28,7 +28,7 @@ class OrphanCheck(object):
         print "Checking for Orphaned Database Records:"
         print
         
-        # Get all Series Records
+        # Get all Library Records
         #  Create a connection to the database
 
         DBConn = MySQLdb.Connection(host=hostName, user='DavidW', passwd=pw, port=3306)  #  db=dbName,
@@ -54,11 +54,47 @@ class OrphanCheck(object):
         print
         print
 
-        print "Check for Series Notes without Series:"
-        query = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum FROM Notes2  WHERE (SeriesNum <> 0) AND (SeriesNum not in (SELECT SeriesNum FROM Series2))'
+        print "Check for Library Notes without Library:"
+        query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, DocumentNum, QuoteNum
+                     FROM Notes2
+                     WHERE (SeriesNum <> 0) AND
+                           (SeriesNum not in (SELECT SeriesNum FROM Series2))"""
         self.ExecQuery(query)
 
-        print "Check for Episodes without Series:"
+        if DBVersion >= 260:
+            print "Check for Documents without Library:"
+            query = """SELECT DocumentNum, DocumentID, LibraryNum
+                         FROM Documents2
+                         WHERE (LibraryNum not in (SELECT SeriesNum FROM Series2))"""
+            self.ExecQuery(query)
+
+            print "Check for Document Keywords without Document:"
+            if DBVersion > 260:
+                query = """SELECT EpisodeNum, DocumentNum, ClipNum, QuoteNum, SnapshotNum, KeywordGroup, Keyword
+                             FROM ClipKeywords2
+                             WHERE (DocumentNum > 0) AND
+                                   (DocumentNum not in (SELECT DocumentNum FROM Documents2))"""
+            elif DBVersion > 250:
+                query = 'SELECT EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword FROM ClipKeywords2  WHERE (ClipNum = 0) AND (SnapshotNum = 0) AND (EpisodeNum not in (SELECT EpisodeNum FROM Episodes2))'
+            else:
+                query = 'SELECT EpisodeNum, ClipNum, KeywordGroup, Keyword FROM ClipKeywords2  WHERE (ClipNum = 0) AND (EpisodeNum not in (SELECT EpisodeNum FROM Episodes2))'
+            self.ExecQuery(query)
+
+            print "Check for QuotePositions without Document:"
+            query = """SELECT QuoteNum, DocumentNum, StartChar, EndChar
+                         FROM QuotePositions2
+                         WHERE (DocumentNum > 0) AND
+                               (DocumentNum not in (SELECT DocumentNum FROM Documents2))"""
+            self.ExecQuery(query)
+
+            print "Check for Document Notes without Document:"
+            query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, DocumentNum, QuoteNum
+                         FROM Notes2
+                         WHERE (DocumentNum <> 0) AND
+                               (DocumentNum not in (SELECT DocumentNum FROM Documents2))"""
+            self.ExecQuery(query)
+
+        print "Check for Episodes without Library:"
         query = 'SELECT EpisodeNum, EpisodeID, SeriesNum FROM Episodes2  WHERE (SeriesNum not in (SELECT SeriesNum FROM Series2))'
         self.ExecQuery(query)
 
@@ -71,27 +107,102 @@ class OrphanCheck(object):
         self.ExecQuery(query)
 
         print "Check for Episode Keywords without Episodes:"
-        if DBVersion > 250:
+        if DBVersion > 260:
+            query = """SELECT EpisodeNum, DocumentNum, ClipNum, QuoteNum, SnapshotNum, KeywordGroup, Keyword
+                         FROM ClipKeywords2
+                         WHERE (EpisodeNum > 0) AND
+                               (EpisodeNum not in (SELECT EpisodeNum FROM Episodes2))"""
+        elif DBVersion > 250:
             query = 'SELECT EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword FROM ClipKeywords2  WHERE (ClipNum = 0) AND (SnapshotNum = 0) AND (EpisodeNum not in (SELECT EpisodeNum FROM Episodes2))'
         else:
             query = 'SELECT EpisodeNum, ClipNum, KeywordGroup, Keyword FROM ClipKeywords2  WHERE (ClipNum = 0) AND (EpisodeNum not in (SELECT EpisodeNum FROM Episodes2))'
         self.ExecQuery(query)
 
         print "Check for Episode Notes without Episodes:"
-        query = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum FROM Notes2  WHERE (EpisodeNum <> 0) AND (EpisodeNum not in (SELECT EpisodeNum FROM Episodes2))'
+        query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, DocumentNum, QuoteNum
+                     FROM Notes2
+                     WHERE (EpisodeNum <> 0) AND
+                           (EpisodeNum not in (SELECT EpisodeNum FROM Episodes2))"""
         self.ExecQuery(query)
 
         print "Check for Transcript Notes without Transcripts:"
-        query = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum FROM Notes2  WHERE (TranscriptNum <> 0) AND (TranscriptNum not in (SELECT TranscriptNum FROM Transcripts2))'
+        query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, DocumentNum, QuoteNum
+                     FROM Notes2
+                     WHERE (TranscriptNum <> 0) AND
+                           (TranscriptNum not in (SELECT TranscriptNum FROM Transcripts2))"""
         self.ExecQuery(query)
 
         print "Check for Nested Collections without Parents:"
         query = 'SELECT CollectNum, CollectID, ParentCollectNum FROM Collections2  WHERE (ParentCollectNum <> 0) AND (ParentCollectNum not in (SELECT CollectNum FROM Collections2))'
         self.ExecQuery(query)
 
+        if DBVersion >= 260:
+            print "Check for Quote Notes without Quote:"
+            query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, DocumentNum, QuoteNum
+                         FROM Notes2
+                         WHERE (QuoteNum <> 0) AND
+                               (QuoteNum not in (SELECT QuoteNum FROM Quotes2))"""
+            self.ExecQuery(query)
+
         print "Check for Collection Notes without Collections:"
-        query = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum FROM Notes2  WHERE (CollectNum <> 0) AND (CollectNum not in (SELECT CollectNum FROM Collections2))'
+        query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, DocumentNum, QuoteNum
+                     FROM Notes2
+                     WHERE (CollectNum <> 0) AND
+                           (CollectNum not in (SELECT CollectNum FROM Collections2))"""
         self.ExecQuery(query)
+
+        if DBVersion >= 270:
+            print "Check for Quotes without Collections:"
+            query = """SELECT QuoteNum, QuoteID, CollectNum
+                         FROM Quotes2
+                         WHERE (CollectNum not in (SELECT CollectNum FROM Collections2))"""
+            self.ExecQuery(query)
+
+            print "Check for QuotePositions without Quote:"
+            query = """SELECT QuoteNum, DocumentNum, StartChar, EndChar
+                         FROM QuotePositions2
+                         WHERE (QuoteNum not in (SELECT QuoteNum FROM Quotes2))"""
+            self.ExecQuery(query)
+
+            print "Check for QuotePositions with negative StartChar:"
+            query = """SELECT QuoteNum, DocumentNum, StartChar, EndChar
+                         FROM QuotePositions2
+                         WHERE StartChar < 0"""
+            self.ExecQuery(query)
+
+            print "Check for QuotePositions with negative EndChar:"
+            query = """SELECT QuoteNum, DocumentNum, StartChar, EndChar
+                         FROM QuotePositions2
+                         WHERE EndChar < 0"""
+            self.ExecQuery(query)
+
+            print "Check for Quote Notes without Quote:"
+            query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, DocumentNum, QuoteNum
+                         FROM Notes2
+                         WHERE (QuoteNum <> 0) AND
+                               (QuoteNum not in (SELECT QuoteNum FROM Quotes2))"""
+            self.ExecQuery(query)
+
+            print "Check for Quotes without Source Documents:"
+            query = """SELECT QuoteNum, QuoteID, CollectNum, SourceDocumentNum
+                         FROM Quotes2
+                         WHERE (SourceDocumentNum > 0) AND
+                               (SourceDocumentNum not in (SELECT DocumentNum FROM Documents2))"""
+            self.ExecQuery(query)
+
+            # Known Orphans
+            print "Known Quote orphans:  (SourceDocumentNum = 0)", 
+            query = """SELECT QuoteNum, QuoteID, CollectNum, SourceDocumentNum
+                         FROM Quotes2
+                         WHERE SourceDocumentNum = 0"""
+            self.DBCursor.execute(query)
+            print self.DBCursor.rowcount
+            print
+
+            if self.DBCursor.rowcount > 0:
+                for Record in self.DBCursor.fetchall():
+                    print Record
+                print
 
         print "Check for Clips without Collections:"
         query = 'SELECT ClipNum, ClipID, CollectNum FROM Clips2  WHERE (CollectNum not in (SELECT CollectNum FROM Collections2))'
@@ -106,7 +217,7 @@ class OrphanCheck(object):
         self.ExecQuery(query)
 
         # Known Orphans
-        print "Known orphans:  (SourceTranscriptNum = 0)", 
+        print "Known Clip orphans:  (SourceTranscriptNum = 0)", 
         query = 'SELECT TranscriptNum, EpisodeNum, SourceTranscriptNum, ClipNum FROM Transcripts2 WHERE (ClipNum > 0) AND (SourceTranscriptNum = 0)'
         self.DBCursor.execute(query)
         print self.DBCursor.rowcount
@@ -130,7 +241,10 @@ class OrphanCheck(object):
         self.ExecQuery(query)
 
         print "Check for Clip Notes without Clips:"
-        query = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum FROM Notes2  WHERE (ClipNum <> 0) AND (ClipNum not in (SELECT ClipNum FROM Clips2))'
+        query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, DocumentNum, QuoteNum
+                     FROM Notes2
+                     WHERE (ClipNum <> 0) AND
+                           (ClipNum not in (SELECT ClipNum FROM Clips2))"""
         self.ExecQuery(query)
 
         if DBVersion >= 260:
@@ -159,7 +273,10 @@ class OrphanCheck(object):
             self.ExecQuery(query)
 
             print "Check for Snapshot Notes without Snapshots:"
-            query = 'SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, SnapshotNum FROM Notes2  WHERE (SnapshotNum <> 0) AND (SnapshotNum not in (SELECT SnapshotNum FROM Snapshots2))'
+            query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, SnapshotNum, DocumentNum, QuoteNum
+                         FROM Notes2
+                         WHERE (SnapshotNum <> 0) AND
+                         (SnapshotNum not in (SELECT SnapshotNum FROM Snapshots2))"""
             self.ExecQuery(query)
 
         keywordList = []
@@ -349,6 +466,33 @@ class OrphanCheck(object):
 
                         SortOrder[Record2[2]] = ('Clip', Record2[1])
 
+                if DBVersion >= 270:
+                    query2 = 'SELECT QuoteNum, QuoteID, SortOrder FROM Quotes2 WHERE CollectNum = %s' % Record[0]
+
+                    try:
+                        DBCursor2.execute(query2)
+                    except:
+                        print "Exception!", sys.exc_info()[0], sys.exc_info()[1]
+    #                print "  Count =", DBCursor2.rowcount
+    #                print
+
+                    Records2 = DBCursor2.fetchall()
+
+                    for Record2 in Records2:
+                        
+    #                    print "  Quote:", Record2[0], Record2[1], Record2[2]
+                    
+                        if SortOrder.has_key(Record2[2]):
+                            testPassed = False
+
+                            print '  Quote "%s" has the same Sort Order as %s "%s" in Collection "%s"' % \
+                                  (Record2[1], SortOrder[Record2[2]][0], SortOrder[Record2[2]][1], Record[1])
+                            print
+
+                        else:
+
+                            SortOrder[Record2[2]] = ('Quote', Record2[1])
+
                 if DBVersion >= 260:
                     query2 = 'SELECT SnapshotNum, SnapshotID, SortOrder FROM Snapshots2 WHERE CollectNum = %s' % Record[0]
 
@@ -393,25 +537,28 @@ class OrphanCheck(object):
         try:
             self.DBCursor.execute(query)
 
+            if self.DBCursor.rowcount == 0:
+                print "PASSED"
+                self.testsPassed += 1
+                print
+            else:
+                
+                print "FAILED!!!  ******************************************"
+                print
+                
+    #        print "Count =", self.DBCursor.rowcount
+            if self.DBCursor.rowcount > 0:
+                for rec in self.DBCursor.description:
+                    print rec[0],
+                print
+                Records = self.DBCursor.fetchall()
+                for Record in Records:
+                    print Record
+                print
+            print
         except:
             print "Exception!", sys.exc_info()[0], sys.exc_info()[1]
-        if self.DBCursor.rowcount == 0:
-            print "PASSED"
-            self.testsPassed += 1
             print
-        else:
-            
-            print "FAILED!!!  ******************************************"
-#        print "Count =", self.DBCursor.rowcount
-        if self.DBCursor.rowcount > 0:
-            for rec in self.DBCursor.description:
-                print rec[0],
-            print
-            Records = self.DBCursor.fetchall()
-            for Record in Records:
-                print Record
-            print
-        print
 
 
 # run the app

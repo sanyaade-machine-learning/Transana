@@ -1,4 +1,4 @@
-# Copyright (C) 2003-2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003-2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -51,6 +51,7 @@ class ConfigData(object):
         self.autoArrange = True
 
         # Set default values for Dialog Size values which are not saved as part of the configuration file
+        self.quotePropertiesSize = (680, 550)
         self.clipPropertiesSize = (680, 550)
         self.keywordListEditSize = (600, 385)
     
@@ -65,8 +66,7 @@ class ConfigData(object):
         str = str + 'transcriptionSetback = %s\n' % self.transcriptionSetback
         str = str + 'videoSpeed = %s\n' % self.videoSpeed
         str = str + 'videoSize = %s\n' % self.videoSize
-        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
-            str = str + 'quickClipMode = %s\n' % self.quickClipMode
+        str = str + 'quickClipMode = %s\n' % self.quickClipMode
         str = str + 'wordTracking = %s\n' % self.wordTracking
         str = str + 'autoArrange = %s\n' % self.autoArrange
         str = str + 'Visualization style = %s\n' % self.visualizationStyle
@@ -188,8 +188,7 @@ class ConfigData(object):
             # Load the Visualization Style
             self.visualizationStyle = config.Read('/2.0/visualizationStyle', 'Waveform')
             # Load Quick Clip Mode setting
-            if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
-                self.quickClipMode = config.ReadInt('/2.0/QuickClipMode', True)
+            self.quickClipMode = config.ReadInt('/2.0/QuickClipMode', True)
             # Load Auto Word-Tracking setting
             self.wordTracking = config.ReadInt('/2.0/WordTracking', True)
             # Load Message Server Host Setting
@@ -311,8 +310,7 @@ class ConfigData(object):
             # Default Visualization Style is Waveform
             self.visualizationStyle = 'Waveform'
             # Quick Clip Mode should be disabled by default
-            if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
-                self.quickClipMode = True
+            self.quickClipMode = True
             # Auto Word Tracking is enabled by default
             self.wordTracking = True
             # Word Wrap
@@ -493,8 +491,7 @@ class ConfigData(object):
         # Save the Visualization Style
         config.Write('/2.0/visualizationStyle', self.visualizationStyle)
         # Save the Quick Clip Mode setting
-        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
-            config.WriteInt('/2.0/QuickClipMode', self.quickClipMode)
+        config.WriteInt('/2.0/QuickClipMode', self.quickClipMode)
         # Save the Auto Word Tracking setting
         config.WriteInt('/2.0/WordTracking', self.wordTracking)
         # Save the Message Server Host

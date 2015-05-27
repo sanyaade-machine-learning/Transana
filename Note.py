@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -54,8 +54,10 @@ class Note(DataObject.DataObject):
         str = str + "series_num = %s\n" % self.series_num
         str = str + "episode_num = %s\n" % self.episode_num
         str = str + "transcript_num = %s\n" % self.transcript_num
+        str += "document_num = %s\n" % self.document_num
         str = str + "collection_num = %s\n" % self.collection_num
         str = str + "clip_num = %s\n" % self.clip_num
+        str += "quote_num = %s\n" % self.quote_num
         str = str + "snapshot_num = %s\n" % self.snapshot_num
         str = str + "author = %s\n" % self.author
         str = str + "text = %s\n\n" % self.text
@@ -129,7 +131,7 @@ class Note(DataObject.DataObject):
         # Get the database connection
         db = DBInterface.get_db()
         # Determine the TYPE of note that has been requested
-        if kwargs.has_key("Series"):
+        if kwargs.has_key("Library"):
             q = "SeriesNum"
         elif kwargs.has_key("Episode"):
             q = "EpisodeNum"
@@ -141,6 +143,10 @@ class Note(DataObject.DataObject):
             q = "TranscriptNum"
         elif kwargs.has_key("Snapshot"):
             q = "SnapshotNum"
+        elif kwargs.has_key("Document"):
+            q = "DocumentNum"
+        elif kwargs.has_key("Quote"):
+            q = "QuoteNum"
         # Determine the NUMBER of the record type, i.e. which Series, Episode, etc. the note is attached to.
         num = kwargs.values()[0]
         # Ensure that the parameter IS a number!
@@ -198,7 +204,9 @@ class Note(DataObject.DataObject):
            ((self.collection_num == 0) or (self.collection_num == None)) and \
            ((self.clip_num == 0) or (self.clip_num == None)) and \
            ((self.transcript_num == 0) or (self.transcript_num == None)) and \
-           ((self.snapshot_num == 0) or (self.snapshot_num == None)):
+           ((self.snapshot_num == 0) or (self.snapshot_num == None)) and \
+           ((self.document_num == 0) or (self.document_num == None)) and \
+           ((self.quote_num == 0) or (self.quote_num == None)):
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                 prompt = unicode(_("Note %s is not assigned to any object."), 'utf8')
@@ -221,18 +229,19 @@ class Note(DataObject.DataObject):
             text = self.text
 
         values = (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, \
-                  self.snapshot_num, author, text)
+                  self.snapshot_num, self.document_num, self.quote_num, author, text)
 
         # Determine if we are creating a new record or saving an existing one
         if (self._db_start_save() == 0):  # Creating new record
             # Check to see that no identical record exists
             if DBInterface.record_match_count('Notes2', \
-                                              ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum", "SnapshotNum"), \
+                                              ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum", \
+                                               "SnapshotNum", "DocumentNum", "QuoteNum"), \
                                               (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, \
-                                               self.snapshot_num) ) > 0:
+                                               self.snapshot_num, self.document_num, self.quote_num) ) > 0:
                 targetObject = _('object')
                 if (self.series_num != 0) and (self.series_num != None):
-                    targetObject = _('Series')
+                    targetObject = _('Libraries')
                 elif (self.episode_num != 0) and (self.episode_num != None):
                     targetObject = _('Episode')
                 elif (self.transcript_num != 0) and (self.transcript_num != None):
@@ -243,6 +252,10 @@ class Note(DataObject.DataObject):
                     targetObject = _('Clip')
                 elif (self.snapshot_num != 0) and (self.snapshot_num != None):
                     targetObject = _('Snapshot')
+                elif (self.document_num != 0) and (self.document_num != None):
+                    targetObject = _('Document')
+                elif (self.quote_num != 0) and (self.quote_num != None):
+                    targetObject = _('Quote')
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_('A Note named "%s" already exists for this %s.'), 'utf8')
@@ -253,19 +266,21 @@ class Note(DataObject.DataObject):
 
             # insert a new record
             query = """ INSERT INTO Notes2
-                            (NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, TranscriptNum, SnapshotNum,
+                            (NoteID, SeriesNum, EpisodeNum, CollectNum, ClipNum, TranscriptNum, SnapshotNum, DocumentNum, QuoteNum, 
                              NoteTaker, NoteText)
                           VALUES
-                            (%s, %s, %s, %s, %s, %s, %s, %s, %s) """
+                            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) """
             
         else:  # Saving an existing record
             # Check to see that no identical record with a different number exists (!NoteNum specifies "Not same note number")
             if DBInterface.record_match_count('Notes2', \
-                                              ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum", "SnapshotNum", "!NoteNum"), \
-                                              (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, self.snapshot_num, self.number) ) > 0:
+                                              ("NoteID", "SeriesNum", "EpisodeNum", "CollectNum", "ClipNum", "TranscriptNum", \
+                                               "SnapshotNum", "DocumentNum", "QuoteNum", "!NoteNum"), \
+                                              (id, self.series_num, self.episode_num, self.collection_num, self.clip_num, self.transcript_num, \
+                                               self.snapshot_num, self.document_num, self.quote_num, self.number) ) > 0:
                 targetObject = _('object')
                 if (self.series_num != 0) and (self.series_num != None):
-                    targetObject = _('Series')
+                    targetObject = _('Libraries')
                 elif (self.episode_num != 0) and (self.episode_num != None):
                     targetObject = _('Episode')
                 elif (self.transcript_num != 0) and (self.transcript_num != None):
@@ -276,6 +291,10 @@ class Note(DataObject.DataObject):
                     targetObject = _('Clip')
                 elif (self.snapshot_num != 0) and (self.snapshot_num != None):
                     targetObject = _('Snapshot')
+                elif (self.document_num != 0) and (self.document_num != None):
+                    targetObject = _('Document')
+                elif (self.quote_num != 0) and (self.quote_num != None):
+                    targetObject = _('Quote')
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     prompt = unicode(_('A Note named "%s" already exists for this %s.'), 'utf8')
@@ -293,6 +312,8 @@ class Note(DataObject.DataObject):
                               ClipNum = %s,
                               TranscriptNum = %s,
                               SnapshotNum = %s,
+                              DocumentNum = %s,
+                              QuoteNum = %s, 
                               NoteTaker = %s,
                               NoteText = %s
                           WHERE NoteNum = %s """ 
@@ -315,7 +336,9 @@ class Note(DataObject.DataObject):
                                 CollectNum = %s AND
                                 ClipNum = %s AND
                                 TranscriptNum = %s AND
-                                SnapshotNum = %s """
+                                SnapshotNum = %s AND
+                                DocumentNum = %s AND
+                                QuoteNum = %s """
             # Adjust query for sqlite if needed
             query = DBInterface.FixQuery(query)
             # Get a temporary database cursor
@@ -323,7 +346,7 @@ class Note(DataObject.DataObject):
             # Execute the query
             tempDBCursor.execute(query, 
                                  (id, self.series_num, self.episode_num, self.collection_num, self.clip_num,
-                                  self.transcript_num, self.snapshot_num))
+                                  self.transcript_num, self.snapshot_num, self.document_num, self.quote_num))
             # Get the query results
             data = tempDBCursor.fetchall()
             # If there is one record ...
@@ -374,6 +397,8 @@ class Note(DataObject.DataObject):
         self.clip_num = r['ClipNum']
         self.transcript_num = r['TranscriptNum']
         self.snapshot_num = r['SnapshotNum']
+        self.document_num = r['DocumentNum']
+        self.quote_num = r['QuoteNum']
         self.author = r['NoteTaker']
 
         # self.text = r['NoteText']
@@ -440,6 +465,20 @@ class Note(DataObject.DataObject):
     def _del_snapshot(self):
         self._snapshot = 0
 
+    def _set_document(self, num):
+        self._document = num
+    def _get_document(self):
+        return self._document
+    def _del_document(self):
+        self._document = 0
+
+    def _set_quote(self, num):
+        self._quote = num
+    def _get_quote(self):
+        return self._quote
+    def _del_quote(self):
+        self._quote = 0
+
     def _get_notetype(self):
         notetype = None
         if self.transcript_num > 0:
@@ -447,13 +486,17 @@ class Note(DataObject.DataObject):
         elif self.episode_num > 0:
             notetype = 'Episode'
         elif self.series_num > 0:
-            notetype = 'Series'
+            notetype = 'Library'
         elif self.clip_num > 0:
             notetype = 'Clip'
         elif self.collection_num > 0:
             notetype = 'Collection'
         elif self.snapshot_num > 0:
             notetype = 'Snapshot'
+        elif self.document_num > 0:
+            notetype = 'Document'
+        elif self.quote_num > 0:
+            notetype = 'Quote'
         return notetype
 
     def _set_author(self, name):
@@ -487,6 +530,10 @@ class Note(DataObject.DataObject):
                         """Number of the transcript from which this Note was taken.""")
     snapshot_num = property(_get_snapshot, _set_snapshot, _del_snapshot,
                         """Number of the snapshot from which this Note was taken.""")
+    document_num = property(_get_document, _set_document, _del_document,
+                        """Number of the document from which this Note was taken.""")
+    quote_num = property(_get_quote, _set_quote, _del_quote,
+                        """Number of the quote from which this Note was taken.""")
     notetype = property(_get_notetype, doc=""" Type of Note (read-only) """)
     author = property(_get_author, _set_author, _del_author,
                         """Person responsible for creating the Note.""")

@@ -1,8 +1,9 @@
+# -*- coding: cp1252 -*-
 import datetime
 import os
 import sys
 import wx
-import traceback
+# import traceback
 
 import gettext
 
@@ -22,23 +23,25 @@ import ConfigData
 import ControlObjectClass
 import DBInterface
 import Dialogs
+import Document
 import Episode
 import KeywordObject
 import MenuWindow
 import Misc
 import Note
-import Series
+import Quote
+import Library
 import Snapshot
 import TransanaExceptions
 import Transcript
 
-if TransanaConstants.DBInstalled in ['sqlite3']:
-    import sqlite3
+#if TransanaConstants.DBInstalled in ['sqlite3']:
+import sqlite3
 
 
 MENU_FILE_EXIT = 101
 
-class FormCheck(wx.Frame):
+class DBTest(wx.Frame):
     """ This window displays a variety of GUI Widgets. """
     def __init__(self,parent,id,title):
 
@@ -56,7 +59,10 @@ class FormCheck(wx.Frame):
         TransanaGlobal.transana_graphicsColorList = TransanaGlobal.getColorDefs(TransanaGlobal.configData.colorConfigFilename)
         # Set essential global color manipulation data structures once the ConfigData object exists.
         (TransanaGlobal.transana_colorNameList, TransanaGlobal.transana_colorLookup, TransanaGlobal.keywordMapColourSet) = TransanaGlobal.SetColorVariables()
-        TransanaGlobal.configData.videoPath = 'C:\\Users\\DavidWoods\\Videos'
+        if 'wxMSW' in wx.PlatformInfo:
+            TransanaGlobal.configData.videoPath = 'C:\\Users\\DavidWoods\\Videos\\'
+        elif 'wxMac' in wx.PlatformInfo:
+            TransanaGlobal.configData.videoPath = '/Volumes/Vidëos/'
         TransanaGlobal.configData.ssl = False
 
         TransanaGlobal.menuWindow = MenuWindow.MenuWindow(None, -1, title)
@@ -110,6 +116,7 @@ class FormCheck(wx.Frame):
             print
             print sys.exc_info()[0]
             print sys.exc_info()[1]
+            import traceback
             traceback.print_exc(file=sys.stdout)
             
 
@@ -124,6 +131,8 @@ class FormCheck(wx.Frame):
         startAtTest = 1  # Should start at 1, not 0!
         endAtTest = 1000   # Should be one more than the last test to be run!
         testsToRun = testsNotToSkip + range(startAtTest, endAtTest)
+
+        numTestQuotes = 10
 
         t = datetime.datetime.now()
 
@@ -146,37 +155,70 @@ class FormCheck(wx.Frame):
 
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if (20 in testsToRun) and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
-            # Tables Exist?
-            testName = 'Table Count'
+        if 20 in testsToRun:
+            testName = 'Delete All Tables'
             self.txtCtrl.AppendText('Test "%s" ' % testName)
+            self.testsRun += 1
 
-            query = "SHOW TABLES"
+            if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+                query = "DROP TABLE ConfigInfo, Series2, Episodes2, AdditionalVids2, Documents2, Transcripts2, Collections2, "
+                query += "Clips2, Snapshots2, Quotes2, QuotePositions2, Notes2, Keywords2, ClipKeywords2, SnapshotKeywords2, "
+                query += "SnapshotKeywordStyles2, CoreData2, Filters2"
+
+                dbCursor.execute(query)
+            elif TransanaConstants.DBInstalled in ['sqlite3']:
+                tableNames = ["ConfigInfo", "Series2", "Episodes2", "AdditionalVids2", "Documents2", "Transcripts2",
+                              "Collections2", "Clips2", "Snapshots2", "Quotes2", "QuotePositions2", "Notes2", "Keywords2", 
+                              "ClipKeywords2", "SnapshotKeywords2", "SnapshotKeywordStyles2", "CoreData2", "Filters2"]
+                query = "DROP TABLE IF EXISTS %s"
+                for table in tableNames:
+                    dbCursor.execute(query % table)
+
+
+            self.testsSuccessful += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+
+        if (30 in testsToRun):
+            testName = 'DBInterface.establish_db_exists to create new tables'
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            
+            DBInterface.establish_db_exists()
+
+            if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+                query = "SHOW TABLES"
+            elif TransanaConstants.DBInstalled in ['sqlite3']:
+                query = "SELECT * FROM sqlite_master WHERE type='table'"
             dbCursor.execute(query)
-            n = dbCursor.rowcount
+            if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+                n = dbCursor.rowcount
+                results = dbCursor.fetchall()
+            elif TransanaConstants.DBInstalled in ['sqlite3']:
+                tableResults = dbCursor.fetchall()
+                n = len(tableResults) - 1
+                results = []
+                for x in range(1, n + 1):
+                    results.append((tableResults[x][1],))
 
             self.testsRun += 1
-            if n == 15:
+            if n == 18:
                 self.txtCtrl.AppendText('Passed.\n')
                 self.testsSuccessful += 1
             else:
                 self.txtCtrl.AppendText('FAILED.\n')
                 self.testsFailed += 1
 
-            results = dbCursor.fetchall()
-
-        if (30 in testsToRun) and TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
-            testName = 'Tables Exist'
-            self.txtCtrl.AppendText('Test "%s" ' % testName)
-            
+            self.CheckTable('ConfigInfo', results)                    #
             self.CheckTable('Series2', results)                       #
             self.CheckTable('Episodes2', results)                     #
             self.CheckTable('AdditionalVids2', results)
-            self.CheckTable('Episodes2', results)                     #
+            self.CheckTable('Documents2', results)                    #
             self.CheckTable('Transcripts2', results)                  #
             self.CheckTable('Collections2', results)                  #
             self.CheckTable('Clips2', results)                        #
             self.CheckTable('Snapshots2', results)                    #
+            self.CheckTable('Quotes2', results)                       #
+            self.CheckTable('QuotePositions2', results)               #
             self.CheckTable('Notes2', results)
             self.CheckTable('Keywords2', results)                     #
             self.CheckTable('ClipKeywords2', results)                 #
@@ -186,33 +228,6 @@ class FormCheck(wx.Frame):
             self.CheckTable('Filters2', results)
 
             self.txtCtrl.AppendText('Total Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
-
-        # Delete SearchDemo Keyword Group
-        testName = 'Deleting Keyword Group : %s' % 'SearchDemo'
-        self.SetStatusText(testName)
-        self.testsRun += 1
-        self.txtCtrl.AppendText('Test "%s" ' % testName)
-        try:
-            # Delete the Keyword Group
-            DBInterface.delete_keyword_group('SearchDemo')
-            self.testsSuccessful += 1
-        except TransanaExceptions.RecordNotFoundError:
-            # This is the desired result!
-            self.testsSuccessful += 1
-        except sqlite3.OperationalError:
-            # This is the desired result!
-            self.testsSuccessful += 1
-        except:
-
-            print "Exception in Test 30 -- Could not delete Series %s." % 'SearchDemo'
-            print sys.exc_info()[0]
-            print sys.exc_info()[1]
-            traceback.print_exc(file=sys.stdout)
-            print
-            
-            self.txtCtrl.AppendText('FAILED.')
-            self.testsFailed += 1
-        self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         testKeywordPairs = [(u'English Keyword Group 1',
                              u'English Keyword 1',
@@ -228,28 +243,32 @@ class FormCheck(wx.Frame):
                              unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93  \xe5\xae\x9a\xe4\xb9\x89', 'utf8')),
                             (unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x81\xd8\xa6\xd8\xa9 1', 'utf8'),
                              unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x83\xd9\x84\xd9\x85\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd9\x81\xd8\xaa\xd8\xa7\xd8\xad\xd9\x8a\xd8\xa9 1', 'utf8'),
-                             unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xaa\xd8\xb9\xd8\xb1\xd9\x8a\xd9\x81', 'utf8'))]
+                             unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xaa\xd8\xb9\xd8\xb1\xd9\x8a\xd9\x81', 'utf8')),
+                            (u'Testing Keyword Group 1',
+                             u'Testing Keyword 1',
+                             u'Testing Definition')]
 
         for (keywordGroupName, keywordName, definition) in testKeywordPairs:
-            if 40 in testsToRun:
-                try:
-
-                    DBInterface.delete_keyword(keywordGroupName, keywordName)
-                    
-                # If the keyword doesn't exist ...
-                except TransanaExceptions.RecordNotFoundError:
-                    # this is the expected result.
-                    pass
-                except sqlite3.OperationalError:
-                    # This is the desired result!
-                    pass
-                except:
-
-                    print "Exception in Test 40 -- Could not delete Keyword %s : %s." % (keywordGroupName, keywordName)
-                    print sys.exc_info()[0]
-                    print sys.exc_info()[1]
-                    print
-
+##            if 40 in testsToRun:
+##                try:
+##
+##                    DBInterface.delete_keyword(keywordGroupName, keywordName)
+##                    
+##                # If the keyword doesn't exist ...
+##                except TransanaExceptions.RecordNotFoundError:
+##                    # this is the expected result.
+##                    pass
+##                except sqlite3.OperationalError:
+##                    # This is the desired result!
+##                    pass
+##                except:
+##
+##                    print "Exception in Test 40 -- Could not delete Keyword %s : %s." % (keywordGroupName.encode('utf8'), keywordName.encode('utf8'))
+##                    print sys.exc_info()[0]
+##                    print sys.exc_info()[1]
+##                    traceback.print_exc(file=sys.stdout)
+##                    print
+##
             if 50 in testsToRun:
                 # Keyword Saving
                 testName = 'Creating Keywords : %s : %s' % (keywordGroupName, keywordName)
@@ -283,6 +302,8 @@ class FormCheck(wx.Frame):
                 except:
                     print sys.exc_info()[0]
                     print sys.exc_info()[1]
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
                     # If we can't load or create the keyword, consider the test failed
                     self.txtCtrl.AppendText('FAILED.')
                     self.testsFailed += 1
@@ -326,7 +347,8 @@ class FormCheck(wx.Frame):
                           unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd9\x82\xd8\xb7\xd8\xb9 1', 'utf8'),
                           unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd8\xac\xd9\x85\xd9\x88\xd8\xb9\xd8\xa9 1', 'utf8')),
                          ("Apostrophe's Test",
-                          "Apostrophe's Test Clip 1", "Apostrophe's Test Collection 1"),
+                          "Apostrophe's Test Clip 1",
+                          "Apostrophe's Test Collection 1"),
                          ('SearchDemo',
                           'A', 'SearchDemo'),
                          ('SearchDemo',
@@ -359,48 +381,167 @@ class FormCheck(wx.Frame):
                     print "Exception in Test 65 -- Could not delete Clip %s." % clipName.encode('utf8')
                     print sys.exc_info()[0]
                     print sys.exc_info()[1]
+                    import traceback
+                    traceback.print_exc(file=sys.stdout)
                     print
                     
                     self.txtCtrl.AppendText('FAILED.')
                     self.testsFailed += 1
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        # Delete SearchDemo Series
-        testName = 'Deleting Series : %s' % 'SearchDemo'
-        self.SetStatusText(testName)
-        self.testsRun += 1
-        self.txtCtrl.AppendText('Test "%s" ' % testName)
-        try:
-            # Try to load the Test Series
-            testSeries1 = Series.Series('SearchDemo')
-            # Delete the Test Series
-            testSeries1.db_delete()
-            self.testsSuccessful += 1
-        except TransanaExceptions.RecordNotFoundError:
-            # This is the desired result!
-            self.testsSuccessful += 1
-        except sqlite3.OperationalError:
-            # This is the desired result!
-            self.testsSuccessful += 1
-        except:
-
-            print "Exception in Test 70 -- Could not delete Series %s." % 'SearchDemo'
-            print sys.exc_info()[0]
-            print sys.exc_info()[1]
-            print
-            self.txtCtrl.AppendText('FAILED.')
-            self.testsFailed += 1
-        self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
-
+        testQuoteNames = [('English',
+                           unicode('English Quote 1', 'utf8'),
+                           unicode('English Collection 1', 'utf8')),
+                          ('French',
+                           unicode('Fran\xc3\xa7ais Quote 1', 'utf8'),
+                           unicode('Fran\xc3\xa7ais Collection 1', 'utf8')),
+                          ('Chinese',
+                           unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Quote 1', 'utf8'),
+                           unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 \xe8\xa7\x86\xe9\xa2\x91\xe9\x9b\x86\xe5\x90\x88 1', 'utf8')),
+                          ('Arabic',
+                           unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Quote 1', 'utf8'),
+                           unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd8\xac\xd9\x85\xd9\x88\xd8\xb9\xd8\xa9 1', 'utf8')),
+                          ("Apostrophe's Test",
+                           "Apostrophe's Test Quote 1",
+                           "Apostrophe's Test Collection 1")]
+ 
+##        for (language, quoteName, collectionName) in testQuoteNames:
+##            if 65 in testsToRun:
+##                self.testsRun += 1
+##                try:
+##                    # Try to load the Test Quote
+##                    testQuote1 = Quote.Quote(quoteID=quoteName, collectionID=collectionName, collectionParent=0)
+##                    # Delete the Test Quote
+##                    testQuote1.db_delete()
+##                    self.testsSuccessful += 1
+##                except TransanaExceptions.RecordNotFoundError:
+##                    # This is the desired result!
+##                    self.testsSuccessful += 1
+##                except:
+##
+##                    print "Exception in Test 65 -- Could not delete Quote %s." % quoteName.encode('utf8')
+##                    print sys.exc_info()[0]
+##                    print sys.exc_info()[1]
+##                    traceback.print_exc(file=sys.stdout)
+##                    print
+##                    
+##                    self.txtCtrl.AppendText('FAILED.')
+##                    self.testsFailed += 1
+##                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+##
+##        # Delete Testing Collection
+##        testName = 'Deleting Collection : %s' % 'Testing'
+##        self.SetStatusText(testName)
+##        self.testsRun += 1
+##        self.txtCtrl.AppendText('Test "%s" ' % testName)
+##        try:
+##            # Try to load the Test Collection
+##            testCollection1 = Collection.Collection('Testing')
+##            # Delete the Test Collection
+##            testCollection1.db_delete()
+##            self.testsSuccessful += 1
+##        except TransanaExceptions.RecordNotFoundError:
+##            # This is the desired result!
+##            self.testsSuccessful += 1
+##        except:
+##
+##            print "Exception in Test ??? -- Could not delete Collection %s." % 'Testing'
+##            print sys.exc_info()[0]
+##            print sys.exc_info()[1]
+##            print
+##            self.txtCtrl.AppendText('FAILED.')
+##            self.testsFailed += 1
+##        self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+##
+##        # Delete SearchDemo Collection
+##        testName = 'Deleting Collection : %s' % 'SearchDemo'
+##        self.SetStatusText(testName)
+##        self.testsRun += 1
+##        self.txtCtrl.AppendText('Test "%s" ' % testName)
+##        try:
+##            # Try to load the Test Collection
+##            testCollection1 = Collection.Collection('SearchDemo')
+##            # Delete the Test Collection
+##            testCollection1.db_delete()
+##            self.testsSuccessful += 1
+##        except TransanaExceptions.RecordNotFoundError:
+##            # This is the desired result!
+##            self.testsSuccessful += 1
+##        except:
+##
+##            print "Exception in Test 135 -- Could not delete Collection %s." % 'SearchDemo'
+##            print sys.exc_info()[0]
+##            print sys.exc_info()[1]
+##            print
+##            self.txtCtrl.AppendText('FAILED.')
+##            self.testsFailed += 1
+##        self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+##
+##        # Delete Testing Library
+##        testName = 'Deleting Library : %s' % 'Testing'
+##        self.SetStatusText(testName)
+##        self.testsRun += 1
+##        self.txtCtrl.AppendText('Test "%s" ' % testName)
+##        try:
+##            # Try to load the Test Library
+##            testSeries1 = Library.Library('Testing')
+##            # Delete the Test Library
+##            testSeries1.db_delete()
+##            self.testsSuccessful += 1
+##        except TransanaExceptions.RecordNotFoundError:
+##            # This is the desired result!
+##            self.testsSuccessful += 1
+##        except sqlite3.OperationalError:
+##            # This is the desired result!
+##            self.testsSuccessful += 1
+##        except:
+##
+##            print "Exception in Test 70 -- Could not delete Library %s." % 'Testing'
+##            print sys.exc_info()[0]
+##            print sys.exc_info()[1]
+##            traceback.print_exc(file=sys.stdout)
+##            print
+##            self.txtCtrl.AppendText('FAILED.')
+##            self.testsFailed += 1
+##        self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+##
+##        # Delete SearchDemo Library
+##        testName = 'Deleting Library : %s' % 'SearchDemo'
+##        self.SetStatusText(testName)
+##        self.testsRun += 1
+##        self.txtCtrl.AppendText('Test "%s" ' % testName)
+##        try:
+##            # Try to load the Test Library
+##            testSeries1 = Library.Library('SearchDemo')
+##            # Delete the Test Library
+##            testSeries1.db_delete()
+##            self.testsSuccessful += 1
+##        except TransanaExceptions.RecordNotFoundError:
+##            # This is the desired result!
+##            self.testsSuccessful += 1
+##        except sqlite3.OperationalError:
+##            # This is the desired result!
+##            self.testsSuccessful += 1
+##        except:
+##
+##            print "Exception in Test 70 -- Could not delete Library %s." % 'SearchDemo'
+##            print sys.exc_info()[0]
+##            print sys.exc_info()[1]
+##            traceback.print_exc(file=sys.stdout)
+##            print
+##            self.txtCtrl.AppendText('FAILED.')
+##            self.testsFailed += 1
+##        self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+##
         testSeriesNames = [('English',
-                            unicode('English Series 1', 'utf8'),
-                            unicode('English Series Owner 1', 'utf8'),
-                            unicode('English Series Comment 1', 'utf8'),
+                            unicode('English Library 1', 'utf8'),
+                            unicode('English Library Owner 1', 'utf8'),
+                            unicode('English Library Comment 1', 'utf8'),
                             testKeywordPairs[0][0]),
                             ("Apostrophe's Test",
-                             unicode("Apostrophe's Test Series 1", 'utf8'),
-                             unicode("Apostrophe's Test Series Owner 1", 'utf8'),
-                             unicode("Apostrophe's Test Series Comment 1", 'utf8'),
+                             unicode("Apostrophe's Test Library 1", 'utf8'),
+                             unicode("Apostrophe's Test Library Owner 1", 'utf8'),
+                             unicode("Apostrophe's Test Library Comment 1", 'utf8'),
                             testKeywordPairs[1][0]),
                             ('French',
                              unicode('Fran\xc3\xa7ais S\xc3\xa9ries 1', 'utf8'),
@@ -416,16 +557,21 @@ class FormCheck(wx.Frame):
                              unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd8\xb3\xd9\x84\xd8\xb3\xd9\x84\xd8\xa7\xd8\xaa 1', 'utf8'),
                              unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd8\xb3\xd9\x84\xd8\xb3\xd9\x84\xd8\xa7\xd8\xaa \xd8\xa7\xd9\x84\xd9\x85\xd8\xa4\xd9\x84\xd9\x81 1', 'utf8'),
                              unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd8\xb3\xd9\x84\xd8\xb3\xd9\x84\xd8\xa7\xd8\xaa \xd8\xaa\xd8\xb9\xd9\x84\xd9\x8a\xd9\x82 1', 'utf8'),
-                            testKeywordPairs[4][0])]
+                            testKeywordPairs[4][0]),
+                           ('Testing',
+                            unicode('Testing', 'utf8'),
+                            unicode('Testing Library Owner 1', 'utf8'),
+                            unicode('Testing Library Comment 1', 'utf8'),
+                            testKeywordPairs[5][0])]
         testSeriesData = {}
 
         for (language, seriesName, seriesOwner, seriesComment, seriesKeywordGroup) in testSeriesNames:
             if 70 in testsToRun:
                 self.testsRun += 1
                 try:
-                    # Try to load the Test Series
-                    testSeries1 = Series.Series(seriesName)
-                    # Delete the Test Series
+                    # Try to load the Test Library
+                    testSeries1 = Library.Library(seriesName)
+                    # Delete the Test Library
                     testSeries1.db_delete()
                     self.testsSuccessful += 1
                 except TransanaExceptions.RecordNotFoundError:
@@ -436,9 +582,10 @@ class FormCheck(wx.Frame):
 #                    self.testsSuccessful += 1
                 except:
 
-                    print "Exception in Test 70 -- Could not delete Series %s." % seriesName.encode('utf8')
+                    print "Exception in Test 70 -- Could not delete Library %s." % seriesName.encode('utf8')
                     print sys.exc_info()[0]
                     print sys.exc_info()[1]
+                    import traceback
                     traceback.print_exc(file=sys.stdout)
                     print
                     self.txtCtrl.AppendText('FAILED.')
@@ -446,14 +593,14 @@ class FormCheck(wx.Frame):
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
             if 80 in testsToRun:
-                # Series Saving
-                testName = 'Creating Series : %s' % seriesName
+                # Library Saving
+                testName = 'Creating Library : %s' % seriesName
                 self.SetStatusText(testName)
                 self.testsRun += 1
                 self.txtCtrl.AppendText('Test "%s" ' % testName)
                 try:
-                    # ... create a new Series
-                    series1 = Series.Series()
+                    # ... create a new Library
+                    series1 = Library.Library()
                     # Populate it with data
                     series1.id = seriesName
                     series1.owner = seriesOwner
@@ -461,7 +608,7 @@ class FormCheck(wx.Frame):
                     series1.keyword_group = seriesKeywordGroup
                     try:
                         series1.db_save()
-                        # If we create the Series, consider the test passed.
+                        # If we create the Library, consider the test passed.
                         self.txtCtrl.AppendText('Passed.')
                         self.testsSuccessful += 1
                         testSeriesData[language] = (series1.number, series1.id)
@@ -470,7 +617,7 @@ class FormCheck(wx.Frame):
                         errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
                         errordlg.ShowModal()
                         errordlg.Destroy()
-                        # If we can't create the Series, consider the test failed
+                        # If we can't create the Library, consider the test failed
                         self.txtCtrl.AppendText('FAILED.')
                         self.testsFailed += 1
                 except:
@@ -478,19 +625,19 @@ class FormCheck(wx.Frame):
                     print sys.exc_info()[1]
                     traceback.print_exc(file=sys.stdout)
                     
-                    # If we can't load or create the Series, consider the test failed
+                    # If we can't load or create the Library, consider the test failed
                     self.txtCtrl.AppendText('FAILED.')
                     self.testsFailed += 1
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
             if 90 in testsToRun:
-                # Compare Created with Saved Series
-                testName = 'Comparing Series by Number'
+                # Compare Created with Saved Library
+                testName = 'Comparing Library by Number'
                 self.SetStatusText(testName)
                 self.testsRun += 1
                 self.txtCtrl.AppendText('Test "%s" ' % testName)
                 
-                series2 = Series.Series(series1.number)
+                series2 = Library.Library(series1.number)
 
                 if series1 == series2:
                     self.txtCtrl.AppendText('Passed.')
@@ -501,13 +648,13 @@ class FormCheck(wx.Frame):
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
             if 95 in testsToRun:
-                # Compare Created with Saved Series
-                testName = 'Comparing Series by Name'
+                # Compare Created with Saved Library
+                testName = 'Comparing Library by Name'
                 self.SetStatusText(testName)
                 self.testsRun += 1
                 self.txtCtrl.AppendText('Test "%s" ' % testName)
                 
-                series2 = Series.Series(seriesName)
+                series2 = Library.Library(seriesName)
 
                 if series1 == series2:
                     self.txtCtrl.AppendText('Passed.')
@@ -519,14 +666,14 @@ class FormCheck(wx.Frame):
                 
         if sys.platform == 'win32':
             mediaFileEnglish    = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Demo.mpg', 'utf8')
-            mediaFileApostrophe = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Demo.mpg', 'utf8')
+            mediaFileApostrophe = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Demo2.mpg', 'utf8')
             mediaFileFrench     = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Test \xc3\xa2\xc3\xab\xc3\xac\xc3\xb3\xc3\xbb 5.mpg', 'utf8')
             mediaFileChinese    = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\\xe4\xba\xb2\xe4\xba\xb3 \xe4\xba\xb2\\\xe4\xba\xb2\xe4\xba\xb3\xe4\xba\xb2 5.mpg', 'utf8')
             mediaFileArabic     = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4\\\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4.mpg', 'utf8')
         
         elif sys.platform == 'darwin':
             mediaFileEnglish    = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\x96d\xc3\xaa/Demo.mpg', 'utf8')
-            mediaFileApostrophe = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\x96d\xc3\xaa/Demo.mpg', 'utf8')
+            mediaFileApostrophe = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\x96d\xc3\xaa/Demo2.mpg', 'utf8')
             mediaFileFrench     = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\xb6d\xc3\xaa/Test \xc3\xa2\xc3\xab\xc3\xac\xc3\xb3\xc3\xbb 5.mpg', 'utf8')
             mediaFileChinese    = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\xb6d\xc3\xaa/\xe4\xba\xb2\xe4\xba\xb3 \xe4\xba\xb2/\xe4\xba\xb2\xe4\xba\xb3\xe4\xba\xb2 5.mpg', 'utf8')
             mediaFileArabic     = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\xb6d\xc3\xaa/\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4/\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4.mpg', 'utf8')
@@ -846,29 +993,217 @@ class FormCheck(wx.Frame):
                 
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        # Delete SearchDemo Collection
-        testName = 'Deleting Collection : %s' % 'SearchDemo'
-        self.SetStatusText(testName)
-        self.testsRun += 1
-        self.txtCtrl.AppendText('Test "%s" ' % testName)
-        try:
-            # Try to load the Test Collection
-            testCollection1 = Collection.Collection('SearchDemo')
-            # Delete the Test Collection
-            testCollection1.db_delete()
-            self.testsSuccessful += 1
-        except TransanaExceptions.RecordNotFoundError:
-            # This is the desired result!
-            self.testsSuccessful += 1
-        except:
+        if sys.platform == 'win32':
+            documentFileEnglish    = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Demo.rtf', 'utf8')
+            documentFileApostrophe = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Demo2.rtf', 'utf8')
+            documentFileFrench     = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Test \xc3\xa2\xc3\xab\xc3\xac\xc3\xb3\xc3\xbb 5.rtf', 'utf8')
+            documentFileChinese    = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\\xe4\xba\xb2\xe4\xba\xb3 \xe4\xba\xb2\\\xe4\xba\xb2\xe4\xba\xb3\xe4\xba\xb2 5.rtf', 'utf8')
+            documentFileArabic     = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4\\\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4.rtf', 'utf8')
+            documentFileTesting    = unicode('C:\\Users\\DavidWoods\\Videos\\Harrie\\7000_No_TC.xml', 'utf8')
+        
+        elif sys.platform == 'darwin':
+            documentFileEnglish    = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\x96d\xc3\xaa/Demo.rtf', 'utf8')
+            documentFileApostrophe = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\x96d\xc3\xaa/Demo2.rtf', 'utf8')
+            documentFileFrench     = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\xb6d\xc3\xaa/Test \xc3\xa2\xc3\xab\xc3\xac\xc3\xb3\xc3\xbb 5.rtf', 'utf8')
+            documentFileChinese    = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\xb6d\xc3\xaa/\xe4\xba\xb2\xe4\xba\xb3 \xe4\xba\xb2/\xe4\xba\xb2\xe4\xba\xb3\xe4\xba\xb2 5.rtf', 'utf8')
+            documentFileArabic     = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\xb6d\xc3\xaa/\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4/\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4.rtf', 'utf8')
+            documentFileTesting    = unicode('/Volumes/Vid\xc3\xabo/Harrie/7000_No_TC.xml', 'utf8')
 
-            print "Exception in Test 135 -- Could not delete Collection %s." % 'SearchDemo'
-            print sys.exc_info()[0]
-            print sys.exc_info()[1]
-            print
-            self.txtCtrl.AppendText('FAILED.')
-            self.testsFailed += 1
-        self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+        testDocumentNames = [('English',
+                              unicode('English Document 1', 'utf8'),
+                              unicode('English Document Author 1', 'utf8'),
+                              unicode('English Document Comment 1', 'utf8'),
+                              testSeriesData['English'][0],
+                              testSeriesData['English'][1],
+                              documentFileEnglish,
+                              testKeywordPairs[0][0],
+                              testKeywordPairs[0][1]),
+                             ("Apostrophe's Test",
+                              unicode("Apostrophe's Test Document 1", 'utf8'),
+                              unicode("Apostrophe's Test Document Author 1", 'utf8'),
+                              unicode("Apostrophe's Test Document Comment 1", 'utf8'),
+                              testSeriesData["Apostrophe's Test"][0],
+                              testSeriesData["Apostrophe's Test"][1],
+                              documentFileApostrophe,
+                              testKeywordPairs[1][0],
+                              testKeywordPairs[1][1]),
+                             ('French',
+                              unicode('Fran\xc3\xa7ais Document 1', 'utf8'),
+                              unicode('Fran\xc3\xa7ais Document Author 1', 'utf8'),
+                              unicode('Fran\xc3\xa7ais Document Commentaire 1', 'utf8'),
+                              testSeriesData['French'][0],
+                              testSeriesData['French'][1],
+                              documentFileFrench,
+                              testKeywordPairs[2][0],
+                              testKeywordPairs[2][1]),
+                             ('Chinese',
+                              unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Document 1', 'utf8'),
+                              unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Document Author 1', 'utf8'),
+                              unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Document \xe4\xba\x8b\xe4\xbb\xb6 1', 'utf8'),
+                              testSeriesData['Chinese'][0],
+                              testSeriesData['Chinese'][1],
+                              documentFileChinese,
+                              testKeywordPairs[3][0],
+                              testKeywordPairs[3][1]),
+                             ('Arabic',
+                              unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Document 1', 'utf8'),
+                              unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Document Author 1', 'utf8'),
+                              unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Document \xd8\xaa\xd8\xb9\xd9\x84\xd9\x8a\xd9\x82 1', 'utf8'),
+                              testSeriesData['Arabic'][0],
+                              testSeriesData['Arabic'][1],
+                              documentFileArabic,
+                              testKeywordPairs[4][0],
+                              testKeywordPairs[4][1]),
+                             ('Testing',
+                              unicode('Testing', 'utf8'),
+                              unicode('Testing Document Author 1', 'utf8'),
+                              unicode('Testing Document Comment 1', 'utf8'),
+                              testSeriesData['Testing'][0],
+                              testSeriesData['Testing'][1],
+                              documentFileTesting,
+                              testKeywordPairs[5][0],
+                              testKeywordPairs[5][1])]
+
+        tempText = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New" alignment="1" leftindent="0" leftsubindent="0" rightindent="0" parspacingafter="10" parspacingbefore="0" linespacing="10" tabs="">
+    <paragraph>
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">0</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">5 English Test.</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">10 Apostrophe's Test.</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">15 Fran\xc3\xa7ais.</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">20 \xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93.</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">25 \xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9.</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">30</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">35</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">40</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">45</text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>
+"""
+        testDocumentData = {}
+
+        for (language, documentName, documentAuthor, documentComment, libraryNum, libraryName, importFileName, keywordGroup, keyword) \
+            in testDocumentNames:
+
+            if 136 in testsToRun:
+                # Document Saving
+                testName = 'Creating Document : %s' % documentName
+                self.SetStatusText(testName)
+                self.testsRun += 1
+                self.txtCtrl.AppendText('Test "%s" ' % testName)
+                try:
+                    document1 = Document.Document()
+                    document1.id = documentName
+                    document1.author = documentAuthor
+                    document1.comment = documentComment
+                    document1.library_num = libraryNum
+                    document1.imported_file = importFileName
+                    document1.add_keyword(keywordGroup, keyword)
+                    if language == 'Testing':
+#                        document1.text = documentFileTesting
+
+                        # Open the file
+                        f = open(documentFileTesting, "r")
+                        # Read the file straight into the Transcript Text
+                        document1.text = f.read()
+                        # if the text does NOT have an RTF or XML header ...
+                        if (document1.text[:5].lower() != '{\\rtf') and (document1.text[:5].lower() != '<?xml'):
+                            # ... add "txt" to the start of the file to signal that it's probably a text file
+                            document1.text = 'txt\n' + document1.text
+                        # Close the file
+                        f.close()
+
+                    else:
+                        document1.text = tempText
+                    try:
+                        document1.db_save()
+                        # If we create the Document, consider the test passed.
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                        testDocumentData[language] = (document1.number, document1.id)
+                    except TransanaExceptions.SaveError:
+                        # Display the Error Message, allow "continue" flag to remain true
+                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                        # If we can't create the Document, consider the test failed
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                except:
+                    print sys.exc_info()[0]
+                    print sys.exc_info()[1]
+                    # If we can't load or create the Document, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+            if 137 in testsToRun:
+                # Compare Created with Saved Document
+                testName = 'Comparing Document by Number'
+                self.SetStatusText(testName)
+                self.testsRun += 1
+                self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+                document2 = Document.Document(num=document1.number)
+
+                # A created Document is missing the "Keyword Document Number" from keywords!
+                # Add them here, or the comparison will definitely fail!
+                for obj in document1._kwlist:
+                    obj.documentNum = document1.number
+                document1.changed = False
+
+                if document1 == document2:
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                else:
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+
+                    print "Document by Number:"
+                    print document1
+                    print
+                    print document2
+                    print
+
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+            if 138 in testsToRun:
+                # Compare Created with Saved Document
+                testName = 'Comparing Document by Name'
+                self.SetStatusText(testName)
+                self.testsRun += 1
+                self.txtCtrl.AppendText('Test "%s" ' % testName)
+                
+                document2 = Document.Document(libraryID=libraryName, documentID=documentName)
+
+                if document1 == document2:
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                else:
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         testCollectionNames = [('English',
                                 unicode('English Collection 1', 'utf8'),
@@ -894,7 +1229,12 @@ class FormCheck(wx.Frame):
                                 unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd8\xac\xd9\x85\xd9\x88\xd8\xb9\xd8\xa9 1', 'utf8'),
                                 unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd8\xac\xd9\x85\xd9\x88\xd8\xb9\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd8\xa4\xd9\x84\xd9\x81 1', 'utf8'),
                                 unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 \xd8\xa7\xd9\x84\xd9\x85\xd8\xac\xd9\x85\xd9\x88\xd8\xb9\xd8\xa9 \xd8\xaa\xd8\xb9\xd9\x84\xd9\x8a\xd9\x82 1', 'utf8'),
-                                testKeywordPairs[4][0])]
+                                testKeywordPairs[4][0]),
+                               ('Testing',
+                                unicode('Testing', 'utf8'),
+                                unicode('Testing Collection Owner 1', 'utf8'),
+                                unicode('Testing Collection Comment 1', 'utf8'),
+                                testKeywordPairs[5][0])]
 
         testCollectionData = {}
 
@@ -916,6 +1256,8 @@ class FormCheck(wx.Frame):
                     print u"Exception in Test 140 -- Could not delete Collection %s." % collectionName.decode('utf8')
                     print sys.exc_info()[0]
                     print sys.exc_info()[1]
+                    import traceback
+                    traceback.print_exc()
                     print
 
             if 150 in testsToRun:
@@ -991,14 +1333,14 @@ class FormCheck(wx.Frame):
 
         if sys.platform == 'win32':
             mediaFileEnglish    = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Demo.mpg', 'utf8')
-            mediaFileApostrophe = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Demo.mpg', 'utf8')
+            mediaFileApostrophe = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Demo2.mpg', 'utf8')
             mediaFileFrench     = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Test \xc3\xa2\xc3\xab\xc3\xac\xc3\xb3\xc3\xbb 5.mpg', 'utf8')
             mediaFileChinese    = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\\xe4\xba\xb2\xe4\xba\xb3 \xe4\xba\xb2\\\xe4\xba\xb2\xe4\xba\xb3\xe4\xba\xb2 5.mpg', 'utf8')
             mediaFileArabic     = unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4\\\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4.mpg', 'utf8')
         
         elif sys.platform == 'darwin':
             mediaFileEnglish    = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\x96d\xc3\xaa/Demo.mpg', 'utf8')
-            mediaFileApostrophe = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\x96d\xc3\xaa/Demo.mpg', 'utf8')
+            mediaFileApostrophe = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\x96d\xc3\xaa/Demo2.mpg', 'utf8')
             mediaFileFrench     = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\xb6d\xc3\xaa/Test \xc3\xa2\xc3\xab\xc3\xac\xc3\xb3\xc3\xbb 5.mpg', 'utf8')
             mediaFileChinese    = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\xb6d\xc3\xaa/\xe4\xba\xb2\xe4\xba\xb3 \xe4\xba\xb2/\xe4\xba\xb2\xe4\xba\xb3\xe4\xba\xb2 5.mpg', 'utf8')
             mediaFileArabic     = unicode('/Volumes/Vid\xc3\xabo/Unic\xc3\xb6d\xc3\xaa/\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4/\xd8\xb4\xd9\x82\xd8\xb4\xd9\x84\xd8\xa7\xd9\x87\xd8\xa4.mpg', 'utf8')
@@ -1151,7 +1493,7 @@ class FormCheck(wx.Frame):
                         # If we create the Clip, consider the test passed.
                         self.txtCtrl.AppendText('Passed.')
                         self.testsSuccessful += 1
-                        testClipData[language] = (clip1.number, clip1.id, cliptranscript1.number, cliptranscript1.source_transcript, cliptranscript1.sort_order)
+                        testClipData[language] = (clip1.number, clip1.id, cliptranscript1.number, cliptranscript1.source_transcript, clip1.episode_num, cliptranscript1.sort_order)
                     except TransanaExceptions.SaveError:
                         # Display the Error Message, allow "continue" flag to remain true
                         errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
@@ -1163,6 +1505,7 @@ class FormCheck(wx.Frame):
                 except:
                     print sys.exc_info()[0]
                     print sys.exc_info()[1]
+                    traceback.print_exc(file=sys.stdout)
                     # If we can't load or create the Clip, consider the test failed
                     self.txtCtrl.AppendText('FAILED.')
                     self.testsFailed += 1
@@ -1218,6 +1561,188 @@ class FormCheck(wx.Frame):
                     self.testsFailed += 1
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
+        testQuoteNames = [('English',
+                           unicode('English Quote 1', 'utf8'),
+                           testCollectionData['English'][0],
+                           testCollectionData['English'][1],
+                           testDocumentData['English'][0],
+                           4,
+                           16,
+                           unicode('English Quote Comment 1', 'utf8'),
+                           testKeywordPairs[0][0],
+                           testKeywordPairs[0][1]),
+                          ("Apostrophe's Test",
+                           unicode("Apostrophe's Test Quote 1", 'utf8'),
+                           testCollectionData["Apostrophe's Test"][0],
+                           testCollectionData["Apostrophe's Test"][1],
+                           testDocumentData["Apostrophe's Test"][0],
+                           21,
+                           38,
+                           unicode("Apostrophe's Test Quote Comment 1", 'utf8'),
+                           testKeywordPairs[1][0],
+                           testKeywordPairs[1][1]),
+                          ('French',
+                           unicode('Fran\xc3\xa7ais Quote 1', 'utf8'),
+                           testCollectionData['French'][0],
+                           testCollectionData['French'][1],
+                           testDocumentData['French'][0],
+                           43,
+                           51,
+                           unicode('Fran\xc3\xa7ais Quote Commentaire 1', 'utf8'),
+                           testKeywordPairs[2][0],
+                           testKeywordPairs[2][1]),
+                          ('Chinese',
+                           unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Quote 1', 'utf8'),
+                           testCollectionData['Chinese'][0],
+                           testCollectionData['Chinese'][1],
+                           testDocumentData['Chinese'][0],
+                           56,
+                           61,
+                           unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Quote \xe4\xba\x8b\xe4\xbb\xb6 1', 'utf8'),
+                           testKeywordPairs[3][0],
+                           testKeywordPairs[3][1]),
+                          ('Arabic',
+                           unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Quote 1', 'utf8'),
+                           testCollectionData['Arabic'][0],
+                           testCollectionData['Arabic'][1],
+                           testDocumentData['Arabic'][0],
+                           66,
+                           73,
+                           unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Quote \xd8\xaa\xd8\xb9\xd9\x84\xd9\x8a\xd9\x82 1', 'utf8'),
+                           testKeywordPairs[4][0],
+                           testKeywordPairs[4][1])]
+
+        testingQuoteText = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" fontpointsize="9" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Segoe UI" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10" margin-left="5,4098" margin-right="5,4098" margin-top="5,4098" margin-bottom="5,4098">
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Courier New">ABCD %04d</text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>"""
+
+        # Add the Testing Quotes
+        for x in range(1, numTestQuotes + 1):
+            tmpRec = ('Testing',
+                           unicode('Testing Quote %04d' % x, 'utf8'),
+                           testCollectionData['Testing'][0],
+                           testCollectionData['Testing'][1],
+                           testDocumentData['Testing'][0],
+                           (x - 1) * 72 + 7,
+                           (x - 1) * 72 + 33,
+                           unicode('Testing Quote Comment %04d' % x, 'utf8'),
+                           testKeywordPairs[5][0],
+                           testKeywordPairs[5][1])
+            testQuoteNames += (tmpRec,)
+
+        testQuoteData = {}
+        tmpCnt = 0
+
+        for (language, quoteName, collectionNum, collectionName, sourceDocumentNum, startChar, endChar, quoteComment, \
+             keywordGroup, keyword) in testQuoteNames:
+
+            if 175 in testsToRun:
+                # Quote Saving
+                testName = 'Creating Quote : %s' % quoteName
+                if language != 'Testing':
+                    self.SetStatusText(testName)
+                    self.testsRun += 1
+                    self.txtCtrl.AppendText('Test "%s" ' % testName)
+                else:
+                    tmpCnt += 1
+                    if (tmpCnt % 100 == 1) or (tmpCnt == numTestQuotes):
+                        self.txtCtrl.AppendText("Creating %s of %s\n" % (quoteName, numTestQuotes))
+                        self.Update()
+                try:
+                    quote1 = Quote.Quote()
+                    quote1.id = quoteName
+                    quote1.collection_num = collectionNum
+                    quote1.source_document_num = sourceDocumentNum
+                    quote1.sort_order = DBInterface.getMaxSortOrder(collectionNum) + 1
+                    quote1.start_char = startChar
+                    if language != 'Testing':
+                        # We can use the Clip Transcripts as Quote Text too!
+                        quote1.text = testClipTranscripts[language]
+                    else:
+                        quote1.text = testingQuoteText % (tmpCnt)
+                    quote1.end_char = endChar
+                    quote1.comment = quoteComment
+                    quote1.add_keyword(keywordGroup, keyword)
+                    try:
+                        quote1.db_save()
+                        if language != 'Testing':
+                            # If we create the Quote, consider the test passed.
+                            self.txtCtrl.AppendText('Passed.')
+                            self.testsSuccessful += 1
+                            testQuoteData[language] = (quote1.number, quote1.id, quote1.collection_num, quote1.source_document_num)
+                    except TransanaExceptions.SaveError:
+                        # Display the Error Message, allow "continue" flag to remain true
+                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                        # If we can't create the Quote, consider the test failed
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                except:
+                    print sys.exc_info()[0]
+                    print sys.exc_info()[1]
+                    # If we can't load or create the Quote, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                if language != 'Testing':
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+            if language != 'Testing':
+                if 176 in testsToRun:
+                    # Compare Created with Saved Quote
+                    testName = 'Comparing Quotes by Number'
+                    self.SetStatusText(testName)
+                    self.testsRun += 1
+                    self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+                    # A created Quote is missing the "Keyword Document Number" from keywords!
+                    # Add them here, or the comparison will definitely fail!
+                    for obj in quote1._kwlist:
+                        obj.quoteNum = quote1.number
+                    quote1.changed = False
+
+                    quote2 = Quote.Quote(quote1.number)
+
+                    # Add the missing CollectionID text to Quote1, which doesn't get it when created.
+                    quote1.collection_id = quote2.collection_id
+
+                    if quote1 == quote2:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+
+                        print "Failed:", testName
+                        print quote1
+                        print
+                        print quote2
+                        print
+                        
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+                if 177 in testsToRun:
+                    # Compare Created with Saved Clip
+                    testName = 'Comparing Quotes by Name'
+                    self.SetStatusText(testName)
+                    self.testsRun += 1
+                    self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+                    quote2 = Quote.Quote(quoteID = quoteName, collectionID = collectionName, collectionParent = 0)
+
+                    if quote1 == quote2:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
         if sys.platform == 'win32':
             mediaFile1 = 'C:\\Users\\DavidWoods\\Videos'
         
@@ -1227,7 +1752,7 @@ class FormCheck(wx.Frame):
         testSnapshotNames = [('English',
                               unicode('English Snapshot 1', 'utf8'),
                               unicode('English Snapshot Comment 1', 'utf8'),
-                              os.path.join(mediaFile1, 'Images', 'ch130214.gif'), # unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Demo.mpg', 'utf8'),
+                              os.path.join(mediaFile1, 'Images', 'ch130214.gif'),
                               testSeriesData['English'][0],
                               testSeriesData['English'][1],
                               testEpisodeData['English'][0],
@@ -1242,7 +1767,7 @@ class FormCheck(wx.Frame):
                              ("Apostrophe's Test",
                               unicode("Apostrophe's Test Snapshot 1", 'utf8'),
                               unicode("Apostrophe's Test Snapshot Comment 1", 'utf8'),
-                              os.path.join(mediaFile1, 'Images', 'ch130214.gif'), # unicode('C:\\Users\\DavidWoods\\Videos\\Unic\xc3\xb6d\xc3\xaa\\Demo.mpg', 'utf8'),
+                              os.path.join(mediaFile1, 'Images', 'ch130214.gif'),
                               testSeriesData["Apostrophe's Test"][0],
                               testSeriesData["Apostrophe's Test"][1],
                               testEpisodeData["Apostrophe's Test"][0],
@@ -1414,16 +1939,16 @@ class FormCheck(wx.Frame):
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         testSeriesNoteNames = [('English',
-                                unicode('English Series Note 1', 'utf8'),
-                                unicode('English Series Note Comment 1', 'utf8'),
-                                unicode('English Series Note NoteTaker 1', 'utf8'),
-                                unicode('English Series Note Text 1', 'utf8'),
+                                unicode('English Library Note 1', 'utf8'),
+                                unicode('English Library Note Comment 1', 'utf8'),
+                                unicode('English Library Note NoteTaker 1', 'utf8'),
+                                unicode('English Library Note Text 1', 'utf8'),
                                 testSeriesData['English'][0]),
                                ("Apostrophe's Test",
-                                unicode("Apostrophe's Test Series Note 1", 'utf8'),
-                                unicode("Apostrophe's Test Series Note Comment 1", 'utf8'),
-                                unicode("Apostrophe's Test Series Note NoteTaker 1", 'utf8'),
-                                unicode("Apostrophe's Test Series Note Text 1", 'utf8'),
+                                unicode("Apostrophe's Test Library Note 1", 'utf8'),
+                                unicode("Apostrophe's Test Library Note Comment 1", 'utf8'),
+                                unicode("Apostrophe's Test Library Note NoteTaker 1", 'utf8'),
+                                unicode("Apostrophe's Test Library Note Text 1", 'utf8'),
                                 testSeriesData["Apostrophe's Test"][0]),
                                ('French',
                                 unicode('Fran\xc3\xa7ais S\xc3\xa9ries Note 1', 'utf8'),
@@ -1447,12 +1972,13 @@ class FormCheck(wx.Frame):
         testNoteData = {}
 
         for (language, noteName, noteComment, noteTaker, noteText, seriesNum) in testSeriesNoteNames:
-            testNoteData[language] = {'Series' : [], 'Episode' : [], 'Transcript' : [],
-                                      'Collection' : [], 'Clip' : [], 'Snapshot' : []}
+            testNoteData[language] = {'Libraries' : [], 'Episode' : [], 'Transcript' : [],
+                                      'Collection' : [], 'Clip' : [], 'Snapshot' : [],
+                                      'Document' : [], 'Quote' : []}
             if 210 in testsToRun:
                 try:
                     # Try to load the Test Note
-                    testNote1 = Note.Note(noteName, Series=seriesNum)
+                    testNote1 = Note.Note(noteName, Library=seriesNum)
                     # Delete the Test Note
                     testNote1.db_delete()
                 except TransanaExceptions.RecordNotFoundError:
@@ -1467,7 +1993,7 @@ class FormCheck(wx.Frame):
 
             if 220 in testsToRun:
                 # Note Saving
-                testName = 'Creating Series Note : %s' % noteName
+                testName = 'Creating Library Note : %s' % noteName
                 self.SetStatusText(testName)
                 self.testsRun += 1
                 self.txtCtrl.AppendText('Test "%s" ' % testName)
@@ -1485,7 +2011,7 @@ class FormCheck(wx.Frame):
                         # If we create the Note, consider the test passed.
                         self.txtCtrl.AppendText('Passed.')
                         self.testsSuccessful += 1
-                        testNoteData[language]['Series'].append((note1.number, note1.id),)
+                        testNoteData[language]['Libraries'].append((note1.number, note1.id),)
                     except TransanaExceptions.SaveError:
                         # Display the Error Message, allow "continue" flag to remain true
                         errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
@@ -1526,7 +2052,7 @@ class FormCheck(wx.Frame):
                 self.testsRun += 1
                 self.txtCtrl.AppendText('Test "%s" ' % testName)
                 
-                note2 = Note.Note(noteName, Series=seriesNum)
+                note2 = Note.Note(noteName, Library=seriesNum)
 
                 if note1 == note2:
                     self.txtCtrl.AppendText('Passed.')
@@ -2146,6 +2672,249 @@ class FormCheck(wx.Frame):
                     self.testsFailed += 1
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
+        testDocumentNoteNames = [('English',
+                                unicode('English Document Note 1', 'utf8'),
+                                unicode('English Document Note Comment 1', 'utf8'),
+                                unicode('English Document Note NoteTaker 1', 'utf8'),
+                                unicode('English Document Note Text 1', 'utf8'),
+                                testDocumentData['English'][0]),
+                               ("Apostrophe's Test",
+                                unicode("Apostrophe's Test Document Note 1", 'utf8'),
+                                unicode("Apostrophe's Test Document Note Comment 1", 'utf8'),
+                                unicode("Apostrophe's Test Document Note NoteTaker 1", 'utf8'),
+                                unicode("Apostrophe's Test Document Note Text 1", 'utf8'),
+                                testDocumentData["Apostrophe's Test"][0]),
+                               ('French',
+                                unicode('Fran\xc3\xa7ais Document Note 1', 'utf8'),
+                                unicode('Fran\xc3\xa7ais Document Note Commentaire 1', 'utf8'),
+                                unicode('Fran\xc3\xa7ais Document Auteur-e de la note 1', 'utf8'),
+                                unicode('Fran\xc3\xa7ais Document Contenu de la note 1', 'utf8'),
+                                testDocumentData['French'][0]),
+                               ('Chinese',
+                                unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Document \xe5\xa4\x87\xe6\xb3\xa8 1', 'utf8'),
+                                unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Document \xe5\xa4\x87\xe6\xb3\xa8 \xe6\x89\xb9\xe6\xb3\xa8 1', 'utf8'),
+                                unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Document \xe5\xa4\x87\xe6\xb3\xa8\xe6\x8f\x90\xe5\x8f\x96\xe5\x99\xa8 1', 'utf8'),
+                                unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Document \xe5\xa4\x87\xe6\xb3\xa8\xe6\x96\x87\xe6\x9c\xac\xef\xbc\x9a 1', 'utf8'),
+                                testDocumentData['Chinese'][0]),
+                               ('Arabic',
+                                unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Document \xd8\xa7\xd9\x84\xd9\x85\xd9\x84\xd8\xa7\xd8\xad\xd8\xb8\xd8\xa9 1', 'utf8'),
+                                unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Document \xd8\xa7\xd9\x84\xd9\x85\xd9\x84\xd8\xa7\xd8\xad\xd8\xb8\xd8\xa9  1', 'utf8'),
+                                unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Document \xd9\x85\xd8\xa4\xd9\x84\xd9\x81 \xd8\xa7\xd9\x84\xd9\x85\xd9\x84\xd8\xa7\xd8\xad\xd8\xb8\xd8\xa9 1', 'utf8'),
+                                unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Document \xd9\x86\xd8\xb5 \xd8\xa7\xd9\x84\xd9\x85\xd9\x84\xd8\xa7\xd8\xad\xd8\xb8\xd8\xa9 1', 'utf8'),
+                                testDocumentData['Arabic'][0])]
+
+        for (language, noteName, noteComment, noteTaker, noteText, documentNum) in testDocumentNoteNames:
+            if 210 in testsToRun:
+                try:
+                    # Try to load the Test Note
+                    testNote1 = Note.Note(noteName, Document=documentNum)
+                    # Delete the Test Note
+                    testNote1.db_delete()
+                except TransanaExceptions.RecordNotFoundError:
+                    # This is the desired result!
+                    pass
+                except sqlite3.OperationalError:
+                    # This is the desired result!
+                    pass
+                except:
+
+                    print "Exception in Test 210 -- Could not delete Note %s." % noteName
+                    print sys.exc_info()[0]
+                    print sys.exc_info()[1]
+                    print
+
+            if 220 in testsToRun:
+                # Note Saving
+                testName = 'Creating Document Note : %s' % noteName
+                self.SetStatusText(testName)
+                self.testsRun += 1
+                self.txtCtrl.AppendText('Test "%s" ' % testName)
+                try:
+                    # ... create a new Note
+                    note1 = Note.Note()
+                    # Populate it with data
+                    note1.id = noteName
+#                    note1.comment = noteComment
+                    note1.author = noteTaker
+                    note1.text = noteText
+                    note1.document_num = documentNum
+                    try:
+                        note1.db_save()
+                        # If we create the Note, consider the test passed.
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                        testNoteData[language]['Document'].append((note1.number, note1.id),)
+                    except TransanaExceptions.SaveError:
+                        # Display the Error Message, allow "continue" flag to remain true
+                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                        # If we can't create the Note, consider the test failed
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                except:
+                    print sys.exc_info()[0]
+                    print sys.exc_info()[1]
+                    # If we can't load or create the Note, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+            if 230 in testsToRun:
+                # Compare Created with Saved Note
+                testName = 'Comparing Notes by Number'
+                self.SetStatusText(testName)
+                self.testsRun += 1
+                self.txtCtrl.AppendText('Test "%s" ' % testName)
+                
+                note2 = Note.Note(note1.number)
+
+                if note1 == note2:
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                else:
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+            if 235 in testsToRun:
+                # Compare Created with Saved Note
+                testName = 'Comparing Notes by Name'
+                self.SetStatusText(testName)
+                self.testsRun += 1
+                self.txtCtrl.AppendText('Test "%s" ' % testName)
+                
+                note2 = Note.Note(noteName, Document=documentNum)
+
+                if note1 == note2:
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                else:
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        testQuoteNoteNames = [('English',
+                               unicode('English Quote Note 1', 'utf8'),
+                               unicode('English Quote Note Comment 1', 'utf8'),
+                               unicode('English Quote Note NoteTaker 1', 'utf8'),
+                               unicode('English Quote Note Text 1', 'utf8'),
+                               testQuoteData['English'][0]),
+                              ("Apostrophe's Test",
+                               unicode("Apostrophe's Test Quote Note 1", 'utf8'),
+                               unicode("Apostrophe's Test Quote Note Comment 1", 'utf8'),
+                               unicode("Apostrophe's Test Quote Note NoteTaker 1", 'utf8'),
+                               unicode("Apostrophe's Test Quote Note Text 1", 'utf8'),
+                               testQuoteData["Apostrophe's Test"][0]),
+                              ('French',
+                               unicode('Fran\xc3\xa7ais Quote Note 1', 'utf8'),
+                               unicode('Fran\xc3\xa7ais Quote Note Commentaire 1', 'utf8'),
+                               unicode('Fran\xc3\xa7ais Quote Auteur-e de la note 1', 'utf8'),
+                               unicode('Fran\xc3\xa7ais Quote Contenu de la note 1', 'utf8'),
+                               testQuoteData['French'][0]),
+                              ('Chinese',
+                               unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Quote \xe5\xa4\x87\xe6\xb3\xa8 1', 'utf8'),
+                               unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Quote \xe5\xa4\x87\xe6\xb3\xa8 \xe6\x89\xb9\xe6\xb3\xa8 1', 'utf8'),
+                               unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Quote \xe5\xa4\x87\xe6\xb3\xa8\xe6\x8f\x90\xe5\x8f\x96\xe5\x99\xa8 1', 'utf8'),
+                               unicode('\xe4\xb8\xad\xe6\x96\x87\x2d\xe7\xae\x80\xe4\xbd\x93 Quote \xe5\xa4\x87\xe6\xb3\xa8\xe6\x96\x87\xe6\x9c\xac\xef\xbc\x9a 1', 'utf8'),
+                               testQuoteData['Chinese'][0]),
+                              ('Arabic',
+                               unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Quote \xd8\xa7\xd9\x84\xd9\x85\xd9\x84\xd8\xa7\xd8\xad\xd8\xb8\xd8\xa9 1', 'utf8'),
+                               unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Quote \xd8\xa7\xd9\x84\xd9\x85\xd9\x84\xd8\xa7\xd8\xad\xd8\xb8\xd8\xa9  1', 'utf8'),
+                               unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Quote \xd9\x85\xd8\xa4\xd9\x84\xd9\x81 \xd8\xa7\xd9\x84\xd9\x85\xd9\x84\xd8\xa7\xd8\xad\xd8\xb8\xd8\xa9 1', 'utf8'),
+                               unicode('\xd8\xa7\xd9\x84\xd8\xb9\xd8\xb1\xd8\xa8\xd9\x8a\xd8\xa9 Quote \xd9\x86\xd8\xb5 \xd8\xa7\xd9\x84\xd9\x85\xd9\x84\xd8\xa7\xd8\xad\xd8\xb8\xd8\xa9 1', 'utf8'),
+                               testQuoteData['Arabic'][0])]
+
+        for (language, noteName, noteComment, noteTaker, noteText, quoteNum) in testQuoteNoteNames:
+            if 210 in testsToRun:
+                try:
+                    # Try to load the Test Note
+                    testNote1 = Note.Note(noteName, Quote=quoteNum)
+                    # Delete the Test Note
+                    testNote1.db_delete()
+                except TransanaExceptions.RecordNotFoundError:
+                    # This is the desired result!
+                    pass
+                except sqlite3.OperationalError:
+                    # This is the desired result!
+                    pass
+                except:
+
+                    print "Exception in Test 210 -- Could not delete Note %s." % noteName
+                    print sys.exc_info()[0]
+                    print sys.exc_info()[1]
+                    print
+
+            if 220 in testsToRun:
+                # Note Saving
+                testName = 'Creating Quote Note : %s' % noteName
+                self.SetStatusText(testName)
+                self.testsRun += 1
+                self.txtCtrl.AppendText('Test "%s" ' % testName)
+                try:
+                    # ... create a new Note
+                    note1 = Note.Note()
+                    # Populate it with data
+                    note1.id = noteName
+#                    note1.comment = noteComment
+                    note1.author = noteTaker
+                    note1.text = noteText
+                    note1.quote_num = quoteNum
+                    try:
+                        note1.db_save()
+                        # If we create the Note, consider the test passed.
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                        testNoteData[language]['Quote'].append((note1.number, note1.id),)
+                    except TransanaExceptions.SaveError:
+                        # Display the Error Message, allow "continue" flag to remain true
+                        errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                        errordlg.ShowModal()
+                        errordlg.Destroy()
+                        # If we can't create the Note, consider the test failed
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                except:
+                    print sys.exc_info()[0]
+                    print sys.exc_info()[1]
+                    # If we can't load or create the Note, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+            if 230 in testsToRun:
+                # Compare Created with Saved Note
+                testName = 'Comparing Notes by Number'
+                self.SetStatusText(testName)
+                self.testsRun += 1
+                self.txtCtrl.AppendText('Test "%s" ' % testName)
+                
+                note2 = Note.Note(note1.number)
+
+                if note1 == note2:
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                else:
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+            if 235 in testsToRun:
+                # Compare Created with Saved Note
+                testName = 'Comparing Notes by Name'
+                self.SetStatusText(testName)
+                self.testsRun += 1
+                self.txtCtrl.AppendText('Test "%s" ' % testName)
+                
+                note2 = Note.Note(noteName, Quote=quoteNum)
+
+                if note1 == note2:
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                else:
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         testCoreDataNames = [('English',
                               unicode('Demo.mpg', 'utf8'),
@@ -2164,7 +2933,7 @@ class FormCheck(wx.Frame):
                               'English Coverage',
                               'English Rights'),
                              ("Apostrophe's Test",
-                              unicode('Demo.mpg', 'utf8'),
+                              unicode('Demo2.mpg', 'utf8'),
                               "Apostrophe's Test Title",
                               "Apostrophe's Test Creator",
                               "Apostrophe's Test Subject",
@@ -2231,33 +3000,35 @@ class FormCheck(wx.Frame):
         for (language, mediaFilename, title, creator, subject, description, publisher, contributor, dc_date, dc_type, format,
              source, language, relation, coverage, rights) in testCoreDataNames:
             
-            if 270 in testsToRun:
-                testName = 'Testing Core Data -- Deleting'
-                self.SetStatusText(testName)
-                self.testsRun += 1
-                self.txtCtrl.AppendText('Test "%s" ' % testName)
-
-                try:
-                    # Try to load the Test Core Data Record
-                    testCoreData1 = CoreData.CoreData(mediaFilename)
-                    # Delete the Test Core Data Record
-                    testCoreData1.db_delete()
-                    self.testsSuccessful += 1
-                except TransanaExceptions.RecordNotFoundError:
-                    # This is the desired result!
-                    self.testsSuccessful += 1
-                except:
-
-                    print sys.exc_info()[0]
-                    print sys.exc_info()[1]
-                    traceback.print_exc(file=sys.stdout)
-                    print
-                    print "Exception in Test 270 -- Could not delete CoreData %s." % mediaFilename.encode('utf8')
-                    print
-                    self.txtCtrl.AppendText('FAILED.')
-                    self.testsFailed += 1
-                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
-
+##            if 270 in testsToRun:
+##                testName = 'Testing Core Data -- Deleting'
+##                self.SetStatusText(testName)
+##                self.testsRun += 1
+##                self.txtCtrl.AppendText('Test "%s" ' % testName)
+##
+##                print "Deleting Core Data: ", language.encode('utf8'), mediaFilename.encode('utf8')
+##
+##                try:
+##                    # Try to load the Test Core Data Record
+##                    testCoreData1 = CoreData.CoreData(mediaFilename)
+##                    # Delete the Test Core Data Record
+##                    testCoreData1.db_delete()
+##                    self.testsSuccessful += 1
+##                except TransanaExceptions.RecordNotFoundError:
+##                    # This is the desired result!
+##                    self.testsSuccessful += 1
+##                except:
+##
+##                    print sys.exc_info()[0]
+##                    print sys.exc_info()[1]
+##                    traceback.print_exc(file=sys.stdout)
+##                    print
+##                    print "Exception in Test 270 -- Could not delete CoreData %s." % mediaFilename.encode('utf8')
+##                    print
+##                    self.txtCtrl.AppendText('FAILED.')
+##                    self.testsFailed += 1
+##                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+##
             if 280 in testsToRun:
                 # Core Data Saving
                 testName = 'Creating Core Data : %s' % mediaFilename.encode('utf8')
@@ -2294,7 +3065,7 @@ class FormCheck(wx.Frame):
                         errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
                         errordlg.ShowModal()
                         errordlg.Destroy()
-                        # If we can't create the Series, consider the test failed
+                        # If we can't create the Library, consider the test failed
                         self.txtCtrl.AppendText('FAILED.')
                         self.testsFailed += 1
                 except:
@@ -2302,19 +3073,19 @@ class FormCheck(wx.Frame):
                     print sys.exc_info()[1]
                     traceback.print_exc(file=sys.stdout)
                     
-                    # If we can't load or create the Series, consider the test failed
+                    # If we can't load or create the Library, consider the test failed
                     self.txtCtrl.AppendText('FAILED.')
                     self.testsFailed += 1
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
 ##            if 290 in testsToRun:
-##                # Compare Created with Saved Series
-##                testName = 'Comparing Series by Number'
+##                # Compare Created with Saved Library
+##                testName = 'Comparing Library by Number'
 ##                self.SetStatusText(testName)
 ##                self.testsRun += 1
 ##                self.txtCtrl.AppendText('Test "%s" ' % testName)
 ##                
-##                series2 = Series.Series(series1.number)
+##                series2 = Library.Library(series1.number)
 ##
 ##                if series1 == series2:
 ##                    self.txtCtrl.AppendText('Passed.')
@@ -2347,6 +3118,147 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
+        if 302 in testsToRun:
+            testName = 'Testing DBInterface.list_of_documents()'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            results = DBInterface.list_of_documents()
+
+            comparison = []
+            for key in testDocumentData.keys():
+                data = testDocumentData[key] + (testSeriesData[key][0],)
+                comparison.append(data)
+
+            results.sort()
+            comparison.sort()
+
+            if results == comparison:
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 304 in testsToRun:
+
+            testName = 'Testing DBInterface.list_of_documents() with libraryNum'
+            self.SetStatusText(testName)
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            for key in testSeriesData.keys():
+                if key != 'Testing':
+
+                    self.testsRun += 1
+
+                    results = DBInterface.list_of_documents(int(testSeriesData[key][0]))
+
+                    comparison = []
+
+                    data = testDocumentData[key] + (testSeriesData[key][0],)
+                    comparison.append(data)
+
+                    results.sort()
+                    comparison.sort()
+
+                    if results == comparison:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 306 in testsToRun:
+            testName = 'Testing DBInterface.dictionary_of_documents_and_episodes()'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            results = DBInterface.dictionary_of_documents_and_episodes()
+
+            comp = {}
+            for key in testDocumentData.keys():
+                comp[(testDocumentData[key][1], testDocumentData[key][0])] = ('Document', testSeriesData[key][0], testDocumentData[key][0])
+
+            for key in testEpisodeData.keys():
+                comp[(testEpisodeData[key][1], testEpisodeData[key][0])] = ('Episode', testSeriesData[key][0], testEpisodeData[key][0])
+
+            resKeys = results.keys()
+            resKeys.sort()
+            compKeys = comp.keys()
+            compKeys.sort()
+
+            passed = (resKeys == compKeys)
+            try:
+                for key in resKeys:
+                    if results[key] != comp[key]:
+                        passed = (passed and False)
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                print
+                import traceback
+                traceback.print_exc(file=sys.stdout)
+                print
+                passed = False
+
+            if passed:
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 308 in testsToRun:
+
+            testName = 'Testing DBInterface.dictionary_of_documents_and_episodes() with library'
+            self.SetStatusText(testName)
+
+            for key in testSeriesData.keys():
+                if key != 'Testing':
+
+                    self.testsRun += 1
+                    self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+                    results = DBInterface.dictionary_of_documents_and_episodes(Library.Library(int(testSeriesData[key][0])))
+
+                    comp = {}
+                        
+                    comp[(testDocumentData[key][1], testDocumentData[key][0])] = ('Document', testSeriesData[key][0], testDocumentData[key][0])
+
+                    comp[(testEpisodeData[key][1], testEpisodeData[key][0])] = ('Episode', testSeriesData[key][0], testEpisodeData[key][0])
+
+                    resKeys = results.keys()
+                    resKeys.sort()
+                    compKeys = comp.keys()
+                    compKeys.sort()
+
+                    passed = (resKeys == compKeys)
+                    try:
+                        for key in resKeys:
+                            if results[key] != comp[key]:
+                                passed = (passed and False)
+                    except:
+                        print sys.exc_info()[0]
+                        print sys.exc_info()[1]
+                        print
+                        import traceback
+                        traceback.print_exc(file=sys.stdout)
+                        print
+                        passed = False
+
+                    if passed:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
         if 310 in testsToRun:
             testName = 'Testing DBInterface.list_of_episodes()'
             self.SetStatusText(testName)
@@ -2378,26 +3290,27 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('Test "%s" ' % testName)
 
             for key in testSeriesData.keys():
+                if key != 'Testing':
 
-                self.testsRun += 1
+                    self.testsRun += 1
 
-                results = DBInterface.list_of_episodes_for_series(testSeriesData[key][1])
+                    results = DBInterface.list_of_episodes_for_series(testSeriesData[key][1])
 
-                comparison = []
+                    comparison = []
 
-                data = testEpisodeData[key] + (testSeriesData[key][0],)
-                comparison.append(data)
+                    data = testEpisodeData[key] + (testSeriesData[key][0],)
+                    comparison.append(data)
 
-                results.sort()
-                comparison.sort()
+                    results.sort()
+                    comparison.sort()
 
-                if results == comparison:
-                    self.txtCtrl.AppendText('Passed.')
-                    self.testsSuccessful += 1
-                else:
-                    self.txtCtrl.AppendText('FAILED.')
-                    self.testsFailed += 1
-                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+                    if results == comparison:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 330 in testsToRun:
 
@@ -2467,7 +3380,8 @@ class FormCheck(wx.Frame):
 
                 comparison = []
 
-                data = (testClipData[key][2:])
+                data = (testClipData[key][2:4] + (testClipData[key][-1],))
+
                 comparison.append(data)
 
                 results.sort()
@@ -2527,6 +3441,130 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
+        if 373 in testsToRun:
+            testName = 'Testing DBInterface.list_of_quotes()'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            results = DBInterface.list_of_quotes()
+
+            # Strip Testing Quotes from Results!
+            results2 = []
+            for res in results:
+                if not u'Testing Quote' in res[1]:
+                    results2.append(res)
+
+            comparison = []
+            for key in testQuoteData.keys():
+
+                if key != 'Testing':
+                    comparison.append(testQuoteData[key][ : 2] + (testCollectionData[key][0], testQuoteData[key][3], 2L))
+                
+            results2.sort()
+            comparison.sort()
+            
+            if results2 == comparison:
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+
+                print
+                print testName, key
+                print
+                print results2
+                print
+                print comparison
+                print
+                
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 375 in testsToRun:
+
+            testName = 'Testing DBInterface.list_of_quotes_by_document()'
+            self.SetStatusText(testName)
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            for key in testDocumentData.keys():
+
+                if key != 'Testing':
+                    self.testsRun += 1
+
+                    results = DBInterface.list_of_quotes_by_document(testDocumentData[key][0])
+
+                    comparison1 = []
+                    
+                    for tmpQuote in results:
+                        data = (tmpQuote['QuoteNum'], tmpQuote['QuoteID'], tmpQuote['CollectNum'])
+                        comparison1.append(data)
+
+                    comparison2 = []
+
+                    data = testQuoteData[key][ : 2] + (testCollectionData[key][0],)
+                    comparison2.append(data)
+
+                    comparison1.sort()
+                    comparison2.sort()
+
+                    if comparison1 == comparison2:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+
+                        print
+                        print testName, key
+                        print
+                        print comparison1
+                        print
+                        print comparison2
+                        print
+                        
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 377 in testsToRun:
+
+            testName = 'Testing DBInterface.list_of_quotes_by_collectionnum()'
+            self.SetStatusText(testName)
+#            self.txtCtrl.AppendText('Test "%s:" \n' % testName)
+
+            for key in testCollectionData.keys():
+
+                if key != 'Testing':
+
+                    self.txtCtrl.AppendText('Test "%s: %s" ' % (testName, key))
+                    self.testsRun += 1
+
+                    results = DBInterface.list_of_quotes_by_collectionnum(testCollectionData[key][0])
+
+                    comparison = []
+
+                    data = testQuoteData[key][ : 2] + (testCollectionData[key][0],)
+                    comparison.append(data)
+
+                    results.sort()
+                    comparison.sort()
+
+                    if results == comparison:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+
+                        print
+                        print testName, key
+                        print
+                        print results
+                        print
+                        print comparison
+                        print
+                        
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
         if 380 in testsToRun:
             testName = 'Testing DBInterface.list_of_clips()'
             self.SetStatusText(testName)
@@ -2536,9 +3574,9 @@ class FormCheck(wx.Frame):
             results = DBInterface.list_of_clips()
 
             comparison = []
+
             for key in testClipData.keys():
-                
-                comparison.append(testClipData[key][ : 2] + (testCollectionData[key][0], 1L))
+                comparison.append(testClipData[key][ : 2] + (testCollectionData[key][0], testClipData[key][4], 1L))
 
             results.sort()
             comparison.sort()
@@ -2547,6 +3585,15 @@ class FormCheck(wx.Frame):
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
             else:
+
+                print
+                print testName
+                print
+                print results
+                print
+                print comparison
+                print
+                
                 self.txtCtrl.AppendText('FAILED.')
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
@@ -2559,25 +3606,27 @@ class FormCheck(wx.Frame):
 
             for key in testCollectionData.keys():
 
-                self.testsRun += 1
+                if key != 'Testing':
 
-                results = DBInterface.list_of_clips_by_collection(testCollectionData[key][1], 0)
+                    self.testsRun += 1
 
-                comparison = []
+                    results = DBInterface.list_of_clips_by_collection(testCollectionData[key][1], 0)
 
-                data = testClipData[key][ : 2] + (testCollectionData[key][0],)
-                comparison.append(data)
+                    comparison = []
 
-                results.sort()
-                comparison.sort()
+                    data = testClipData[key][ : 2] + (testCollectionData[key][0],)
+                    comparison.append(data)
 
-                if results == comparison:
-                    self.txtCtrl.AppendText('Passed.')
-                    self.testsSuccessful += 1
-                else:
-                    self.txtCtrl.AppendText('FAILED.')
-                    self.testsFailed += 1
-                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+                    results.sort()
+                    comparison.sort()
+
+                    if results == comparison:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 400 in testsToRun:
 
@@ -2587,25 +3636,27 @@ class FormCheck(wx.Frame):
 
             for key in testCollectionData.keys():
 
-                self.testsRun += 1
+                if key != 'Testing':
 
-                results = DBInterface.list_of_clips_by_collectionnum(testCollectionData[key][0])
+                    self.testsRun += 1
 
-                comparison = []
+                    results = DBInterface.list_of_clips_by_collectionnum(testCollectionData[key][0])
 
-                data = testClipData[key][ : 2] + (testCollectionData[key][0],)
-                comparison.append(data)
+                    comparison = []
 
-                results.sort()
-                comparison.sort()
+                    data = testClipData[key][ : 2] + (testCollectionData[key][0],)
+                    comparison.append(data)
 
-                if results == comparison:
-                    self.txtCtrl.AppendText('Passed.')
-                    self.testsSuccessful += 1
-                else:
-                    self.txtCtrl.AppendText('FAILED.')
-                    self.testsFailed += 1
-                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+                    results.sort()
+                    comparison.sort()
+
+                    if results == comparison:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 410 in testsToRun:
 
@@ -2686,15 +3737,24 @@ class FormCheck(wx.Frame):
             comparison = []
             for key in testSnapshotData.keys():
 
-                comparison.append(testSnapshotData[key] + (testCollectionData[key][0], 2L))
+                comparison.append(testSnapshotData[key] + (testCollectionData[key][0], numTestQuotes + 1))
 
             results.sort()
             comparison.sort()
-            
+
             if results == comparison:
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
             else:
+
+                print
+                print testName
+                print
+                print results
+                print
+                print comparison
+                print
+                
                 self.txtCtrl.AppendText('FAILED.')
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
@@ -2769,52 +3829,55 @@ class FormCheck(wx.Frame):
 
             for key in testCollectionData.keys():
 
-                self.testsRun += 1
+                if key != 'Testing':
 
-                results = DBInterface.list_of_snapshots_by_collectionnum(testCollectionData[key][0])
+                    self.testsRun += 1
 
-                comparison = []
+                    results = DBInterface.list_of_snapshots_by_collectionnum(testCollectionData[key][0])
 
-                data = testSnapshotData[key][ : 2] + (testCollectionData[key][0],)
-                comparison.append(data)
+                    comparison = []
 
-                results.sort()
-                comparison.sort()
+                    data = testSnapshotData[key][ : 2] + (testCollectionData[key][0],)
+                    comparison.append(data)
 
-                if results == comparison:
-                    self.txtCtrl.AppendText('Passed.')
-                    self.testsSuccessful += 1
-                else:
-                    self.txtCtrl.AppendText('FAILED.')
-                    self.testsFailed += 1
-                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+                    results.sort()
+                    comparison.sort()
+
+                    if results == comparison:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 470 in testsToRun:
-            testName = 'Testing DBInterface.list_of_notes(Series)'
+            testName = 'Testing DBInterface.list_of_notes(Library)'
             self.SetStatusText(testName)
             self.txtCtrl.AppendText('Test "%s" ' % testName)
 
             for key in testSeriesData.keys():
 
-                self.testsRun += 1
+                if key != 'Testing':
+                    self.testsRun += 1
 
-                results = DBInterface.list_of_notes(Series=testSeriesData[key][0], includeNumber=True)
+                    results = DBInterface.list_of_notes(Library=testSeriesData[key][0], includeNumber=True)
 
-                comparison = []
+                    comparison = []
 
-                data = testNoteData[key]['Series'][0]
-                comparison.append(data)
+                    data = testNoteData[key]['Libraries'][0]
+                    comparison.append(data)
 
-                results.sort()
-                comparison.sort()
+                    results.sort()
+                    comparison.sort()
 
-                if results == comparison:
-                    self.txtCtrl.AppendText('Passed.')
-                    self.testsSuccessful += 1
-                else:
-                    self.txtCtrl.AppendText('FAILED.')
-                    self.testsFailed += 1
-                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+                    if results == comparison:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 472 in testsToRun:
             testName = 'Testing DBInterface.list_of_notes(Episode)'
@@ -2877,25 +3940,27 @@ class FormCheck(wx.Frame):
 
             for key in testCollectionData.keys():
 
-                self.testsRun += 1
+                if key != 'Testing':
 
-                results = DBInterface.list_of_notes(Collection=testCollectionData[key][0], includeNumber=True)
+                    self.testsRun += 1
 
-                comparison = []
+                    results = DBInterface.list_of_notes(Collection=testCollectionData[key][0], includeNumber=True)
 
-                data = testNoteData[key]['Collection'][0]
-                comparison.append(data)
+                    comparison = []
 
-                results.sort()
-                comparison.sort()
+                    data = testNoteData[key]['Collection'][0]
+                    comparison.append(data)
 
-                if results == comparison:
-                    self.txtCtrl.AppendText('Passed.')
-                    self.testsSuccessful += 1
-                else:
-                    self.txtCtrl.AppendText('FAILED.')
-                    self.testsFailed += 1
-                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+                    results.sort()
+                    comparison.sort()
+
+                    if results == comparison:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 478 in testsToRun:
             testName = 'Testing DBInterface.list_of_notes(Clip)'
@@ -2951,23 +4016,83 @@ class FormCheck(wx.Frame):
                     self.testsFailed += 1
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
+        if 485 in testsToRun:
+            testName = 'Testing DBInterface.list_of_notes(Document)'
+            self.SetStatusText(testName)
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            for key in testDocumentData.keys():
+
+                if key != 'Testing':
+
+                    self.testsRun += 1
+
+                    results = DBInterface.list_of_notes(Document=testDocumentData[key][0], includeNumber=True)
+
+                    comparison = []
+
+                    data = testNoteData[key]['Document'][0]
+                    comparison.append(data)
+
+                    results.sort()
+                    comparison.sort()
+
+                    if results == comparison:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 486 in testsToRun:
+            testName = 'Testing DBInterface.list_of_notes(Quote)'
+            self.SetStatusText(testName)
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            for key in testQuoteData.keys():
+
+                if key != 'Testing':
+
+                    self.testsRun += 1
+
+                    results = DBInterface.list_of_notes(Quote=testQuoteData[key][0], includeNumber=True)
+
+                    comparison = []
+
+                    data = testNoteData[key]['Quote'][0]
+                    comparison.append(data)
+
+                    results.sort()
+                    comparison.sort()
+
+                    if results == comparison:
+                        self.txtCtrl.AppendText('Passed.')
+                        self.testsSuccessful += 1
+                    else:
+                        self.txtCtrl.AppendText('FAILED.')
+                        self.testsFailed += 1
+                    self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
         if 490 in testsToRun:
-            testName = 'Testing DBInterface.list_of_node_notes(SeriesNode=True)'
+            testName = 'Testing DBInterface.list_of_node_notes(LibraryNode=True)'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
 
-            results = DBInterface.list_of_node_notes(SeriesNode=True)
+            results = DBInterface.list_of_node_notes(LibraryNode=True)
 
             comparison = []
 
             for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Series'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0)
+                data = testNoteData[language]['Libraries'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0, 0, 0)
                 comparison.append(data)
-                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0)
+                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0, 0, 0)
                 comparison.append(data)
-                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0)
+                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0, 0, 0)
+                comparison.append(data)
+                data = testNoteData[language]['Document'][0] + (0, 0, 0, 0, 0, 0, testDocumentData[language][0], 0)
                 comparison.append(data)
 
             results.sort()
@@ -2993,11 +4118,13 @@ class FormCheck(wx.Frame):
 
             for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0)
+                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0, 0, 0)
                 comparison.append(data)
-                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0)
+                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0, 0, 0)
                 comparison.append(data)
-                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0])
+                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0], 0, 0)
+                comparison.append(data)
+                data = testNoteData[language]['Quote'][0] + (0, 0, 0, 0, 0, 0, 0, testQuoteData[language][0])
                 comparison.append(data)
 
             results.sort()
@@ -3021,24 +4148,28 @@ class FormCheck(wx.Frame):
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Series'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0)
+                data = testNoteData[language]['Libraries'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0)
+                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0)
+                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0)
+                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0)
+                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0])
+                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0], 0, 0)
+                comparison2.append(data)
+                data = testNoteData[language]['Document'][0] + (0, 0, 0, 0, 0, 0, testDocumentData[language][0], 0)
+                comparison2.append(data)
+                data = testNoteData[language]['Quote'][0] + (0, 0, 0, 0, 0, 0, 0, testQuoteData[language][0])
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3053,23 +4184,23 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 520 in testsToRun:
-            testName = 'Testing DBInterface.list_of_all_notes(Series Scope, No Text Search)'
+            testName = 'Testing DBInterface.list_of_all_notes(Library Scope, No Text Search)'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
 
-            results = DBInterface.list_of_all_notes(reportType='SeriesNode')
+            results = DBInterface.list_of_all_notes(reportType='LibraryNode')
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Series'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0)
+                data = testNoteData[language]['Libraries'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3093,14 +4224,14 @@ class FormCheck(wx.Frame):
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0)
+                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3124,14 +4255,14 @@ class FormCheck(wx.Frame):
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0)
+                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0, 0, 0)
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3155,14 +4286,14 @@ class FormCheck(wx.Frame):
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0)
+                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0, 0, 0)
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3186,14 +4317,14 @@ class FormCheck(wx.Frame):
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0)
+                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0, 0, 0)
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3217,14 +4348,76 @@ class FormCheck(wx.Frame):
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0])
+                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0], 0, 0)
+                comparison2.append(data)
+
+            comparison1.sort()
+            comparison2.sort()
+
+            if comparison1 == comparison2:
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 573 in testsToRun:
+            testName = 'Testing DBInterface.list_of_all_notes(Document Scope, No Text Search)'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            results = DBInterface.list_of_all_notes(reportType='DocumentNode')
+
+            comparison1 = []
+            for rec in results:
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
+                comparison1.append(data)
+
+            comparison2 = []
+
+            for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
+
+                data = testNoteData[language]['Document'][0] + (0, 0, 0, 0, 0, 0, testDocumentData[language][0], 0)
+                comparison2.append(data)
+
+            comparison1.sort()
+            comparison2.sort()
+
+            if comparison1 == comparison2:
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            else:
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 574 in testsToRun:
+            testName = 'Testing DBInterface.list_of_all_notes(Quote Scope, No Text Search)'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            results = DBInterface.list_of_all_notes(reportType='QuoteNode')
+
+            comparison1 = []
+            for rec in results:
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
+                comparison1.append(data)
+
+            comparison2 = []
+
+            for language in ['English', "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
+
+                data = testNoteData[language]['Quote'][0] + (0, 0, 0, 0, 0, 0, 0, testQuoteData[language][0])
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3248,24 +4441,28 @@ class FormCheck(wx.Frame):
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['English']:  # , "Apostrophe's Test", 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Series'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0)
+                data = testNoteData[language]['Libraries'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0)
+                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0)
+                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0)
+                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0)
+                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0])
+                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0], 0, 0)
+                comparison2.append(data)
+                data = testNoteData[language]['Document'][0] + (0, 0, 0, 0, 0, 0, testDocumentData[language][0], 0)
+                comparison2.append(data)
+                data = testNoteData[language]['Quote'][0] + (0, 0, 0, 0, 0, 0, 0, testQuoteData[language][0])
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3275,6 +4472,18 @@ class FormCheck(wx.Frame):
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
             else:
+
+                print '------------------------------------------'
+                print comparison1
+                print
+                print comparison2
+                print '------------------------------------------'
+                for x in range(len(comparison1)):
+                    print x, comparison1[x] == comparison2[x]
+                    if not comparison1[x] == comparison2[x]:
+                        print comparison1[x]
+                        print comparison2[x]
+                
                 self.txtCtrl.AppendText('FAILED.')
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
@@ -3292,24 +4501,28 @@ class FormCheck(wx.Frame):
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['French']:  #  ['English', 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Series'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0)
+                data = testNoteData[language]['Libraries'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0)
+                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0)
+                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0)
+                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0)
+                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0])
+                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0], 0, 0)
+                comparison2.append(data)
+                data = testNoteData[language]['Document'][0] + (0, 0, 0, 0, 0, 0, testDocumentData[language][0], 0)
+                comparison2.append(data)
+                data = testNoteData[language]['Quote'][0] + (0, 0, 0, 0, 0, 0, 0, testQuoteData[language][0])
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3336,24 +4549,28 @@ class FormCheck(wx.Frame):
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['Chinese']:  #  ['English', 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Series'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0)
+                data = testNoteData[language]['Libraries'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0)
+                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0)
+                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0)
+                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0)
+                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0])
+                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0], 0, 0)
+                comparison2.append(data)
+                data = testNoteData[language]['Document'][0] + (0, 0, 0, 0, 0, 0, testDocumentData[language][0], 0)
+                comparison2.append(data)
+                data = testNoteData[language]['Quote'][0] + (0, 0, 0, 0, 0, 0, 0, testQuoteData[language][0])
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3380,24 +4597,28 @@ class FormCheck(wx.Frame):
 
             comparison1 = []
             for rec in results:
-                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectionNum'], rec['ClipNum'], rec['SnapshotNum'])
+                data = (rec['NoteNum'], rec['NoteID'], rec['SeriesNum'], rec['EpisodeNum'], rec['TranscriptNum'], rec['CollectNum'], rec['ClipNum'], rec['SnapshotNum'], rec['DocumentNum'], rec['QuoteNum'])
                 comparison1.append(data)
 
             comparison2 = []
 
             for language in ['Arabic']:  #  ['English', 'French', 'Chinese', 'Arabic']:
 
-                data = testNoteData[language]['Series'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0)
+                data = testNoteData[language]['Libraries'][0] + (testSeriesData[language][0], 0, 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0)
+                data = testNoteData[language]['Episode'][0] + (0, testEpisodeData[language][0], 0, 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0)
+                data = testNoteData[language]['Transcript'][0] + (0, 0, testTranscriptData[language][0], 0, 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0)
+                data = testNoteData[language]['Collection'][0] + (0, 0, 0, testCollectionData[language][0], 0, 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0)
+                data = testNoteData[language]['Clip'][0] + (0, 0, 0, 0, testClipData[language][0], 0, 0, 0)
                 comparison2.append(data)
-                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0])
+                data = testNoteData[language]['Snapshot'][0] + (0, 0, 0, 0, 0, testSnapshotData[language][0], 0, 0)
+                comparison2.append(data)
+                data = testNoteData[language]['Document'][0] + (0, 0, 0, 0, 0, 0, testDocumentData[language][0], 0)
+                comparison2.append(data)
+                data = testNoteData[language]['Quote'][0] + (0, 0, 0, 0, 0, 0, 0, testQuoteData[language][0])
                 comparison2.append(data)
 
             comparison1.sort()
@@ -3490,6 +4711,31 @@ class FormCheck(wx.Frame):
         testKeywordNames['Arabic'] = testKeywordPairs[4]
         
         if 650 in testsToRun:
+            testName = 'Testing DBInterface.list_of_keywords(Document)'
+            self.SetStatusText(testName)
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            for key in testEpisodeData.keys():
+
+                self.testsRun += 1
+                
+                results = DBInterface.list_of_keywords(Document=testDocumentData[key][0])
+
+                comparison = []
+                comparison.append(testKeywordNames[key][:2] + (u'0',))
+
+                results.sort()
+                comparison.sort()
+
+                if results == comparison:
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                else:
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 655 in testsToRun:
             testName = 'Testing DBInterface.list_of_keywords(Episode)'
             self.SetStatusText(testName)
             self.txtCtrl.AppendText('Test "%s" ' % testName)
@@ -3515,6 +4761,31 @@ class FormCheck(wx.Frame):
                 self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 660 in testsToRun:
+            testName = 'Testing DBInterface.list_of_keywords(Quote)'
+            self.SetStatusText(testName)
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+
+            for key in testClipData.keys():
+
+                self.testsRun += 1
+                
+                results = DBInterface.list_of_keywords(Quote=testQuoteData[key][0])
+
+                comparison = []
+                comparison.append(testKeywordNames[key][:2] + (u'0',))
+
+                results.sort()
+                comparison.sort()
+
+                if results == comparison:
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                else:
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+                self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 665 in testsToRun:
             testName = 'Testing DBInterface.list_of_keywords(Clip)'
             self.SetStatusText(testName)
             self.txtCtrl.AppendText('Test "%s" ' % testName)
@@ -3626,6 +4897,7 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('FAILED.\n')
             self.testsFailed += 1
 
+
 class DBLogin:
     def __init__(self, username, password, dbServer, databaseName, port):
         self.username = username
@@ -3633,10 +4905,19 @@ class DBLogin:
         self.dbServer = dbServer
         self.databaseName = databaseName
         self.port = port
+        self.ssl = True
+        if 'wxMSW' in wx.PlatformInfo:
+            self.sslClientCert = 'C:\\Users\\DavidWoods\\Documents\\SSL\\DKW-Linux\\DKWLinux-client-cert.pem'
+            self.sslClientKey = 'C:\\Users\\DavidWoods\\Documents\\SSL\\DKW-Linux\\DKWLinux-client-key.pem'
+            self.sslMsgSrvCert = 'C:\\Users\\DavidWoods\\Documents\\SSL\\DKW-Linux\\DKWLinux-TransanaMessageServer-cert.pem'
+        elif 'wxMac' in wx.PlatformInfo:
+            self.sslClientCert = '/Users/davidwoods/Transana 2/SSL/DKW-Linux/DKWLinux-client-cert.pem'
+            self.sslClientKey = '/Users/davidwoods/Transana 2/SSL/DKW-Linux/DKWLinux-client-key.pem'
+            self.sslMsgSrvCert = '/Users/davidwoods/Transana 2/SSL/DKW-Linux/DKWLinux-TransanaMessageServer-cert.pem'
 
 class MyApp(wx.App):
    def OnInit(self):
-      frame = FormCheck(None, -1, "Unit Test 2: Database")
+      frame = DBTest(None, -1, "Unit Test 2: Database")
       self.SetTopWindow(frame)
       return True
       

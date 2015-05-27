@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -34,7 +34,7 @@ else:
 import cPickle
 import pickle
 import sys
-import Series
+import Library
 import Episode
 import Collection
 import Clip
@@ -45,7 +45,7 @@ import XMLExport
 class SelectiveDataExport(Dialogs.GenForm):
     """ This windows displays a variety of GUI Widgets. """
     def __init__(self,parent,id,seriesNum=0, episodeNum=0, collectionNum=0):
-        # Remember the series, episode or collection that triggered creation of this export
+        # Remember the Library, episode or collection that triggered creation of this export
         self.seriesNum = seriesNum
         self.episodeNum = episodeNum
         self.collectionNum = collectionNum
@@ -140,7 +140,7 @@ class SelectiveDataExport(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size, and define height as unchangeable
         self.SetSizeHints(max(550, width), height, -1, height)
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
         # Set focus to the XML file field
         self.XMLFile.SetFocus()
 
@@ -179,8 +179,8 @@ class SelectiveDataExport(Dialogs.GenForm):
             # Writing XML's DTD Headers
             XMLExportObject.WritingXMLDTD(f)
 
-            # Writing Series Records
-            progress.Update(9, _('Writing Series Records'))
+            # Writing Library Records
+            progress.Update(9, _('Writing Library Records'))
             seriesList = []
 
             if db != None:
@@ -232,7 +232,7 @@ class SelectiveDataExport(Dialogs.GenForm):
 
 
             if DEBUG:
-                print "Series Records:", seriesList
+                print "Library Records:", seriesList
                     
             # Writing Episode Records
             progress.Update(18, _('Writing Episode Records'))
@@ -511,13 +511,13 @@ class SelectiveDataExport(Dialogs.GenForm):
             # Collecting Note data
             notesList = []
 
-            # Collecting NoteData from Series...
+            # Collecting NoteData from Library...
             for seriesRec in seriesList:
-                seriesNotesList = DBInterface.list_of_notes(Series = seriesRec)
+                seriesNotesList = DBInterface.list_of_notes(Library = seriesRec)
                 
             if DEBUG:
                 print
-                print "Series Notes List =", seriesNotesList
+                print "Library Notes List =", seriesNotesList
                                
             for seriesNote in seriesNotesList:
                 # If the note isn't already in the notesList...

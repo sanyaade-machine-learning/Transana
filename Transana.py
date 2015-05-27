@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -17,7 +17,7 @@
 """This file implements the Transana class, which is the main Transana application
 definition."""
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 
 
 """
@@ -226,10 +226,30 @@ class Transana(wx.App):
             if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
                 # ... we need to reverse the image direcion
                 bitmap = bitmap.ConvertToImage().Mirror().ConvertToBitmap()
+
+            splashPosition = wx.DefaultPosition
+
+## This doesn't work.  I have not been able to put the Splash Screen anywhere but on the Center of
+## Monitor 0 (with wx.SPASH_CENTER_ON_SCREEN) or the upper left corner of Monitor 0 (without it).  Bummer.
+                
+##            # Get the Size and Position for the PRIMARY screen
+##            (x1, y1, w1, h1) = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()
+##            (x2, y2) = bitmap.GetSize()
+##
+##            splashPosition = (int(float(w1) / 2.0) + x1 - int(float(x2) / 2.0),
+##                              int(float(h1) / 2.0) + y1 - int(float(y2) / 2.0))
+##
+##            print "Splash Screen Position:"
+##            print TransanaGlobal.configData.primaryScreen
+##            print x1, y1, w1, h1
+##            print x2, y2
+##            print splashPosition
+##            print
+
             # Create the SplashScreen object
             splash = wx.SplashScreen(bitmap,
-                        wx.SPLASH_CENTRE_ON_SCREEN | wx.SPLASH_TIMEOUT,
-                        4000, None, -1, wx.DefaultPosition, wx.DefaultSize, splashStyle)
+                        wx.SPLASH_CENTER_ON_SCREEN | wx.SPLASH_TIMEOUT,
+                        4000, None, -1, splashPosition, wx.DefaultSize, splashStyle)
         else:
             raise ImageLoadError, \
                     _("Unable to load Transana's splash screen image.  Installation error?")
@@ -426,7 +446,6 @@ class Transana(wx.App):
                         print "Creating Transcript Window",
         
                     self.transcriptWindow = TranscriptionUI.TranscriptionUI(TransanaGlobal.menuWindow, includeClose = ('wxMac' in wx.PlatformInfo))
-
                     if DEBUG:
                         print self.transcriptWindow.dlg.GetSize()
                         print "Creating Visualization Window",
@@ -439,21 +458,21 @@ class Transana(wx.App):
                         print "Creating Control Object"
         
                     # Create the Control Object and register all objects to be controlled with it
-                    self.controlObject = ControlObject()
-                    self.controlObject.Register(Menu = TransanaGlobal.menuWindow,
+                    self.ControlObject = ControlObject()
+                    self.ControlObject.Register(Menu = TransanaGlobal.menuWindow,
                                                 Video = self.videoWindow,
                                                 Transcript = self.transcriptWindow,
                                                 Data = self.dataWindow,
                                                 Visualization = self.visualizationWindow)
                     # Set the active transcript
-                    self.controlObject.activeTranscript = 0
+                    self.ControlObject.activeTranscript = 0
 
                     # Register the ControlObject with all other objects to be controlled
-                    TransanaGlobal.menuWindow.Register(ControlObject=self.controlObject)
-                    self.dataWindow.Register(ControlObject=self.controlObject)
-                    self.videoWindow.Register(ControlObject=self.controlObject)
-                    self.transcriptWindow.Register(ControlObject=self.controlObject)
-                    self.visualizationWindow.Register(ControlObject=self.controlObject)
+                    TransanaGlobal.menuWindow.Register(ControlObject=self.ControlObject)
+                    self.dataWindow.Register(ControlObject=self.ControlObject)
+                    self.videoWindow.Register(ControlObject=self.ControlObject)
+                    self.transcriptWindow.Register(ControlObject=self.ControlObject)
+                    self.visualizationWindow.Register(ControlObject=self.ControlObject)
 
                     # Set the Application Top Window to the Menu Window (wxPython)
                     self.SetTopWindow(TransanaGlobal.menuWindow)
@@ -517,7 +536,7 @@ class Transana(wx.App):
                         print "Call 3", 'Visualization', w + x
 
                     # Adjust the positions of all other windows to match the Visualization Window's initial position
-                    self.controlObject.UpdateWindowPositions('Visualization', w + x)
+                    self.ControlObject.UpdateWindowPositions('Visualization', w + x, YUpper = h + y)
 
                     TransanaGlobal.resizingAll = False
 
@@ -587,7 +606,7 @@ class Transana(wx.App):
                 # If the user says Yes ...
                 if tmpDlg.LocalShowModal() == wx.ID_YES:
                     # ... start the Tutorial
-                    self.controlObject.Help('Welcome to the Transana Tutorial')
+                    self.ControlObject.Help('Welcome to the Transana Tutorial')
 
             if DEBUG:
                 print

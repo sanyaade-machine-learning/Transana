@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -30,14 +30,18 @@ import Collection
 import DBInterface
 # Import Transana's Dialog Boxes
 import Dialogs
+# import Transana's Documeng object
+import Document
 # Import Transana's Episode object
 import Episode
 # import Transana's Filter Dialog
 import FilterDialog
 # Import Transana's Note object
 import Note
-# Import Transana's Series Object
-import Series
+# Import Transana's Quote object
+import Quote
+# Import Transana's Library Object
+import Library
 # import Transana's Snapshot Object
 import Snapshot
 # Import Transana's Text Report infrastructure
@@ -57,14 +61,14 @@ class ReportGenerator(wx.Object):
         # Parameters can include:
         # controlObject=None
         # title=''
-        # reportType       One of RootNode, SeriesNode, EpisodeNode, TranscriptNode, CollectionNode, or ClipNode
+        # reportType       One of RootNode, LibraryNode, DocumentNode, EpisodeNode, TranscriptNode, CollectionNode, QuoteNode, ClipNode, or SnapshotNode
         # searchText=None  Search Text for Notes Report based on Notes Text Search results
 
         # Remember the parameters passed in and set values for all variables, even those NOT passed in.
         if kwargs.has_key('controlObject'):
-            self.controlObject = kwargs['controlObject']
+            self.ControlObject = kwargs['controlObject']
         else:
-            self.controlObject = None
+            self.ControlObject = None
         # Specify the Report Title
         if kwargs.has_key('title'):
             self.title = kwargs['title']
@@ -85,13 +89,13 @@ class ReportGenerator(wx.Object):
 
         # Create the TextReport object, which forms the basis for text-based reports.
         self.report = TextReport.TextReport(None, title=self.title, displayMethod=self.OnDisplay,
-                                            filterMethod=self.OnFilter, helpContext="Series, Episode, Collection, and Notes Reports")
+                                            filterMethod=self.OnFilter, helpContext="Transana's Text Reports")
         # If a Control Object has been passed in ...
-        if self.controlObject != None:
+        if self.ControlObject != None:
             # ... register this report with the Control Object (which adds it to the Windows Menu)
-            self.controlObject.AddReportWindow(self.report)
+            self.ControlObject.AddReportWindow(self.report)
             # Register the Control Object with the Report
-            self.report.controlObject = self.controlObject
+            self.report.ControlObject = self.ControlObject
         # Define the Filter List
         self.filterList = []
         # To speed report creation, freeze GUI updates based on changes to the report text
@@ -115,35 +119,14 @@ class ReportGenerator(wx.Object):
             populateFilterList = False
         # Make the control writable
         reportText.SetReadOnly(False)
-        # If we're using the Rich Text Control ...
-        if TransanaConstants.USESRTC:
-            # Set the font for the Report Title
-            reportText.SetTxtStyle(fontFace = 'Courier New', fontSize = 16, fontBold = True, fontUnderline = True,
-                                   parAlign = wx.TEXT_ALIGNMENT_CENTER, parSpacingAfter = 12)
-            # Add the Report Title
-            reportText.WriteText(self.title)
-            # Turn off underlining and bold
-            reportText.SetTxtStyle(fontBold = False, fontUnderline = False)
-            reportText.Newline()
-        # If we're using the Styled Text Control ...
-        else:
-            # Set the font for the Report Title
-            reportText.SetFont('Courier New', 13, 0x000000, 0xFFFFFF)
-            # Make the font Bold
-            reportText.SetBold(True)
-            # Get the style specified associated with this font
-            style = reportText.GetStyleAccessor("size:13,face:Courier New,fore:#000000,back:#ffffff,bold")
-            # Get spaces appropriate to centering the title
-            centerSpacer = self.report.GetCenterSpacer(style, self.title)
-            # Insert the spaces to center the title
-            reportText.InsertStyledText(centerSpacer)
-            # Turn on underlining now (because we don't want the spaces to be underlined)
-            reportText.SetUnderline(True)
-            # Add the Report Title
-            reportText.InsertStyledText(self.title)
-            # Turn off underlining and bold
-            reportText.SetUnderline(False)
-            reportText.SetBold(False)
+        # Set the font for the Report Title
+        reportText.SetTxtStyle(fontFace = 'Courier New', fontSize = 16, fontBold = True, fontUnderline = True,
+                               parAlign = wx.TEXT_ALIGNMENT_CENTER, parSpacingAfter = 12)
+        # Add the Report Title
+        reportText.WriteText(self.title)
+        # Turn off underlining and bold
+        reportText.SetTxtStyle(fontBold = False, fontUnderline = False)
+        reportText.Newline()
 
         if self.searchText != None:
             # ...  add a subtitle
@@ -153,23 +136,11 @@ class ReportGenerator(wx.Object):
             else:
                 prompt = _("Search Text: %s")
             self.subtitle = prompt % self.searchText
-            # If we're using the Rich Text Control ...
-            if TransanaConstants.USESRTC:
-                # ... set the font for the subtitle ...
-                reportText.SetTxtStyle(fontSize = 10)
-                # ... and insert the spacer and the subtitle.
-                reportText.WriteText(self.subtitle)
-                reportText.Newline()
-            # If we're using the Styled Text Control ...
-            else:
-                # ... set the font for the subtitle ...
-                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                # ... get the style specifier for that font ...
-                style = reportText.GetStyleAccessor("size:10,face:Courier New,fore:#000000,back:#ffffff")
-                # ... get the spaces needed to center the subtitle ...
-                centerSpacer = self.report.GetCenterSpacer(style, self.subtitle)
-                # ... and insert the subtitle.
-                reportText.InsertStyledText('\n' + centerSpacer + self.subtitle)
+            # ... set the font for the subtitle ...
+            reportText.SetTxtStyle(fontSize = 10)
+            # ... and insert the spacer and the subtitle.
+            reportText.WriteText(self.subtitle)
+            reportText.Newline()
 
         if self.configName != '':
             # ...  add a subtitle
@@ -179,48 +150,29 @@ class ReportGenerator(wx.Object):
             else:
                 prompt = _("Filter Configuration: %s")
             self.configLine = prompt % self.configName
-            # If we're using the Rich Text Control ...
-            if TransanaConstants.USESRTC:
-                # ... set the font for the subtitle ...
-                reportText.SetTxtStyle(fontSize = 10)
-                # ... and insert the subtitle.
-                reportText.WriteText(self.configLine)
-                reportText.Newline()
-            # If we're using the Styled Text Control ...
-            else:
-                # ... set the font for the subtitle ...
-                reportText.SetFont('Courier New', 10, 0x000000, 0xFFFFFF)
-                # ... get the style specifier for that font ...
-                style = reportText.GetStyleAccessor("size:10,face:Courier New,fore:#000000,back:#ffffff")
-                # ... get the spaces needed to center the subtitle ...
-                centerSpacer = self.report.GetCenterSpacer(style, self.configLine)
-                # ... and insert the spacer and the subtitle.
-                reportText.InsertStyledText('\n' + centerSpacer + self.configLine)
-
-        # If we're NOT using the Rich Text Control ...
-        if not TransanaConstants.USESRTC:
-            if (self.searchText != None) or (self.configName != ''):
-                # Set the font for the Report Title
-                reportText.SetFont('Courier New', 13, 0x000000, 0xFFFFFF)
-                # Get the style specified associated with this font
-                style = reportText.GetStyleAccessor("size:13,face:Courier New,fore:#000000,back:#ffffff,bold")
-
-            # Skip a couple of lines.
-            reportText.InsertStyledText('\n\n')
+            # ... set the font for the subtitle ...
+            reportText.SetTxtStyle(fontSize = 10)
+            # ... and insert the subtitle.
+            reportText.WriteText(self.configLine)
+            reportText.Newline()
 
         # If a Root Node flag is passed in ...
         if self.reportType == 'RootNode':
             # ... we want to group notes by category.  (They will be alphabetical within each category.)
-            majorList = DBInterface.list_of_all_notes(reportType='SeriesNode', searchText=self.searchText)
+            majorList = DBInterface.list_of_all_notes(reportType='LibraryNode', searchText=self.searchText)
+            if TransanaConstants.proVersion:
+                majorList += DBInterface.list_of_all_notes(reportType='DocumentNode', searchText=self.searchText)
             majorList += DBInterface.list_of_all_notes(reportType='EpisodeNode', searchText=self.searchText)
             majorList += DBInterface.list_of_all_notes(reportType='TranscriptNode', searchText=self.searchText)
             majorList += DBInterface.list_of_all_notes(reportType='CollectionNode', searchText=self.searchText)
+            if TransanaConstants.proVersion:
+                majorList += DBInterface.list_of_all_notes(reportType='QuoteNode', searchText=self.searchText)
             majorList += DBInterface.list_of_all_notes(reportType='ClipNode', searchText=self.searchText)
             if TransanaConstants.proVersion:
                 majorList += DBInterface.list_of_all_notes(reportType='SnapshotNode', searchText=self.searchText)
         # if a specific Node flag is passed in ...
         else:
-            # ... and use the Clips from the Episode for the majorList. 
+            # ... and use the Notes from the requested Report Type for the majorList. 
             majorList = DBInterface.list_of_all_notes(reportType=self.reportType, searchText=self.searchText)
 
         # Initialize the initial data structure that will be turned into the report
@@ -244,55 +196,59 @@ class ReportGenerator(wx.Object):
             if (noteRecord['NoteNum'] in checkedRecords) or populateFilterList:
                 # ... load each note ...
                 tempNote = Note.Note(noteRecord['NoteNum'])
-                # If we're using the Rich Text Control ...
-                if TransanaConstants.USESRTC:
-                    # Turn bold on.
-                    reportText.SetTxtStyle(fontBold = True, fontSize = 12,
-                                           parAlign = wx.TEXT_ALIGNMENT_LEFT, parLeftIndent = 0,
-                                           parSpacingBefore = 36, parSpacingAfter = 12)
-                    # Add the note ID to the report
-                    reportText.WriteText('%s' % tempNote.id)
-                    reportText.Newline()
-                # If we're using the Styled Text Control ...
-                else:
-                    # Turn bold on.
-                    reportText.SetBold(True)
-                    # Add the note ID to the report
-                    reportText.InsertStyledText('%s\n' % tempNote.id)
-                    # Turn bold off.
-                    reportText.SetBold(False)
+                # Turn bold on.
+                reportText.SetTxtStyle(fontBold = True, fontSize = 12,
+                                       parAlign = wx.TEXT_ALIGNMENT_LEFT, parLeftIndent = 0,
+                                       parSpacingBefore = 36, parSpacingAfter = 12)
+                # Add the note ID to the report
+                reportText.WriteText('%s' % tempNote.id)
+                reportText.Newline()
 
                 # Initialize all temporary objects to None so we can detect their presence or absence
-                tempSeries = None
+                tempLibrary = None
+                tempDocument = None
                 tempEpisode = None
                 tempTranscript = None
                 tempCollection = None
+                tempQuote = None
                 tempClip = None
                 tempSnapshot = None
-                # If we have a Series Note ...
+                # If we have a Library Note ...
                 if tempNote.series_num > 0:
-                    # ... load the Series data
-                    tempSeries = Series.Series(tempNote.series_num)
-                    noteParent = unicode(_('Series'), 'utf8') + ' ' + tempSeries.id
+                    # ... load the Library data
+                    tempLibrary = Library.Library(tempNote.series_num)
+                    noteParent = unicode(_('Libraries'), 'utf8') + ' ' + tempLibrary.id
+                # If we have a Document Note ...
+                elif tempNote.document_num > 0:
+                    # ... load the Document and Library data
+                    tempDocument = Document.Document(tempNote.document_num)
+                    tempLibrary = Library.Library(tempDocument.library_num)
+                    noteParent = unicode(_('Document'), 'utf8') + ' ' + tempLibrary.id + ' > ' + tempDocument.id
                 # If we have an Episode Note ...
                 elif tempNote.episode_num > 0:
-                    # ... load the Episode and Series data
+                    # ... load the Episode and Library data
                     tempEpisode = Episode.Episode(tempNote.episode_num)
-                    tempSeries = Series.Series(tempEpisode.series_num)
-                    noteParent = unicode(_('Episode'), 'utf8') + ' ' + tempSeries.id + ' > ' + tempEpisode.id
+                    tempLibrary = Library.Library(tempEpisode.series_num)
+                    noteParent = unicode(_('Episode'), 'utf8') + ' ' + tempLibrary.id + ' > ' + tempEpisode.id
                 # If we have a Transcript Note ...
                 elif tempNote.transcript_num > 0:
-                    # ... load the Transcript, Episode, and Series data
+                    # ... load the Transcript, Episode, and Library data
                     # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
                     tempTranscript = Transcript.Transcript(tempNote.transcript_num, skipText=True)
                     tempEpisode = Episode.Episode(tempTranscript.episode_num)
-                    tempSeries = Series.Series(tempEpisode.series_num)
-                    noteParent = unicode(_('Transcript'), 'utf8') + ' ' + tempSeries.id + ' > ' + tempEpisode.id + ' > ' + tempTranscript.id
+                    tempLibrary = Library.Library(tempEpisode.series_num)
+                    noteParent = unicode(_('Transcript'), 'utf8') + ' ' + tempLibrary.id + ' > ' + tempEpisode.id + ' > ' + tempTranscript.id
                 # If we have a Collection Note ...
                 elif tempNote.collection_num > 0:
                     # ... load the Collection data
                     tempCollection = Collection.Collection(tempNote.collection_num)
                     noteParent = unicode(_('Collection'), 'utf8') + ' ' + tempCollection.GetNodeString()
+                # If we have a Quote Note ...
+                elif tempNote.quote_num > 0:
+                    # ... load the Quote and Collection data.  We can skip loading the Quote text to save load time
+                    tempQuote = Quote.Quote(tempNote.quote_num, skipText=True)
+                    tempCollection = Collection.Collection(tempQuote.collection_num)
+                    noteParent = unicode(_('Quote'), 'utf8') + ' ' + tempCollection.GetNodeString() + ' > ' + tempQuote.id
                 # If we have a Clip Note ...
                 elif tempNote.clip_num > 0:
                     # ... load the Clip and Collection data.  We can skip loading the Clip Transcript to save load time
@@ -306,192 +262,119 @@ class ReportGenerator(wx.Object):
                     tempCollection = Collection.Collection(tempSnapshot.collection_num)
                     noteParent = unicode(_('Snapshot'), 'utf8') + ' ' + tempCollection.GetNodeString() + ' > ' + tempSnapshot.id
 
-                # If we have Series data ...
-                if tempSeries != None:
-                    # If we're using the Rich Text Control ...
-                    if TransanaConstants.USESRTC:
-                        # Turn bold on.
-                        reportText.SetTxtStyle(fontSize = 10, fontBold = True, parLeftIndent = 63, parSpacingBefore = 0, parSpacingAfter = 0)
-                        # Add the note ID to the report
-                        reportText.WriteText(_('Series: '))
-                        # Turn bold off.
-                        reportText.SetTxtStyle(fontBold = False)
-                        # Add the Series ID
-                        reportText.WriteText('%s' % tempSeries.id)
-                        reportText.Newline()
-                    # If we're using the Styled Text Control ...
-                    else:
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the note ID to the report
-                        reportText.InsertStyledText(_('Series: '))
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the Series ID
-                        reportText.InsertStyledText('%s\n' % tempSeries.id)
+                # If we have Library data ...
+                if tempLibrary != None:
+                    # Turn bold on.
+                    reportText.SetTxtStyle(fontSize = 10, fontBold = True, parLeftIndent = 63, parSpacingBefore = 0, parSpacingAfter = 0)
+                    # Add the note ID to the report
+                    reportText.WriteText(_('Library: '))
+                    # Turn bold off.
+                    reportText.SetTxtStyle(fontBold = False)
+                    # Add the Library ID
+                    reportText.WriteText('%s' % tempLibrary.id)
+                    reportText.Newline()
+                # If we have Document data ...
+                if tempDocument != None:
+                    # Turn bold on.
+                    reportText.SetTxtStyle(fontBold = True)
+                    # Add the note ID to the report
+                    reportText.WriteText(_('Document: '))
+                    # Turn bold off.
+                    reportText.SetTxtStyle(fontBold = False)
+                    # Add the Document ID
+                    reportText.WriteText('%s' % tempDocument.id)
+                    reportText.Newline()
                 # If we have Episode data ...
                 if tempEpisode != None:
-                    # If we're using the Rich Text Control ...
-                    if TransanaConstants.USESRTC:
-                        # Turn bold on.
-                        reportText.SetTxtStyle(fontBold = True)
-                        # Add the note ID to the report
-                        reportText.WriteText(_('Episode: '))
-                        # Turn bold off.
-                        reportText.SetTxtStyle(fontBold = False)
-                        # Add the Episode ID
-                        reportText.WriteText('%s' % tempEpisode.id)
-                        reportText.Newline()
-                    # If we're using the Styled Text Control ...
-                    else:
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the note ID to the report
-                        reportText.InsertStyledText(_('Episode: '))
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the Episode ID
-                        reportText.InsertStyledText('%s\n' % tempEpisode.id)
+                    # Turn bold on.
+                    reportText.SetTxtStyle(fontBold = True)
+                    # Add the note ID to the report
+                    reportText.WriteText(_('Episode: '))
+                    # Turn bold off.
+                    reportText.SetTxtStyle(fontBold = False)
+                    # Add the Episode ID
+                    reportText.WriteText('%s' % tempEpisode.id)
+                    reportText.Newline()
                 # If we have Transcript data ...
                 if tempTranscript != None:
-                    # If we're using the Rich Text Control ...
-                    if TransanaConstants.USESRTC:
-                        # Turn bold on.
-                        reportText.SetTxtStyle(fontBold = True)
-                        # Add the note ID to the report
-                        reportText.WriteText(_('Transcript: '))
-                        # Turn bold off.
-                        reportText.SetTxtStyle(fontBold = False)
-                        # Add the Transcript ID
-                        reportText.WriteText('%s' % tempTranscript.id)
-                        reportText.Newline()
-                    # If we're using the Styled Text Control ...
-                    else:
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the note ID to the report
-                        reportText.InsertStyledText(_('Transcript: '))
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the Transcript ID
-                        reportText.InsertStyledText('%s\n' % tempTranscript.id)
+                    # Turn bold on.
+                    reportText.SetTxtStyle(fontBold = True)
+                    # Add the note ID to the report
+                    reportText.WriteText(_('Transcript: '))
+                    # Turn bold off.
+                    reportText.SetTxtStyle(fontBold = False)
+                    # Add the Transcript ID
+                    reportText.WriteText('%s' % tempTranscript.id)
+                    reportText.Newline()
                 # If we have Collection data ...
                 if tempCollection != None:
-                    # If we're using the Rich Text Control ...
-                    if TransanaConstants.USESRTC:
-                        # Turn bold on.
-                        reportText.SetTxtStyle(fontSize = 10, fontBold = True, parLeftIndent = 63, parSpacingBefore = 0, parSpacingAfter = 0)
-                        # Add the note ID to the report
-                        reportText.WriteText(_('Collection: '))
-                        # Turn bold off.
-                        reportText.SetTxtStyle(fontBold = False)
-                        # Add the Collection ID
-                        reportText.WriteText('%s' % tempCollection.GetNodeString())
-                        reportText.Newline()
-                    # If we're using the Styled Text Control ...
-                    else:
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the note ID to the report
-                        reportText.InsertStyledText(_('Collection: '))
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the Collection Node String
-                        reportText.InsertStyledText('%s\n' % tempCollection.GetNodeString())
+                    # Turn bold on.
+                    reportText.SetTxtStyle(fontSize = 10, fontBold = True, parLeftIndent = 63, parSpacingBefore = 0, parSpacingAfter = 0)
+                    # Add the note ID to the report
+                    reportText.WriteText(_('Collection: '))
+                    # Turn bold off.
+                    reportText.SetTxtStyle(fontBold = False)
+                    # Add the Collection ID
+                    reportText.WriteText('%s' % tempCollection.GetNodeString())
+                    reportText.Newline()
+                # If we have Quote data ...
+                if tempQuote != None:
+                    # Turn bold on.
+                    reportText.SetTxtStyle(fontBold = True)
+                    # Add the note ID to the report
+                    reportText.WriteText(_('Quote: '))
+                    # Turn bold off.
+                    reportText.SetTxtStyle(fontBold = False)
+                    # Add the Quote ID
+                    reportText.WriteText('%s' % tempQuote.id)
+                    reportText.Newline()
                 # If we have Clip data ...
                 if tempClip != None:
-                    # If we're using the Rich Text Control ...
-                    if TransanaConstants.USESRTC:
-                        # Turn bold on.
-                        reportText.SetTxtStyle(fontBold = True)
-                        # Add the note ID to the report
-                        reportText.WriteText(_('Clip: '))
-                        # Turn bold off.
-                        reportText.SetTxtStyle(fontBold = False)
-                        # Add the Clip ID
-                        reportText.WriteText('%s' % tempClip.id)
-                        reportText.Newline()
-                    # If we're using the Styled Text Control ...
-                    else:
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the note ID to the report
-                        reportText.InsertStyledText(_('Clip: '))
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the Clip ID
-                        reportText.InsertStyledText('%s\n' % tempClip.id)
+                    # Turn bold on.
+                    reportText.SetTxtStyle(fontBold = True)
+                    # Add the note ID to the report
+                    reportText.WriteText(_('Clip: '))
+                    # Turn bold off.
+                    reportText.SetTxtStyle(fontBold = False)
+                    # Add the Clip ID
+                    reportText.WriteText('%s' % tempClip.id)
+                    reportText.Newline()
                 # If we have Snapshot data ...
                 if tempSnapshot != None:
-                    # If we're using the Rich Text Control ...
-                    if TransanaConstants.USESRTC:
-                        # Turn bold on.
-                        reportText.SetTxtStyle(fontBold = True)
-                        # Add the note ID to the report
-                        reportText.WriteText(_('Snapshot: '))
-                        # Turn bold off.
-                        reportText.SetTxtStyle(fontBold = False)
-                        # Add the Snapshot ID
-                        reportText.WriteText('%s' % tempSnapshot.id)
-                        reportText.Newline()
-                    # If we're using the Styled Text Control ...
-                    else:
-                        # Turn bold on.
-                        reportText.SetBold(True)
-                        # Add the note ID to the report
-                        reportText.InsertStyledText(_('Snapshot: '))
-                        # Turn bold off.
-                        reportText.SetBold(False)
-                        # Add the Snapshot ID
-                        reportText.InsertStyledText('%s\n' % tempSnapshot.id)
+                    # Turn bold on.
+                    reportText.SetTxtStyle(fontBold = True)
+                    # Add the note ID to the report
+                    reportText.WriteText(_('Snapshot: '))
+                    # Turn bold off.
+                    reportText.SetTxtStyle(fontBold = False)
+                    # Add the Snapshot ID
+                    reportText.WriteText('%s' % tempSnapshot.id)
+                    reportText.Newline()
 
                 # If we're going through the list for the first time and need to populate the filter list ...
                 if populateFilterList:
                     # ... add the note number, note ID, note parent info, and checked=True to the filter list.
                     self.filterList.append((tempNote.number, tempNote.id, noteParent, True))
 
-                # If we're using the Rich Text Control ...
-                if TransanaConstants.USESRTC:
-                    # Turn bold on.
-                    reportText.SetTxtStyle(fontBold = True)
-                    # Add the note ID to the report
-                    reportText.WriteText(_('Note Taker: '))
-                    # Turn bold off.
-                    reportText.SetTxtStyle(fontBold = False)
-                    # Add the Note's author
-                    reportText.WriteText('%s' % tempNote.author)
-                    reportText.Newline()
-                    # Turn bold on.
-                    reportText.SetTxtStyle(fontBold = True)
-                    # Add the note ID to the report
-                    reportText.WriteText(_('Note Text:'))
-                    reportText.Newline()
-                    # Turn bold off.
-                    reportText.SetTxtStyle(fontBold = False, parLeftIndent = 127)
-                    # Add the note text to the report (rstrip() prevents formatting problems when notes end with blank lines)
-                    reportText.WriteText('%s' % tempNote.text.rstrip())
-                    reportText.Newline()
-                # If we're using the Styled Text Control ...
-                else:
-                    # Turn bold on.
-                    reportText.SetBold(True)
-                    # Add the note ID to the report
-                    reportText.InsertStyledText(_('Note Taker: '))
-                    # Turn bold off.
-                    reportText.SetBold(False)
-                    # Add the Note's author
-                    reportText.InsertStyledText('%s\n' % tempNote.author)
-                    # Turn bold on.
-                    reportText.SetBold(True)
-                    # Add the note ID to the report
-                    reportText.InsertStyledText(_('Note Text:\n'))
-                    # Turn bold off.
-                    reportText.SetBold(False)
-                    # Add the note text to the report
-                    reportText.InsertStyledText('%s\n' % tempNote.text.rstrip())
-
-                    # Add a blank line after each group
-                    reportText.InsertStyledText('\n')
+                # Turn bold on.
+                reportText.SetTxtStyle(fontBold = True)
+                # Add the note ID to the report
+                reportText.WriteText(_('Note Taker: '))
+                # Turn bold off.
+                reportText.SetTxtStyle(fontBold = False)
+                # Add the Note's author
+                reportText.WriteText('%s' % tempNote.author)
+                reportText.Newline()
+                # Turn bold on.
+                reportText.SetTxtStyle(fontBold = True)
+                # Add the note ID to the report
+                reportText.WriteText(_('Note Text:'))
+                reportText.Newline()
+                # Turn bold off.
+                reportText.SetTxtStyle(fontBold = False, parLeftIndent = 127)
+                # Add the note text to the report (rstrip() prevents formatting problems when notes end with blank lines)
+                reportText.WriteText('%s' % tempNote.text.rstrip())
+                reportText.Newline()
 
             
         # Make the control read only, now that it's done
@@ -509,7 +392,7 @@ class ReportGenerator(wx.Object):
         # Determine the Report Scope
         if self.reportType == 'RootNode':
             reportScope = 1
-        elif self.reportType == 'SeriesNode':
+        elif self.reportType == 'LibraryNode':
             reportScope = 2
         elif self.reportType == 'EpisodeNode':
             reportScope = 3
@@ -521,6 +404,10 @@ class ReportGenerator(wx.Object):
             reportScope = 6
         elif self.reportType == 'SnapshotNode':
             reportScope = 7
+        elif self.reportType == 'DocumentNode':
+            reportScope = 8
+        elif self.reportType == 'QuoteNode':
+            reportScope = 9
         # Define the Filter Dialog.  We need reportType 13 to identify the Notes Report, the appropriate reportScope,
         # and the capacity to filter Notes.
         dlgFilter = FilterDialog.FilterDialog(self.report, -1, self.title, reportType=13,
