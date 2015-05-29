@@ -55,6 +55,8 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# Transana
 *.po
 app.fil
 DBTest.py
@@ -84,3 +86,39 @@ TransanaConfigConstantsPro.py
 TransanaConfigConstantsSU.py
 TransanaConfigConstantsWorkshop.py
 translate.py
+242_250_Conversion
+242_250_Conversion_Lab/
+242_250_Conversion_Single/
+250 Upgrade Utility/
+Audio Extract/
+build Intel - OLD/
+build PPC - OLD/
+Build_Mac_260/
+Cloud Service/
+locale/
+share/
+share/dutch/
+share/english/
+share (mac)/
+SSL/
+TransanaDemonstrationSetupDir/
+TransanaLabSetupDir/
+TransanaMultiUserSetupDir/
+TransanaProfessionalSetupDir/
+TransanaStandardSetupDir/
+TransanaWorkshopSetupDir/
+CreateTempTxt.py
+deforder.py
+FixHelpFiles.py
+License_de.txt
+License_es.txt
+License_it.txt
+audioextract
+License.txt
+MakeClassDoc.py
+MakeModuleDoc.py
+msvcp90.dll
+msvcr90.dll
+setup_PyRTFParserDemo.py
+TransanaColorDefs - Original - Copy.txt
+TransanaColorDefs - Original.txt
