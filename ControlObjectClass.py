@@ -850,8 +850,16 @@ class ControlObject(object):
             self.TranscriptWindow.SetTitle(_('Document') + u' - ' + tmpLibrary.id + u' > ' + currentObj.id)
             # ... and set the object to work with to the original Document
             tmpCurrentObj = currentObj
-        # If we have a Transcript Object ...
-        elif isinstance(currentObj, Transcript.Transcript) and (currentObj.clip_num == 0):
+        # If we have a Episode Object ...
+        elif isinstance(currentObj, Episode.Episode):
+            # We already have an episode, so use that.
+            tmpEpisode = currentObj
+            # ... load the Library ...
+            tmpLibrary = Library.Library(tmpEpisode.series_num)
+            # ... and we'll work with the Episode
+            tmpCurrentObj = currentObj
+        # If we have a Transcript Object ...  (SHOULD THIS EVEN HAPPEN??)
+        elif (isinstance(currentObj, Transcript.Transcript) and (currentObj.clip_num == 0)):
             # ... load the Episode ...
             tmpEpisode = Episode.Episode(currentObj.episode_num)
             # ... load the Library ...

@@ -96,8 +96,6 @@ build PPC - OLD/
 Build_Mac_260/
 Cloud Service/
 locale/
-share/
-share (mac)/
 SSL/
 TransanaDemonstrationSetupDir/
 TransanaLabSetupDir/
@@ -118,5 +116,8 @@ MakeModuleDoc.py
 msvcp90.dll
 msvcr90.dll
 setup_PyRTFParserDemo.py
-TransanaColorDefs - Original - Copy.txt
-TransanaColorDefs - Original.txt
+share (mac)/
+share/
+TransanaColorDefs*
+errmsg.sys
+errmsg.txt
