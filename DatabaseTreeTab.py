@@ -6584,7 +6584,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                     self.parent.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('C')
                                 # Check to see if we need to update the keyword Visualization.  (We don't know if any clips
                                 # were in the current episode, so all we can check is that an episode is loaded!)
-                                if (isinstance(self.parent.ControlObject.currentObj, Episode.Episode)):
+                                if (isinstance(self.parent.ControlObject.currentObj, Episode.Episode) or
+                                    isinstance(self.parent.ControlObject.currentObj, Document.Document)):
                                     self.parent.ControlObject.UpdateKeywordVisualization()
                                 # Even if this computer doesn't need to update the keyword visualization others, might need to.
                                 if not TransanaConstants.singleUserVersion:
