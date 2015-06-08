@@ -119,5 +119,8 @@ setup_PyRTFParserDemo.py
 share (mac)/
 share/
 TransanaColorDefs*
-errmsg.sys
-errmsg.txt
+help/Manual and Tutorial 3.0 Outline.docx
+RichTextEditCtrl_RTC - Copy.py
+TranscriptEditor_RTC - Copy.py
+WaveformProgress - SubProcess.py
+WaveformProgress - wxProcess.py
