@@ -126,3 +126,4 @@ WaveformProgress - SubProcess.py
 WaveformProgress - wxProcess.py
 BatchFileProcessor - Multi.py
 BatchFileProcessor - Single.py
+*.DS_Store

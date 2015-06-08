@@ -1393,6 +1393,10 @@ class VisualizationWindow(wx.Dialog):
                                 if (len(errorLog) == 1) and (errorLog[0] == 'Cancelled'):
                                     # ... signal that the WAV file was NOT created!
                                     dllvalue = 1
+                            # On OS X, if you do extraction from a multi-media Episode, Transana will crash soon after.  (eg. create Quick Clip.)
+                            # This appears to prevent that!!
+                            wx.YieldIfNeeded()
+                                
                         except UnicodeDecodeError:
                             if DEBUG:
                                 import traceback
