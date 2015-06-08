@@ -286,7 +286,7 @@ class BatchFileProcessor(Dialogs.GenForm):
         # Remove this conversion from the dictionary of running conversions
         del(self.runningConversions[progressDlg.indexNum])
         # If we have NO MORE running conversions ...
-        if len(self.runningConversions) == 0:
+        if (len(self.runningConversions) == 0) and (len(self.processFileList) == 0):
             # Close and destroy the Batch File Processor
             self.Close()
             self.Destroy()
