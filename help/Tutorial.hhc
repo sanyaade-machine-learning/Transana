@@ -1,7 +1,7 @@
 <ul>
 
   <li> <object type="text/sitemap">
-           <param name="Name" value="Transana Tutorial">
+           <param name="Name" value="The Transana Tutorial">
            <param name="ID" value=10>
            <param name="Local" value="Tutorial.htm">
        </object>
@@ -16,7 +16,7 @@
            <param name="Local" value="StartingTransana.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Transana Main Screen">
+           <param name="Name" value="Transana's Main Screen">
            <param name="ID" value=40>
            <param name="Local" value="TransanaWindow.htm">
        </object>
@@ -41,7 +41,7 @@
            <param name="Local" value="CreateLibrary.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Text - Preparing Text Data">
+           <param name="Name" value="Text - Preparing Text for Analysis">
            <param name="ID" value=90>
            <param name="Local" value="PrepareText.htm">
        </object>
@@ -56,7 +56,7 @@
            <param name="Local" value="EditDocument.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Media - Preparing Media Data">
+           <param name="Name" value="Media - Preparing Media for Analysis">
            <param name="ID" value=120>
            <param name="Local" value="PrepareMedia.htm">
        </object>
@@ -101,7 +101,7 @@
            <param name="Local" value="PlayingMedia.htm">
        </object>
   <li> <object type="text/sitemap">
-           <param name="Name" value="Image - Adding a Still Image to a Transcript">
+           <param name="Name" value="Image - Add a Still Image to a Document or Transcript">
            <param name="ID" value=210>
            <param name="Local" value="InsertImage.htm">
        </object>

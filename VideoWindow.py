@@ -330,7 +330,7 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
             # Create the Snapshot button
             self.btnSnapshot = wx.BitmapButton(self, -1, TransanaGlobal.GetImage(TransanaImages.Snapshot), size=(48, 24))
             # Set the Help String
-            self.btnSnapshot.SetToolTipString(_("Capture Snapshot"))
+            self.btnSnapshot.SetToolTipString(_("Video Screen Capture"))
             # Add LayoutDirection to prevent problems with Right-To-Left languages
             self.btnSnapshot.SetLayoutDirection(wx.Layout_LeftToRight)
             # Bind the Snapshot button to its event handler
@@ -387,8 +387,8 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
                 # If the transcript is not editable ...
                 if self.ControlObject.ActiveTranscriptReadOnly():
                     # ... create an error message
-                    msg = _("The current transcript is not editable.  The requested snapshot can be saved to disk, but cannot be inserted into the transcript.")
-                    msg += '\n\n' + _("To insert the snapshot into the transcript, press the Edit Mode button on the Document Toolbar to make the transcript editable.")
+                    msg = _("The current transcript is not editable.  The requested screen capture can be saved to disk, but cannot be inserted into the transcript.")
+                    msg += '\n\n' + _("To insert the screen capture into the transcript, press the Edit Mode button on the Document Toolbar to make the transcript editable.")
             # if not (If we have a Document or Quote) ...
             else:
                 # ... get the media filename from the media player
@@ -396,8 +396,8 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
                 # If the document is not editable ...
                 if self.ControlObject.ActiveTranscriptReadOnly():
                     # ... create an error message
-                    msg = _("The current document is not editable.  The requested snapshot can be saved to disk, but cannot be inserted into the document.")
-                    msg += '\n\n' + _("To insert the snapshot into the document, press the Edit Mode button on the Document Toolbar to make the document editable.")
+                    msg = _("The current document is not editable.  The requested screen capture can be saved to disk, but cannot be inserted into the document.")
+                    msg += '\n\n' + _("To insert the screen capture into the document, press the Edit Mode button on the Document Toolbar to make the document editable.")
             if msg != '':
                 dlg = Dialogs.InfoDialog(self, msg)
                 dlg.ShowModal()
