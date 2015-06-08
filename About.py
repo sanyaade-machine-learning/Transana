@@ -105,7 +105,7 @@ class AboutBox(wx.Dialog):
 
         # Create a label for the Translation Credits
         if TransanaGlobal.configData.language == 'en':
-            str = 'Documentation written by David K. Woods\nwith assistance and editing by \nBecky Holmes and Jen Patashnick.'
+            str = 'Documentation written by David K. Woods\nwith assistance and editing by Becky Holmes.'
         elif TransanaGlobal.configData.language == 'ar':
             str = _("Arabic translation provided by\n.")
         elif TransanaGlobal.configData.language == 'da':
