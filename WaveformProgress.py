@@ -269,6 +269,7 @@ class WaveformProgress(wx.Dialog):
             process = '"' +  programStr + '" "-embedded" "1" "-i" "%s" "-vn" "-ar" "2756" "-ab" "8k" "-ac" "1" "-acodec" "pcm_u8" "-y" "%s"'
             tempMediaFilename = inputFile
             tempWaveFilename = outputFile
+
         elif mode == 'AudioExtraction-OLD':
             programStr = os.path.join(TransanaGlobal.programDir, 'audioextract')
             if 'wxMSW' in wx.PlatformInfo:
@@ -353,9 +354,12 @@ class WaveformProgress(wx.Dialog):
                         # ... add the line to the error messages list
                         self.errorMessages.append(line)
             # Destroy the now-completed process
-            self.process.Destroy()
+            if self.process is not None:
+                self.process.Detach()
+                self.process.CloseOutput()
             # De-reference the process
             self.process = None
+            wx.YieldIfNeeded()
             # If we're allowing multiple threads ...
             if not self.showModally:
                 # ... inform the PARENT that this thread is complete for cleanup

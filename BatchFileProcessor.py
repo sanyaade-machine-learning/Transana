@@ -289,7 +289,6 @@ class BatchFileProcessor(Dialogs.GenForm):
         if len(self.runningConversions) == 0:
             # Close and destroy the Batch File Processor
             self.Close()
-            self.Destroy()
 
     def OnBrowse(self, evt):
         """ Invoked when the user presses the Get Files button. """

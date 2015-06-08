@@ -124,3 +124,5 @@ RichTextEditCtrl_RTC - Copy.py
 TranscriptEditor_RTC - Copy.py
 WaveformProgress - SubProcess.py
 WaveformProgress - wxProcess.py
+BatchFileProcessor - Multi.py
+BatchFileProcessor - Single.py
