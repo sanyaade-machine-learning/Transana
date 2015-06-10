@@ -378,7 +378,7 @@ class SnapshotWindow(wx.Frame):
             self.line_style_cb.SetStringSelection(_('Solid'))
             self.toolbar2.AddControl(self.line_style_cb)
             self.line_style_cb.Bind(wx.EVT_CHOICE, self.OnToolbar)
-            # Disable LIne Style selection
+            # Disable Line Style selection
             self.line_style_cb.Enable(False)
 
             self.toolbar2.AddSeparator()
@@ -2065,14 +2065,19 @@ class SnapshotWindow(wx.Frame):
             self.obj.db_load(self.obj.number)
             # Update the Keyword Visualization, if needed
             self.ControlObject.UpdateKeywordVisualization()
-            # Even if this computer doesn't need to update the keyword visualization others, might need to.
-            if not TransanaConstants.singleUserVersion and (self.obj.episode_num != 0):
-                # We need to update the Episode Keyword Visualization
-                if DEBUG:
-                    print 'Message to send = "UKV %s %s %s"' % ('Episode', self.obj.episode_num, 0)
-                    
+            # Multi-user Messaging
+            if not TransanaConstants.singleUserVersion:
+                # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                if (self.obj.episode_num != 0):
+                    # We need to update the Episode Keyword Visualization
+                    if DEBUG:
+                        print 'Message to send = "UKV %s %s %s"' % ('Episode', self.obj.episode_num, 0)
+                        
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', self.obj.episode_num, 0))
+                # If this Snapshot is open on other computers, it should be updated.
                 if TransanaGlobal.chatWindow != None:
-                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', self.obj.episode_num, 0))
+                    TransanaGlobal.chatWindow.SendMessage("US %s" % (self.obj.number))
             # Toggle the Toolbar Button to signal that we have left Edit mode
             self.toolbar.ToggleTool(self.editTool.GetId(), False)
         except TransanaExceptions.SaveError:

@@ -2165,6 +2165,11 @@ class TranscriptEditor(RichTextEditCtrl):
             # ... tell it to play again!
             self.parent.ControlObject.Play()
 
+        # A few users, mostly on OS X, are experiencing program crashes following Auto-Save.  I have not been able to
+        # recreate this problem, despite trying on a large number of computers and with varied data.  This is an
+        # attempt to solve that problem blind based on other crashes I've debugged lately.
+        wx.YieldIfNeeded()
+
         # Start exception handling
         try:
             # Try to return focus to whatever control had it

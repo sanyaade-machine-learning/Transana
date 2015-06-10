@@ -1485,6 +1485,19 @@ class ChatWindow(wx.Frame):
 
                                 print "ChatWindow.OnPostMessage():  UKV not processed for ", msgData[0]
                                 print
+
+                        # Update Snapshot
+                        elif messageHeader == 'US':
+                            # Start with a list of all the open Snapshot Windows.
+                            openSnapshotWindows = self.ControlObject.GetOpenSnapshotWindows()
+                            # Interate through the Snapshot Windows
+                            for win in openSnapshotWindows:
+                                # If the snapshot in question is open ...
+                                if (win.obj.number == int(message)):
+                                    # ... update the Snapshot Window
+                                    win.FileClear(event)
+                                    win.FileRestore(event)
+                                    win.OnEnterWindow(event)
                                     
                         else:
                             if DEBUG:
