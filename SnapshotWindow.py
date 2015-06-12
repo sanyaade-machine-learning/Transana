@@ -2279,8 +2279,14 @@ class GUITransana(GUIMode.GUIBase):
 
     def OnMove(self, event):
         """ Detect Mouse Motion for Rubber Band Box and Hit Test functions """
-        # Hit Test
-        self.Canvas.MouseOverTest(event)
+        # Get the cursor position and the coordinates bounding the image canvas
+        pos = event.GetPosition()
+        rect = self.Canvas.GetRect()
+        # If we go off the Canvas while drawing, the MouseOverTest crashes Transana!  Let's prevent that by
+        # only doing the MouseOverTest while on the canvas
+        if (pos[0] > 0) and (pos[1] > 0) and (pos[0] < rect[2]) and (pos[1] < rect[3]):
+            # Hit Test
+            self.Canvas.MouseOverTest(event)
 
         # Always raise the Move event.
         self.Canvas._RaiseMouseEvent(event,FloatCanvas.EVT_FC_MOTION)
