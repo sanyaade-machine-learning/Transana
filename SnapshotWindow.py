@@ -1520,11 +1520,11 @@ class SnapshotWindow(wx.Frame):
         # Create a Menu
         menu = wx.Menu()
         # Populate the Menu
-        menu.Append(MENU_POPUP_HIDE, _("Hide"))
+        menu.Append(MENU_POPUP_HIDE, _('Hide "%s"') % Object.Name)
         wx.EVT_MENU(self, MENU_POPUP_HIDE, self.OnPopupMenu)
-        menu.Append(MENU_POPUP_SENDTOBACK, _("Send To Back"))
+        menu.Append(MENU_POPUP_SENDTOBACK, _('Send "%s" To Back') % Object.Name)
         wx.EVT_MENU(self, MENU_POPUP_SENDTOBACK, self.OnPopupMenu)
-        menu.Append(MENU_POPUP_DELETE, _("Delete"))
+        menu.Append(MENU_POPUP_DELETE, _('Delete "%s"') % Object.Name)
         wx.EVT_MENU(self, MENU_POPUP_DELETE, self.OnPopupMenu)
         # Have the Menu Pop Up for the User
         self.PopupMenu(menu, self.ScreenToClient(wx.GetMousePosition()))
@@ -2280,7 +2280,7 @@ class GUITransana(GUIMode.GUIBase):
     def OnMove(self, event):
         """ Detect Mouse Motion for Rubber Band Box and Hit Test functions """
         # Hit Test
-        # self.Canvas.MouseOverTest(event)
+        self.Canvas.MouseOverTest(event)
 
         # Always raise the Move event.
         self.Canvas._RaiseMouseEvent(event,FloatCanvas.EVT_FC_MOTION)
