@@ -124,7 +124,6 @@ def DragDropEvaluation(source, destination):
         (source.nodetype == 'QuoteNode'            and destination.nodetype == 'QuoteNode') or \
         (source.nodetype == 'QuoteNode'            and destination.nodetype == 'ClipNode') or \
         (source.nodetype == 'QuoteNode'            and destination.nodetype == 'SnapshotNode') or \
-        (source.nodetype == 'QuoteNode'            and destination.nodetype == 'KeywordNode') or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'CollectionNode'       and source.parent != destination.recNum) or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'QuoteNode') or \
         (source.nodetype == 'ClipNode'             and destination.nodetype == 'ClipNode') or \
