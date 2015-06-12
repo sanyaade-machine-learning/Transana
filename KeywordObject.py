@@ -100,14 +100,14 @@ class Keyword(object):
             originalKeywordGroup = self.originalKeywordGroup
             originalKeyword = self.originalKeyword
 
-        # query the lock status for Episodes that contain the Keyword 
-        query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Episodes2 c
+        # query the lock status for Documents that contain the Keyword 
+        query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Documents2 c
                      WHERE a.KeywordGroup = %s AND
                            a.Keyword = %s AND
                            a.KeywordGroup = b.KeywordGroup AND
                            a.Keyword = b.Keyword AND
-                           b.EpisodeNum <> 0 AND
-                           b.EpisodeNum = c.EpisodeNum AND
+                           b.DocumentNum <> 0 AND
+                           b.DocumentNum = c.DocumentNum AND
                            (c.RecordLock <> '' AND
                             c.RecordLock IS NOT NULL)"""
         values = (originalKeywordGroup, originalKeyword)
@@ -118,7 +118,50 @@ class Keyword(object):
         RecordCount = len(result)
         c.close()
 
-        # If no Episodes that contain the record are locked, check the lock status of Clips that contain the Keyword
+
+        # If no Document that contain the record are locked, check the lock status of Episodes that contain the Keyword
+        if RecordCount == 0:
+            # query the lock status for Episodes that contain the Keyword 
+            query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Episodes2 c
+                         WHERE a.KeywordGroup = %s AND
+                               a.Keyword = %s AND
+                               a.KeywordGroup = b.KeywordGroup AND
+                               a.Keyword = b.Keyword AND
+                               b.EpisodeNum <> 0 AND
+                               b.EpisodeNum = c.EpisodeNum AND
+                               (c.RecordLock <> '' AND
+                                c.RecordLock IS NOT NULL)"""
+            values = (originalKeywordGroup, originalKeyword)
+            c = DBInterface.get_db().cursor()
+            query = DBInterface.FixQuery(query)
+            c.execute(query, values)
+            result = c.fetchall()
+            RecordCount = len(result)
+            c.close()
+
+        # If no Documents or Episodes that contain the record are locked, check the lock status of Quotes that
+        # contain the Keyword
+        if RecordCount == 0:
+            # query the lock status for Quotes that contain the Keyword 
+            query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Quotes2 c
+                         WHERE a.KeywordGroup = %s AND
+                               a.Keyword = %s AND
+                               a.KeywordGroup = b.KeywordGroup AND
+                               a.Keyword = b.Keyword AND
+                               b.QuoteNum <> 0 AND
+                               b.QuoteNum = c.QuoteNum AND
+                               (c.RecordLock <> '' AND
+                                c.RecordLock IS NOT NULL)"""
+            values = (originalKeywordGroup, originalKeyword)
+            c = DBInterface.get_db().cursor()
+            query = DBInterface.FixQuery(query)
+            c.execute(query, values)
+            result = c.fetchall()
+            RecordCount = len(result)
+            c.close()
+
+        # If no Documents, Episodes, or Quotes that contain the record are locked, check the lock status of
+        # Clips that contain the Keyword
         if RecordCount == 0:
             # query the lock status for Clips that contain the Keyword 
             query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Clips2 c
@@ -138,7 +181,8 @@ class Keyword(object):
             RecordCount = len(result)
             c.close()
 
-        # If no Episodes or Clips that contain the record are locked, check the lock status of Snapshots that contain the Keyword for Whole Snapshot coding
+        # If no Documents, Episodes, Quotes, or Clips that contain the record are locked, check the lock status
+        # of Snapshots that contain the Keyword for Whole Snapshot coding
         if RecordCount == 0:
             # query the lock status for Snapshots that contain the Keyword 
             query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Snapshots2 c
@@ -158,7 +202,8 @@ class Keyword(object):
             RecordCount = len(result)
             c.close()
 
-        # If no Episodes, Clips that contain the record are locked, check the lock status of Snapshots that contain the Keyword for Snapshot Coding
+        # If no Documents, Episodes, Quotes, Clips, or whole Snapshots that contain the record are locked,
+        # check the lock status of Snapshots that contain the Keyword for Snapshot Coding
         if RecordCount == 0:
             # query the lock status for Snapshots that contain the Keyword 
             query = """SELECT c.RecordLock FROM Keywords2 a, SnapshotKeywords2 b, Snapshots2 c
@@ -499,9 +544,9 @@ class Keyword(object):
             if EpisodeClipLockCount != 0 and \
                ((originalKeywordGroup != keywordGroup) or \
                 (originalKeyword != keyword)):
-                tempstr = _("""You cannot proceed because another user has recently started editing an Episode, Clip, or Snapshot 
-that uses Keyword "%s:%s".  If you change the Keyword now, that would 
-corrupt the record that is currently locked by %s.  Please try again later.""")
+                tempstr = _("""You cannot proceed because another user has recently started editing a Document, Episode, Quote, Clip, 
+or Snapshot that uses Keyword "%s:%s".  If you change the Keyword now, 
+that would corrupt the record that is currently locked by %s.  Please try again later.""")
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     tempstr = unicode(tempstr, 'utf8')
