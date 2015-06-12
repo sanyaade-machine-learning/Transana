@@ -144,6 +144,7 @@ class Quote(DataObject.DataObject):
             WHERE   QuoteID = %s AND
                     a.CollectNum = b.CollectNum AND
                     b.CollectID = %s AND
+                    b.ParentCollectNum = %s AND
                     c.QuoteNum = a.QuoteNum
         """
         # Adjust the query for sqlite if needed
@@ -151,7 +152,7 @@ class Quote(DataObject.DataObject):
         # Get a database cursor
         c = db.cursor()
         # Execute the query
-        c.execute(query, (quoteID, collectionID))
+        c.execute(query, (quoteID, collectionID, collectionParent))
         # Get the number of rows returned
         # rowcount doesn't work for sqlite!
         if TransanaConstants.DBInstalled == 'sqlite3':

@@ -4759,7 +4759,7 @@ def CheckForDuplicateObjName(sourceObjName, sourceObjType, treeCtrl, destCollect
          tempData = treeCtrl.GetPyData(tempTreeItem)
          
          # See if the current child is a Quote or Clip AND it has the same name as the source Object
-         if (tempData.nodetype in ['QuoteNode', 'ClipNode'])  and (treeCtrl.GetItemText(tempTreeItem).upper() == sourceObjName.upper()):
+         if (tempData.nodetype in ['QuoteNode', 'ClipNode', 'SnapshotNode'])  and (treeCtrl.GetItemText(tempTreeItem).upper() == sourceObjName.upper()):
             # If so, prompt the user to change the object's Name.  First, build a Dialog to ask that question.
             dlg = wx.TextEntryDialog(TransanaGlobal.menuWindow, _('Duplicate Item Name.  Please enter a new name for the Item.'), _('Transana Error'), sourceObjName, style=wx.OK | wx.CANCEL | wx.CENTRE)
             # Position the Dialog Box in the center of the screen
@@ -4845,9 +4845,9 @@ def CopyMoveQuote(treeCtrl, destNode, sourceQuote, sourceCollection, destCollect
           # Report the failure to the user, although it's already known to have failed because they pressed "cancel".
           if 'unicode' in wx.PlatformInfo:
               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-              prompt = unicode(_('%s cancelled for Quote "%s".  Duplicate Item Name Error.'), 'utf8') % (copyMovePrompt, sourceQuote.id)
+              prompt = unicode(_('%s cancelled for Quote "%s".  Duplicate Item Name Error.'), 'utf8') % (action, sourceQuote.id)
           else:
-              prompt = _('%s cancelled for Quote "%s".  Duplicate Item Name Error.') % (copyMovePrompt, sourceQuote.id)
+              prompt = _('%s cancelled for Quote "%s".  Duplicate Item Name Error.') % (action, sourceQuote.id)
           dlg = Dialogs.ErrorDialog(treeCtrl, prompt)
           dlg.ShowModal()
           dlg.Destroy()
@@ -5042,9 +5042,9 @@ def CopyMoveClip(treeCtrl, destNode, sourceClip, sourceCollection, destCollectio
           # Report the failure to the user, although it's already known to have failed because they pressed "cancel".
           if 'unicode' in wx.PlatformInfo:
               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-              prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Item Name Error.'), 'utf8') % (copyMovePrompt, sourceClip.id)
+              prompt = unicode(_('%s cancelled for Clip "%s".  Duplicate Item Name Error.'), 'utf8') % (action, sourceClip.id)
           else:
-              prompt = _('%s cancelled for Clip "%s".  Duplicate Item Name Error.') % (copyMovePrompt, sourceClip.id)
+              prompt = _('%s cancelled for Clip "%s".  Duplicate Item Name Error.') % (action, sourceClip.id)
           dlg = Dialogs.ErrorDialog(treeCtrl, prompt)
           dlg.ShowModal()
           dlg.Destroy()
@@ -5262,9 +5262,9 @@ def CopyMoveSnapshot(treeCtrl, destNode, sourceSnapshot, sourceCollection, destC
           # Report the failure to the user, although it's already known to have failed because they pressed "cancel".
           if 'unicode' in wx.PlatformInfo:
               # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-              prompt = unicode(_('%s cancelled for Snapshot "%s".  Duplicate Item Name Error.'), 'utf8') % (copyMovePrompt, sourceSnapshot.id)
+              prompt = unicode(_('%s cancelled for Snapshot "%s".  Duplicate Item Name Error.'), 'utf8') % (action, sourceSnapshot.id)
           else:
-              prompt = _('%s cancelled for Snapshot "%s".  Duplicate Item Name Error.') % (copyMovePrompt, sourceSnapshot.id)
+              prompt = _('%s cancelled for Snapshot "%s".  Duplicate Item Name Error.') % (action, sourceSnapshot.id)
           dlg = Dialogs.ErrorDialog(treeCtrl, prompt)
           dlg.ShowModal()
           dlg.Destroy()
