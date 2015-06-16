@@ -530,6 +530,11 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
                 if data[-1] == '"':
                     data = data[:-1]
 
+            # If we have a value in self.URL, populated in startElement, ...
+            if self.url != '':
+                # ... specify that we have a URL
+                self.txtCtrl.BeginURL(self.url)
+
             # If data isn't empty ...
             if data != "":
                 # Add the text to the RTC
@@ -537,8 +542,10 @@ class XMLToRTCHandler(xml.sax.handler.ContentHandler):
 
             # If we have a value in self.URL, populated in startElement, ...
             if self.url != '':
-                # ... then we need to at least mention the hyperlink.
-                self.txtCtrl.WriteText('(%s} ' % self.url)
+                # ... specify that we have to end the URL
+                self.txtCtrl.EndURL()
+                # ... and remove the URL specification, since we've now displayed it.
+                self.url = ''
 
         # If the characters come from a symbol element ...
         elif self.element == 'symbol':

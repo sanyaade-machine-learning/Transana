@@ -2428,7 +2428,6 @@ class ReportGenerator(wx.Object):
 
                                     # Add the keyword
                                     reportText.WriteText('%s : %s  (' % (key[0], key[1]))
-
                                     # if THIS Snapshot with THIS Keyword has NOT already been counted ...
                                     if not (('Snapshot', tmpObj.number, key[0], key[1]) in self.itemsCounted):
                                         # Add this Keyword to the Keyword Counts
@@ -2438,8 +2437,8 @@ class ReportGenerator(wx.Object):
                                                 keywordTimes['%s : %s' % (key[0], key[1])] += tmpObj.episode_duration
                                         else:
                                             keywordCounts['%s : %s' % (key[0], key[1])] = 1
-                                            keywordTimes['%s : %s' % (key[0], key[0])] = 0
-                                            keywordLengths['%s : %s' % (key[0], key[0])] = 0
+                                            keywordTimes['%s : %s' % (key[0], key[1])] = 0
+                                            keywordLengths['%s : %s' % (key[0], key[1])] = 0
                                             if tmpObj.episode_num > 0:
                                                 keywordTimes['%s : %s' % (key[0], key[1])] += tmpObj.episode_duration
                                         # Remember that THIS Snapshot with THIS Keyword HAS been counted now

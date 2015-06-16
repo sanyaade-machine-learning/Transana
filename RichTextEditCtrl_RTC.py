@@ -810,8 +810,12 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             startPos = XMLText.find(st)
             # ... identify the ending position of the TIME CODE DATA
             endPos = XMLText.find('&gt;', startPos + 4)
-            # Remove the hidden time code data
-            XMLText = XMLText[ : startPos] + XMLText[endPos + 4 : ]
+
+            try:
+                # Remove the hidden time code data
+                XMLText = XMLText[ : startPos] + XMLText[endPos + 4 : ]
+            except:
+                pass
 
         return XMLText
 
