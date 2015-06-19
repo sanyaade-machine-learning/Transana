@@ -841,65 +841,71 @@ class ControlObject(object):
     def UpdateCurrentObject(self, currentObj):
         """ This should be called any time the "current" object is changes, such as when the Transcript Notebook Page
             is changed. """
-
-        # If the current Object is a Document ...
-        if isinstance(currentObj, Document.Document):
-            # ... load the Library ...
-            tmpLibrary = Library.Library(currentObj.library_num)
-            # ... set the Transcript Window title accordingly ...
-            self.TranscriptWindow.SetTitle(_('Document') + u' - ' + tmpLibrary.id + u' > ' + currentObj.id)
-            # ... and set the object to work with to the original Document
-            tmpCurrentObj = currentObj
-        # If we have a Episode Object ...
-        elif isinstance(currentObj, Episode.Episode):
-            # We already have an episode, so use that.
-            tmpEpisode = currentObj
-            # ... load the Library ...
-            tmpLibrary = Library.Library(tmpEpisode.series_num)
-            # ... and we'll work with the Episode
-            tmpCurrentObj = currentObj
-        # If we have a Transcript Object ...  (SHOULD THIS EVEN HAPPEN??)
-        elif (isinstance(currentObj, Transcript.Transcript) and (currentObj.clip_num == 0)):
-            # ... load the Episode ...
-            tmpEpisode = Episode.Episode(currentObj.episode_num)
-            # ... load the Library ...
-            tmpLibrary = Library.Library(tmpEpisode.series_num)
-            # ... and set the object to work with to the EPISODE
-            tmpCurrentObj = tmpEpisode
-            # ... set the Transcript Window title accordingly ...
-            self.TranscriptWindow.SetTitle(_('Transcript') + u' - ' + tmpLibrary.id + u' > ' + tmpEpisode.id + u' > ' + currentObj.id)
-        elif isinstance(currentObj, Quote.Quote):
-            # ... set the Transcript Window title accordingly ...
-            self.TranscriptWindow.SetTitle(_('Quote') + u' - ' + currentObj.GetNodeString(True))
-            # ... and set the object to work with to the original Document
-            tmpCurrentObj = currentObj
-        elif isinstance(currentObj, Clip.Clip):
-            # ... set the Transcript Window title accordingly ...
-            self.TranscriptWindow.SetTitle(_('Clip') + u' - ' + currentObj.GetNodeString(True))
-            # ... and set the object to work with to the original Clip
-            tmpCurrentObj = currentObj
-        elif isinstance(currentObj, Transcript.Transcript) and (currentObj.clip_num > 0):
-            try:
-                # ... load the Clip ...
-                tmpClip = Clip.Clip(currentObj.clip_num)
-                # ... and set the object to work with to the CLIP
-                tmpCurrentObj = tmpClip
+        # Start exception handling to catch when the current object has been deleted by another user
+        try:
+            # If the current Object is a Document ...
+            if isinstance(currentObj, Document.Document):
+                # ... load the Library ...
+                tmpLibrary = Library.Library(currentObj.library_num)
                 # ... set the Transcript Window title accordingly ...
-                self.TranscriptWindow.SetTitle(_('Clip') + u' - ' + tmpClip.GetNodeString(True))
-            except TransanaExceptions.RecordNotFoundError, e:
-                # If the record is not found, that's because ANOTHER USER has deleted it!!
-                # We have to fake it here!
-                tmpCurrentObj = Clip.Clip()
-                tmpCurrentObj.number = currentObj.clip_num
+                self.TranscriptWindow.SetTitle(_('Document') + u' - ' + tmpLibrary.id + u' > ' + currentObj.id)
+                # ... and set the object to work with to the original Document
+                tmpCurrentObj = currentObj
+            # If we have a Episode Object ...
+            elif isinstance(currentObj, Episode.Episode):
+                # We already have an episode, so use that.
+                tmpEpisode = currentObj
+                # ... load the Library ...
+                tmpLibrary = Library.Library(tmpEpisode.series_num)
+                # ... and we'll work with the Episode
+                tmpCurrentObj = currentObj
+            # If we have a Transcript Object ...  (SHOULD THIS EVEN HAPPEN??)
+            elif (isinstance(currentObj, Transcript.Transcript) and (currentObj.clip_num == 0)):
+                # ... load the Episode ...
+                tmpEpisode = Episode.Episode(currentObj.episode_num)
+                # ... load the Library ...
+                tmpLibrary = Library.Library(tmpEpisode.series_num)
+                # ... and set the object to work with to the EPISODE
+                tmpCurrentObj = tmpEpisode
+                # ... set the Transcript Window title accordingly ...
+                self.TranscriptWindow.SetTitle(_('Transcript') + u' - ' + tmpLibrary.id + u' > ' + tmpEpisode.id + u' > ' + currentObj.id)
+            elif isinstance(currentObj, Quote.Quote):
+                # ... set the Transcript Window title accordingly ...
+                self.TranscriptWindow.SetTitle(_('Quote') + u' - ' + currentObj.GetNodeString(True))
+                # ... and set the object to work with to the original Document
+                tmpCurrentObj = currentObj
+            elif isinstance(currentObj, Clip.Clip):
+                # ... set the Transcript Window title accordingly ...
+                self.TranscriptWindow.SetTitle(_('Clip') + u' - ' + currentObj.GetNodeString(True))
+                # ... and set the object to work with to the original Clip
+                tmpCurrentObj = currentObj
+            elif isinstance(currentObj, Transcript.Transcript) and (currentObj.clip_num > 0):
+                try:
+                    # ... load the Clip ...
+                    tmpClip = Clip.Clip(currentObj.clip_num)
+                    # ... and set the object to work with to the CLIP
+                    tmpCurrentObj = tmpClip
+                    # ... set the Transcript Window title accordingly ...
+                    self.TranscriptWindow.SetTitle(_('Clip') + u' - ' + tmpClip.GetNodeString(True))
+                except TransanaExceptions.RecordNotFoundError, e:
+                    # If the record is not found, that's because ANOTHER USER has deleted it!!
+                    # We have to fake it here!
+                    tmpCurrentObj = Clip.Clip()
+                    tmpCurrentObj.number = currentObj.clip_num
+                    
+            else:
+                tmpCurrentObj = currentObj
                 
-        else:
-            tmpCurrentObj = currentObj
-            
-            print "ControlObjectClass.UpdateCurrentObject():", self.currentObj == currentObj
-            print type(self.currentObj), type(currentObj)
-            print currentObj
-            print
+                print "ControlObjectClass.UpdateCurrentObject():", self.currentObj == currentObj
+                print type(self.currentObj), type(currentObj)
+                print currentObj
+                print
+        # If the current object is not found, 
+        except TransanaExceptions.RecordNotFoundError, e:
+            # The current object has been deleted, so signal that!
+            tmpCurrentObj = None
 
+        
         # Remove any tabs in the Data Window beyond the Database Tab
         self.DataWindow.DeleteTabs()
         # This method can have problems during MU object deletion.  Therefore, start exception handling.
