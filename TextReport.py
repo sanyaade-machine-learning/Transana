@@ -481,6 +481,24 @@ class TextReport(wx.Frame):
                 # Use the HTML Handler to save the file.
                 # Note that the HTML Handler takes a wxRichTextBuffer argument
                 handler.SaveFile(self.reportText.GetBuffer(), fname)
+
+                # We need to edit the HTML file ever so slightly so that it KNOWS that it's using UTF8.
+                # Open the HTML file
+                tmpFile = open(fname, "r")
+                # Read the HTML file
+                tmpFileText = tmpFile.read()
+                # Close the HTML file
+                tmpFile.close()
+                # Determine the position of the HTML HEAD tag
+                insertPoint = tmpFileText.lower().find('<head>') + 6
+                # Insert the HTML5 META tag specifying the UTF8 character set in the HEAD block
+                tmpFileText = tmpFileText[:insertPoint] + '<META charset="UTF-8">' + tmpFileText[insertPoint:]
+                # Now open the HTML file for writing
+                tmpFile = open(fname, "w")
+                # Replace its contents with the edited contents
+                tmpFile.write(tmpFileText)
+                # Close the HTML file
+                tmpFile.close()
         except:
 
             print "HTML FILE SAVE failure in TextReport.py"
