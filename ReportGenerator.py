@@ -2708,7 +2708,7 @@ class ReportGenerator(wx.Object):
                 else:
                     prompt = u'  ' + unicode(_('Quotes:'), 'utf8') + u'\t%6d'
                 data = (self.quoteCount,)
-                if self.showTime:
+                if self.showKeywords or self.showTime:
                     prompt += u'  %10s'
                     data += (self.quoteTotalLength,)
                 # Add the total Item Count
@@ -2723,7 +2723,7 @@ class ReportGenerator(wx.Object):
                 else:
                     prompt = u'  ' + unicode(_('Clips:'), 'utf8') + u'\t%6d'
                 data = (self.clipCount,)
-                if self.showTime:
+                if self.showKeywords or self.showTime:
                     if ((self.documentName != None) or (self.episodeName != None) or \
                         (self.collection != None) or (self.searchColl != None)) and \
                         (len(keywordLengths) > 0):
@@ -2738,7 +2738,7 @@ class ReportGenerator(wx.Object):
             if self.snapshotCount > 0:
                 prompt = u'  ' + unicode(_('Snapshots:'), 'utf8') + u'\t%6d'
                 data = (self.snapshotCount,)
-                if self.showTime:
+                if self.showKeywords or self.showTime:
                     if ((self.documentName != None) or (self.episodeName != None) or \
                         (self.collection != None) or (self.searchColl != None)) and \
                         (len(keywordLengths) > 0):
