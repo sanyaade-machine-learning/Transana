@@ -1112,10 +1112,12 @@ class FilterDialog(wx.Dialog):
                 dlg.CentreOnScreen()
                 # Show the dialog and get the results.
                 result = dlg.ShowModal()
-                # Get the config name the user chose.
-                configName = dlg.GetStringSelection()
-                # Remember the Configuration Name
-                self.configName = configName
+                # If the user pressed OK ...
+                if result == wx.ID_OK:
+                    # Get the config name the user chose.
+                    configName = dlg.GetStringSelection()
+                    # Remember the Configuration Name
+                    self.configName = configName
                 # Destroy the Choice Dialog
                 dlg.Destroy()
             
