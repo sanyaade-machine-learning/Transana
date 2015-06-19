@@ -1936,7 +1936,11 @@ class TranscriptEditor(RichTextEditCtrl):
 
             elif c == wx.WXK_F12:
                 # F12 is Quick Save
-                self.save_transcript()
+                # Save the transcript
+                if TransanaConstants.partialTranscriptEdit:
+                    self.save_transcript(continueEditing=True)
+                else:
+                    self.save_transcript()
                 blockSkip = True
 
             # If anything not explicitly handled is entered ...

@@ -7044,7 +7044,12 @@ class _DBTreeCtrl(wx.TreeCtrl):
                             if dlg.get_input() != None:
                                 # Try to save the Quote Data
                                 quote.db_save()
-
+                                # Get the source document's object if it is open somewhere in this copy of Transana
+                                openSourceDocument = self.parent.ControlObject.GetOpenDocumentObject(Document.Document, quote.source_document_num)
+                                # If it is open somewhere ...
+                                if openSourceDocument != None:
+                                    # ... then reload it to update its QuotePositions, which may have changed due to a Quote Merge.
+                                    openSourceDocument.db_load_by_num(openSourceDocument.number)
                                 # See if the Quote ID has been changed.  If it has, update the tree.
                                 if quote.id != originalQuoteID:
                                     # Rename the Quote's Tree node

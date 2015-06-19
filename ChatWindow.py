@@ -1448,6 +1448,13 @@ class ChatWindow(wx.Frame):
                                 self.ControlObject.UpdateKeywordVisualization()
                             # if Object Type is Document ...
                             elif msgData[0] == 'Document':
+                                # Get the source document's object if it is open somewhere in this copy of Transana
+                                openSourceDocument = self.ControlObject.GetOpenDocumentObject(Document.Document, int(msgData[2]))
+                                # If it is open somewhere ...
+                                if openSourceDocument != None:
+                                    # ... then reload it to update its QuotePositions, which may have changed due to a Quote Merge.
+                                    openSourceDocument.db_load_by_num(openSourceDocument.number)
+                                
                                 # See if the currently loaded document matches the document number sent from the Message Server
                                 if isinstance(self.ControlObject.currentObj, Document.Document) and \
                                    self.ControlObject.currentObj.number == int(msgData[2]):
