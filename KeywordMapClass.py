@@ -2629,13 +2629,21 @@ class KeywordMap(wx.Frame):
             if (time > 0) and (kw != None) and \
                (((self.MediaLength > 0) and (time < self.MediaLength)) or \
                 ((self.CharacterLength > 0) and (time < self.CharacterLength))):
-                if 'unicode' in wx.PlatformInfo:
+                # If we have media-based data ...
+                if (self.MediaLength > 0) and (time < self.MediaLength):
+                    # ... set a prompt for keyword and time
                     prompt = unicode(_("Keyword:  %s : %s,  Time: %s"), 'utf8')
-                else:
-                    prompt = _("Keyword:  %s : %s,  Time: %s")
-                # Set the Status Text to indicate the current Keyword and Time values
-                self.SetStatusText(prompt % (kw[0], kw[1], Misc.time_in_ms_to_str(time)))
+                    # Set the Status Text to indicate the current Keyword and Time values
+                    self.SetStatusText(prompt % (kw[0], kw[1], Misc.time_in_ms_to_str(time)))
+                # if we have text-based data ...
+                elif (self.CharacterLength > 0) and (time < self.CharacterLength):
+                    # ... set a prompt for keyword and position
+                    prompt = unicode(_("Keyword:  %s : %s,  Position: %s"), 'utf8')
+                    # Set the Status Text to indicate the current Keyword and Position values
+                    self.SetStatusText(prompt % (kw[0], kw[1], time))
+                # If there's a defined keyword in the Keyword Clip List ...
                 if (self.keywordClipList.has_key(kw)):
+                    # ... and we have media-based data ...
                     if self.MediaLength > 0:
                         # initialize the string that will hold the names of clips being pointed to
                         clipNames = ''
@@ -2659,6 +2667,7 @@ class KeywordMap(wx.Frame):
                         if (clipNames != ''):
                             # ... add the Clip Names to the ToolTip so they will show up on screen as a hint
                             self.graphic.SetToolTipString(clipNames)
+                    # .. and we have text-based data ...
                     elif self.CharacterLength > 0:
                         # initialize the string that will hold the names of quotes being pointed to.
                         quoteNames = ''
