@@ -894,7 +894,7 @@ class KeywordMap(wx.Frame):
         else:
             self.Bounds = (0, 0, w, h - 25)
         # If we have data defined in the graph ...
-        if (self.episodeName != '') or (self.collection != None):
+        if (self.episodeName != '') or (self.textObj != None) or (self.collection != None):
             # ... redraw the graph
             self.DrawGraph()
             
