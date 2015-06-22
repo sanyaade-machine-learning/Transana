@@ -206,9 +206,14 @@ class FilterDialog(wx.Dialog):
             self.endTimeVal = self.startTimeVal
 
         # Initialize the dialog box.
+        # The form needs to be a bit larger on OSX
+        if 'wxMac' in wx.PlatformInfo:
+            formHeight = 610
+        else:
+            formHeight = 575
         # Just to be clear, if we're loading the default, we don't actually SEE the dialog, but we still
         # create it and populate all of its fields.  That's the easiest way to load the default config!!
-        wx.Dialog.__init__(self, parent, id, title, size = (500,575),
+        wx.Dialog.__init__(self, parent, id, title, size = (500, formHeight),
                            style= wx.DEFAULT_DIALOG_STYLE | wx.MAXIMIZE_BOX | wx.RESIZE_BORDER | wx.NO_FULL_REPAINT_ON_RESIZE)
         # Make the background White
         self.SetBackgroundColour(wx.WHITE)
