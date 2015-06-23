@@ -797,11 +797,11 @@ class FilterDialog(wx.Dialog):
                 # Add the End Time field
                 self.endTime = wx.TextCtrl(self.optionsPanel, -1, self.endTimeVal)
                 pnlVSizer.Add(self.endTime, 0, wx.LEFT, 10)
-                # Add a note that says this data does not get saved.
+                # Add a note about using 0 for end-of-file position.
                 if self.reportType in [17]:
-                    tRTxt = wx.StaticText(self.optionsPanel, -1, _("NOTE:  Setting the End Position to 0 will set it to the end of the Document.\nPosition data is not saved as part of the Filter Configuration data."))
+                    tRTxt = wx.StaticText(self.optionsPanel, -1, _("NOTE:  Setting the End Position to 0 will set it to the end of the Document."))
                 else:
-                    tRTxt = wx.StaticText(self.optionsPanel, -1, _("NOTE:  Setting the End Time to 0 will set it to the end of the Media File.\nTime Range data is not saved as part of the Filter Configuration data."))
+                    tRTxt = wx.StaticText(self.optionsPanel, -1, _("NOTE:  Setting the End Time to 0 will set it to the end of the Media File."))
                 pnlVSizer.Add(tRTxt, 0, wx.ALL, 10)
 
             # Keyword Map Report, Keyword Visualization, the Series Keyword Sequence Map, the Collection Keyword Map,
