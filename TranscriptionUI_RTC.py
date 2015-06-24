@@ -404,6 +404,11 @@ class TranscriptionUI(wx.Frame):
             if tmpObj != None:
                 # Remove the Visualization Info for the item being closed
                 self.ControlObject.DeleteVisualizationInfo((type(tmpObj), tmpObj.number))
+                # If we're closing the Transcript for a media-based object ... 
+                if isinstance(tmpObj, Transcript.Transcript):
+                    # ... clear the media file out of the media window (since there can only be one)
+                    self.ControlObject.ClearMediaWindow()
+            
             # ... delete the Notebook Page
             self.DeleteNotebookPage(event)
             # Other Window interaction is handled automatically as the Notebook Page changes on this page closing!!
@@ -422,6 +427,8 @@ class TranscriptionUI(wx.Frame):
             self.ClearDoc()
             # Clear the Visualization Window
             self.ControlObject.ClearVisualization()
+            # Clear the Media Window
+            self.ControlObject.ClearMediaWindow()
 
     def OnSize(self, event):
         """ Resize method for Transcription UI.  Toolbar requires it. """

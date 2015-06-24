@@ -1440,12 +1440,7 @@ class ControlObject(object):
             # Clear Visualization Window
             self.VisualizationWindow.ClearVisualization()
             # Clear the Video Window
-            self.VideoWindow.ClearVideo()
-            # Clear the Video Filename as well!
-            self.VideoFilename = ''
-            # Identify the loaded media file
-            str = _('Media')
-            self.VideoWindow.SetTitle(str)
+            self.ClearMediaWindow()
 
             # Clear the Data Window
             self.DataWindow.ClearData()
@@ -1934,6 +1929,16 @@ class ControlObject(object):
         self.VisualizationWindow.ClearVisualization()
 
 #        self.VisualizationWindow.OnIdle(None)
+
+    def ClearMediaWindow(self):
+        """ Clear the media window """
+        # Clear the Video Window
+        self.VideoWindow.ClearVideo()
+        # Clear the Video Filename as well!
+        self.VideoFilename = ''
+        # Identify the loaded media file
+        str = _('Media')
+        self.VideoWindow.SetTitle(str)
 
     def ClearVisualizationSelection(self):
         """ Clear the current selection from the Visualization Window """
