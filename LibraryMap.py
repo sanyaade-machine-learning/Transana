@@ -2121,6 +2121,8 @@ class LibraryMap(wx.Frame):
         
     def OnLeftUp(self, event):
         """ Left Mouse Button Up event.  Triggers the load of a Clip. """
+        # Note if the Control key is pressed
+        ctrlPressed = wx.GetKeyState(wx.WXK_CONTROL)
         # Pass the event to the parent
         event.Skip()
         # Get the mouse's current position
@@ -2170,14 +2172,8 @@ class LibraryMap(wx.Frame):
                             clipNames[clipName] = (objType, clipNum)
         # If only 1 Item is found ...
         if len(clipNames) == 1:
-            # ... if that Item is a Clip ...
-            if clipNames[clipNames.keys()[0]][0] == 'Clip':
-                # ... load that clip by looking up the clip's number
-                self.parent.KeywordMapLoadClip(clipNames[clipNames.keys()[0]][1])
-            # ... if that Item is a Snapshot ...
-            elif clipNames[clipNames.keys()[0]][0] == 'Snapshot':
-                # ... load that Snapshot by looking up the snapshot's number
-                self.parent.KeywordMapLoadSnapshot(clipNames[clipNames.keys()[0]][1])
+            # ... load that clip by looking up the clip's number
+            self.parent.KeywordMapLoadItem(clipNames[clipNames.keys()[0]][0], clipNames[clipNames.keys()[0]][1], ctrlPressed)
             # If left-click, close the Series Map.  If not, don't!
             if event.LeftUp():
                 # Close the Series Map
@@ -2189,14 +2185,8 @@ class LibraryMap(wx.Frame):
                                         clipNames.keys(), wx.CHOICEDLG_STYLE)
             # If the user selects an Item and click OK ...
             if dlg.ShowModal() == wx.ID_OK:
-                # ... if that Item is a Clip ...
-                if clipNames[dlg.GetStringSelection()][0] == 'Clip':
-                    # ... load the selected clip
-                    self.parent.KeywordMapLoadClip(clipNames[dlg.GetStringSelection()][1])
-                # ... if that Item is a Snapshot ...
-                elif clipNames[dlg.GetStringSelection()][0] == 'Snapshot':
-                    # ... load the selected snapshot
-                    self.parent.KeywordMapLoadSnapshot(clipNames[dlg.GetStringSelection()][1])
+                # ... load the selected clip
+                self.parent.KeywordMapLoadItem(clipNames[dlg.GetStringSelection()][0], clipNames[dlg.GetStringSelection()][1], ctrlPressed)
                 # Destroy the SingleChoiceDialog
                 dlg.Destroy()
                 # If left-click, close the Series Map.  If not, don't!

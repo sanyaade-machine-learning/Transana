@@ -2838,18 +2838,8 @@ class KeywordMap(wx.Frame):
             if dlg.ShowModal() == wx.ID_OK:
                 # Get the data for the clicked object
                 (objType, objNum) = clipNames[dlg.GetStringSelection()]
-                # If the object is a Quote ...
-                if objType == 'Quote':
-                    # ... load that Quote
-                    self.parent.KeywordMapLoadQuote(objNum)                
-                # If the object is a clip ...
-                elif objType == 'Clip':
-                    # ... load that clip
-                    self.parent.KeywordMapLoadClip(objNum)
-                # If the object is a Snapshot ...
-                elif objType == 'Snapshot':
-                    # ... load that snapshot
-                    self.parent.KeywordMapLoadSnapshot(objNum)
+                # ... load that Quote
+                self.parent.KeywordMapLoadItem(objType, objNum, ctrlPressed)
                 # Destroy the SingleChoiceDialog
                 dlg.Destroy()
                 # If left-click, close the Keyword Map.  If not, don't!
