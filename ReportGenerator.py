@@ -678,10 +678,10 @@ class ReportGenerator(wx.Object):
             # Now build the subtitle
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_("Search Result: %s  Library: %s"), 'utf8')
+                prompt = unicode(_("Search Library: %s"), 'utf8')
             else:
-                prompt = _("Search Result: %s  Library: %s")
-            self.subtitle = prompt % (self.treeCtrl.GetItemText(searchResultNode), self.treeCtrl.GetItemText(self.searchSeries))
+                prompt = _("Search Library: %s")
+            self.subtitle = prompt % (self.treeCtrl.GetItemText(self.searchSeries),)
             # The majorLabel is for Episodes in this case
             majorLabel = _('Episode')
             # Initialize the majorList to an empty list
@@ -761,10 +761,10 @@ class ReportGenerator(wx.Object):
             # Now build the subtitle
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_("Search Result: %s  Collection: %s"), 'utf8')
+                prompt = unicode(_("Search Collection: %s"), 'utf8')
             else:
-                prompt = _("Search Result: %s  Collection: %s")
-            self.subtitle = prompt % (self.treeCtrl.GetItemText(searchResultNode), self.treeCtrl.GetItemText(self.searchColl))
+                prompt = _("Search Collection: %s")
+            self.subtitle = prompt % (self.treeCtrl.GetItemText(self.searchColl),)
             # The majorLabel is for Clips in this case
             majorLabel = _('Clip')
             # Initialize the majorList to an empty list
