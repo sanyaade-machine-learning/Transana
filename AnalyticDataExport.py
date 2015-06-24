@@ -31,6 +31,7 @@ import Clip
 import DBInterface
 import FilterDialog
 import TransanaConstants
+import TransanaExceptions
 import TransanaGlobal
 import Misc
 # import Python's codecs module to make reading and writing UTF-8 text files 
@@ -479,14 +480,24 @@ class AnalyticDataExport(Dialogs.GenForm):
                     # Encode string values using the Export Encoding
                     collectionID = collection.GetNodeString()
                     quoteID = quote.id
-                    document = Document.Document(quote.source_document_num)
-                    quoteSourceFilename = document.imported_file
-                    # If we're doing a Library report, we need the Quote's source document and Library for Document Filter comparison.
-                    if self.libraryNum != 0:
-                        library = Library.Library(document.library_num)
+                    try:
+                        document = Document.Document(quote.source_document_num)
+                        documentID = document.id
+                        quoteSourceFilename = document.imported_file
+                        # If we're doing a Library report, we need the Quote's source document and Library for Document Filter comparison.
+                        if self.libraryNum != 0:
+                            library = Library.Library(document.library_num)
+                            libraryID = library.id
+                    # If we have an orphaned Quote ...
+                    except TransanaExceptions.RecordNotFoundError, e:
+                        # ... then we don't know these values!
+                        documentID = ''
+                        quoteSourceFilename = _('Source Document unknown')
+                        libraryID = 0
+                        
                     # Implement Document filtering if needed.  If we have a Library Report, we need to confirm that the Source Document
                     # is "checked" in the filter list.  (If we don't have a Library Report, this check isn't needed.)
-                    if (self.libraryNum == 0) or ((document.id, library.id, True) in documentList):
+                    if (self.libraryNum == 0) or ((documentID == '') and (libraryID == '')) or ((documentID, libraryID, True) in documentList):
                         # Write the Quote's data values to the output file.  We're creating a tab-delimited file,
                         # so we'll use tabs to separate the items.
                         f.write('%s\t%s\t%s\t%s\t%s\t%s\t%d' % (collectionID, '1', quoteID, quoteSourceFilename,

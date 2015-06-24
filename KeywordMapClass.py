@@ -1918,6 +1918,9 @@ class KeywordMap(wx.Frame):
     def DrawGraph(self):
         """ Actually Draw the Keyword Map """
         self.keywordClipList = {}
+        # We need to remember Snapshot Color for when self.keywordAsColor is False
+        # Otherwise, whole snapshot coding may get a different color than detail snapshot coding.
+        snapshotColor = {}
 
         if not self.embedded:
             # Now that we have all necessary information, let's create and populate the graphic
@@ -2387,15 +2390,27 @@ class KeywordMap(wx.Frame):
                     # If we're in the Keyword Map and are NOT using Colors as Keywords (i.e., colors are Clips) ....
                     if (not self.embedded) and (not self.colorAsKeywords):
                         # Update the color index here, at the clip transition
-                        if (SnapshotNum != lastsnapshot) and (lastsnapshot != 0):
+                        if snapshotColor.has_key(SnapshotNum):
+                            colourindex = snapshotColor[SnapshotNum]
+                        else:
+                            # ... get the index for the next color in the color list
+                            colourindex = self.keywordColors['lastColor'] + 1
+                            # If we're at the end of the list ...
+                            if colourindex > len(colorSet) - 1:
+                                # ... reset the list to the beginning
+                                colourindex = 0
+                            # ... remember the color index used
+                            self.keywordColors['lastColor'] = colourindex
                             if colourindex < len(colorSet) - 1:
                                 colourindex = colourindex + 1
                             else:
                                 colourindex = 0
+                            snapshotColor[SnapshotNum] = colourindex
                     # Otherwise ...
                     else:
                         # ... use the keyword's defined color
                         colourindex = self.keywordColors[(KWG, KW)]
+
                     # Set the Color of the line to be drawn
                     self.graphic.SetColour(colorLookup[colorSet[colourindex]])
                     # Add this line to the graphic
