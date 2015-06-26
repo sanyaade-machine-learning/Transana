@@ -127,3 +127,10 @@ WaveformProgress - wxProcess.py
 BatchFileProcessor - Multi.py
 BatchFileProcessor - Single.py
 *.DS_Store
+unit_test_search.py
+unit_test_database.py
+unit_test_form_check.py
+unit_test_language_utility.py
+unit_test_misc.py
+unit_test_search.py
+unit_test_SSL.py

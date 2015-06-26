@@ -1,3 +1,4 @@
+# -*- coding: cp1252 -*-
 import wx
 
 # This module expects i18n.  Enable it here.
@@ -16,11 +17,13 @@ import ControlObjectClass
 import DatabaseTreeTab
 import DBInterface
 import Dialogs
+import Document
 import Episode
 import KeywordObject
+import Library
 import MenuWindow
 import ProcessSearch
-import Library
+import Quote
 import Snapshot
 import TransanaExceptions
 import Transcript
@@ -109,6 +112,46 @@ class FormCheck(wx.Frame):
         startAtTest = 1  # Should start at 1, not 0!
         endAtTest = 500   # Should be one more than the last test to be run!
         testsToRun = testsNotToSkip + range(startAtTest, endAtTest)
+
+        documentText = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" linespacing="10">
+    <paragraph>
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">10</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">
+      <text>20</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">
+      <text>30</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">
+      <text>40</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">
+      <text>50</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">
+      <text>60</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">
+      <text>70</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">
+      <text>80</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">
+      <text>90</text>
+    </paragraph>
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">
+      <text>100</text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>"""
+        if 'wxMSW' in wx.PlatformInfo:
+            documentFile = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Demonstration Data', 'Transana with Text.rtf')
+        else:
+            documentFile = os.sep + os.path.join('Volumes', 'Vidëo', 'Demonstration Data', 'Transana with Text.rtf').decode('cp1250')
 
         if (not TransanaConstants.singleUserVersion):
             # Database Connection
@@ -273,13 +316,56 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         if 31 in testsToRun:
+            # Document Saving
+            testName = 'Creating Document : A'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                documentA = Document.Document(libraryID='SearchDemo', documentID='A Doc')
+                # If the Document already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Episode doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                documentA = Document.Document()
+                documentA.id = 'A Doc'
+                documentA.comment = 'Created by unit_test_search'
+                documentA.imported_file = documentFile
+                documentA.library_id = series1.id
+                documentA.library_num = series1.number
+                documentA.text = documentText
+                documentA.add_keyword(keywordA.keywordGroup, keywordA.keyword)
+                try:
+                    documentA.db_save()
+                    # If we create the Episode, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Episode, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Episode, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 32 in testsToRun:
             # Episode Saving
             testName = 'Creating Episode : A'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                episodeA = Episode.Episode(series='SearchDemo', episode='A')
+                episodeA = Episode.Episode(series='SearchDemo', episode='A Ep')
                 # If the Episode already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -287,7 +373,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 episodeA = Episode.Episode()
-                episodeA.id = 'A'
+                episodeA.id = 'A Ep'
                 episodeA.comment = 'Created by unit_test_search'
                 episodeA.media_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Demo', 'Demo.mpg')
                 episodeA.series_id = series1.id
@@ -314,14 +400,57 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 32 in testsToRun:
+        if 33 in testsToRun:
+            # Document Saving
+            testName = 'Creating Document : B'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                documentB = Document.Document(libraryID='SearchDemo', documentID='B Doc')
+                # If the Document already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Episode doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                documentB = Document.Document()
+                documentB.id = 'B Doc'
+                documentB.comment = 'Created by unit_test_search'
+                documentB.imported_file = documentFile
+                documentB.library_id = series1.id
+                documentB.library_num = series1.number
+                documentB.text = documentText
+                documentB.add_keyword(keywordB.keywordGroup, keywordB.keyword)
+                try:
+                    documentB.db_save()
+                    # If we create the Episode, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Episode, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Episode, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 34 in testsToRun:
             # Episode Saving
             testName = 'Creating Episode : B'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                episodeB = Episode.Episode(series='SearchDemo', episode='B')
+                episodeB = Episode.Episode(series='SearchDemo', episode='B Ep')
                 # If the Episode already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -329,7 +458,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 episodeB = Episode.Episode()
-                episodeB.id = 'B'
+                episodeB.id = 'B Ep'
                 episodeB.comment = 'Created by unit_test_search'
                 episodeB.media_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Demo', 'Demo.mpg')
                 episodeB.series_id = series1.id
@@ -356,14 +485,57 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 33 in testsToRun:
+        if 35 in testsToRun:
+            # Document Saving
+            testName = 'Creating Document : C'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                documentC = Document.Document(libraryID='SearchDemo', documentID='C Doc')
+                # If the Document already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Episode doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                documentC = Document.Document()
+                documentC.id = 'C Doc'
+                documentC.comment = 'Created by unit_test_search'
+                documentC.imported_file = documentFile
+                documentC.library_id = series1.id
+                documentC.library_num = series1.number
+                documentC.text = documentText
+                documentC.add_keyword(keywordC.keywordGroup, keywordC.keyword)
+                try:
+                    documentC.db_save()
+                    # If we create the Episode, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Episode, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Episode, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 36 in testsToRun:
             # Episode Saving
             testName = 'Creating Episode : C'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                episodeC = Episode.Episode(series='SearchDemo', episode='C')
+                episodeC = Episode.Episode(series='SearchDemo', episode='C Ep')
                 # If the Episode already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -371,7 +543,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 episodeC = Episode.Episode()
-                episodeC.id = 'C'
+                episodeC.id = 'C Ep'
                 episodeC.comment = 'Created by unit_test_search'
                 episodeC.media_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Demo', 'Demo.mpg')
                 episodeC.series_id = series1.id
@@ -398,14 +570,58 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 35 in testsToRun:
+        if 37 in testsToRun:
+            # Document Saving
+            testName = 'Creating Document : AB'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                documentAB = Document.Document(libraryID='SearchDemo', documentID='AB Doc')
+                # If the Document already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Episode doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                documentAB = Document.Document()
+                documentAB.id = 'AB Doc'
+                documentAB.comment = 'Created by unit_test_search'
+                documentAB.imported_file = documentFile
+                documentAB.library_id = series1.id
+                documentAB.library_num = series1.number
+                documentAB.text = documentText
+                documentAB.add_keyword(keywordA.keywordGroup, keywordA.keyword)
+                documentAB.add_keyword(keywordB.keywordGroup, keywordB.keyword)
+                try:
+                    documentAB.db_save()
+                    # If we create the Episode, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Episode, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Episode, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 38 in testsToRun:
             # Episode Saving
             testName = 'Creating Episode : AB'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                episodeAB = Episode.Episode(series='SearchDemo', episode='AB')
+                episodeAB = Episode.Episode(series='SearchDemo', episode='AB Ep')
                 # If the Episode already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -413,7 +629,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 episodeAB = Episode.Episode()
-                episodeAB.id = 'AB'
+                episodeAB.id = 'AB Ep'
                 episodeAB.comment = 'Created by unit_test_search'
                 episodeAB.media_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Demo', 'Demo.mpg')
                 episodeAB.series_id = series1.id
@@ -441,14 +657,58 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 36 in testsToRun:
+        if 39 in testsToRun:
+            # Document Saving
+            testName = 'Creating Document : AC'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                documentAC = Document.Document(libraryID='SearchDemo', documentID='AC Doc')
+                # If the Document already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Episode doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                documentAC = Document.Document()
+                documentAC.id = 'AC Doc'
+                documentAC.comment = 'Created by unit_test_search'
+                documentAC.imported_file = documentFile
+                documentAC.library_id = series1.id
+                documentAC.library_num = series1.number
+                documentAC.text = documentText
+                documentAC.add_keyword(keywordA.keywordGroup, keywordA.keyword)
+                documentAC.add_keyword(keywordC.keywordGroup, keywordC.keyword)
+                try:
+                    documentAC.db_save()
+                    # If we create the Episode, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Episode, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Episode, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 40 in testsToRun:
             # Episode Saving
             testName = 'Creating Episode : AC'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                episodeAC = Episode.Episode(series='SearchDemo', episode='AC')
+                episodeAC = Episode.Episode(series='SearchDemo', episode='AC Ep')
                 # If the Episode already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -456,7 +716,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 episodeAC = Episode.Episode()
-                episodeAC.id = 'AC'
+                episodeAC.id = 'AC Ep'
                 episodeAC.comment = 'Created by unit_test_search'
                 episodeAC.media_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Demo', 'Demo.mpg')
                 episodeAC.series_id = series1.id
@@ -484,14 +744,58 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 37 in testsToRun:
+        if 41 in testsToRun:
+            # Document Saving
+            testName = 'Creating Document : BC'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                documentBC = Document.Document(libraryID='SearchDemo', documentID='BC Doc')
+                # If the Document already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Episode doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                documentBC = Document.Document()
+                documentBC.id = 'BC Doc'
+                documentBC.comment = 'Created by unit_test_search'
+                documentBC.imported_file = documentFile
+                documentBC.library_id = series1.id
+                documentBC.library_num = series1.number
+                documentBC.text = documentText
+                documentBC.add_keyword(keywordB.keywordGroup, keywordB.keyword)
+                documentBC.add_keyword(keywordC.keywordGroup, keywordC.keyword)
+                try:
+                    documentBC.db_save()
+                    # If we create the Episode, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Episode, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Episode, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 42 in testsToRun:
             # Episode Saving
             testName = 'Creating Episode : BC'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                episodeBC = Episode.Episode(series='SearchDemo', episode='BC')
+                episodeBC = Episode.Episode(series='SearchDemo', episode='BC Ep')
                 # If the Episode already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -499,7 +803,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 episodeBC = Episode.Episode()
-                episodeBC.id = 'BC'
+                episodeBC.id = 'BC Ep'
                 episodeBC.comment = 'Created by unit_test_search'
                 episodeBC.media_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Demo', 'Demo.mpg')
                 episodeBC.series_id = series1.id
@@ -527,14 +831,59 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 38 in testsToRun:
+        if 43 in testsToRun:
+            # Document Saving
+            testName = 'Creating Document : ABC'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                documentABC = Document.Document(libraryID='SearchDemo', documentID='ABC Doc')
+                # If the Document already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Episode doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                documentABC = Document.Document()
+                documentABC.id = 'ABC Doc'
+                documentABC.comment = 'Created by unit_test_search'
+                documentABC.imported_file = documentFile
+                documentABC.library_id = series1.id
+                documentABC.library_num = series1.number
+                documentABC.text = documentText
+                documentABC.add_keyword(keywordA.keywordGroup, keywordA.keyword)
+                documentABC.add_keyword(keywordB.keywordGroup, keywordB.keyword)
+                documentABC.add_keyword(keywordC.keywordGroup, keywordC.keyword)
+                try:
+                    documentABC.db_save()
+                    # If we create the Episode, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Episode, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Episode, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 44 in testsToRun:
             # Episode Saving
             testName = 'Creating Episode : ABC'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                episodeABC = Episode.Episode(series='SearchDemo', episode='ABC')
+                episodeABC = Episode.Episode(series='SearchDemo', episode='ABC Ep')
                 # If the Episode already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -542,7 +891,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 episodeABC = Episode.Episode()
-                episodeABC.id = 'ABC'
+                episodeABC.id = 'ABC Ep'
                 episodeABC.comment = 'Created by unit_test_search'
                 episodeABC.media_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Demo', 'Demo.mpg')
                 episodeABC.series_id = series1.id
@@ -628,7 +977,7 @@ class FormCheck(wx.Frame):
 </richtext>
 """
 
-        if 41 in testsToRun:
+        if 45 in testsToRun:
             # Transcript Saving
             testName = 'Creating Transcript : A'
             self.SetStatusText(testName)
@@ -669,7 +1018,7 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 42 in testsToRun:
+        if 46 in testsToRun:
             # Transcript Saving
             testName = 'Creating Transcript : B'
             self.SetStatusText(testName)
@@ -710,7 +1059,7 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 43 in testsToRun:
+        if 47 in testsToRun:
             # Transcript Saving
             testName = 'Creating Transcript : C'
             self.SetStatusText(testName)
@@ -751,7 +1100,7 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 44 in testsToRun:
+        if 48 in testsToRun:
             # Transcript Saving
             testName = 'Creating Transcript : AB'
             self.SetStatusText(testName)
@@ -792,7 +1141,7 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 45 in testsToRun:
+        if 49 in testsToRun:
             # Transcript Saving
             testName = 'Creating Transcript : AC'
             self.SetStatusText(testName)
@@ -833,7 +1182,7 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 46 in testsToRun:
+        if 50 in testsToRun:
             # Transcript Saving
             testName = 'Creating Transcript : BC'
             self.SetStatusText(testName)
@@ -874,7 +1223,7 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 47 in testsToRun:
+        if 51 in testsToRun:
             # Transcript Saving
             testName = 'Creating Transcript : ABC'
             self.SetStatusText(testName)
@@ -915,7 +1264,7 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        if 51 in testsToRun:
+        if 52 in testsToRun:
             # Collection Saving
             testName = 'Creating Collection : SearchDemo'
             self.SetStatusText(testName)
@@ -956,15 +1305,391 @@ class FormCheck(wx.Frame):
                 self.testsFailed += 1
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
-        cliptranscriptA = None
         if 61 in testsToRun:
+            # Quote Saving
+            testName = 'Creating Quote : A'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                quoteA = Quote.Quote(quoteID = 'A Quote', collectionID = collection1.id, collectionParent=collection1.parent)
+                # If the Quote already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Quote doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                quoteA = Quote.Quote()
+                quoteA.id = 'A Quote'
+                quoteA.collection_num = collection1.number
+                quoteA.collection_id = collection1.id
+                quoteA.source_document_num = documentA.number
+                quoteA.sort_order = DBInterface.getMaxSortOrder(collection1.number) + 1
+                quoteA.start_char = 0
+                quoteA.end_char = 2
+                quoteA.comment = 'Created by unit_test_search'
+                quoteA.add_keyword(keywordA.keywordGroup, keywordA.keyword)
+                quoteA.text = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10" margin-left="5,4098" margin-right="5,4098" margin-top="5,4098" margin-bottom="5,4098">
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">10</text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>"""
+                try:
+                    quoteA.db_save()
+                    # If we create the Quote, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Clip, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Clip, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 63 in testsToRun:
+            # Quote Saving
+            testName = 'Creating Quote : B'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                quoteB = Quote.Quote(quoteID = 'B Quote', collectionID = collection1.id, collectionParent=collection1.parent)
+                # If the Quote already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Quote doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                quoteB = Quote.Quote()
+                quoteB.id = 'B Quote'
+                quoteB.collection_num = collection1.number
+                quoteB.collection_id = collection1.id
+                quoteB.source_document_num = documentA.number
+                quoteB.sort_order = DBInterface.getMaxSortOrder(collection1.number) + 1
+                quoteB.start_char = 3
+                quoteB.end_char = 5
+                quoteB.comment = 'Created by unit_test_search'
+                quoteB.add_keyword(keywordB.keywordGroup, keywordB.keyword)
+                quoteB.text = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10" margin-left="5,4098" margin-right="5,4098" margin-top="5,4098" margin-bottom="5,4098">
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">20</text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>"""
+                try:
+                    quoteB.db_save()
+                    # If we create the Quote, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Clip, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Clip, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 65 in testsToRun:
+            # Quote Saving
+            testName = 'Creating Quote : C'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                quoteC = Quote.Quote(quoteID = 'C Quote', collectionID = collection1.id, collectionParent=collection1.parent)
+                # If the Quote already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Quote doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                quoteC = Quote.Quote()
+                quoteC.id = 'C Quote'
+                quoteC.collection_num = collection1.number
+                quoteC.collection_id = collection1.id
+                quoteC.source_document_num = documentA.number
+                quoteC.sort_order = DBInterface.getMaxSortOrder(collection1.number) + 1
+                quoteC.start_char = 6
+                quoteC.end_char = 8
+                quoteC.comment = 'Created by unit_test_search'
+                quoteC.add_keyword(keywordC.keywordGroup, keywordC.keyword)
+                quoteC.text = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10" margin-left="5,4098" margin-right="5,4098" margin-top="5,4098" margin-bottom="5,4098">
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">30</text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>"""
+                try:
+                    quoteC.db_save()
+                    # If we create the Quote, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Clip, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Clip, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 67 in testsToRun:
+            # Quote Saving
+            testName = 'Creating Quote : AB'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                quoteAB = Quote.Quote(quoteID = 'AB Quote', collectionID = collection1.id, collectionParent=collection1.parent)
+                # If the Quote already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Quote doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                quoteAB = Quote.Quote()
+                quoteAB.id = 'AB Quote'
+                quoteAB.collection_num = collection1.number
+                quoteAB.collection_id = collection1.id
+                quoteAB.source_document_num = documentA.number
+                quoteAB.sort_order = DBInterface.getMaxSortOrder(collection1.number) + 1
+                quoteAB.start_char = 9
+                quoteAB.end_char = 11
+                quoteAB.comment = 'Created by unit_test_search'
+                quoteAB.add_keyword(keywordA.keywordGroup, keywordA.keyword)
+                quoteAB.add_keyword(keywordB.keywordGroup, keywordB.keyword)
+                quoteAB.text = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10" margin-left="5,4098" margin-right="5,4098" margin-top="5,4098" margin-bottom="5,4098">
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">40</text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>"""
+                try:
+                    quoteAB.db_save()
+                    # If we create the Quote, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Clip, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Clip, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 69 in testsToRun:
+            # Quote Saving
+            testName = 'Creating Quote : AC'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                quoteAC = Quote.Quote(quoteID = 'AC Quote', collectionID = collection1.id, collectionParent=collection1.parent)
+                # If the Quote already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Quote doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                quoteAC = Quote.Quote()
+                quoteAC.id = 'AC Quote'
+                quoteAC.collection_num = collection1.number
+                quoteAC.collection_id = collection1.id
+                quoteAC.source_document_num = documentA.number
+                quoteAC.sort_order = DBInterface.getMaxSortOrder(collection1.number) + 1
+                quoteAC.start_char = 12
+                quoteAC.end_char = 14
+                quoteAC.comment = 'Created by unit_test_search'
+                quoteAC.add_keyword(keywordA.keywordGroup, keywordA.keyword)
+                quoteAC.add_keyword(keywordC.keywordGroup, keywordC.keyword)
+                quoteAC.text = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10" margin-left="5,4098" margin-right="5,4098" margin-top="5,4098" margin-bottom="5,4098">
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">50</text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>"""
+                try:
+                    quoteAC.db_save()
+                    # If we create the Quote, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Clip, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Clip, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 71 in testsToRun:
+            # Quote Saving
+            testName = 'Creating Quote : BC'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                quoteBC = Quote.Quote(quoteID = 'BC Quote', collectionID = collection1.id, collectionParent=collection1.parent)
+                # If the Quote already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Quote doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                quoteBC = Quote.Quote()
+                quoteBC.id = 'BC Quote'
+                quoteBC.collection_num = collection1.number
+                quoteBC.collection_id = collection1.id
+                quoteBC.source_document_num = documentA.number
+                quoteBC.sort_order = DBInterface.getMaxSortOrder(collection1.number) + 1
+                quoteBC.start_char = 15
+                quoteBC.end_char = 17
+                quoteBC.comment = 'Created by unit_test_search'
+                quoteBC.add_keyword(keywordB.keywordGroup, keywordB.keyword)
+                quoteBC.add_keyword(keywordC.keywordGroup, keywordC.keyword)
+                quoteBC.text = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10" margin-left="5,4098" margin-right="5,4098" margin-top="5,4098" margin-bottom="5,4098">
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">60</text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>"""
+                try:
+                    quoteBC.db_save()
+                    # If we create the Quote, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Clip, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Clip, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        if 73 in testsToRun:
+            # Quote Saving
+            testName = 'Creating Quote : ABC'
+            self.SetStatusText(testName)
+            self.testsRun += 1
+            self.txtCtrl.AppendText('Test "%s" ' % testName)
+            try:
+                quoteABC = Quote.Quote(quoteID = 'ABC Quote', collectionID = collection1.id, collectionParent=collection1.parent)
+                # If the Quote already exists, consider the test passed.
+                self.txtCtrl.AppendText('Passed.')
+                self.testsSuccessful += 1
+            # If the Quote doesn't exist ...
+            except TransanaExceptions.RecordNotFoundError:
+                # ... create it
+                quoteABC = Quote.Quote()
+                quoteABC.id = 'ABC Quote'
+                quoteABC.collection_num = collection1.number
+                quoteABC.collection_id = collection1.id
+                quoteABC.source_document_num = documentA.number
+                quoteABC.sort_order = DBInterface.getMaxSortOrder(collection1.number) + 1
+                quoteABC.start_char = 18
+                quoteABC.end_char = 20
+                quoteABC.comment = 'Created by unit_test_search'
+                quoteABC.add_keyword(keywordA.keywordGroup, keywordA.keyword)
+                quoteABC.add_keyword(keywordB.keywordGroup, keywordB.keyword)
+                quoteABC.add_keyword(keywordC.keywordGroup, keywordC.keyword)
+                quoteABC.text = """<?xml version="1.0" encoding="UTF-8"?>
+<richtext version="1.0.0.0" xmlns="http://www.wxwidgets.org">
+  <paragraphlayout textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10" margin-left="5,4098" margin-right="5,4098" margin-top="5,4098" margin-bottom="5,4098">
+    <paragraph textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontfamily="70" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS" alignment="1" parspacingafter="10" parspacingbefore="0" linespacing="10">
+      <text textcolor="#000000" bgcolor="#FFFFFF" fontpointsize="12" fontstyle="90" fontweight="90" fontunderlined="0" fontface="Comic Sans MS">70</text>
+    </paragraph>
+  </paragraphlayout>
+</richtext>"""
+                try:
+                    quoteABC.db_save()
+                    # If we create the Quote, consider the test passed.
+                    self.txtCtrl.AppendText('Passed.')
+                    self.testsSuccessful += 1
+                except TransanaExceptions.SaveError:
+                    # Display the Error Message, allow "continue" flag to remain true
+                    errordlg = Dialogs.ErrorDialog(None, sys.exc_info()[1].reason)
+                    errordlg.ShowModal()
+                    errordlg.Destroy()
+                    # If we can't create the Clip, consider the test failed
+                    self.txtCtrl.AppendText('FAILED.')
+                    self.testsFailed += 1
+            except:
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                # If we can't load or create the Clip, consider the test failed
+                self.txtCtrl.AppendText('FAILED.')
+                self.testsFailed += 1
+            self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
+
+        cliptranscriptA = None
+        if 62 in testsToRun:
             # Clip Saving
             testName = 'Creating Clip : A'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                clipA = Clip.Clip('A', collection1.id, collection1.parent)
+                clipA = Clip.Clip('A Clip', collection1.id, collection1.parent)
                 # If the Clip already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -972,7 +1697,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 clipA = Clip.Clip()
-                clipA.id = 'A'
+                clipA.id = 'A Clip'
                 clipA.episode_num = episodeA.number
                 clipA.clip_start = 5000
                 clipA.clip_stop = 10000
@@ -1020,14 +1745,14 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         cliptranscriptB = None
-        if 62 in testsToRun:
+        if 64 in testsToRun:
             # Clip Saving
             testName = 'Creating Clip : B'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                clipB = Clip.Clip('B', collection1.id, collection1.parent)
+                clipB = Clip.Clip('B Clip', collection1.id, collection1.parent)
                 # If the Clip already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1035,7 +1760,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 clipB = Clip.Clip()
-                clipB.id = 'B'
+                clipB.id = 'B Clip'
                 clipB.episode_num = episodeA.number
                 clipB.clip_start = 10000
                 clipB.clip_stop = 15000
@@ -1083,14 +1808,14 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         cliptranscriptC = None
-        if 63 in testsToRun:
+        if 66 in testsToRun:
             # Clip Saving
             testName = 'Creating Clip : C'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                clipC = Clip.Clip('C', collection1.id, collection1.parent)
+                clipC = Clip.Clip('C Clip', collection1.id, collection1.parent)
                 # If the Clip already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1098,7 +1823,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 clipC = Clip.Clip()
-                clipC.id = 'C'
+                clipC.id = 'C Clip'
                 clipC.episode_num = episodeA.number
                 clipC.clip_start = 15000
                 clipC.clip_stop = 20000
@@ -1146,14 +1871,14 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         cliptranscriptAB = None
-        if 64 in testsToRun:
+        if 68 in testsToRun:
             # Clip Saving
             testName = 'Creating Clip : AB'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                clipAB = Clip.Clip('AB', collection1.id, collection1.parent)
+                clipAB = Clip.Clip('AB Clip', collection1.id, collection1.parent)
                 # If the Clip already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1161,7 +1886,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 clipAB = Clip.Clip()
-                clipAB.id = 'AB'
+                clipAB.id = 'AB Clip'
                 clipAB.episode_num = episodeA.number
                 clipAB.clip_start = 20000
                 clipAB.clip_stop = 25000
@@ -1210,14 +1935,14 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         cliptranscriptAC = None
-        if 65 in testsToRun:
+        if 70 in testsToRun:
             # Clip Saving
             testName = 'Creating Clip : AC'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                clipAC = Clip.Clip('AC', collection1.id, collection1.parent)
+                clipAC = Clip.Clip('AC Clip', collection1.id, collection1.parent)
                 # If the Clip already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1225,7 +1950,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 clipAC = Clip.Clip()
-                clipAC.id = 'AC'
+                clipAC.id = 'AC Clip'
                 clipAC.episode_num = episodeA.number
                 clipAC.clip_start = 25000
                 clipAC.clip_stop = 30000
@@ -1274,14 +1999,14 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         cliptranscriptBC = None
-        if 66 in testsToRun:
+        if 72 in testsToRun:
             # Clip Saving
             testName = 'Creating Clip : BC'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                clipBC = Clip.Clip('BC', collection1.id, collection1.parent)
+                clipBC = Clip.Clip('BC Clip', collection1.id, collection1.parent)
                 # If the Clip already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1289,7 +2014,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 clipBC = Clip.Clip()
-                clipBC.id = 'BC'
+                clipBC.id = 'BC Clip'
                 clipBC.episode_num = episodeA.number
                 clipBC.clip_start = 30000
                 clipBC.clip_stop = 35000
@@ -1338,14 +2063,14 @@ class FormCheck(wx.Frame):
             self.txtCtrl.AppendText('\nTotal Tests Run:  %d  Tests passes:  %d  Tests failed:  %d.\n\n' % (self.testsRun, self.testsSuccessful, self.testsFailed))
 
         cliptranscriptABC = None
-        if 67 in testsToRun:
+        if 74 in testsToRun:
             # Clip Saving
             testName = 'Creating Clip : ABC'
             self.SetStatusText(testName)
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                clipABC = Clip.Clip('ABC', collection1.id, collection1.parent)
+                clipABC = Clip.Clip('ABC Clip', collection1.id, collection1.parent)
                 # If the Clip already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1353,7 +2078,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 clipABC = Clip.Clip()
-                clipABC.id = 'ABC'
+                clipABC.id = 'ABC Clip'
                 clipABC.episode_num = episodeA.number
                 clipABC.clip_start = 35000
                 clipABC.clip_stop = 40000
@@ -1409,7 +2134,7 @@ class FormCheck(wx.Frame):
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                snapshotA = Snapshot.Snapshot('A', collection1.number)
+                snapshotA = Snapshot.Snapshot('A Snap', collection1.number)
                 # If the Snapshot already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1417,7 +2142,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 snapshotA = Snapshot.Snapshot()
-                snapshotA.id = 'A'
+                snapshotA.id = 'A Snap'
                 snapshotA.collection_num = collection1.number
                 snapshotA.collection_id = collection1.id
                 snapshotA.image_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Images', 'ch130214.gif')
@@ -1453,7 +2178,7 @@ class FormCheck(wx.Frame):
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                snapshotB = Snapshot.Snapshot('B', collection1.number)
+                snapshotB = Snapshot.Snapshot('B Snap', collection1.number)
                 # If the Snapshot already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1461,7 +2186,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 snapshotB = Snapshot.Snapshot()
-                snapshotB.id = 'B'
+                snapshotB.id = 'B Snap'
                 snapshotB.collection_num = collection1.number
                 snapshotB.collection_id = collection1.id
                 snapshotB.image_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Images', 'ch130214.gif')
@@ -1497,7 +2222,7 @@ class FormCheck(wx.Frame):
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                snapshotC = Snapshot.Snapshot('C', collection1.number)
+                snapshotC = Snapshot.Snapshot('C Snap', collection1.number)
                 # If the Snapshot already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1505,7 +2230,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 snapshotC = Snapshot.Snapshot()
-                snapshotC.id = 'C'
+                snapshotC.id = 'C Snap'
                 snapshotC.collection_num = collection1.number
                 snapshotC.collection_id = collection1.id
                 snapshotC.image_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Images', 'ch130214.gif')
@@ -1541,7 +2266,7 @@ class FormCheck(wx.Frame):
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                snapshotAB = Snapshot.Snapshot('AB', collection1.number)
+                snapshotAB = Snapshot.Snapshot('AB Snap', collection1.number)
                 # If the Snapshot already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1549,7 +2274,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 snapshotAB = Snapshot.Snapshot()
-                snapshotAB.id = 'AB'
+                snapshotAB.id = 'AB Snap'
                 snapshotAB.collection_num = collection1.number
                 snapshotAB.collection_id = collection1.id
                 snapshotAB.image_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Images', 'ch130214.gif')
@@ -1608,7 +2333,7 @@ class FormCheck(wx.Frame):
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                snapshotAC = Snapshot.Snapshot('AC', collection1.number)
+                snapshotAC = Snapshot.Snapshot('AC Snap', collection1.number)
                 # If the Snapshot already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1616,7 +2341,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 snapshotAC = Snapshot.Snapshot()
-                snapshotAC.id = 'AC'
+                snapshotAC.id = 'AC Snap'
                 snapshotAC.collection_num = collection1.number
                 snapshotAC.collection_id = collection1.id
                 snapshotAC.image_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Images', 'ch130214.gif')
@@ -1675,7 +2400,7 @@ class FormCheck(wx.Frame):
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                snapshotBC = Snapshot.Snapshot('BC', collection1.number)
+                snapshotBC = Snapshot.Snapshot('BC Snap', collection1.number)
                 # If the Snapshot already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1683,7 +2408,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 snapshotBC = Snapshot.Snapshot()
-                snapshotBC.id = 'BC'
+                snapshotBC.id = 'BC Snap'
                 snapshotBC.collection_num = collection1.number
                 snapshotBC.collection_id = collection1.id
                 snapshotBC.image_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Images', 'ch130214.gif')
@@ -1742,7 +2467,7 @@ class FormCheck(wx.Frame):
             self.testsRun += 1
             self.txtCtrl.AppendText('Test "%s" ' % testName)
             try:
-                snapshotABC = Snapshot.Snapshot('ABC', collection1.number)
+                snapshotABC = Snapshot.Snapshot('ABC Snap', collection1.number)
                 # If the Snapshot already exists, consider the test passed.
                 self.txtCtrl.AppendText('Passed.')
                 self.testsSuccessful += 1
@@ -1750,7 +2475,7 @@ class FormCheck(wx.Frame):
             except TransanaExceptions.RecordNotFoundError:
                 # ... create it
                 snapshotABC = Snapshot.Snapshot()
-                snapshotABC.id = 'ABC'
+                snapshotABC.id = 'ABC Snap'
                 snapshotABC.collection_num = collection1.number
                 snapshotABC.collection_id = collection1.id
                 snapshotABC.image_filename = os.path.join('C:\\Users', 'DavidWoods', 'Videos', 'Images', 'ch130214.gif')
@@ -1819,6 +2544,13 @@ class FormCheck(wx.Frame):
             
 
         del(series1)
+        del(documentA)
+        del(documentB)
+        del(documentC)
+        del(documentAB)
+        del(documentAC)
+        del(documentBC)
+        del(documentABC)
         del(episodeA)
         del(episodeB)
         del(episodeC)
@@ -1834,6 +2566,13 @@ class FormCheck(wx.Frame):
         del(transcriptBC)
         del(transcriptABC)
         del(collection1)
+        del(quoteA)
+        del(quoteB)
+        del(quoteC)
+        del(quoteAB)
+        del(quoteAC)
+        del(quoteBC)
+        del(quoteABC)
         del(clipA)
         del(cliptranscriptA)
         del(clipB)
@@ -2042,7 +2781,7 @@ class FormCheck(wx.Frame):
             self.tree.Collapse(node)
 
         if 201 in testsToRun:
-            testName = 'Search for A in Episodes Only'
+            testName = 'Search for A in Documents Only'
             self.SetStatusText(testName)
             msg = testName
             self.ShowMessage(msg)
@@ -2054,7 +2793,7 @@ class FormCheck(wx.Frame):
                 self.tree.Collapse(node)
 
         if 202 in testsToRun:
-            testName = 'Search for B in Clips Only'
+            testName = 'Search for B in Episodes Only'
             self.SetStatusText(testName)
             msg = testName
             self.ShowMessage(msg)
@@ -2066,7 +2805,7 @@ class FormCheck(wx.Frame):
                 self.tree.Collapse(node)
 
         if 203 in testsToRun:
-            testName = 'Search for C in Snapshots Only'
+            testName = 'Search for C in Quotes Only'
             self.SetStatusText(testName)
             msg = testName
             self.ShowMessage(msg)
@@ -2078,65 +2817,89 @@ class FormCheck(wx.Frame):
                 self.tree.Collapse(node)
 
         if 204 in testsToRun:
-            testName = 'Search for "A AND".  Is the Search Button enabled?\n\nPress Cancel.'
+            testName = 'Search for A AND B in Clips Only'
             self.SetStatusText(testName)
             msg = testName
             self.ShowMessage(msg)
             search = ProcessSearch.ProcessSearch(self.tree, 204)
-            msg = 'Was the Search button disabled?'
+            msg = 'SearchDemo : A AND B should show:\n\n  AB\n  ABC\n\nDoes it?'
             self.ConfirmTest(msg, testName)
+            node = self.tree.select_Node((_('Search'), 'Search 204'), 'SearchResultsNode')
+            if node != None:
+                self.tree.Collapse(node)
 
         if 205 in testsToRun:
-            testName = 'Search for "B OR".  Is the Search Button enabled?\n\nPress Cancel.'
+            testName = 'Search for A OR B in Snapshots Only'
             self.SetStatusText(testName)
             msg = testName
             self.ShowMessage(msg)
             search = ProcessSearch.ProcessSearch(self.tree, 205)
+            msg = 'SearchDemo : A OR B should show:\n\n  A\n  B\n  AB\n  AC\n  BC\n  ABC\n\nDoes it?'
+            self.ConfirmTest(msg, testName)
+            node = self.tree.select_Node((_('Search'), 'Search 205'), 'SearchResultsNode')
+            if node != None:
+                self.tree.Collapse(node)
+
+        if 210 in testsToRun:
+            testName = 'Search for "A AND".  Is the Search Button enabled?\n\nPress Cancel.'
+            self.SetStatusText(testName)
+            msg = testName
+            self.ShowMessage(msg)
+            search = ProcessSearch.ProcessSearch(self.tree, 210)
             msg = 'Was the Search button disabled?'
             self.ConfirmTest(msg, testName)
 
-        if 206 in testsToRun:
+        if 211 in testsToRun:
+            testName = 'Search for "B OR".  Is the Search Button enabled?\n\nPress Cancel.'
+            self.SetStatusText(testName)
+            msg = testName
+            self.ShowMessage(msg)
+            search = ProcessSearch.ProcessSearch(self.tree, 211)
+            msg = 'Was the Search button disabled?'
+            self.ConfirmTest(msg, testName)
+
+        if 212 in testsToRun:
             testName = 'Search for "NOT".  Is the Search Button enabled?\n\nPress Cancel.'
             self.SetStatusText(testName)
             msg = testName
             self.ShowMessage(msg)
-            search = ProcessSearch.ProcessSearch(self.tree, 206)
+            search = ProcessSearch.ProcessSearch(self.tree, 212)
             msg = 'Was the Search button disabled?'
             self.ConfirmTest(msg, testName)
 
-        if 207 in testsToRun:
+        if 213 in testsToRun:
             testName = 'Search for "C AND NOT".  Is the Search Button enabled?\n\nPress Cancel.'
             self.SetStatusText(testName)
             msg = testName
             self.ShowMessage(msg)
-            search = ProcessSearch.ProcessSearch(self.tree, 207)
+            search = ProcessSearch.ProcessSearch(self.tree, 213)
             msg = 'Was the Search button disabled?'
             self.ConfirmTest(msg, testName)
 
-        if 208 in testsToRun:
+        if 214 in testsToRun:
             testName = 'Search for "A OR NOT".  Is the Search Button enabled?\n\nPress Cancel.'
             self.SetStatusText(testName)
             msg = testName
             self.ShowMessage(msg)
-            search = ProcessSearch.ProcessSearch(self.tree, 208)
+            search = ProcessSearch.ProcessSearch(self.tree, 214)
             msg = 'Was the Search button disabled?'
             self.ConfirmTest(msg, testName)
 
-        if 209 in testsToRun:
+        if 215 in testsToRun:
             testName = 'Search for "(B AND C".  Is the Search Button enabled?\n\nPress Cancel.'
             self.SetStatusText(testName)
             msg = testName
             self.ShowMessage(msg)
-            search = ProcessSearch.ProcessSearch(self.tree, 209)
+            search = ProcessSearch.ProcessSearch(self.tree, 215)
             msg = 'Was the Search button disabled?'
             self.ConfirmTest(msg, testName)
 
-        if 210 in testsToRun:
+        if 216 in testsToRun:
             testName = 'Try to close Parentheses that were never opened.\n\nPress Cancel.'
             self.SetStatusText(testName)
             msg = testName
             self.ShowMessage(msg)
-            search = ProcessSearch.ProcessSearch(self.tree, 207)
+            search = ProcessSearch.ProcessSearch(self.tree, 216)
             msg = 'Was it impossible to close non-opened parentheses?'
             self.ConfirmTest(msg, testName)
 
