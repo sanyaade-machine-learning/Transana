@@ -173,7 +173,7 @@ class KeywordsTab(wx.Panel):
             self.parent.parent.ControlObject.ShowDataTab(0)
 
 
-    def UpdateKeywords(self):
+    def UpdateKeywords(self, sendMUMessage=False):
         """ Update the display to display all keywords in the Keyword List """
         # Clear the visible control
         self.lbKeywordsList.DeleteAllItems()
@@ -231,7 +231,7 @@ class KeywordsTab(wx.Panel):
             # Update the Keyword Visualization, as the clip's keywords have probably changed.
             self.parent.parent.ControlObject.UpdateKeywordVisualization()
             # Even if this computer doesn't need to update the keyword visualization others, might need to.
-            if not TransanaConstants.singleUserVersion:
+            if not TransanaConstants.singleUserVersion and sendMUMessage:
                 # We need to update the Keyword Visualization for the current ClipObject
                 if DEBUG:
                     print 'Message to send = "UKV %s %s %s"' % ('Clip', self.clipObj.number, self.clipObj.episode_num)
@@ -249,7 +249,7 @@ class KeywordsTab(wx.Panel):
             # Update the Keyword Visualization, as the quote's keywords have probably changed.
             self.parent.parent.ControlObject.UpdateKeywordVisualization()
             # Even if this computer doesn't need to update the keyword visualization others, might need to.
-            if not TransanaConstants.singleUserVersion:
+            if not TransanaConstants.singleUserVersion and sendMUMessage:
                 # We need to update the Keyword Visualization for the current QuoteObject
                 if DEBUG:
                     print 'Message to send = "UKV %s %s %s"' % ('Quote', self.quoteObj.number, self.quoteObj.source_document_num)
@@ -375,7 +375,7 @@ class KeywordsTab(wx.Panel):
                                     TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
 
                         # Update the display to reflect changes in the Keyword List
-                        self.UpdateKeywords()
+                        self.UpdateKeywords(sendMUMessage=True)
                         # If we do all this, we don't need to continue any more.
                         contin = False
                     # If the user pressed Cancel ...
