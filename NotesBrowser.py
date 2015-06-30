@@ -623,7 +623,7 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             # ... load the Library data ...
             tempLibrary = Library.Library(note.series_num)
             # ... set up the Tree Node data ...
-            nodeData = ("Library", tempLibrary.id, noteIDToUse)
+            nodeData = ("Libraries", tempLibrary.id, noteIDToUse)
             # ... and signal that it's a Library Note.
             nodeType = 'LibraryNoteNode'
         # if we have a Document note ...
@@ -632,7 +632,7 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             tempDocument = Document.Document(note.document_num)
             tempLibrary = Library.Library(tempDocument.library_num)
             # ... set up the Tree Node data ...
-            nodeData = ("Library", tempLibrary.id, tempDocument.id, noteIDToUse)
+            nodeData = ("Libraries", tempLibrary.id, tempDocument.id, noteIDToUse)
             # ... and signal that it's a Document Note.
             nodeType = 'DocumentNoteNode'
         # if we have an Episode note ...
@@ -641,7 +641,7 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             tempEpisode = Episode.Episode(note.episode_num)
             tempLibrary = Library.Library(tempEpisode.series_num)
             # ... set up the Tree Node data ...
-            nodeData = ("Library", tempLibrary.id, tempEpisode.id, noteIDToUse)
+            nodeData = ("Libraries", tempLibrary.id, tempEpisode.id, noteIDToUse)
             # ... and signal that it's an Episode Note.
             nodeType = 'EpisodeNoteNode'
         # if we have a Transcript note ...
@@ -652,7 +652,7 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             tempEpisode = Episode.Episode(tempTranscript.episode_num)
             tempLibrary = Library.Library(tempEpisode.series_num)
             # ... set up the Tree Node data ...
-            nodeData = ("Library", tempLibrary.id, tempEpisode.id, tempTranscript.id, noteIDToUse)
+            nodeData = ("Libraries", tempLibrary.id, tempEpisode.id, tempTranscript.id, noteIDToUse)
             # ... and signal that it's a Transcript Note.
             nodeType = 'TranscriptNoteNode'
         # if we have a Collection note ...
