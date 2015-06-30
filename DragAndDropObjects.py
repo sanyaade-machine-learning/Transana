@@ -783,9 +783,9 @@ class DataTreeDropTarget(wx.PyDropTarget):
                      (quoteData.plainText != '') and \
                      (self.dropData.nodetype == 'KeywordGroupNode'):
 
-                    print "DragAndDropObjects.DataTreeDropTarget.OnDrop():  Drop Document Text onto Keyword Group should create a keyword!"
-                    print quoteData
-                    print
+#                    print "DragAndDropObjects.DataTreeDropTarget.OnDrop():  Drop Document Text onto Keyword Group should create a keyword!"
+#                    print quoteData
+#                    print
 
                     # Create a new Keyword Object with the desired KWG and KW values
                     kw = Keyword.Keyword()

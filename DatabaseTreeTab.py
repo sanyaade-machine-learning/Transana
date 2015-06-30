@@ -2517,7 +2517,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             else:
                 sel_item = self.GetSelections()
 
+                # We can work with multiple Quotes, Clips, or Snaps mixed together!
                 IsQuoteClipSnap = self.GetPyData(sel_item[0]).nodetype in ['QuoteNode', 'ClipNode', 'SnapshotNode']
+                # We can also work with multiple Search Quotes, Search Clips, or Search Snaps mixed together!
+                IsSearchQuoteClipSnap = self.GetPyData(sel_item[0]).nodetype in ['SearchQuoteNode', 'SearchClipNode', 'SearchSnapshotNode']
 
 ##                print "DatabaseTreeTab.OnCutCopyBeginDrag():", IsQuoteClipSnap, self.GetPyData(sel_item[0]).nodetype
 
@@ -2529,7 +2532,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                    
                    # ... comparing the node type of the iteration item to the first node type ...
                    if (IsQuoteClipSnap and not (self.GetPyData(x).nodetype in ['QuoteNode', 'ClipNode', 'SnapshotNode'])) or \
-                      (not (IsQuoteClipSnap) and (self.GetPyData(sel_item[0]).nodetype != self.GetPyData(x).nodetype)):
+                      (IsSearchQuoteClipSnap and not (self.GetPyData(x).nodetype in ['SearchQuoteNode', 'SearchClipNode', 'SearchSnapshotNode'])) or \
+                      (not (IsQuoteClipSnap) and (not (IsSearchQuoteClipSnap)) and (self.GetPyData(sel_item[0]).nodetype != self.GetPyData(x).nodetype)):
                         # ... and if they're different, display an error message ...
                         dlg = Dialogs.ErrorDialog(self.parent, _('All selected items must be the same type to manipulate multiple items at once.'))
                         dlg.ShowModal()
@@ -10613,13 +10617,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
         # IF there are multiple selections in the list, they all need to be the same TYPE of object
         if len(self.GetSelections()) > 1:
 
+            # Quotes, Clips, and Snaps can be handled together
             IsQuoteClipSnap = self.GetPyData(self.GetSelections()[0]).nodetype in ['QuoteNode', 'ClipNode', 'SnapshotNode']
+            # Search Quotes, Search Clips, and Search Snaps can be handled together
+            IsSearchQuoteClipSnap = self.GetPyData(self.GetSelections()[0]).nodetype in ['SearchQuoteNode', 'SearchClipNode', 'SearchSnapshotNode']
 
             # iterate through the list of selections ...
             for x in self.GetSelections():
                # ... comparing the node type to the reference node type of the selected item ...
                if (IsQuoteClipSnap and not (self.GetPyData(x).nodetype in ['QuoteNode', 'ClipNode', 'SnapshotNode'])) or \
-                  (not (IsQuoteClipSnap) and (self.GetPyData(sel_item).nodetype != self.GetPyData(x).nodetype)):
+                  (IsSearchQuoteClipSnap and not (self.GetPyData(x).nodetype in ['SearchQuoteNode', 'SearchClipNode', 'SearchSnapshotNode'])) or \
+                  (not (IsQuoteClipSnap) and not (IsSearchQuoteClipSnap) and (self.GetPyData(sel_item).nodetype != self.GetPyData(x).nodetype)):
                     # ... and if they're different, display an error message ...
                     dlg = Dialogs.ErrorDialog(self.parent, _('All selected items must be the same type to manipulate multiple items at once.'))
                     dlg.ShowModal()
