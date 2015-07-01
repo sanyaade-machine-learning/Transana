@@ -134,3 +134,5 @@ unit_test_language_utility.py
 unit_test_misc.py
 unit_test_search.py
 unit_test_SSL.py
+images/Embedded/tmp.py
+images/Embedded/ArtProviderBitmapSaver.py

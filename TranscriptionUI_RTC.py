@@ -138,7 +138,8 @@ class TranscriptionUI(wx.Frame):
                         shortHelpString=_('Undo action')))
         wx.EVT_MENU(self, self.CMD_UNDO_ID, self.OnUndo)
 
-        self.toolbar.AddSeparator()
+        if not 'wxMac' in wx.PlatformInfo:
+            self.toolbar.AddSeparator()
 
         # Bold, Italic, Underline buttons
         self.CMD_BOLD_ID = wx.NewId()
@@ -156,7 +157,8 @@ class TranscriptionUI(wx.Frame):
                         isToggle=1, shortHelpString=_("Underline text")))
         wx.EVT_MENU(self, self.CMD_UNDERLINE_ID, self.OnUnderline)
 
-        self.toolbar.AddSeparator()
+        if not 'wxMac' in wx.PlatformInfo:
+            self.toolbar.AddSeparator()
 
         # Jeffersonian Symbols
         self.CMD_RISING_INT_ID = wx.NewId()
@@ -179,7 +181,8 @@ class TranscriptionUI(wx.Frame):
                         shortHelpString=_("Whispered Speech")))
         wx.EVT_MENU(self, self.CMD_WHISPERED_SPEECH_ID, self.OnInsertChar)
       
-        self.toolbar.AddSeparator()
+        if not 'wxMac' in wx.PlatformInfo:
+            self.toolbar.AddSeparator()
 
         # Add show / hide timecodes button
         self.CMD_SHOWHIDE_ID = wx.NewId()
@@ -207,7 +210,8 @@ class TranscriptionUI(wx.Frame):
         self.tools.append(self.toolbar.AddTool(self.CMD_FORMAT_ID, TransanaImages.ArtProv_HELPSETTINGS.GetBitmap(), shortHelpString=_("Format")))
         wx.EVT_MENU(self, self.CMD_FORMAT_ID, self.OnFormat)
 
-        self.toolbar.AddSeparator()
+        if not 'wxMac' in wx.PlatformInfo:
+            self.toolbar.AddSeparator()
 
         # Add QuickClip button
         self.CMD_QUICKCLIP_ID = wx.NewId()
@@ -227,7 +231,8 @@ class TranscriptionUI(wx.Frame):
                         shortHelpString=_("Save Transcript")))
         wx.EVT_MENU(self, self.CMD_SAVE_ID, self.OnSave)
 
-        self.toolbar.AddSeparator()
+        if not 'wxMac' in wx.PlatformInfo:
+            self.toolbar.AddSeparator()
 
         # Add Propagate Changes Button
         # First, define the ID for this button
@@ -238,7 +243,8 @@ class TranscriptionUI(wx.Frame):
         # Link the button to the appropriate event handler
         wx.EVT_MENU(self, self.CMD_PROPAGATE_ID, self.OnPropagate)
 
-        self.toolbar.AddSeparator()
+        if not 'wxMac' in wx.PlatformInfo:
+            self.toolbar.AddSeparator()
         
         # Add Multi-Select Button
         # First, define the ID for this button
@@ -258,7 +264,8 @@ class TranscriptionUI(wx.Frame):
         # Link the button to the appropriate event handler
         wx.EVT_MENU(self, self.CMD_PLAY_ID, self.OnMultiPlay)
 
-        self.toolbar.AddSeparator()
+        if not 'wxMac' in wx.PlatformInfo:
+            self.toolbar.AddSeparator()
 
         # SEARCH moved to TranscriptionUI because you can't put a TextCtrl on a Toolbar on the Mac!
         # Set the Initial State of the Editing Buttons to "False"
@@ -287,7 +294,8 @@ class TranscriptionUI(wx.Frame):
                         shortHelpString=_("Search forwards")))
         wx.EVT_MENU(self, self.CMD_SEARCH_NEXT_ID, self.OnSearch)
 
-        self.toolbar.AddSeparator()
+        if not 'wxMac' in wx.PlatformInfo:
+            self.toolbar.AddSeparator()
 
         self.CMD_EXIT_ID = wx.NewId()
         # Add an Exit button to the Toolbar
