@@ -4866,6 +4866,8 @@ def CopyMoveQuote(treeCtrl, destNode, sourceQuote, sourceCollection, destCollect
              newQuote.sort_order = itemCount
              # Save the new Quote to the database.
              newQuote.db_save()
+             # If the source Document is Open, it needs to be updated!
+             treeCtrl.parent.ControlObject.AddQuoteToOpenDocument(newQuote)
           elif action == 'Move':
              # Now that we know the number of items in the collection, assign that as sortOrder
              sourceQuote.sort_order = itemCount

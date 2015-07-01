@@ -981,7 +981,6 @@ class ControlObject(object):
             # Update the Selection Text
             self.UpdateSelectionTextLater()
 
-
     def RemoveQuoteFromOpenDocument(self, quote_num, doc_num):
         """ If a Quote is deleted and the source document for that quote is currently open, we need to remove
             the quote_dict reference to that quote.  We pass source document number and quote number, as the
