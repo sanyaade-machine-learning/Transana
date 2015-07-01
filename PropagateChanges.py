@@ -201,7 +201,7 @@ class PropagateObjectChanges(wx.Dialog):
                             # substitute the new text for the old text
                             tempObj.text = text
                             # Save the Quote
-                            tempObj.db_save()
+                            tempObj.db_save(use_transactions=False)
                             # unlock the Quote
                             tempObj.unlock_record()
                             # Finally, indicate success in the Report
