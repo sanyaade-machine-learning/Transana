@@ -27,6 +27,11 @@ import TransanaConstants
 import TransanaGlobal
 # import Python's os module
 import os
+# Import Python's platform module
+import platform
+# import Python's sys module
+import sys
+
 
 class AboutBox(wx.Dialog):
     """ Create and display the About Dialog Box """
@@ -149,6 +154,13 @@ class AboutBox(wx.Dialog):
         # Add the FFmpeg Credits to the main sizer
         mainSizer.Add(self.ffmpeg, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
 
+        if ('wxMac' in wx.PlatformInfo) and \
+           (('alpha' in TransanaConstants.versionNumber.lower()) or ('beta' in TransanaConstants.versionNumber.lower())):
+            self.tmpInput = wx.TextCtrl(self, -1, "DELETE ME!", size=(1, 1))
+            mainSizer.Add(self.tmpInput, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
+            self.tmpInput.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
+            self.tmpInput.SetFocus()
+
         # Create an OK button
         btnOK = wx.Button(self, wx.ID_OK, _("OK"))
         # Add the OK button to the main sizer
@@ -188,9 +200,25 @@ class AboutBox(wx.Dialog):
             if (key == wx.WXK_F11) or (key in [ord('S'), ord('s')]):
                 # Import Python's ctypes, Transana's DBInterface, Python's sys modules, and numpy
                 import Crypto, ctypes, DBInterface, paramiko, sys, numpy
+
+                if sys.platform == 'win32':
+                    sysplat = 'Windows'
+                elif sys.platform == 'darwin':
+                    sysplat = 'Mac OS X'
+                else:
+                    sysplat = sys.platform
+                
+                
+                str = 'Platform:  %s %s' % (sysplat, platform.release())
                 # Build a string that contains the version information for crucial programming components
-                str = '\n            Transana %s uses the following tools:\n\n'% (TransanaConstants.versionNumber)
-                str = '%sPython:  %s\n' % (str, sys.version[:6].strip())
+                str += '\n\n            Transana %s uses the following tools:\n\n'% (TransanaConstants.versionNumber)
+                if (platform.architecture()[0] == '32bit') or (sys.maxint == 2 ** 31 - 1):
+                    arc = '32-bit'
+                elif platform.architecture()[0] == '64bit':
+                    arc = '64-bit'
+                else:
+                    arc = 'Unknown architecture'
+                str = '%sPython:  %s  (%s)\n' % (str, sys.version[:6].strip(), arc)
                 if 'unicode' in wx.PlatformInfo:
                     str2 = 'unicode'
                 else:
