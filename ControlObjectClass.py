@@ -3013,6 +3013,14 @@ class ControlObject(object):
                     else:
                         tmpAdjustedY = YUpper + 1
 
+                    # Transcripts are ending up too large on OS X.  I can't figure out why, so let's just correct it here.
+                    # If the bottom of the Data Window is smaller than the bottom of the Transcript Window ...
+                    if (self.DataWindow.GetDimensions()[1] + self.DataWindow.GetDimensions()[3]) < \
+                       (self.TranscriptWindow.GetDimensions()[1] + self.TranscriptWindow.GetDimensions()[3]):
+                        # ... reduce the wheight by the difference!
+                        wheight -= (self.TranscriptWindow.GetDimensions()[1] + self.TranscriptWindow.GetDimensions()[3]) - \
+                                        (self.DataWindow.GetDimensions()[1] + self.DataWindow.GetDimensions()[3])
+
                     if (oleft != wleft) or (otop != tmpAdjustedY) or (owidth != X - wleft) or (oheight != wheight + wtop - tmpAdjustedY):
                         self.TranscriptWindow.SetDims(wleft, tmpAdjustedY, X - wleft, wheight + wtop - tmpAdjustedY)
 
