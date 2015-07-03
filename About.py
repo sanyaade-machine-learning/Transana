@@ -203,15 +203,16 @@ class AboutBox(wx.Dialog):
 
                 if sys.platform == 'win32':
                     sysplat = 'Windows'
+                    sysver = platform.win32_ver()[0]
                 elif sys.platform == 'darwin':
                     sysplat = 'Mac OS X'
+                    sysver = platform.mac_ver()[0]
                 else:
                     sysplat = sys.platform
-                
-                
-                str = 'Platform:  %s %s' % (sysplat, platform.release())
+                    sysver = platform.version()
+                str = 'Platform:  %s %s' % (sysplat, sysver)
                 # Build a string that contains the version information for crucial programming components
-                str += '\n\n            Transana %s uses the following tools:\n\n'% (TransanaConstants.versionNumber)
+                str += '\n\nTransana %s uses the following tools:\n\n'% (TransanaConstants.versionNumber)
                 if (platform.architecture()[0] == '32bit') or (sys.maxint == 2 ** 31 - 1):
                     arc = '32-bit'
                 elif platform.architecture()[0] == '64bit':
@@ -347,6 +348,8 @@ class AboutBox(wx.Dialog):
                 self.ffmpeg.SetLabel(self.ffmpeg_str)
             # Fit the window to the altered controls
             self.Fit()
+            TransanaGlobal.CenterOnPrimary(self)
+
         # If ALT and SHIFT aren't both pressed ...
         else:
             # ... then we don't do anything
