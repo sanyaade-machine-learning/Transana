@@ -1347,9 +1347,11 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             return False
 
         # Perform the comparison
+        # NOTE:  If the second font's foreground color matches its background color, we can ignore differences in FaceName!
+        #        This prevents hidden fonts from eluding detection here because of font face changes.
         if (not font1.IsOk()) or \
            (not font2.IsOk()) or \
-           (font1.GetFaceName() != font2.GetFaceName()) or \
+           ((fmt2.GetTextColour() != fmt2.GetBackgroundColour()) and (font1.GetFaceName() != font2.GetFaceName())) or \
            (font1.GetPointSize() != font2.GetPointSize()) or \
            (font1.GetWeight() != font2.GetWeight()) or \
            (font1.GetStyle() != font2.GetStyle()) or \
