@@ -823,111 +823,111 @@ class PropagateClipChanges(wx.Dialog):
                     # ... we should STOP processing Clips!  So stop iterating!
                     break
     
-                # If the user pressed Cancel ...
-                if results == wx.ID_CANCEL:
-                    # ... undo Data Object changes in the database ...
-                    dbCursor.execute("ROLLBACK")
+            # If the user pressed Cancel ...
+            if results == wx.ID_CANCEL:
+                # ... undo Data Object changes in the database ...
+                dbCursor.execute("ROLLBACK")
 
-                    # If the user presses Cancel, we have to reverse the changes that have already been made to the
-                    # user interface (local and MU).  This probably isn't a great model (change, then undo if Cancelled),
-                    # but cancel should be rare.
-                    # So first, iterate through the Undo list to see what records need to be undone.
-                    for undoRec in undoData:
+                # If the user presses Cancel, we have to reverse the changes that have already been made to the
+                # user interface (local and MU).  This probably isn't a great model (change, then undo if Cancelled),
+                # but cancel should be rare.
+                # So first, iterate through the Undo list to see what records need to be undone.
+                for undoRec in undoData:
 
-                        # If the record is a Quote or a Clip record ...
-                        if undoRec[0] in ['Quote', 'Clip']:
-                            # ... assemble the node list based on the values in the Undo record
-                            nodeList = (_("Collections"),) + undoRec[5] + (undoRec[3],)
-                            if undoRec[0] == 'Quote':
-                                # Rename the correct Tree node
-                                parent.tree.rename_Node(nodeList, 'QuoteNode', undoRec[4])
-                                msg = "QuoteNode"
-                            elif undoRec[0] == 'Clip':
-                                # Rename the correct Tree node
-                                parent.tree.rename_Node(nodeList, 'ClipNode', undoRec[4])
-                                msg = "ClipNode"
-    
-                            # If we're in the Multi-User mode, we need to send a message about the change
-                            if not TransanaConstants.singleUserVersion:
-                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
-                                # This must be untranslated to avoid problems in mixed-language environments.
-                                # Prepend these on the Messsage
-                                msg += " >|< Collections >|< "
-                                for node in nodeList[1:]:
-                                    # Prepend the new Node's name on the Message with the appropriate seperator
-                                    msg += node + ' >|< ' 
-                                # Begin constructing the message with the old and new names for the node
-                                msg += undoRec[4]
+                    # If the record is a Quote or a Clip record ...
+                    if undoRec[0] in ['Quote', 'Clip']:
+                        # ... assemble the node list based on the values in the Undo record
+                        nodeList = (_("Collections"),) + undoRec[5] + (undoRec[3],)
+                        if undoRec[0] == 'Quote':
+                            # Rename the correct Tree node
+                            parent.tree.rename_Node(nodeList, 'QuoteNode', undoRec[4])
+                            msg = "QuoteNode"
+                        elif undoRec[0] == 'Clip':
+                            # Rename the correct Tree node
+                            parent.tree.rename_Node(nodeList, 'ClipNode', undoRec[4])
+                            msg = "ClipNode"
 
-                                if DEBUG:
-                                    print 'Message to send = "RN %s"' % msg.encode('latin1')
-                                    print
-
-                                # Cache the Rename Node message for later processing
-                                if TransanaGlobal.chatWindow != None:
-                                    messageCache.append("RN %s" % msg)
-
-                        # If the record is a Keyword Example record ...
-                        elif undoRec[0] == 'KWE':
-                            # .. Build the Keyword Example Node List for the OLD Clip ID
-                            nodeList = (_('Keywords'), undoRec[5], undoRec[6], undoRec[3])
-                            # Select the Keyword Example Node
-                            exampleNode = parent.tree.select_Node(nodeList, 'KeywordExampleNode')
-                            # Update the Keyword Example Node to the NEW Clip ID
-                            parent.tree.SetItemText(exampleNode, undoRec[4])
-                            # If we're in the Multi-User mode, we need to send a message about the change
-                            if not TransanaConstants.singleUserVersion:
-                                # Begin constructing the message with the old and new names for the node
-                                msg = " >|< %s >|< %s" % (undoRec[2], undoRec[3])
-                                # Get the full Node Branch by climbing it to two levels above the root
-                                while (parent.tree.GetItemParent(parent.tree.GetItemParent(exampleNode)) != parent.tree.GetRootItem()):
-                                    # Update the selected node indicator
-                                    exampleNode = parent.tree.GetItemParent(exampleNode)
-                                    # Prepend the new Node's name on the Message with the appropriate seperator
-                                    msg = ' >|< ' + parent.tree.GetItemText(exampleNode) + msg
-                                # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
-                                # This must be untranslated to avoid problems in mixed-language environments.
-                                # Prepend these on the Messsage
-                                msg = "KeywordExampleNode >|< Keywords" + msg
-
-                                if DEBUG:
-                                    print 'Message to send = "RN %s"' % msg
-
-                                # Cache the Rename Node message for later processing
-                                if TransanaGlobal.chatWindow != None:
-                                    messageCache.append("RN %s" % msg)
-
-                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        # If we're in the Multi-User mode, we need to send a message about the change
                         if not TransanaConstants.singleUserVersion:
-                            # Build the message to update Keyword Visualizations.
-                            msg = '%s %d' % (objType, undoRec[1])
+                            # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                            # This must be untranslated to avoid problems in mixed-language environments.
+                            # Prepend these on the Messsage
+                            msg += " >|< Collections >|< "
+                            for node in nodeList[1:]:
+                                # Prepend the new Node's name on the Message with the appropriate seperator
+                                msg += node + ' >|< ' 
+                            # Begin constructing the message with the old and new names for the node
+                            msg += undoRec[4]
 
                             if DEBUG:
-                                print 'Message to send = "UKL %s"' % msg
+                                print 'Message to send = "RN %s"' % msg.encode('latin1')
+                                print
 
+                            # Cache the Rename Node message for later processing
                             if TransanaGlobal.chatWindow != None:
-                                # Cache the Update Keywords messages for later processing
-                                messageCache.append("UKL %s" % msg)
-                                messageCache.append("UKV %s %s" % (msg, undoRec[2]))
-                    
-                    # ... and inform the user that the changes were cancelled.  To avoid confusion, clear the report information already generated.
-                    self.memo.Clear()
-                    self.memo.AppendText(cancelMessageText)
-                # If the user pressed anything except Cancel ...
-                else:
-                    # ... commit the changes to the database
-                    dbCursor.execute("COMMIT")
+                                messageCache.append("RN %s" % msg)
 
-                    # If we're in MU and have a chat window ...
-                    if TransanaGlobal.chatWindow != None:
-                        # Iterate through the cached messages
-                        for message in messageCache:
-                            # Send the messages one at a time
-                            TransanaGlobal.chatWindow.SendMessage(message)
-                    # If the current clip needs to be updated ...
-                    if CurrentClipToUpdate != 0:
-                        # ... then update the current clip to the latest data
-                        parent.ControlObject.LoadClipByNumber(CurrentClipToUpdate)
+                    # If the record is a Keyword Example record ...
+                    elif undoRec[0] == 'KWE':
+                        # .. Build the Keyword Example Node List for the OLD Clip ID
+                        nodeList = (_('Keywords'), undoRec[5], undoRec[6], undoRec[3])
+                        # Select the Keyword Example Node
+                        exampleNode = parent.tree.select_Node(nodeList, 'KeywordExampleNode')
+                        # Update the Keyword Example Node to the NEW Clip ID
+                        parent.tree.SetItemText(exampleNode, undoRec[4])
+                        # If we're in the Multi-User mode, we need to send a message about the change
+                        if not TransanaConstants.singleUserVersion:
+                            # Begin constructing the message with the old and new names for the node
+                            msg = " >|< %s >|< %s" % (undoRec[2], undoRec[3])
+                            # Get the full Node Branch by climbing it to two levels above the root
+                            while (parent.tree.GetItemParent(parent.tree.GetItemParent(exampleNode)) != parent.tree.GetRootItem()):
+                                # Update the selected node indicator
+                                exampleNode = parent.tree.GetItemParent(exampleNode)
+                                # Prepend the new Node's name on the Message with the appropriate seperator
+                                msg = ' >|< ' + parent.tree.GetItemText(exampleNode) + msg
+                            # The first parameter is the Node Type.  The second one is the UNTRANSLATED root node.
+                            # This must be untranslated to avoid problems in mixed-language environments.
+                            # Prepend these on the Messsage
+                            msg = "KeywordExampleNode >|< Keywords" + msg
+
+                            if DEBUG:
+                                print 'Message to send = "RN %s"' % msg
+
+                            # Cache the Rename Node message for later processing
+                            if TransanaGlobal.chatWindow != None:
+                                messageCache.append("RN %s" % msg)
+
+                    # Now let's communicate with other Transana instances if we're in Multi-user mode
+                    if not TransanaConstants.singleUserVersion:
+                        # Build the message to update Keyword Visualizations.
+                        msg = '%s %d' % (objType, undoRec[1])
+
+                        if DEBUG:
+                            print 'Message to send = "UKL %s"' % msg
+
+                        if TransanaGlobal.chatWindow != None:
+                            # Cache the Update Keywords messages for later processing
+                            messageCache.append("UKL %s" % msg)
+                            messageCache.append("UKV %s %s" % (msg, undoRec[2]))
+                
+                # ... and inform the user that the changes were cancelled.  To avoid confusion, clear the report information already generated.
+                self.memo.Clear()
+                self.memo.AppendText(cancelMessageText)
+            # If the user pressed anything except Cancel ...
+            else:
+                # ... commit the changes to the database
+                dbCursor.execute("COMMIT")
+
+                # If we're in MU and have a chat window ...
+                if TransanaGlobal.chatWindow != None:
+                    # Iterate through the cached messages
+                    for message in messageCache:
+                        # Send the messages one at a time
+                        TransanaGlobal.chatWindow.SendMessage(message)
+                # If the current clip needs to be updated ...
+                if CurrentClipToUpdate != 0:
+                    # ... then update the current clip to the latest data
+                    parent.ControlObject.LoadClipByNumber(CurrentClipToUpdate)
                     
         # Update the contents of the memo
         self.memo.Update()
