@@ -142,10 +142,7 @@ class FormatDef(object):
     def _getFontFace(self):
         return self._fontFace
     def _setFontFace(self, fontFace):
-        if fontFace != None:
-            self._fontFace = fontFace.strip()
-        else:
-            self._fontFace = fontFace
+        self._fontFace = fontFace.strip()
     def _delFontFace(self):
         self._fontFace = None
 
