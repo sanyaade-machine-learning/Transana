@@ -32,7 +32,7 @@ import TransanaImages
 class ErrorDialog(wx.Dialog):
     """Error message dialog to the user."""
 
-    def __init__(self, parent, errmsg, includeSkipCheck=False):
+    def __init__(self, parent, errmsg, dlgCaption=_("Transana Error"), includeSkipCheck=False):
         # This should be easy, right?  Just use the OS MessageDialog like so:
         # wx.MessageDialog.__init__(self, parent, errmsg, _("Transana Error"), wx.OK | wx.CENTRE | wx.ICON_ERROR)
         # That's all there is to it, right?
@@ -46,7 +46,7 @@ class ErrorDialog(wx.Dialog):
         self.includeSkipCheck = includeSkipCheck
 
         # Create a Dialog box
-        wx.Dialog.__init__(self, parent, -1, _("Transana Error"), size=(350, 150), style=wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP)
+        wx.Dialog.__init__(self, parent, -1, dlgCaption, size=(350, 150), style=wx.CAPTION | wx.CLOSE_BOX | wx.STAY_ON_TOP)
         # Set "Window Variant" to small only for Mac to make fonts match better
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
