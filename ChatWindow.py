@@ -1689,8 +1689,11 @@ def ConnectToMessageServer():
                     tmpDlg.Destroy()
 
                     # On SSL failure, we need to delete the sockets and start over to make an un-encrypted connection
-                    del(socketObj)
-                    del(socketObj_plain)
+                    try:
+                        del(socketObj)
+                        del(socketObj_plain)
+                    except:
+                        pass
                     
                     # Define the Socket connection
                     socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1714,8 +1717,11 @@ def ConnectToMessageServer():
                     tmpDlg.Destroy()
 
                     # On SSL failure, we need to delete the sockets and start over to make an un-encrypted connection
-                    del(socketObj)
-                    del(socketObj_plain)
+                    try:
+                        del(socketObj)
+                        del(socketObj_plain)
+                    except:
+                        pass
                     
                     # Define the Socket connection
                     socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
