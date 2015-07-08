@@ -83,6 +83,9 @@ class Episode(DataObject.DataObject):
         str = str + "Date = %s\n" % self.tape_date
         str = str + "Library ID = %s\n" % self.series_id
         str = str + "Library Num = %s\n" % self.series_num
+        str += "isLocked = %s\n" % self._isLocked
+        str += "recordlock = %s\n" % self.recordlock
+        str += "locktime = %s\n" % self.locktime
         str += "Keywords:\n"
         for kw in self._kwlist:
             str += '  ' + kw.keywordPair + '\n'
@@ -671,6 +674,11 @@ class Episode(DataObject.DataObject):
         self.series_id = r['SeriesID']
         self.series_num = r['SeriesNum']
         
+        self.recordlock = r['RecordLock']
+        if self.recordlock != '':
+            self._isLocked = True
+        self.locktime = r['LockTime']
+
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
         # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
         if 'unicode' in wx.PlatformInfo:
@@ -678,6 +686,7 @@ class Episode(DataObject.DataObject):
             self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
             self.media_filename = DBInterface.ProcessDBDataForUTF8Encoding(self.media_filename)
             self.series_id = DBInterface.ProcessDBDataForUTF8Encoding(self.series_id)
+            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)
 
         # Remember whether the MediaFile uses the VideoRoot Folder or not.
         # Detection of the use of the Video Root Path is platform-dependent.

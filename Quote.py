@@ -97,12 +97,15 @@ class Quote(DataObject.DataObject):
         str += "start_char = %s\n" % self.start_char
         str += "end_char = %s\n" % self.end_char
         str += "comment = %s\n" % self.comment
+        str += "isLocked = %s\n" % self._isLocked
+        str += "recordlock = %s\n" % self.recordlock
+        str += "locktime = %s\n" % self.locktime
         str += "Keywords:\n"
         for kw in self._kwlist:
             str += '  ' + kw.keywordPair + '\n'
         str = str + "LastSaveTime = %s\n" % self.lastsavetime
-        if len(self.text) > 250:
-            str += self.text[:250] + '\n\n'   # "text not displayed due to length.\n\n"
+        if len(self.text) > 150:
+            str += self.text[:150] + '\n\n'   # "text not displayed due to length.\n\n"
         else:
             str += "text = %s\n\n" % self.text
         return str.encode('utf8')
@@ -196,7 +199,7 @@ class Quote(DataObject.DataObject):
         # If we're skipping the XML Text ...
         if self.skipText:
             # Define the query to load a Quote without text
-            query = """SELECT a.QuoteNum, QuoteID, a.CollectNum, CollectID, SourceDocumentNum, SortOrder, Comment,
+            query = """SELECT a.QuoteNum, QuoteID, a.CollectNum, CollectID, SourceDocumentNum, SortOrder, a.Comment,
                               StartChar, EndChar,
                               a.RecordLock, a.LockTime, LastSaveTime
                          FROM Quotes2 a, QuotePositions2 b, Collections2 c
@@ -208,7 +211,7 @@ class Quote(DataObject.DataObject):
         else:
             # Define the query to load a Document with everything
             # Define the query to load a Quote without text
-            query = """SELECT a.QuoteNum, QuoteID, a.CollectNum, CollectID, SourceDocumentNum, SortOrder, Comment,
+            query = """SELECT a.QuoteNum, QuoteID, a.CollectNum, CollectID, SourceDocumentNum, SortOrder, a.Comment,
                               StartChar, EndChar,
                               XMLText, a.RecordLock, a.LockTime, LastSaveTime
                          FROM Quotes2 a, QuotePositions2 b, Collections2 c
@@ -261,8 +264,6 @@ class Quote(DataObject.DataObject):
         # If there's a defined (saved) transcript object ...
         if (self.id != 0) and (self.text != None):
             
-#            print "Document.UpdateParagraphs()"
-
             # ... and if the text is in XML form ...
             if self.text[:5] == '<?xml':
                 # ... divide the transcript text into individual LINES
@@ -827,6 +828,10 @@ class Quote(DataObject.DataObject):
         self.end_char = row['EndChar']
         self.sort_order = row['SortOrder']
         self.comment = row['Comment']
+        self.recordlock = row['RecordLock']
+        if self.recordlock != '':
+            self._isLocked = True
+        self.locktime = row['LockTime']
         # If we're NOT skipping the XML Text ...
         if not self.skipText:
             # Can I get away with assuming Unicode?
@@ -886,3 +891,4 @@ class Quote(DataObject.DataObject):
             self.id = DBInterface.ProcessDBDataForUTF8Encoding(self.id)
             self.collection_id = DBInterface.ProcessDBDataForUTF8Encoding(self.collection_id)
             self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
+            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)

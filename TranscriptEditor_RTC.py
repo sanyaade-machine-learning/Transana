@@ -48,6 +48,8 @@ import Episode, Clip
 import Quote
 # Import Transana's Constants
 import TransanaConstants
+# import Transana Exceptions
+import TransanaExceptions
 # Import Transana's Global variables
 import TransanaGlobal
 # import the RTC version of the Transcript User Interface module
@@ -614,32 +616,45 @@ class TranscriptEditor(RichTextEditCtrl):
         if self.timeCodeDataVisible:
             # ... then hide them for now.
             self.changeTimeCodeValueStatus(False)
-        # If we have a defined Transcript Object ...
-        if self.TranscriptObj:
-            # Note whether the transcript has changed
-            self.TranscriptObj.has_changed = self.modified()
-            # Get the transcript data in XML format
-            self.TranscriptObj.text = self.GetFormattedSelection('XML')
-            # Specify the Document Length in Characters (for Documents)
-            self.TranscriptObj.document_length = self.GetLength()
-            # Write it to the database
-            self.TranscriptObj.db_save()
-        # If time codes were showing, show them again.
-        if not initCodesVis:
-            self.hide_codes()
-        # If Time Code Values were showing, show them again.
-        if initTimeCodeValueStatus:
-            self.changeTimeCodeValueStatus(True)
-        # Let's try restoring the Cursor Position when all is said and done.
-        self.RestoreCursor()
-        # Mark the Edit Control as unmodified.
-	self.DiscardEdits()
-        # Destroy the Save Popup Dialog
-        self.saveDlg.Destroy()
-        # If Partial Transcript editing is enabled ...
-        if TransanaConstants.partialTranscriptEdit and continueEditing:
-            # If we have only part of the transcript in the editor, we need to restore the partial transcript state following save
-            self.UpdateCurrentContents('EnterEditMode')
+        # Start exception handling in case there's a problem with the Save
+        try:
+            # If we have a defined Transcript Object ...
+            if self.TranscriptObj:
+                # Note whether the transcript has changed
+                self.TranscriptObj.has_changed = self.modified()
+                # Get the transcript data in XML format
+                self.TranscriptObj.text = self.GetFormattedSelection('XML')
+                # Specify the Document Length in Characters (for Documents)
+                self.TranscriptObj.document_length = self.GetLength()
+                # Write it to the database
+                self.TranscriptObj.db_save()
+        except TransanaExceptions.SaveError, e:
+            raise
+        except:
+            print "TranscriptEditor_RTC.save_transcript():"
+            print sys.exc_info()[0]
+            print sys.exc_info()[1]
+            import traceback
+            traceback.print_exc()
+            raise
+        # We need to finish this even if an exception is raised!
+        finally:
+            # If time codes were showing, show them again.
+            if not initCodesVis:
+                self.hide_codes()
+            # If Time Code Values were showing, show them again.
+            if initTimeCodeValueStatus:
+                self.changeTimeCodeValueStatus(True)
+            # Let's try restoring the Cursor Position when all is said and done.
+            self.RestoreCursor()
+            # Mark the Edit Control as unmodified.
+            self.DiscardEdits()
+            # Destroy the Save Popup Dialog
+            self.saveDlg.Destroy()
+            # If Partial Transcript editing is enabled ...
+            if TransanaConstants.partialTranscriptEdit and continueEditing:
+                # If we have only part of the transcript in the editor, we need to restore the partial transcript state following save
+                self.UpdateCurrentContents('EnterEditMode')
 
     def export_transcript(self, fname):
         """Export the transcript to an RTF file."""

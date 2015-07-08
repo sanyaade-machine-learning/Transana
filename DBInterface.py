@@ -2068,6 +2068,9 @@ def get_db(dbToOpen=None):
                             dbCursor.execute('SET character_set_server = utf8')
                             dbCursor.execute('SET character_set_database = utf8')
                             dbCursor.execute('SET character_set_results = utf8')
+                            dbCursor.execute('SET collation_connection = utf8_general_ci')
+                            dbCursor.execute('SET collation_database = utf8_general_ci')
+                            dbCursor.execute('SET collation_server = utf8_general_ci')
                             
                             dbCursor.execute('USE %s' % databaseName.encode('utf8'))
                             # Set the global character encoding to UTF-8

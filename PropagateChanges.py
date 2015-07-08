@@ -452,6 +452,10 @@ class PropagateClipChanges(wx.Dialog):
         #  Could this code be optimized by leaving the newKeywordList == None and skipping Keyword Processing if there is none to do?
         # ***************************************************
 
+        # Let's try locking everything here.
+        lockedObjects = {}
+        unlockedObjects = {}
+
         if objType == 'Quote':
             # Initialize the quoteList
             # Request quotes that are copies of the current quote
@@ -463,6 +467,14 @@ class PropagateClipChanges(wx.Dialog):
                 # ... then remove it from the list.  It's already been updated!
                 objList.remove((originalObj.number, originalObj.collection_num, originalObj.id, originalObj.source_document_num))
 
+            for obj in objList:
+                dataObj = Quote.Quote(num = obj[0])
+                try:
+                    dataObj.lock_record()
+                    unlockedObjects[dataObj.number] = dataObj
+                except:
+                    lockedObjects[dataObj.number] = dataObj
+
         elif objType == 'Clip':
             # If we are passed a Transcript Index ...
             if sourceTranscriptIndex > -1:
@@ -470,6 +482,7 @@ class PropagateClipChanges(wx.Dialog):
                 objListTranscriptIndex = sourceTranscriptIndex
                 # Request clips that are copies of the current clip
                 objList = DBInterface.list_of_clip_copies(originalObj.id, originalObj.transcripts[objListTranscriptIndex].source_transcript, originalObj.transcripts[objListTranscriptIndex].clip_start, originalObj.transcripts[objListTranscriptIndex].clip_stop)
+
             # ... otherwise we have to handle requests from multiple transcripts ...
             else:
                 # Initialize the objList
@@ -498,6 +511,7 @@ class PropagateClipChanges(wx.Dialog):
                        (originalObj.id == clid):
                         # ... then remove it from the list.  It's already been updated!
                         objList.remove((num, colnum, clid, trnum))
+
             # If we HAVE a Transcript Index ...
             else:
                 
@@ -505,6 +519,14 @@ class PropagateClipChanges(wx.Dialog):
                 if (originalObj.number, originalObj.collection_num, originalObj.id, originalObj.transcripts[sourceTranscriptIndex].number) in objList:
                     # ... then remove it from the list.  It's already been updated!
                     objList.remove((originalObj.number, originalObj.collection_num, originalObj.id, originalObj.transcripts[sourceTranscriptIndex].number))
+
+            for obj in objList:
+                dataObj = Clip.Clip(obj[0])
+                try:
+                    dataObj.lock_record()
+                    unlockedObjects[dataObj.number] = dataObj
+                except:
+                    lockedObjects[dataObj.number] = dataObj
 
         # If no objects are returned ...
         if len(objList) == 0:
@@ -527,183 +549,203 @@ class PropagateClipChanges(wx.Dialog):
             results = ID_SKIP
             # If the user cancels, we may need to undo some of the changes that get made to the system!
             undoData = []
+
+            print "PropagateChanges.PropagateClipChanges():"
+            
             # Iterate through the Object List ...
             for obj in objList:
                 # Start Exception handling.
                 try:
                     if objType == 'Quote':
-                        dataObj = Quote.Quote(num = obj[0])
-                        # Let's remember the original Object ID.
-                        oldDataID = dataObj.id
+
                         recordLockedPrompt = unicode(_('ERROR: Quote "%s" in Collection "%s" is locked and cannot be updated.'), 'utf8')
                         saveErrorPrompt = unicode(_('ERROR: Save error "%s" for Quote "%s" in Collection "%s"'), 'utf8')
                         cancelMessageText = _("Quote Change Propagation was cancelled.  Therefore, no Quotes were updated.")
 
-                        # If the user hasn't signal that they want to update all Quotes ...
-                        if (not acceptAll):
-                            # ... create the Accept Quote Changes form WITH KEYWORDS ...
-                            acceptQuoteChanges = AcceptObjectTranscriptChanges(self, 'Document', obj[0], -1, newText, newKeywordList, helpString="Propagate Clip Changes")
-                            # ... and display it, capturing the user feedback.
-                            results = acceptQuoteChanges.GetResults()
-                            # Close (and Destroy) the form
-                            acceptQuoteChanges.Destroy()
-                            # If the user wants to update all Clips ...
-                            if results == ID_UPDATEALL:
-                                # ... then changing this variable will prevent the need for further user intervention.
-                                acceptAll = True
-                        # If the user presses "Update" (OK) or has pressed "Update All" ...
-                        if acceptAll or (results == wx.ID_OK):
-                            # Lock the Quote (will raise an exception of you can't)
-                            dataObj.lock_record()
-                            # update the Quote ID
-                            dataObj.id = newObjID
-                            # substitute the new transcript text for the old text
-                            dataObj.text = newText
-                            # Clear the old keywords from the Quote
-                            dataObj.clear_keywords()
-                            # Iterate through all the keywords in the NEW keyword list
-                            for clipKeyword in newKeywordList:
-                                # ... add it as a non-example keyword
-                                dataObj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
+                        if unlockedObjects.has_key(obj[0]):
+                            dataObj = unlockedObjects[obj[0]]
+    #                        dataObj = Quote.Quote(num = obj[0])
+                            # Let's remember the original Object ID.
+                            oldDataID = dataObj.id
 
-                            # Save the Quote
-                            dataObj.db_save(use_transactions=False)
-                            # unlock the Quote
-                            dataObj.unlock_record()
-
-                            # Finally, indicate success in the Report
-                            prompt = unicode(_('Quote "%s" in Collection "%s" has been updated.'), 'utf8')
-                            # Add the message to the report
-                            self.memo.AppendText(prompt % (oldDataID, dataObj.GetNodeString(False)) + '\n\n')
-                        # If the user indicates we should skip ONE clip ...
-                        elif results == ID_SKIP:
-                            # ... indicate that in the report and don't do anything else.
-                            prompt = unicode(_('Quote change has been skipped for Quote "%s" in Collection "%s".'), 'utf8')
-                            self.memo.AppendText(prompt % (oldDataID, dataObj.GetNodeString(False)) + '\n\n')
-                        # If the user indicates we should CANCEL Quote propagation ...
-                        elif results == wx.ID_CANCEL:
-                            # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
-                            #     the full Quote information to the report.
-                            self.memo.AppendText(_("Quote change propagation has been cancelled."))
-                            # ... we should STOP processing Quotes!  So stop iterating!
-                            break
-
-                    elif objType == 'Clip':
-                        # ... load the current clip
-                        dataObj = Clip.Clip(obj[0])
-                        # Let's remember the original Object ID.
-                        oldDataID = dataObj.id
-                        recordLockedPrompt = unicode(_('ERROR: Clip "%s" in Collection "%s" is locked and cannot be updated.'), 'utf8')
-                        saveErrorPrompt = unicode(_('ERROR: Save error "%s" for Clip "%s" in Collection "%s"'), 'utf8')
-                        cancelMessageText = _("Clip Change Propagation was cancelled.  Therefore, no clips were updated.")
-
-                        # If we have a Transcript Index ...
-                        if sourceTranscriptIndex > -1:
-                            # We need the appropriate transcript's INDEX.  Initialize to -1
-                            trIndex = -1
-                            # Interate through transcripts ...
-                            for tr in dataObj.transcripts:
-                                # ... if the transcript's number is the one we're looking for (matches the SourceTranscript) ...
-                                if tr.number == obj[3]:
-                                    # ... remember the INDEX for the Transcript, so we know which one to update.
-                                    trIndex = {dataObj.transcripts.index(tr) : newText}
-                                    break
-                        # If we don't have a Transcript Index, we need to create a dictionary of transcripts!
-                        else:
-                            # Initialize a dictionary
-                            trIndex = {}
-                    
-                            # The trick here is to make sure that ALL COMBINATIONS of transcripts of same and different sizes get
-                            # detected and processed.  If we update a clip with just transcripts 2 and 3, we need to be sure that
-                            # clips with transcripts 1 and 3 as well as 2 and 4 get caught and processed.
-                    
-                            # Loop through all dataObj transcripts
-                            for x in range(len(dataObj.transcripts)):
-                                # Loop through all newText transcripts
-                                for y in range(len(newText)):
-                                    # If both transcripts come from the same source transcript, we have a match.
-                                    if dataObj.transcripts[x].source_transcript == newText[y].source_transcript:
-                                        # We need to record the matches for processing.
-                                        trIndex[x] = newText[y].text
-                                        # Once we've found the match, no need to keep looking within newText.
-                                        break
-
-                        # For each key in the transcripts dictionary ...
-                        for key in trIndex.keys():
-                            # If the user hasn't signal that they want to update all clips AND we've found an eligible transcript (index != -1) ...
-                            if (not acceptAll) and (trIndex != -1):
-                                # See if we're looking at single transcript situations OR the first transcript in a list ...
-                                if (sourceTranscriptIndex > -1) or (key == 0):
-                                    # ... create the Accept Clip Transcript Changes form WITH KEYWORDS ...
-                                    acceptClipChanges = AcceptObjectTranscriptChanges(self, 'Episode', obj[0], key, trIndex[key], newKeywordList, helpString="Propagate Clip Changes")
-                                # If it's not a single or the first, ...
-                                else:
-                                    # ... LEAVE THE KEYWORDS OFF!
-                                    acceptClipChanges = AcceptObjectTranscriptChanges(self, 'Episode', obj[0], key, trIndex[key], helpString="Propagate Clip Changes")
+                            # If the user hasn't signal that they want to update all Quotes ...
+                            if (not acceptAll):
+                                # ... create the Accept Quote Changes form WITH KEYWORDS ...
+                                acceptQuoteChanges = AcceptObjectTranscriptChanges(self, 'Document', obj[0], -1, newText, newKeywordList, helpString="Propagate Clip Changes")
                                 # ... and display it, capturing the user feedback.
-                                results = acceptClipChanges.GetResults()
+                                results = acceptQuoteChanges.GetResults()
                                 # Close (and Destroy) the form
-                                acceptClipChanges.Destroy()
+                                acceptQuoteChanges.Destroy()
                                 # If the user wants to update all Clips ...
                                 if results == ID_UPDATEALL:
                                     # ... then changing this variable will prevent the need for further user intervention.
                                     acceptAll = True
                             # If the user presses "Update" (OK) or has pressed "Update All" ...
                             if acceptAll or (results == wx.ID_OK):
-                                # Get a list of Keyword Examples for the current clip.  We don't want to lose this information in the propagation.
-                                keywordExamples = DBInterface.list_all_keyword_examples_for_a_clip(obj[0])
-                                # Lock the Clip (will raise an exception of you can't)
-                                dataObj.lock_record()
-                                # update the Clip ID
+
+                                print dataObj
+                                print
+                                
+                                # Lock the Quote (will raise an exception of you can't)
+#                                dataObj.lock_record()
+                                # update the Quote ID
                                 dataObj.id = newObjID
                                 # substitute the new transcript text for the old text
-                                dataObj.transcripts[key].text = trIndex[key]
-                                if (sourceTranscriptIndex > -1) or (key == 0):
-                                    # Clear the old keywords from the clip
-                                    dataObj.clear_keywords()
-                                    # Iterate through all the clips in the NEW keyword list
-                                    for clipKeyword in newKeywordList:
-                                        # If the keyword is also in the Keyword Examples list ...
-                                        if (clipKeyword.keywordGroup, clipKeyword.keyword, dataObj.number, originalObj.id) in keywordExamples:
-                                            # ... add it as an example keyword
-                                            dataObj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword, example=1)
-                                        # If it's NOT an example ...
-                                        else:
-                                            # ... add it as a non-example keyword
-                                            dataObj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
-                                    # We don't want Keyword Example clips to get lost because of propagation.
-                                    # Therefore, iterate through the Keyword Examples list
-                                    for kw in keywordExamples:
-                                        # Check to see if the keyword is already added to the clip above.  If NOT ...
-                                        if not dataObj.has_keyword(kw[0], kw[1]):
-                                            # ... add the keyword as an example keyword
-                                            dataObj.add_keyword(kw[0], kw[1], example=1)
-                                            # This will be unexpected by the user, so let's add a note to the user about this.
-                                            prompt = unicode(_('Clip "%s" in collection "%s" retained keyword "%s : %s" because it is a keyword example.'), 'utf8') + u'\n\n'
-                                            # Add the prompt to the memo to communicate this to the user.
-                                            self.memo.AppendText(prompt % (oldDataID, dataObj.GetNodeString(False), kw[0], kw[1]))
+                                dataObj.text = newText
+                                # Clear the old keywords from the Quote
+                                dataObj.clear_keywords()
+                                # Iterate through all the keywords in the NEW keyword list
+                                for clipKeyword in newKeywordList:
+                                    # ... add it as a non-example keyword
+                                    dataObj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
 
-                                # Save the Clip
+                                # Save the Quote
                                 dataObj.db_save(use_transactions=False)
-                                # unlock the clip
+                                # unlock the Quote
                                 dataObj.unlock_record()
 
                                 # Finally, indicate success in the Report
-                                prompt = unicode(_('Transcript %d of clip "%s" in collection "%s" has been updated.'), 'utf8')
+                                prompt = unicode(_('Quote "%s" in Collection "%s" has been updated.'), 'utf8')
                                 # Add the message to the report
-                                self.memo.AppendText(prompt % (key + 1, oldDataID, dataObj.GetNodeString(False)) + '\n\n')
+                                self.memo.AppendText(prompt % (oldDataID, dataObj.GetNodeString(False)) + '\n\n')
                             # If the user indicates we should skip ONE clip ...
                             elif results == ID_SKIP:
                                 # ... indicate that in the report and don't do anything else.
-                                prompt = unicode(_('Clip change has been skipped for transcript %d of clip "%s" in collection "%s".'), 'utf8')
-                                self.memo.AppendText(prompt % (key + 1, oldDataID, dataObj.GetNodeString(False)) + '\n\n')
-                            # If the user indicates we should CANCEL Clip propagation ...
+                                prompt = unicode(_('Quote change has been skipped for Quote "%s" in Collection "%s".'), 'utf8')
+                                self.memo.AppendText(prompt % (oldDataID, dataObj.GetNodeString(False)) + '\n\n')
+                            # If the user indicates we should CANCEL Quote propagation ...
                             elif results == wx.ID_CANCEL:
                                 # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
-                                #     the full Clip information to the report.
-                                self.memo.AppendText(_("Clip change propagation has been cancelled."))
-                                # ... we should STOP processing Clips!  So stop iterating!
+                                #     the full Quote information to the report.
+                                self.memo.AppendText(_("Quote change propagation has been cancelled."))
+                                # ... we should STOP processing Quotes!  So stop iterating!
                                 break
+
+                    elif objType == 'Clip':
+                        
+                        recordLockedPrompt = unicode(_('ERROR: Clip "%s" in Collection "%s" is locked and cannot be updated.'), 'utf8')
+                        saveErrorPrompt = unicode(_('ERROR: Save error "%s" for Clip "%s" in Collection "%s"'), 'utf8')
+                        cancelMessageText = _("Clip Change Propagation was cancelled.  Therefore, no clips were updated.")
+
+                        if unlockedObjects.has_key(obj[0]):
+                            dataObj = unlockedObjects[obj[0]]
+                            # ... load the current clip
+    #                        dataObj = Clip.Clip(obj[0])
+                            
+
+                            print dataObj
+                            print
+
+
+                            # Let's remember the original Object ID.
+                            oldDataID = dataObj.id
+                            # If we have a Transcript Index ...
+                            if sourceTranscriptIndex > -1:
+                                # We need the appropriate transcript's INDEX.  Initialize to -1
+                                trIndex = -1
+                                # Interate through transcripts ...
+                                for tr in dataObj.transcripts:
+                                    # ... if the transcript's number is the one we're looking for (matches the SourceTranscript) ...
+                                    if tr.number == obj[3]:
+                                        # ... remember the INDEX for the Transcript, so we know which one to update.
+                                        trIndex = {dataObj.transcripts.index(tr) : newText}
+                                        break
+                            # If we don't have a Transcript Index, we need to create a dictionary of transcripts!
+                            else:
+                                # Initialize a dictionary
+                                trIndex = {}
+                        
+                                # The trick here is to make sure that ALL COMBINATIONS of transcripts of same and different sizes get
+                                # detected and processed.  If we update a clip with just transcripts 2 and 3, we need to be sure that
+                                # clips with transcripts 1 and 3 as well as 2 and 4 get caught and processed.
+                        
+                                # Loop through all dataObj transcripts
+                                for x in range(len(dataObj.transcripts)):
+                                    # Loop through all newText transcripts
+                                    for y in range(len(newText)):
+                                        # If both transcripts come from the same source transcript, we have a match.
+                                        if dataObj.transcripts[x].source_transcript == newText[y].source_transcript:
+                                            # We need to record the matches for processing.
+                                            trIndex[x] = newText[y].text
+                                            # Once we've found the match, no need to keep looking within newText.
+                                            break
+
+                            # For each key in the transcripts dictionary ...
+                            for key in trIndex.keys():
+                                # If the user hasn't signal that they want to update all clips AND we've found an eligible transcript (index != -1) ...
+                                if (not acceptAll) and (trIndex != -1):
+                                    # See if we're looking at single transcript situations OR the first transcript in a list ...
+                                    if (sourceTranscriptIndex > -1) or (key == 0):
+                                        # ... create the Accept Clip Transcript Changes form WITH KEYWORDS ...
+                                        acceptClipChanges = AcceptObjectTranscriptChanges(self, 'Episode', obj[0], key, trIndex[key], newKeywordList, helpString="Propagate Clip Changes")
+                                    # If it's not a single or the first, ...
+                                    else:
+                                        # ... LEAVE THE KEYWORDS OFF!
+                                        acceptClipChanges = AcceptObjectTranscriptChanges(self, 'Episode', obj[0], key, trIndex[key], helpString="Propagate Clip Changes")
+                                    # ... and display it, capturing the user feedback.
+                                    results = acceptClipChanges.GetResults()
+                                    # Close (and Destroy) the form
+                                    acceptClipChanges.Destroy()
+                                    # If the user wants to update all Clips ...
+                                    if results == ID_UPDATEALL:
+                                        # ... then changing this variable will prevent the need for further user intervention.
+                                        acceptAll = True
+                                # If the user presses "Update" (OK) or has pressed "Update All" ...
+                                if acceptAll or (results == wx.ID_OK):
+                                    # Get a list of Keyword Examples for the current clip.  We don't want to lose this information in the propagation.
+                                    keywordExamples = DBInterface.list_all_keyword_examples_for_a_clip(obj[0])
+                                    # Lock the Clip (will raise an exception of you can't)
+#                                    dataObj.lock_record()
+                                    # update the Clip ID
+                                    dataObj.id = newObjID
+                                    # substitute the new transcript text for the old text
+                                    dataObj.transcripts[key].text = trIndex[key]
+                                    if (sourceTranscriptIndex > -1) or (key == 0):
+                                        # Clear the old keywords from the clip
+                                        dataObj.clear_keywords()
+                                        # Iterate through all the clips in the NEW keyword list
+                                        for clipKeyword in newKeywordList:
+                                            # If the keyword is also in the Keyword Examples list ...
+                                            if (clipKeyword.keywordGroup, clipKeyword.keyword, dataObj.number, originalObj.id) in keywordExamples:
+                                                # ... add it as an example keyword
+                                                dataObj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword, example=1)
+                                            # If it's NOT an example ...
+                                            else:
+                                                # ... add it as a non-example keyword
+                                                dataObj.add_keyword(clipKeyword.keywordGroup, clipKeyword.keyword)
+                                        # We don't want Keyword Example clips to get lost because of propagation.
+                                        # Therefore, iterate through the Keyword Examples list
+                                        for kw in keywordExamples:
+                                            # Check to see if the keyword is already added to the clip above.  If NOT ...
+                                            if not dataObj.has_keyword(kw[0], kw[1]):
+                                                # ... add the keyword as an example keyword
+                                                dataObj.add_keyword(kw[0], kw[1], example=1)
+                                                # This will be unexpected by the user, so let's add a note to the user about this.
+                                                prompt = unicode(_('Clip "%s" in collection "%s" retained keyword "%s : %s" because it is a keyword example.'), 'utf8') + u'\n\n'
+                                                # Add the prompt to the memo to communicate this to the user.
+                                                self.memo.AppendText(prompt % (oldDataID, dataObj.GetNodeString(False), kw[0], kw[1]))
+
+                                    # Save the Clip
+                                    dataObj.db_save(use_transactions=False)
+                                    # unlock the clip
+                                    dataObj.unlock_record()
+
+                                    # Finally, indicate success in the Report
+                                    prompt = unicode(_('Transcript %d of clip "%s" in collection "%s" has been updated.'), 'utf8')
+                                    # Add the message to the report
+                                    self.memo.AppendText(prompt % (key + 1, oldDataID, dataObj.GetNodeString(False)) + '\n\n')
+                                # If the user indicates we should skip ONE clip ...
+                                elif results == ID_SKIP:
+                                    # ... indicate that in the report and don't do anything else.
+                                    prompt = unicode(_('Clip change has been skipped for transcript %d of clip "%s" in collection "%s".'), 'utf8')
+                                    self.memo.AppendText(prompt % (key + 1, oldDataID, dataObj.GetNodeString(False)) + '\n\n')
+                                # If the user indicates we should CANCEL Clip propagation ...
+                                elif results == wx.ID_CANCEL:
+                                    # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
+                                    #     the full Clip information to the report.
+                                    self.memo.AppendText(_("Clip change propagation has been cancelled."))
+                                    # ... we should STOP processing Clips!  So stop iterating!
+                                    break
                     # Initialize the Chat Message
                     msg = ""
                     # If the Data Object ID has changed, we need to update instances of the Object ID
@@ -915,6 +957,14 @@ class PropagateClipChanges(wx.Dialog):
                 self.memo.AppendText(cancelMessageText)
             # If the user pressed anything except Cancel ...
             else:
+                # Add Locked Items to the report
+##                if objType == 'Quote':
+                # Get each locked object ...
+                for dataObj in lockedObjects.values():
+                    # ... indicate that in the report.
+                    prompt = recordLockedPrompt
+                    self.memo.AppendText(prompt % (dataObj.id, dataObj.GetNodeString(False)) + '\n\n')
+
                 # ... commit the changes to the database
                 dbCursor.execute("COMMIT")
 

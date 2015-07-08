@@ -65,6 +65,9 @@ class Keyword(object):
         str += "drawMode = %s\n" % self.drawMode
         str += "lineWidth = %s\n" % self.lineWidth
         str += "lineStyle = %s\n" % self.lineStyle
+        str += "isLocked = %s\n" % self._isLocked
+        str += "recordlock = %s\n" % self.recordlock
+        str += "locktime = %s\n" % self.locktime
         return str
 
     def __eq__(self, other):
@@ -845,6 +848,10 @@ that would corrupt the record that is currently locked by %s.  Please try again 
         self.drawMode = r['DrawMode']
         self.lineWidth = r['LineWidth']
         self.lineStyle = r['LineStyle']
+        self.recordlock = r['RecordLock']
+        if self.recordlock != '':
+            self._isLocked = True
+        self.locktime = r['LockTime']
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
         # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
         if 'unicode' in wx.PlatformInfo:
@@ -852,6 +859,7 @@ that would corrupt the record that is currently locked by %s.  Please try again 
             self.keyword = DBInterface.ProcessDBDataForUTF8Encoding(self.keyword)
             self.definition = DBInterface.ProcessDBDataForUTF8Encoding(self.definition)
             self.lineColorName = DBInterface.ProcessDBDataForUTF8Encoding(self.lineColorName)
+            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)
 
     def _get_keywordGroup(self):
         return self._keywordGroup

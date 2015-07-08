@@ -96,6 +96,9 @@ class Transcript(DataObject.DataObject):
         str = str + "Comment = %s\n" % self.comment
         str += "MinTranscriptWidth = %s\n" % self.minTranscriptWidth
         str = str + "LastSaveTime = %s\n" % self.lastsavetime
+        str += "isLocked = %s\n" % self._isLocked
+        str += "recordlock = %s\n" % self.recordlock
+        str += "locktime = %s\n" % self.locktime
         if len(self.text) > 250:
             str = str + "text not displayed due to length.\n\n"
         else:
@@ -870,6 +873,10 @@ class Transcript(DataObject.DataObject):
 
         self.comment = row['Comment']
         self.minTranscriptWidth = row['MinTranscriptWidth']
+        self.recordlock = row['RecordLock']
+        if self.recordlock != '':
+            self._isLocked = True
+        self.locktime = row['LockTime']
         self.lastsavetime = row['LastSaveTime']
         self.changed = False
 
@@ -890,3 +897,4 @@ class Transcript(DataObject.DataObject):
                 self.series_id = DBInterface.ProcessDBDataForUTF8Encoding(self.series_id)
             if row.has_key('EpisodeID'):
                 self.episode_id = DBInterface.ProcessDBDataForUTF8Encoding(self.episode_id)
+            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)

@@ -114,6 +114,9 @@ class Snapshot(DataObject.DataObject):
         str += "  episode_duration = %s (%s)\n" % (self.episode_duration, Misc.time_in_ms_to_str(self.episode_duration))
         str += "  comment          = %s\n" % self.comment
         str += "  sort_order       = %s\n" % self.sort_order
+        str += "isLocked = %s\n" % self._isLocked
+        str += "recordlock = %s\n" % self.recordlock
+        str += "locktime = %s\n" % self.locktime
         str += "  lastsavetime     = %s\n" % self.lastsavetime
         for kws in self.keyword_list:
             str = str + "\nKeyword:  %s" % kws.keywordPair
@@ -874,6 +877,10 @@ class Snapshot(DataObject.DataObject):
         self.episode_duration = r['SnapshotDuration']
         self.comment = r['SnapshotComment']
         self.sort_order = r['SortOrder']
+        self.recordlock = r['RecordLock']
+        if self.recordlock != '':
+            self._isLocked = True
+        self.locktime = r['LockTime']
         self.lastsavetime = r['LastSaveTime']
 
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
@@ -883,6 +890,7 @@ class Snapshot(DataObject.DataObject):
 #            self.collection_id = DBInterface.ProcessDBDataForUTF8Encoding(self.collection_id)
             self.image_filename = DBInterface.ProcessDBDataForUTF8Encoding(self.image_filename)
             self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
+            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)
 
         # Remember whether the ImageFile uses the VideoRoot Folder or not.
         # Detection of the use of the Video Root Path is platform-dependent.

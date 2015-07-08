@@ -124,7 +124,7 @@ class DataObject(object):
         c = db.cursor()
         lq = self._get_db_fields(('RecordLock', 'LockTime'), c)
 
-        if (lq[1] == None) or (lq[0] == "") or ((DBInterface.ServerDateTime() - lq[1]).days > 1):
+        if not self._isLocked and (lq[1] == None) or (lq[0] == "") or ((DBInterface.ServerDateTime() - lq[1]).days > 1):
             # Lock the record
             self._set_db_fields(    ('RecordLock', 'LockTime'),
                                     (DBInterface.get_username(),
@@ -342,7 +342,7 @@ class DataObject(object):
                 else:
                     return 1
             else:
-                raise SaveError, _("Record lock no longer valid.")
+                raise SaveError, _("Record lock no longer valid.\nYour changes cannot be saved.")
                 
     def _db_start_delete(self, use_transactions):
         """Initialize delete operation and begin transaction if necessary.
