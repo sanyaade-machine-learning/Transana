@@ -873,10 +873,6 @@ class Transcript(DataObject.DataObject):
 
         self.comment = row['Comment']
         self.minTranscriptWidth = row['MinTranscriptWidth']
-        self.recordlock = row['RecordLock']
-        if self.recordlock != '':
-            self._isLocked = True
-        self.locktime = row['LockTime']
         self.lastsavetime = row['LastSaveTime']
         self.changed = False
 
@@ -897,4 +893,3 @@ class Transcript(DataObject.DataObject):
                 self.series_id = DBInterface.ProcessDBDataForUTF8Encoding(self.series_id)
             if row.has_key('EpisodeID'):
                 self.episode_id = DBInterface.ProcessDBDataForUTF8Encoding(self.episode_id)
-            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)

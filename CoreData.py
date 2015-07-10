@@ -315,10 +315,6 @@ class CoreData(DataObject.DataObject):
         self.relation = row['Relation']
         self.coverage = row['Coverage']
         self.rights = row['Rights']
-        self.recordlock = row['RecordLock']
-        if self.recordlock != '':
-            self._isLocked = True
-        self.locktime = row['LockTime']
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
         # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
         if 'unicode' in wx.PlatformInfo:
@@ -336,7 +332,6 @@ class CoreData(DataObject.DataObject):
             self.relation = DBInterface.ProcessDBDataForUTF8Encoding(self.relation)
             self.coverage = DBInterface.ProcessDBDataForUTF8Encoding(self.coverage)
             self.rights = DBInterface.ProcessDBDataForUTF8Encoding(self.rights)
-            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)
 
     # Property Getters and Setters
     # (NOTE:  Number, Id, and Comment are provided by DataObject)

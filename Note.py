@@ -417,11 +417,6 @@ class Note(DataObject.DataObject):
                 self.text = r['NoteText'].tostring()
         else:
             self.text = r['NoteText']
-
-        self.recordlock = r['RecordLock']
-        if self.recordlock != '':
-            self._isLocked = True
-        self.locktime = r['LockTime']
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
         # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
         if 'unicode' in wx.PlatformInfo:
@@ -429,7 +424,6 @@ class Note(DataObject.DataObject):
             self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
             self.author = DBInterface.ProcessDBDataForUTF8Encoding(self.author)
             self.text = DBInterface.ProcessDBDataForUTF8Encoding(self.text)
-            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)
 
     def _set_series(self, num):
         self._series = num

@@ -124,7 +124,7 @@ class DataObject(object):
         c = db.cursor()
         lq = self._get_db_fields(('RecordLock', 'LockTime'), c)
 
-        if not self._isLocked and (lq[1] == None) or (lq[0] == "") or ((DBInterface.ServerDateTime() - lq[1]).days > 1):
+        if (lq[1] == None) or (lq[0] == "") or ((DBInterface.ServerDateTime() - lq[1]).days > 1):
             # Lock the record
             self._set_db_fields(    ('RecordLock', 'LockTime'),
                                     (DBInterface.get_username(),

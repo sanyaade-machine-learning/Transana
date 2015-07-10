@@ -877,20 +877,14 @@ class Snapshot(DataObject.DataObject):
         self.episode_duration = r['SnapshotDuration']
         self.comment = r['SnapshotComment']
         self.sort_order = r['SortOrder']
-        self.recordlock = r['RecordLock']
-        if self.recordlock != '':
-            self._isLocked = True
-        self.locktime = r['LockTime']
         self.lastsavetime = r['LastSaveTime']
 
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
         # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
         if 'unicode' in wx.PlatformInfo:
             self.id = DBInterface.ProcessDBDataForUTF8Encoding(self.id)
-#            self.collection_id = DBInterface.ProcessDBDataForUTF8Encoding(self.collection_id)
             self.image_filename = DBInterface.ProcessDBDataForUTF8Encoding(self.image_filename)
             self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
-            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)
 
         # Remember whether the ImageFile uses the VideoRoot Folder or not.
         # Detection of the use of the Video Root Path is platform-dependent.

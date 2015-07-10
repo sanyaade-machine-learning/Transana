@@ -348,10 +348,6 @@ class Library(DataObject.DataObject):
         self.comment = r['SeriesComment']
         self.owner = r['SeriesOwner']
         self.keyword_group = r['DefaultKeywordGroup']
-        self.recordlock = r['RecordLock']
-        if self.recordlock != '':
-            self._isLocked = True
-        self.locktime = r['LockTime']
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
         # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
         if 'unicode' in wx.PlatformInfo:
@@ -359,7 +355,6 @@ class Library(DataObject.DataObject):
             self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
             self.owner = DBInterface.ProcessDBDataForUTF8Encoding(self.owner)
             self.keyword_group = DBInterface.ProcessDBDataForUTF8Encoding(self.keyword_group)
-            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)
 
     def _get_owner(self):
         return self._owner

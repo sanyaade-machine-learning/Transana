@@ -1026,10 +1026,6 @@ class Document(DataObject.DataObject):
         self.imported_file = row['ImportedFile']
         self.import_date = row['ImportDate']
         self.document_length = row['DocumentLength']
-        self.recordlock = row['RecordLock']
-        if self.recordlock != '':
-            self._isLocked = True
-        self.locktime = row['LockTime']
         self.lastsavetime = row['LastSaveTime']
         self.changed = False
 
@@ -1041,4 +1037,3 @@ class Document(DataObject.DataObject):
             self.author = DBInterface.ProcessDBDataForUTF8Encoding(self.author)
             self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
             self.imported_file = DBInterface.ProcessDBDataForUTF8Encoding(self.imported_file)
-            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)

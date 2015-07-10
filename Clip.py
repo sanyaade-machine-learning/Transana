@@ -921,10 +921,6 @@ class Clip(DataObject.DataObject):
                 tempTranscript = Transcript.Transcript(tr[0])
                 # Append the transcript object to the Clip's Transcript List
                 self.transcripts.append(tempTranscript)
-        self.recordlock = r['RecordLock']
-        if self.recordlock != '':
-            self._isLocked = True
-        self.locktime = r['LockTime']
             
         # If we're in Unicode mode, we need to encode the data from the database appropriately.
         # (unicode(var, TransanaGlobal.encoding) doesn't work, as the strings are already unicode, yet aren't decoded.)
@@ -933,7 +929,6 @@ class Clip(DataObject.DataObject):
             self.comment = DBInterface.ProcessDBDataForUTF8Encoding(self.comment)
             self.collection_id = DBInterface.ProcessDBDataForUTF8Encoding(self.collection_id)
             self.media_filename = DBInterface.ProcessDBDataForUTF8Encoding(self.media_filename)
-            self.recordlock = DBInterface.ProcessDBDataForUTF8Encoding(self.recordlock)
 
         # Remember whether the MediaFile uses the VideoRoot Folder or not.
         # Detection of the use of the Video Root Path is platform-dependent.
