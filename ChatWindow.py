@@ -1089,17 +1089,53 @@ class ChatWindow(wx.Frame):
                             # Rename the tree node
                             self.ControlObject.DataWindow.DBTab.tree.rename_Node(nodelist[1:-1], nodelist[0], nodelist[-1])
 
-                            # If a CLIP gets renamed, check to see if that clip is currently loaded in the interface.
-                            if isinstance(self.ControlObject.currentObj, Clip.Clip) and \
-                               (nodelist[0] == 'ClipNode') and \
-                               (self.ControlObject.currentObj.GetNodeData() == nodelist[2:-1]):
-                                # If that clip is loaded (but not locked, as RN NEVER gets called on a locked clip),
-                                # remember its clip number
-                                tmpClipNum = self.ControlObject.currentObj.number
-                                # Re-load that clip.  The currently-loaded version is out of date, and needs to be updated
-                                # in case the local user wants to propagate changes.
-                                self.ControlObject.LoadClipByNumber(tmpClipNum)
-                            
+                            # Let's see if the renamed Document, Quote, or (Episode or Clip) Transcript is currently OPEN.
+                            # (Open Episodes don't need to be treated the same way because of the looser relationship to
+                            #  the transcript!)
+                            if nodelist[0] == "DocumentNode":
+                                docType = Document.Document
+                                tmpObj = Document.Document(libraryID = nodelist[-3], documentID = nodelist[-1])
+                            elif nodelist[0] == 'TranscriptNode':
+                                docType = Transcript.Transcript
+                                tmpEpisode = Episode.Episode(series=nodelist[-4], episode=nodelist[-3])
+                                # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
+                                tmpObj = Transcript.Transcript(nodelist[-1], ep=tmpEpisode.number, skipText=True)
+                            elif nodelist[0] == 'QuoteNode':
+                                docType = Quote.Quote
+                                parentNum = 0
+                                for coll in nodelist[2:-2]:
+                                    tmpCollection = Collection.Collection(coll, parentNum)
+                                    parentNum = tmpCollection.number
+                                # Get a temporary copy of the Quote.  We don't need the quote's text, which speeds this up.
+                                tmpObj = Quote.Quote(quoteID=nodelist[-1], collectionID=tmpCollection.id, collectionParent=tmpCollection.parent, skipText=True)
+                            elif nodelist[0] == 'ClipNode':
+                                docType = Transcript.Transcript
+                                parentNum = 0
+                                for coll in nodelist[2:-2]:
+                                    tmpCollection = Collection.Collection(coll, parentNum)
+                                    parentNum = tmpCollection.number
+                                # Get a temporary copy of the Clip.  We don't need the clip's transcript, which speeds this up.
+                                tmpClip = Clip.Clip(nodelist[-1], tmpCollection.id, tmpCollection.parent)
+                                tmpObj = tmpClip.transcripts[0]
+                            if self.ControlObject.GetOpenDocumentObject(docType, tmpObj.number) != None:
+                                # Note the current Document tab, 
+                                currentTabNum = self.ControlObject.GetCurrentDocumentTabNum()
+                                # For Documents and Quotes, Close the Open Document Window (Transcripts and Clips do this
+                                # automatically)
+                                if nodelist[0] in ['DocumentNode', 'QuoteNode']:
+                                    self.ControlObject.CloseOpenTranscriptWindowObject(docType, tmpObj.number)
+                                # then open the new object,
+                                if nodelist[0] == 'DocumentNode':
+                                    self.ControlObject.LoadDocument(nodelist[-3], tmpObj.id, tmpObj.number)
+                                elif nodelist[0] == 'TranscriptNode':
+                                    self.ControlObject.LoadTranscript(nodelist[-4], tmpEpisode.id, tmpObj.id)
+                                elif nodelist[0] == 'QuoteNode':
+                                    self.ControlObject.LoadQuote(tmpObj.number)
+                                elif nodelist[0] == 'ClipNode':
+                                    self.ControlObject.LoadClipByNumber(tmpClip.number)
+                                # then restore the current Document tab!
+                                self.ControlObject.SetCurrentDocumentTabNum(currentTabNum)
+                                
                             # If we're removing a Keyword Group ...
                             if nodelist[0] == 'KeywordGroupNode':
                                 # ... we need to update the Keyword Groups Data Structure

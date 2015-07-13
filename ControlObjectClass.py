@@ -838,6 +838,14 @@ class ControlObject(object):
                             # ... reset the ControlObject TranscriptNum dictionary
                             self.TranscriptNum = {}
 
+    def GetCurrentDocumentTabNum(self):
+        """ Return the Document Window's Current Tab number """
+        return self.TranscriptWindow.nb.GetSelection()
+
+    def SetCurrentDocumentTabNum(self, tabNum):
+        """ Set the Document Window's Current Tab Number from outside the Document Window """
+        self.TranscriptWindow.nb.SetSelection(tabNum)
+
     def UpdateCurrentObject(self, currentObj):
         """ This should be called any time the "current" object is changes, such as when the Transcript Notebook Page
             is changed. """
