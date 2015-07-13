@@ -122,6 +122,14 @@ class PropagateObjectChanges(wx.Dialog):
         # Clear the Report of contents
         self.memo.Clear()
 
+        # We need to lock the data items that we can up front to prevent record lock problems.
+        # If User 1 started a propagation process, then User 2 locked an object, the object would get the
+        # propagation changes from User 1 and User 2 would lose work.  We have to prevent that by locking
+        # the records up front rather than later as I was doing.
+        # I think the old model failed because the record locks were issued inside the Transaction.  This solves the problem.
+        lockedObjects = {}
+        unlockedObjects = {}
+
         # If we have a Document ...
         if objType == 'Document':
             # Determine the current selection in the current Document.
@@ -131,6 +139,16 @@ class PropagateObjectChanges(wx.Dialog):
                 emptyListData = "%s" % insertionPoint
             # request clips that include the current transcript cursor position
             objList = DBInterface.list_of_quotes_by_document(self.parent.TranscriptWindow.dlg.editor.TranscriptObj.number, textPos = insertionPoint, textSel=positionInfo)
+
+            # Iterate through the list of Quotes, loading the objects, locking what can be locked, and noting what cannot
+            # be locked.
+            for obj in objList:
+                dataObj = Quote.Quote(num = obj['QuoteNum'])
+                try:
+                    dataObj.lock_record()
+                    unlockedObjects[dataObj.number] = dataObj
+                except:
+                    lockedObjects[dataObj.number] = dataObj
 
         # If we have an Episode Transcript ...
         elif objType == 'Episode':
@@ -154,6 +172,16 @@ class PropagateObjectChanges(wx.Dialog):
                     objList.append(clip)
             # This still misses clips that have had BOTH time codes removed, but I can't figure out how to fix that.  It shouldn't happen very often.
         
+            # Iterate through the list of Clips, loading the objects, locking what can be locked, and noting what cannot
+            # be locked.
+            for obj in objList:
+                dataObj = Clip.Clip(obj['ClipNum'])
+                try:
+                    dataObj.lock_record()
+                    unlockedObjects[dataObj.number] = dataObj
+                except:
+                    lockedObjects[dataObj.number] = dataObj
+
         # If no data objects are returned ...
         if len(objList) == 0:
             # ... inform the user by adding a message to the report
@@ -173,167 +201,175 @@ class PropagateObjectChanges(wx.Dialog):
                 # Let's load the object
                 # If we have a Document ...
                 if objType == 'Document':
-                    # ... get the Quote for the list entry ...
-                    tempObj = Quote.Quote(obj['QuoteNum'])
-                    # ... set the Transcript selection to match the Quote's text ...
-                    self.parent.TranscriptWindow.dlg.editor.SetSelection(tempObj.start_char, tempObj.end_char)
-                    # ... and get the NEW text matching the Quote's position values.
-                    text = self.parent.TranscriptWindow.dlg.editor.GetFormattedSelection('XML', selectionOnly=True)
+                    recordLockedPrompt = unicode(_('ERROR: Quote "%s" in Collection "%s" is locked and cannot be updated.'), 'utf8')
+                    # If the Quote was NOT locked when we started ...
+                    if unlockedObjects.has_key(obj['QuoteNum']):
+                        # ... get the Quote for the list entry ...
+                        tempObj = unlockedObjects[obj['QuoteNum']]
+                        # ... set the Transcript selection to match the Quote's text ...
+                        self.parent.TranscriptWindow.dlg.editor.SetSelection(tempObj.start_char, tempObj.end_char)
+                        # ... and get the NEW text matching the Quote's position values.
+                        text = self.parent.TranscriptWindow.dlg.editor.GetFormattedSelection('XML', selectionOnly=True)
 
-                    # Start Exception handling.
-                    try:
-                        # If the user hasn't signal that they want to update all Quotes ...
-                        if not acceptAll:
-                            # ... create the Accept Quote Transcript Changes form ...
-                            acceptChanges = AcceptObjectTranscriptChanges(self, objType, tempObj.number, 0, text, helpString="Propagate Transcript Changes")
-                            # ... and display it, capturing the user feedback.
-                            results = acceptChanges.GetResults()
-                            # Close (and Destroy) the form
-                            acceptChanges.Destroy()
-                            # If the user wants to update all Quotes ...
-                            if results == ID_UPDATEALL:
-                                # ... then changing this variable will prevent the need for further user intervention.
-                                acceptAll = True
-                        # If the user presses "Update" (OK) or has pressed "Update All" ...
-                        if acceptAll or (results == wx.ID_OK):
-                            # Lock the Quote (will raise an exception of you can't)
-                            tempObj.lock_record()
-                            # substitute the new text for the old text
-                            tempObj.text = text
-                            # Save the Quote
-                            tempObj.db_save(use_transactions=False)
-                            # unlock the Quote
+                        # Start Exception handling.
+                        try:
+                            # If the user hasn't signal that they want to update all Quotes ...
+                            if not acceptAll:
+                                # ... create the Accept Quote Transcript Changes form ...
+                                acceptChanges = AcceptObjectTranscriptChanges(self, objType, tempObj.number, 0, text, helpString="Propagate Transcript Changes")
+                                # ... and display it, capturing the user feedback.
+                                results = acceptChanges.GetResults()
+                                # Close (and Destroy) the form
+                                acceptChanges.Destroy()
+                                # If the user wants to update all Quotes ...
+                                if results == ID_UPDATEALL:
+                                    # ... then changing this variable will prevent the need for further user intervention.
+                                    acceptAll = True
+                            # If the user presses "Update" (OK) or has pressed "Update All" ...
+                            if acceptAll or (results == wx.ID_OK):
+                                # Lock the Quote (will raise an exception of you can't)
+#                                tempObj.lock_record()
+                                # substitute the new text for the old text
+                                tempObj.text = text
+                                # Save the Quote
+                                tempObj.db_save(use_transactions=False)
+                                # Finally, indicate success in the Report
+                                self.memo.AppendText(_("Text updated for Quote"))
+                            # If the user indicates we should skip ONE Quote ...
+                            elif results == ID_SKIP:
+                                # ... indicate that in the report and don't do anything else.
+                                self.memo.AppendText(_("Text change skipped for Quote"))
+                            # If the user indicates we should CANCEL Text propagation ...
+                            elif results == wx.ID_CANCEL:
+                                # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
+                                #     the full Quote information to the report.
+                                self.memo.AppendText(_("Transcript propagation cancelled at Quote"))
+                            # unlock the Quote, regardless of how it was treated
                             tempObj.unlock_record()
-                            # Finally, indicate success in the Report
-                            self.memo.AppendText(_("Text updated for Quote"))
-                        # If the user indicates we should skip ONE Quote ...
-                        elif results == ID_SKIP:
-                            # ... indicate that in the report and don't do anything else.
-                            self.memo.AppendText(_("Text change skipped for Quote"))
-                        # If the user indicates we should CANCEL Text propagation ...
-                        elif results == wx.ID_CANCEL:
-                            # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
-                            #     the full Quote information to the report.
-                            self.memo.AppendText(_("Transcript propagation cancelled at Quote"))
-                    # If a RecordLocked Exception is raised ...
-                    except TransanaExceptions.RecordLockedError:
-                        # ... indicate that in the report.
-                        self.memo.AppendText(_("ERROR: Record lock error for Quote"))
-                    # If a SaveError exception is raised (I don't know how this might happen!)
-                    except TransanaExceptions.SaveError, e:
-                        # build the prompt for the user ...
-                        prompt = unicode(_('ERROR: Save error "%s" for Quote'), 'utf8')
-                        # ... and report the error in the report.
-                        self.memo.AppendText(prompt % e.reason)
-                        # unlock the data object
-                        tempObj.unlock_record()
-                    # We need to build the prompt for the Quote information, which is added to ALL of the above prompts
-                    prompt = unicode(_('in Collection'), 'utf8')
-                    # Add the quote data to the report.
-                    self.memo.AppendText(' "%s" %s "%s".  (%s - %s)\n\n' % (tempObj.id, prompt, tempObj.collection_id, tempObj.start_char, tempObj.end_char))
-                    # If the user pressed "Cancel" ...
-                    if results == wx.ID_CANCEL:
-                        # ... we should STOP processing QUOTES!
-                        break
+                        # If a RecordLocked Exception is raised ...  THIS SHOULD NOT HAPPEN ANY MORE!!
+                        except TransanaExceptions.RecordLockedError:
+                            # ... indicate that in the report.
+                            self.memo.AppendText(_("ERROR: Record lock error for Quote"))
+                        # If a SaveError exception is raised (I don't know how this might happen!)
+                        except TransanaExceptions.SaveError, e:
+                            # build the prompt for the user ...
+                            prompt = unicode(_('ERROR: Save error "%s" for Quote'), 'utf8')
+                            # ... and report the error in the report.
+                            self.memo.AppendText(prompt % e.reason)
+                            # unlock the data object
+                            tempObj.unlock_record()
+                        # We need to build the prompt for the Quote information, which is added to ALL of the above prompts
+                        prompt = unicode(_('in Collection'), 'utf8')
+                        # Add the quote data to the report.
+                        self.memo.AppendText(' "%s" %s "%s".  (%s - %s)\n\n' % (tempObj.id, prompt, tempObj.collection_id, tempObj.start_char, tempObj.end_char))
+                        # If the user pressed "Cancel" ...
+                        if results == wx.ID_CANCEL:
+                            # ... we should STOP processing QUOTES!
+                            break
 
                 # If we have an Episode Transcript ...
                 elif objType == 'Episode':
-                    tempObj = Clip.Clip(obj['ClipNum'])
-                    # If the clip has only one Transcript ...
-                    if len(tempObj.transcripts) == 1:
-                        # ... then give the Clip Transcript the Clip's start and stop times.  (They only get assigned for multi-transcript clips!)
-                        # (NOTE:  Legacy Clips from Transana before version 2.30 require this.)
-                        tempObj.transcripts[0].clip_start = tempObj.clip_start
-                        tempObj.transcripts[0].clip_stop = tempObj.clip_stop
+                    recordLockedPrompt = unicode(_('ERROR: Clip "%s" in Collection "%s" is locked and cannot be updated.'), 'utf8')
+                    # If the Clip was NOT locked when we started ...
+                    if unlockedObjects.has_key(obj['ClipNum']):
+                        tempObj = unlockedObjects[obj['ClipNum']]
+                        # If the clip has only one Transcript ...
+                        if len(tempObj.transcripts) == 1:
+                            # ... then give the Clip Transcript the Clip's start and stop times.  (They only get assigned for multi-transcript clips!)
+                            # (NOTE:  Legacy Clips from Transana before version 2.30 require this.)
+                            tempObj.transcripts[0].clip_start = tempObj.clip_start
+                            tempObj.transcripts[0].clip_stop = tempObj.clip_stop
 
-                    # For every transcript if each clip ...
-                    for clipTranscript in tempObj.transcripts:
-                        # Get the text from the Episode Transcript that matches the Clip TRANSCRIPT's start and stop times.  (NOT JUST THE CLIP'S!!)
-                        # The return values include the Episode Transcript's time code boundaries, in case they've changed since the
-                        # clip was created, as well as the NEW text.
-                        (start, end, text) = self.parent.TranscriptWindow.dlg.editor.GetTextBetweenTimeCodes(clipTranscript.clip_start, clipTranscript.clip_stop)
-                        # Check the start and end times to make sure neither has changed.  THEY MUST MATCH EXACTLY or we won't propagate to that clip.
-                        # Also check that the Clip's originating Transcript Number matches the current Episode Transcripts's number, that is,
-                        # that this clip was indeed taken from THIS transcript.  The one exception to this rule is if the clip has been orphaned,
-                        # which will probably only be known if the data has been through export/import since the clips was orphaned.
-                        if (start == clipTranscript.clip_start) and \
-                           (end == clipTranscript.clip_stop) and \
-                           ((clipTranscript.source_transcript == self.parent.TranscriptWindow.dlg.editor.TranscriptObj.number) or \
-                            (clipTranscript.source_transcript == 0)):
-                            
-                            # Start Exception handling.
-                            try:
-                                # If the user hasn't signal that they want to update all clips ...
-                                if not acceptAll:
-                                    # ... create the Accept Clip Transcript Changes form ...
-                                    acceptClipChanges = AcceptObjectTranscriptChanges(self, objType, tempObj.number, tempObj.transcripts.index(clipTranscript), text, helpString="Propagate Transcript Changes")
-                                    # ... and display it, capturing the user feedback.
-                                    results = acceptClipChanges.GetResults()
-                                    # Close (and Destroy) the form
-                                    acceptClipChanges.Destroy()
-                                    # If the user wants to update all Clips ...
-                                    if results == ID_UPDATEALL:
-                                        # ... then changing this variable will prevent the need for further user intervention.
-                                        acceptAll = True
-                                # If the user presses "Update" (OK) or has pressed "Update All" ...
-                                if acceptAll or (results == wx.ID_OK):
-                                    # Lock the Clip (will raise an exception of you can't)
-                                    clipTranscript.lock_record()
-                                    # substitute the new text for the old text
-                                    clipTranscript.text = text
-                                    # Save the Clip
-                                    clipTranscript.db_save()
+                        # For every transcript if each clip ...
+                        for clipTranscript in tempObj.transcripts:
+                            # Get the text from the Episode Transcript that matches the Clip TRANSCRIPT's start and stop times.  (NOT JUST THE CLIP'S!!)
+                            # The return values include the Episode Transcript's time code boundaries, in case they've changed since the
+                            # clip was created, as well as the NEW text.
+                            (start, end, text) = self.parent.TranscriptWindow.dlg.editor.GetTextBetweenTimeCodes(clipTranscript.clip_start, clipTranscript.clip_stop)
+                            # Check the start and end times to make sure neither has changed.  THEY MUST MATCH EXACTLY or we won't propagate to that clip.
+                            # Also check that the Clip's originating Transcript Number matches the current Episode Transcripts's number, that is,
+                            # that this clip was indeed taken from THIS transcript.  The one exception to this rule is if the clip has been orphaned,
+                            # which will probably only be known if the data has been through export/import since the clips was orphaned.
+                            if (start == clipTranscript.clip_start) and \
+                               (end == clipTranscript.clip_stop) and \
+                               ((clipTranscript.source_transcript == self.parent.TranscriptWindow.dlg.editor.TranscriptObj.number) or \
+                                (clipTranscript.source_transcript == 0)):
+                                
+                                # Start Exception handling.
+                                try:
+                                    # If the user hasn't signal that they want to update all clips ...
+                                    if not acceptAll:
+                                        # ... create the Accept Clip Transcript Changes form ...
+                                        acceptClipChanges = AcceptObjectTranscriptChanges(self, objType, tempObj.number, tempObj.transcripts.index(clipTranscript), text, helpString="Propagate Transcript Changes")
+                                        # ... and display it, capturing the user feedback.
+                                        results = acceptClipChanges.GetResults()
+                                        # Close (and Destroy) the form
+                                        acceptClipChanges.Destroy()
+                                        # If the user wants to update all Clips ...
+                                        if results == ID_UPDATEALL:
+                                            # ... then changing this variable will prevent the need for further user intervention.
+                                            acceptAll = True
+                                    # If the user presses "Update" (OK) or has pressed "Update All" ...
+                                    if acceptAll or (results == wx.ID_OK):
+                                        # Lock the Clip (will raise an exception of you can't)
+#                                        clipTranscript.lock_record()
+                                        # substitute the new text for the old text
+                                        clipTranscript.text = text
+                                        # Save the Clip
+                                        clipTranscript.db_save()
+                                        # unlock the clip
+#                                        clipTranscript.unlock_record()
+                                        # Finally, indicate success in the Report
+                                        self.memo.AppendText(_("Transcript updated for Clip"))
+                                    # If the user indicates we should skip ONE clip ...
+                                    elif results == ID_SKIP:
+                                        # ... indicate that in the report and don't do anything else.
+                                        self.memo.AppendText(_("Transcript change skipped for Clip"))
+                                    # If the user indicates we should CANCEL Transcript propagation ...
+                                    elif results == wx.ID_CANCEL:
+                                        # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
+                                        #     the full Clip information to the report.
+                                        self.memo.AppendText(_("Transcript propagation cancelled at Clip"))
+                                # If a RecordLocked Exception is raised ...
+                                except TransanaExceptions.RecordLockedError:
+                                    # ... indicate that in the report.
+                                    self.memo.AppendText(recordLockedPrompt)
+                                # If a SaveError exception is raised (I don't know how this might happen!)
+                                except TransanaExceptions.SaveError, e:
+                                    # build the prompt for the user ...
+                                    prompt = unicode(_('ERROR: Save error "%s" for Clip'), 'utf8')
+                                    # ... and report the error in the report.
+                                    self.memo.AppendText(prompt % e.reason)
                                     # unlock the clip
-                                    clipTranscript.unlock_record()
-                                    # Finally, indicate success in the Report
-                                    self.memo.AppendText(_("Transcript updated for Clip"))
-                                # If the user indicates we should skip ONE clip ...
-                                elif results == ID_SKIP:
-                                    # ... indicate that in the report and don't do anything else.
-                                    self.memo.AppendText(_("Transcript change skipped for Clip"))
-                                # If the user indicates we should CANCEL Transcript propagation ...
-                                elif results == wx.ID_CANCEL:
-                                    # ... indicate that in the report.  The rest of Cancel is implemented later, after we've added
-                                    #     the full Clip information to the report.
-                                    self.memo.AppendText(_("Transcript propagation cancelled at Clip"))
-                            # If a RecordLocked Exception is raised ...
-                            except TransanaExceptions.RecordLockedError:
-                                # ... indicate that in the report.
-                                self.memo.AppendText(_("ERROR: Record lock error for Clip"))
-                            # If a SaveError exception is raised (I don't know how this might happen!)
-                            except TransanaExceptions.SaveError, e:
-                                # build the prompt for the user ...
-                                prompt = unicode(_('ERROR: Save error "%s" for Clip'), 'utf8')
-                                # ... and report the error in the report.
-                                self.memo.AppendText(prompt % e.reason)
-                                # unlock the clip
-                                clipTranscript.unlock_record()
-                        # If a clip has Time Code boundary or Transcript Source issues ...
-                        else:
-                            # If the time code boundaries are okay ...
-                            if (clipTranscript.source_transcript != self.parent.TranscriptWindow.dlg.editor.TranscriptObj.number) or \
-                               (clipTranscript.source_transcript == 0):
-                                # ... then we have a Transcript Source error to add to the report.
-                                self.memo.AppendText(_("SKIP: A different transcript was used to create clip"))
-                            # Otherwise ...
+#                                    clipTranscript.unlock_record()
+                            # If a clip has Time Code boundary or Transcript Source issues ...
                             else:
-                                # ... we have a Time Code Boundary problem to report to the user.
-                                self.memo.AppendText(_("ERROR: Clip boundaries don't match transcript time codes for clip"))
-                            # If either of these errors occurs, it's the same as if the user pressed "Skip".
-                            results = ID_SKIP
-        
-                        # We need to build the prompt for the Clip information, which is added to ALL of the above prompts
-                        prompt = unicode(_('in Collection'), 'utf8')
-                        # Add the clip data to the report.
-                        self.memo.AppendText(' "%s" %s "%s".  (%s - %s)\n\n' % (tempObj.id, prompt, tempObj.collection_id, Misc.time_in_ms_to_str(clipTranscript.clip_start), Misc.time_in_ms_to_str(clipTranscript.clip_stop)))
+                                # If the time code boundaries are okay ...
+                                if (clipTranscript.source_transcript != self.parent.TranscriptWindow.dlg.editor.TranscriptObj.number) or \
+                                   (clipTranscript.source_transcript == 0):
+                                    # ... then we have a Transcript Source error to add to the report.
+                                    self.memo.AppendText(_("SKIP: A different transcript was used to create clip"))
+                                # Otherwise ...
+                                else:
+                                    # ... we have a Time Code Boundary problem to report to the user.
+                                    self.memo.AppendText(_("ERROR: Clip boundaries don't match transcript time codes for clip"))
+                                # If either of these errors occurs, it's the same as if the user pressed "Skip".
+                                results = ID_SKIP
+            
+                            # We need to build the prompt for the Clip information, which is added to ALL of the above prompts
+                            prompt = unicode(_('in Collection'), 'utf8')
+                            # Add the clip data to the report.
+                            self.memo.AppendText(' "%s" %s "%s".  (%s - %s)\n\n' % (tempObj.id, prompt, tempObj.collection_id, Misc.time_in_ms_to_str(clipTranscript.clip_start), Misc.time_in_ms_to_str(clipTranscript.clip_stop)))
+                            # If the user pressed "Cancel" ...
+                            if results == wx.ID_CANCEL:
+                                # ... we should STOP processing TRANSCRIPTS!
+                                break
                         # If the user pressed "Cancel" ...
                         if results == wx.ID_CANCEL:
-                            # ... we should STOP processing TRANSCRIPTS!
+                            # ... we should STOP processing CLIPS too!
                             break
-                    # If the user pressed "Cancel" ...
-                    if results == wx.ID_CANCEL:
-                        # ... we should STOP processing CLIPS too!
-                        break
+
+                    tempObj.unlock_record()
 
             # If the user pressed Cancel ...
             if results == wx.ID_CANCEL:
@@ -342,8 +378,18 @@ class PropagateObjectChanges(wx.Dialog):
                 # ... and inform the user that the changes were cancelled.  To avoid confusion, clear the report information already generated.
                 self.memo.Clear()
                 self.memo.AppendText(cancellationMessage)
+                # Get each locked object ...
+                for dataObj in unlockedObjects.values():
+#                    if dataObj._isLocked:
+                        # ... unlock the record
+                    dataObj.unlock_record()
             # If the user pressed anything except Cancel ...
             else:
+                # Get each locked object ...
+                for dataObj in lockedObjects.values():
+                    # ... indicate that in the report.
+                    prompt = recordLockedPrompt
+                    self.memo.AppendText(prompt % (dataObj.id, dataObj.GetNodeString(False)) + '\n\n')
                 # ... commit the changes to the database
                 dbCursor.execute("COMMIT")
             
@@ -452,7 +498,11 @@ class PropagateClipChanges(wx.Dialog):
         #  Could this code be optimized by leaving the newKeywordList == None and skipping Keyword Processing if there is none to do?
         # ***************************************************
 
-        # Let's try locking everything here.
+        # We need to lock the data items that we can up front to prevent record lock problems.
+        # If User 1 started a propagation process, then User 2 locked an object, the object would get the
+        # propagation changes from User 1 and User 2 would lose work.  We have to prevent that by locking
+        # the records up front rather than later as I was doing.
+        # I think the old model failed because the record locks were issued inside the Transaction.  This solves the problem.
         lockedObjects = {}
         unlockedObjects = {}
 
@@ -467,6 +517,8 @@ class PropagateClipChanges(wx.Dialog):
                 # ... then remove it from the list.  It's already been updated!
                 objList.remove((originalObj.number, originalObj.collection_num, originalObj.id, originalObj.source_document_num))
 
+            # Iterate through the list of Quotes, loading the objects, locking what can be locked, and noting what cannot
+            # be locked.
             for obj in objList:
                 dataObj = Quote.Quote(num = obj[0])
                 try:
@@ -520,6 +572,8 @@ class PropagateClipChanges(wx.Dialog):
                     # ... then remove it from the list.  It's already been updated!
                     objList.remove((originalObj.number, originalObj.collection_num, originalObj.id, originalObj.transcripts[sourceTranscriptIndex].number))
 
+            # Iterate through the list of Clips, loading the objects, locking what can be locked, and noting what cannot
+            # be locked.
             for obj in objList:
                 dataObj = Clip.Clip(obj[0])
                 try:
@@ -549,9 +603,6 @@ class PropagateClipChanges(wx.Dialog):
             results = ID_SKIP
             # If the user cancels, we may need to undo some of the changes that get made to the system!
             undoData = []
-
-            print "PropagateChanges.PropagateClipChanges():"
-            
             # Iterate through the Object List ...
             for obj in objList:
                 # Start Exception handling.
@@ -561,10 +612,11 @@ class PropagateClipChanges(wx.Dialog):
                         recordLockedPrompt = unicode(_('ERROR: Quote "%s" in Collection "%s" is locked and cannot be updated.'), 'utf8')
                         saveErrorPrompt = unicode(_('ERROR: Save error "%s" for Quote "%s" in Collection "%s"'), 'utf8')
                         cancelMessageText = _("Quote Change Propagation was cancelled.  Therefore, no Quotes were updated.")
-
+                        
+                        # If the Quote was NOT locked when we started ...
                         if unlockedObjects.has_key(obj[0]):
+                            # Load the current Quote
                             dataObj = unlockedObjects[obj[0]]
-    #                        dataObj = Quote.Quote(num = obj[0])
                             # Let's remember the original Object ID.
                             oldDataID = dataObj.id
 
@@ -582,12 +634,6 @@ class PropagateClipChanges(wx.Dialog):
                                     acceptAll = True
                             # If the user presses "Update" (OK) or has pressed "Update All" ...
                             if acceptAll or (results == wx.ID_OK):
-
-                                print dataObj
-                                print
-                                
-                                # Lock the Quote (will raise an exception of you can't)
-#                                dataObj.lock_record()
                                 # update the Quote ID
                                 dataObj.id = newObjID
                                 # substitute the new transcript text for the old text
@@ -601,8 +647,6 @@ class PropagateClipChanges(wx.Dialog):
 
                                 # Save the Quote
                                 dataObj.db_save(use_transactions=False)
-                                # unlock the Quote
-                                dataObj.unlock_record()
 
                                 # Finally, indicate success in the Report
                                 prompt = unicode(_('Quote "%s" in Collection "%s" has been updated.'), 'utf8')
@@ -621,22 +665,20 @@ class PropagateClipChanges(wx.Dialog):
                                 # ... we should STOP processing Quotes!  So stop iterating!
                                 break
 
+                            # unlock the Quote, regardless of how it is processed
+                            dataObj.unlock_record()
+
                     elif objType == 'Clip':
                         
                         recordLockedPrompt = unicode(_('ERROR: Clip "%s" in Collection "%s" is locked and cannot be updated.'), 'utf8')
                         saveErrorPrompt = unicode(_('ERROR: Save error "%s" for Clip "%s" in Collection "%s"'), 'utf8')
                         cancelMessageText = _("Clip Change Propagation was cancelled.  Therefore, no clips were updated.")
 
+                        # If the Clip was NOT locked when we started ...
                         if unlockedObjects.has_key(obj[0]):
-                            dataObj = unlockedObjects[obj[0]]
                             # ... load the current clip
-    #                        dataObj = Clip.Clip(obj[0])
+                            dataObj = unlockedObjects[obj[0]]
                             
-
-                            print dataObj
-                            print
-
-
                             # Let's remember the original Object ID.
                             oldDataID = dataObj.id
                             # If we have a Transcript Index ...
@@ -694,8 +736,6 @@ class PropagateClipChanges(wx.Dialog):
                                 if acceptAll or (results == wx.ID_OK):
                                     # Get a list of Keyword Examples for the current clip.  We don't want to lose this information in the propagation.
                                     keywordExamples = DBInterface.list_all_keyword_examples_for_a_clip(obj[0])
-                                    # Lock the Clip (will raise an exception of you can't)
-#                                    dataObj.lock_record()
                                     # update the Clip ID
                                     dataObj.id = newObjID
                                     # substitute the new transcript text for the old text
@@ -727,8 +767,6 @@ class PropagateClipChanges(wx.Dialog):
 
                                     # Save the Clip
                                     dataObj.db_save(use_transactions=False)
-                                    # unlock the clip
-                                    dataObj.unlock_record()
 
                                     # Finally, indicate success in the Report
                                     prompt = unicode(_('Transcript %d of clip "%s" in collection "%s" has been updated.'), 'utf8')
@@ -746,6 +784,10 @@ class PropagateClipChanges(wx.Dialog):
                                     self.memo.AppendText(_("Clip change propagation has been cancelled."))
                                     # ... we should STOP processing Clips!  So stop iterating!
                                     break
+                                
+                                # unlock the clip, regardless of how it is processed
+                                dataObj.unlock_record()
+                                
                     # Initialize the Chat Message
                     msg = ""
                     # If the Data Object ID has changed, we need to update instances of the Object ID
@@ -955,10 +997,15 @@ class PropagateClipChanges(wx.Dialog):
                 # ... and inform the user that the changes were cancelled.  To avoid confusion, clear the report information already generated.
                 self.memo.Clear()
                 self.memo.AppendText(cancelMessageText)
+
+                # Get each locked object ...
+                for dataObj in unlockedObjects.values():
+                    # ... unlock the records
+#                    if dataObj._isLocked:
+                    dataObj.unlock_record()
+
             # If the user pressed anything except Cancel ...
             else:
-                # Add Locked Items to the report
-##                if objType == 'Quote':
                 # Get each locked object ...
                 for dataObj in lockedObjects.values():
                     # ... indicate that in the report.
