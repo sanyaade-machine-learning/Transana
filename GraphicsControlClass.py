@@ -837,8 +837,11 @@ class GraphicsControl(wx.ScrolledWindow):
     def SetDim(self, x, y, width, height):
         """ This method resizes the Graphic Area by resizing the canvas  """
         self.canvassize = (width, height)
+        # Get the Frame Width and Height for this platform
+        frameWidth = wx.SystemSettings.GetMetric(wx.SYS_FRAMESIZE_X)
+        frameHeight = wx.SystemSettings.GetMetric(wx.SYS_FRAMESIZE_Y)
         # The control should be 6 pixels larger than the canvas to allow for the border
-        self.SetDimensions(x, y, width+6, height+6)
+        self.SetDimensions(x, y, width+(2*frameWidth), height+(2*frameHeight))
         # Resize the Background Image to the size of the Graphic Control
         if self.backgroundImage != None:
             # Rescale does not work properly.  The image does not "round-trip" well when enlarged and reduced by a large amount.

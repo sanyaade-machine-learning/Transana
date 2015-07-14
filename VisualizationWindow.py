@@ -143,9 +143,12 @@ class VisualizationWindow(wx.Dialog):
         # Create a main Box sizer
         box = wx.BoxSizer(wx.VERTICAL)
 
+        # Get the Frame Width for this platform
+        frameWidth = wx.SystemSettings.GetMetric(wx.SYS_FRAMESIZE_X)
+
         # The waveform / Keyword Visualization is held in a GraphicsControlClass object that handles the visualization display.
         # At this time, the GraphicsControlClass is not aware of Sizers or Constraints
-        self.waveform = GraphicsControlClass.GraphicsControl(self, -1, wx.Point(1, 1), wx.Size(int(width-12), int(height-48-headerHeight)), (width-14, height-52-headerHeight), visualizationMode=True)
+        self.waveform = GraphicsControlClass.GraphicsControl(self, -1, wx.Point(1, 1), wx.Size(int(width-12), int(height-48-headerHeight)), (width-12-(2*frameWidth), height-52-headerHeight), visualizationMode=True)
         box.Add(self.waveform, 1, wx.EXPAND, 0)
 
         # Add the Timeline Panel, which holds the time line and scale information
@@ -1951,9 +1954,6 @@ class VisualizationWindow(wx.Dialog):
             self.ControlObject.PlayPause()
 
     def OnMouseOver(self, x, y, xpct, ypct):
-
-#        print "VisualizationWindow.OnMouseOver():", x, xpct
-        
         if self.ControlObject.GetCurrentItemType() == 'Transcript':
             self.lbl_Time_Time.SetLabel(Misc.time_in_ms_to_str(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit))
         else:
@@ -2015,8 +2015,11 @@ class VisualizationWindow(wx.Dialog):
         # We need to know the height of the Window Header to adjust the size of the Graphic Area
         headerHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
 
+        # Get the Frame Width for this platform
+        frameWidth = wx.SystemSettings.GetMetric(wx.SYS_FRAMESIZE_X)
+
         # Set size of Waveform Window (Do this first, or the timeline is not scaled properly.)
-        self.waveform.SetDim(0, 1, width, height-50-headerHeight)
+        self.waveform.SetDim(0, 1, width-(2*frameWidth), height-50-headerHeight)
 
         # Position toolbar Panel
         self.toolbar.SetDimensions(0, height-28-headerHeight, width, self.toolbar.GetMinSize()[1])
