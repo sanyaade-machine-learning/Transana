@@ -744,6 +744,10 @@ class ControlObject(object):
         else:
             self.currentObj = None
 
+    def GetCurrentDocumentObject(self):
+        """ Get the object underlying the currently-open tab in the Document Window """
+        return self.TranscriptWindow.dlg.editor.TranscriptObj
+
     def GetOpenDocumentObject(self, docType, docNum):
         """ if the Document indicated by docNum is currently open, return a pointer to that existing Document
             object.  OBJECTS OBTAINED THIS WAY SHOULD NOT BE EDITED!! """
@@ -760,6 +764,30 @@ class ControlObject(object):
                     break
         # Return the result
         return result
+
+    def SelectOpenDocumentTab(self, docType, docNum):
+        """ Bring the indicated Document / Transcript to the front of the Document Window display """
+        # Create a flag for when we can stop looking
+        found = False
+        # For each Notebook Page in the Transcript Window ...
+        for page in range(self.TranscriptWindow.nb.GetPageCount()):
+            # ... for each Splitter Pane on the Notebook Page ...
+            for pane in self.TranscriptWindow.nb.GetPage(page).GetChildren():
+                # Get the pane's data object
+                dataObj = pane.editor.TranscriptObj
+                # If this is the data object we are looking for ...
+                if isinstance(dataObj, docType) and (dataObj.number == docNum):
+                    # ... select the appropriate notebook tab ...
+                    self.TranscriptWindow.nb.SetSelection(page)
+                    # .. and the correct Splitter pane ...
+                    pane.ActivatePanel()
+                    # ... signal that we are done ...
+                    found = True
+                    # ... and stop looking at Panes
+                    break
+            # If we found what we are looking for, we can stop looking at Notebook Tabs too.
+            if found:
+                break
 
     def CloseOpenTranscriptWindowObject(self, docType, docNum):
         """ If the Document/Transcript/Quote indicated by docNum is currently open, close it.
@@ -837,14 +865,6 @@ class ControlObject(object):
                         if docType == Transcript.Transcript:
                             # ... reset the ControlObject TranscriptNum dictionary
                             self.TranscriptNum = {}
-
-    def GetCurrentDocumentTabNum(self):
-        """ Return the Document Window's Current Tab number """
-        return self.TranscriptWindow.nb.GetSelection()
-
-    def SetCurrentDocumentTabNum(self, tabNum):
-        """ Set the Document Window's Current Tab Number from outside the Document Window """
-        self.TranscriptWindow.nb.SetSelection(tabNum)
 
     def UpdateCurrentObject(self, currentObj):
         """ This should be called any time the "current" object is changes, such as when the Transcript Notebook Page

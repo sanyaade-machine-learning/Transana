@@ -1118,13 +1118,12 @@ class ChatWindow(wx.Frame):
                                 tmpClip = Clip.Clip(nodelist[-1], tmpCollection.id, tmpCollection.parent)
                                 tmpObj = tmpClip.transcripts[0]
                             if self.ControlObject.GetOpenDocumentObject(docType, tmpObj.number) != None:
-                                # Note the current Document tab, 
-                                currentTabNum = self.ControlObject.GetCurrentDocumentTabNum()
-                                # For Documents and Quotes, Close the Open Document Window (Transcripts and Clips do this
-                                # automatically)
-                                if nodelist[0] in ['DocumentNode', 'QuoteNode']:
-                                    self.ControlObject.CloseOpenTranscriptWindowObject(docType, tmpObj.number)
-                                # then open the new object,
+                                # Note the type and number of the currently opened object in the Document Window
+                                currObjType = type(self.ControlObject.GetCurrentDocumentObject())
+                                currObjNum = self.ControlObject.GetCurrentDocumentObject().number
+                                # Close the Open Document Window for the changed object
+                                self.ControlObject.CloseOpenTranscriptWindowObject(docType, tmpObj.number)
+                                # Then open a new Document Tab for the changed object
                                 if nodelist[0] == 'DocumentNode':
                                     self.ControlObject.LoadDocument(nodelist[-3], tmpObj.id, tmpObj.number)
                                 elif nodelist[0] == 'TranscriptNode':
@@ -1133,8 +1132,8 @@ class ChatWindow(wx.Frame):
                                     self.ControlObject.LoadQuote(tmpObj.number)
                                 elif nodelist[0] == 'ClipNode':
                                     self.ControlObject.LoadClipByNumber(tmpClip.number)
-                                # then restore the current Document tab!
-                                self.ControlObject.SetCurrentDocumentTabNum(currentTabNum)
+                                # Finally, restore the interface to the object that was showing when we started.
+                                self.ControlObject.SelectOpenDocumentTab(currObjType, currObjNum)
                                 
                             # If we're removing a Keyword Group ...
                             if nodelist[0] == 'KeywordGroupNode':
