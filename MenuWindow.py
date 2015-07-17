@@ -874,7 +874,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
                         pane.editor.TranscriptObj.unlock_record()
 ##                    # Close the Document Window
 ##                    pane.Close()
-            
+
             # If we have the multi-user version ...
             if not TransanaConstants.singleUserVersion:
                 # ... stop the Connection Timer.
@@ -901,6 +901,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             # (This is slow, so should be done as late as possible, preferably after windows are closed.)
             if TransanaConstants.singleUserVersion:
                 DBInterface.EndSingleUserDatabase()
+
             # Alternately, if we're in the Multi-user version, we need to close the Chat Window, which
             # ends the socket connection to the Transana MessageServer.
             else:
@@ -923,6 +924,11 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
 
             # Destroy the Menu Window
             self.Destroy()
+            
+            # On the Mac ...
+            if 'wxMac' in wx.PlatformInfo:
+                # ... Transana is not exiting properly on OS X 10.10.3.  This should ensure the program ends.
+                sys.exit(0)
         # If the user reconsiders exiting...
         else:
             # If the Close Event is triggered from the Menu, the event has no Veto property.
