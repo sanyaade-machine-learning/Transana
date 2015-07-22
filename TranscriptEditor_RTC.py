@@ -2145,8 +2145,10 @@ class TranscriptEditor(RichTextEditCtrl):
 
             # Update the Data Window based on key press, if needed
             self.parent.ControlObject.UpdateDataWindowOnDocumentEdit()
-            # Update the Keyword Visualization
-            self.parent.ControlObject.UpdateKeywordVisualization()
+            # Update the Keyword Visualization.  In this case, we do NOT need to look up all the
+            # coding for all the Quotes or Clips taken from this object, a costly operation, so we
+            # signal that that can be skippped.
+            self.parent.ControlObject.UpdateKeywordVisualization(textChangeOnly = True)
 
     def OnAutoSave(self, event):
         """ Process the AutoSave Timer Event """

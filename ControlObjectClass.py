@@ -1987,11 +1987,12 @@ class ControlObject(object):
             # ... update the text object
             self.VisualizationWindow.kwMap.textObj = tobj
 
-    def UpdateKeywordVisualization(self):
+    def UpdateKeywordVisualization(self, textChangeOnly = False):
         """ If the Keyword Visualization is displayed, update it based on something that could change the keywords
-            in the display area. """
+            in the display area.  The parameter indicates whether we are just changing text in the object (and therefore
+            do not need to update the CONTENTS of the visualization) or whether we need to do the full coding lookup. """
         # Update the Keyword Visualization
-        self.VisualizationWindow.UpdateKeywordVisualization()
+        self.VisualizationWindow.UpdateKeywordVisualization(textChangeOnly)
 
     def UpdateSnapshotWindows(self, mode, event, kw_group, kw_name=None):
         """ mode = 'Update' -- Update all open Snapshot Windows based on a change in a keyword

@@ -457,13 +457,19 @@ class VisualizationWindow(wx.Dialog):
         # Call the OnIdle handler's method explicitly, so this is in fact handled in real time rather than waiting for Idle time.
         self.OnIdle(None)
 
-    def UpdateKeywordVisualization(self):
+    def UpdateKeywordVisualization(self, textChangeOnly = False):
+        """ Update the Keyword Visualization based on some sort of change in the data.  If this is called based on a change
+            in the TEXT of a Document or Transcript, due to editing, the Coding involved won't have changed, so we can skip
+            the time-consuming step of loading all the coding that goes into the Visualization. """
         # Only do something if we've got the Keyword or Hybrid visualization and there is a data object currently loaded
         if (self.VisualizationType in ['Keyword', 'Hybrid', 'Text-Keyword']) and \
            (self.ControlObject.currentObj != None) and \
            (self.kwMap != None):
-            # Update the Visualization's underlying data
-            self.kwMap.UpdateKeywordVisualization()
+            # If we do NOT have a Text Change ...
+            # (This eliminates the typing speed problem observed on OS X!)
+            if not textChangeOnly:
+                # Update the Visualization's underlying data
+                self.kwMap.UpdateKeywordVisualization()
             # Signal that height can be reset
             self.heightIsSet = False
             # Call the resize Height method
