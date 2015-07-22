@@ -27,10 +27,17 @@ VERSION = 300
 
 # import wxPython
 import wx
+
+if __name__ == '__main__':
+    __builtins__._ = wx.GetTranslation
+
 # import Python ssl module
 import ssl
 # import Python socket module
 import socket
+
+import datetime
+
 # import Python os module
 import os
 # import Python sys module
@@ -71,7 +78,7 @@ import Note
 
 # We create a thread to listen for messages from the Message Server.  However,
 # only the Main program thread can interact with a wxPython GUI.  Therefore,
-# we need to create a custom event to receive the message from the Message Server
+# we need to create a custom event to receive the event from the Message Server
 # (via the socket connection) and transfer that data to the Main program thread
 # where it will be displayed.
 #
@@ -112,7 +119,8 @@ class PostMessageEvent(wx.PyEvent):
         self.data = data
 
         if DEBUG:
-            print "PostMessageEvent created with data =", self.data.encode('latin1')
+            print "PostMessageEvent created with data =", self.data.encode('latin1'), "ChatWindow.EventIDS:", EVT_POST_MESSAGE_ID, EVT_CLOSE_MESSAGE_ID, EVT_MESSAGESERVER_LOST_ID
+
 
 # Create the actual Custom Close Message Event object
 class CloseMessageEvent(wx.PyEvent):
@@ -216,8 +224,14 @@ class ListenerThread(threading.Thread):
                 
                 # Process all the messages.  (The last message is always blank or overflow, so skip it!)
                 for message in messages[:-1]:
+
+                    if DEBUG:
+                        print "ChatWindow.ListenerThread.run() posting a PostMessageEvent of '%s'" % message
+
+                    tmpEvent = PostMessageEvent(message)
+                    
                     # Post the Message Event with the message as data
-                    wx.PostEvent(self.window, PostMessageEvent(message))
+                    wx.PostEvent(self.window, tmpEvent)
                 # Unlock the thread when we're done processing all the messages.
                 threadLock.release()
             else:
@@ -381,8 +395,10 @@ class ChatWindow(wx.Frame):
         # Set the minimum size for the form.
         self.SetSizeHints(minW = 600, minH = 440)
         # Center the form on the screen
-#        self.CentreOnScreen()
-        TransanaGlobal.CenterOnPrimary(self)
+        if __name__ == '__main__':
+            self.CentreOnScreen()
+        else:
+            TransanaGlobal.CenterOnPrimary(self)
         
         # Set the initial focus to the Text Entry control
         self.txtEntry.SetFocus()
@@ -410,7 +426,7 @@ class ChatWindow(wx.Frame):
         EVT_CLOSE_MESSAGE(self, self.OnCloseMessage)
 
         # Register with the Control Object
-        if TransanaGlobal.menuWindow.ControlObject != None:
+        if (TransanaGlobal.menuWindow != None) and (TransanaGlobal.menuWindow.ControlObject != None):
             TransanaGlobal.menuWindow.ControlObject.Register(Chat=self)
             self.ControlObject = TransanaGlobal.menuWindow.ControlObject
         else:
@@ -418,10 +434,16 @@ class ChatWindow(wx.Frame):
 
         # Inform the message server of user's identity and database connection
         if 'unicode' in wx.PlatformInfo:
-            userName = self.userName.encode('utf8')
-            host = TransanaGlobal.configData.host.encode('utf8')
-            db = TransanaGlobal.configData.database.encode('utf8')
-            ssl = TransanaGlobal.chatIsSSL
+            if __name__ == '__main__':
+                userName = 'Test_' + sys.platform
+                host = '192.168.1.19'
+                db = 'ChatTestDB'
+                ssl = False
+            else:
+                userName = self.userName.encode('utf8')
+                host = TransanaGlobal.configData.host.encode('utf8')
+                db = TransanaGlobal.configData.database.encode('utf8')
+                ssl = TransanaGlobal.chatIsSSL
             
             if DEBUG:
                 print 'C %s %s %s %s %s ||| ' % (userName, host, db, ssl, VERSION)
@@ -468,6 +490,28 @@ class ChatWindow(wx.Frame):
             else:
                 self.sslStatus[self.userName] = 'FALSE'
 
+        # Okay, this is really annoying.  Here's the scoop.
+        # July 21, 2015.  If I use OS X 10.10.3 (Yosemite), the current OS X release,
+        # the Chat and MU Messaging infrastructure doesn't work on the Mac.
+        # That's because EVT_POST_MESSAGE works to Post a Message, but for reasons that elude me,
+        # it doesn't trigger ChatWindow.OnPostMessage() like it's supposed to.  So the message
+        # coming in from the Message Server gets received and written to the Event Queue okay,
+        # but it doesn't get "read" and posted in the Chat Window because the ChatWindow's
+        # EVT_POST_MESSAGE handler doesn't get called in response to the message being queued
+        # correctly.
+        #
+        # So what I've done is set up a time that's called every half second.  All it does is
+        # call wx.YieldIfNeeded().  That seems to be enough!
+        #
+        # I know I shouldn't HAVE to do this, but at least for now, I do.
+        #
+        if 'wxMac' in wx.PlatformInfo:
+            if DEBUG:
+                self.processMessageQueueTime = datetime.datetime.now()
+            self.processMessageQueueTimer = wx.Timer()
+            self.processMessageQueueTimer.Bind(wx.EVT_TIMER, self.OnProcessMessageQueue)
+            self.processMessageQueueTimer.Start(500)
+
         # Create a Timer to check for Message Server validation.
         # Initialize to unvalidated state
         self.serverValidation = False
@@ -477,6 +521,13 @@ class ChatWindow(wx.Frame):
         self.validationTimer.Bind(wx.EVT_TIMER, self.OnValidationTimer)
         # 10 seconds should be sufficient for the connection to the message server to be established and confirmed
         self.validationTimer.Start(10000)
+
+    def OnProcessMessageQueue(self, event):
+        
+        if DEBUG:
+            print "ChatWIndow.ProcessMessageQueue():", datetime.datetime.now() - self.processMessageQueueTime
+        
+        wx.YieldIfNeeded()
 
     def SendMessage(self, message):
         """ Send a message through the chatWindow's socket """
@@ -585,7 +636,8 @@ class ChatWindow(wx.Frame):
         self.sslImage.SetBitmap(image)
 
         # Notify the Control Object to update other SSL indicator(s)
-        self.ControlObject.UpdateSSLStatus(not ("FALSE" in self.sslStatus.values()))
+        if self.ControlObject != None:
+            self.ControlObject.UpdateSSLStatus(not ("FALSE" in self.sslStatus.values()))
 
     def OnSSLClick(self, event):
         """ Handle click on the SSL indicator image """
@@ -627,6 +679,9 @@ class ChatWindow(wx.Frame):
             for m in message.split(' >|< '):
                 nodelist += (m,)
             return nodelist
+
+        if DEBUG:
+            print "ChatWindow.OnPostMessage():", event.data
                 
         # If there is data in the message event ...
         if event.data != None:
@@ -1092,6 +1147,7 @@ class ChatWindow(wx.Frame):
                             # Let's see if the renamed Document, Quote, or (Episode or Clip) Transcript is currently OPEN.
                             # (Open Episodes don't need to be treated the same way because of the looser relationship to
                             #  the transcript!)
+                            docType = None
                             if nodelist[0] == "DocumentNode":
                                 docType = Document.Document
                                 tmpObj = Document.Document(libraryID = nodelist[-3], documentID = nodelist[-1])
@@ -1117,7 +1173,8 @@ class ChatWindow(wx.Frame):
                                 # Get a temporary copy of the Clip.  We don't need the clip's transcript, which speeds this up.
                                 tmpClip = Clip.Clip(nodelist[-1], tmpCollection.id, tmpCollection.parent)
                                 tmpObj = tmpClip.transcripts[0]
-                            if self.ControlObject.GetOpenDocumentObject(docType, tmpObj.number) != None:
+                            if (docType != None) and \
+                               self.ControlObject.GetOpenDocumentObject(docType, tmpObj.number) != None:
                                 # Note the type and number of the currently opened object in the Document Window
                                 currObjType = type(self.ControlObject.GetCurrentDocumentObject())
                                 currObjNum = self.ControlObject.GetCurrentDocumentObject().number
@@ -1590,14 +1647,13 @@ class ChatWindow(wx.Frame):
         if self.serverValidation:
             # ... Stop the validation timer.  It's done.
             self.validationTimer.Stop()
+
         # If the server has NOT been validated ...
         else:
             # If it's not visible ...
             if not self.IsShown():
                 # ... show the ChatWindow.
                 self.Show(True)
-            # Bring this window to the top of the others
-            # self.Raise()
             # Change the Timer interval to a minute
             self.validationTimer.Start(60000)
             # Display an error message to the user.
@@ -1789,7 +1845,6 @@ def ConnectToMessageServer():
             ConnectedToMessageServer = True
         except socket.error:
 
-
             print sys.exc_info()[0], sys.exc_info()[1]
             import traceback
             print traceback.print_exc(file=sys.stdout)
@@ -1844,7 +1899,7 @@ def ConnectToMessageServer():
 # it in the context of Transana.
 if __name__ == '__main__':
     # These values come from the Config object in Transana
-    SERVERHOST = 'localhost'
+    SERVERHOST = '192.168.1.19'
     SERVERPORT = 17595
 
     # Declare the main App object
@@ -1861,6 +1916,9 @@ if __name__ == '__main__':
         app.MainLoop()
     except socket.error:
         print _('You were unable to connect to a Transana Message Server')
+        print sys.exc_info()[0], sys.exc_info()[1]
+        import traceback
+        print traceback.print_exc(file=sys.stdout)
     except:
         print sys.exc_info()[0], sys.exc_info()[1]
         import traceback

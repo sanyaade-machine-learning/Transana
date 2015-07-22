@@ -136,3 +136,8 @@ unit_test_search.py
 unit_test_SSL.py
 images/Embedded/tmp.py
 images/Embedded/ArtProviderBitmapSaver.py
+Unit Tests/RTC_Cmd_B.py
+MessageServer/TestChatWindow.py
+MessageServer/TestChatWindow_SSL.py
+MessageServer/TestChatWindow2.py
+MessageServer/TestChatWindow1.py
