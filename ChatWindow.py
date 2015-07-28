@@ -505,12 +505,12 @@ class ChatWindow(wx.Frame):
         #
         # I know I shouldn't HAVE to do this, but at least for now, I do.
         #
-        if 'wxMac' in wx.PlatformInfo:
-            if DEBUG:
-                self.processMessageQueueTime = datetime.datetime.now()
-            self.processMessageQueueTimer = wx.Timer()
-            self.processMessageQueueTimer.Bind(wx.EVT_TIMER, self.OnProcessMessageQueue)
-            self.processMessageQueueTimer.Start(500)
+##        if 'wxMac' in wx.PlatformInfo:
+##            if DEBUG:
+##                self.processMessageQueueTime = datetime.datetime.now()
+##            self.processMessageQueueTimer = wx.Timer()
+##            self.processMessageQueueTimer.Bind(wx.EVT_TIMER, self.OnProcessMessageQueue)
+##            self.processMessageQueueTimer.Start(500)
 
         # Create a Timer to check for Message Server validation.
         # Initialize to unvalidated state
@@ -522,12 +522,12 @@ class ChatWindow(wx.Frame):
         # 10 seconds should be sufficient for the connection to the message server to be established and confirmed
         self.validationTimer.Start(10000)
 
-    def OnProcessMessageQueue(self, event):
-        
-        if DEBUG:
-            print "ChatWIndow.ProcessMessageQueue():", datetime.datetime.now() - self.processMessageQueueTime
-        
-        wx.YieldIfNeeded()
+##    def OnProcessMessageQueue(self, event):
+##        
+##        if DEBUG:
+##            print "ChatWIndow.ProcessMessageQueue():", datetime.datetime.now() - self.processMessageQueueTime
+##        
+##        wx.YieldIfNeeded()
 
     def SendMessage(self, message):
         """ Send a message through the chatWindow's socket """
