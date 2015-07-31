@@ -1370,7 +1370,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
          # If the current database is not empty, we need to tell the user.
         if not DBInterface.IsDatabaseEmpty():
             prompt = _('Your current database is not empty.') + '\n\n' + \
-                     _('You can only import data into an existing databases if\nthere are no overlapping Series or Collection records.\nIf there is any overlap in these records, the import\nwill fail.') + '\n\n' + \
+                     _('You can only import data into an existing databases if\nthere are no overlapping Library or Collection records.\nIf there is any overlap in these records, the import\nwill fail.') + '\n\n' + \
                      _('If you have overlapping Keywords, the existing Keyword\nis retained and the importing Keyword (including its\ndefinition, which could differ) is discarded.') + '\n\n' + \
                      _('If you have overlapping Core Data records, the existing\nCore Data record is retained and the importing Core\nData record is discarded.')
             dlg = Dialogs.InfoDialog(self, prompt)
