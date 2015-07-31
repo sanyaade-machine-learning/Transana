@@ -479,8 +479,8 @@ class XMLImport(Dialogs.GenForm):
                    # ... so we do unicode stripping only of the RIGHT side here.
                    line = Misc.unistrip(line, left=False)
 
-               if DEBUG:
-                   print "Line %d: '%s' %s %s" % (lineCount, line, objectType, dataType)
+               if DEBUG and not dataType in ['XMLText', 'RTFText']:
+                   print "Line %d: '%s' %s %s" % (lineCount, line[:40], objectType, dataType)
 
                # Create an upper case version of line once (as repeated upper() calls were taking a LOT of time on profiling!)
                lineUpper = line.upper()
@@ -770,6 +770,9 @@ class XMLImport(Dialogs.GenForm):
                                    tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
                                    tmpdlg.ShowModal()
                                    tmpdlg.Destroy()
+                               elif DEBUG and (objectType == 'Transcript'):
+                                   print currentObj
+                                   print
 
                                if DEBUG_Exceptions:
                                    print "XMLImport 2:  Saving ", type(currentObj), objCountNumber
@@ -2043,12 +2046,23 @@ class XMLImport(Dialogs.GenForm):
                    elif line[:4] == 'Note':
                        linkType = 'Note'
 
-                   # Get the object type
-                   lineArray.append(line[:len(linkType) + 1])
-                   line = line[len(linkType) + 1:]
-                   linkNum = int(line[:line.find('"')])
-                   lineArray.append("%s" % recNumbers[linkType][linkNum])
-                   line = line[line.find('"'):]
+                   try:
+                       # Get the object type
+                       lineArray.append(line[:len(linkType) + 1])
+                       line = line[len(linkType) + 1:]
+                       linkNum = int(line[:line.find('"')])
+                       lineArray.append("%s" % recNumbers[linkType][linkNum])
+                       line = line[line.find('"'):]
+                   except KeyError:
+                       prompt = unicode(_("Bad hyperlink.  Linked %s no longer exists."), 'utf8')
+                       # Display our carefully crafted error message to the user.
+                       errordlg = Dialogs.ErrorDialog(None, prompt % linkType)
+                       errordlg.ShowModal()
+                       errordlg.Destroy()
+
+                       # Substitute a 0 for the object number and complete the link edit
+                       lineArray.append("%s" % 0)
+                       line = line[line.find('"'):]
                    
                lineArray.append(line)
                line = ''

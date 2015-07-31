@@ -6562,6 +6562,31 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         # Let's get a  list of those Keyword Examples before we do anything.
                         kwExamples = DBInterface.list_all_keyword_examples_for_all_clips_in_a_collection(selData.recNum)
                         try:
+                            # Create a list starting with the CURRENT Collection
+                            nestedCollectionList = [(selData.recNum, self.GetItemText(sel), selData.parent)]
+                            # While the list has elements ...
+                            while len(nestedCollectionList) > 0:
+                                # ... add all nested Collections in the current Collection
+                                (tmpColNum, tmpColId, tmpParentNum) = nestedCollectionList[0]
+                                # ... drop the current Collection from the list 
+                                nestedCollectionList = nestedCollectionList[1:] + DBInterface.list_of_collections(tmpColNum)
+                                # ... get all the quotes in the current Collection
+                                quoteList = DBInterface.list_of_quotes_by_collectionnum(tmpColNum)
+                                # ... for each Quote ...
+                                for quote in quoteList:
+                                    # Remove the Object's Position Data from the Source Document, if it's open
+                                    self.parent.ControlObject.RemoveQuoteFromOpenDocument(quote[0], quote[3])
+                                    # Even if this computer doesn't need to update the Source Document, others might need to.
+                                    if not TransanaConstants.singleUserVersion:
+                                        # We need to pass the type of the deleted Object's record number and the deleted Object's
+                                        # SOURCE Document number.
+                                        
+                                        if DEBUG:
+                                            print 'Message to send = "DQPOD %s %s"' % (quote[0], quote[3])
+                                            
+                                        if (TransanaGlobal.chatWindow != None) and (quote[3] > 0):
+                                            TransanaGlobal.chatWindow.SendMessage("DQPOD %s %s" % (quote[0], quote[3]))
+
                             # Try to delete the Collection, initiating a Transaction
                             delResult = collection.db_delete(1)
                             # If successful, remove the Collection Node from the Database Tree
@@ -8691,6 +8716,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
             try:
                 # Get the Object number (so it will persist after the Object is deleted)
                 tmpObjNum = tmpObj.number
+                # Get the Source Document's Number
+                tmpObjSourceNum = tmpObj.source_document_num
                 # Try to delete the Object, initiating a Transaction
                 delResult = tmpObj.db_delete(1)
                 # If successful, remove the Object Node from the Database Tree
@@ -8698,6 +8725,17 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     if isinstance(tmpObj, Quote.Quote):
                         # Remove the Object's Position Data from the Source Document, if it's open
                         self.parent.ControlObject.RemoveQuoteFromOpenDocument(tmpObjNum, tmpObjParentNum)
+
+                        # Even if this computer doesn't need to update the Source Document, others might need to.
+                        if not TransanaConstants.singleUserVersion:
+                            # We need to pass the type of the deleted Object's record number and the deleted Object's
+                            # SOURCE Document number.
+                            if DEBUG:
+                                print 'Message to send = "DQPOD %s %s"' % (tmpObjNum, tmpObjSourceNum)
+                                
+                            if (TransanaGlobal.chatWindow != None) and (tmpObjSourceNum > 0):
+                                TransanaGlobal.chatWindow.SendMessage("DQPOD %s %s" % (tmpObjNum, tmpObjSourceNum))
+
                     # Get a temporary Selection Pointer
                     tempSel = sel
                     # Get the full Node Branch by climbing it to one level above the root

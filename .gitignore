@@ -141,3 +141,5 @@ MessageServer/TestChatWindow.py
 MessageServer/TestChatWindow_SSL.py
 MessageServer/TestChatWindow2.py
 MessageServer/TestChatWindow1.py
+Unit Tests/OrphanCheck.py
+unit_test_database.py

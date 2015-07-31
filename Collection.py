@@ -308,7 +308,7 @@ class Collection(DataObject.DataObject):
 
             # Delete Quotes, which in turn will delete Quote notes/kws
             quotes = DBInterface.list_of_quotes_by_collectionnum(self.number)
-            for (quoteNo, quote_id, collNo) in quotes:
+            for (quoteNo, quote_id, collNo, sourceDocNo) in quotes:
                 quote = Quote.Quote(num=quoteNo)
                 result = result and quote.db_delete(0)
                 del quote

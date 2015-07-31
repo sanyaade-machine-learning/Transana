@@ -1375,24 +1375,6 @@ class ChatWindow(wx.Frame):
                             # Extract the node list from the message
                             nodelist = ConvertMessageToNodeList(message)
 
-##                            print
-##                            print "ChatWindow.OnPostMessage():  Delete Node"
-##                            print "Removing a Quote Node"
-##                            print message
-##                            print nodelist
-##                            print
-##                            print "DONE  1.  If the Document is open, remove this Quote from the quote_dict"
-##                            print "DONE  2.  If the Quote is open, close it!"
-##                            print "DONE  3.  Check about Deleting a Document -- we should close the Document!"
-##                            print "DONE  4.  Check about Deleting a Clip -- we should close the Clip!"
-##                            print "DONE  5.  Check about deleting an Episode -- we should close the Episode!"
-##                            print "DONE  6.  Check about deleting a Transcript -- we should close the Transcript!"
-##                            print "DONE  7.  Check about deleting a Library - we should close ALL Docs and Episodes!"
-##                            print "DONE  8.  Check about deleting a Collection - close ALL Quotes, Clips, and Snaps!"
-##                            print "DONE  9.  Check about deleting a Snapshot -- we should close the Snapshot!"
-##                            print "10.  And what about Keywords?  We can remove them from open objects!!"
-##                            print
-
                             # Check the TYPE of the translated second element.
                             if type(_(nodelist[1])).__name__ == 'str':
                                 # If string, translate it and convert it to unicode
@@ -1502,12 +1484,20 @@ class ChatWindow(wx.Frame):
                                     # so it does not conflict with DatabaseTreeTab.py calls.
                                     if nodeType != None:
                                         self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('D', (nodeType, nodelist[1:]))
-                            # Otherwise, if a Library, Episode, Transcript, Collection, Clip, or Snapshot node is deleted ...
-                            elif nodelist[0] in ['LibraryNode', 'EpisodeNode', 'TranscriptNode', 'CollectionNode', 'ClipNode', 'SnapshotNode']:
+                            # Otherwise, if a Library, Document, Episode, Transcript, Collection, Quote, Clip, or Snapshot node is deleted ...
+                            elif nodelist[0] in ['LibraryNode', 'DocumentNode', 'EpisodeNode', 'TranscriptNode', 'CollectionNode', 'QuoteNode', 'ClipNode', 'SnapshotNode']:
                                 # ... and if the Notes Browser is open, ...
                                 if self.ControlObject.NotesBrowserWindow != None:
                                     # ... we need to CHECK to see if any notes were deleted.
                                     self.ControlObject.NotesBrowserWindow.UpdateTreeCtrl('C')
+                                    
+                        # If a Quote is being deleted on another computer, we need to
+                        # Delete Quote Position from Open Document
+                        elif messageHeader == 'DQPOD':
+                            # Parse the message at the space into object type and object number
+                            msgData = message.split(' ')
+                            # ... we need to drop that Quote's Position from the source Document, if it's open.
+                            self.ControlObject.RemoveQuoteFromOpenDocument(int(msgData[0]), int(msgData[1]))
 
                         # Update Keyword List
                         elif messageHeader == 'UKL':

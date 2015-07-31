@@ -329,7 +329,7 @@ class ReportGenerator(wx.Object):
                     # For each Quote ...
                     for x in tmpQuoteList:
                         # ... add the Quote to the Dictionary with the Sort Order as the key and with the Object Type added
-                        tmpDict[x[3]] = (('Quote',) + x)
+                        tmpDict[x[3]] = (('Quote',) + x[:-1])
 
                     # Get a list of all Snapshots in the Collection.
                     tmpSnapshotList = DBInterface.list_of_snapshots_by_collectionnum(self.collection.number, includeSortOrder=True)
@@ -371,7 +371,7 @@ class ReportGenerator(wx.Object):
                         # For each Quote ...
                         for x in tmpQuoteList:
                             # ... add the Quote to the Dictionary with the Sort Order as the key and with the Object Type added
-                            tmpDict[x[3]] = (('Quote',) + x)
+                            tmpDict[x[3]] = (('Quote',) + x[:-1])
                         # Get a list of all Snapshots in the Collection.
                         tmpSnapshotList = DBInterface.list_of_snapshots_by_collectionnum(collNum, includeSortOrder=True)
                         # For each Snapshot ...

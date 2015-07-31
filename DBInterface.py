@@ -2662,7 +2662,7 @@ def list_of_quotes_by_document(DocumentNum, textPos=-1, textSel=(-2, -2)):
 
 def list_of_quotes_by_collectionnum(collectionNum, includeSortOrder=False):
     quoteList = []
-    query = """ SELECT QuoteNum, QuoteID, CollectNum, SortOrder
+    query = """ SELECT QuoteNum, QuoteID, CollectNum, SortOrder, SourceDocumentNum
                 FROM Quotes2
                 WHERE CollectNum = %s
                 ORDER BY SortOrder, QuoteID """
@@ -2670,14 +2670,14 @@ def list_of_quotes_by_collectionnum(collectionNum, includeSortOrder=False):
     query = FixQuery(query)
     cursor = get_db().cursor()
     cursor.execute(query, (collectionNum, ))
-    for (quoteNum, quoteID, collectNum, sortOrder) in cursor.fetchall():
+    for (quoteNum, quoteID, collectNum, sortOrder, sourceDocNum) in cursor.fetchall():
         id = quoteID
         if 'unicode' in wx.PlatformInfo:
             id = ProcessDBDataForUTF8Encoding(id)
         if includeSortOrder:
-            quoteList.append((quoteNum, id, collectNum, sortOrder))
+            quoteList.append((quoteNum, id, collectNum, sortOrder, sourceDocNum))
         else:
-            quoteList.append((quoteNum, id, collectNum))
+            quoteList.append((quoteNum, id, collectNum, sourceDocNum))
     cursor.close()
     return quoteList
 

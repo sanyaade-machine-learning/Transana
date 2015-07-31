@@ -1672,7 +1672,7 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
 
             if TransanaConstants.proVersion:
                 # Now load a list of all the Quotes in the Collection and iterate through them
-                for tempQuoteNum, tempQuoteID, tempCollectNum in DBInterface.list_of_quotes_by_collectionnum(tempCollection.number):
+                for tempQuoteNum, tempQuoteID, tempCollectNum, tempParentDocNum in DBInterface.list_of_quotes_by_collectionnum(tempCollection.number):
                     # Load the Quote.
                     tempQuote = Quote.Quote(num=tempQuoteNum)
                     try:
@@ -5426,7 +5426,7 @@ def ChangeClipOrder(treeCtrl, destNode, sourceObject, sourceCollection):
     # Start Exception Handling
     try:
         # For each Quote in the Collection ...
-        for (tmpQuoteNum, tmpQuoteID, tmpCollectNum) in quoteLockList:
+        for (tmpQuoteNum, tmpQuoteID, tmpCollectNum, tmpSourceDocNum) in quoteLockList:
             # Load the Quote.
             tmpQuote = Quote.Quote(num=tmpQuoteNum)
             # Lock the QuoteRecord

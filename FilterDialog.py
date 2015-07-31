@@ -83,19 +83,19 @@ class FilterDialog(wx.Dialog):
           title
           reportType     1 = Keyword Map  (reportScope is the Episode Number)
                          2 = Keyword Visualization  (reportScope is the Episode Number)
-                         3 = Episode Clip Data Export (reportScope is the Episode Number)
+                         3 = Episode Analytic Data Export (reportScope is the Episode Number)
                          4 = Collection Clip Data Export (reportScope is the Collection Number, or 0 for Collection Root)
-                         5 = Series Keyword Sequence Map (reportScope is the Series Number)
-                         6 = Series Keyword Bar Graph (reportScope is the Series Number)
-                         7 = Series Keyword Percentage Map (reportScope is the Series Number)
-                         8 = Episode Clip Data Coder Reliabiltiy Export (reportScope is the Episode Number)
+                         5 = Library Keyword Sequence Map (reportScope is the Library Number)
+                         6 = Library Keyword Bar Graph (reportScope is the Series Number)
+                         7 = Library Keyword Percentage Map (reportScope is the Series Number)
+                         8 = Episode Clip Data Coder Reliabiltiy Export (reportScope is the Episode Number) (NOT IMPLEMENTED)
                          9 = Keyword Summary Report for all Keyword Groups (configSave not yet implemented) (reportScope is not yet defined)
                         10 = Library Report (reportScope is Library Number)
                         11 = Episode Report (reportScope is Episode Number)
                         12 = Collection Report (reportScope is Collection Number)
                         13 = Notes Report (reportScope is 1 for all notes, 2 for Series, 3 for Episodes, 4 for Transcripts, 5 for Collections,
-                                           6 for Clips)
-                        14 = Series Clip Data Export (reportScope is the Series Number)
+                                           6 for Clips, 7 for Snapshots, 8 for Documents, 9 for Quotes)
+                        14 = Library Analytic Data Export (reportScope is the Series Number)
                         15 = Search Save (Search Saves have NO reportScope! or FilterDataType!!)
                         16 = Collection Keyword Map  (reportScope is the CollectionNumber)
                         17 = Document Keyword Map (reportScope is the Document Number)
@@ -106,7 +106,9 @@ class FilterDialog(wx.Dialog):
             *** ADDING A REPORT TYPE?  Remember to add the delete_filter_records() call to the appropriate
                 object's db_delete() method!
 
-                ALSO, remember to add the ReportScope conversion to XMLImport for Filter Imports! ***
+                ALSO, remember to add the ReportScope conversion to XMLImport for Filter Imports!
+
+                ALSO, remember to add it to the OrphanCheck Unit Test!  ***
                          
         Optional parameters are:
           loadDefault         (boolean) -- silently load a profile named "Default", if one exists
@@ -1209,71 +1211,74 @@ class FilterDialog(wx.Dialog):
                         needToReconcileEpisodes = False
 
                     # If the data is for the Clips Tab (filterDataType 2) ...
-                    elif self.clipFilter and (filterDataType == 2):
-                        # Get the current Clip data from the Form
-                        formClipData = self.GetClips()
-                        # Due to the BLOB / LONGBLOB problem, we can have bad data in the database.  Better catch it.
-                        try:
-                            # Get the Clip data from the Database.
+                    elif (filterDataType == 2):
+                        if self.clipFilter:
+                            # Get the current Clip data from the Form
+                            formClipData = self.GetClips()
+                            # Due to the BLOB / LONGBLOB problem, we can have bad data in the database.  Better catch it.
+                            try:
+                                # Get the Clip data from the Database.
+                                # (If MySQLDB returns an Array, convert it to a String!)
+                                if type(filterData).__name__ == 'array':
+                                    fileClipData = cPickle.loads(filterData.tostring())
+                                else:
+                                    fileClipData = cPickle.loads(filterData)
+                                # Clear the Clip List
+                                self.clipList.DeleteAllItems()
+                                # Determine if this list is Ordered
+                                if self.kwargs.has_key('clipSort') and self.kwargs['clipSort']:
+                                    orderedList = True
+                                else:
+                                    orderedList = False
+                                # We need to compare the file data to the form data and reconcile differences,
+                                # then feed the results to the Clip Tab.
+                                self.SetClips(self.ReconcileLists(formClipData, fileClipData, listIsOrdered=orderedList))
+                                # Note that we have reconciled Clips
+                                needToReconcileClips = False
+                            # If the pickled data got truncated in the database, we'll get an Unpickling error here!
+                            except cPickle.UnpicklingError, e:
+                                # Construct and display an error message here
+                                errormsg = _("Transana was unable to load your clip filter data from the database.  Please select your clips again and re-save the filter configuration.")
+                                errorDlg = Dialogs.ErrorDialog(self, errormsg)
+                                errorDlg.ShowModal()
+                                errorDlg.Destroy()
+                            
+                    # If the data is for the Keywords Tab (filterDataType 3) ...
+                    elif (filterDataType == 3):
+                        if self.keywordFilter:
+                            # Get the current Keyword data from the Form
+                            formKeywordData = self.GetKeywords()
+                            # Get the Keyword data from the Database.
                             # (If MySQLDB returns an Array, convert it to a String!)
                             if type(filterData).__name__ == 'array':
-                                fileClipData = cPickle.loads(filterData.tostring())
+                                fileKeywordData = cPickle.loads(filterData.tostring())
                             else:
-                                fileClipData = cPickle.loads(filterData)
-                            # Clear the Clip List
-                            self.clipList.DeleteAllItems()
+                                fileKeywordData = cPickle.loads(filterData)
+                            # Clear the Keyword List
+                            self.keywordList.DeleteAllItems()
                             # Determine if this list is Ordered
-                            if self.kwargs.has_key('clipSort') and self.kwargs['clipSort']:
+                            if self.kwargs.has_key('keywordSort') and self.kwargs['keywordSort']:
                                 orderedList = True
                             else:
                                 orderedList = False
                             # We need to compare the file data to the form data and reconcile differences,
-                            # then feed the results to the Clip Tab.
-                            self.SetClips(self.ReconcileLists(formClipData, fileClipData, listIsOrdered=orderedList))
-                            # Note that we have reconciled Clips
-                            needToReconcileClips = False
-                        # If the pickled data got truncated in the database, we'll get an Unpickling error here!
-                        except cPickle.UnpicklingError, e:
-                            # Construct and display an error message here
-                            errormsg = _("Transana was unable to load your clip filter data from the database.  Please select your clips again and re-save the filter configuration.")
-                            errorDlg = Dialogs.ErrorDialog(self, errormsg)
-                            errorDlg.ShowModal()
-                            errorDlg.Destroy()
-                        
-                    # If the data is for the Keywords Tab (filterDataType 3) ...
-                    elif self.keywordFilter and (filterDataType == 3):
-                        # Get the current Keyword data from the Form
-                        formKeywordData = self.GetKeywords()
-                        # Get the Keyword data from the Database.
-                        # (If MySQLDB returns an Array, convert it to a String!)
-                        if type(filterData).__name__ == 'array':
-                            fileKeywordData = cPickle.loads(filterData.tostring())
-                        else:
-                            fileKeywordData = cPickle.loads(filterData)
-                        # Clear the Keyword List
-                        self.keywordList.DeleteAllItems()
-                        # Determine if this list is Ordered
-                        if self.kwargs.has_key('keywordSort') and self.kwargs['keywordSort']:
-                            orderedList = True
-                        else:
-                            orderedList = False
-                        # We need to compare the file data to the form data and reconcile differences,
-                        # then feed the results to the Keyword Tab.
-                        self.SetKeywords(self.ReconcileLists(formKeywordData, fileKeywordData, listIsOrdered=orderedList))
-                        # Note that we have reconciled Keywords
-                        needToReconcileKeywords = False
+                            # then feed the results to the Keyword Tab.
+                            self.SetKeywords(self.ReconcileLists(formKeywordData, fileKeywordData, listIsOrdered=orderedList))
+                            # Note that we have reconciled Keywords
+                            needToReconcileKeywords = False
 
                     # If the data is for the Keyword Colors (filterDataType 4) ...
-                    elif self.keywordFilter and (filterDataType == 4):
-                        # Get the Keyword data from the Database.
-                        # (If MySQLDB returns an Array, convert it to a String!)
-                        if type(filterData).__name__ == 'array':
-                            fileKeywordColorData = cPickle.loads(filterData.tostring())
-                        else:
-                            fileKeywordColorData = cPickle.loads(filterData)
-                        # Now over-ride existing Keyword Color data with the data from the file
-                        for kwPair in fileKeywordColorData.keys():
-                            self.keywordColors[kwPair] = fileKeywordColorData[kwPair] % len(TransanaGlobal.keywordMapColourSet)
+                    elif (filterDataType == 4):
+                        if self.keywordFilter:
+                            # Get the Keyword data from the Database.
+                            # (If MySQLDB returns an Array, convert it to a String!)
+                            if type(filterData).__name__ == 'array':
+                                fileKeywordColorData = cPickle.loads(filterData.tostring())
+                            else:
+                                fileKeywordColorData = cPickle.loads(filterData)
+                            # Now over-ride existing Keyword Color data with the data from the file
+                            for kwPair in fileKeywordColorData.keys():
+                                self.keywordColors[kwPair] = fileKeywordColorData[kwPair] % len(TransanaGlobal.keywordMapColourSet)
 
                     # If the data is for the Keywords Group Tab (filterDataType 5) ...
                     elif filterDataType == 5:
@@ -1457,22 +1462,23 @@ class FilterDialog(wx.Dialog):
                         self.colorOutput.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Snapshots Tab (filterDataType 18) ...
-                    elif self.snapshotFilter and (filterDataType == 18):
-                        # Get the current Snapshot data from the Form
-                        formSnapshotData = self.GetSnapshots()
-                        # Get the Snapshot data from the Database.
-                        # (If MySQLDB returns an Array, convert it to a String!)
-                        if type(filterData).__name__ == 'array':
-                            fileSnapshotData = cPickle.loads(filterData.tostring())
-                        else:
-                            fileSnapshotData = cPickle.loads(filterData)
-                        # Clear the Snapshot List
-                        self.snapshotList.DeleteAllItems()
-                        # We need to compare the file data to the form data and reconcile differences,
-                        # then feed the results to the Snapshots Tab.
-                        self.SetSnapshots(self.ReconcileLists(formSnapshotData, fileSnapshotData))
-                        # Note that we have reconciled Snapshots
-                        needToReconcileSnapshots = False
+                    elif (filterDataType == 18):
+                        if self.snapshotFilter:
+                            # Get the current Snapshot data from the Form
+                            formSnapshotData = self.GetSnapshots()
+                            # Get the Snapshot data from the Database.
+                            # (If MySQLDB returns an Array, convert it to a String!)
+                            if type(filterData).__name__ == 'array':
+                                fileSnapshotData = cPickle.loads(filterData.tostring())
+                            else:
+                                fileSnapshotData = cPickle.loads(filterData)
+                            # Clear the Snapshot List
+                            self.snapshotList.DeleteAllItems()
+                            # We need to compare the file data to the form data and reconcile differences,
+                            # then feed the results to the Snapshots Tab.
+                            self.SetSnapshots(self.ReconcileLists(formSnapshotData, fileSnapshotData))
+                            # Note that we have reconciled Snapshots
+                            needToReconcileSnapshots = False
 
                     # If the data is for the Documents Tab (filterDataType 19) ...
                     elif filterDataType == 19:
@@ -1493,34 +1499,35 @@ class FilterDialog(wx.Dialog):
                         needToReconcileDocuments = False
 
                     # If the data is for the Quotes Tab (filterDataType 20) ...
-                    elif self.quoteFilter and (filterDataType == 20):
-                        # Get the current Quote data from the Form
-                        formQuoteData = self.GetQuotes()
-                        # Due to the BLOB / LONGBLOB problem, we can have bad data in the database.  Better catch it.
-                        # (Probably NOT for Quotes, but the try ... except block does no harm!)
-                        try:
-                            # Get the Quote data from the Database.
-                            # (If MySQLDB returns an Array, convert it to a String!)
-                            if type(filterData).__name__ == 'array':
-                                fileQuoteData = cPickle.loads(filterData.tostring())
-                            else:
-                                fileQuoteData = cPickle.loads(filterData)
-                            # Clear the Quote List
-                            self.quoteList.DeleteAllItems()
-                            # This is NOT an ordered list!
-                            orderedList = False
-                            # We need to compare the file data to the form data and reconcile differences,
-                            # then feed the results to the Quote Tab.
-                            self.SetQuotes(self.ReconcileLists(formQuoteData, fileQuoteData, listIsOrdered=orderedList))
-                            # Note that we have reconciled Quotes
-                            needToReconcileQuotes = False
-                        # If the pickled data got truncated in the database, we'll get an Unpickling error here!
-                        except cPickle.UnpicklingError, e:
-                            # Construct and display an error message here
-                            errormsg = _("Transana was unable to load your quote filter data from the database.  Please select your quotes again and re-save the filter configuration.")
-                            errorDlg = Dialogs.ErrorDialog(self, errormsg)
-                            errorDlg.ShowModal()
-                            errorDlg.Destroy()
+                    elif (filterDataType == 20):
+                        if self.quoteFilter:
+                            # Get the current Quote data from the Form
+                            formQuoteData = self.GetQuotes()
+                            # Due to the BLOB / LONGBLOB problem, we can have bad data in the database.  Better catch it.
+                            # (Probably NOT for Quotes, but the try ... except block does no harm!)
+                            try:
+                                # Get the Quote data from the Database.
+                                # (If MySQLDB returns an Array, convert it to a String!)
+                                if type(filterData).__name__ == 'array':
+                                    fileQuoteData = cPickle.loads(filterData.tostring())
+                                else:
+                                    fileQuoteData = cPickle.loads(filterData)
+                                # Clear the Quote List
+                                self.quoteList.DeleteAllItems()
+                                # This is NOT an ordered list!
+                                orderedList = False
+                                # We need to compare the file data to the form data and reconcile differences,
+                                # then feed the results to the Quote Tab.
+                                self.SetQuotes(self.ReconcileLists(formQuoteData, fileQuoteData, listIsOrdered=orderedList))
+                                # Note that we have reconciled Quotes
+                                needToReconcileQuotes = False
+                            # If the pickled data got truncated in the database, we'll get an Unpickling error here!
+                            except cPickle.UnpicklingError, e:
+                                # Construct and display an error message here
+                                errormsg = _("Transana was unable to load your quote filter data from the database.  Please select your quotes again and re-save the filter configuration.")
+                                errorDlg = Dialogs.ErrorDialog(self, errormsg)
+                                errorDlg.ShowModal()
+                                errorDlg.Destroy()
                         
                     # If the data is for the Include Nested Collection Data value (filterDataType 101) ...
                     elif filterDataType == 101:
@@ -1530,37 +1537,41 @@ class FilterDialog(wx.Dialog):
                         self.showNestedData.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Media Filename Data value (filterDataType 102) ...
-                    elif (self.quoteFilter or self.clipFilter or self.snapshotFilter) and (filterDataType == 102):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # Set the Show Media Filename Data value
-                        self.showFile.SetValue((filterData == 'True') or (filterData == '1'))
+                    elif (filterDataType == 102):
+                        if (self.quoteFilter or self.clipFilter or self.snapshotFilter):
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # Set the Show Media Filename Data value
+                            self.showFile.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Item Time Data value (filterDataType 103) ...
-                    elif (self.quoteFilter or self.clipFilter or self.snapshotFilter) and (filterDataType == 103):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # Set the Show Clip Time Data value
-                        self.showTime.SetValue((filterData == 'True') or (filterData == '1'))
+                    elif (filterDataType == 103):
+                        if (self.quoteFilter or self.clipFilter or self.snapshotFilter):
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # Set the Show Clip Time Data value
+                            self.showTime.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Clip Transcripts value (filterDataType 104) ...
-                    elif self.clipFilter and (filterDataType == 104):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # Set the Show Clip Transcripts value
-                        self.showClipTranscripts.SetValue((filterData == 'True') or (filterData == '1'))
+                    elif (filterDataType == 104):
+                        if self.clipFilter:
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # Set the Show Clip Transcripts value
+                            self.showClipTranscripts.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Keywords value (filterDataType 105) ...
-                    elif (self.episodeFilter or self.documentFilter or self.quoteFilter or self.clipFilter or self.snapshotFilter) and (filterDataType == 105):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # If we delete the LAST Keyword from a report, and that report has a
-                        # Default Configuration, there is no "showKeyword" control to set!!
-                        try:
-                            # Set the Show Clip Keywords value
-                            self.showKeywords.SetValue((filterData == 'True') or (filterData == '1'))
-                        except:
-                            pass
+                    elif (filterDataType == 105):
+                        if (self.episodeFilter or self.documentFilter or self.quoteFilter or self.clipFilter or self.snapshotFilter):
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # If we delete the LAST Keyword from a report, and that report has a
+                            # Default Configuration, there is no "showKeyword" control to set!!
+                            try:
+                                # Set the Show Clip Keywords value
+                                self.showKeywords.SetValue((filterData == 'True') or (filterData == '1'))
+                            except:
+                                pass
 
                     # If the data is for the Show Comments value (filterDataType 106) ...
                     elif filterDataType == 106:
@@ -1577,39 +1588,44 @@ class FilterDialog(wx.Dialog):
                         self.showCollectionNotes.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Clip Notes value (filterDataType 108) ...
-                    elif self.clipFilter and (filterDataType == 108):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # Set the Show Clip Notes value
-                        self.showClipNotes.SetValue((filterData == 'True') or (filterData == '1'))
+                    elif (filterDataType == 108):
+                        if self.clipFilter:
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # Set the Show Clip Notes value
+                            self.showClipNotes.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Source Information value (filterDataType 109) ...
-                    elif (self.quoteFilter or self.clipFilter or self.snapshotFilter) and (filterDataType == 109):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # Set the Show Source Information value
-                        self.showSourceInfo.SetValue((filterData == 'True') or (filterData == '1'))
+                    elif (filterDataType == 109):
+                        if (self.quoteFilter or self.clipFilter or self.snapshotFilter):
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # Set the Show Source Information value
+                            self.showSourceInfo.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Snapshot Image value (filterDataType 110) ...
-                    elif self.snapshotFilter and (filterDataType == 110):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # Set the Show Snapshot Image value
-                        self.showSnapshotImage.SetSelection(int(filterData))
+                    elif (filterDataType == 110):
+                        if self.snapshotFilter:
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # Set the Show Snapshot Image value
+                            self.showSnapshotImage.SetSelection(int(filterData))
 
                     # If the data is for the Show Snapshot Notes value (filterDataType 111) ...
-                    elif self.snapshotFilter and (filterDataType == 111):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # Set the Show Snapshot Notes value
-                        self.showSnapshotNotes.SetValue((filterData == 'True') or (filterData == '1'))
+                    elif (filterDataType == 111):
+                        if self.snapshotFilter:
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # Set the Show Snapshot Notes value
+                            self.showSnapshotNotes.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Snapshot Coding value (filterDataType 112) ...
-                    elif self.snapshotFilter and (filterDataType == 112):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # Set the Show Snapshot Coding value
-                        self.showSnapshotCoding.SetValue((filterData == 'True') or (filterData == '1'))
+                    elif (filterDataType == 112):
+                        if self.snapshotFilter:
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # Set the Show Snapshot Coding value
+                            self.showSnapshotCoding.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Enable Hyperlink value (filterDataType 113) ...
                     elif (filterDataType == 113):
@@ -1626,18 +1642,20 @@ class FilterDialog(wx.Dialog):
                         self.showDocImportDate.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Quote Notes value (filterDataType 115) ...
-                    elif self.quoteFilter and (filterDataType == 115):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # Set the Show Quote Notes value
-                        self.showQuoteNotes.SetValue((filterData == 'True') or (filterData == '1'))
+                    elif (filterDataType == 115):
+                        if self.quoteFilter:
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # Set the Show Quote Notes value
+                            self.showQuoteNotes.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If the data is for the Show Quote Text value (filterDataType 116) ...
-                    elif self.quoteFilter and (filterDataType == 116):
-                        if type(filterData).__name__ == 'array':
-                            filterData = filterData.tostring()
-                        # Set the Show Quote Text value
-                        self.showQuoteText.SetValue((filterData == 'True') or (filterData == '1'))
+                    elif (filterDataType == 116):
+                        if self.quoteFilter:
+                            if type(filterData).__name__ == 'array':
+                                filterData = filterData.tostring()
+                            # Set the Show Quote Text value
+                            self.showQuoteText.SetValue((filterData == 'True') or (filterData == '1'))
 
                     # If we have an unknown filterDataType ...
                     else:

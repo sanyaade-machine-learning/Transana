@@ -37,6 +37,8 @@ import cPickle
 import datetime
 import pickle
 import os
+# import Python's Regular Expresions
+import re
 import sys
 
 # Set the encoding for export.
@@ -767,12 +769,19 @@ class XMLExport(Dialogs.GenForm):
                 progress.Refresh()
 
                 # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
-                xmlData = XMLText[39:]
+                # Due to changes in the header across wxPython versions, we need to use a regular expression.
+                # xmlData = XMLText[39:]
+
+                # Match "<?xml" plus any number of characters that are not ">" plus ">" plus whitespace
+                REGEX = "<\?xml[^>]*>[\s]*"
+                regexCompiled = re.compile(REGEX)
+                regexSearch = regexCompiled.search(XMLText)
+                xmlData = XMLText[regexSearch.end():]
 
             # now simply write the XML data to the file.  (This does NOT need to be encoded, as the XML already is!)
             # (but check to make sure there's actually XML data there!)
-            if xmlData != None:
-                f.write('%s' % xmlData.rstrip())
+            if XMLText != None:
+                f.write('%s' % XMLText.rstrip())
             # ... add an extra line break here!
             f.write('\n')
             f.write('      </XMLText>\n')
@@ -1014,12 +1023,19 @@ class XMLExport(Dialogs.GenForm):
 ##                progress.Refresh()
 
                 # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
-                xmlData = XMLText[39:]
+                # Due to changes in the header across wxPython versions, we need to use a regular expression.
+                # xmlData = XMLText[39:]
+
+                # Match "<?xml" plus any number of characters that are not ">" plus ">" plus whitespace
+                REGEX = "<\?xml[^>]*>[\s]*"
+                regexCompiled = re.compile(REGEX)
+                regexSearch = regexCompiled.search(XMLText)
+                xmlData = XMLText[regexSearch.end():]
 
             # now simply write the XML data to the file.  (This does NOT need to be encoded, as the XML already is!)
             # (but check to make sure there's actually XML data there!)
-            if xmlData != None:
-                f.write('%s' % xmlData.rstrip())
+            if XMLText != None:
+                f.write('%s' % XMLText.rstrip())
             # ... add an extra line break here!
             f.write('\n')
             f.write('      </XMLText>\n')
@@ -1298,7 +1314,14 @@ class XMLExport(Dialogs.GenForm):
                 progress.Refresh()
 
                 # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
-                rtfData = RTFText[39:]
+                # Due to changes in the header across wxPython versions, we need to use a regular expression.
+                # rtfData = RTFText[39:]
+
+                # Match "<?xml" plus any number of characters that are not ">" plus ">" plus whitespace
+                REGEX = "<\?xml[^>]*>[\s]*"
+                regexCompiled = re.compile(REGEX)
+                regexSearch = regexCompiled.search(RTFText)
+                rtfData = RTFText[regexSearch.end():]
 
             elif (type(RTFText).__name__ != 'NoneType') and (len(RTFText) > 6) and (RTFText[:6].upper() == '{\\RTF1'):
 
@@ -1323,7 +1346,14 @@ class XMLExport(Dialogs.GenForm):
                     rtfData = self.invisibleRTC.GetFormattedSelection('XML')
 
                     # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
-                    rtfData = rtfData[39:]
+                    # Due to changes in the header across wxPython versions, we need to use a regular expression.
+                    # rtfData = rtfData[39:]
+
+                    # Match "<?xml" plus any number of characters that are not ">" plus ">" plus whitespace
+                    REGEX = "<\?xml[^>]*>[\s]*"
+                    regexCompiled = re.compile(REGEX)
+                    regexSearch = regexCompiled.search(rtfData)
+                    rtfData = rtfData[regexSearch.end():]
 
                 # If we're using the StyledTextCtrl ...
                 else:
@@ -1375,7 +1405,14 @@ class XMLExport(Dialogs.GenForm):
                     rtfData = self.invisibleRTC.GetFormattedSelection('XML')
 
                     # If XML, we can just use it as is after we strip off the XML Header Line, which breaks XML.
-                    rtfData = rtfData[39:]
+                    # Due to changes in the header across wxPython versions, we need to use a regular expression.
+                    # rtfData = rtfData[39:]
+
+                    # Match "<?xml" plus any number of characters that are not ">" plus ">" plus whitespace
+                    REGEX = "<\?xml[^>]*>[\s]*"
+                    regexCompiled = re.compile(REGEX)
+                    regexSearch = regexCompiled.search(rtfData)
+                    rtfData = rtfData[regexSearch.end():]
 
             # now simply write the RTF data to the file.  (This does NOT need to be encoded, as the RTF already is!)
             # (but check to make sure there's actually RTF data there!)
