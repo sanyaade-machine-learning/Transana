@@ -8953,7 +8953,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                                 noteParentNodeType = self.GetPyData(self.GetItemParent(sel)).nodetype
                                 if noteParentNodeType == 'LibraryNode':
                                     noteNodeType = 'LibraryNoteNode'
-                                    nodeType = 'Libraries'
+                                    nodeType = 'Library'
                                 elif noteParentNodeType == 'EpisodeNode':
                                     noteNodeType = 'EpisodeNoteNode'
                                     nodeType = 'Episode'
