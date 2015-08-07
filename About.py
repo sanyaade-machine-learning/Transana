@@ -258,6 +258,10 @@ class AboutBox(wx.Dialog):
                 dbCursor.execute(query)
                 seriesCount = dbCursor.fetchall()[0][0]
                 
+                query = "SELECT COUNT(DocumentNum) FROM Documents2"
+                dbCursor.execute(query)
+                documentCount = dbCursor.fetchall()[0][0]
+                
                 query = "SELECT COUNT(EpisodeNum) FROM Episodes2"
                 dbCursor.execute(query)
                 episodeCount = dbCursor.fetchall()[0][0]
@@ -273,6 +277,10 @@ class AboutBox(wx.Dialog):
                 query = "SELECT COUNT(CollectNum) FROM Collections2"
                 dbCursor.execute(query)
                 collectionCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(quoteNum) FROM Quotes2"
+                dbCursor.execute(query)
+                quoteCount = dbCursor.fetchall()[0][0]
                 
                 query = "SELECT COUNT(clipNum) FROM Clips2"
                 dbCursor.execute(query)
@@ -315,22 +323,25 @@ class AboutBox(wx.Dialog):
                 filterCount = dbCursor.fetchall()[0][0]
 
                 tmpStr = """Data Records:
-  Series: %s
+  Libraries: %s
+  Documents: %s
   Episodes: %s
   Episode Transcripts: %s
   Collections: %s
+  Quotes: %s
   Clips: %s
   Clip Transcripts: %s
   Snapshots: %s
   Notes:  %s
   Keywords: %s
-  Clip Keywords: %s
+  Quote/Clip Keywords: %s
   Snapshot Keywords: %s
   Snapshot Keyword Styles: %s
   Additional Videos:  %s
   Filters:  %s
   Core Data: %s\n  """
-                data = (seriesCount, episodeCount, transcriptCount, collectionCount, clipCount, clipTranscriptCount,
+                data = (seriesCount, documentCount, episodeCount, transcriptCount, collectionCount, quoteCount,
+                        clipCount, clipTranscriptCount,
                         snapshotCount, noteCount, keywordCount, clipKeywordCount, snapshotKeywordCount,
                         snapshotKeywordStylesCount, addVidCount, filterCount, coreDataCount)
                 
