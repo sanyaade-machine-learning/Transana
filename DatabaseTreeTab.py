@@ -8716,8 +8716,10 @@ class _DBTreeCtrl(wx.TreeCtrl):
             try:
                 # Get the Object number (so it will persist after the Object is deleted)
                 tmpObjNum = tmpObj.number
-                # Get the Source Document's Number
-                tmpObjSourceNum = tmpObj.source_document_num
+                # If we have a Quote object ...
+                if isinstance(tmpObj, Quote.Quote):
+                    # Get the Source Document's Number
+                    tmpObjSourceNum = tmpObj.source_document_num
                 # Try to delete the Object, initiating a Transaction
                 delResult = tmpObj.db_delete(1)
                 # If successful, remove the Object Node from the Database Tree
