@@ -44,7 +44,7 @@ class OptionsSettings(wx.Dialog):
         """ Initialize the Program Options Dialog Box """
         self.parent = parent
         self.lab = lab
-        dlgWidth = 550
+        dlgWidth = 600
         # The Configuration Options dialog needs to be a different on different platforms, and
         # if we're showing the LAB version's initial configuration, we need a bit more room.
         if 'wxMSW' in wx.PlatformInfo:
@@ -54,7 +54,6 @@ class OptionsSettings(wx.Dialog):
                 dlgHeight = 445
         else:
             if self.lab:
-                dlgWidth = 580
                 dlgHeight = 395
             else:
                 dlgHeight = 345
