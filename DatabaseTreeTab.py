@@ -11187,7 +11187,7 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     menu.Enable(menu.FindItem(_('Delete Keyword Example')), True)
                     
             elif sel_item_data.nodetype in ['NoteNode', 'LibraryNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode', \
-                                            'ClipNoteNode', 'SnapshotNoteNode', 'DocumentNoteNode']:
+                                            'ClipNoteNode', 'SnapshotNoteNode', 'DocumentNoteNode', 'QuoteNoteNode']:
                 # If there are multiple items selected ...
                 if len(self.GetSelections()) > 1:
                     # Enable Cut menu item
