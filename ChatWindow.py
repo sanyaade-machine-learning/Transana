@@ -1460,7 +1460,7 @@ class ChatWindow(wx.Frame):
 
                             # If we're deleting a Note Node ...
                             elif nodelist[0] in ['LibraryNoteNode', 'EpisodeNoteNode', 'TranscriptNoteNode', 'CollectionNoteNode',
-                                                 'ClipNoteNode', 'SnapshotNoteNode', 'DocumentNoteNode']:
+                                                 'ClipNoteNode', 'SnapshotNoteNode', 'DocumentNoteNode', 'QuoteNoteNode']:
                                 # ... and the Notes Browser is open, we need to delete the Note from there too.
                                 if self.ControlObject.NotesBrowserWindow != None:
                                     # Determine the Note Browser's root node based on the type of Note we're deleting
@@ -1478,6 +1478,8 @@ class ChatWindow(wx.Frame):
                                         nodeType = 'Snapshot'
                                     elif nodelist[0] == 'DocumentNoteNode':
                                         nodeType = 'Document'
+                                    elif nodelist[0] == 'QuoteNoteNode':
+                                        nodeType = 'Quote'
                                     else:
                                         nodeType = None
                                     # Signal the Notes Browser to delete the Note.  Shorten the node list by 1 element
