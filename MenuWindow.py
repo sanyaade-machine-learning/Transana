@@ -472,12 +472,13 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         
         # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  "&Media Conversion" works for 2.50.
         #        For 2.60, let's go with "Snapshot".  For 2.61, we'll use "SSL Client Key File"
+        #        For 3.00, let's use "Libraries".
         # If you update this, also update the phrase
         # below in the OnOptionsLanguage method.)
         
-        if (outofdateLanguage != '') and ("SSL Client Key File" == _("SSL Client Key File")):
+        if (outofdateLanguage != '') and ("Libraries" == _("Libraries")):
             # If not, display an information message.
-            dlg = wx.MessageDialog(None, languageErrorPrompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
+            dlg = Dialogs.InfoDialog(None, languageErrorPrompt)
             dlg.ShowModal()
             dlg.Destroy()
 
@@ -1776,10 +1777,10 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             #        For 2.60, let's go with "Snapshot".  For 2.61, we'll use "SSL Client Key File".
             # If you update this, also update the phrase above in the __init__ method.)
             
-            if (outofdateLanguage != '') and ("SSL Client Key File" == _("SSL Client Key File")):
+            if (outofdateLanguage != '') and ("Libraries" == _("Libraries")):
                 # If not, display an information message.
                 prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
-                dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
+                dlg = Dialogs.InfoDialog(None, prompt)
                 dlg.ShowModal()
                 dlg.Destroy()
 

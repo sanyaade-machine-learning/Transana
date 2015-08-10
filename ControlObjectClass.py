@@ -876,7 +876,7 @@ class ControlObject(object):
                 # ... load the Library ...
                 tmpLibrary = Library.Library(currentObj.library_num)
                 # ... set the Transcript Window title accordingly ...
-                self.TranscriptWindow.SetTitle(_('Document') + u' - ' + tmpLibrary.id + u' > ' + currentObj.id)
+                self.TranscriptWindow.SetTitle(_('Document').decode('utf8') + u' - ' + tmpLibrary.id + u' > ' + currentObj.id)
                 # ... and set the object to work with to the original Document
                 tmpCurrentObj = currentObj
             # If we have a Episode Object ...
@@ -896,15 +896,16 @@ class ControlObject(object):
                 # ... and set the object to work with to the EPISODE
                 tmpCurrentObj = tmpEpisode
                 # ... set the Transcript Window title accordingly ...
-                self.TranscriptWindow.SetTitle(_('Transcript') + u' - ' + tmpLibrary.id + u' > ' + tmpEpisode.id + u' > ' + currentObj.id)
+                prompt = unicode('%s - %s > %s > %s', 'utf8')
+                self.TranscriptWindow.SetTitle(prompt % (_('Transcript').decode('utf8'), tmpLibrary.id, tmpEpisode.id, currentObj.id))
             elif isinstance(currentObj, Quote.Quote):
                 # ... set the Transcript Window title accordingly ...
-                self.TranscriptWindow.SetTitle(_('Quote') + u' - ' + currentObj.GetNodeString(True))
+                self.TranscriptWindow.SetTitle(_('Quote').decode('utf8') + u' - ' + currentObj.GetNodeString(True))
                 # ... and set the object to work with to the original Document
                 tmpCurrentObj = currentObj
             elif isinstance(currentObj, Clip.Clip):
                 # ... set the Transcript Window title accordingly ...
-                self.TranscriptWindow.SetTitle(_('Clip') + u' - ' + currentObj.GetNodeString(True))
+                self.TranscriptWindow.SetTitle(_('Clip').decode('utf8') + u' - ' + currentObj.GetNodeString(True))
                 # ... and set the object to work with to the original Clip
                 tmpCurrentObj = currentObj
             elif isinstance(currentObj, Transcript.Transcript) and (currentObj.clip_num > 0):
@@ -914,7 +915,7 @@ class ControlObject(object):
                     # ... and set the object to work with to the CLIP
                     tmpCurrentObj = tmpClip
                     # ... set the Transcript Window title accordingly ...
-                    self.TranscriptWindow.SetTitle(_('Clip') + u' - ' + tmpClip.GetNodeString(True))
+                    self.TranscriptWindow.SetTitle(_('Clip').decode('utf8') + u' - ' + tmpClip.GetNodeString(True))
                 except TransanaExceptions.RecordNotFoundError, e:
                     # If the record is not found, that's because ANOTHER USER has deleted it!!
                     # We have to fake it here!
@@ -1048,7 +1049,7 @@ class ControlObject(object):
         if not windowOpen:
             # Start Exception Handling
             try:
-                title = _("Snapshot") + u' - ' + snapshot.GetNodeString(True)
+                title = _("Snapshot").decode('utf8') + u' - ' + snapshot.GetNodeString(True)
                 # ... create a new Snapshot Window ...
                 snapshotDlg = SnapshotWindow.SnapshotWindow(self.MenuWindow, -1, title, snapshot)
                 # ... and add this to the list of open Snapshot Windows

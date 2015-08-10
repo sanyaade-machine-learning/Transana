@@ -1087,7 +1087,7 @@ class SnapshotWindow(wx.Frame):
         self.canvas.ClearAll()
 
         # Change the Window Name
-        self.SetTitle(_("Snapshot") + u' - ' + self.obj.GetNodeString(True))
+        self.SetTitle(_("Snapshot").decode('utf8') + u' - ' + self.obj.GetNodeString(True))
 
         # If the image that is passed in has a defined window size ...
         if self.obj.image_size[0] > 0:
