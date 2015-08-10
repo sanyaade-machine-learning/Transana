@@ -3178,7 +3178,7 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
         data = (collectNum, episodeNum, clipStart, clipStop)
 
         if DEBUG:
-            tmpDlg = wx.MessageDialog(None, query % data, "Hello!")
+            tmpDlg = Dialogs.InfoDialog(None, query % data)
             tmpDlg.ShowModal()
             tmpDlg.Destroy()
 

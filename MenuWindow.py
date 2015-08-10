@@ -1765,7 +1765,9 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
                 self.presLan_en.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             else:
-                wx.MessageDialog(None, "Unknown Language", "Unknown Language").ShowModal()
+                dlg = Dialogs.InfoDialog(None, "Unknown Language")
+                dlg.ShowModal()
+                dlg.Destroy()
 
                 lang = wx.LANGUAGE_ENGLISH
                 TransanaGlobal.configData.language = 'en'

@@ -654,7 +654,7 @@ that would corrupt the record that is currently locked by %s.  Please try again 
         RecordLockedError exception if record is locked and unable to be
         deleted."""
         tempstr = "Delete Keyword object has not been implemented."
-        dlg = wx.MessageDialog(TransanaGlobal.menuWindow, tempstr, "Keyword Object", wx.OK | wx.ICON_EXCLAMATION)
+        dlg = Dialogs.InfoDialog(TransanaGlobal.menuWindow, tempstr)
         dlg.ShowModal()
         dlg.Destroy()
 

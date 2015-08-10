@@ -767,7 +767,7 @@ class XMLImport(Dialogs.GenForm):
                                        tr.number = -1
 
                                if DEBUG and (objectType == 'Transcript') and False:
-                                   tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
+                                   tmpdlg = Dialogs.InfoDialog(self, currentObj.__repr__())
                                    tmpdlg.ShowModal()
                                    tmpdlg.Destroy()
                                elif DEBUG and (objectType == 'Transcript'):
@@ -1015,7 +1015,7 @@ class XMLImport(Dialogs.GenForm):
                                print sys.exc_info()[0], sys.exc_info()[1]
                                print
                                if (objectType == 'Transcript'):
-                                   tmpdlg = wx.MessageDialog(self, currentObj.__repr__())
+                                   tmpdlg = Dialogs.InfoDialog(self, currentObj.__repr__())
                                    tmpdlg.ShowModal()
                                    tmpdlg.Destroy()
                                import traceback

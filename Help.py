@@ -63,7 +63,8 @@ class Help(object):
 
         if DEBUG:
             msg = "Help.__init__():  programDir = %s" % programDir
-            tmpDlg = wx.MessageDialog(None, msg)
+            import Dialogs
+            tmpDlg = Dialogs.InfoDialog(None, msg)
             tmpDlg.ShowModal()
             tmpDlg.Destroy()
 
