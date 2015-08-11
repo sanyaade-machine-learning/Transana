@@ -604,10 +604,12 @@ class DataTreeDropTarget(wx.PyDropTarget):
                                 if self.dropData.nodetype == 'LibraryNode':
                                     # Load the dropped-on Library
                                     tmpLibrary = Library.Library(self.dropData.recNum)
-                                    # Now get a list of all Documents in the Library and iterate through them
-                                    for tempDocumentNum, tempDocumentID, tempLibraryNum in DBInterface.list_of_documents(tmpLibrary.number):
-                                        # ... propagating the new Document Keywords to all Quotes from that Document
-                                        TransanaGlobal.menuWindow.ControlObject.PropagateObjectKeywords(_('Document'), tempDocumentNum, kwList)
+                                    # If we're not in the Standard version ...
+                                    if TransanaConstants.proVersion:
+                                        # Now get a list of all Documents in the Library and iterate through them
+                                        for tempDocumentNum, tempDocumentID, tempLibraryNum in DBInterface.list_of_documents(tmpLibrary.number):
+                                            # ... propagating the new Document Keywords to all Quotes from that Document
+                                            TransanaGlobal.menuWindow.ControlObject.PropagateObjectKeywords(_('Document'), tempDocumentNum, kwList)
                                     # Now get a list of all Episodes in the Library and iterate through them
                                     for tempEpisodeNum, tempEpisodeID, tempLibraryNum in DBInterface.list_of_episodes_for_series(tmpLibrary.id):
                                         # Propagate the Keyword List to each Episode in the Library
@@ -1512,32 +1514,34 @@ def DropKeyword(parent, sourceData, targetType, targetName, targetRecNum, target
         try:
             # Lock the Library Record, just to be on the safe side (Is this necessary??  I don't think so, but maybe that can confirm that all episodes are available.)
             tempLibrary.lock_record()
-            # Now get a list of all Documents in the Library and iterate through them
-            for tempDocumentNum, tempDocumentID, tempLibraryNum in DBInterface.list_of_documents(tempLibrary.number):
-                # Load the Document Record
-                tempDocument = Document.Document(num=tempDocumentNum)
-                try:
-                    # Lock the Document Record
-                    tempDocument.lock_record()
-                    # Add the Keyword to the Episode
-                    tempDocument.add_keyword(sourceData.parent, sourceData.text)
-                    # If we're using confirmations (only have ONE operation) ...
-                    if confirmations:
-                        # ... Check to see if there are keywords to be propagated
-                        parent.parent.ControlObject.PropagateObjectKeywords(_('Document'), tempDocument.number, tempDocument.keyword_list)
-                    # Save the Document
-                    tempDocument.db_save()
-                    # Now let's communicate with other Transana instances if we're in Multi-user mode
-                    if not TransanaConstants.singleUserVersion:
-                        msg = 'Document %d' % tempDocument.number
-                        if TransanaGlobal.chatWindow != None:
-                            # Send the "Update Keyword List" message
-                            TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
-                    # Unlock the Document Record
-                    tempDocument.unlock_record()
-                # Handle "RecordLockedError" exception
-                except TransanaExceptions.RecordLockedError, e:
-                    TransanaExceptions.ReportRecordLockedException(_("Document"), tempDocument.id, e)
+            # If we're not in the Standard version ...
+            if TransanaConstants.proVersion:
+                # Now get a list of all Documents in the Library and iterate through them
+                for tempDocumentNum, tempDocumentID, tempLibraryNum in DBInterface.list_of_documents(tempLibrary.number):
+                    # Load the Document Record
+                    tempDocument = Document.Document(num=tempDocumentNum)
+                    try:
+                        # Lock the Document Record
+                        tempDocument.lock_record()
+                        # Add the Keyword to the Episode
+                        tempDocument.add_keyword(sourceData.parent, sourceData.text)
+                        # If we're using confirmations (only have ONE operation) ...
+                        if confirmations:
+                            # ... Check to see if there are keywords to be propagated
+                            parent.parent.ControlObject.PropagateObjectKeywords(_('Document'), tempDocument.number, tempDocument.keyword_list)
+                        # Save the Document
+                        tempDocument.db_save()
+                        # Now let's communicate with other Transana instances if we're in Multi-user mode
+                        if not TransanaConstants.singleUserVersion:
+                            msg = 'Document %d' % tempDocument.number
+                            if TransanaGlobal.chatWindow != None:
+                                # Send the "Update Keyword List" message
+                                TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
+                        # Unlock the Document Record
+                        tempDocument.unlock_record()
+                    # Handle "RecordLockedError" exception
+                    except TransanaExceptions.RecordLockedError, e:
+                        TransanaExceptions.ReportRecordLockedException(_("Document"), tempDocument.id, e)
             # Now get a list of all Episodes in the Library and iterate through them
             for tempEpisodeNum, tempEpisodeID, tempLibraryNum in DBInterface.list_of_episodes_for_series(tempLibrary.id):
                 # Load the Episode Record
@@ -2298,8 +2302,10 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                     # ... and remove the first entry 
                     collectionsToCopy = collectionsToCopy[1:]
 
-                    # We need a list of all the quotes in the Source Collection
-                    quoteList = DBInterface.list_of_quotes_by_collectionnum(sourceCollection.number)
+                    # If we're NOT in Standard ...
+                    if TransanaConstants.proVersion:
+                        # We need a list of all the quotes in the Source Collection
+                        quoteList = DBInterface.list_of_quotes_by_collectionnum(sourceCollection.number)
                     # We need a list of all the clips in the Source Collection
                     clipList = DBInterface.list_of_clips_by_collection(sourceCollection.id, sourceCollection.parent)
                     # Start exception handling
@@ -2353,12 +2359,14 @@ def ProcessPasteDrop(treeCtrl, sourceData, destNode, action, confirmations=True)
                         # Create a dictionary of objects which uses the sort_order as the key!!
                         copyOrder = {}
 
-                        # Iterate through the list of Quotes
-                        for quote in quoteList:
-                            # Load the next Quote from the list
-                            tempQuote = Quote.Quote(num=quote[0])
-                            # Add the Quote to the sortOrder dictionary
-                            copyOrder[tempQuote.sort_order] = tempQuote
+                        # If Quotes are supported ...
+                        if TransanaConstants.proVersion:
+                            # Iterate through the list of Quotes
+                            for quote in quoteList:
+                                # Load the next Quote from the list
+                                tempQuote = Quote.Quote(num=quote[0])
+                                # Add the Quote to the sortOrder dictionary
+                                copyOrder[tempQuote.sort_order] = tempQuote
 
                         # Iterate through the list of Clips
                         for clip in clipList:

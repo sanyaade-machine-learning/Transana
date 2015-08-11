@@ -482,22 +482,19 @@ class Document(DataObject.DataObject):
                         c.execute(query, values)
                     else:
 
-                        print "Document.db_save():  QuotePositions not BULK inserted for sqlite yet!!"
+#                        print "Document.db_save():  QuotePositions not BULK inserted for sqlite yet!!"
 
                         query = "INSERT INTO QuotePositions2 (QuoteNum, DocumentNum, StartChar, EndChar) VALUES "
                         query += "(%s, %s, %s, %s) "
                         for key in self.quote_dict.keys():
                             values = (key, self.number, self.quote_dict[key][0], self.quote_dict[key][1])
 
-                            print
-                            print
-                            print "Document.db_save():"
-                            print query
-                            print values
-                            print
-                            print query % values
-                            print
-                            print
+#                            print
+#                            print
+#                            print "Document.db_save():"
+#                            print query
+#                            print values
+#                            print
 
                             # Adjust the query for sqlite if needed
                             query = DBInterface.FixQuery(query)

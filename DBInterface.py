@@ -2462,14 +2462,20 @@ def dictionary_of_documents_and_episodes(library=None):
     """ Create a Dictionary Object containing info on all the Documents and Episodes in a Library """
     # Initialize a Dictionary
     d = {}
+    # Initialize docs to an empty list in case we're in the Standard version.
+    docs = []
     if library != None:
-        # Get all the Documents for this Library
-        docs = list_of_documents(library.number)
+        # Don't return Documents for the Standard version!
+        if TransanaConstants.proVersion:
+            # Get all the Documents for this Library
+            docs = list_of_documents(library.number)
         # Get all the Episodes for this Library    
         episodes = list_of_episodes_for_series(library.id)
     else:
-        # Get all the Documents for this Library
-        docs = list_of_documents()
+        # Don't return Documents for the Standard version!
+        if TransanaConstants.proVersion:
+            # Get all the Documents for this Library
+            docs = list_of_documents()
         # Get all the Episodes for this Library    
         episodes = list_of_episodes()
     # Iterate through the Document list

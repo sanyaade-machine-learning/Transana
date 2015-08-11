@@ -27,20 +27,20 @@ import TransanaGlobal
 import TransanaImages
 import Library
 import LibraryPropertiesForm
+import Document
 import Episode
 import EpisodePropertiesForm
 import Transcript
 import TranscriptPropertiesForm
 import Collection
 import CollectionPropertiesForm
+import Quote
 import Clip
+import Snapshot
 import ClipPropertiesForm
 if TransanaConstants.proVersion:
-    import Document
     import DocumentPropertiesForm
-    import Quote
     import QuotePropertiesForm
-    import Snapshot
     import SnapshotPropertiesForm
 import Note
 import NotePropertiesForm
