@@ -387,7 +387,7 @@ class ConfigData(object):
         # Load the databaseList, if it exists
         # NOTE:  if using Unicode, this MUST be a String object!
         if TransanaConstants.singleUserVersion:
-            dbList = str(config.Read('/2.0/DatabaseListSU', ''))
+            dbList = str(config.Read('/3.0/DatabaseListSU', ''))
         else:
             dbList = str(config.Read('/2.0/DatabaseListMU', ''))
 
@@ -523,7 +523,7 @@ class ConfigData(object):
             print "ConfigData.SaveConfiguration():  tmpDbList = '%s'" % tmpDbList
 
         if TransanaConstants.singleUserVersion:
-            config.Write('/2.0/DatabaseListSU', tmpDbList)
+            config.Write('/3.0/DatabaseListSU', tmpDbList)
         else:
             config.Write('/2.0/DatabaseListMU', tmpDbList)
 
