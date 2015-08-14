@@ -78,7 +78,7 @@ if demoVersion:
     maxEpisodes = 5
     maxEpisodeTranscripts = 5
     maxDocuments = 5
-    maxClips = 30
+    maxClips = 20
     maxQuotes = 20
     maxSnapshots = 5
     maxKeywords = 15
@@ -87,7 +87,7 @@ if demoVersion:
 t1 = t2 = t3 = t4 = t5 = t6 = t7 = 0
 
 # Define the maximum number of Transcript Windows that can be opened
-if proVersion:
+if proVersion and not demoVersion:
     maxTranscriptWindows = 5
 else:
     maxTranscriptWindows = 1

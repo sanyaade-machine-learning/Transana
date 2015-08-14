@@ -42,7 +42,7 @@ import sys
 import string
 
 # Define the maximum number of video files allowed.  (This could change!)
-if TransanaConstants.proVersion:
+if TransanaConstants.proVersion and not TransanaConstants.demoVersion:
     MEDIAFILEMAX = 4
 else:
     MEDIAFILEMAX = 1

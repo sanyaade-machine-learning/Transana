@@ -10807,7 +10807,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         # there are fewer that TransanaConstants.maxTranscriptWindows Transcript Windows already open ...
                         if isinstance(self.parent.ControlObject.TranscriptWindow.GetCurrentObject(), Document.Document) and \
                            (not(sel_item_data.recNum in openDocuments)) and \
-                           (len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) < TransanaConstants.maxTranscriptWindows):
+                           (len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) < TransanaConstants.maxTranscriptWindows) and \
+                           not TransanaConstants.demoVersion:
                             # ... enable the Additional Transcript menu
                             menu.Enable(menu.FindItem(_("Open Additional Document")), True)
                         # if ANY of those conditions fails ...
@@ -10839,7 +10840,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     if TransanaConstants.proVersion:
                         # Determine if multiple transcripts option should be enabled
                         trList = DBInterface.list_transcripts(self.GetItemText(self.GetItemParent(sel_item)), self.GetItemText(sel_item))
-                        if len(trList) > 1:
+                        if (len(trList) > 1) and \
+                           not TransanaConstants.demoVersion:
                             menu.Enable(menu.FindItem(_("Open Multiple Transcripts")), True)
                         else:
                             menu.Enable(menu.FindItem(_("Open Multiple Transcripts")), False)
@@ -10870,7 +10872,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                         if (isinstance(self.parent.ControlObject.TranscriptWindow.GetCurrentObject(), Transcript.Transcript)) and \
                            (self.parent.ControlObject.TranscriptWindow.GetCurrentObject().clip_num == 0) and \
                            (self.parent.ControlObject.TranscriptWindow.GetCurrentObject().episode_num == sel_item_data.parent) and \
-                           (len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) < TransanaConstants.maxTranscriptWindows):
+                           (len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) < TransanaConstants.maxTranscriptWindows) and \
+                           not TransanaConstants.demoVersion:
                             # ... enable the Additional Transcript menu
                             menu.Enable(menu.FindItem(_("Open Additional Transcript")), True)
                             # ... but let's check that it's not already loaded!  Iterate through the open Splitter Panes ...
@@ -10966,7 +10969,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     if TransanaConstants.proVersion:
                         # Determine if the Add Multi-transcript Clip menu item should be enabled
                         if isinstance(self.parent.ControlObject.TranscriptWindow.GetCurrentObject(), Transcript.Transcript) and \
-                           len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) > 1:
+                           len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) > 1 and \
+                           not TransanaConstants.demoVersion:
                             menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), True)
                         else:
                             menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), False)
@@ -11007,7 +11011,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     if TransanaConstants.proVersion:
                         # Determine if the Add Multi-transcript Clip menu item should be enabled
                         if isinstance(self.parent.ControlObject.TranscriptWindow.GetCurrentObject(), Transcript.Transcript) and \
-                           len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) > 1:
+                           len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) > 1 and \
+                           not TransanaConstants.demoVersion:
                             menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), True)
                         else:
                             menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), False)
@@ -11053,7 +11058,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     if TransanaConstants.proVersion:
                         # Determine if the Add Multi-transcript Clip menu item should be enabled
                         if isinstance(self.parent.ControlObject.TranscriptWindow.GetCurrentObject(), Transcript.Transcript) and \
-                           len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) > 1:
+                           len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) > 1 and \
+                           not TransanaConstants.demoVersion:
                             menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), True)
                         else:
                             menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), False)
@@ -11107,7 +11113,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     if TransanaConstants.proVersion:
                         # Determine if the Add Multi-transcript Clip menu item should be enabled
                         if isinstance(self.parent.ControlObject.TranscriptWindow.GetCurrentObject(), Transcript.Transcript) and \
-                           len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) > 1:
+                           len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) > 1 and \
+                           not TransanaConstants.demoVersion:
                             menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), True)
                         else:
                             menu.Enable(menu.FindItem(_('Add Multi-transcript Clip')), False)
@@ -11164,7 +11171,8 @@ class _DBTreeCtrl(wx.TreeCtrl):
                     # Determine if the Add Multi-transcript Clip menu item should be enabled
                     if isinstance(self.parent.ControlObject.TranscriptWindow.GetCurrentObject(), Transcript.Transcript) and \
                        self.parent.ControlObject.TranscriptWindow.GetCurrentObject().clip_num == 0 and \
-                       len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) > 1:
+                       len(self.parent.ControlObject.TranscriptWindow.nb.GetCurrentPage().GetChildren()) > 1 and \
+                       not TransanaConstants.demoVersion:
                         menu.Enable(menu.FindItem(_('Create Multi-transcript Quick Clip')), True)
                     else:
                         menu.Enable(menu.FindItem(_('Create Multi-transcript Quick Clip')), False)
