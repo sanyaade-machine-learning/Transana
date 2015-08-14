@@ -517,6 +517,28 @@ class TranscriptionUI(wx.Frame):
         # Load the transcript
         self.dlg.editor.load_transcript(transcriptObj)
 
+        # if we're in the Demo version ...
+        if TransanaConstants.demoVersion:
+
+            # ... and if the Document / Transcript length is over 10,000 characters ...
+            if self.dlg.editor.GetLength() > 10000:
+                # ... go into Edit mode ...
+                self.dlg.editor.SetReadOnly(False)
+                # ... select everything beyond the 10,000th character ...
+                self.dlg.editor.SetSelection(9999, self.dlg.editor.GetLength() - 1)
+                # ... delete it from the control ...
+                self.dlg.editor.DeleteSelection()
+                # ... go back to Read Only mode ...
+                self.dlg.editor.SetReadOnly(True)
+                # ... and forget we've made any edits!
+                self.dlg.editor.DiscardEdits()
+
+                # Tell the user we've truncated the document and that they shouldn't save!
+                msg = _("The Transana Demonstration limits the size of Documents and Transcripts.\nThis document has been truncated.  You may lose data if you try to edit it.")
+                dlg = Dialogs.InfoDialog(self.dlg, msg)
+                dlg.ShowModal()
+                dlg.Destroy()
+
         # Enable the Toolbar
         self.dlg.toolbar.Enable(True)
         # Enable the Search
