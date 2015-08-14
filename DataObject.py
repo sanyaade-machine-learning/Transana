@@ -320,7 +320,7 @@ class DataObject(object):
 
     def _db_start_save(self):
         """Return 0 if creating new record, 1 if updating an existing one."""
-        tname = type(self).__name__
+        tname = _(type(self).__name__)
         # You can save a Clip Transcript with a blank Transcript ID!
         if (self.id == "") and (tname != 'Transcript'):
             if 'unicode' in wx.PlatformInfo:
