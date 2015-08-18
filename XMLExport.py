@@ -1917,7 +1917,10 @@ class XMLExport(Dialogs.GenForm):
                 FilterData = filterDataList
 
             f.write('      <FilterData>\n')
-            f.write('        %s\n' % self.Escape(FilterData))
+            if isinstance(FilterData, int):
+                f.write('        %s\n' % FilterData)
+            else:
+                f.write('        %s\n' % self.Escape(FilterData))
             f.write('      </FilterData>\n')
             f.write('    </Filter>\n')
 

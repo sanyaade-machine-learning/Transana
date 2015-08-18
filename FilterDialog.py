@@ -1187,6 +1187,13 @@ class FilterDialog(wx.Dialog):
                 
                 # We may get multiple records, one for each tab on the Filter Dialog.
                 for (filterDataType, filterData) in DBCursor.fetchall():
+
+                    # FilterData always used to be either an array or a string under MySQL.  Now, 
+                    # under SQLite, we get integers some of the time.  It's easiest to just convert
+                    # them to strings here.
+                    if isinstance(filterData, int):
+                        filterData = "%s" % filterData
+
                     # If the data is for the Episodes Tab (filterDataType 1) ...
                     if filterDataType == 1:
                         # Get the current Episode data from the Form
