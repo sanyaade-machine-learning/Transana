@@ -115,7 +115,7 @@ class QuotePropertiesForm(Dialogs.GenForm):
             self.mergeQuotes.InsertColumn(0, _('Quote Name'))
             self.mergeQuotes.InsertColumn(1, _('Collection'))
             self.mergeQuotes.InsertColumn(2, _('Start Character'))
-            self.mergeQuotes.InsertColumn(3, _('End Characer'))
+            self.mergeQuotes.InsertColumn(3, _('End Character'))
             self.mergeQuotes.SetColumnWidth(0, 244)
             self.mergeQuotes.SetColumnWidth(1, 244)
             # ... and populate the Merge Quotes list from the mergeList data
