@@ -20,7 +20,7 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 # Patch sent by David Fraser to eliminate need for mx module
 
 DEBUG = False
-DEBUG_Exceptions = False
+DEBUG_Exceptions = True
 if DEBUG or DEBUG_Exceptions:
     print "XMLImport DEBUG is ON!"
 
@@ -1060,7 +1060,8 @@ class XMLImport(Dialogs.GenForm):
                                    # One specific error we need to trap is bogus Transcript records that have lost
                                    # their parents.  This happened to at least one user.
                                    if objectType == 'Transcript':
-                                       msg = msg + '\n\n' + _('The Transcript is for')
+
+                                       msg = msg + u'\n\n' + unicode(_('The Transcript is for'), 'utf8')
                                        if currentObj.episode_num > 0:
                                             if 'unicode' in wx.PlatformInfo:
                                                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.

@@ -153,7 +153,7 @@ MENU_HELP_MANUAL                =  wx.ID_HELP   # Constant used to improve Mac s
 MENU_HELP_TUTORIAL              =  wx.NewId()
 MENU_HELP_NOTATION              =  wx.NewId()
 MENU_HELP_WEBSITE               =  wx.NewId()
-MENU_HELP_FUND                  =  wx.NewId()
+# MENU_HELP_FUND                  =  wx.NewId()
 MENU_HELP_ABOUT                 =  wx.ID_ABOUT   # Constant used to improve Mac standardization
 
 
@@ -386,7 +386,7 @@ class MenuSetup(wx.MenuBar):
         self.helpmenu.Append(MENU_HELP_TUTORIAL, _("&Tutorial"))
         self.helpmenu.Append(MENU_HELP_NOTATION, _("Transcript &Notation"))
         self.helpmenu.Append(MENU_HELP_WEBSITE, _("&www.transana.org"))
-        self.helpmenu.Append(MENU_HELP_FUND, _("&Fund Transana"))
+        # self.helpmenu.Append(MENU_HELP_FUND, _("&Fund Transana"))
         self.helpmenu.Append(MENU_HELP_ABOUT, _("&About"))
         self.Append(self.helpmenu, _("&Help"))
 

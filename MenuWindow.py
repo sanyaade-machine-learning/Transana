@@ -666,7 +666,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         # Define handler for Help > www.transana.org
         wx.EVT_MENU(self, MenuSetup.MENU_HELP_WEBSITE, self.OnHelpWebsite)
         # Define handler for Help > Fund Transana
-        wx.EVT_MENU(self, MenuSetup.MENU_HELP_FUND, self.OnHelpFund)
+        # wx.EVT_MENU(self, MenuSetup.MENU_HELP_FUND, self.OnHelpFund)
         self.SetMenuBar(self.menuBar)
         # Define handler for Help > About
         wx.EVT_MENU(self, MenuSetup.MENU_HELP_ABOUT, self.OnHelpAbout)
@@ -2168,10 +2168,10 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         # Open the user's browser and display the web site
         webbrowser.open('http://www.transana.org/', new=True)
 
-    def OnHelpFund(self, evt):
-        """ Handler for Help > Fund Transana menu command """
-        # Open the user's browser and display the funding page
-        webbrowser.open('http://www.transana.org/about/funding.htm', new=True)
+##    def OnHelpFund(self, evt):
+##        """ Handler for Help > Fund Transana menu command """
+##        # Open the user's browser and display the funding page
+##        webbrowser.open('http://www.transana.org/about/funding.htm', new=True)
 
     def ChangeLanguages(self):
         """ Reset all Menu Labels to reflect a change in selected Language """
@@ -2301,7 +2301,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_NOTATION, _("Transcript &Notation"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_ABOUT, _("&About"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_WEBSITE, _("&www.transana.org"))
-        self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_FUND, _("&Fund Transana"))
+        # self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_FUND, _("&Fund Transana"))
 
         wx.App_SetMacHelpMenuTitleName(_("&Help"))
 

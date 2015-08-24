@@ -322,7 +322,7 @@ class DataObject(object):
         """Return 0 if creating new record, 1 if updating an existing one."""
         tname = _(type(self).__name__)
         # You can save a Clip Transcript with a blank Transcript ID!
-        if (self.id == "") and (tname != 'Transcript'):
+        if (self.id == "") and (tname != _('Transcript')):
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                 prompt = unicode(_("Cannot save a %s with a blank %s ID"), 'utf8')
