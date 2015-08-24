@@ -20,7 +20,7 @@ __author__ = 'David Woods <dwoods@wcer.wisc.edu>'
 # Patch sent by David Fraser to eliminate need for mx module
 
 DEBUG = False
-DEBUG_Exceptions = True
+DEBUG_Exceptions = False
 if DEBUG or DEBUG_Exceptions:
     print "XMLImport DEBUG is ON!"
 
