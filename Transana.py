@@ -331,7 +331,7 @@ class Transana(wx.App):
         # If we're on the Single-user version for Windows ...
         if TransanaConstants.singleUserVersion and ('wxMSW' in wx.PlatformInfo):
             # ... determine the file name for the data conversion information pickle file
-            fs = os.path.join(TransanaGlobal.configData.databaseDir, '242_250_Convert.pkl')
+            fs = os.path.join(TransanaGlobal.configData.databaseDir, '260_300_Convert.pkl')
             # If there is data in mid-conversion ...
             if os.path.exists(fs):
                 # ... get the conversion data from the Pickle File
@@ -356,19 +356,19 @@ class Transana(wx.App):
                     # Iterate through the conversion data
                     for key in self.exportedDBs:
                         # Determine the file path for the converted database
-                        newDBPath = os.path.join(TransanaGlobal.configData.databaseDir, key + '_Converted')
+                        newDBPath = os.path.join(TransanaGlobal.configData.databaseDir, key + '.db')
                         # If the converted database ALREADY EXISTS ...
                         if os.path.exists(newDBPath):
                             # ... create an error message
                             prompt = unicode(_('Database "%s" already exists.\nDatabase "%s" cannot be converted at this time.'), 'utf8')
                             # ... display an error message
-                            tmpDlg = Dialogs.ErrorDialog(None, prompt % (key + '_Converted', key))
+                            tmpDlg = Dialogs.ErrorDialog(None, prompt % (key, key))
                             tmpDlg.ShowModal()
                             tmpDlg.Destroy()
                         # If the converted database does NOT exist ...
                         else:
                             # Create the Import Database, passing the database name so the user won't be prompted for one.
-                            DBInterface.establish_db_exists(dbToOpen = key + '_Converted')
+                            DBInterface.establish_db_exists(dbToOpen = key)
 
                             # Import the database.
                             # First, create an Import Database dialog, but don't SHOW it.
@@ -390,7 +390,7 @@ class Transana(wx.App):
                             # Update the database name
                             TransanaGlobal.configData.database = key + '_Converted'
                             # Add the new (converted) database name to the database list
-                            TransanaGlobal.configData.databaseList['localhost']['dbList'].append(key + '_Converted')
+                            TransanaGlobal.configData.databaseList['localhost']['dbList'].append(key)
                             # Start exception handling
                             try:
                                 # If we're NOT in the lab version of Transana ...

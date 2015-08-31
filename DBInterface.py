@@ -1034,7 +1034,7 @@ def establish_db_exists(dbToOpen=None):
                 query = """INSERT INTO ConfigInfo
                              (KeyVal, Value)
                             VALUES
-                             ('DBVersion', '270')"""
+                             ('DBVersion', '300')"""
                 # Execute the Query
                 dbCursor.execute(query)
         else:
@@ -1042,7 +1042,7 @@ def establish_db_exists(dbToOpen=None):
             DBVersion = int(data[0][0])
 
         # Detect OLDER Database Versions
-        if (DBVersion > 0) and (DBVersion < 270):
+        if (DBVersion > 0) and (DBVersion < 300):
             # Create and report the problem
             prompt = _("This Transana Database has NOT been upgraded.\nDo you want to upgrade it?")
             dlg = Dialogs.QuestionDialog(None, prompt)
@@ -1051,9 +1051,9 @@ def establish_db_exists(dbToOpen=None):
 
             if result == wx.ID_YES:
                 # Indicate we're upgrading the DB
-                DBVersion = 270
+                DBVersion = 300
                 # update the Database Version in ConfigInfo
-                query = """UPDATE ConfigInfo SET Value = '270' WHERE KeyVal = 'DBVersion'"""
+                query = """UPDATE ConfigInfo SET Value = '300' WHERE KeyVal = 'DBVersion'"""
                 dbCursor.execute(query)
 
             else:
@@ -1065,7 +1065,7 @@ def establish_db_exists(dbToOpen=None):
                 return False
 
         # Detect NEWER Database Versions
-        if DBVersion > 270:
+        if DBVersion > 300:
             # Create and report the problem
             prompt = _("This Transana Database has been upgraded.\nYou need to upgrade your copy of Transana to work with it.")
             dlg = Dialogs.ErrorDialog(None, prompt)
@@ -1734,14 +1734,22 @@ def get_db(dbToOpen=None):
 
             # Destroy the form now that we're done with it.
             UsernameForm.Destroy()
-        # If we are passed a database name (2.42 to 2.50 conversion) ...
+        # If we are passed a database name (2.60 to 3.00 conversion) ...
         else:
-            # ... then we can skip the Username and Password Dialog
-            userName = dbToOpen.username          # TransanaGlobal.userName
-            password = dbToOpen.password          # ''
-            dbServer = dbToOpen.dbServer          # ''
-            databaseName = dbToOpen.databaseName  # dbToOpen
-            port = dbToOpen.port                  # ''
+            if isinstance(dbToOpen, unicode):
+                # ... then we can skip the Username and Password Dialog
+                userName = ''
+                password = ''
+                dbServer = ''
+                databaseName = dbToOpen
+                port = ''
+            else:
+                # ... then we can skip the Username and Password Dialog
+                userName = dbToOpen.username          # TransanaGlobal.userName
+                password = dbToOpen.password          # ''
+                dbServer = dbToOpen.dbServer          # ''
+                databaseName = dbToOpen.databaseName  # dbToOpen
+                port = dbToOpen.port                  # ''
             # For unit_test_search.py...
             if dbServer == 'DKW-Linux':
                 messageServer = 'DKW-Linux'
