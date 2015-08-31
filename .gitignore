@@ -143,3 +143,69 @@ MessageServer/TestChatWindow2.py
 MessageServer/TestChatWindow1.py
 Unit Tests/OrphanCheck.py
 unit_test_database.py
+242_250 Upgrade Utility/242_250_Conversion.py
+242_250 Upgrade Utility/ConfigData.py
+242_250 Upgrade Utility/Dialogs.py
+242_250 Upgrade Utility/GdiPlus.dll
+242_250 Upgrade Utility/LIBMYSQLD.dll
+242_250 Upgrade Utility/msvcp71.dll
+242_250 Upgrade Utility/OptionsSettings.py
+242_250 Upgrade Utility/RTFDoc.py
+242_250 Upgrade Utility/RichTextEditCtrl.py
+242_250 Upgrade Utility/TextDoc.py
+242_250 Upgrade Utility/RTFParser.py
+260_300 Upgrade Utility/260_300_Conversion.py
+242_250 Upgrade Utility/images/transana.ico
+260_300 Upgrade Utility/ConfigData.py
+260_300 Upgrade Utility/GdiPlus.dll
+260_300 Upgrade Utility/images/transana.ico
+260_300 Upgrade Utility/LIBMYSQLD.dll
+260_300 Upgrade Utility/Dialogs.py
+260_300 Upgrade Utility/msvcp71.dll
+260_300 Upgrade Utility/RichTextEditCtrl.py
+260_300 Upgrade Utility/RTFDoc.py
+260_300 Upgrade Utility/RTFParser.py
+260_300 Upgrade Utility/OptionsSettings.py
+260_300_Conversion/GdiPlus.dll
+260_300 Upgrade Utility/TextDoc.py
+260_300_Conversion/260_300_Conversion.exe
+260_300_Conversion/images/transana.ico
+260_300_Conversion/library.zip
+260_300_Conversion/LIBMYSQLD.dll
+260_300_Conversion/msvcp71.dll
+260_300_Conversion/python26.dll
+260_300_Conversion/wxmsw30u_core_vc90.dll
+260_300_Conversion/wxbase30u_net_vc90.dll
+260_300_Conversion/wxbase30u_vc90.dll
+260_300_Conversion/wxmsw30u_stc_vc90.dll
+260_300_Conversion/wxmsw30u_html_vc90.dll
+260_300_Conversion/wxmsw30u_adv_vc90.dll
+260_300_Conversion/w9xpopen.exe
+260_300_Conversion_Lab/260_300_Conversion.exe
+260_300_Conversion_Lab/GdiPlus.dll
+260_300_Conversion_Lab/images/transana.ico
+260_300_Conversion_Lab/LIBMYSQLD.dll
+260_300_Conversion_Lab/library.zip
+260_300_Conversion_Lab/msvcp71.dll
+260_300_Conversion_Lab/python26.dll
+260_300_Conversion_Lab/w9xpopen.exe
+260_300_Conversion_Lab/wxbase30u_net_vc90.dll
+260_300_Conversion_Lab/wxbase30u_vc90.dll
+260_300_Conversion_Lab/wxmsw30u_adv_vc90.dll
+260_300_Conversion_Lab/wxmsw30u_core_vc90.dll
+260_300_Conversion_Lab/wxmsw30u_html_vc90.dll
+260_300_Conversion_Lab/wxmsw30u_stc_vc90.dll
+260_300_Conversion_Single/260_300_Conversion.exe
+260_300_Conversion_Single/GdiPlus.dll
+260_300_Conversion_Single/images/transana.ico
+260_300_Conversion_Single/LIBMYSQLD.dll
+260_300_Conversion_Single/library.zip
+260_300_Conversion_Single/msvcp71.dll
+260_300_Conversion_Single/python26.dll
+260_300_Conversion_Single/w9xpopen.exe
+260_300_Conversion_Single/wxbase30u_net_vc90.dll
+260_300_Conversion_Single/wxbase30u_vc90.dll
+260_300_Conversion_Single/wxmsw30u_adv_vc90.dll
+260_300_Conversion_Single/wxmsw30u_core_vc90.dll
+260_300_Conversion_Single/wxmsw30u_html_vc90.dll
+260_300_Conversion_Single/wxmsw30u_stc_vc90.dll
