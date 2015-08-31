@@ -1121,7 +1121,8 @@ class TranscriptEditor(RichTextEditCtrl):
         """Insert a timecode in the current cursor position of the
         Transcript.  The parameter time_ms is optional and will default
         to the current Video Position if not used."""
-        if self.get_read_only():
+        # If the item is read-only or if it is a Document (instead of a Transcript), we don't insert time codes
+        if self.get_read_only() or isinstance(self.TranscriptObj, Document.Document):
             # Don't do it in read-only mode
             return
         
