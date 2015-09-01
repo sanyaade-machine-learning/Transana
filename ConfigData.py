@@ -79,6 +79,7 @@ class ConfigData(object):
         str = str + 'language = %s\n\n' % self.language
         str = str + 'databaseList = %s\n\n' % self.databaseList
         str += 'pathsByDB = %s\n' % self.pathsByDB
+        str += 'pathsByDB2 = %s\n' % self.pathsByDB2
         str += 'tabSize = %s\n' % self.tabSize
         str += 'wordWrap = %s\n' % self.wordWrap
         str += 'autoSave = %s\n' % self.autoSave
@@ -433,7 +434,7 @@ class ConfigData(object):
                     print h, d
 
         # Read the dictionary object that stores Path information for different databases
-        pathsByDB = str(config.Read('/2.0/pathsByDB', ''))
+        pathsByDB = str(config.Read('/3.0/pathsByDB', ''))
         # If we get the default value of '' ...
         if pathsByDB == '':
             # ... then we want this variable to be an empty dictionary object
@@ -442,6 +443,17 @@ class ConfigData(object):
         else:
             # ... we need to unpack it to make it usable.
             self.pathsByDB = pickle.loads(pathsByDB)
+
+        # When converting databases, we may need OLD information from the version 2.0 pathByDB config object!
+        pathsByDB2 = str(config.Read('/2.0/pathsByDB', ''))
+        # If we get the default value of '' ...
+        if pathsByDB2 == '':
+            # ... then we want this variable to be an empty dictionary object
+            self.pathsByDB2 = {}
+        # If there is already data in the config file ...
+        else:
+            # ... we need to unpack it to make it usable.
+            self.pathsByDB2 = pickle.loads(pathsByDB2)
 
         # Embedded MySQL can only work with Latin-1 compatible paths.  The following
         # code checks to make sure the path will work.  This final check handles the situation where
@@ -530,7 +542,7 @@ class ConfigData(object):
         # To save the dictionary of paths for different databases, we must first pickle it
         tmpPathsByDB = pickle.dumps(self.pathsByDB)
         # Now we can save it to the config file/registry
-        config.Write('/2.0/pathsByDB', tmpPathsByDB)
+        config.Write('/3.0/pathsByDB', tmpPathsByDB)
 
         # Save Tab Size setting
         config.Write('/2.0/TabSize', self.tabSize)

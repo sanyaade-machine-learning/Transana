@@ -889,7 +889,7 @@ def CreateAdditionalVidsTableQuery(num):
     return query % (num, autoIncrementSyntax)
 
 
-def establish_db_exists(dbToOpen=None):
+def establish_db_exists(dbToOpen=None, usePrompt=True):
     """ Check for the existence of all database tables and create them
         if necessary.  dbToOpen is passed if we are automatically importing a database
         following 2.42 to 2.50 Data Conversion. """
@@ -897,7 +897,7 @@ def establish_db_exists(dbToOpen=None):
     # NOTE:  Syntax for updating tables from MySQL 4.0 to MySQL 4.1 with Unicode UTF8 Characters Set:
     #          ALTER TABLE xxxx2 default character set utf8
     # Obtain a Database
-    db = get_db(dbToOpen)
+    db = get_db(dbToOpen, usePrompt=usePrompt)
     # If this fails, return "False" to indicate failure
     if db == None:
         return False
@@ -1709,7 +1709,7 @@ def UpdateTranscriptRecsfor240(self):
         # Execute the query
         dbCursor2.execute(query, (TNum2, TranscriptNum))
 
-def get_db(dbToOpen=None):
+def get_db(dbToOpen=None, usePrompt=True):
     """ Get a connection object reference to the database.  If a connection has not yet been established, then create the connection.
         dbToOpen is passed if we are automatically importing a database following 2.42 to 2.50 Data Conversion. """
     global _dbref
@@ -1781,7 +1781,7 @@ def get_db(dbToOpen=None):
                 # Add the path and the database extension to the database name to create the full database file path and name
                 dbName = os.path.join(databasePath, databaseName.encode(TransanaGlobal.encoding) + '.db')
                 # If the database file does not exist ...
-                if not os.path.exists(dbName):
+                if not os.path.exists(dbName) and usePrompt:
                     # If the Database Name was not found, prompt the user to see if they want to create a new Database.
                     # First, create the Prompt Dialog
                     # NOTE:  This does not use Dialogs.ErrorDialog because it requires a Yes/No reponse

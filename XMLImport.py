@@ -246,8 +246,9 @@ class XMLImport(Dialogs.GenForm):
 
     def Import(self):
        """ Handle the Import request """
-       # use the LONGEST title here to set the width of the dialog box!
-       progress = wx.ProgressDialog(_('Transana XML Import'),
+       if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+           # use the LONGEST title here to set the width of the dialog box!
+           progress = wx.ProgressDialog(_('Transana XML Import'),
                                     _('Importing Transcript records (This may be slow because of the size of Transcript records.)') + '\nTest',
                                     parent=self,
                                     style = wx.PD_APP_MODAL | wx.PD_AUTO_HIDE)
@@ -497,7 +498,8 @@ class XMLImport(Dialogs.GenForm):
 
                    # Code for updating the Progress Bar
                    if lineUpper in MainHeads.keys():
-                       progress.Update(MainHeads[lineUpper]['progPct'], MainHeads[lineUpper]['progPrompt'])
+                       if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+                           progress.Update(MainHeads[lineUpper]['progPct'], MainHeads[lineUpper]['progPrompt'])
                        # These records should NEVER skip error messages
                        skipCheck = MainHeads[lineUpper]['skipCheck']
                        skipValue = MainHeads[lineUpper]['skipValue']
@@ -1178,7 +1180,8 @@ class XMLImport(Dialogs.GenForm):
                            st += ' '
                            st += currentObj.id.encode(TransanaGlobal.encoding)
                            st += '  (%d)' % currentObj.number
-                           progress.Update(5, st)
+                           if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+                               progress.Update(5, st)
 
                        if objectType == 'Transcript':
                            st = _('Importing Transcript records (This may be slow because of the size of Transcript records.)')
@@ -1187,7 +1190,8 @@ class XMLImport(Dialogs.GenForm):
                            st += ' '
                            st += currentObj.id.encode(TransanaGlobal.encoding)
                            st += '  (%d)' % currentObj.number
-                           progress.Update(43, st)
+                           if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+                               progress.Update(43, st)
 
                    elif dataType == 'Comment':
                        currentObj.comment = self.ProcessLine(line)
@@ -1364,7 +1368,8 @@ class XMLImport(Dialogs.GenForm):
                        dataType = None
 
                        if objectType == 'Transcript':
-                           progress.Update(43, _('Importing Transcript records (This may be slow because of the size of Transcript records.)') + \
+                           if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+                               progress.Update(43, _('Importing Transcript records (This may be slow because of the size of Transcript records.)') + \
                                                '\n  ' + _("Clip Transcript") + ' %d' % currentObj.clip_num)
 
                    elif dataType == 'SnapshotNum':
@@ -1817,7 +1822,8 @@ class XMLImport(Dialogs.GenForm):
            if contin: 
                # Since Clips were imported before Transcripts, the Originating Transcript Numbers in the Clip Records
                # are incorrect.  We must update them now.
-               progress.Update(81, _('Updating Source Transcript Numbers in Clip Transcript records'))
+               if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+                   progress.Update(81, _('Updating Source Transcript Numbers in Clip Transcript records'))
                if db != None:
                    dbCursor2 = db.cursor()
                    # Get all NEW transcript records.  We DON'T want to process transcript records that were in the database prior
@@ -1848,7 +1854,8 @@ class XMLImport(Dialogs.GenForm):
                    # We need a secong database cursor for updates
                    dbCursor2 = db.cursor()
                    
-                   progress.Update(86, _('Updating HyperLinks in Documents'))
+                   if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+                       progress.Update(86, _('Updating HyperLinks in Documents'))
                    # Get all Document records
                    SQLText = 'SELECT DocumentNum, XMLText FROM Documents2'
                    SQLText = DBInterface.FixQuery(SQLText)
@@ -1862,7 +1869,8 @@ class XMLImport(Dialogs.GenForm):
                    for (DocumentNum, XMLText) in dbCursor.fetchall():
                        dbCursor2.execute(SQLText, (self.UpdateHyperlinks(XMLText, recNumbers), DocumentNum))
 
-                   progress.Update(90, _('Updating HyperLinks in Quotes'))
+                   if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+                       progress.Update(90, _('Updating HyperLinks in Quotes'))
                    # Get all Quote records
                    SQLText = 'SELECT QuoteNum, XMLText FROM Quotes2'
                    SQLText = DBInterface.FixQuery(SQLText)
@@ -1876,7 +1884,8 @@ class XMLImport(Dialogs.GenForm):
                    for (QuoteNum, XMLText) in dbCursor.fetchall():
                        dbCursor2.execute(SQLText, (self.UpdateHyperlinks(XMLText, recNumbers), QuoteNum))
 
-                   progress.Update(95, _('Updating HyperLinks in Transcripts'))
+                   if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+                       progress.Update(95, _('Updating HyperLinks in Transcripts'))
                    # Get all Transcript records
                    SQLText = 'SELECT TranscriptNum, RTFText FROM Transcripts2'
                    SQLText = DBInterface.FixQuery(SQLText)
@@ -1951,14 +1960,16 @@ class XMLImport(Dialogs.GenForm):
            # .. then we need to update Transana's Database Tree, which we don't need to do when importData IS passed in.
            TransanaGlobal.menuWindow.ControlObject.DataWindow.DBTab.tree.refresh_tree()
 
-       progress.Update(100)
+       if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+           progress.Update(100)
 
        # If we are importing a pre-2.40 Transana-XML file ...
        if self.XMLVersionNumber in ['1.0', '1.1', '1.2', '1.3', '1.4']:
            # ... then we need to update the transcript records so that clips made from other clips are parented
            # by the source EPISODE, not the source CLIP.
            DBInterface.UpdateTranscriptRecsfor240(self)
-       progress.Destroy()
+       if (self.importData == None) or not ('wxMac' in wx.PlatformInfo):
+           progress.Destroy()
 
        # DO NOT CLOSE THE DATABASE!!!!
        # db.close()

@@ -329,7 +329,7 @@ class Transana(wx.App):
                 return False
 
         # If we're on the Single-user version for Windows ...
-        if TransanaConstants.singleUserVersion and ('wxMSW' in wx.PlatformInfo):
+        if TransanaConstants.singleUserVersion:
             # ... determine the file name for the data conversion information pickle file
             fs = os.path.join(TransanaGlobal.configData.databaseDir, '260_300_Convert.pkl')
             # If there is data in mid-conversion ...
@@ -367,8 +367,11 @@ class Transana(wx.App):
                             tmpDlg.Destroy()
                         # If the converted database does NOT exist ...
                         else:
+                            if 'wxMac' in wx.PlatformInfo:
+                                prompt = _('Converting "%s"\nThis process may take a long time, depending on how much data this database contains.\nWe cannot provide progress feedback on OS X.  Please be patient.')
+                                progWarn = Dialogs.PopupDialog(None, _("Converting Databases"), prompt % key)
                             # Create the Import Database, passing the database name so the user won't be prompted for one.
-                            DBInterface.establish_db_exists(dbToOpen = key)
+                            DBInterface.establish_db_exists(dbToOpen = key, usePrompt=False)
 
                             # Import the database.
                             # First, create an Import Database dialog, but don't SHOW it.
@@ -377,6 +380,10 @@ class Transana(wx.App):
                             temp.Import()
                             # Close the Import Database dialog
                             temp.Close()
+
+                            if 'wxMac' in wx.PlatformInfo:
+                                progWarn.Destroy()
+                                progWarn = None
 
                             # Close the database that was just imported
                             DBInterface.close_db()
@@ -388,17 +395,18 @@ class Transana(wx.App):
                                 TransanaGlobal.configData.databaseList['localhost'] = {}
                                 TransanaGlobal.configData.databaseList['localhost']['dbList'] = []
                             # Update the database name
-                            TransanaGlobal.configData.database = key + '_Converted'
+                            TransanaGlobal.configData.database = key
                             # Add the new (converted) database name to the database list
                             TransanaGlobal.configData.databaseList['localhost']['dbList'].append(key)
                             # Start exception handling
                             try:
                                 # If we're NOT in the lab version of Transana ...
                                 if not TransanaConstants.labVersion:
-                                    # Add the unconverted database's PATH values to the CONVERTED database's configuration!
-                                    TransanaGlobal.configData.pathsByDB[('', 'localhost', key + '_Converted')] = \
-                                        {'visualizationPath' : TransanaGlobal.configData.pathsByDB[('', 'localhost', key)]['visualizationPath'],
-                                         'videoPath' : TransanaGlobal.configData.pathsByDB[('', 'localhost', key)]['videoPath']}
+                                    if TransanaGlobal.configData.pathsByDB2.has_key(('', 'localhost', key)):
+                                        # Add the unconverted database's PATH values to the CONVERTED database's configuration!
+                                        TransanaGlobal.configData.pathsByDB[('', 'localhost', key)] = \
+                                            {'visualizationPath' : TransanaGlobal.configData.pathsByDB2[('', 'localhost', key)]['visualizationPath'],
+                                             'videoPath' : TransanaGlobal.configData.pathsByDB2[('', 'localhost', key)]['videoPath']}
                                 # Save the altered configuration data
                                 TransanaGlobal.configData.SaveConfiguration()
                             # The Computer Lab version sometimes throws a KeyError
@@ -406,8 +414,11 @@ class Transana(wx.App):
                                 # If this comes up, we can ignore it.
                                 pass
 
-                    # Delete the Import File Information
-                    os.remove(fs)
+                # Delete the Import File Information
+                os.remove(fs)
+
+                if DEBUG:
+                    print "Done importing Files"
 
         # We can only continue if we initialized the database OR are running MU.
         if connectionEstablished:
