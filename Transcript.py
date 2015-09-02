@@ -96,7 +96,7 @@ class Transcript(DataObject.DataObject):
         str = str + "Comment = %s\n" % self.comment
         str += "MinTranscriptWidth = %s\n" % self.minTranscriptWidth
         str = str + "LastSaveTime = %s\n" % self.lastsavetime
-        str += "isLocked = %s\n" % self._isLocked
+#        str += "isLocked = %s\n" % self._isLocked
 #        str += "recordlock = %s\n" % self.recordlock
 #        str += "locktime = %s\n" % self.locktime
         if len(self.text) > 250:

@@ -65,9 +65,9 @@ class Keyword(object):
         str += "drawMode = %s\n" % self.drawMode
         str += "lineWidth = %s\n" % self.lineWidth
         str += "lineStyle = %s\n" % self.lineStyle
-        str += "isLocked = %s\n" % self._isLocked
-        str += "recordlock = %s\n" % self.recordlock
-        str += "locktime = %s\n" % self.locktime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         return str
 
     def __eq__(self, other):

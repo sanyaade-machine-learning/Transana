@@ -75,9 +75,9 @@ class CoreData(DataObject.DataObject):
         str = str + 'relation = %s\n' % self.relation
         str = str + 'coverage = %s\n' % self.coverage
         str = str + 'rights = %s\n\n' % self.rights
-        str += "isLocked = %s\n" % self._isLocked
-        str += "recordlock = %s\n" % self.recordlock
-        str += "locktime = %s\n" % self.locktime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         return str
 
     def clear(self):

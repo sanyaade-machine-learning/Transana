@@ -121,9 +121,9 @@ class Clip(DataObject.DataObject):
         str += "offset = %s\n" % Misc.time_in_ms_to_str(self.offset)
         str += "audio = %s\n" % self.audio
         str = str + "sort_order = %s\n" % self.sort_order
-        str += "isLocked = %s\n" % self._isLocked
-        str += "recordlock = %s\n" % self.recordlock
-        str += "locktime = %s\n" % self.locktime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         # Iterate through transcript objects
         for tr in self.transcripts:
             str = str + '\nClip Transcript: %s from %s\n' % (tr.number, tr.source_transcript)

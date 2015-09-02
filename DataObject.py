@@ -328,7 +328,7 @@ class DataObject(object):
                 prompt = unicode(_("Cannot save a %s with a blank %s ID"), 'utf8')
             else:
                 prompt = _("Cannot save a %s with a blank %s ID")
-            raise SaveError, prompt % (tname, tname)
+            raise SaveError, prompt % (tname.decode('utf8'), tname.decode('utf8'))
         else:
             # Verify record lock is still good
             if (self.number == 0) or \

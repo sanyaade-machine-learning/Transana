@@ -97,9 +97,9 @@ class Quote(DataObject.DataObject):
         str += "start_char = %s\n" % self.start_char
         str += "end_char = %s\n" % self.end_char
         str += "comment = %s\n" % self.comment
-        str += "isLocked = %s\n" % self._isLocked
-        str += "recordlock = %s\n" % self.recordlock
-        str += "locktime = %s\n" % self.locktime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         str += "Keywords:\n"
         for kw in self._kwlist:
             str += '  ' + kw.keywordPair + '\n'

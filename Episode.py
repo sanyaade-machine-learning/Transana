@@ -83,9 +83,9 @@ class Episode(DataObject.DataObject):
         str = str + "Date = %s\n" % self.tape_date
         str = str + "Library ID = %s\n" % self.series_id
         str = str + "Library Num = %s\n" % self.series_num
-        str += "isLocked = %s\n" % self._isLocked
-        str += "recordlock = %s\n" % self.recordlock
-        str += "locktime = %s\n" % self.locktime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         str += "Keywords:\n"
         for kw in self._kwlist:
             str += '  ' + kw.keywordPair + '\n'

@@ -67,9 +67,9 @@ class Library(DataObject.DataObject):
         str += 'comment = %s\n' % self.comment.encode('utf8')
         str += 'owner = %s\n' % self.owner.encode('utf8')
         str += 'keyword_group = %s\n\n' % self.keyword_group.encode('utf8')
-        str += "isLocked = %s\n" % self._isLocked
-        str += "recordlock = %s\n" % self.recordlock
-        str += "locktime = %s\n" % self.locktime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         return str
         
     def __eq__(self, other):

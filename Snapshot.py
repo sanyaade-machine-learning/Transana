@@ -114,9 +114,9 @@ class Snapshot(DataObject.DataObject):
         str += "  episode_duration = %s (%s)\n" % (self.episode_duration, Misc.time_in_ms_to_str(self.episode_duration))
         str += "  comment          = %s\n" % self.comment
         str += "  sort_order       = %s\n" % self.sort_order
-        str += "isLocked = %s\n" % self._isLocked
-        str += "recordlock = %s\n" % self.recordlock
-        str += "locktime = %s\n" % self.locktime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         str += "  lastsavetime     = %s\n" % self.lastsavetime
         for kws in self.keyword_list:
             str = str + "\nKeyword:  %s" % kws.keywordPair

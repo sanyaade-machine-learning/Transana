@@ -93,9 +93,9 @@ class Document(DataObject.DataObject):
         str += "Imported File = %s\n" % self.imported_file
         str += "Import Date = %s\n" % self.import_date
         str += "Document Length = %s  (%s)\n" % (self.document_length, len(self.text))
-        str += "isLocked = %s\n" % self._isLocked
-        str += "recordlock = %s\n" % self.recordlock
-        str += "locktime = %s\n" % self.locktime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         str += "Keywords:\n"
         for kw in self._kwlist:
             str += '  ' + kw.keywordPair + '\n'

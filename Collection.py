@@ -69,9 +69,9 @@ class Collection(DataObject.DataObject):
         str = str + "owner = %s\n" % self.owner.encode('utf8')
         str = str + "Default KWG = %s\n\n" % self.keyword_group.encode('utf8')
         str += "GetNodeData(): %s\n\n" % (self.GetNodeData(), )
-        str += "isLocked = %s\n" % self._isLocked
-        str += "recordlock = %s\n" % self.recordlock
-        str += "locktime = %s\n" % self.locktime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         return str
 
     def __eq__(self, other):

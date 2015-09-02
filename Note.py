@@ -60,9 +60,9 @@ class Note(DataObject.DataObject):
         str += "quote_num = %s\n" % self.quote_num
         str = str + "snapshot_num = %s\n" % self.snapshot_num
         str = str + "author = %s\n" % self.author
-        str += "isLocked = %s\n" % self._isLocked
-        str += "recordlock = %s\n" % self.recordlock
-        str += "locktime = %s\n" % self.locktime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         str = str + "text = %s\n\n" % self.text
         return str.encode('utf8')
 
