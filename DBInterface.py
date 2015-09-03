@@ -1779,7 +1779,7 @@ def get_db(dbToOpen=None, usePrompt=True):
                 # ... get the database path
                 databasePath = TransanaGlobal.configData.databaseDir
                 # Add the path and the database extension to the database name to create the full database file path and name
-                dbName = os.path.join(databasePath, databaseName.encode(TransanaGlobal.encoding) + '.db')
+                dbName = os.path.join(databasePath, databaseName + '.db')
                 # If the database file does not exist ...
                 if not os.path.exists(dbName) and usePrompt:
                     # If the Database Name was not found, prompt the user to see if they want to create a new Database.
@@ -1804,7 +1804,7 @@ def get_db(dbToOpen=None, usePrompt=True):
                 # If we should connect to the database ...
                 if result == wx.ID_YES:
                     # ... connect to it.
-                    _dbref = sqlite3.connect(dbName)
+                    _dbref = sqlite3.connect(dbName.encode('utf8'))
                     # Enable AutoCommit
                     _dbref.isolation_level = None
                     # Have sqlite use Strings rather than Unicode, as all fields in Transana are manually encoded
@@ -5330,7 +5330,7 @@ def DeleteDatabase(username, password, server, database, port):
             # ... get the database path
             databasePath = TransanaGlobal.configData.databaseDir
             # ... and build the full database name by combining the path, database name, and file extension
-            dbName = os.path.join(databasePath, database.encode(TransanaGlobal.encoding) + '.db')
+            dbName = os.path.join(databasePath, database + '.db')
             # Build a prompt for confirming the delete
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.

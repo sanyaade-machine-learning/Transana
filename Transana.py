@@ -397,7 +397,7 @@ class Transana(wx.App):
                             # Update the database name
                             TransanaGlobal.configData.database = key
                             # Add the new (converted) database name to the database list
-                            TransanaGlobal.configData.databaseList['localhost']['dbList'].append(key)
+                            TransanaGlobal.configData.databaseList['localhost']['dbList'].append(key.encode('utf8'))
                             # Start exception handling
                             try:
                                 # If we're NOT in the lab version of Transana ...

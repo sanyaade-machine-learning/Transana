@@ -900,6 +900,8 @@ class UsernameandPassword(wx.Dialog):
                 dlg = Dialogs.InfoDialog(None, msg % database)
                 dlg.ShowModal()
                 dlg.Destroy()
+                # Save the Config changes
+                TransanaGlobal.configData.SaveConfiguration()
 
             else:
                 errormsg = ''
