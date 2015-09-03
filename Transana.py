@@ -402,11 +402,19 @@ class Transana(wx.App):
                             try:
                                 # If we're NOT in the lab version of Transana ...
                                 if not TransanaConstants.labVersion:
-                                    if TransanaGlobal.configData.pathsByDB2.has_key(('', 'localhost', key)):
-                                        # Add the unconverted database's PATH values to the CONVERTED database's configuration!
-                                        TransanaGlobal.configData.pathsByDB[('', 'localhost', key)] = \
-                                            {'visualizationPath' : TransanaGlobal.configData.pathsByDB2[('', 'localhost', key)]['visualizationPath'],
-                                             'videoPath' : TransanaGlobal.configData.pathsByDB2[('', 'localhost', key)]['videoPath']}
+
+                                    # This is harder than it should be because of a combination of encoding and case-changing issues.
+                                    # Let's iterate through the Version 2.5 "paths by database" config data
+                                    for key2 in TransanaGlobal.configData.pathsByDB2.keys():
+                                        # If we have a LOCAL database with a matching key to the database being imported ...
+                                        if (key2[0] == '') and (key2[1] == 'localhost') and (key2[2].decode('utf8').lower() == key):
+                                            # Add the unconverted database's PATH values to the CONVERTED database's configuration!
+                                            TransanaGlobal.configData.pathsByDB[('', 'localhost', key.encode('utf8'))] = \
+                                                {'visualizationPath' : TransanaGlobal.configData.pathsByDB2[key2]['visualizationPath'],
+                                                 'videoPath' : TransanaGlobal.configData.pathsByDB2[key2]['videoPath']}
+                                            # ... and we can stop looking
+                                            break
+
                                 # Save the altered configuration data
                                 TransanaGlobal.configData.SaveConfiguration()
                             # The Computer Lab version sometimes throws a KeyError
