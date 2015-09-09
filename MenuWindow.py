@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -455,7 +455,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
 
 
             # We need to reset the media type constants if we are using a Right-To-Left Language, due to a
-            # bug in wxWidgets 3.0.0.0's MediaCtrl, which doesn't play video for QuickTime formats under RtL languages.
+            # bug in wxWidgets 3.0.0.0's MediaCtrl, which doesn't play Media for QuickTime formats under RtL languages.
             # We do this here, because layout direction isn't defined when we load the Constants!
             if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
                 TransanaConstants.fileTypesString = TransanaConstants.fileTypesString_RtL
@@ -472,12 +472,13 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         
         # NOTE:  "Fixed-Increment Time Code" works for version 2.42.  "&Media Conversion" works for 2.50.
         #        For 2.60, let's go with "Snapshot".  For 2.61, we'll use "SSL Client Key File"
+        #        For 3.00, let's use "Libraries".
         # If you update this, also update the phrase
         # below in the OnOptionsLanguage method.)
         
-        if (outofdateLanguage != '') and ("SSL Client Key File" == _("SSL Client Key File")):
+        if (outofdateLanguage != '') and ("Libraries" == _("Libraries")):
             # If not, display an information message.
-            dlg = wx.MessageDialog(None, languageErrorPrompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
+            dlg = Dialogs.InfoDialog(None, languageErrorPrompt)
             dlg.ShowModal()
             dlg.Destroy()
 
@@ -558,11 +559,11 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         wx.EVT_MENU(self, MenuSetup.MENU_FILE_NEWDATABASE, self.OnFileNewDatabase)
         # Define handler for File > File Management
         wx.EVT_MENU(self, MenuSetup.MENU_FILE_FILEMANAGEMENT, self.OnFileManagement)
-        # Define handler for File > Save Transcript
+        # Define handler for File > Save Document
         wx.EVT_MENU(self, MenuSetup.MENU_FILE_SAVE, self.OnSaveTranscript)
-        # Define handler for File > Save Transcript As
+        # Define handler for File > Save Document As
         wx.EVT_MENU(self, MenuSetup.MENU_FILE_SAVEAS, self.OnSaveTranscriptAs)
-        # Define handler for File > Print Transcript
+        # Define handler for File > Print Document
         wx.EVT_MENU(self, MenuSetup.MENU_FILE_PRINTTRANSCRIPT, self.OnPrintTranscript)
         # Define handler for File > Printer Setup
         wx.EVT_MENU(self, MenuSetup.MENU_FILE_PRINTERSETUP, self.OnPrinterSetup)
@@ -573,35 +574,39 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         # Define handler for File > Exit
         wx.EVT_MENU(self, MenuSetup.MENU_FILE_EXIT, self.OnFileExit)
 
-        # Define handler for Transcript > Undo
+        # Define handler for Document > Undo
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_EDIT_UNDO, self.OnTranscriptUndo)
-        # Define handler for Transcript > Cut
+        # Define handler for Document > Cut
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_EDIT_CUT, self.OnTranscriptCut)
-        # Define handler for Transcript > Copy
+        # Define handler for Document > Copy
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_EDIT_COPY, self.OnTranscriptCopy)
-        # Define handler for Transcript > Paste
+        # Define handler for Document > Paste
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_EDIT_PASTE, self.OnTranscriptPaste)
-        # Define handler for Transcript > Format Font
+        # Define handler for Document > Format Font
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_FONT, self.OnFormatFont)
         # If we're using the Rich Text Control ...
         if TransanaConstants.USESRTC:
-            # Define handler for Transcript > Format Paragraph
+            # Define handler for Document > Format Paragraph
             wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_PARAGRAPH, self.OnFormatParagraph)
-            # Define handler for Transcript > Format Tabs
+            # Define handler for Document > Format Tabs
             wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_TABS, self.OnFormatTabs)
-            # Define handler for Transcript > Insert Image
+            # Define handler for Document > Insert Image
             wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_INSERT_IMAGE, self.OnInsertImage)
-        # Define handler for Transcript > Print
+        # Define handler for Document > Print
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_PRINT, self.OnPrintTranscript)
-        # Define handler for Transcript > Printer Setup
+        # Define handler for Document > Printer Setup
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_PRINTERSETUP, self.OnPrinterSetup)
 
-        # Define handler for Transcript > Fixed-Increment Time Codes
+        # Define handler for Document > Change Document Splitter Orientation
+        wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_ORIENTATION, self.OnDocumentOrientation)
+        # Define handler for Document > Fixed-Increment Time Codes
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, self.OnAutoTimeCode)
-        # Define handler for Transcript > Adjust Indexes
+        # Define handler for Document > Adjust Indexes
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, self.OnAdjustIndexes)
-        # Define handler for Transcript > Text Time Code Conversion
+        # Define handler for Document > Text Time Code Conversion
         wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_TEXT_TIMECODE, self.OnTextTimeCodeConversion)
+        # Define handler for Document > Close Current Transcript
+        wx.EVT_MENU(self, MenuSetup.MENU_TRANSCRIPT_CLOSE_CURRENT, self.OnCloseCurrentTranscript)
 
         # Define handler for Tools > Notes Browser
         wx.EVT_MENU(self, MenuSetup.MENU_TOOLS_NOTESBROWSER, self.OnNotesBrowser)
@@ -627,19 +632,18 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         # Define handler for Options > Language changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_LANGUAGE_EN, MenuSetup.MENU_OPTIONS_LANGUAGE_ZH, self.OnOptionsLanguage)
         # Define handler for Options > Quick Clip Mode
-        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
-            wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_QUICK_CLIPS, self.OnOptionsQuickClipMode)
+        wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_QUICK_CLIPS, self.OnOptionsQuickClipMode)
         # Define handler for Options > Show Quick Clip Warning
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_QUICKCLIPWARNING, self.OnOptionsQuickClipWarning)
         # Define handler for Options > Auto Word-tracking
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_WORDTRACK, self.OnOptionsWordTrack)
         # Define handler for Options > Auto-Arrange
         wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_AUTOARRANGE, self.OnOptionsAutoArrange)
-        # Define handler for Options > Long Transcript Editing
-        wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_LONGTRANSCRIPTEDIT, self.OnOptionsLongTranscriptEdit)
+        # Define handler for Options > Long Document Editing
+#        wx.EVT_MENU(self, MenuSetup.MENU_OPTIONS_LONGTRANSCRIPTEDIT, self.OnOptionsLongTranscriptEdit)
         # Define handler for Options > Visualization Style changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_VISUALIZATION_WAVEFORM, MenuSetup.MENU_OPTIONS_VISUALIZATION_HYBRID, self.OnOptionsVisualizationStyle)
-        # Define handler for Options > Video Size changes
+        # Define handler for Options > Media Size changes
         wx.EVT_MENU_RANGE(self, MenuSetup.MENU_OPTIONS_VIDEOSIZE_50, MenuSetup.MENU_OPTIONS_VIDEOSIZE_200, self.OnOptionsVideoSize)
 
         # Define handler for Window Menu
@@ -662,13 +666,13 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         # Define handler for Help > www.transana.org
         wx.EVT_MENU(self, MenuSetup.MENU_HELP_WEBSITE, self.OnHelpWebsite)
         # Define handler for Help > Fund Transana
-        wx.EVT_MENU(self, MenuSetup.MENU_HELP_FUND, self.OnHelpFund)
+        # wx.EVT_MENU(self, MenuSetup.MENU_HELP_FUND, self.OnHelpFund)
         self.SetMenuBar(self.menuBar)
         # Define handler for Help > About
         wx.EVT_MENU(self, MenuSetup.MENU_HELP_ABOUT, self.OnHelpAbout)
 
         # Define a Close Event, so that if the user click the "X" on the Menu Frame, everything
-        # will close properly, including the Video Window.
+        # will close properly, including the Media Window.
         wx.EVT_CLOSE(self, self.OnCloseWindow)
 
         # This doesn't work for Right-To-Left languages!
@@ -770,23 +774,23 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         if (changeX != 0) and TransanaGlobal.configData.autoArrange:
             # Get the Visualization Size
             visRect = self.ControlObject.VisualizationWindow.GetRect()
-            # Get the Video Size
+            # Get the Media Size
             vidRect = self.ControlObject.VideoWindow.GetRect()
             # Change the Visualization WIDTH by the horizontal change
             self.ControlObject.VisualizationWindow.SetRect((visRect[0], visRect[1], visRect[2] + changeX, visRect[3]))
-            # Change the Video POSITION by the horizontal change
+            # Change the Media POSITION by the horizontal change
             self.ControlObject.VideoWindow.SetRect((vidRect[0] + changeX, vidRect[1], vidRect[2], vidRect[3]))
 
         # If there's a VERTICAL change ...
         if (changeY != 0) and TransanaGlobal.configData.autoArrange:
             # Get the Data Size
             dataRect = self.ControlObject.DataWindow.GetRect()
-            # Get the Transcript Size (pick the transcript window based on the REMAINDER so each transcript gets change in turn!)
-            trRect = self.ControlObject.TranscriptWindow[self.lastSize[1] % len(self.ControlObject.TranscriptWindow)].dlg.GetRect()
+            # Get the Document Size (pick the Document window based on the REMAINDER so each Document gets change in turn!)
+            trRect = self.ControlObject.TranscriptWindow.GetRect()  # len(self.ControlObject.TranscriptWindow)].dlg.GetRect()
             # Change the HEIGHT of the Data Window
             self.ControlObject.DataWindow.SetRect((dataRect[0], dataRect[1], dataRect[2], dataRect[3] + changeY))
-            # Change the HEIGHT of the Transcript Window
-            self.ControlObject.TranscriptWindow[self.lastSize[1] % len(self.ControlObject.TranscriptWindow)].dlg.SetRect((trRect[0], trRect[1], trRect[2], trRect[3] + changeY))
+            # Change the HEIGHT of the Document Window
+            self.ControlObject.TranscriptWindow.dlg.SetRect((trRect[0], trRect[1], trRect[2], trRect[3] + changeY))
 
         # Update the Last Known Size value
         self.lastSize = self.GetClientSize()
@@ -808,8 +812,8 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         self.ControlObject.CloseAllImages()
     
     def OnCloseWindow(self, event):
-        """ This code forces the Video Window to close when the "X" is used to close the Menu Bar """
-        # Prompt for save if transcript was modified
+        """ This code forces the Media Window to close when the "X" is used to close the Menu Bar """
+        # Prompt for save if Document was modified
         if TransanaConstants.partialTranscriptEdit:
             self.ControlObject.SaveTranscript(1, continueEditing=False)
         else:
@@ -843,37 +847,46 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             if self.ControlObject.NotesBrowserWindow != None:
                 # If so, close it, which saves anything being edited.
                 self.ControlObject.NotesBrowserWindow.Close()
-            # unlock the Transcript Records, if any are locked
-            # (Count backwards from the highest number!)
-            for x in range(len(self.ControlObject.TranscriptWindow) - 1, -1, -1):
-                # Turn off the Line Number Timer
-                self.ControlObject.TranscriptWindow[x].dlg.LineNumTimer.Stop()
-                # If the transcript has been modified ...
-                if self.ControlObject.TranscriptWindow[x].TranscriptModified():
-                    # ... save it!
-                    if TransanaConstants.partialTranscriptEdit:
-                        self.ControlObject.SaveTranscript(1, transcriptToSave=x, continueEditing=False)
-                    else:
-                        self.ControlObject.SaveTranscript(1, transcriptToSave=x)
-                # If the transcript is locked ...
-                if (self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj != None) and \
-                   (self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj.isLocked):
-                    # ... unlock it
-                    self.ControlObject.TranscriptWindow[x].dlg.editor.TranscriptObj.unlock_record()
-                # Close the Transcript Window
-                self.ControlObject.TranscriptWindow[x].dlg.Close()
-            # Close the connection to the Database, if one is open
-            if DBInterface.is_db_open():
-                DBInterface.close_db()
+            # unlock the Document Records, if any are locked
+            # For each Notebook Tab ... (Count backwards from the highest number!)
+            for tabNum in range(self.ControlObject.TranscriptWindow.nb.GetPageCount() - 1, -1, -1):
+                # Select the tab (needed for checking and saving documents!)
+                self.ControlObject.TranscriptWindow.nb.SetSelection(tabNum)
+                # ... for each splitter pane on the notebook tab ...
+                for pane in self.ControlObject.TranscriptWindow.nb.GetPage(tabNum).GetChildren():
+                    # Activate the Panel so TranscriptModified call will be accurate
+                    pane.ActivatePanel()
+                    # Turn off the Line Number Timer
+                    pane.LineNumTimer.Stop()
+                    # If the Document has been modified ...
+                    if pane.TranscriptModified():
+                        x = pane.panelNum
+                        
+                        # ... save it!
+                        if TransanaConstants.partialTranscriptEdit:
+                            self.ControlObject.SaveTranscript(1, transcriptToSave=x, continueEditing=False)
+                        else:
+                            self.ControlObject.SaveTranscript(1, transcriptToSave=x)
+
+                    # If the Document is locked ...
+                    if (pane.editor.TranscriptObj != None) and \
+                       (pane.editor.TranscriptObj.isLocked):
+                        # ... unlock it
+                        pane.editor.TranscriptObj.unlock_record()
+##                    # Close the Document Window
+##                    pane.Close()
+
             # If we have the multi-user version ...
             if not TransanaConstants.singleUserVersion:
                 # ... stop the Connection Timer.
                 TransanaGlobal.connectionTimer.Stop()
             # Save Configuration Data
             TransanaGlobal.configData.SaveConfiguration()
-            # We need to force the Video Window to close along with all of the other windows.
+            # We need to force the Media Window to close along with all of the other windows.
             # (The other windows all close automatically.)
             if self.ControlObject != None:
+                if self.ControlObject.TranscriptWindow != None:
+                    self.ControlObject.TranscriptWindow.Close()
                 if self.ControlObject.DataWindow != None:
                     # Close the Data Window
                     self.ControlObject.DataWindow.Close()
@@ -881,10 +894,15 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
                     self.ControlObject.VideoWindow.Close()
                 if self.ControlObject.VisualizationWindow != None:
                     self.ControlObject.VisualizationWindow.Close()
+
+            # Close the connection to the Database, if one is open
+            if DBInterface.is_db_open():
+                DBInterface.close_db()
             # Terminate MySQL if using the embedded version.
             # (This is slow, so should be done as late as possible, preferably after windows are closed.)
             if TransanaConstants.singleUserVersion:
                 DBInterface.EndSingleUserDatabase()
+
             # Alternately, if we're in the Multi-user version, we need to close the Chat Window, which
             # ends the socket connection to the Transana MessageServer.
             else:
@@ -907,6 +925,11 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
 
             # Destroy the Menu Window
             self.Destroy()
+            
+            # On the Mac ...
+            if 'wxMac' in wx.PlatformInfo:
+                # ... Transana is not exiting properly on OS X 10.10.3.  This should ensure the program ends.
+                sys.exit(0)
         # If the user reconsiders exiting...
         else:
             # If the Close Event is triggered from the Menu, the event has no Veto property.
@@ -923,14 +946,13 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
     def ClearMenus(self):
         # Set Menus to their initial default values
         self.menuBar.filemenu.Enable(MenuSetup.MENU_FILE_SAVE, False)              
-        # Most Transcript Menu items default to disabled until a Transcript
+        # Most Document Menu items default to disabled until a Document
         # is loaded
         self.SetTranscriptOptions(False)
         self.SetTranscriptEditOptions(False)
 
     def SetTranscriptOptions(self, enable):
-        """Enable or disable the menu options that depend on whether or not
-        a Transcript is loaded."""
+        """Enable or disable the menu options that depend on whether or not a Document is loaded."""
         self.menuBar.filemenu.Enable(MenuSetup.MENU_FILE_SAVEAS, enable)
         # If we have Right to Left text, we cannot enable PRINT because it doesn't work right due to wxWidgets bugs.
         if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
@@ -946,7 +968,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
 
     def SetTranscriptEditOptions(self, enable):
         """Enable or disable the menu options that depend on whether or not
-        a Transcript is editable."""
+        a Document is editable."""
         self.menuBar.filemenu.Enable(MenuSetup.MENU_FILE_SAVE, enable)
         self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_EDIT_UNDO, enable)
         self.menuBar.transcriptmenu.Enable(MenuSetup.MENU_TRANSCRIPT_EDIT_CUT, enable)
@@ -974,10 +996,10 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         """ Implements File New menu command """
         # If a Control Object has been defined ...
         if self.ControlObject != None:
-            # set the active transcript to 0 so multiple transcript will be cleared
+            # set the active Document to 0 so multiple Document will be cleared
             self.ControlObject.activeTranscript = 0
             # ... it should know how to clear all the Windows!
-            self.ControlObject.ClearAllWindows()
+            self.ControlObject.ClearAllWindows(clearAllTabs=True)
             # Close all Snapshot Windows
             self.ControlObject.CloseAllImages()
             # ... and close all the reports, which ClearAllWindows doesn't do
@@ -1030,8 +1052,8 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             self.fileManagementWindow.Raise()
 
     def OnPrintTranscript(self, event):
-        """ Implements Transcript Printing from the File and Transcript menus """
-        # Get the Transcript Object currently loaded in the Transcript Window
+        """ Implements Document Printing from the File and Document menus """
+        # Get the Document Object currently loaded in the Document Window
         tempTranscript = self.ControlObject.GetCurrentTranscriptObject()
         # If we're using the RTC ...
         if TransanaConstants.USESRTC:
@@ -1073,11 +1095,11 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             if result == wx.ID_NO:
                 # ... create a hidden RichTextEditCtrl_RTC
                 hiddenCtrl = RichTextEditCtrl_RTC.RichTextEditCtrl(self)
-                # Use the hidden control to strip the time codes from the Temp Transcript Object's text
+                # Use the hidden control to strip the time codes from the Temp Document Object's text
                 tempTranscript.text = hiddenCtrl.StripTimeCodes(tempTranscript.text)
                 # Now get rid of the hidden control.  We're done with it!
                 hiddenCtrl.Destroy()
-            # Now put the contents of the XML transcript text into the buffer!
+            # Now put the contents of the XML Document text into the buffer!
             try:
                 # Create a IO stream object
                 stream = cStringIO.StringIO(tempTranscript.text)
@@ -1103,7 +1125,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         else:
             # Set the Cursor to the Hourglass while the report is assembled
             self.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
-            # Prepare the Transcript for printing
+            # Prepare the Document for printing
             (graphic, pageData) = TranscriptPrintoutClass.PrepareData(TransanaGlobal.printData, tempTranscript)
             # Send the results of the PrepareData() call to the MyPrintout object, once for the print preview
             # version and once for the printer version.  
@@ -1120,7 +1142,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
                 errordlg.Destroy()
             else:
 
-                # Print Preview on the Mac is broken.  Just print the transcript.
+                # Print Preview on the Mac is broken.  Just print the Document.
                 if 'wxMac' in wx.PlatformInfo:
                     printPreview.Print(True)
                 else:
@@ -1160,11 +1182,11 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         pageDialog.Destroy()
 
     def OnSaveTranscript(self, event):
-        """Handler for File > Save Transcript menu command"""
+        """Handler for File > Save Document menu command"""
         self.ControlObject.SaveTranscript(continueEditing=TransanaConstants.partialTranscriptEdit)
 
     def OnSaveTranscriptAs(self, event):
-        """Handler for File > Save Transcript As menu command"""
+        """Handler for File > Save Document As menu command"""
         self.ControlObject.SaveTranscriptAs()
 
     def OnFileExit(self, evt):
@@ -1173,23 +1195,24 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         self.OnCloseWindow(evt)
 
     def OnTranscriptUndo(self, event):
-        """ Handler for Transcript > Undo """
+        """ Handler for Document > Undo """
         # Determine the object with the current focus
         tmpObj = wx.Window.FindFocus()
         # If we have an object OTHER THAN a RichTextEditCtrl ...
         # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
-        if isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl):
+        if isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl) or isinstance(tmpObj, wx.TextCtrl):
             self.ControlObject.TranscriptUndo(event)
         else:
             event.Skip()
 
     def OnTranscriptCut(self, event):
-        """ Handler for Transcript > Cut """
+        """ Handler for Document > Cut """
         # Determine the object with the current focus
         tmpObj = wx.Window.FindFocus()
         # If the current window is the RichTextEditCtrl_RTC or the MenuWindow ...
         # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
         if (isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl) or \
+            isinstance(tmpObj, wx.TextCtrl) or \
             isinstance(tmpObj, MenuWindow)):
             # ... let Transana handle the Cut
             self.ControlObject.TranscriptCut(event)
@@ -1203,12 +1226,13 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             event.Skip()
 
     def OnTranscriptCopy(self, event):
-        """ Handler for Transcript > Copy """
+        """ Handler for Document > Copy """
         # Determine the object with the current focus
         tmpObj = wx.Window.FindFocus()
         # If the current window is the RichTextEditCtrl_RTC or the MenuWindow ...
         # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
         if (isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl) or \
+            isinstance(tmpObj, wx.TextCtrl) or \
             isinstance(tmpObj, MenuWindow)):
             # ... let Transana handle the Copy
             self.ControlObject.TranscriptCopy(event)
@@ -1222,12 +1246,13 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             event.Skip()
 
     def OnTranscriptPaste(self, event):
-        """ Handler for Transcript > Paste """
+        """ Handler for Document > Paste """
         # Determine the object with the current focus
         tmpObj = wx.Window.FindFocus()
         # If the current window is the RichTextEditCtrl_RTC or the MenuWindow ...
         # (this is required for wxMac, as otherwise the RTC handles ALL Cut/Copy/Paste requests!)
         if (isinstance(tmpObj, RichTextEditCtrl_RTC.RichTextEditCtrl) or \
+            isinstance(tmpObj, wx.TextCtrl) or \
             isinstance(tmpObj, MenuWindow)):
             # ... let Transana handle the Paste
             self.ControlObject.TranscriptPaste(event)
@@ -1241,23 +1266,27 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             event.Skip()
 
     def OnFormatFont(self, event):
-        """ Handler for Transcript > Format Font """
+        """ Handler for Document > Format Font """
         self.ControlObject.TranscriptCallFormatDialog()
 
     def OnFormatParagraph(self, event):
-        """ Handler for Transcript > Format Paragraph """
+        """ Handler for Document > Format Paragraph """
         self.ControlObject.TranscriptCallFormatDialog(tabToOpen=1)
 
     def OnFormatTabs(self, event):
-        """ Handler for Transcript > Format Tabs """
+        """ Handler for Document > Format Tabs """
         self.ControlObject.TranscriptCallFormatDialog(tabToOpen=2)
 
     def OnInsertImage(self, event):
-        """ Handler for Transcript > Insert Image """
+        """ Handler for Document > Insert Image """
         self.ControlObject.TranscriptInsertImage()
 
+    def OnDocumentOrientation(self, event):
+        """ Change the Document Window Splitter Orientation """
+        self.ControlObject.TranscriptWindow.ChangeOrientation(event)
+        
     def OnAutoTimeCode(self, event):
-        """ Handler for Transcript > Fixed-Increment Time Codes """
+        """ Handler for Document > Fixed-Increment Time Codes """
         if not self.ControlObject.AutoTimeCodeEnableTest():
             msg = _('You cannot add fixed-increment time codes to a transcript that already has time codes.')
             dlg = Dialogs.ErrorDialog(self, msg)
@@ -1265,11 +1294,11 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             dlg.Destroy()
         # Ask the Control Object to process AutoTimeCoding and let us know if it worked.
         if not self.ControlObject.AutoTimeCodeEnableTest() or self.ControlObject.AutoTimeCode():
-            # If it worked, update the Transcript menu's Enabled status
+            # If it worked, update the Document menu's Enabled status
             self.SetTranscriptEditOptions(True)
 
     def OnAdjustIndexes(self, event):
-        """ Handler for Transcript > Adjust Indexes menu command """
+        """ Handler for Document > Adjust Indexes menu command """
         msg = _('Please enter the number of seconds by which to adjust the indexes for this transcript.\nValues are accurate to 1/1000 of a second (3 decimal places).')
         dlg = wx.TextEntryDialog(self, msg, _('Adjust Indexes'), '0.000')
         result = dlg.ShowModal()
@@ -1295,8 +1324,13 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         """  Convert Text (H:MM:SS.hh) Time Codes to Transana's Format """
         # Inform the Control Object that Text Time Code Conversion has been requested
         self.ControlObject.TextTimeCodeConversion()
-        # Update the Transcript menu's Enabled status
+        # Update the Document menu's Enabled status
         self.SetTranscriptEditOptions(True)
+
+    def OnCloseCurrentTranscript(self, event):
+        """ Close Current Transcript """
+        # Tell the Control Object to close the current Transcript
+        self.ControlObject.CloseCurrentTranscript(event)
 
     def OnNotesBrowser(self, event):
         """ Notes Browser """
@@ -1327,17 +1361,17 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         # Show the dialog
         mediaConv.ShowModal()
         # Call Close here to clean up Temp Files in some circumstances
-        mediaConv.Close()
+#        mediaConv.Close()
         # Destroy the dialog
-        mediaConv.Destroy()
-        
+#        mediaConv.Destroy()
+
     def OnImportDatabase(self, event):
         """ Import Database """
 
          # If the current database is not empty, we need to tell the user.
         if not DBInterface.IsDatabaseEmpty():
             prompt = _('Your current database is not empty.') + '\n\n' + \
-                     _('You can only import data into an existing databases if\nthere are no overlapping Series or Collection records.\nIf there is any overlap in these records, the import\nwill fail.') + '\n\n' + \
+                     _('You can only import data into an existing databases if\nthere are no overlapping Library or Collection records.\nIf there is any overlap in these records, the import\nwill fail.') + '\n\n' + \
                      _('If you have overlapping Keywords, the existing Keyword\nis retained and the importing Keyword (including its\ndefinition, which could differ) is discarded.') + '\n\n' + \
                      _('If you have overlapping Core Data records, the existing\nCore Data record is retained and the importing Core\nData record is discarded.')
             dlg = Dialogs.InfoDialog(self, prompt)
@@ -1345,7 +1379,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             dlg.Destroy()
 
         # Create an Import Database dialog
-        temp = XMLImport.XMLImport(self.ControlObject.TranscriptWindow[0].dlg, -1, _('Transana XML Import'))
+        temp = XMLImport.XMLImport(self.ControlObject.TranscriptWindow.dlg, -1, _('Transana XML Import'))
         # Get the User Input
         result = temp.get_input()
         # If the user gave a valid response ...
@@ -1369,7 +1403,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
     def OnExportDatabase(self, event):
         """ Export Database """
         # Create an Export Database dialog
-        temp = XMLExport.XMLExport(self.ControlObject.TranscriptWindow[0].dlg, -1, _('Transana XML Export'))
+        temp = XMLExport.XMLExport(self.ControlObject.TranscriptWindow.dlg, -1, _('Transana XML Export'))
         # Set up the confirmation loop signal variable
         repeat = True
         # While we are in the confirmation loop ...
@@ -1390,7 +1424,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
                 else:
                     # ... error check the file name.  If it does not have a PATH ...
                     if os.path.split(result[_('Transana-XML Filename')])[0] == u'':
-                        # ... add the Video Path to the file name
+                        # ... add the Media Path to the file name
                         fileName = os.path.join(TransanaGlobal.configData.videoPath, result[_('Transana-XML Filename')])
                     # If there is a path, just continue.
                     else:
@@ -1468,9 +1502,9 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         # Get User input
         temp.get_input()
         # Close the Dialog
-        temp.Close()
+##        temp.Close()
         # Destroy the Dialog
-        temp.Destroy()
+##        temp.Destroy()
 
     def OnChat(self, event):
         """ Chat Window """
@@ -1491,18 +1525,16 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
 
     def OnRecordLock(self, event):
         """ Record Lock Utility Window """
-        # If a Control Object has been defined ...
-        if self.ControlObject != None:
-            # ... it should know how to clear all the Windows!
-            self.ControlObject.ClearAllWindows()
-            # If the Notes Browser Window is open ...
-            if self.ControlObject.NotesBrowserWindow != None:
-                # ... close it, thus releasing any records that might be locked there.
-                self.ControlObject.NotesBrowserWindow.Close()
-            # For each Shapshot Window (from the end of the list to the start) ...
-            while len(self.ControlObject.SnapshotWindows) > 0:
-                # ... close it, thus releasing any records that might be locked there.
-                self.ControlObject.SnapshotWindows[len(self.ControlObject.SnapshotWindows) - 1].Close()
+        # Clear all the Transcript Window pages and panes!
+        self.ControlObject.ClearAllWindows(True)
+        # If the Notes Browser Window is open ...
+        if self.ControlObject.NotesBrowserWindow != None:
+            # ... close it, thus releasing any records that might be locked there.
+            self.ControlObject.NotesBrowserWindow.Close()
+        # For each Shapshot Window (from the end of the list to the start) ...
+        while len(self.ControlObject.SnapshotWindows) > 0:
+            # ... close it, thus releasing any records that might be locked there.
+            self.ControlObject.SnapshotWindows[len(self.ControlObject.SnapshotWindows) - 1].Close()
         # Create a Record Lock Utility window
         recordLockWindow = RecordLock.RecordLock(self, -1, _("Transana Record Lock Utility"))
         recordLockWindow.ShowModal()
@@ -1522,13 +1554,13 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             messageServerPort = TransanaGlobal.configData.messageServerPort
         # Open the Options Settings Dialog Box
         OptionsSettings.OptionsSettings(self)
-        # If the video speed was changed ...
+        # If the Media speed was changed ...
         if self.ControlObject.VideoWindow.GetPlayBackSpeed() != TransanaGlobal.configData.videoSpeed/10.0:
-            # Change video speed here
+            # Change Media speed here
             self.ControlObject.VideoWindow.SetPlayBackSpeed(TransanaGlobal.configData.videoSpeed)
         # Update the Tab Size and Word Wrap.  First, see if they've changed.
         if (TransanaGlobal.configData.tabSize != oldTabSize) or (TransanaGlobal.configData.wordWrap != oldWordWrap):
-            # For each Transcript Window ...
+            # For each Document Window ...
             for trWin in self.ControlObject.TranscriptWindow:
                 # ... set the new tab size
                 trWin.dlg.editor.SetTabWidth(int(TransanaGlobal.configData.tabSize))
@@ -1733,7 +1765,9 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
                 self.presLan_en.install()  # Adding "unicode=1" here would eliminiate the need to declare translations strings at unicode() objects!!
 
             else:
-                wx.MessageDialog(None, "Unknown Language", "Unknown Language").ShowModal()
+                dlg = Dialogs.InfoDialog(None, "Unknown Language")
+                dlg.ShowModal()
+                dlg.Destroy()
 
                 lang = wx.LANGUAGE_ENGLISH
                 TransanaGlobal.configData.language = 'en'
@@ -1745,10 +1779,10 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             #        For 2.60, let's go with "Snapshot".  For 2.61, we'll use "SSL Client Key File".
             # If you update this, also update the phrase above in the __init__ method.)
             
-            if (outofdateLanguage != '') and ("SSL Client Key File" == _("SSL Client Key File")):
+            if (outofdateLanguage != '') and ("Libraries" == _("Libraries")):
                 # If not, display an information message.
                 prompt = "Transana's %s translation is no longer up-to-date.\nMissing prompts will be displayed in English.\n\nIf you are willing to help with this translation,\nplease contact David Woods at dwoods@wcer.wisc.edu." % outofdateLanguage
-                dlg = wx.MessageDialog(None, prompt, "Translation update", style=wx.OK | wx.ICON_INFORMATION)
+                dlg = Dialogs.InfoDialog(None, prompt)
                 dlg.ShowModal()
                 dlg.Destroy()
 
@@ -1801,18 +1835,16 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             if self.visualizationWindowLayout != None:
                 self.ControlObject.VisualizationWindow.SetPosition(self.visualizationWindowLayout[0])
                 self.ControlObject.VisualizationWindow.SetSize(self.visualizationWindowLayout[1])
-            # Video Window
+            # Media Window
             if self.videoWindowLayout != None:
                 self.ControlObject.VideoWindow.SetPosition(self.videoWindowLayout[0])
                 self.ControlObject.VideoWindow.SetSize(self.videoWindowLayout[1])
                 # Try to get the graphic to update
                 self.ControlObject.VideoWindow.Refresh()
-            # Transcript Window
+            # Document Window
             if self.transcriptWindowLayout != None:
-                self.ControlObject.TranscriptWindow[0].dlg.SetPosition(self.transcriptWindowLayout[0])
-                self.ControlObject.TranscriptWindow[0].dlg.SetSize(self.transcriptWindowLayout[1])
-                # Auto-arrange additional transcripts
-                self.ControlObject.AutoArrangeTranscriptWindows()
+                self.ControlObject.TranscriptWindow.dlg.SetPosition(self.transcriptWindowLayout[0])
+                self.ControlObject.TranscriptWindow.dlg.SetSize(self.transcriptWindowLayout[1])
             # Data window
             if self.dataWindowLayout != None:
                 self.ControlObject.DataWindow.SetPosition(self.dataWindowLayout[0])
@@ -1823,17 +1855,38 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             self.menuWindowLayout = (self.GetPosition(), self.GetSize())
             self.visualizationWindowLayout = (self.ControlObject.VisualizationWindow.GetPosition(), self.ControlObject.VisualizationWindow.GetSize())
             self.videoWindowLayout = (self.ControlObject.VideoWindow.GetPosition(), self.ControlObject.VideoWindow.GetSize())
-            self.transcriptWindowLayout = (self.ControlObject.TranscriptWindow[0].dlg.GetPosition(), self.ControlObject.TranscriptWindow[0].dlg.GetSize())
+            self.transcriptWindowLayout = (self.ControlObject.TranscriptWindow.dlg.GetPosition(), self.ControlObject.TranscriptWindow.dlg.GetSize())
             self.dataWindowLayout = (self.ControlObject.DataWindow.GetPosition(), self.ControlObject.DataWindow.GetSize())
 
     def OnOptionsLongTranscriptEdit(self, event):
-        """ Handler for Options > Long Transcript Editing """
-        # Let's just make sure no transcripts are in Edit Mode.  For each transcript ...
-        for win in self.ControlObject.TranscriptWindow:
-            # ... if it's not Read Only (i.e. IS in Edit Mode) ...
-            if not win.dlg.editor.GetReadOnly():
-                # ... set that window to Read Only (which will save it!)
-                win.SetReadOnly(True)
+        """ Handler for Options > Long Document Editing """
+        # note the current TranscriptWindow's selected Page and Panel
+        activePage = self.ControlObject.TranscriptWindow.nb.GetSelection()
+        activePane = self.ControlObject.TranscriptWindow.nb.GetCurrentPage().activePanel
+        # Freeze the TranscriptWindow to make this move a little faster
+        self.ControlObject.TranscriptWindow.nb.Freeze()
+        # Let's just make sure no transcripts are in Edit Mode.  For each Document ...
+        for pageNum in range(self.ControlObject.TranscriptWindow.nb.GetPageCount()):
+            # Select the current page, as SetReadOnly() only works on the currently selected page
+            self.ControlObject.TranscriptWindow.nb.SetSelection(pageNum)
+            # Initialize the Panel Number Counter
+            panelNum = 0
+            # For each Splitter Pane on the current Notebook Page ...
+            for pane in self.ControlObject.TranscriptWindow.nb.GetPage(pageNum).GetChildren():
+                # ... activate that Pane, as SetReadOnly() only works on the currently selected Pane
+                self.ControlObject.TranscriptWindow.nb.GetCurrentPage().ActivatePanel(panelNum)
+                # ... if it's not Read Only (i.e. IS in Edit Mode) ...
+                if not pane.editor.get_read_only():
+                    # ... set that window to Read Only (which will save it!)
+                    self.ControlObject.TranscriptWindow.SetReadOnly(True)
+                # Increment the Panel (Pane) number
+                panelNum += 1
+        # Reset the Transcript Window to 
+        self.ControlObject.TranscriptWindow.nb.SetSelection(activePage)
+        self.ControlObject.TranscriptWindow.nb.GetCurrentPage().ActivatePanel(activePane)
+        # Thaw the Notebook to make it responsive again
+        self.ControlObject.TranscriptWindow.nb.Thaw()
+        
         # Set the Constant value when the value changes
         TransanaConstants.partialTranscriptEdit = event.IsChecked()
 
@@ -1866,7 +1919,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         elif event.GetId() == MenuSetup.MENU_OPTIONS_VIDEOSIZE_200:
             TransanaGlobal.configData.videoSize = 200
 
-        # Trigger the change in size of the Video Component via the Control Object
+        # Trigger the change in size of the Media Component via the Control Object
         self.ControlObject.VideoSizeChange()
 
     def OnMonitor(self, event):
@@ -1924,15 +1977,15 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
                 # Reposition the Visualization Window
                 self.ControlObject.VisualizationWindow.SetDims(visualRect[0], visualRect[1], visualRect[2], visualRect[3])
                 
-                # Determine what the Video Rectangle should be on the new monitor
+                # Determine what the Media Rectangle should be on the new monitor
                 videoRect = self.ControlObject.VideoWindow.GetNewRect()
-                # Reposition the Video Window
+                # Reposition the Media Window
                 self.ControlObject.VideoWindow.SetDims(videoRect[0], videoRect[1], videoRect[2], videoRect[3])
 
                 # Determine what the Transcription Rectangle should be on the new monitor
-                transRect = self.ControlObject.TranscriptWindow[0].GetNewRect()
-                # Reposition the Transcript Window
-                self.ControlObject.TranscriptWindow[0].SetDims(transRect[0], transRect[1], transRect[2], transRect[3])
+                transRect = self.ControlObject.TranscriptWindow.GetNewRect()
+                # Reposition the Document Window
+                self.ControlObject.TranscriptWindow.SetDims(transRect[0], transRect[1], transRect[2], transRect[3])
 
                 # Determine what the Data Rectangle should be on the new monitor
                 dataRect = self.ControlObject.DataWindow.GetNewRect()
@@ -1945,7 +1998,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
                 # Get the size and position of the Visualization Window
                 (x, y, w, h) = self.ControlObject.VisualizationWindow.GetRect()
                 # Adjust the positions of all other windows to match the Visualization Window's initial position
-                self.ControlObject.UpdateWindowPositions('Visualization', w + x)
+                self.ControlObject.UpdateWindowPositions('Visualization', w + x, YUpper = h + y)
 
     def OnWindow(self, event):
         """ Handler for Window Menu """
@@ -1957,28 +2010,24 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             windowList.append(self.ControlObject.MenuWindow)
             # ... add the Data Window to the list
             windowList.append(self.ControlObject.DataWindow)
-            # ... add the Video Window to the list
+            # ... add the Media Window to the list
             windowList.append(self.ControlObject.VideoWindow)
-            # ... interate through the current Transcript Windows ...
-            for window in self.ControlObject.TranscriptWindow:
-                # ... and add them to the list
-                windowList.append(window.dlg)
+            # ... add the Document Window to the list
+            windowList.append(self.ControlObject.TranscriptWindow)
             # ... add the Visualization Window to the list
             windowList.append(self.ControlObject.VisualizationWindow)
         # If Data Window is selected ...
         elif event.GetId() == MenuSetup.MENU_WINDOW_DATA:
             # ... add the Data Window to the list
             windowList.append(self.ControlObject.DataWindow)
-        # If Video Window is selected ...
+        # If Media Window is selected ...
         elif event.GetId() == MenuSetup.MENU_WINDOW_VIDEO:
-            # ... add the Video Window to the list
+            # ... add the Media Window to the list
             windowList.append(self.ControlObject.VideoWindow)
-        # If the Transcript Window is selected ...
+        # If the Document Window is selected ...
         elif event.GetId() == MenuSetup.MENU_WINDOW_TRANSCRIPT:
-            # ... interate through the current Transcript Windows ...
-            for window in self.ControlObject.TranscriptWindow:
-                # ... and add them to the list
-                windowList.append(window.dlg)
+            # ... add the Document Window to the list
+            windowList.append(self.ControlObject.TranscriptWindow)
         # If the Visualization Window is selected ...
         elif event.GetId() == MenuSetup.MENU_WINDOW_VISUALIZATION:
             # ... add the Visualization Window to the list
@@ -2099,11 +2148,11 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
 
     def OnHelpManual(self, evt):
         """ Handler for Help > Manual menu command """
-        self.ControlObject.Help('Transana Main Screen')
+        self.ControlObject.Help('Transana Manual')
 
     def OnHelpTutorial(self, evt):
         """ Handler for Help > Tutorial menu command """
-        self.ControlObject.Help('Welcome to the Transana Tutorial')
+        self.ControlObject.Help('Transana Tutorial')
 
     def OnHelpNotation(self, evt):
         """ Handler for Help > Notation menu command """
@@ -2119,10 +2168,10 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         # Open the user's browser and display the web site
         webbrowser.open('http://www.transana.org/', new=True)
 
-    def OnHelpFund(self, evt):
-        """ Handler for Help > Fund Transana menu command """
-        # Open the user's browser and display the funding page
-        webbrowser.open('http://www.transana.org/about/funding.htm', new=True)
+##    def OnHelpFund(self, evt):
+##        """ Handler for Help > Fund Transana menu command """
+##        # Open the user's browser and display the funding page
+##        webbrowser.open('http://www.transana.org/about/funding.htm', new=True)
 
     def ChangeLanguages(self):
         """ Reset all Menu Labels to reflect a change in selected Language """
@@ -2130,15 +2179,15 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_NEW, _("&New"))
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_NEWDATABASE, _("&Change Database"))
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_FILEMANAGEMENT, _("File &Management"))
-        self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_SAVE, _("&Save Transcript"))
-        self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_SAVEAS, _("Save Transcript &As"))
-        self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_PRINTTRANSCRIPT, _("&Print Transcript"))
+        self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_SAVE, _("&Save Document"))
+        self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_SAVEAS, _("Save Document &As"))
+        self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_PRINTTRANSCRIPT, _("&Print Document"))
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_PRINTERSETUP, _("Printer &Setup"))
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_CLOSE_SNAPSHOTS, _("Close All Snapshots"))
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_CLOSE_REPORTS, _("Close All Reports"))
         self.menuBar.filemenu.SetLabel(MenuSetup.MENU_FILE_EXIT, _("E&xit"))
         
-        self.menuBar.SetLabelTop(1, _("&Transcript"))
+        self.menuBar.SetLabelTop(1, _("&Document"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_EDIT_UNDO, _("&Undo\tCtrl-Z"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_EDIT_CUT, _("Cu&t\tCtrl-X"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_EDIT_COPY, _("&Copy\tCtrl-C"))
@@ -2150,9 +2199,11 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_INSERT_IMAGE, _("&Insert Image"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_PRINT, _("&Print"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_PRINTERSETUP, _("Printer &Setup"))
+        self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_ORIENTATION, _("Change Document Splitter Orientation"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_AUTOTIMECODE, _("F&ixed-Increment Time Codes"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_ADJUSTINDEXES, _("&Adjust Indexes"))
         self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_TEXT_TIMECODE, _("Text Time Code Conversion"))
+        self.menuBar.transcriptmenu.SetLabel(MenuSetup.MENU_TRANSCRIPT_CLOSE_CURRENT, _("Close Current Document"))
 
         self.menuBar.SetLabelTop(2, _("Too&ls"))
         self.menuBar.toolsmenu.SetLabel(MenuSetup.MENU_TOOLS_NOTESBROWSER, _("&Notes Browser"))
@@ -2211,20 +2262,19 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_EL, _("English prompts, Greek data"))
         if self.menuBar.optionslanguagemenu.FindItemById(MenuSetup.MENU_OPTIONS_LANGUAGE_JA) != None:
             self.menuBar.optionslanguagemenu.SetLabel(MenuSetup.MENU_OPTIONS_LANGUAGE_JA, _("English prompts, Japanese data"))
-        if TransanaConstants.macDragDrop or (not 'wxMac' in wx.PlatformInfo):
-            self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_QUICK_CLIPS, _("&Quick Clip Mode"))
-        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_QUICKCLIPWARNING, _("Show Quick Clip Warning"))
+        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_QUICK_CLIPS, _("&Quick Quote and Clip Mode"))
+        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_QUICKCLIPWARNING, _("Show Quick Quote and Clip Warning"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_WORDTRACK, _("Auto &Word-tracking"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_AUTOARRANGE, _("&Auto-Arrange"))
-        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_LONGTRANSCRIPTEDIT, _("Long Transcript Editing"))
-        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION, _("Vi&sualization Style"))
+#        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_LONGTRANSCRIPTEDIT, _("Long Document Editing"))
+        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION, _("Media Vi&sualization Style"))
         self.menuBar.optionsvisualizationmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION_WAVEFORM, _("&Waveform"))
         self.menuBar.optionsvisualizationmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION_KEYWORD, _("&Keyword"))
         self.menuBar.optionsvisualizationmenu.SetLabel(MenuSetup.MENU_OPTIONS_VISUALIZATION_HYBRID, _("&Hybrid"))
-        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_VIDEOSIZE, _("&Video Size"))
+        self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_VIDEOSIZE, _("&Media Size"))
         self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_ALL, _("&All Windows"))
-        self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_VIDEO, _("&Video Only"))
-        self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_TRANS, _("Video and &Transcript Only"))
+        self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_VIDEO, _("&Media Only"))
+        self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_TRANS, _("Media and &Transcript Only"))
         self.menuBar.optionspresentmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT_AUDIO, _("A&udio and Transcript Only"))
         self.menuBar.optionsmenu.SetLabel(MenuSetup.MENU_OPTIONS_PRESENT, _("&Presentation Mode"))
         if wx.Display.GetCount() > 1:
@@ -2235,8 +2285,8 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_ALL_SNAPSHOT, _("Close All Snapshots"))
         self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_CLOSE_REPORTS, _("Close All Reports"))
         self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_DATA, _("Data"))
-        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_VIDEO, _("Video"))
-        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_TRANSCRIPT, _("Transcript"))
+        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_VIDEO, _("Media"))
+        self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_TRANSCRIPT, _("Document"))
         self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_VISUALIZATION, _("Visualization"))
         self.menuBar.windowMenu.SetLabel(MenuSetup.MENU_WINDOW_NOTESBROWSER, _("Notes Browser"))
         if not TransanaConstants.singleUserVersion:
@@ -2251,7 +2301,7 @@ class MenuWindow(wx.Frame):  # wx.MDIParentFrame
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_NOTATION, _("Transcript &Notation"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_ABOUT, _("&About"))
         self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_WEBSITE, _("&www.transana.org"))
-        self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_FUND, _("&Fund Transana"))
+        # self.menuBar.helpmenu.SetLabel(MenuSetup.MENU_HELP_FUND, _("&Fund Transana"))
 
         wx.App_SetMacHelpMenuTitleName(_("&Help"))
 

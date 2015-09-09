@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -310,13 +310,39 @@ for (colorName, colorDef) in transana_grayList:
 def CenterOnPrimary(win):
     """ a wxWindow is passed in as the win parameter.
         This window should be centered on the primary monitor used by Transana on a multi-monitor system. """
+
+#    print "TransanaGlobal.CenterOnPrimary():"
+#    print win.GetRect()
+
+    # Get the Size and Position for the PRIMARY screen
     (x1, y1, w1, h1) = wx.Display(configData.primaryScreen).GetClientArea()
+    # Get the original Size and Position for the window
     (x2, y2, w2, h2) = win.GetRect()
+
+    # I'm seeing some WEIRD values here with wxPython 2.9.??.  Let's try to correct for that.
+    # If the left value is wider than the whole screen ...
+    if (w2 > w1) or (w2 < 0):
+        # ... set it to 50% of the screen width.
+        w2 = int(w1 * 0.50)
+
+#        print "Correcting w2 to", w2
+        
+    # If the height value is taller than the whole screen ...
+    if (h2 > h1) or (h2 < 0):
+        # ... set it to 50% of the screen height.
+        h2 = int(h1 * 0.50)
+
+#        print "Correcting h2 to", h2
+#    print
+        
+    # Position the Window on the center of the Primary Screen
     win.SetPosition((x1 + ((w1 - w2) / 2), y1 + ((h1 - h2) / 2)))
 
-##    print "Misc.CenterOnPrimary():", (x1, y1, w1, h1), (x2, y2, w2, h2)
-##    print "     Window centered on", (x1 + ((w1 - w2) / 2), y1 + ((h1 - h2) / 2))
-##    print
+#    print "TransanaGlobal.CenterOnPrimary():", (x1, y1, w1, h1), (x2, y2, w2, h2)
+#    print "     Window centered on", (x1 + ((w1 - w2) / 2), y1 + ((h1 - h2) / 2))
+#    print
+#    print win.GetRect()
+#    print '---------------------------------------'
 
 def GetImage(imagename):
     if configData.LayoutDirection == wx.Layout_RightToLeft:

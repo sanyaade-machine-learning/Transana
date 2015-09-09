@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -44,7 +44,7 @@ class OptionsSettings(wx.Dialog):
         """ Initialize the Program Options Dialog Box """
         self.parent = parent
         self.lab = lab
-        dlgWidth = 550
+        dlgWidth = 600
         # The Configuration Options dialog needs to be a different on different platforms, and
         # if we're showing the LAB version's initial configuration, we need a bit more room.
         if 'wxMSW' in wx.PlatformInfo:
@@ -54,7 +54,6 @@ class OptionsSettings(wx.Dialog):
                 dlgHeight = 445
         else:
             if self.lab:
-                dlgWidth = 580
                 dlgHeight = 395
             else:
                 dlgHeight = 345
@@ -88,8 +87,8 @@ class OptionsSettings(wx.Dialog):
             # Add the label to the Panel Sizer
             panelDirSizer.Add(lblLabInst, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
 
-        # Add the Video Root Directory Label to the Directories Tab
-        lblVideoDirectory = wx.StaticText(panelDirectories, -1, _("Video Root Directory"), style=wx.ST_NO_AUTORESIZE)
+        # Add the Media Library Directory Label to the Directories Tab
+        lblVideoDirectory = wx.StaticText(panelDirectories, -1, _("Media Library Directory"), style=wx.ST_NO_AUTORESIZE)
         # Add the label to the Panel Sizer
         panelDirSizer.Add(lblVideoDirectory, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         # Add a spacer
@@ -97,8 +96,8 @@ class OptionsSettings(wx.Dialog):
 
         # Create a Row Sizer
         r1Sizer = wx.BoxSizer(wx.HORIZONTAL)
-        # Add the Video Root Directory TextCtrl to the Directories Tab
-        # If the video path is not empty, we should normalize the path specification
+        # Add the Media Library Directory TextCtrl to the Directories Tab
+        # If the Media path is not empty, we should normalize the path specification
         if TransanaGlobal.configData.videoPath == '':
             videoPath = TransanaGlobal.configData.videoPath
         else:
@@ -107,7 +106,7 @@ class OptionsSettings(wx.Dialog):
         # Add the element to the Row Sizer
         r1Sizer.Add(self.videoDirectory, 6, wx.EXPAND | wx.RIGHT, 10)
 
-        # Add the Video Root Directory Browse Button to the Directories Tab
+        # Add the Media Library Directory Browse Button to the Directories Tab
         self.btnVideoBrowse = wx.Button(panelDirectories, -1, _("Browse"))
         # Add the element to the Row Sizer
         r1Sizer.Add(self.btnVideoBrowse, 0)
@@ -193,7 +192,7 @@ class OptionsSettings(wx.Dialog):
             # Define the main VERTICAL sizer for the Notebook Page
             panelTranSizer = wx.BoxSizer(wx.VERTICAL)
 
-            # Add the Video Setback Label to the Transcriber Settings Tab
+            # Add the Media Setback Label to the Transcriber Settings Tab
             lblTranscriptionSetback = wx.StaticText(panelTranscriber, -1, _("Transcription Setback:  (Auto-rewind interval for Ctrl-S)"),
                                                     style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Panel Sizer
@@ -201,7 +200,7 @@ class OptionsSettings(wx.Dialog):
             # Add a spacer
             panelTranSizer.Add((0, 3))
 
-            # Add the Video Setback Slider to the Transcriber Settings Tab
+            # Add the Media Setback Slider to the Transcriber Settings Tab
             self.transcriptionSetback = wx.Slider(panelTranscriber, -1, TransanaGlobal.configData.transcriptionSetback, 0, 5,
                                                   style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
             # Add the element to the Panel Sizer
@@ -211,42 +210,42 @@ class OptionsSettings(wx.Dialog):
             setbackSizer = wx.BoxSizer(wx.HORIZONTAL)
             # Add a spacer so the numbers are positioned correctly
             setbackSizer.Add((11, 0))
-            # Add the Video Setback "0" Value Label to the Transcriber Settings Tab
+            # Add the Media Setback "0" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetbackMin = wx.StaticText(panelTranscriber, -1, "0", style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Row Sizer
             setbackSizer.Add(lblTranscriptionSetbackMin, 0)
             # Add a spacer
             setbackSizer.Add((1, 0), 1, wx.EXPAND)
 
-            # Add the Video Setback "1" Value Label to the Transcriber Settings Tab
+            # Add the Media Setback "1" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetback1 = wx.StaticText(panelTranscriber, -1, "1", style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Row Sizer
             setbackSizer.Add(lblTranscriptionSetback1, 0)
             # Add a spacer
             setbackSizer.Add((1, 0), 1, wx.EXPAND)
 
-            # Add the Video Setback "2" Value Label to the Transcriber Settings Tab
+            # Add the Media Setback "2" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetback2 = wx.StaticText(panelTranscriber, -1, "2", style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Row Sizer
             setbackSizer.Add(lblTranscriptionSetback2, 0)
             # Add a spacer
             setbackSizer.Add((1, 0), 1, wx.EXPAND)
 
-            # Add the Video Setback "3" Value Label to the Transcriber Settings Tab
+            # Add the Media Setback "3" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetback3 = wx.StaticText(panelTranscriber, -1, "3", style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Row Sizer
             setbackSizer.Add(lblTranscriptionSetback3, 0)
             # Add a spacer
             setbackSizer.Add((1, 0), 1, wx.EXPAND)
 
-            # Add the Video Setback "4" Value Label to the Transcriber Settings Tab
+            # Add the Media Setback "4" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetback4 = wx.StaticText(panelTranscriber, -1, "4", style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Row Sizer
             setbackSizer.Add(lblTranscriptionSetback4, 0)
             # Add a spacer
             setbackSizer.Add((1, 0), 1, wx.EXPAND)
 
-            # Add the Video Setback "5" Value Label to the Transcriber Settings Tab
+            # Add the Media Setback "5" Value Label to the Transcriber Settings Tab
             lblTranscriptionSetbackMax = wx.StaticText(panelTranscriber, -1, "5", style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Row Sizer
             setbackSizer.Add(lblTranscriptionSetbackMax, 0)
@@ -278,8 +277,8 @@ class OptionsSettings(wx.Dialog):
                 
             # Create a Row Sizer
             lblSpeedSizer = wx.BoxSizer(wx.HORIZONTAL)
-            # Add the Video Speed Slider Label to the Transcriber Settings Tab
-            lblVideoSpeed = wx.StaticText(panelTranscriber, -1, _("Video Playback Speed"), style=wx.ST_NO_AUTORESIZE)
+            # Add the Media Speed Slider Label to the Transcriber Settings Tab
+            lblVideoSpeed = wx.StaticText(panelTranscriber, -1, _("Media Playback Speed"), style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Row Sizer
             lblSpeedSizer.Add(lblVideoSpeed, 0)
             # Add a spacer
@@ -288,11 +287,11 @@ class OptionsSettings(wx.Dialog):
             # Screen elements get a bit out of order here!  We put the CURRENT VALUE of the slider above the slider.
             # We'll use the order of adding things to sizers to get around the logic problems this presents.
 
-            # Add the Video Speed Slider to the Transcriber Settings Tab
+            # Add the Media Speed Slider to the Transcriber Settings Tab
             self.videoSpeed = wx.Slider(panelTranscriber, -1, TransanaGlobal.configData.videoSpeed, 1, 20,
                                         style=wx.SL_HORIZONTAL | wx.SL_AUTOTICKS)
 
-            # Add the Video Speed Slider Current Setting Label to the Transcriber Settings Tab
+            # Add the Media Speed Slider Current Setting Label to the Transcriber Settings Tab
             self.lblVideoSpeedSetting = wx.StaticText(panelTranscriber, -1, "%1.1f" % (float(self.videoSpeed.GetValue()) / 10))
             # Add the element to the Row Sizer
             lblSpeedSizer.Add(self.lblVideoSpeedSetting, 0, wx.ALIGN_RIGHT)
@@ -311,21 +310,21 @@ class OptionsSettings(wx.Dialog):
             speedSizer = wx.BoxSizer(wx.HORIZONTAL)
             # Add a spacer so the values are positioned correctly
             speedSizer.Add((6, 0))
-            # Add the Video Speed Slider Minimum Speed Label to the Transcriber Settings Tab
+            # Add the Media Speed Slider Minimum Speed Label to the Transcriber Settings Tab
             lblVideoSpeedMin = wx.StaticText(panelTranscriber, -1, "0.1", style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Row Sizer
             speedSizer.Add(lblVideoSpeedMin, 0)
             # Add a spacer
             speedSizer.Add((1, 0), 8, wx.EXPAND)
 
-            # Add the Video Speed Slider Normal Speed Label to the Transcriber Settings Tab
+            # Add the Media Speed Slider Normal Speed Label to the Transcriber Settings Tab
             lblVideoSpeed1 = wx.StaticText(panelTranscriber, -1, "1.0", style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Row Sizer
             speedSizer.Add(lblVideoSpeed1, 0)
             # Add a spacer
             speedSizer.Add((1, 0), 9, wx.EXPAND)
 
-            # Add the Video Speed Slider Maximum Speed Label to the Transcriber Settings Tab
+            # Add the Media Speed Slider Maximum Speed Label to the Transcriber Settings Tab
             lblVideoSpeedMax = wx.StaticText(panelTranscriber, -1, "2.0", style=wx.ST_NO_AUTORESIZE)
             # Add the element to the Row Sizer
             speedSizer.Add(lblVideoSpeedMax, 0)
@@ -566,7 +565,7 @@ class OptionsSettings(wx.Dialog):
             notebook.SetSelection(tabToShow)
         # If the Directories Tab is showing ...
         if notebook.GetSelection() == 0:
-            # ... the video directory should receive initial focus
+            # ... the Media directory should receive initial focus
             self.videoDirectory.SetFocus()
         # If the Transcriber Settings tab is showing ...
         elif notebook.GetSelection() == 1:
@@ -612,7 +611,7 @@ class OptionsSettings(wx.Dialog):
         self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
         self.Layout()
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # Get the form's current size
         (width, height) = self.GetSize()
@@ -635,8 +634,8 @@ class OptionsSettings(wx.Dialog):
             TransanaGlobal.configData.visualizationPath = self.waveformDirectory.GetValue() + os.sep
         else:
             TransanaGlobal.configData.visualizationPath = self.waveformDirectory.GetValue()
-        # If the Video Directory does not end with the separator character, add one,
-        # then update the Global Video Directory.  (But the lab version doesn't HAVE this value at start-up time.)
+        # If the Media Directory does not end with the separator character, add one,
+        # then update the Global Media Directory.  (But the lab version doesn't HAVE this value at start-up time.)
         if (len(self.videoDirectory.GetValue()) > 0) and \
            (self.videoDirectory.GetValue()[-1] != os.sep):
             tempVideoPath = self.videoDirectory.GetValue() + os.sep
@@ -649,7 +648,7 @@ class OptionsSettings(wx.Dialog):
             TransanaGlobal.configData.databaseDir = self.databaseDirectory.GetValue() + os.sep
         else:
             TransanaGlobal.configData.databaseDir = self.databaseDirectory.GetValue()
-        # If we're not in the LAB version and the Video Root Path has changed ...
+        # If we're not in the LAB version and the Media Library Path has changed ...
         if (not self.lab) and (tempVideoPath != TransanaGlobal.configData.videoPath):
             # First, find out if there are Episodes or Clips that need to be changed in the Database
             (episodeCount, clipCount) = DBInterface.VideoFilePaths(tempVideoPath)
@@ -695,7 +694,7 @@ class OptionsSettings(wx.Dialog):
             if ('wxMSW' in wx.PlatformInfo):
                 # Update the Media Player selection
                 TransanaGlobal.configData.mediaPlayer = self.chMediaPlayer.GetSelection()
-            # Update the Global Video Speed
+            # Update the Global Media Speed
             TransanaGlobal.configData.videoSpeed = self.videoSpeed.GetValue()
 
             # STC needs the Tab Size and Word Wrap settings.  RTC does not support them.
@@ -722,7 +721,7 @@ class OptionsSettings(wx.Dialog):
             # Update the Global Special Font Size
             TransanaGlobal.configData.specialFontSize = int(self.specialFontSize.GetValue())
 
-        # Make sure the current video root and visualization path settings are saved in the configuration under the (username, server, database) key.
+        # Make sure the current Media Library and visualization path settings are saved in the configuration under the (username, server, database) key.
         TransanaGlobal.configData.pathsByDB[(TransanaGlobal.userName.encode('utf8'), TransanaGlobal.configData.host.encode('utf8'), TransanaGlobal.configData.database.encode('utf8'))] = \
             {'videoPath' : TransanaGlobal.configData.videoPath.encode('utf8'),
              'visualizationPath' : TransanaGlobal.configData.visualizationPath.encode('utf8')}
@@ -768,13 +767,13 @@ class OptionsSettings(wx.Dialog):
             tmpCO.Help('Program Settings')
 
     def OnBrowse(self, event):
-        """ Implements the "Browse" button for the Waveform or Video Root Directories on the Directories Tab """
-        # Set the prompt and current value for the correct Browse operation (Waveform or Video Root folder)
+        """ Implements the "Browse" button for the Waveform or Media Library Directories on the Directories Tab """
+        # Set the prompt and current value for the correct Browse operation (Waveform or Media Library folder)
         if event.GetId() == self.btnWaveformBrowse.GetId():
             prompt = _("Choose a Waveforms directory:")
             currentValue = self.waveformDirectory.GetValue()
         elif event.GetId() == self.btnVideoBrowse.GetId():
-            prompt = _("Choose a Video Root directory:")
+            prompt = _("Choose a Media Library directory:")
             currentValue = self.videoDirectory.GetValue()
         elif event.GetId() == self.btnDatabaseBrowse.GetId():
             prompt = _("Choose a Database Directory:")
@@ -788,7 +787,7 @@ class OptionsSettings(wx.Dialog):
                 self.waveformDirectory.SetValue(dlg.GetPath())
             elif event.GetId() == self.btnVideoBrowse.GetId():
                 self.videoDirectory.SetValue(dlg.GetPath())
-                # If no Waveform directory is assigned when the Video Root is selected (as will be true for the LAB version) ...
+                # If no Waveform directory is assigned when the Media Library is selected (as will be true for the LAB version) ...
                 if self.waveformDirectory.GetValue() == '':
                     # ... then auto-assign a waveforms subdirectory!
                     self.waveformDirectory.SetValue(os.path.join(dlg.GetPath(), 'waveforms'))
@@ -798,8 +797,8 @@ class OptionsSettings(wx.Dialog):
         dlg.Destroy
 
     def OnScroll(self, event):
-        """ Handle the Scroll Event for the Video Speed Slider. """
-        # Update the Current Video Speed Label
+        """ Handle the Scroll Event for the Media Speed Slider. """
+        # Update the Current Media Speed Label
         self.lblVideoSpeedSetting.SetLabel("%1.1f" % (float(self.videoSpeed.GetValue()) / 10))
 
     def OnPageChange(self, event):
@@ -808,7 +807,7 @@ class OptionsSettings(wx.Dialog):
         event.Skip()
         # If the Directories tab is showing ...
         if event.GetSelection() == 0:
-            # ... the Video Root should recieve focus
+            # ... the Media Library should recieve focus
             wx.CallAfter(self.videoDirectory.SetFocus)
         # If the Transcriber Settings tab is showing ...
         elif event.GetSelection() == 1:

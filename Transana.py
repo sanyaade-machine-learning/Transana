@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -17,7 +17,7 @@
 """This file implements the Transana class, which is the main Transana application
 definition."""
 
-__author__ = 'Nathaniel Case, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case'
 
 
 """
@@ -226,10 +226,30 @@ class Transana(wx.App):
             if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
                 # ... we need to reverse the image direcion
                 bitmap = bitmap.ConvertToImage().Mirror().ConvertToBitmap()
+
+            splashPosition = wx.DefaultPosition
+
+## This doesn't work.  I have not been able to put the Splash Screen anywhere but on the Center of
+## Monitor 0 (with wx.SPASH_CENTER_ON_SCREEN) or the upper left corner of Monitor 0 (without it).  Bummer.
+                
+##            # Get the Size and Position for the PRIMARY screen
+##            (x1, y1, w1, h1) = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()
+##            (x2, y2) = bitmap.GetSize()
+##
+##            splashPosition = (int(float(w1) / 2.0) + x1 - int(float(x2) / 2.0),
+##                              int(float(h1) / 2.0) + y1 - int(float(y2) / 2.0))
+##
+##            print "Splash Screen Position:"
+##            print TransanaGlobal.configData.primaryScreen
+##            print x1, y1, w1, h1
+##            print x2, y2
+##            print splashPosition
+##            print
+
             # Create the SplashScreen object
             splash = wx.SplashScreen(bitmap,
-                        wx.SPLASH_CENTRE_ON_SCREEN | wx.SPLASH_TIMEOUT,
-                        4000, None, -1, wx.DefaultPosition, wx.DefaultSize, splashStyle)
+                        wx.SPLASH_CENTER_ON_SCREEN | wx.SPLASH_TIMEOUT,
+                        4000, None, -1, splashPosition, wx.DefaultSize, splashStyle)
         else:
             raise ImageLoadError, \
                     _("Unable to load Transana's splash screen image.  Installation error?")
@@ -309,9 +329,9 @@ class Transana(wx.App):
                 return False
 
         # If we're on the Single-user version for Windows ...
-        if TransanaConstants.singleUserVersion and ('wxMSW' in wx.PlatformInfo):
+        if TransanaConstants.singleUserVersion:
             # ... determine the file name for the data conversion information pickle file
-            fs = os.path.join(TransanaGlobal.configData.databaseDir, '242_250_Convert.pkl')
+            fs = os.path.join(TransanaGlobal.configData.databaseDir, '260_300_Convert.pkl')
             # If there is data in mid-conversion ...
             if os.path.exists(fs):
                 # ... get the conversion data from the Pickle File
@@ -336,19 +356,22 @@ class Transana(wx.App):
                     # Iterate through the conversion data
                     for key in self.exportedDBs:
                         # Determine the file path for the converted database
-                        newDBPath = os.path.join(TransanaGlobal.configData.databaseDir, key + '_Converted')
+                        newDBPath = os.path.join(TransanaGlobal.configData.databaseDir, key + '.db')
                         # If the converted database ALREADY EXISTS ...
                         if os.path.exists(newDBPath):
                             # ... create an error message
                             prompt = unicode(_('Database "%s" already exists.\nDatabase "%s" cannot be converted at this time.'), 'utf8')
                             # ... display an error message
-                            tmpDlg = Dialogs.ErrorDialog(None, prompt % (key + '_Converted', key))
+                            tmpDlg = Dialogs.ErrorDialog(None, prompt % (key, key))
                             tmpDlg.ShowModal()
                             tmpDlg.Destroy()
                         # If the converted database does NOT exist ...
                         else:
+                            if 'wxMac' in wx.PlatformInfo:
+                                prompt = _('Converting "%s"\nThis process may take a long time, depending on how much data this database contains.\nWe cannot provide progress feedback on OS X.  Please be patient.')
+                                progWarn = Dialogs.PopupDialog(None, _("Converting Databases"), prompt % key)
                             # Create the Import Database, passing the database name so the user won't be prompted for one.
-                            DBInterface.establish_db_exists(dbToOpen = key + '_Converted')
+                            DBInterface.establish_db_exists(dbToOpen = key, usePrompt=False)
 
                             # Import the database.
                             # First, create an Import Database dialog, but don't SHOW it.
@@ -357,6 +380,10 @@ class Transana(wx.App):
                             temp.Import()
                             # Close the Import Database dialog
                             temp.Close()
+
+                            if 'wxMac' in wx.PlatformInfo:
+                                progWarn.Destroy()
+                                progWarn = None
 
                             # Close the database that was just imported
                             DBInterface.close_db()
@@ -368,17 +395,26 @@ class Transana(wx.App):
                                 TransanaGlobal.configData.databaseList['localhost'] = {}
                                 TransanaGlobal.configData.databaseList['localhost']['dbList'] = []
                             # Update the database name
-                            TransanaGlobal.configData.database = key + '_Converted'
+                            TransanaGlobal.configData.database = key
                             # Add the new (converted) database name to the database list
-                            TransanaGlobal.configData.databaseList['localhost']['dbList'].append(key + '_Converted')
+                            TransanaGlobal.configData.databaseList['localhost']['dbList'].append(key.encode('utf8'))
                             # Start exception handling
                             try:
                                 # If we're NOT in the lab version of Transana ...
                                 if not TransanaConstants.labVersion:
-                                    # Add the unconverted database's PATH values to the CONVERTED database's configuration!
-                                    TransanaGlobal.configData.pathsByDB[('', 'localhost', key + '_Converted')] = \
-                                        {'visualizationPath' : TransanaGlobal.configData.pathsByDB[('', 'localhost', key)]['visualizationPath'],
-                                         'videoPath' : TransanaGlobal.configData.pathsByDB[('', 'localhost', key)]['videoPath']}
+
+                                    # This is harder than it should be because of a combination of encoding and case-changing issues.
+                                    # Let's iterate through the Version 2.5 "paths by database" config data
+                                    for key2 in TransanaGlobal.configData.pathsByDB2.keys():
+                                        # If we have a LOCAL database with a matching key to the database being imported ...
+                                        if (key2[0] == '') and (key2[1] == 'localhost') and (key2[2].decode('utf8').lower() == key):
+                                            # Add the unconverted database's PATH values to the CONVERTED database's configuration!
+                                            TransanaGlobal.configData.pathsByDB[('', 'localhost', key.encode('utf8'))] = \
+                                                {'visualizationPath' : TransanaGlobal.configData.pathsByDB2[key2]['visualizationPath'],
+                                                 'videoPath' : TransanaGlobal.configData.pathsByDB2[key2]['videoPath']}
+                                            # ... and we can stop looking
+                                            break
+
                                 # Save the altered configuration data
                                 TransanaGlobal.configData.SaveConfiguration()
                             # The Computer Lab version sometimes throws a KeyError
@@ -386,8 +422,11 @@ class Transana(wx.App):
                                 # If this comes up, we can ignore it.
                                 pass
 
-                    # Delete the Import File Information
-                    os.remove(fs)
+                # Delete the Import File Information
+                os.remove(fs)
+
+                if DEBUG:
+                    print "Done importing Files"
 
         # We can only continue if we initialized the database OR are running MU.
         if connectionEstablished:
@@ -426,7 +465,6 @@ class Transana(wx.App):
                         print "Creating Transcript Window",
         
                     self.transcriptWindow = TranscriptionUI.TranscriptionUI(TransanaGlobal.menuWindow, includeClose = ('wxMac' in wx.PlatformInfo))
-
                     if DEBUG:
                         print self.transcriptWindow.dlg.GetSize()
                         print "Creating Visualization Window",
@@ -439,21 +477,21 @@ class Transana(wx.App):
                         print "Creating Control Object"
         
                     # Create the Control Object and register all objects to be controlled with it
-                    self.controlObject = ControlObject()
-                    self.controlObject.Register(Menu = TransanaGlobal.menuWindow,
+                    self.ControlObject = ControlObject()
+                    self.ControlObject.Register(Menu = TransanaGlobal.menuWindow,
                                                 Video = self.videoWindow,
                                                 Transcript = self.transcriptWindow,
                                                 Data = self.dataWindow,
                                                 Visualization = self.visualizationWindow)
                     # Set the active transcript
-                    self.controlObject.activeTranscript = 0
+                    self.ControlObject.activeTranscript = 0
 
                     # Register the ControlObject with all other objects to be controlled
-                    TransanaGlobal.menuWindow.Register(ControlObject=self.controlObject)
-                    self.dataWindow.Register(ControlObject=self.controlObject)
-                    self.videoWindow.Register(ControlObject=self.controlObject)
-                    self.transcriptWindow.Register(ControlObject=self.controlObject)
-                    self.visualizationWindow.Register(ControlObject=self.controlObject)
+                    TransanaGlobal.menuWindow.Register(ControlObject=self.ControlObject)
+                    self.dataWindow.Register(ControlObject=self.ControlObject)
+                    self.videoWindow.Register(ControlObject=self.ControlObject)
+                    self.transcriptWindow.Register(ControlObject=self.ControlObject)
+                    self.visualizationWindow.Register(ControlObject=self.ControlObject)
 
                     # Set the Application Top Window to the Menu Window (wxPython)
                     self.SetTopWindow(TransanaGlobal.menuWindow)
@@ -517,7 +555,7 @@ class Transana(wx.App):
                         print "Call 3", 'Visualization', w + x
 
                     # Adjust the positions of all other windows to match the Visualization Window's initial position
-                    self.controlObject.UpdateWindowPositions('Visualization', w + x)
+                    self.ControlObject.UpdateWindowPositions('Visualization', w + x, YUpper = h + y)
 
                     TransanaGlobal.resizingAll = False
 
@@ -587,7 +625,7 @@ class Transana(wx.App):
                 # If the user says Yes ...
                 if tmpDlg.LocalShowModal() == wx.ID_YES:
                     # ... start the Tutorial
-                    self.controlObject.Help('Welcome to the Transana Tutorial')
+                    self.ControlObject.Help('Welcome to the Transana Tutorial')
 
             if DEBUG:
                 print

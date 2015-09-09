@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -142,7 +142,7 @@ class KWManager(wx.Dialog):
         self.SetSizer(mainSizer)
         self.SetAutoLayout(True)
         self.Layout()
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         self.kw_groups = DBInterface.list_of_keyword_groups()
         for kwg in self.kw_groups:
@@ -191,7 +191,13 @@ class KWManager(wx.Dialog):
 
     def OnNewKWG(self, evt):
         """Invoked when the 'Create a new keyword group' button is activated."""
-        kwg = Dialogs.add_kw_group_ui(self, self.kw_groups)
+        kwgDlg = Dialogs.add_kw_group_ui(self, self.kw_groups)
+        result = kwgDlg.ShowModal()
+        if result == wx.ID_OK:
+            kwg = kwgDlg.kwGroup.GetValue()
+        else:
+            kwg = None
+        kwgDlg.Destroy()
         if kwg:
             self.kw_groups.append(kwg)
             self.kw_group.Append(kwg)
@@ -258,9 +264,15 @@ class KWManager(wx.Dialog):
         kw_name = self.kw_lb.GetStringSelection()
         if kw_name == "":
             return
-        # Load the selected keyword into a Keyword Object
-        kw = Keyword.Keyword(self.kw_group.GetStringSelection(), kw_name)
-        self.EditKeyword(kw, evt)
+        try:
+            # Load the selected keyword into a Keyword Object
+            kw = Keyword.Keyword(self.kw_group.GetStringSelection(), kw_name)
+            self.EditKeyword(kw, evt)
+        except RecordNotFoundError, e:
+            prompt = unicode('Could not load keyword "%s : %s".\nIt may have been altered by another user.', 'utf8')
+            errordlg = Dialogs.ErrorDialog(None, prompt % (self.kw_group.GetStringSelection(), self.kw_lb.GetStringSelection()))
+            errordlg.ShowModal()
+            errordlg.Destroy()
 
     def OnDelKW(self, evt):
         """Invoked when the 'Delete Keyword from list' button is activated."""
@@ -280,7 +292,7 @@ class KWManager(wx.Dialog):
             # Signal that we do NOT want to delete the Keyword!
             result = wx.ID_NO
         else:
-            msg = _('Are you sure you want to delete Keyword "%s" and all instances of it from the Clips and Snapshots?')
+            msg = _('Are you sure you want to delete Keyword "%s" and all instances of it from Quotes, Clips, and Snapshots?')
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                 msg = unicode(msg, 'utf8')
@@ -318,18 +330,30 @@ class KWManager(wx.Dialog):
         """Invoked when a keyword is selected in the listbox."""
         # Check to see if there IS a keyword selected.  (an error was being raised!)
         if self.kw_lb.GetStringSelection() != '':
-            kw = Keyword.Keyword(self.kw_group.GetStringSelection(), self.kw_lb.GetStringSelection())
-            self.definition.SetValue(kw.definition)
-            self.edit_kw.Enable(self.deleteEnabled)
-            self.del_kw.Enable(self.deleteEnabled)
+            try:
+                kw = Keyword.Keyword(self.kw_group.GetStringSelection(), self.kw_lb.GetStringSelection())
+                self.definition.SetValue(kw.definition)
+                self.edit_kw.Enable(self.deleteEnabled)
+                self.del_kw.Enable(self.deleteEnabled)
+            except RecordNotFoundError, e:
+                prompt = unicode('Could not load keyword "%s : %s".\nIt may have been altered by another user.', 'utf8')
+                errordlg = Dialogs.ErrorDialog(None, prompt % (self.kw_group.GetStringSelection(), self.kw_lb.GetStringSelection()))
+                errordlg.ShowModal()
+                errordlg.Destroy()
 
     def OnKeywordDoubleClick(self, event):
         """Double-clicking a keyword calls the Edit Properties screen!"""
-        # Load the selected keyword into a Keyword Object
-        kw = Keyword.Keyword(self.kw_group.GetStringSelection(), self.kw_lb.GetStringSelection())
-        # Double-clicking should only work if Editing is enabled!!
-        if self.edit_kw.IsEnabled():
-            self.EditKeyword(kw, event)
+        try:
+            # Load the selected keyword into a Keyword Object
+            kw = Keyword.Keyword(self.kw_group.GetStringSelection(), self.kw_lb.GetStringSelection())
+            # Double-clicking should only work if Editing is enabled!!
+            if self.edit_kw.IsEnabled():
+                self.EditKeyword(kw, event)
+        except RecordNotFoundError, e:
+            prompt = unicode('Could not load keyword "%s : %s".\nIt may have been altered by another user.', 'utf8')
+            errordlg = Dialogs.ErrorDialog(None, prompt % (self.kw_group.GetStringSelection(), self.kw_lb.GetStringSelection()))
+            errordlg.ShowModal()
+            errordlg.Destroy()
 
     def EditKeyword(self, kw, evt):
         # We need to update all open Snapshot Windows based on the change in this Keyword

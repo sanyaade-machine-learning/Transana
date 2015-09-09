@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -35,14 +35,14 @@ import TransanaImages
 import wx
 import CoreData
 import CoreDataPropertiesForm
-import Series
+import Library
 import Episode
 import os
 import sys
 import string
 
 # Define the maximum number of video files allowed.  (This could change!)
-if TransanaConstants.proVersion:
+if TransanaConstants.proVersion and not TransanaConstants.demoVersion:
     MEDIAFILEMAX = 4
 else:
     MEDIAFILEMAX = 1
@@ -82,8 +82,8 @@ class EpisodePropertiesForm(Dialogs.GenForm):
 
         # Create a VERTICAL sizer for the next element
         v2 = wx.BoxSizer(wx.VERTICAL)
-        # Series ID layout
-        series_edit = self.new_edit_box(_("Series ID"), v2, self.obj.series_id)
+        # Library ID layout
+        series_edit = self.new_edit_box(_("Library ID"), v2, self.obj.series_id)
         # Add the element to the sizer
         r2Sizer.Add(v2, 2, wx.EXPAND)
         series_edit.Enable(False)
@@ -333,7 +333,7 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size
         self.SetSizeHints(max(550, width), max(435, height))
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # We need to set some minimum sizes so the sizers will work right
         self.kw_group_lb.SetSizeHints(minW = 50, minH = 20)
@@ -347,11 +347,11 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         for keywordGroup in self.kw_groups:
             self.kw_group_lb.Append(keywordGroup)
 
-        # Load the parent Series in order to determine the default Keyword Group
-        tempSeries = Series.Series(self.obj.series_id)
-        # Select the Series Default Keyword Group in the Keyword Group list
-        if (tempSeries.keyword_group != '') and (self.kw_group_lb.FindString(tempSeries.keyword_group) != wx.NOT_FOUND):
-            self.kw_group_lb.SetStringSelection(tempSeries.keyword_group)
+        # Load the parent Library in order to determine the default Keyword Group
+        tempLibrary = Library.Library(self.obj.series_id)
+        # Select the Library Default Keyword Group in the Keyword Group list
+        if (tempLibrary.keyword_group != '') and (self.kw_group_lb.FindString(tempLibrary.keyword_group) != wx.NOT_FOUND):
+            self.kw_group_lb.SetStringSelection(tempLibrary.keyword_group)
         # If no Default Keyword Group is defined, select the first item in the list
         else:
             # but only if there IS a first item in the list.
@@ -384,10 +384,11 @@ class EpisodePropertiesForm(Dialogs.GenForm):
         """Refresh the keywords listbox."""
         sel = self.kw_group_lb.GetStringSelection()
         if sel:
-            self.kw_list = \
-                DBInterface.list_of_keywords_by_group(sel)
+            self.kw_list = DBInterface.list_of_keywords_by_group(sel)
             self.kw_lb.Clear()
-            self.kw_lb.InsertItems(self.kw_list, 0)
+            if len(self.kw_list) > 0:
+                self.kw_lb.InsertItems(self.kw_list, 0)
+                self.kw_lb.EnsureVisible(0)
 
     def highlight_bad_keyword(self):
         """ Highlight the first bad keyword in the keyword list """
@@ -781,11 +782,11 @@ class ListBoxFileDropTarget(wx.FileDropTarget):
 class AddEpisodeDialog(EpisodePropertiesForm):
     """Dialog used when adding a new Episode."""
 
-    def __init__(self, parent, id, series):
+    def __init__(self, parent, id, library):
         obj = Episode.Episode()
         obj.owner = DBInterface.get_username()
-        obj.series_num = series.number
-        obj.series_id = series.id
+        obj.series_num = library.number
+        obj.series_id = library.id
         EpisodePropertiesForm.__init__(self, parent, id, _("Add Episode"), obj)
 
 class EditEpisodeDialog(EpisodePropertiesForm):

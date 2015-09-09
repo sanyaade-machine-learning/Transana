@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -230,8 +230,7 @@ class SnapshotWindow(wx.Frame):
             self.Bind(wx.EVT_TOOL, self.OnCodingKey, self.codingKeyTool)
 
             # Add a Previous button
-            bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
-            self.prevSnapBtn = self.toolbar.AddTool(wx.ID_ANY, bitmap=bmp, isToggle=False, shortHelpString = _("Previous Snapshot"))
+            self.prevSnapBtn = self.toolbar.AddTool(wx.ID_ANY, bitmap=TransanaImages.ArtProv_BACK.GetBitmap(), isToggle=False, shortHelpString = _("Previous Snapshot"))
             self.Bind(wx.EVT_TOOL, self.OnChangeSnapshot, self.prevSnapBtn)
             # If there is no previous snapshot ...
             if self.prevSnapshot == 0:
@@ -239,8 +238,7 @@ class SnapshotWindow(wx.Frame):
                 self.toolbar.EnableTool(self.prevSnapBtn.GetId(), False)
                 
             # If there is a next snapshot in the collection, add a Next button
-            bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
-            self.nextSnapBtn = self.toolbar.AddTool(wx.ID_ANY, bitmap=bmp, isToggle=False, shortHelpString = _("Next Snapshot"))
+            self.nextSnapBtn = self.toolbar.AddTool(wx.ID_ANY, bitmap=TransanaImages.ArtProv_FORWARD.GetBitmap(), isToggle=False, shortHelpString = _("Next Snapshot"))
             self.Bind(wx.EVT_TOOL, self.OnChangeSnapshot, self.nextSnapBtn)
             # If there is no next snapshot ...
             if self.nextSnapshot == 0:
@@ -380,15 +378,13 @@ class SnapshotWindow(wx.Frame):
             self.line_style_cb.SetStringSelection(_('Solid'))
             self.toolbar2.AddControl(self.line_style_cb)
             self.line_style_cb.Bind(wx.EVT_CHOICE, self.OnToolbar)
-            # Disable LIne Style selection
+            # Disable Line Style selection
             self.line_style_cb.Enable(False)
 
             self.toolbar2.AddSeparator()
 
             # Add a Help button
-            # Get the graphic for Help ...
-            bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
-            self.help = wx.BitmapButton(self.toolbar2, -1, bmp, size=(24, 24))
+            self.help = wx.BitmapButton(self.toolbar2, -1, TransanaImages.ArtProv_HELP.GetBitmap(), size=(24, 24))
             self.help.SetToolTipString(_("Help"))
             self.toolbar2.AddControl(self.help)
             self.help.Bind(wx.EVT_BUTTON, self.OnHelp)
@@ -830,8 +826,8 @@ class SnapshotWindow(wx.Frame):
         # If the current transcript is in Read Only mode ...
         if self.ControlObject.ActiveTranscriptReadOnly():
             # ... inform the user
-            msg = _("The current transcript is not editable.  The requested snapshot cannot be inserted into the transcript.")
-            msg += '\n\n' + _("To insert the snapshot into the transcript, press the Edit Mode button on the Transcript Toolbar to make the transcript editable.")
+            msg = _("The current document is not editable.  The requested snapshot cannot be inserted into the document.")
+            msg += '\n\n' + _("To insert the snapshot into the document, press the Edit Mode button on the Document Toolbar to make the document editable.")
             dlg = Dialogs.InfoDialog(self, msg)
             dlg.ShowModal()
             dlg.Destroy()
@@ -841,7 +837,7 @@ class SnapshotWindow(wx.Frame):
             # Save the current selection to the temporary file
             self.FileSaveSelectionAs(event, filename = filename)
             # Load the TEMP file into Transcript"
-            self.ControlObject.TranscriptInsertImage(filename)
+            self.ControlObject.TranscriptInsertImage(filename, self.obj.number)
 
     def OnEditKeywords(self, event):
         """ Edit whole snapshot keywords """
@@ -1091,7 +1087,7 @@ class SnapshotWindow(wx.Frame):
         self.canvas.ClearAll()
 
         # Change the Window Name
-        self.SetTitle(self.obj.id)
+        self.SetTitle(_("Snapshot").decode('utf8') + u' - ' + self.obj.GetNodeString(True))
 
         # If the image that is passed in has a defined window size ...
         if self.obj.image_size[0] > 0:
@@ -1524,11 +1520,11 @@ class SnapshotWindow(wx.Frame):
         # Create a Menu
         menu = wx.Menu()
         # Populate the Menu
-        menu.Append(MENU_POPUP_HIDE, _("Hide"))
+        menu.Append(MENU_POPUP_HIDE, _('Hide "%s"') % Object.Name)
         wx.EVT_MENU(self, MENU_POPUP_HIDE, self.OnPopupMenu)
-        menu.Append(MENU_POPUP_SENDTOBACK, _("Send To Back"))
+        menu.Append(MENU_POPUP_SENDTOBACK, _('Send "%s" To Back') % Object.Name)
         wx.EVT_MENU(self, MENU_POPUP_SENDTOBACK, self.OnPopupMenu)
-        menu.Append(MENU_POPUP_DELETE, _("Delete"))
+        menu.Append(MENU_POPUP_DELETE, _('Delete "%s"') % Object.Name)
         wx.EVT_MENU(self, MENU_POPUP_DELETE, self.OnPopupMenu)
         # Have the Menu Pop Up for the User
         self.PopupMenu(menu, self.ScreenToClient(wx.GetMousePosition()))
@@ -1800,18 +1796,42 @@ class SnapshotWindow(wx.Frame):
             if result == wx.ID_OK:
                 # ... get the path
                 path = dlg.GetPath()
+            # Destroy the File Dialog
+            dlg.Destroy()
+            # Check for the file extension
+            if not(path[-4:].lower() == ".jpg"):
+                # ... and add it if needed
+                path = path+".jpg"
+            # Check to see if the file already exists ...
+            if os.path.exists(path):
+                # ... and if so, build an error message.
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A file named "%s" already exists.  Do you want to replace it?'), 'utf8')
+                else:
+                    prompt = _('A file named "%s" already exists.  Do you want to replace it?')
+                # Build an error dialog
+                dlg2 = Dialogs.QuestionDialog(None, prompt % path)
+                # Get the user response
+                if dlg2.LocalShowModal() == wx.ID_YES:
+                    result = wx.ID_OK
+                else:
+                    result = wx.ID_CANCEL
+                dlg2.Destroy()
         # If a file name is passed in ...
         else:
             # ... fake the User hitting OK
             result = wx.ID_OK
             # ... and use the file name passed in
             path = filename
-        # If the user pressed OK
-        if result == wx.ID_OK:
             # Check for the file extension
             if not(path[-4:].lower() == ".jpg"):
                 # ... and add it if needed
                 path = path+".jpg"
+
+        # If the user pressed OK
+        if result == wx.ID_OK:
+            
             # Use the FloatCanvas' SaveAsImage() method to export the image
             self.canvas.SaveAsImage(path, ImageType=wx.BITMAP_TYPE_JPEG)
 
@@ -1880,8 +1900,12 @@ class SnapshotWindow(wx.Frame):
         # Create a dialog to prompt the user for a file name and path
         dlg = wx.FileDialog(self, message="Save file as ...", defaultDir=TransanaGlobal.configData.videoPath, 
                             defaultFile="", wildcard="*.jpg", style=wx.SAVE )
-        # Display the dialog.  If the user hits OK ...
-        if dlg.ShowModal() == wx.ID_OK:
+        # Display the file dialog.
+        result = dlg.ShowModal()
+        # Destroy the File Dialog
+        dlg.Destroy()
+        # If the user hits OK ...
+        if result == wx.ID_OK:
             # ... get the file path
             path = dlg.GetPath()
             # Check for the file extension
@@ -1889,6 +1913,23 @@ class SnapshotWindow(wx.Frame):
                 # ... and add it if needed
                 path = path+".jpg"
 
+            # Check to see if the file already exists ...
+            if os.path.exists(path):
+                # ... and if so, build an error message.
+                if 'unicode' in wx.PlatformInfo:
+                    # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                    prompt = unicode(_('A file named "%s" already exists.  Do you want to replace it?'), 'utf8')
+                else:
+                    prompt = _('A file named "%s" already exists.  Do you want to replace it?')
+                # Build an error dialog
+                dlg2 = Dialogs.QuestionDialog(None, prompt % path)
+                # Get the user response
+                result2 = dlg2.LocalShowModal()
+                dlg2.Destroy()
+                if result2 != wx.ID_YES:
+                    # Exit the Save
+                    return
+            
             # Freeze the image
             self.canvas.Freeze()
 
@@ -2024,14 +2065,19 @@ class SnapshotWindow(wx.Frame):
             self.obj.db_load(self.obj.number)
             # Update the Keyword Visualization, if needed
             self.ControlObject.UpdateKeywordVisualization()
-            # Even if this computer doesn't need to update the keyword visualization others, might need to.
-            if not TransanaConstants.singleUserVersion and (self.obj.episode_num != 0):
-                # We need to update the Episode Keyword Visualization
-                if DEBUG:
-                    print 'Message to send = "UKV %s %s %s"' % ('Episode', self.obj.episode_num, 0)
-                    
+            # Multi-user Messaging
+            if not TransanaConstants.singleUserVersion:
+                # Even if this computer doesn't need to update the keyword visualization others, might need to.
+                if (self.obj.episode_num != 0):
+                    # We need to update the Episode Keyword Visualization
+                    if DEBUG:
+                        print 'Message to send = "UKV %s %s %s"' % ('Episode', self.obj.episode_num, 0)
+                        
+                    if TransanaGlobal.chatWindow != None:
+                        TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', self.obj.episode_num, 0))
+                # If this Snapshot is open on other computers, it should be updated.
                 if TransanaGlobal.chatWindow != None:
-                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Episode', self.obj.episode_num, 0))
+                    TransanaGlobal.chatWindow.SendMessage("US %s" % (self.obj.number))
             # Toggle the Toolbar Button to signal that we have left Edit mode
             self.toolbar.ToggleTool(self.editTool.GetId(), False)
         except TransanaExceptions.SaveError:
@@ -2233,8 +2279,14 @@ class GUITransana(GUIMode.GUIBase):
 
     def OnMove(self, event):
         """ Detect Mouse Motion for Rubber Band Box and Hit Test functions """
-        # Hit Test
-        # self.Canvas.MouseOverTest(event)
+        # Get the cursor position and the coordinates bounding the image canvas
+        pos = event.GetPosition()
+        rect = self.Canvas.GetRect()
+        # If we go off the Canvas while drawing, the MouseOverTest crashes Transana!  Let's prevent that by
+        # only doing the MouseOverTest while on the canvas
+        if (pos[0] > 0) and (pos[1] > 0) and (pos[0] < rect[2]) and (pos[1] < rect[3]):
+            # Hit Test
+            self.Canvas.MouseOverTest(event)
 
         # Always raise the Move event.
         self.Canvas._RaiseMouseEvent(event,FloatCanvas.EVT_FC_MOTION)

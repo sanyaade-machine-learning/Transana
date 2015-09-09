@@ -1,0 +1,71 @@
+<HTML>
+<HEAD>
+<TITLE>Clip Properties</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Clip Properties</H1><HR>
+
+A <A HREF="organization.htm">Clip</A> in Transana is a basic analytic unit for media data.  It is a small segment of video or audio, usually with one or more accompanying transcripts, taken from an <A HREF="episodeproperties.htm">Episode&apos;s</A> <A HREF="transcriptproperties.htm">Transcript</A>.  (<A HREF="transcriptlessclips.htm">Transcript-less Clips</A> are also possible.)  The Clip is selected as analytically important and is coded by placing it in a <A HREF="collectionproperties.htm">Collection</A> and by adding <A HREF="keywordproperties.htm">Keywords</A> to it.<P>
+
+There are two types of Clips in Transana, <A HREF="createclips.htm">Standard Clips</A>, <A HREF="quickclips.htm">Quick Clips</A>.  Please see the linked pages in the <A HREF="tutorial.htm">Tutorial</A> for further information about the similarities and differences between these types of Clips.  In addition, you can make both kinds of Clips either with or without first creating and time-coding transcripts.  The subtleties are described in detail in the <a href="tutorial.htm">Tutorial</a>.  The descriptions below are meant to be brief descriptions, not full training materials.<P>
+
+There are many ways to create Clips in Transana.  Each way has different applications, different advantages, different disadvantages, and different implications for how your research will proceed.<P>
+
+<UL>
+<LI><B>To create a Clip from a Transcript</B>:<P>
+<UL>
+<LI>Create and <A HREF="timecodes.htm">time-code</A> a <A HREF="transcriptproperties.htm">Transcript</A> for an <A HREF="episodeproperties.htm">Episode</A> that covers the segment of the media file you would like to include in your Clip.<P>
+<LI><B>Indicate the contents you want included in the Clip</B>:<P>
+<UL>
+<LI>If you do not make a selection in the Episode&apos;s Transcript, Transana automatically select all text between the time codes that surround the cursor position for the Clip Transcript and will use the surrounding time codes as the Clip boundaries.<P>
+<LI>-or- If you make a selection in the Transcript, Transana will use the highlighted text as the Clip Transcript and will use the time codes surrounding your selection as the Clip boundaries.  Your selection may cross time codes.<P>
+<LI>Note that if your time codes do not closely match your text selection, you may find more media included in your Clip than you intend.  In this case, you may want to insert more precise time codes before creating your Clip.<P>
+</UL>
+<LI><B>To create a Standard Clip</B>:<P>
+<UL>
+<LI>You can double-click the target <A HREF="collectionproperties.htm">Collection</A>.  Doing this will add the Clip to the end of the list of data objects in the Collection.<P>
+<LI>-or- You can right-click (Ctrl-click on the Mac) on the Collection in which you wish to place the Clip and select &quot;Add Clip&quot; from the popup menu.  Doing this will add the Clip to the end of the list of data objects in the Collection.<P>
+<LI>-or- You can drag the selected text from the Transcript onto a <A HREF="collectionproperties.htm">Collection</A> in the database tab of the <A HREF="datawindow.htm">data window</A>.  Doing this will add the Clip to the end of the list of data objects in the Collection.<P>
+<LI>-or- You can right-click (Ctrl-click on the Mac) on an existing <A HREF="quoteproperties.htm">Quote</A>, <A HREF="clipproperties.htm">Clip</A>, or <A HREF="snapshotproperties.htm">Snapshot</A> in a <A HREF="collectionproperties.htm">Collection</A> and select &quot;Add Clip&quot; from the popup menu.  Doing this will add the Clip to the list of data objects in the Collection just above the selected item.<P>
+<LI>-or- You can drag the selected text from the <A HREF="transcriptproperties.htm">Transcript</A> and drop it on an existing <A HREF="quoteproperties.htm">Quote</A>, <A HREF="clipproperties.htm">Clip</A>, or <A HREF="snapshotproperties.htm">Snapshot</A> in a <A HREF="collectionproperties.htm">Collection</A> on the database tab of the <A HREF="datawindow.htm">data window</A>.  Doing this will add the Clip to the list of data objects in the Collection just above the selected item.<P>
+</UL>
+<LI>-or- <B>To create a Quick Clip</B>:<P>
+<UL>
+<LI>You can double-click the a <A HREF="keywordproperties.htm">Keyword</A>.<P>
+<LI>-or- You can right-click (Ctrl-click on the Mac) on the <A HREF="keywordproperties.htm">Keyword</A> and select &quot;Add Quick Clip&quot; from the popup menu.<P>
+<LI>-or- You can drag the selected text from the <A HREF="transcriptproperties.htm">Transcript</A> and drop it on a <A HREF="keywordproperties.htm">Keyword</A> on the database tab of the <A HREF="datawindow.htm">data window</A>.<P>
+</UL>
+</UL>
+<LI><B>To create a Clip without a Transcript</B>:<P>
+<UL>
+<LI>Open an <A HREF="episodeproperties.htm">Episode</A> with any <A HREF="transcriptproperties.htm">Transcript</A>, even a blank Transcript.<P>
+<LI>Make a precise selection in the <A HREF="visualizationwindow.htm">Visualization Window</A> that reflects the media content you want included in the Clip.<P>
+<LI><B>To create a Standard Clip</B>:<P>
+<UL>
+<LI>Select the <A HREF="collectionproperties.htm">Collection</A> in the Database Tree in the <A HREF="datawindow.htm">Data Window</A> in which you would like the Clip.<P>
+</UL>
+<LI>-or- <B>To create a Quick Clip</B>:<P>
+<UL>
+<LI>Select one or more <A HREF="keywordproperties.htm">Keyword(s)</A> in the Database Tree in the <A HREF="datawindow.htm">Data Window</A> which you would like the Quick Clip to include.<P>
+</UL>
+<LI>Press the "create transcript-less clip" <IMG SRC="images/ClipIcon.gif" ALT="Create Transcript-less Clip"> &nbsp; button in the <A HREF="visualizationwindow.htm">Visualization Window</A>.<P>
+</UL>
+
+If you are creating a Standard Clip, you will then see the Clip Properties dialog box.  (Skipping this dialog box is what makes a Quick Quote quick!)<P>
+
+<IMG SRC="images/clipproperties.gif"  ALT="clipproperties"   BORDER=0><P>
+
+The only required field is the &quot;Clip ID,&quot; which must be unique within the parent collection.  &quot;Comment&quot; can be used in any way you wish.  By selecting a keyword group and keyword, then clicking the <IMG SRC="images/addkw.gif"  ALT="addkw"   BORDER=0> &nbsp;button, you can add as many analytic keywords as you wish to each clip, enabling you to find this clip later when doing keyword searches.  The <IMG SRC="images/delkw.gif"  ALT="delkw"   BORDER=0> &nbsp;button allows you to delete keywords from the list, and the <IMG SRC="images/keywordmanagementbutton.gif"  ALT="keywordmanagementbutton"   BORDER=0> &nbsp;button allows you to access <A HREF="keywordmgt.htm">Keyword Management</A> to add or edit Keywords in the middle of Clip creation or editing.  The &quot;Collection ID,&quot; &quot;Library ID,&quot; &quot;Episode ID,&quot; &quot;Clip Start,&quot; &quot;Clip Stop,&quot; and &quot;Clip Length&quot; fields are all maintained by Transana and cannot be edited.  While you can edit the Clip text if you like, it is not recommended.  Changes made here are not reflected in the original Episode transcript.<P>
+
+When you edit a Clip using Clip Properties from the Clip's right-click menu, the <IMG SRC="images/propagatebutton.gif"> &nbsp;button will be visible.  This button is used to locate copies that match the original Clip ID, source Transcript number, Clip start time, and Clip end time, and to update those copies so that they are identical to the current Clip.  See <A HREF="propagatechildchanges.htm">Quote and Clip Change Propagation</A> for more information.<P>
+
+One final note:  Unlike other branches of the database tree, items within a Collection have an &quot;order&quot; that can be altered by the user.  (In some forms of Qualitative analysis, such as Narrative Analysis, the order of data objects can be very important.  This order is reflected in the Collection Report and Play All Clips.)  If you choose &quot;Add Clip&quot; or drop your text on a Collection name, your new Clip will be added to the end of the list of Quotes, Clips, and Snapshots within the Collection.  However, if you choose &quot;Add Clip&quot; or drop your text on a Quote, Clip, or Snapshot, the new Clip will be inserted in the list above the item where the text is dropped.  The order of Quotes, Clips, and Snapshots within a Collection can be altered using cut-and-paste or drag-and-drop within the Collection.<P>
+
+<A HREF="quotemerge.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A  HREF="clipmerge.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

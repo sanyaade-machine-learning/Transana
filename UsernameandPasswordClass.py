@@ -1,4 +1,4 @@
-#Copyright (C) 2003 - 2014  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2003 - 2015  The Board of Regents of the University of Wisconsin System
 #
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -900,6 +900,8 @@ class UsernameandPassword(wx.Dialog):
                 dlg = Dialogs.InfoDialog(None, msg % database)
                 dlg.ShowModal()
                 dlg.Destroy()
+                # Save the Config changes
+                TransanaGlobal.configData.SaveConfiguration()
 
             else:
                 errormsg = ''

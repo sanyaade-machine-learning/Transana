@@ -1,5 +1,5 @@
 # -*- coding: utf8 -*-
-# Copyright (C) 2009-2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2009-2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -1075,12 +1075,18 @@ class RTFTowxRichTextCtrlParser:
             startTime = time.time()
 
         if displayProgress and (len(self.buffer) > 50000):
-            progressDlg = wx.ProgressDialog(_("Parsing Rich Text Format Data"),
-                                            _("Importing transcript from a Rich Text Format document"),
-                                            len(self.buffer), None,
-                                            wx.PD_APP_MODAL | wx.PD_AUTO_HIDE |
-                                            wx.PD_ELAPSED_TIME | wx.PD_ESTIMATED_TIME | wx.PD_REMAINING_TIME )
-            progressDlg.CentreOnScreen()
+
+            if IN_TRANSANA:
+                import Dialogs
+                progressDlg = Dialogs.PopupDialog(None, _("Parsing Rich Text Format Data"),
+                                                _("Importing Rich Text Format document"))
+            else:
+                progressDlg = wx.ProgressDialog(_("Parsing Rich Text Format Data"),
+                                                _("Importing Rich Text Format document"),
+                                                len(self.buffer), None,
+                                                wx.PD_APP_MODAL | wx.PD_AUTO_HIDE |
+                                                wx.PD_ELAPSED_TIME | wx.PD_ESTIMATED_TIME | wx.PD_REMAINING_TIME )
+                progressDlg.CentreOnScreen()
         else:
             progressDlg = None
 
@@ -1098,9 +1104,7 @@ class RTFTowxRichTextCtrlParser:
 
                 self.txtCtrl.SetInsertionPoint(self.txtCtrl.GetLastPosition() - self.insertionOffset - 1)
 
-            if progressDlg and (self.index % min(50000, int(len(self.buffer) / 20)) == 0):
-
-#                print self.index, "%7.2f%%" % (float(self.index) / len(self.buffer) * 100.0)
+            if progressDlg and (self.index % min(50000, int(len(self.buffer) / 20)) == 0) and (not IN_TRANSANA):
 
                 progressDlg.Update(self.index)
                 
@@ -1498,7 +1502,7 @@ class RTFTowxRichTextCtrlParser:
                 # If we're in the Font Table ...
                 elif self.in_font_table:
                     # ... if we DON'T have a semicolon, which signals the end of the font name) ...
-                    if c != ';':
+                    if c != ';' and c != '\n' and c != '\r':
                         self.fontName += c
                 # For any other character other than a newline or \r ...
                 elif (c != '\r' and c != '\n'):
@@ -1897,6 +1901,13 @@ class RTFTowxRichTextCtrlParser:
                     self.fontName = ''
                     self.fontCharSet = -1
                     self.fontEncoding = 'utf8'
+                # I have an instance where the record is repeated twice.  This caused the Font Name to be incorect!
+                # I guess if this happens, reset the data and use the SECOND definition
+                elif self.fontNumber == num:
+                    # and clear the Font Name
+                    self.fontName = ''
+                    self.fontCharSet = -1
+                    self.fontEncoding = 'utf8'
 
                 # If the font number is NOT already in the Font Table dictionary ...
                 if not self.fontTable.has_key(num):
@@ -2099,10 +2110,10 @@ class RTFTowxRichTextCtrlParser:
                 # Update the paragraph left indent
                 self.paragraph['leftindent'] = num
 
-            # New Line specifier
-            elif cw == 'line':
-                # Insert a Newline, but don't change any settings
-                self.txtCtrl.Newline()
+            # New Line specifier  HANDLED BELOW WITH "par"
+            #elif cw == 'line':
+            #    # Insert a Newline, but don't change any settings
+            #    self.txtCtrl.Newline()
 
             # List Text specified (bulleted lists with characters as the bullet text)
             elif cw == 'listtext':
@@ -2124,7 +2135,7 @@ class RTFTowxRichTextCtrlParser:
                 self.image_type = 'MACPICT'
 
             # Paragraph End specifier OR a slash followed by a newline, as in RTF from the F4 / F5 programs.
-            elif (cw in ["par"]) or (c == '\n' and cw == '' and num == None):
+            elif (cw in ["line", "par"]) or (c == '\n' and cw == '' and num == None):
                 # The wxRichTextCtrl sets paragraph formatting by specifying it before a Newline() and cancelling it after.
                 # It doesn't matter if the paragraph text is already in place.
                 

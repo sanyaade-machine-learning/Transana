@@ -1,4 +1,4 @@
-#Copyright (C) 2002-2014  The Board of Regents of the University of Wisconsin System
+#Copyright (C) 2002-2015  The Board of Regents of the University of Wisconsin System
 
 #This program is free software; you can redistribute it and/or
 #modify it under the terms of the GNU General Public License
@@ -127,12 +127,16 @@ class TextReport(wx.Frame):
         # It's always important to remember your ancestors.  (And the passed parameters!)
         self.parent = parent
         self.title = title
+        # This instance of the TranscriptEditor object does NOT appear in a TranscriptionUI_RTC window
+        # with Notebook Pages and Splitter Panes.  We give it an ActivePanel here so avoid problems
+        # when the report is clicked on.
+#        self.ActivePanel = 0
         self.reportNumber = 0
         self.helpContext = helpContext
         self.displayMethod = displayMethod
         self.filterMethod = filterMethod
         # Default the Control Object to None
-        self.controlObject = None
+        self.ControlObject = None
         # Determine the screen size for setting the initial dialog size
         rect = wx.Display(TransanaGlobal.configData.primaryScreen).GetClientArea()  # wx.ClientDisplayRect()
         width = rect[2] * .80
@@ -148,16 +152,12 @@ class TextReport(wx.Frame):
         self.toolBar = self.CreateToolBar(wx.TB_HORIZONTAL | wx.NO_BORDER | wx.TB_TEXT)
         # If a Filter Method is defined ...
         if self.filterMethod != None:
-            # ... get the graphic for the Filter button ...
-            bmp = wx.ArtProvider_GetBitmap(wx.ART_LIST_VIEW, wx.ART_TOOLBAR, (16,16))
             # ... and create a Filter button on the tool bar.
-            self.toolBar.AddTool(T_FILE_FILTER, bmp, shortHelpString=_("Filter"))
+            self.toolBar.AddTool(T_FILE_FILTER, TransanaImages.ArtProv_LISTVIEW.GetBitmap(), shortHelpString=_("Filter"))
         # Add an Edit button  to the Toolbar
         self.toolBar.AddTool(T_FILE_EDIT, TransanaImages.ReadOnly16.GetBitmap(), isToggle=True, shortHelpString=_('Edit/Read-only select'))
-        # ... get the graphic for the Format button ...
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP_SETTINGS, wx.ART_TOOLBAR, (16,16))
         # ... and create a Format button on the tool bar.
-        self.toolBar.AddTool(T_FILE_FONT, bmp, shortHelpString=_("Format"))
+        self.toolBar.AddTool(T_FILE_FONT, TransanaImages.ArtProv_HELPSETTINGS.GetBitmap(), shortHelpString=_("Format"))
         # Disable the Font button
         self.toolBar.EnableTool(T_FILE_FONT, False)
         # Add a Save button to the Toolbar
@@ -186,22 +186,20 @@ class TextReport(wx.Frame):
 
         # If a help context is defined ...
         if self.helpContext != None:
-            # ... get the graphic for Help ...
-            bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
             # ... and create a bitmap button for the Help button
-            self.toolBar.AddTool(T_HELP_HELP, bmp, shortHelpString=_("Help"))
+            self.toolBar.AddTool(T_HELP_HELP, TransanaImages.ArtProv_HELP.GetBitmap(), shortHelpString=_("Help"))
         # Add an Exit button to the Toolbar
         self.toolBar.AddTool(T_FILE_EXIT, TransanaImages.Exit.GetBitmap(), shortHelpString=_('Exit'))
         # Add a toolbar separator
         self.toolBar.AddSeparator()
         # Add the Search Backwards button
-        self.toolBar.AddTool(T_SEARCH_BACK, wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16)), shortHelpString=_('Search backwards'))
+        self.toolBar.AddTool(T_SEARCH_BACK, TransanaImages.ArtProv_BACK.GetBitmap(), shortHelpString=_('Search backwards'))
         # Create a text box for search terms, with the toolbar as its parent.
         self.searchText = wx.TextCtrl(self.toolBar, -1, size=(100, 20), style=wx.TE_PROCESS_ENTER)
         # Add the text box to the toolbar.
         self.toolBar.AddControl(self.searchText)
         # Add the Search Forwards button
-        self.toolBar.AddTool(T_SEARCH_FORWARD, wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16)), shortHelpString=_('Search forwards'))
+        self.toolBar.AddTool(T_SEARCH_FORWARD, TransanaImages.ArtProv_FORWARD.GetBitmap(), shortHelpString=_('Search forwards'))
         # Actually create the Toolbar
         self.toolBar.Realize()
         # Let's go ahead and keep the menu for non-Mac platforms
@@ -313,7 +311,6 @@ class TextReport(wx.Frame):
         # Show the Frame
         self.Show(True)
 
-
     def CallDisplay(self):
         """ Call the parent method (passed in during initialization) that populates the report """
         # Get the paper size from the TranscriptPrintoutClass
@@ -334,7 +331,7 @@ class TextReport(wx.Frame):
         # Set Size Hints, so the report can't be resized.  (This may not be practical for large paper on small monitors.)
         self.SetSizeHints(self.GetSize()[0], int(self.GetSize()[1] * 0.8), self.GetSize()[0], -1)
         # Center on the screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # CallDisplay() ALWAYS makes the report Read Only, so change the EDIT button state to NO EDIT ...
         self.toolBar.ToggleTool(T_FILE_EDIT, False)
@@ -426,16 +423,21 @@ class TextReport(wx.Frame):
             self.reportText.CallFontDialog()
             
     def OnSaveAs(self, event):
-        """Export the report to an RTF file."""
-        # Create a File Dialog for saving an RTF file
-        dlg = wx.FileDialog(self, wildcard="*.rtf", style=wx.SAVE)
+        """Export the report to an RTF or HTML file."""
+        # Create a File Dialog for saving an RTF or HTML file
+        dlg = wx.FileDialog(self, wildcard=_(u'Rich Text Format (*.rtf)|*.rtf|HTML(*.html, *.htm)|*.html;*.htm'), style=wx.SAVE)
         # Display the dialog and get the user input
         if dlg.ShowModal() == wx.ID_OK:
             # Get the File name
             fname = dlg.GetPath()
             # Mac doesn't automatically append the file extension.  Do it if necessary.
-            if not fname.upper().endswith(".RTF"):
-                fname += '.rtf'
+            # If RTF ...
+            if dlg.GetFilterIndex() == 0:
+                if not fname.upper().endswith(".RTF"):
+                    fname += '.rtf'
+            else:
+                if not (fname.upper().endswith(".HTM") or fname.upper().endswith(".HTML")):
+                    fname += '.htm'
             # Check to see if the file already exists ...
             if os.path.exists(fname):
                 # ... and if so, build an error message.
@@ -449,16 +451,60 @@ class TextReport(wx.Frame):
                 dlg2.CentreOnScreen()
                 # If the user chooses to overwrite ...
                 if dlg2.LocalShowModal() == wx.ID_YES:
-                    # ... Export the data to the file
-                    self.reportText.export_transcript(fname)
+                    # If RTF ...
+                    if dlg.GetFilterIndex() == 0:
+                        # ... export teh data to the file
+                        self.reportText.export_transcript(fname)
+                    else:
+                        self.Export_to_HTML(fname)
                 # Destroy the error dialog
                 dlg2.Destroy()
             # If the specified file doesn't already exist ...
             else:
-                # ... export teh data to the file
-                self.reportText.export_transcript(fname)
+                # If RTF ...
+                if dlg.GetFilterIndex() == 0:
+                    # ... export teh data to the file
+                    self.reportText.export_transcript(fname)
+                else:
+                    self.Export_to_HTML(fname)
         # Destroy the File Dialog
         dlg.Destroy()
+
+    def Export_to_HTML(self, fname):
+        try:
+            # If an existing file is selected ...
+            if (fname != ""):
+                # Get an HTML Handler
+                handler = richtext.RichTextHTMLHandler()
+                # Set the handler's encoding
+                handler.SetEncoding('UTF-8')
+                # Use the HTML Handler to save the file.
+                # Note that the HTML Handler takes a wxRichTextBuffer argument
+                handler.SaveFile(self.reportText.GetBuffer(), fname)
+
+                # We need to edit the HTML file ever so slightly so that it KNOWS that it's using UTF8.
+                # Open the HTML file
+                tmpFile = open(fname, "r")
+                # Read the HTML file
+                tmpFileText = tmpFile.read()
+                # Close the HTML file
+                tmpFile.close()
+                # Determine the position of the HTML HEAD tag
+                insertPoint = tmpFileText.lower().find('<head>') + 6
+                # Insert the HTML5 META tag specifying the UTF8 character set in the HEAD block
+                tmpFileText = tmpFileText[:insertPoint] + '<META charset="UTF-8">' + tmpFileText[insertPoint:]
+                # Now open the HTML file for writing
+                tmpFile = open(fname, "w")
+                # Replace its contents with the edited contents
+                tmpFile.write(tmpFileText)
+                # Close the HTML file
+                tmpFile.close()
+        except:
+
+            print "HTML FILE SAVE failure in TextReport.py"
+            print sys.exc_info()[0]
+            print sys.exc_info()[1]
+            print
 
     # Define the Method that implements Printer Setup
     def OnPrintSetup(self, event):
@@ -716,9 +762,9 @@ class TextReport(wx.Frame):
     def OnClose(self, event):
         """ Handle the Close Event """
         # If the report has a defined Control Object ...
-        if self.controlObject != None:
+        if self.ControlObject != None:
             # ... remove this report from the Menu Window's Window Menu
-            self.controlObject.RemoveReportWindow(self.title, self.reportNumber)
+            self.ControlObject.RemoveReportWindow(self.title, self.reportNumber)
 
         # Inherit the parent Close event so things will, you know, close.
         event.Skip()

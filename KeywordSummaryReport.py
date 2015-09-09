@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2014  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2015  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -59,7 +59,7 @@ class KeywordSummaryReport(wx.Object):
         # Remember the keyword group name passed if, if any
         self.keywordGroupName = keywordGroupName
         # Remember the Control Object, if any
-        self.controlObject = controlObject
+        self.ControlObject = controlObject
         # Specify the Report Title
         self.title = unicode(_("Keyword Summary Report"), 'utf8')
         # If no Keyword Group Name is specified ...
@@ -75,11 +75,11 @@ class KeywordSummaryReport(wx.Object):
             self.report = TextReport.TextReport(None, title=self.title, displayMethod=self.OnDisplay,
                                                 helpContext="Keyword Summary Report")
         # If a Control Object has been passed in ...
-        if self.controlObject != None:
+        if self.ControlObject != None:
             # ... register this report with the Control Object (which adds it to the Windows Menu)
-            self.controlObject.AddReportWindow(self.report)
+            self.ControlObject.AddReportWindow(self.report)
             # Register the Control Object with the Report
-            self.report.controlObject = self.controlObject
+            self.report.ControlObject = self.ControlObject
         # Initialize the Keyword Group list for the Filter Dialog.  Start with an empty list.
         self.keywordGroupFilterList = []
         # Get a list of all Keyword Groups

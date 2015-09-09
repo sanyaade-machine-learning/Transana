@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -19,15 +19,18 @@
 __author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case <nacase@wisc.edu>'
 
 import TransanaConstants
+import TransanaGlobal
 import DBInterface
 import Dialogs
 import KWManager
 import Misc
 
-import Series
+import Library
+import Document
 import Episode
 import Transcript
 import Collection
+import Quote
 import Clip
 import Snapshot
 import Note
@@ -50,22 +53,24 @@ class NotePropertiesForm(Dialogs.GenForm):
         collectionID = ''
         clipID = ''
         snapshotID = ''
+        documentID = ''
+        quoteID = ''
         if (self.obj.series_num != 0) and (self.obj.series_num != None):
-            tempSeries = Series.Series(self.obj.series_num)
-            seriesID = tempSeries.id
+            tempLibrary = Library.Library(self.obj.series_num)
+            seriesID = tempLibrary.id
         elif (self.obj.episode_num != 0) and (self.obj.episode_num != None):
             tempEpisode = Episode.Episode(self.obj.episode_num)
             episodeID = tempEpisode.id
-            tempSeries = Series.Series(tempEpisode.series_num)
-            seriesID = tempSeries.id
+            tempLibrary = Library.Library(tempEpisode.series_num)
+            seriesID = tempLibrary.id
         elif (self.obj.transcript_num != 0) and (self.obj.transcript_num != None):
             # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
             tempTranscript = Transcript.Transcript(self.obj.transcript_num, skipText=True)
             transcriptID = tempTranscript.id
             tempEpisode = Episode.Episode(tempTranscript.episode_num)
             episodeID = tempEpisode.id
-            tempSeries = Series.Series(tempEpisode.series_num)
-            seriesID = tempSeries.id
+            tempLibrary = Library.Library(tempEpisode.series_num)
+            seriesID = tempLibrary.id
         elif (self.obj.collection_num != 0) and (self.obj.collection_num != None):
             tempCollection = Collection.Collection(self.obj.collection_num)
             collectionID = tempCollection.GetNodeString()
@@ -79,6 +84,16 @@ class NotePropertiesForm(Dialogs.GenForm):
             tempSnapshot = Snapshot.Snapshot(self.obj.snapshot_num)
             snapshotID = tempSnapshot.id
             tempCollection = Collection.Collection(tempSnapshot.collection_num)
+            collectionID = tempCollection.GetNodeString()
+        elif (self.obj.document_num != 0) and (self.obj.document_num != None):
+            tempDocument = Document.Document(self.obj.document_num)
+            documentID = tempDocument.id
+            tempLibrary = Library.Library(tempDocument.library_num)
+            seriesID = tempLibrary.id
+        elif (self.obj.quote_num != 0) and (self.obj.quote_num != None):
+            tempQuote = Quote.Quote(num=self.obj.quote_num, skipText=True)
+            quoteID = tempQuote.id
+            tempCollection = Collection.Collection(tempQuote.collection_num)
             collectionID = tempCollection.GetNodeString()
             
         # Create the form's main VERTICAL sizer
@@ -104,33 +119,11 @@ class NotePropertiesForm(Dialogs.GenForm):
 
         # Create a VERTICAL sizer for the next element
         v2 = wx.BoxSizer(wx.VERTICAL)
-        # Series ID
-        seriesID_edit = self.new_edit_box(_("Series ID"), v2, seriesID)
+        # Library ID
+        seriesID_edit = self.new_edit_box(_("Library ID"), v2, seriesID)
         # Add the element to the row sizer
         r2Sizer.Add(v2, 1, wx.EXPAND)
         seriesID_edit.Enable(False)
-
-        # Add a horizontal spacer to the row sizer        
-        r2Sizer.Add((10, 0))
-
-        # Create a VERTICAL sizer for the next element
-        v3 = wx.BoxSizer(wx.VERTICAL)
-        # Episode ID
-        episodeID_edit = self.new_edit_box(_("Episode ID"), v3, episodeID)
-        # Add the element to the row sizer
-        r2Sizer.Add(v3, 1, wx.EXPAND)
-        episodeID_edit.Enable(False)
-
-        # Add a horizontal spacer to the row sizer        
-        r2Sizer.Add((10, 0))
-
-        # Create a VERTICAL sizer for the next element
-        v4 = wx.BoxSizer(wx.VERTICAL)
-        # Transcript ID
-        transcriptID_edit = self.new_edit_box(_("Transcript ID"), v4, transcriptID)
-        # Add the element to the row sizer
-        r2Sizer.Add(v4, 1, wx.EXPAND)
-        transcriptID_edit.Enable(False)
 
         # Add the row sizer to the main vertical sizer
         mainSizer.Add(r2Sizer, 0, wx.EXPAND)
@@ -141,42 +134,39 @@ class NotePropertiesForm(Dialogs.GenForm):
         # Create a HORIZONTAL sizer for the next row
         r3Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
+        if TransanaConstants.proVersion:
+            # Create a VERTICAL sizer for the next element
+            v9 = wx.BoxSizer(wx.VERTICAL)
+            # Document ID
+            documentID_edit = self.new_edit_box(_("Document ID"), v9, documentID)
+            # Add the element to the row sizer
+            r3Sizer.Add(v9, 1, wx.EXPAND)
+            documentID_edit.Enable(False)
+
+            # Add a horizontal spacer to the row sizer        
+            r3Sizer.Add((10, 0))
+
         # Create a VERTICAL sizer for the next element
-        v5 = wx.BoxSizer(wx.VERTICAL)
-        # Collection ID
-        collectionID_edit = self.new_edit_box(_("Collection ID"), v5, collectionID)
+        v3 = wx.BoxSizer(wx.VERTICAL)
+        # Episode ID
+        episodeID_edit = self.new_edit_box(_("Episode ID"), v3, episodeID)
         # Add the element to the row sizer
-        r3Sizer.Add(v5, 2, wx.EXPAND)
-        collectionID_edit.Enable(False)
+        r3Sizer.Add(v3, 1, wx.EXPAND)
+        episodeID_edit.Enable(False)
+
+        # Add a horizontal spacer to the row sizer        
+        r3Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v4 = wx.BoxSizer(wx.VERTICAL)
+        # Transcript ID
+        transcriptID_edit = self.new_edit_box(_("Transcript ID"), v4, transcriptID)
+        # Add the element to the row sizer
+        r3Sizer.Add(v4, 1, wx.EXPAND)
+        transcriptID_edit.Enable(False)
 
         # Add the row sizer to the main vertical sizer
         mainSizer.Add(r3Sizer, 0, wx.EXPAND)
-
-        # Create a HORIZONTAL sizer for the next row
-        r4Sizer = wx.BoxSizer(wx.HORIZONTAL)
-
-        # Create a VERTICAL sizer for the next element
-        v6 = wx.BoxSizer(wx.VERTICAL)
-        # Clip ID
-        clipID_edit = self.new_edit_box(_("Clip ID"), v6, clipID)
-        # Add the element to the row sizer
-        r4Sizer.Add(v6, 1, wx.EXPAND)
-        clipID_edit.Enable(False)
-
-        if TransanaConstants.proVersion:
-            # Add a horizontal spacer to the row sizer        
-            r4Sizer.Add((10, 0))
-
-            # Create a VERTICAL sizer for the next element
-            v7 = wx.BoxSizer(wx.VERTICAL)
-            # Snapshot ID
-            snapshotID_edit = self.new_edit_box(_("Snapshot ID"), v7, snapshotID)
-            # Add the element to the row sizer
-            r4Sizer.Add(v7, 1, wx.EXPAND)
-            snapshotID_edit.Enable(False)
-
-        # Add the row sizer to the main vertical sizer
-        mainSizer.Add(r4Sizer, 0, wx.EXPAND)
 
         # Add a vertical spacer to the main sizer        
         mainSizer.Add((0, 10))
@@ -185,14 +175,72 @@ class NotePropertiesForm(Dialogs.GenForm):
         r5Sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # Create a VERTICAL sizer for the next element
+        v5 = wx.BoxSizer(wx.VERTICAL)
+        # Collection ID
+        collectionID_edit = self.new_edit_box(_("Collection ID"), v5, collectionID)
+        # Add the element to the row sizer
+        r5Sizer.Add(v5, 2, wx.EXPAND)
+        collectionID_edit.Enable(False)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r5Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r6Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        if TransanaConstants.proVersion:
+            # Create a VERTICAL sizer for the next element
+            v7 = wx.BoxSizer(wx.VERTICAL)
+            # Quote ID
+            quoteID_edit = self.new_edit_box(_("Quote ID"), v7, quoteID)
+            # Add the element to the row sizer
+            r6Sizer.Add(v7, 1, wx.EXPAND)
+            quoteID_edit.Enable(False)
+
+            # Add a horizontal spacer to the row sizer        
+            r6Sizer.Add((10, 0))
+
+        # Create a VERTICAL sizer for the next element
+        v6 = wx.BoxSizer(wx.VERTICAL)
+        # Clip ID
+        clipID_edit = self.new_edit_box(_("Clip ID"), v6, clipID)
+        # Add the element to the row sizer
+        r6Sizer.Add(v6, 1, wx.EXPAND)
+        clipID_edit.Enable(False)
+
+        if TransanaConstants.proVersion:
+            # Add a horizontal spacer to the row sizer        
+            r6Sizer.Add((10, 0))
+
+            # Create a VERTICAL sizer for the next element
+            v8 = wx.BoxSizer(wx.VERTICAL)
+            # Snapshot ID
+            snapshotID_edit = self.new_edit_box(_("Snapshot ID"), v8, snapshotID)
+            # Add the element to the row sizer
+            r6Sizer.Add(v8, 1, wx.EXPAND)
+            snapshotID_edit.Enable(False)
+
+        # Add the row sizer to the main vertical sizer
+        mainSizer.Add(r6Sizer, 0, wx.EXPAND)
+
+        # Add a vertical spacer to the main sizer        
+        mainSizer.Add((0, 10))
+
+        # Create a HORIZONTAL sizer for the next row
+        r8Sizer = wx.BoxSizer(wx.HORIZONTAL)
+
+        # Create a VERTICAL sizer for the next element
         v8 = wx.BoxSizer(wx.VERTICAL)
         # Comment layout
         noteTaker_edit = self.new_edit_box(_("Note Taker"), v8, self.obj.author, maxLen=100)
         # Add the element to the row sizer
-        r5Sizer.Add(v8, 2, wx.EXPAND)
+        r8Sizer.Add(v8, 2, wx.EXPAND)
 
         # Add the row sizer to the main vertical sizer
-        mainSizer.Add(r5Sizer, 0, wx.EXPAND)
+        mainSizer.Add(r8Sizer, 0, wx.EXPAND)
 
         # Add a vertical spacer to the main sizer        
         mainSizer.Add((0, 10))
@@ -226,7 +274,7 @@ class NotePropertiesForm(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size, and define height as unchangeable
         self.SetSizeHints(max(400, width), height, -1, height)
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
         
         # Set focus to the Note ID
         id_edit.SetFocus()
@@ -249,7 +297,7 @@ class NotePropertiesForm(Dialogs.GenForm):
 class AddNoteDialog(NotePropertiesForm):
     """Dialog used when adding a new Note."""
 
-    def __init__(self, parent, id, seriesNum=0, episodeNum=0, transcriptNum=0, collectionNum=0, clipNum=0, snapshotNum=0):
+    def __init__(self, parent, id, seriesNum=0, episodeNum=0, transcriptNum=0, collectionNum=0, clipNum=0, snapshotNum=0, documentNum=0, quoteNum=0):
         obj = Note.Note()
         obj.author = DBInterface.get_username()
         obj.series_num = seriesNum
@@ -258,6 +306,8 @@ class AddNoteDialog(NotePropertiesForm):
         obj.collection_num = collectionNum
         obj.clip_num = clipNum
         obj.snapshot_num = snapshotNum
+        obj.document_num = documentNum
+        obj.quote_num = quoteNum
         NotePropertiesForm.__init__(self, parent, id, _("Add Note"), obj)
 
 class EditNoteDialog(NotePropertiesForm):

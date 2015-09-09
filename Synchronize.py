@@ -1,4 +1,4 @@
-# Copyright (C) 2008 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2008 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -526,7 +526,7 @@ class Synchronize(wx.Dialog):
         # Lay out the dialog
         self.Layout()
         # Center the dialog on the screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # Now that this is all done, we can signal that the dialog has been built
         self.windowBuilt = True

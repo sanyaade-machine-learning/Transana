@@ -71,7 +71,7 @@ class NoteEditor(wx.Dialog):
         # Set the Sizer to the Dialog
         self.SetSizer(dlgSizer)
         # Center the Dialog on the screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
     def get_text(self):
         """Run the note editor and return the note string."""
@@ -140,10 +140,8 @@ class _NotePanel(wx.Panel):
         if (TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft):
             self.toolbar.EnableTool(T_PRINT, False)
             
-        # Get the graphic for Help ...
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_HELP, wx.ART_TOOLBAR, (16,16))
         # ... and create a bitmap button for the Help button
-        self.toolbar.AddTool(T_HELP, bmp, shortHelpString=_("Help"))
+        self.toolbar.AddTool(T_HELP, TransanaImages.ArtProv_HELP.GetBitmap(), shortHelpString=_("Help"))
         # Add an Exit button to the Toolbar
         self.toolbar.AddTool(T_EXIT, TransanaImages.Exit.GetBitmap(), shortHelpString=_('Exit'))
         # Adding a separator here helps things look better on the Mac.
@@ -159,7 +157,7 @@ class _NotePanel(wx.Panel):
         hsizer.Add((20, 1))
         # Add Quick Search tools
         # Get the icon for the Search Backwards button
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_BACK, wx.ART_TOOLBAR, (16,16))
+        bmp = TransanaImages.ArtProv_BACK.GetBitmap()
         # If we're in a Right-To-Left language ...
         if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
             # ... reverse the direction of the image arrow
@@ -183,7 +181,7 @@ class _NotePanel(wx.Panel):
         # Add a spacer
         hsizer.Add((10, 1))
         # Get the icon for the Search Forwards button
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_GO_FORWARD, wx.ART_TOOLBAR, (16,16))
+        bmp = TransanaImages.ArtProv_FORWARD.GetBitmap()
         # If we're in a Right-To-Left language ...
         if TransanaGlobal.configData.LayoutDirection == wx.Layout_RightToLeft:
             # ... reverse the direction of the image arrow

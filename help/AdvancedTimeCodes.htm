@@ -1,13 +1,13 @@
 <HTML>
 <HEAD>
-<TITLE>Advanced Time Codes</TITLE>
+<TITLE>Media - Advanced Time Codes</TITLE>
 </HEAD>
 
 <BODY>
 
-<H2><I>Advanced Time Codes</I><HR></H2>
+<H2><I>Media - Advanced Time Codes</I><HR></H2>
 
-There are several advanced issues that are helpful to understand in working with time codes.  If this is your first time through the Tutorial and you are currently feeling overwhelmed, you may choose to skip this page.  If so, though, please come back later when you feel like you understand things better.<P>
+There are several advanced issues that are helpful to understand in working with time codes.  If this is your first time through the Tutorial and you are currently feeling a bit overwhelmed, you may choose to skip this page.  If so, please come back later when you feel like you understand things better.<P>
 
 <H3>Timed Pauses / Timed Segments</H3>
 
@@ -17,25 +17,25 @@ To time a segment in Transana, take the following steps:<P>
 
 1.  Make a rough selection in the Visualization Window around the area you are interested in, being sure to leave some margin on either side, and zoom in by pressing the <IMG SRC="images/zoomin.gif">&nbsp; button.<P>
 
-2.  Make a precise selection within the Visualization Window of the segment of your media file you want to time.  It often takes several attempts to get the exact selection, using right-clicking in the Visualization to listen to the current selection.  (Please note that the waveform visualization can be imprecise, and that some media formats respond more quickly to Transana's start and stop commands, so we recommend you rely on your ears for making the final selection.)<P>
+2.  Make a precise selection within the Visualization Window of the segment of your media file you want to time.  It often takes several attempts to get the exact selection, using right-clicking in the Visualization to listen to the current selection.  (Please note that the waveform visualization can be imprecise, and that some media formats respond more quickly to Transana's start and stop commands than others, so we recommend you rely on your ears rather than your eyes for making the final selection.)<P>
 
-3.  Click in the Transcript Window (which must be in edit mode) at the location where you would like the indication of the timed segment to be inserted.<P>
+3.  Click in the Transcript in the Document Window (which must be in edit mode) at the location where you would like the indication of the timed segment to be inserted.<P>
 
-4.  Press the &quot;Selected&quot; button in the Visualization Window.<P>
+4.  Press the &quot;Selected&quot; button in the toolbar at the bottom of the Visualization Window.<P>
 
 Transana will insert two time codes, with the time measurement (accurate to the 1/10th of a second) between these time codes.<P>
 
 <H3>Overlapping Speech</H3>
 
-<FONT COLOR="red">Advanced Topic:</FONT>  There are models for indicating overlapping speech in transcripts that are great on paper but that don't quite work when you try to connect the transcript to a media file the way Transana does.  Time codes in Transana must be in linear order in the transcript, which affects the way overlapping speech should be represented.<P>
+<FONT COLOR="red">Advanced Topic:</FONT>  There are models for indicating overlapping speech in Transcripts that are great on paper but that don't quite work when you try to connect the Transcript to a media file the way Transana does.  Time codes in Transana must be in linear order in the Transcript, which affects the way overlapping speech should be represented.<P>
+
+In the screen shot below, you see an example where the teacher is talking, the student begins talking before the teacher stops talking, and then the student continues on following the overlap.  Note that the transcript shows time codes precisely at the beginning of the overlap and at the end of the overlap, as well as indicating the overlap with square brackets.  It is also important to note that the flow of the conversation remains linear with respect to time in the transcript.<P>
 
 <IMG SRC="images/overlap.gif"><P>
 
-In the screen shot above, you see an example where the teacher is talking, the student begins talking before the teacher stops talking, and then the student continues on following the overlap.  Note that the transcript shows time codes precisely at the beginning of the overlap and at the end of the overlap, as well as indicating the overlap with square brackets.  It is also important to note that the flow of the conversation remains linear with respect to time in the transcript.<P>
+When the person who was speaking before an overlap continues after the overlap, their post-overlap speech needs to be continued on the line below the overlap; it cannot be finished on the same line as the pre-overlap talk because that would break temporal linearity in the transcript and require time codes to be out of order.<P>
 
 <IMG SRC="images/overlap2.gif"><P>
-
-When the person who was speaking before an overlap continues after the overlap, their post-overlap speech needs to be continued on the line below the overlap; it cannot be finished on the same line as the pre-overlap talk because that would break temporal linearity in the transcript and require time codes to be out of order.<P>
 
 <H3>Precise Control of Media File Position</H3>
 
@@ -59,7 +59,7 @@ You will notice that this moves your video file one frame earlier or later.  <P>
 
 <A HREF="addingtimecodes.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-<A HREF="reloadingvideo.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+<A HREF="reloadingdata.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
 
 </BODY>
 </HTML>

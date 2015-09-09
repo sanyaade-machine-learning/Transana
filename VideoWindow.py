@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -56,7 +56,7 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
     def __init__(self, parent):
         """Initialize the Media Window object"""
         # Initialize a Dialog Box
-        wx.Dialog.__init__(self, parent, -1, _("Video"), pos=self.__pos(), size=self.__size(),
+        wx.Dialog.__init__(self, parent, -1, _("Media"), pos=self.__pos(), size=self.__size(),
 #        wx.MDIChildFrame.__init__(self, parent, -1, _("Video"), pos=self.__pos(), size=self.__size(),
                            style = wx.RESIZE_BORDER | wx.CAPTION )
         # We need to adjust the screen position on the Mac.  I don't know why.
@@ -89,6 +89,30 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
 
         if DEBUG:
             print "VideoWindow.__init__():  Initial size:", self.GetSize()
+
+        wx.CallAfter(self.InitializeSize)
+
+    def InitializeSize(self):
+        """ Set the initial size of the media window based on its components.  We want to set the initial
+            size of the Media Window to just show the Control Bar """
+        # Determine the size of the Media Window, including frame, BEFORE the window is resized.
+        # (Width is correct, but will change.)
+        (width, height) = self.GetSize()
+        # Resize the window so that the Button bar will be the correct size.  (Needed to compensate for different-sized
+        # header bars.)
+        self.Fit()
+        # Determine the size of the Media Window, including frame
+        winSize = self.GetSize()
+        # Determine the size of the Media Window, exluding frame
+        clientSize = self.GetClientSize()
+        # Determine the size of the tallest component of the Control Bar, the Play/Pause button
+        btnSize = self.btnPlayPause.GetSize()
+        # The new height should include the FRAME size (whole window - client size) plus the height of the Play button
+        newHeight = winSize[1] - clientSize[1] + btnSize[1]
+        # Set the Window's initial size
+        self.SetSize((width, newHeight))
+
+#        print "VideoWindow.InitialSize():", winSize, clientSize, btnSize, newHeight, TransanaGlobal.menuHeight, TransanaGlobal.menuHeight + btnSize[1]
 
     def Register(self, ControlObject=None):
         """ Register a ControlObject """
@@ -306,7 +330,7 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
             # Create the Snapshot button
             self.btnSnapshot = wx.BitmapButton(self, -1, TransanaGlobal.GetImage(TransanaImages.Snapshot), size=(48, 24))
             # Set the Help String
-            self.btnSnapshot.SetToolTipString(_("Capture Snapshot in Transcript or File"))
+            self.btnSnapshot.SetToolTipString(_("Video Screen Capture"))
             # Add LayoutDirection to prevent problems with Right-To-Left languages
             self.btnSnapshot.SetLayoutDirection(wx.Layout_LeftToRight)
             # Bind the Snapshot button to its event handler
@@ -341,7 +365,11 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
     def OnPlayPause(self, event):
         """ Event Handler for the Play / Pause Button """
         # If a media file is loaded ...
-        if self.ControlObject.currentObj != None:
+        if (self.ControlObject.currentObj != None):
+            # If the currently showing item is not a Transcript (is a Document) ...
+            if not (self.ControlObject.GetCurrentItemType() == 'Transcript'):
+                # ... then bring the Transcript to the front of the Document Stack
+                self.ControlObject.BringTranscriptToFront()
             # ... tell the control object to play or pause  (Run this through the Control Object so speed control etc. works.)
             self.ControlObject.PlayPause()
 
@@ -349,48 +377,74 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
         """ Take a Snapshot of the current video frame and insert into Transcript if possible. """
         # If a media file is loaded ...
         if self.ControlObject.currentObj != None:
-            if self.ControlObject.ActiveTranscriptReadOnly():
-                msg = _("The current transcript is not editable.  The requested snapshot can be saved to disk, but cannot be inserted into the transcript.")
-                msg += '\n\n' + _("To insert the snapshot into the transcript, press the Edit Mode button on the Transcript Toolbar to make the transcript editable.")
+            # Initialize an error message to no error
+            msg = ''
+            # If we have an Episode or a Clip ...            
+            if isinstance(self.ControlObject.currentObj, Episode.Episode) or \
+               isinstance(self.ControlObject.currentObj, Clip.Clip):
+                # ... get the media filename from the object
+                mediaFile = self.ControlObject.currentObj.media_filename
+                # If the transcript is not editable ...
+                if self.ControlObject.ActiveTranscriptReadOnly():
+                    # ... create an error message
+                    msg = _("The current transcript is not editable.  The requested screen capture can be saved to disk, but cannot be inserted into the transcript.")
+                    msg += '\n\n' + _("To insert the screen capture into the transcript, press the Edit Mode button on the Document Toolbar to make the transcript editable.")
+            # if not (If we have a Document or Quote) ...
+            else:
+                # ... get the media filename from the media player
+                mediaFile = self.mediaPlayers[0].FileName
+                # If the document is not editable ...
+                if self.ControlObject.ActiveTranscriptReadOnly():
+                    # ... create an error message
+                    msg = _("The current document is not editable.  The requested screen capture can be saved to disk, but cannot be inserted into the document.")
+                    msg += '\n\n' + _("To insert the screen capture into the document, press the Edit Mode button on the Document Toolbar to make the document editable.")
+            if msg != '':
                 dlg = Dialogs.InfoDialog(self, msg)
                 dlg.ShowModal()
                 dlg.Destroy()
-            # Create the Media Conversion dialog, including Clip Information so we export only the clip segment
-            convertDlg = MediaConvert.MediaConvert(self, self.ControlObject.currentObj.media_filename, self.GetCurrentVideoPosition(), snapshot=True)
-            # Show the Media Conversion Dialog
-            convertDlg.ShowModal()
-            # If the user took a snapshop and the image was successfully created ...
-            if convertDlg.snapshotSuccess and os.path.exists(convertDlg.txtDestFileName.GetValue() % 1):
-                # ... ask the Control Object to communicate with the transcript to insert this image.
-                self.ControlObject.TranscriptInsertImage(convertDlg.txtDestFileName.GetValue() % 1)
-            # We need to explicitly Close the conversion dialog here to force cleanup of temp files in some circumstances
-            convertDlg.Close()
-            # Destroy the Media Conversion Dialog
-            convertDlg.Destroy()
+            if mediaFile != '':
+                # Create the Media Conversion dialog, including Clip Information so we export only the clip segment
+                convertDlg = MediaConvert.MediaConvert(self, mediaFile, self.GetCurrentVideoPosition(), snapshot=True)
+                # Show the Media Conversion Dialog
+                convertDlg.ShowModal()
+                # If the user took a snapshop and the image was successfully created ...
+                if convertDlg.snapshotSuccess and os.path.exists(convertDlg.txtDestFileName.GetValue() % 1):
+                    # ... ask the Control Object to communicate with the transcript to insert this image.
+                    self.ControlObject.TranscriptInsertImage(convertDlg.txtDestFileName.GetValue() % 1)
+                # We need to explicitly Close the conversion dialog here to force cleanup of temp files in some circumstances
+                convertDlg.Close()
+                # Destroy the Media Conversion Dialog
+                convertDlg.Destroy()
+            else:
+                msg = _("Cannot take a Snapshot at the moment....")
+                dlg = Dialogs.InfoDialog(self, msg)
+                dlg.ShowModal()
+                dlg.Destroy()
 
     def OnScroll(self, event):
         """ Event Handler for the Video Position Scroll Bar """
-        # Determine the upper and lower bounds for the current video segment.
-        # If we are showing an Episode ...
-        if isinstance(self.ControlObject.currentObj, Episode.Episode):
-            # ... then the upper and lower bounds are 0 (the video start) and the length of the media file
-            start = 0
-            end = self.ControlObject.GetMediaLength(True)
-        # If we are showing a Clip ...
-        elif isinstance(self.ControlObject.currentObj, Clip.Clip):
-            # ... then we should use the clip start and stop points
-            start = self.ControlObject.currentObj.clip_start
-            end = self.ControlObject.currentObj.clip_stop
-        # If neither an Episode nor a Clip is loaded ...
-        else:
-            # ... then "disable" the scroll bar by not letting it move off of 0
-            self.videoSlider.SetValue(0)
-            return
-        # Determine the correct video position.
-        # (Video range * slider position [divided into 1000 segments] plus the media starting position)
-        newPos = (end - start) * event.GetPosition() / 1000 + start
-        # Set the new video selection
-        self.ControlObject.SetVideoSelection(newPos, -1)
+        if (self.ControlObject.GetCurrentItemType() == 'Transcript'):
+            # Determine the upper and lower bounds for the current video segment.
+            # If we are showing an Episode ...
+            if isinstance(self.ControlObject.currentObj, Episode.Episode):
+                # ... then the upper and lower bounds are 0 (the video start) and the length of the media file
+                start = 0
+                end = self.ControlObject.GetMediaLength(True)
+            # If we are showing a Clip ...
+            elif isinstance(self.ControlObject.currentObj, Clip.Clip):
+                # ... then we should use the clip start and stop points
+                start = self.ControlObject.currentObj.clip_start
+                end = self.ControlObject.currentObj.clip_stop
+            # If neither an Episode nor a Clip is loaded ...
+            else:
+                # ... then "disable" the scroll bar by not letting it move off of 0
+                self.videoSlider.SetValue(0)
+                return
+            # Determine the correct video position.
+            # (Video range * slider position [divided into 1000 segments] plus the media starting position)
+            newPos = (end - start) * event.GetPosition() / 1000 + start
+            # Set the new video selection
+            self.ControlObject.SetVideoSelection(newPos, -1)
         
     def OnKeyDown(self, event):
         """ Handle Key Down events """
@@ -699,10 +753,10 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
             self.ControlObject.currentObj = None
             # Recreate (ie. clear) the Media Players' interface
             self.CreateMediaPlayers()
-            # Call SizeChange to resize and update the display correctly.  (Size Change is necessary.  Dunno why.)
-            self.OnSizeChange()
-            # Refresh the graphic in the video window
-            self.Refresh()
+        # Reset the Video Window to its Initial (very small) size
+        self.InitializeSize()
+        # Refresh the graphic in the video window
+        self.Refresh()
 
     def GetDimensions(self):
         """ Returns the dimensions of the Video Window """
@@ -832,10 +886,6 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
     def OnSizeChange(self):
         """ Size Change called programatically from outside the Video Window """
         # If Auto Arrange is enabled ...
-
-##        print "VideoWindow.OnSizeChange():", TransanaGlobal.configData.autoArrange
-##        TransanaGlobal.configData.autoArrange = False
-            
         if TransanaGlobal.configData.autoArrange:
 
             # If there is no "current object" loaded in the main interface ...
@@ -991,7 +1041,11 @@ class VideoWindow(wx.Dialog):  # (wx.MDIChildFrame)
             height = screenDims[3]
             container = (width, height)
         width = container[0] * .282   # rect[2] * .28
-        height = (container[1] - TransanaGlobal.menuHeight) * .339  # (rect[3] - TransanaGlobal.menuHeight) * .35
+        if 'wxMac' in wx.PlatformInfo:
+            height = 40
+        else:
+            # This doesn't really matter.  It gets re-adjusted elsewhere in InitialSize()
+            height = (container[1] - TransanaGlobal.menuHeight) * .068  # .339
         return wx.Size(width, height)
 
     def __pos(self):

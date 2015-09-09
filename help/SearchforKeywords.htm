@@ -7,59 +7,65 @@
 
 <H2><I>Searching for Keywords</I><HR></H2>
 
-Transana lets you search for clips and episodes that contain specified keywords. Searches are named, and, once created, they appear in reverse chronological order under the <B>Search</B> node in the database tree. This lets you keep track of what you've searched for and what you found when you searched. You can save the results of a search as a collection, but search results are not otherwise permanent. <P>
+Transana lets you search for Quotes, Clips, and Snapshots that contain specified Keywords. Searches are named, and, once created, they appear in reverse chronological order under the <B>Search</B> node in the Database Tree. This lets you keep track of what you've searched for and what you found when you searched. You can save the results of a Search as a Collection, but Search Results are not otherwise permanent because searching is essentially an exploratory activity and not all of your searches will provide interesting results.  You can also save search specifications for reuse as your analysis proceeds.<P>
 
 <H3>Quick Search</H3>
 
-A <B>Quick Search</B> in Transana is one designed to show all clips that have been coded with a single keyword.<P>
+A <B>Quick Search</B> in Transana is one designed to show all data items that have been coded with a single Keyword.<P>
 
-<FONT COLOR="Red">Activity: </FONT>Follow these directions to perform a quick search:<P>
+<FONT COLOR="Red">Activity: </FONT>Follow these directions to perform a Quick Search:<P>
 
-1. Right-click the keyword <B>Symmetry</B> in the <B>Tutorial</B> keyword group in the database tree in the Data window.  Choose <B>Quick Search</B> from the pop-up menu. <P>
+1. Right-click the keyword <B>Tutorial : Standard Creation Method</B> in the Database Tree in the Data window.  Choose <B>Quick Search</B> from the pop-up menu. <P>
 
-Transana creates a <B>Search Result</B> named <B>Symmetry</B> under the <B>Search</B> node.  The program finds six clips that have the keyword <B>Symmetry</B> assigned to them. Subsequent quick searches for the same keyword will be numbered.<P>
+Transana creates a <B>Search Result</B> named <B>Tutorial : Standard Creation Method</B> under the <B>Search</B> node.  If you are using the Standard version of Transana, your Search Results should show three named Clips.  If you are using the Professional, Multi-user, or Computer Lab version of Transana, you should also see three Quotes and one Snapshot, assuming you have followed the Tutorial carefully. <P> 
 
 <IMG SRC="images/demosearch.gif"  ALT="demosearch"   BORDER=0><P>
 
-Notice that the series/episode and collection/clip structure you have set up is preserved in the search results.  This search returns a small set of results, so it's not that helpful, but when you have a very large, complex data set, this helps you know which clips have been returned in the search results. <P>
+2.  Notice that the Collection with Quotes, Clip, and Snapshots structure you have set up is preserved, which can be very helpful in understanding the Search Results.<P>
+
+Search Results act very much like Collections.  You can safely rename or drop individual elements within the Search Result without affecting your underlying data in any way.  This allows you to explore a Search Result, dropping false positive data items, to determine if the results are meaningful.<P>
+
+3.  Right-click your <B>Tutorial : Standard Creation Method</B> Search Result item and choose <B>Search Collection Report</B> from the menu.  This will generate a Collection Report based on the Search Results.  A quick scan through the report will confirm that all of the elements in the report contain the <B>Tutorial : Standard Creation Method</B> Keyword used to trigger the quick search.  Close the Search Collection Report when you are finished looking at it.<P>  
 
 <H3>Standard Search</H3>
 
 Standard searches allow you to do more complex searches, combining multiple keywords using boolean logic.<P>
 
-<FONT COLOR="Red">Activity: </FONT>Perform a standard search using the keywords <B>Symmetry</B> and <B>Confusion.</B> Follow these directions:<P>
+<FONT COLOR="Red">Activity: </FONT>Perform a standard search using the Keywords <B>Tutorial : Clip</B> and <B>Tutorial : Quick Creation Method</B>.  (Transana Standard users, you will need to use your imagination a bit in the following discussion.  Sorry about that.)  Follow these directions:<P>
 
-1. Right-click the <B>Search</B> node in the database tree in the Data window and choose <B>Search</B> from the pop-up menu. Transana opens the Boolean Keyword Search dialog box<P>
+1. Right-click the <B>Search</B> node in the Database Tree in the Data window and choose <B>Search</B> from the pop-up menu. Transana opens the Boolean Keyword Search dialog box<P>
 
 <IMG SRC="images/keywordsearch.gif"  ALT="keywordsearch"   BORDER=0><P>
 
-2. Type <B>Symmetry and Confusion </B>in the field labeled <B>Search Name</B>. <P>
+2. Under <B>Search Name</B>, type "Clip and Quick Creation Method".  It is important that you give your searches good, descriptive names, as it is easy to lose track of your process when doing multiple searches in a single analysis session without this.<P>
 
-3. Click <B>Symmetry</B> in the list of keywords in the dialog box. <P>
+3. Since we only have one Keyword Group, we don't need to make a selection in the list of Keyword Groups.  Click <B>Clip</B> in the Keywords list. <P>
 
-4. Click <B>Add Keywords to Query</B>. <P>
+4. Click <B>Add Keyword to Query</B>. <P>
 
-5. Click the <B>AND</B> button under the label <B>Operators</B> in the dialog box.<P>
+5. Click the <B>AND</B> button under the label <B>Operators</B> in the dialog box.  Notice that because your search specification is currently incomplete, the <B>Search</B> button at the bottom of the form is disabled.<P>
 
-6. Double-click <B>Confusion</B> in the list of keywords in the dialog box to add it to your search.<P>
+6. Double-click <B>Quick Creation Method</B> in the Keywords list in the dialog box to add it to your search.  (Double-clicking is equivalent to selecting a Keyword and clicking the <B>Add Keyword to Query</B> button.)<P>
 
-7. Notice that the <B>Search</B> button is now enabled.  Transana's search dialog is designed to only allow legal searches.  If the <B>Search</B> button is not enabled for you, it's because you have open parentheses or a dangling boolean operator or some other mistake in your search specification.<P>
+7. Notice that the <B>Search</B> button is now enabled.  Transana's search dialog is designed to only allow legal searches.  If the <B>Search</B> button is not enabled, it's because there is an open parenthesis or a dangling boolean operator or some other mistake in your search specification.<P>
 
-8. Notice in the lower left hand corner of the search dialog box that there are buttons that allow you to load, save, and delete search specifications.  While we will not use these now, they can be useful when you wish to design a search you will use repeatedly as your data evolves.<P>
+8. Notice that there is a <B>Collections</B> tab in the Search interface.  This allows you to specify the inclusion or exclusion of specific Collections during the Search process.  Thus, Collection membership can act like a Keyword during Search.  Our current data set and Collection structure is too simple to need that functionality at this time.<P>
 
-9. Click <B>Search</B> to begin searching.<P>
+9. In the lower left hand corner of the search dialog box, there are buttons that allow you to load, save, and delete search specifications.  While we will not use these now, they can be useful when you wish to design a search you will use repeatedly as your data evolves.<P>
 
-Transana displays the results of your search in the database tree.<P>
+10. Click <B>Search</B> to begin searching.<P>
 
 <IMG SRC="images/demosearch2.gif"  ALT="demosearch2"   BORDER=0><P>
 
-This search produced four clips, which you can review by right-clicking the <B>Symmetry and Confusion</B> Search Result node and selecting <B>Play All Clips</B>.  In one clip, a student suggests that symmetry may have something to do with houses.  In the second, a student talks about the carpet being symmetrical if it's all gray. In the third,  the class discusses symmetry as meaning things that are the same, and in the fourth, the teacher is asking about how students will know if they can always create symmetrical two-by-two designs.<P>
+Transana displays the results of your search in the database tree.<P>
 
-The clip <B>Proof</B> in this instance is a false positive result. In this clip, the students are clear about the concept of symmetry, but are expressing confusion about the broader implication of their initial finding that they can always create symmetrical two-by-two designs.  Let's drop it from your Search Result (but not from its original Collection) by right-clicking the clip in the search result and selecting <B>Drop from Search Result</B> from the pop-up menu.<P>
+This search displays three Clips, which you can review by right-clicking the <B>Clip and Quick Creation Method</B> Search Result node and selecting <B>Play All Clips</B>.  In each clip, a different method of creating a Quick Clip is demonstrated.<P>
+
+Take a moment to notice what is <B>not</B> included in these search results.  We see three Clips about Quick Clips.  We don't see any results about Standard Clips.  We don't see results about Quick Quotes or Standard Quote.  We don't see any Snapshots.  That's because in our data, codes for Quick Creation Method and Standard Creation Method are mutually exclusive, as are codes for Clips, Quotes, and Snapshots.  Transana has returned only data items that include both of the Keyword specified in the search.  Had we used <B>OR</B> instead of <B>AND</B>, for course, we would have gotten very different results.<P>
 
 <IMG SRC="images/demosearch3.gif"  ALT="demosearch3"   BORDER=0><P>
 
-<FONT COLOR="red">Advanced Topic:</FONT>  The boolean operators used in Transana's search are subject to an "order of operations" just like other mathematical operators are.  This has important implications for your searches which you need to understand if you will ever use more than two search terms.  See <A HREF="search.htm">Search</A> in the Transana Manual for more information.<P>
+<FONT COLOR="red">Advanced Topic:</FONT>  The boolean operators used in Transana's search are subject to an "order of operations" just like other mathematical operators are.  This has important implications for searches which you need to understand if you will ever use more than two search terms.  See <A HREF="search.htm">Search</A> in the Transana Manual for more information.<P>
 
 <A HREF="reports.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;

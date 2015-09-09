@@ -1,0 +1,136 @@
+<HTML>
+<HEAD>
+<TITLE>Analytic Data Export</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Analytic Data Export</H1><HR>
+
+Transana's Analytic Data Export routine creates a tab-delimited text file that allows you to look at information about <A HREF="quoteproperties.htm">Quotes</A> and <A HREF="clipproperties.htm">Clips</A> you've created in Transana with other programs such as SPSS and Excel.<P>
+
+If you call the Analytic Data Export routine from a <A HREF="libraryproperties.htm">Library</A>, Transana will create a listing of all <A HREF="quoteproperties.htm">Quotes</A> and <A HREF="clipproperties.htm">Clips</A> created from all <A HREF="documentproperties.htm">Documents</A> and <A HREF="episodeproperties.htm">Episodes</A> in the <A HREF="libraryproperties.htm">Library</A> regardless of what <A HREF="collectionproperties.htm">Collections</A> those items are placed in, and sends it to the <A HREF="FilterDialog.htm">Filter Dialog</A>, along with a list of all <A HREF="keywordproperties.htm">Keywords</A> applied to that set of items.<P>
+
+If you call the Analytic Data Export routine from a <A HREF="documentproperties.htm">Document</A>, Transana creates a listing of all <A HREF="quoteproperties.htm">Quotes</A> created from that <A HREF="documentproperties.htm">Document</A>, regardless of what <A HREF="collectionproperties.htm">Collections</A> those <A HREF="quoteproperties.htm">Quotes</A> are placed in, and sends it to the <A HREF="FilterDialog.htm">Filter Dialog</A>, along with a list of all <A HREF="keywordproperties.htm">Keywords</A> applied to that set of <A HREF="quoteproperties.htm">Quotes</A>.<P>  
+
+If you call the Analytic Data Export routine from an <A HREF="episodeproperties.htm">Episode</A>, Transana creates a listing of all <A HREF="clipproperties.htm">Clips</A> created from that <A HREF="episodeproperties.htm">Episode</A>, regardless of what <A HREF="collectionproperties.htm">Collections</A> those <A HREF="clipproperties.htm">Clips</A> are placed in, and sends it to the <A HREF="FilterDialog.htm">Filter Dialog</A>, along with a list of all <A HREF="keywordproperties.htm">Keywords</A> applied to that set of <A HREF="clipproperties.htm">Clips</A>.<P>  
+
+If you call the Analytic Data Export routine from a <A HREF="collectionproperties.htm">Collection</A>, Transana sends a list of all <A HREF="quoteproperties.htm">Quotes</A> and <A HREF="clipproperties.htm">Clips</A> gathered together in that <A HREF="collectionproperties.htm">Collection</A>, regardless of what <A HREF="documentproperties.htm">Documents</A> and <A HREF="episodeproperties.htm">Episodes</A> they are from, and sends it to the <A HREF="FilterDialog.htm">Filter Dialog</A>, along with a list of all <A HREF="keywordproperties.htm">Keywords</A> applied to that set of items.<P>
+
+The first line of this text file is made up of column headings or variable names.  Each subsequent line represents an individual <A HREF="quoteproperties.htm">Quote</A> or <A HREF="clipproperties.htm">Clip</A>.  Note that <A HREF="snapshotproperties.htm">Snapshots</A> are not included in Analytic Data Export, as the data required to describe them is too different to be integrated into Analytic Data Export in a way that would be useful.<P>
+
+The first column of this text file is the name of the Collection where the Quote or Clip is stored.  Nesting information for that Collection is provided.  The second column is the type of item in the row, 1 indicating Quote and 2 indicating Clip.  The third column is Item Name, and the fourth column is the name of the text file that served as the source of the Quote or the media file associated with the Clip.   The fifth and sixth columns are the Start and Stop position, in characters for Quotes and in H:MM:SS.s format for Clips.  The seventh column is the length in characters for Quotes or seconds, accurate to the frame and listed in thousandths of a second, for Clips.  Note that a Quote length CAN be 0 if the source Document was edited to remove the text the Quote was taken from.  Subsequent columns are the coding data for the items, with the Keyword Group and Keyword indicated in the first row of the column, and with a 0 indicating that the specified keyword was not applied to the specified item and a 1 indicating that the keyword was applied to the item.<P>
+
+A sample file (put into table format to make it easier to read) might look something like this:<P>
+
+<TABLE BORDER="1" CELLPADDING="5">
+  <TR>
+    <TD>Collection Name</TD>
+    <TD>Item Type</TD>
+    <TD>Item Name</TD>
+    <TD>Source File</TD>
+    <TD>Start</TD>
+    <TD>Stop</TD>
+    <TD>Length</TD>
+    <TD>Demo : Flip</TD>
+    <TD>Demo : Symmetrical</TD>
+  </TR>
+  <TR>
+    <TD>Examples</TD>
+    <TD>1</TD>
+    <TD>Inigo Quote 1</TD>
+    <TD>E:/Demo/Princess Bride.xml</TD>
+    <TD>1028</TD>
+    <TD>1101</TD>
+    <TD>73</TD>
+    <TD>0</TD>
+    <TD>0</TD>
+  </TR>
+  <TR>
+    <TD>Examples</TD>
+    <TD>1</TD>
+    <TD>Inigo Quote 2</TD>
+    <TD>E:/Demo/Princess Bride.xml</TD>
+    <TD>9619</TD>
+    <TD>9692</TD>
+    <TD>73</TD>
+    <TD>0</TD>
+    <TD>0</TD>
+  </TR>
+  <TR>
+    <TD>Examples</TD>
+    <TD>1</TD>
+    <TD>Inigo Quote 3</TD>
+    <TD>E:/Demo/Princess Bride.xml</TD>
+    <TD>11723</TD>
+    <TD>11796</TD>
+    <TD>73</TD>
+    <TD>0</TD>
+    <TD>0</TD>
+  </TR>
+  <TR>
+    <TD>Examples</TD>
+    <TD>1</TD>
+    <TD>Inigo Quote 4</TD>
+    <TD>E:/Demo/Princess Bride.xml</TD>
+    <TD>11878</TD>
+    <TD>11953</TD>
+    <TD>73</TD>
+    <TD>0</TD>
+    <TD>0</TD>
+  </TR>
+  <TR>
+    <TD>Symmetry</TD>
+    <TD>2</TD>
+    <TD>Carpet</TD>
+    <TD>E:/Demo/Demo.mpg</TD>
+    <TD>0:03:53.0</TD>
+    <TD>0:04:08.8</TD>
+    <TD>15.7280</TD>
+    <TD>0</TD>
+    <TD>1</TD>
+  </TR>
+  <TR>
+    <TD>Symmetry</TD>
+    <TD>2</TD>
+    <TD>Flip Up, Flip Down</TD>
+    <TD>E:/Demo/Demo.mpg</TD>
+    <TD>0:00:00.0</TD>
+    <TD>0:00:20.7</TD>
+    <TD>20.6540</TD>
+    <TD>1</TD>
+    <TD>0</TD>
+  </TR>
+  <TR>
+    <TD>Symmetry</TD>
+    <TD>2</TD>
+    <TD>House</TD>
+    <TD>E:/Demo/Demo.mpg</TD>
+    <TD>0:03:34.4</TD>
+    <TD>0:03:53.0</TD>
+    <TD>18.6350</TD>
+    <TD>0</TD>
+    <TD>1</TD>
+  </TR>
+  <TR>
+    <TD>Symmetry</TD>
+    <TD>2</TD>
+    <TD>Up Down Flip</TD>
+    <TD>E:/Demo/Demo.mpg</TD>
+    <TD>0:00:31.1</TD>
+    <TD>0:01:05.5</TD>
+    <TD>34.4240</TD>
+    <TD>1</TD>
+    <TD>0</TD>
+  </TR>
+</TABLE>
+<P>
+
+Please note that because analytic data is exported to a tab-delimited text file, there can be issues with character encoding for characters that are not included in the English alphabet.  Transana exports data to this file using UTF-8 encoding.<P>
+
+<A HREF="librarymap.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="FilterDialog.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

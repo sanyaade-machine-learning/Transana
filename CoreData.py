@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -75,6 +75,9 @@ class CoreData(DataObject.DataObject):
         str = str + 'relation = %s\n' % self.relation
         str = str + 'coverage = %s\n' % self.coverage
         str = str + 'rights = %s\n\n' % self.rights
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         return str
 
     def clear(self):

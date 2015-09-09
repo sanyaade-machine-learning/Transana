@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -70,11 +70,11 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
 
         # Create a VERTICAL sizer for the next element
         v2 = wx.BoxSizer(wx.VERTICAL)
-        # Add the Series ID element
-        series_id_edit = self.new_edit_box(_("Series ID"), v2, self.obj.series_id)
+        # Add the Library ID element
+        series_id_edit = self.new_edit_box(_("Library ID"), v2, self.obj.series_id)
         # Add the element to the row sizer
         r2Sizer.Add(v2, 1, wx.EXPAND)
-        # Disable Series ID
+        # Disable Library ID
         series_id_edit.Enable(False)
 
         # Add a horizontal spacer to the row sizer        
@@ -195,7 +195,7 @@ class TranscriptPropertiesForm(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size, and define height as unchangeable
         self.SetSizeHints(max(self.width, width), height, -1, height)
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
         # Set focus to the Transcript ID
         self.id_edit.SetFocus()
 

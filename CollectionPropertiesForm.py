@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -24,6 +24,7 @@ import Dialogs
 
 import wx
 import Collection
+import TransanaGlobal
 
 class CollectionPropertiesForm(Dialogs.GenForm):
     """Form containing Collection fields."""
@@ -143,7 +144,7 @@ class CollectionPropertiesForm(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size, and define height as unchangeable
         self.SetSizeHints(max(self.width, width), height, -1, height)
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # Set focus to Series ID
         id_edit.SetFocus()

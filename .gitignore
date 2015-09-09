@@ -55,3 +55,197 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# Transana
+*.po
+app.fil
+DBTest.py
+ffmpeg_Transana (OS X)
+ffmpeg_Transana (Linux)
+ffmpeg_Transana.exe
+disti18n.py
+Fixi18nFiles.py
+Funding-orig.txt
+Funding.txt
+*.bak
+LineCounter.py
+*.iss
+metasetup.py
+mki18n.py
+MySQLforPythonInstaller.py
+*.bat
+profile.txt
+pydoc.py
+TransanaConfigConstantsLab.py
+TransanaConfigConstantsDemo.py
+RegenDocs.py
+setup.py
+setupMac.py
+TransanaConfigConstantsMU.py
+TransanaConfigConstantsPro.py
+TransanaConfigConstantsSU.py
+TransanaConfigConstantsWorkshop.py
+translate.py
+242_250_Conversion
+242_250_Conversion_Lab/
+242_250_Conversion_Single/
+250 Upgrade Utility/
+Audio Extract/
+build Intel - OLD/
+build PPC - OLD/
+Build_Mac_260/
+Cloud Service/
+locale/
+SSL/
+TransanaDemonstrationSetupDir/
+TransanaLabSetupDir/
+TransanaMultiUserSetupDir/
+TransanaProfessionalSetupDir/
+TransanaStandardSetupDir/
+TransanaWorkshopSetupDir/
+CreateTempTxt.py
+deforder.py
+FixHelpFiles.py
+License_de.txt
+License_es.txt
+License_it.txt
+audioextract
+License.txt
+MakeClassDoc.py
+MakeModuleDoc.py
+msvcp90.dll
+msvcr90.dll
+setup_PyRTFParserDemo.py
+share (mac)/
+share/
+TransanaColorDefs*
+help/Manual and Tutorial 3.0 Outline.docx
+RichTextEditCtrl_RTC - Copy.py
+TranscriptEditor_RTC - Copy.py
+WaveformProgress - SubProcess.py
+WaveformProgress - wxProcess.py
+BatchFileProcessor - Multi.py
+BatchFileProcessor - Single.py
+*.DS_Store
+unit_test_search.py
+unit_test_database.py
+unit_test_form_check.py
+unit_test_language_utility.py
+unit_test_misc.py
+unit_test_search.py
+unit_test_SSL.py
+images/Embedded/tmp.py
+images/Embedded/ArtProviderBitmapSaver.py
+Unit Tests/RTC_Cmd_B.py
+MessageServer/TestChatWindow.py
+MessageServer/TestChatWindow_SSL.py
+MessageServer/TestChatWindow2.py
+MessageServer/TestChatWindow1.py
+Unit Tests/OrphanCheck.py
+unit_test_database.py
+242_250 Upgrade Utility/242_250_Conversion.py
+242_250 Upgrade Utility/ConfigData.py
+242_250 Upgrade Utility/Dialogs.py
+242_250 Upgrade Utility/GdiPlus.dll
+242_250 Upgrade Utility/LIBMYSQLD.dll
+242_250 Upgrade Utility/msvcp71.dll
+242_250 Upgrade Utility/OptionsSettings.py
+242_250 Upgrade Utility/RTFDoc.py
+242_250 Upgrade Utility/RichTextEditCtrl.py
+242_250 Upgrade Utility/TextDoc.py
+242_250 Upgrade Utility/RTFParser.py
+260_300 Upgrade Utility/260_300_Conversion.py
+242_250 Upgrade Utility/images/transana.ico
+260_300 Upgrade Utility/ConfigData.py
+260_300 Upgrade Utility/GdiPlus.dll
+260_300 Upgrade Utility/images/transana.ico
+260_300 Upgrade Utility/LIBMYSQLD.dll
+260_300 Upgrade Utility/Dialogs.py
+260_300 Upgrade Utility/msvcp71.dll
+260_300 Upgrade Utility/RichTextEditCtrl.py
+260_300 Upgrade Utility/RTFDoc.py
+260_300 Upgrade Utility/RTFParser.py
+260_300 Upgrade Utility/OptionsSettings.py
+260_300_Conversion/GdiPlus.dll
+260_300 Upgrade Utility/TextDoc.py
+260_300_Conversion/260_300_Conversion.exe
+260_300_Conversion/images/transana.ico
+260_300_Conversion/library.zip
+260_300_Conversion/LIBMYSQLD.dll
+260_300_Conversion/msvcp71.dll
+260_300_Conversion/python26.dll
+260_300_Conversion/wxmsw30u_core_vc90.dll
+260_300_Conversion/wxbase30u_net_vc90.dll
+260_300_Conversion/wxbase30u_vc90.dll
+260_300_Conversion/wxmsw30u_stc_vc90.dll
+260_300_Conversion/wxmsw30u_html_vc90.dll
+260_300_Conversion/wxmsw30u_adv_vc90.dll
+260_300_Conversion/w9xpopen.exe
+260_300_Conversion_Lab/260_300_Conversion.exe
+260_300_Conversion_Lab/GdiPlus.dll
+260_300_Conversion_Lab/images/transana.ico
+260_300_Conversion_Lab/LIBMYSQLD.dll
+260_300_Conversion_Lab/library.zip
+260_300_Conversion_Lab/msvcp71.dll
+260_300_Conversion_Lab/python26.dll
+260_300_Conversion_Lab/w9xpopen.exe
+260_300_Conversion_Lab/wxbase30u_net_vc90.dll
+260_300_Conversion_Lab/wxbase30u_vc90.dll
+260_300_Conversion_Lab/wxmsw30u_adv_vc90.dll
+260_300_Conversion_Lab/wxmsw30u_core_vc90.dll
+260_300_Conversion_Lab/wxmsw30u_html_vc90.dll
+260_300_Conversion_Lab/wxmsw30u_stc_vc90.dll
+260_300_Conversion_Single/260_300_Conversion.exe
+260_300_Conversion_Single/GdiPlus.dll
+260_300_Conversion_Single/images/transana.ico
+260_300_Conversion_Single/LIBMYSQLD.dll
+260_300_Conversion_Single/library.zip
+260_300_Conversion_Single/msvcp71.dll
+260_300_Conversion_Single/python26.dll
+260_300_Conversion_Single/w9xpopen.exe
+260_300_Conversion_Single/wxbase30u_net_vc90.dll
+260_300_Conversion_Single/wxbase30u_vc90.dll
+260_300_Conversion_Single/wxmsw30u_adv_vc90.dll
+260_300_Conversion_Single/wxmsw30u_core_vc90.dll
+260_300_Conversion_Single/wxmsw30u_html_vc90.dll
+260_300_Conversion_Single/wxmsw30u_stc_vc90.dll
+TransanaLab300MacIntel.dmg
+MessageServer/MessageServerSetupDir240/TransanaMessageServer240Win.exe
+MessageServer/MessageServerSetupDir250/TransanaMessageServer250Win.exe
+MessageServer/MessageServerSetupDir240/TransanaMessageServer240Win.zip
+MessageServer/MessageServerSetupDir250/TransanaMessageServer250Win.zip
+MessageServer/MessageServerSetupDir260/TransanaMessageServer260Win.exe
+MessageServer/MessageServerSetupDir260/TransanaMessageServer260Win.zip
+MessageServer/MessageServerSetupDir261/TransanaMessageServer261Win.exe
+MessageServer/MessageServerSetupDir261/TransanaMessageServer261Win.zip
+MessageServer/SSL - All/TransanaMessageServer-cert-Linux.pem
+MessageServer/SSL - All/TransanaMessageServer-cert.pem
+*.pem
+*.crt
+MessageServer/TransanaMessageServer212Linux.zip
+*.key
+MessageServer/TransanaMessageServer220Linux.zip
+MessageServer/TransanaMessageServer230Linux.zip
+MessageServer/TransanaMessageServer230Mac.dmg
+MessageServer/TransanaMessageServer230Win.zip
+MessageServer/TransanaMessageServer240Linux.zip
+MessageServer/TransanaMessageServer240Mac.dmg
+MessageServer/TransanaMessageServer240Win.zip
+MessageServer/TransanaMessageServer250Linux.zip
+MessageServer/TransanaMessageServer250Mac.dmg
+MessageServer/TransanaMessageServer250Win.zip
+MessageServer/TransanaMessageServer260Linux.zip
+MessageServer/TransanaMessageServer260Mac.dmg
+MessageServer/TransanaMessageServer260Win.zip
+MessageServer/TransanaMessageServer261Linux-TCS.zip
+MessageServer/TransanaMessageServer261Linux.zip
+MessageServer/TransanaMessageServer261Mac.dmg
+MessageServer/TransanaMessageServer261Win.zip
+MessageServer/MessageServer.py
+MessageServer/MessageServerSetupDir/TransanaMessageServer300Win.exe
+MessageServer/MessageServerSetupDir/TransanaMessageServer300Win.zip
+MessageServer/PostInstall.txt
+MessageServer/README.txt
+MessageServer/TransanaMessageServer300Linux.zip
+MessageServer/TransanaMessageServer300Mac.dmg
+MessageServer/TransanaMessageServer300Win.zip

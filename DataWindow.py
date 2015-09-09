@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -16,7 +16,7 @@
 
 """This module implements the DataWindow class for the Data Display Objects."""
 
-__author__ = 'Nathaniel Case <nacase@wisc.edu>, David Woods <dwoods@wcer.wisc.edu>'
+__author__ = 'David Woods <dwoods@wcer.wisc.edu>, Nathaniel Case <nacase@wisc.edu>'
 
 DEBUG = False
 if DEBUG:
@@ -24,19 +24,19 @@ if DEBUG:
 
 import wx
 from DatabaseTreeTab import *
-from EpisodeClipsTab import *
+import DocumentQuotesTab
+import DataItemsTab
 from KeywordsTab import *
 import TransanaConstants
 import TransanaGlobal
 
-class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
+class DataWindow(wx.Dialog):
     """This class implements the window containing all data display tabs."""
 
     def __init__(self, parent, id=-1):
         """Initialize a DataWindow object."""
         # Start with a Dialog Box (wxPython)
         wx.Dialog.__init__(self, parent, id, _("Data"), self.__pos(),
-#        wx.MDIChildFrame.__init__(self, parent, id, _("Data"), self.__pos(),
                             self.__size(),
                             style=wx.CAPTION | wx.RESIZE_BORDER)
 
@@ -62,8 +62,8 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
         self.DBTab = DatabaseTreeTab(self.nb)
 
         # Initialize the remaining Tabs to None for the moment
-        self.EpisodeClipsTab = None
-        self.SelectedEpisodeClipsTab = None
+        self.DataItemsTab = None
+        self.SelectedDataItemsTab = None
         self.KeywordsTab = None
         
         # Add the tabs to the Notebook Control
@@ -119,33 +119,46 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
         wx.EVT_NOTEBOOK_PAGE_CHANGED(self, self.nb.GetId(), self.OnNotebookPageSelect)
 
 
-    def AddEpisodeClipsTab(self, seriesObj=None, episodeObj=None):
-        if self.EpisodeClipsTab == None:
-            self.EpisodeClipsTab = EpisodeClipsTab(self.nb, seriesObj, episodeObj)
-            # If a ControlObject is defined, propagate it to the EpisodeClipsTab so that Clips can be loaded via double-clicking
+    def AddItemsTab(self, libraryObj=None, dataObj=None):
+        if self.DataItemsTab == None:
+            if isinstance(dataObj, Episode.Episode):
+                self.DataItemsTab = DataItemsTab.DataItemsTab(self.nb, libraryObj, dataObj)
+                self.nb.AddPage(self.DataItemsTab, _("Episode Items"), False)
+            else:
+                self.DataItemsTab = DocumentQuotesTab.DocumentQuotesTab(self.nb, libraryObj, dataObj)
+                self.nb.AddPage(self.DataItemsTab, _("Document Items"), False)
+            # If a ControlObject is defined, propagate it to the DataItemsTab so that Clips can be loaded via double-clicking
             if self.ControlObject != None:
-                self.EpisodeClipsTab.Register(self.ControlObject)
-            self.nb.AddPage(self.EpisodeClipsTab, _("Episode Items"), False)
+                self.DataItemsTab.Register(self.ControlObject)
             # Allow the Database Tab to redraw, as adding the Episode Clips tab can interfere with the appearance of the Data Window
             self.DBTab.Refresh()
 
-    def AddSelectedEpisodeClipsTab(self, seriesObj=None, episodeObj=None, TimeCode=0):
-        if self.SelectedEpisodeClipsTab == None:
-            self.SelectedEpisodeClipsTab = EpisodeClipsTab(self.nb, seriesObj, episodeObj, TimeCode)
-            # If a ControlObject is defined, propagate it to the EpisodeClipsTab so that Clips can be loaded via double-clicking
+    def AddSelectedItemsTab(self, libraryObj=None, dataObj=None, timeCode=-1, textPos=-1, textSel=(-2, -2)):
+        if self.SelectedDataItemsTab == None:
+            if timeCode > -1:
+                self.SelectedDataItemsTab = DataItemsTab.DataItemsTab(self.nb, libraryObj, dataObj, timeCode)
+            else:
+                self.SelectedDataItemsTab = DocumentQuotesTab.DocumentQuotesTab(self.nb, libraryObj, dataObj, textPos, textSel)
+            # If a ControlObject is defined, propagate it to the DataItemsTab so that Clips can be loaded via double-clicking
             if self.ControlObject != None:
-                self.SelectedEpisodeClipsTab.Register(self.ControlObject)
-            self.nb.AddPage(self.SelectedEpisodeClipsTab, _("Selected Items"), False)
+                self.SelectedDataItemsTab.Register(self.ControlObject)
+            self.nb.AddPage(self.SelectedDataItemsTab, _("Selected Items"), False)
             # Allow the Database Tab to redraw, as adding the Episode Clips tab can interfere with the appearance of the Data Window
             self.DBTab.Refresh()
 
-    def AddKeywordsTab(self, seriesObj=None, episodeObj=None, collectionObj=None, clipObj=None):
+    def AddKeywordsTab(self, seriesObj=None, episodeObj=None, documentObj=None, collectionObj=None, clipObj=None, quoteObj=None):
+        """ Add the Keywords Tab to the Data Window """
+        # If there is not currently a Keywords Tab ...
         if self.KeywordsTab == None:
-            self.KeywordsTab = KeywordsTab(self.nb, seriesObj, episodeObj, collectionObj, clipObj)
+            # ... create a keywords Tab
+            self.KeywordsTab = KeywordsTab(self.nb, seriesObj, episodeObj, documentObj, collectionObj, clipObj, quoteObj)
+            # Add the Tab to the Data Window Notebook
             self.nb.AddPage(self.KeywordsTab, _("Keywords"), False)
             # Allow the Database Tab to redraw, as adding the Keywords tab can interfere with the appearance of the Data Window
             self.DBTab.Refresh()
+        # If a Keywords Tab already exists ...
         else:
+            # ... display an error message for the PROGRAMMER!
             dlg = Dialogs.ErrorDialog(self, _('Problem creating the Keywords Tab!'))
             dlg.ShowModal()
             dlg.Destroy()
@@ -160,37 +173,41 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # Set the selection to the DatabaseTreeTab tab, which won't be deleted
         self.nb.SetSelection(0)
 
+        # Under rare circumstances, this is called before some tabs are RENDERED and thus were not
+        # getting deleted.  This fixes that!
+        wx.YieldIfNeeded()
+        
         # Delete all tabs but the DatabaseTreeTab.
         # Start with the Keywords Tab.  Check to see if it exists ...
-        if self.KeywordsTab != None:
+        if (self.KeywordsTab != None) or (self.nb.GetPageCount() > 1):
             # ... and if it does, delete it ...
             self.nb.DeletePage(self.nb.GetPageCount() - 1)
             # ... and remove the reference to it.
             self.KeywordsTab = None
 
         # Do the Selected Episode Clips Tab next.  Check to see if it exists ...
-        if self.SelectedEpisodeClipsTab != None:
+        if self.SelectedDataItemsTab != None:
             # ... and if it does, delete it.  If it's the current tab, delete it later.  Otherwise, just delete it now ...
             if currentTab == 2:
                 wx.CallAfter(self.DeleteTabLater)
             else:
                 self.nb.DeletePage(2)
             # ... and remove the reference to it.
-            self.SelectedEpisodeClipsTab = None
+            self.SelectedDataItemsTab = None
 
         # Do the Episode Clips Tab next.  Check to see if it exists ...
-        if self.EpisodeClipsTab != None:
+        if self.DataItemsTab != None:
             # ... and if it does, delete it.  If it's the current tab, delete it later.  Otherwise, just delete it now ...
             if currentTab == 1:
                 wx.CallAfter(self.DeleteTabLater)
             else:
                 self.nb.DeletePage(1)
             # ... and remove the reference to it.
-            self.EpisodeClipsTab = None
+            self.DataItemsTab = None
 
     def DeleteTabLater(self):
         """ On the Mac, selecting a clip from the Episode Clips tab or the Selected Clips tab caused a
-            Segment Fault or a Bus Error.  That was because the EpisodeClipsTab tab was being deleted by
+            Segment Fault or a Bus Error.  That was because the DataItemsTab tab was being deleted by
             the DeleteTabs() call above before its double-click method was done.  This method allows us
             to delay the deletion of the appropriate tab until after the tab's method is done.  """
         # The tab to be deleted is always tab 1, as the other tabs have been already deleted and the 
@@ -207,9 +224,9 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
 
             if DEBUG:
                 print
-                print "Call 2", 'Data', left - 1, -1, top
-            
-            self.ControlObject.UpdateWindowPositions('Data', left - 1, YLower = top)
+                print "Call 2", 'Data', left, -1, top - 1
+
+            self.ControlObject.UpdateWindowPositions('Data', left, YLower = top - 1)
         # Call to Layout() is required so that the Notebook Control resizes properly
         self.Layout()
         if not TransanaConstants.singleUserVersion:
@@ -229,32 +246,26 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
 
     def OnNotebookPageSelect(self, event):
         """ Detect which tab in the Notebook is selected and prepare that tab for display. """
-        if 'unicode' in wx.PlatformInfo:
-            # If Episode Clips Tab is selected ...
-            if self.nb.GetPageText(event.GetSelection()) == unicode(_("Episode Items"), 'utf8'):
-                # ... get the latest Data for the Episode Clips
-                self.EpisodeClipsTab.Refresh()
-            # If the Selected Clips Tab is selected ...
-            elif self.nb.GetPageText(event.GetSelection()) == unicode(_("Selected Items"), 'utf8'):
+        # If Episode Clips Tab is selected ...
+        if self.nb.GetPageText(event.GetSelection()) in [unicode(_("Episode Items"), 'utf8'), unicode(_("Document Items"), 'utf8')]:
+            # ... get the latest Data for the Episode/Document Items
+            self.DataItemsTab.Refresh()
+        # If the Selected Clips Tab is selected ...
+        elif self.nb.GetPageText(event.GetSelection()) == unicode(_("Selected Items"), 'utf8'):
+            # If we have a Transcript (Episode) ...
+            if isinstance(self.ControlObject.currentObj, Transcript.Transcript):
                 # ... get the latest Data based on the current Video Position
-                self.SelectedEpisodeClipsTab.Refresh(self.ControlObject.GetVideoPosition())
-            # If the Keyword Tab is selected ...
-            elif self.nb.GetPageText(event.GetSelection()) == unicode(_('Keywords'), 'utf8'):
-                # update the Keywords Tab in case something has changed since the objects were first loaded.
-                self.KeywordsTab.Refresh()
-        else:
-            # If Episode Clips Tab is selected ...
-            if self.nb.GetPageText(event.GetSelection()) == _("Episode Items"):
-                # ... get the latest Data for the Episode Clips
-                self.EpisodeClipsTab.Refresh()
-            # If the Selected Clips Tab is selected ...
-            elif self.nb.GetPageText(event.GetSelection()) == _("Selected Items"):
-                # ... get the latest Data based on the current Video Position
-                self.SelectedEpisodeClipsTab.Refresh(self.ControlObject.GetVideoPosition())
-            # If the Keyword Tab is selected ...
-            elif self.nb.GetPageText(event.GetSelection()) == _('Keywords'):
-                # update the Keywords Tab in case something has changed since the objects were first loaded.
-                self.KeywordsTab.Refresh()
+                self.SelectedDataItemsTab.Refresh(self.ControlObject.GetVideoPosition())
+            # If we have a Document ...
+            elif isinstance(self.ControlObject.currentObj, Document.Document):
+                # ... get the current Document position / selection ...
+                (pos, sel) = self.ControlObject.GetDocumentPosition()
+                # ... and get the latest Quote data based on the current selection / position
+                self.SelectedDataItemsTab.Refresh(pos, sel)
+        # If the Keyword Tab is selected ...
+        elif self.nb.GetPageText(event.GetSelection()) == unicode(_('Keywords'), 'utf8'):
+            # update the Keywords Tab in case something has changed since the objects were first loaded.
+            self.KeywordsTab.Refresh()
 
     def Register(self, ControlObject=None):
         """ Register a ControlObject """
@@ -265,6 +276,13 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
         """Clear the display."""
         # Remove any extra tabs that are displayed
         self.DeleteTabs()
+
+    def UpdateDataWindow(self):
+        """ Update the DataWindow, if needed """
+        # If the Episode Clip Tab (which also shows Document Quotes) exists ...
+        if (self.DataItemsTab != None):
+            # ... update it!
+            self.DataItemsTab.Refresh()
 
     def UpdateSSLStatus(self, sslValue):
         """ Update the SSL Status Indicator """
@@ -371,11 +389,12 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
             container = (width, height)
         
         width = container[0] * .282  # rect[2] * .28
-        height = (container[1] - TransanaGlobal.menuHeight) * .66  # (rect[3] - TransanaGlobal.menuHeight) * .64
+        height = (container[1] - TransanaGlobal.menuHeight) * 0.931  # .66
 
         # Compensate in Linux.  I'm not sure why this is necessary, but it seems to be.
 #        if 'wxGTK' in wx.PlatformInfo:
 #            height -= 50
+
         return wx.Size(width, height)
 
     def __pos(self):
@@ -402,4 +421,8 @@ class DataWindow(wx.Dialog):  # (wx.MDIChildFrame):
             y = rect[1] + rect[3] - height + 24
         else:
             y = rect[1] + container[1] - height # rect[1] + rect[3] - height - 3
+
+        if DEBUG:
+            print "DataWindow.__pos(): Y = %d, H = %d, Total = %d" % (y, height, y + height)
+        
         return wx.Point(x, y)

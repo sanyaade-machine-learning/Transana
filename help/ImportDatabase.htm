@@ -1,0 +1,45 @@
+<HTML>
+<HEAD>
+<TITLE>Import Database</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Import Database</H1><HR>
+
+The &quot;Import Database&quot; function in the Tools menu is intended to import data that is in Transana-XML format.  Such files are created by exporting Data from Transana 2.0 or higher using the &quot;<A HREF="exportdatabase.htm">Export Database</A>&quot; function or by using the Data Exporter tool to extract data from Transana 1.22 - 1.24.<P>
+
+Combining databases by importing several Transana-XML files into the same database is far more difficult that most people imagine, given the way most people work with Transana.  If two copies of the same data object differ, Transana has no way to determine which version, or which features within the two versions, are the more desirable ones.  Manual recociliation is impractical in this situation.<P>
+
+Therefore, Import Database only allows the import of database with no <A HREF="libraryproperties.htm">Library</A> or first-level <A HREF="collectionproperties.htm">Collection</A> records that overlap the data currently in the database.  If duplicate <A HREF="keywordproperties.htm">Keyword</A> or <A HREF="coredata.htm">Core Data records</A> are discovered, Transana will ignore the new record, retaining the existing Keyword or Core Data record even when those records differ.  <P>
+
+In addition, you may not be able to import data from versions of Transana released after the version you are using.  If you get an error message indicating that you need to upgrade your copy of Transana to be able to import a Transana-XML file, it is most likely because of changes to the Transana database structure and Transana-XML definition required by new features in the program.<P>
+
+<H2>Encoding Issues</H2>
+
+Most, but not all, Transana database export files use UTF-8 encoding.  In order to deal with all possible character encoding circumstances, you may need to know the circumstances under which a particular Transana-XML file was created.  This gets a little complicated, and the detail that follows is only important if you are experiencing character encoding problems after importing a Transana Database Export file in Transana-XML format.<P>
+
+The vast majority of Transana users can use the "Most Transana database export files" option in the "Exported by:" field on the Import Database form.  You can try this option first.  If you see encoding problems with your file, you can delete the database you imported and try again using a different encoding option.  To check for encoding problems in your database, look for characters that are not used in English, such as accented characters.  If that character doesn't look right, you probably have an encoding problem.<P>
+
+If the file you are trying to import was created by single-user Transana 2.1 or later for OS X, by multi-user Transana 2.1 or later on either Windows or OS X, by single-user Transana 2.1 to 2.42 using English, Danish, German, Spanish, French, Italian, Dutch, Norwegian Bokmal, Norwegian Ny-norsk, or Swedish, or by single-user Transana 2.50 and later for Windows, your file was encoded using UTF-8 encoding.  You can use the "Most Transana database export files" option in the "Exported by:" field on the Import Database form.  <P>
+
+Exceptions to this include Database Export Files from Transana 2.0 to 2.05, and single-user Transana 2.1 to Transana 2.42 for Windows using any of the following language settings:  Chinese, Russian, English prompts and Eastern European data (ISO-8859-2 encoding), English prompts and Greek data, and English prompts and Japanese data.  <P>
+
+If the Transana Database Export file was created on single-user Transana 2.1 to 2.42 using the <B>Chinese</B> prompts, your file may use GBK encoding.  Try the "Chinese from single-user Transana 2.1 - 2.42 on Windows" option.<P>
+
+If the Transana Database Export file was created on single-user Transana 2.1 to 2.42 using the <B>Russian</B> prompts, your file may use KOI8_R encoding.  Try the "Russian from single-user Transana 2.1 - 2.42 on Windows" option.<P>
+
+If the Transana Database Export file was created on single-user Transana 2.1 to 2.42 using the English prompts with the <B>Eastern European data</B> option, your file may use ISO8859_2 encoding.  Try the "Eastern European data from single-user Transana 2.1 - 2.42 on Windows" option.<P>
+
+If the Transana Database Export file was created on single-user Transana 2.1 to 2.42 using the English prompts with the <B>Greek data</B> option, your file may use ISO8859_7 encoding.  Try the "Greek data from single-user Transana 2.1 - 2.42 on Windows" option.<P>
+
+If the Transana Database Export file was created on single-user Transana 2.1 to 2.42 using the English prompts with the <B>Japanese data</B> option, your file may use CP932 encoding.  Try the "Japanese data from single-user Transana 2.1 - 2.42 on Windows" option.<P>
+
+If the Transana Database Export file was created from <B>Transana 2.0 to Transana 2.05</B>, it uses Latin-1 encoding.  You can select the "Transana 2.0 to Transana 2.05 database export files" option for the "Exported by:" field, but Transana should auto-detect the origin of the file and will use Latin-1 anyway.<P>
+
+<A HREF="exportdatabase.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="colorconfiguration.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

@@ -1,0 +1,37 @@
+<HTML>
+<HEAD>
+<TITLE>Snapshot Properties</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Snapshot Properties</H1><HR>
+
+Please note that the Standard version of Transana does not support Snapshots.  To use this feature, you must be using the Professionsal, Computer Lab, or Multi-User version of Transana.<P> 
+
+A <A HREF="organization.htm">Snapshot</A> in Transana is a basic analytic unit for still images.  The Snapshot is not a smaller segment of the still image the way a Quote is a segment of a Document or a Clip is a segment of an Episode.  A Snapshot is created directly in a <A HREF="collectionproperties.htm">Collection</A>.  The relationship between detail and the larger image is handled by the <A HREF="snapshotwindow.htm">Snapshot Window</A> rather than through the <A HREF="datawindow.htm">Data Window</A>.<P>
+
+To add a <A HREF="organization.htm">Snapshot</A> in Transana, you can right-click (Ctrl-click on the Mac) on the <A HREF="collectionproperties.htm">Collection</A> where you want to place the Snapshot and select &quot;Add Snapshot&quot; from the popup menu.  Doing this will add the Snapshot to the end of the list of data objects in the Collection.<P>
+
+If you want to place the new Snapshot in a particular position in the list of data items in a Collection, you can right-click a <A HREF="quoteproperties.htm">Quote</A>, <A HREF="clipproperties.htm">Clip</A> or Snapshot and choose &quot;Add Snapshot,&quot;.  If you do this, the new Snapshot will be added above the selected item.<P>
+
+You will then see the Add Snapshot dialog box.<P>
+
+<IMG SRC="images/snapshotproperties.gif"  ALT="snapshotproperties"   BORDER=0><P>
+
+Press the Browse button to select an image file from the computer's disk.  If you currently have an Episode or Clip displayed in Transana's main interface, you can also press the "Capture Snapshot for Coding" button right next to the Browse button to capture a still image from the currently-loaded video file.  (If you don't have an episode or clip loaded in Transana's main interface, this option is not visible.)<P>
+
+Please note that Transana does not import the image file into the database, but rather stores a pointer to the file's location.  If you rename, move, or delete the image file after creating a Snapshot, that Snapshot will not load properly.  If you capture a Snapshot from your video, you should avoid using the default Snapshot name to avoid accidentally deleting the image file created in this process should you capture another Snapshot from the same video file at a later time.<P> 
+
+The only required fields are the &quot;Snapshot ID,&quot; which must be unique within the Collection, and the Image Filename.  If you would like to link your Snapshot to a particular spot in a media file, you can use the "Library ID", "Episode ID", "Transcription ID", "Episode Position" and "Duration" fields.  &quot;Comment&quot; can be used in any way you wish.  <P>
+
+You can apply coding to an entire still image by selecting a Keyword Group and Keyword on this form, then clicking the <IMG SRC="images/addkw.gif"  ALT="addkw"   BORDER=0> &nbsp;button.  This allows you to find this Snapshot later when doing Keyword searches.  The <IMG SRC="images/delkw.gif"  ALT="delkw"   BORDER=0> &nbsp;button allows you to delete Keywords from the Snapshot Keyword list, and the <IMG SRC="images/keywordmanagementbutton.gif"  ALT="keywordmanagementbutton"   BORDER=0> &nbsp;button allows you to access <A HREF="keywordmgt.htm">Keyword Management</A> to add or edit keywords while in the middle of adding a Snapshot.  The &quot;Collection ID&quot; field is maintained by Transana and cannot be edited.  (You can also code parts of an image in the <A HREF="snapshotwindow.htm">Snapshot Window</A>.)<P>
+
+One final note:  Unlike other branches of the database tree, items within a Collection have an &quot;order&quot; that can be altered by the user.  (This is important for the Collection Report and &quot;Play All Clips&quot;.)  If you choose &quot;Add Snapshot&quot;, your new Snapshot will be added to the end of the list of items within the Collection.  However, if you choose &quot;Add Snapshot&quot; on an existing Quote, Clip, or Snapshot, the new Snapshot will be inserted in the list above the item you selected.  The order of items within a Collection can be altered using cut-and-paste or drag-and-drop within the Collection.<P>
+
+<A HREF="clipmerge.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A  HREF="snapshotwindow.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

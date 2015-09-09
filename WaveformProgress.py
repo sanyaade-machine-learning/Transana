@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -51,7 +51,7 @@ class WaveformProgress(wx.Dialog):
         To use it this way, you create it, then call the Extract() method, which will show it modally and handle updating itself.
         Then Destroy() it. """
 
-    def __init__(self, parent, label='', clipStart=0, clipDuration=0):
+    def __init__(self, parent, label='', clipStart=0, clipDuration=0, showModally=True):
         """ Initialize the Progress Dialog """
 
         # There's a bug.  I think it's an interaction between OS X 10.7.5 and earlier (but not 10.8.4), wxPython (version
@@ -65,6 +65,10 @@ class WaveformProgress(wx.Dialog):
         # menuWindow object.
         self.locale = wx.Locale(TransanaGlobal.menuWindow.locale.Language)
 
+        # Remember the Parent
+        self.parent = parent
+        # Remember whether we're MODAL or ALLOWING MULTIPLE THREADS
+        self.showModally = showModally
         # Remember the start time and duration, if they are passed in.
         self.clipStart = clipStart
         self.clipDuration = clipDuration
@@ -143,7 +147,7 @@ class WaveformProgress(wx.Dialog):
         self.timer = wx.Timer()
         self.timer.Bind(wx.EVT_TIMER, self.OnTimer)
 
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
     def OnInterrupt(self, event):
         """ Cancel Button Event Handler """
@@ -265,6 +269,7 @@ class WaveformProgress(wx.Dialog):
             process = '"' +  programStr + '" "-embedded" "1" "-i" "%s" "-vn" "-ar" "2756" "-ab" "8k" "-ac" "1" "-acodec" "pcm_u8" "-y" "%s"'
             tempMediaFilename = inputFile
             tempWaveFilename = outputFile
+
         elif mode == 'AudioExtraction-OLD':
             programStr = os.path.join(TransanaGlobal.programDir, 'audioextract')
             if 'wxMSW' in wx.PlatformInfo:
@@ -317,8 +322,14 @@ class WaveformProgress(wx.Dialog):
         # Start the timer to get feedback and post progress
         self.timer.Start(500)
 
-        # Show the Progress Dialog modally
-        self.ShowModal()
+        # If we're processing Modally ...
+        if self.showModally:
+            # ... show the Progress Dialog modally
+            self.ShowModal()
+        # If we're allowing multiple threads ...
+        else:
+            # ... show the Progress Dialog non-modally
+            self.Show()
 
     def OnEndProcess(self, event):
         """ End of wx.Process event handler """
@@ -343,9 +354,16 @@ class WaveformProgress(wx.Dialog):
                         # ... add the line to the error messages list
                         self.errorMessages.append(line)
             # Destroy the now-completed process
-            self.process.Destroy()
+            if self.process is not None:
+                self.process.Detach()
+                self.process.CloseOutput()
             # De-reference the process
             self.process = None
+            wx.YieldIfNeeded()
+            # If we're allowing multiple threads ...
+            if not self.showModally:
+                # ... inform the PARENT that this thread is complete for cleanup
+                self.parent.OnConvertComplete(self)
             # Close the Progress Dialog
             self.Close()
 

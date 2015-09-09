@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -151,8 +151,8 @@ class SnapshotPropertiesForm(Dialogs.GenForm):
 
         # Create a VERTICAL sizer for the next element
         v4 = wx.BoxSizer(wx.VERTICAL)
-        # Series ID
-        self.series_cb = self.new_choice_box(_("Series ID"), v4, seriesRecs, default = serDefault)
+        # Library ID
+        self.series_cb = self.new_choice_box(_("Library ID"), v4, seriesRecs, default = serDefault)
         # Add the element to the sizer
         r4Sizer.Add(v4, 1, wx.EXPAND)
         self.series_cb.Bind(wx.EVT_CHOICE, self.OnSeriesChoice)
@@ -364,7 +364,7 @@ class SnapshotPropertiesForm(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size
         self.SetSizeHints(max(minWidth, width), max(minHeight, height))
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # We need to set some minimum sizes so the sizers will work right
         self.kw_group_lb.SetSizeHints(minW = 50, minH = 20)
@@ -421,10 +421,11 @@ class SnapshotPropertiesForm(Dialogs.GenForm):
         """Refresh the keywords listbox."""
         sel = self.kw_group_lb.GetStringSelection()
         if sel:
-            self.kw_list = \
-                DBInterface.list_of_keywords_by_group(sel)
+            self.kw_list = DBInterface.list_of_keywords_by_group(sel)
             self.kw_lb.Clear()
-            self.kw_lb.InsertItems(self.kw_list, 0)
+            if len(self.kw_list) > 0:
+                self.kw_lb.InsertItems(self.kw_list, 0)
+                self.kw_lb.EnsureVisible(0) 
 
     def highlight_bad_keyword(self):
         """ Highlight the first bad keyword in the keyword list """
@@ -480,6 +481,11 @@ class SnapshotPropertiesForm(Dialogs.GenForm):
         
     def OnSnapshot(self, event):
         """ Handle the Snapshot button press """
+
+        # Just because the media file is showing doesn't mean it's the CURRENT item in the Transana interface.
+        # Let's bring the Transcript forward, making the media file part of the CURRENT interface
+        self.parent.ControlObject.BringTranscriptToFront()
+        
         # Create the Media Conversion dialog, including Clip Information so we export only the clip segment
         convertDlg = MediaConvert.MediaConvert(self, self.parent.ControlObject.currentObj.media_filename,
                                                self.parent.ControlObject.GetVideoPosition(), snapshot=True)
@@ -504,7 +510,7 @@ class SnapshotPropertiesForm(Dialogs.GenForm):
                 self.obj.series_id = self.parent.ControlObject.currentObj.series_id
                 self.obj.episode_num = self.parent.ControlObject.currentObj.number
                 self.obj.episode_id = self.parent.ControlObject.currentObj.id
-                self.obj.transcript_num = self.parent.ControlObject.TranscriptNum[self.parent.ControlObject.activeTranscript]
+                self.obj.transcript_num = self.parent.ControlObject.TranscriptWindow.dlg.editor.TranscriptObj.number
                 self.series_cb.SetStringSelection(self.obj.series_id)
                 self.PopulateEpisodeChoiceBasedOnSeries(self.obj.series_id)
                 self.episode_cb.SetStringSelection(self.obj.episode_id)

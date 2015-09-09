@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -80,8 +80,8 @@ import Episode
 import KeywordObject
 # import Transana's Note Object
 import Note
-# import Transana's Series Object
-import Series
+# import Transana's Library Object
+import Library
 # import Transana's Snapshot Object
 import Snapshot
 # import Transana's Global Variables
@@ -197,8 +197,8 @@ def is_db_open():
     """ Quick and dirty test to see if the database is currently open """
     return _dbref != None
 
-def CreateSeriesTableQuery(num):
-    """ Create query for the Series Table """
+def CreateLibraryTableQuery(num):
+    """ Create query for the Library Table """
 
     # Different databases have slightly different syntaxes for handling auto-increment fields
     # If we are using a MySQL database ...
@@ -210,10 +210,10 @@ def CreateSeriesTableQuery(num):
         # ... use the sqlite syntax
         autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
 
-    # NOTE:  If you change this, you need to change the INSERT queries in the SERIES object
+    # NOTE:  If you change this, you need to change the INSERT queries in the Library object
     #        AND in the UpdateEncoding250() method below in this file!
     
-    # Series Table: Test for existence and create if needed
+    # Library Table: Test for existence and create if needed
     query = """
               CREATE TABLE IF NOT EXISTS Series%d
                 (SeriesNum            INTEGER %s,
@@ -464,6 +464,128 @@ def CreateSnapshotsTableQuery(num):
     # Return the query to the calling routine
     return query % (num, autoIncrementSyntax)
 
+def CreateDocumentsTableQuery(num):
+    """ Create query for the Documents Table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the DOCUMENT objects
+    
+    # Documents Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS Documents%d
+                (DocumentNum          INTEGER %s, 
+                 DocumentID           VARCHAR(100), 
+                 LibraryNum           INTEGER,
+                 Author               VARCHAR(100),
+                 Comment              VARCHAR(255),
+                 ImportedFile         VARCHAR(255),
+                 ImportDate           DATETIME,
+                 DocumentLength       INTEGER,
+                 XMLText              LONGBLOB, 
+                 RecordLock           VARCHAR(25), 
+                 LockTime             DATETIME, 
+                 LastSaveTime         DATETIME"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """,
+                 PRIMARY KEY (DocumentNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ 
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
+    # Return the query to the calling routine
+    return query % (num, autoIncrementSyntax)
+
+def CreateQuotesTableQuery(num):
+    """ Create query for the Quotes Table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the QUOTE objects
+    
+    # Documents Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS Quotes%d
+                (QuoteNum             INTEGER %s, 
+                 QuoteID              VARCHAR(100), 
+                 CollectNum           INTEGER,
+                 SourceDocumentNum    INTEGER,
+                 SortOrder            INTEGER,
+                 Comment              VARCHAR(255),
+                 XMLText              LONGBLOB, 
+                 RecordLock           VARCHAR(25), 
+                 LockTime             DATETIME, 
+                 LastSaveTime         DATETIME"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """,
+                 PRIMARY KEY (QuoteNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ 
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
+    # Return the query to the calling routine
+    return query % (num, autoIncrementSyntax)
+
+def CreateQuotePositionsTableQuery(num):
+    """ Create query for the Quote Positions Table """
+
+    # Different databases have slightly different syntaxes for handling auto-increment fields
+    # If we are using a MySQL database ...
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        # ... use the MySQL syntax
+        autoIncrementSyntax = 'auto_increment'
+    # If we are using the sqlite database ...
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        # ... use the sqlite syntax
+        autoIncrementSyntax = 'PRIMARY KEY AUTOINCREMENT'
+
+    # NOTE:  If you change this, you need to change the INSERT queries in the DOCUMENT and QUOTE objects
+    
+    # Documents Table: Test for existence and create if needed
+    query = """
+              CREATE TABLE IF NOT EXISTS QuotePositions%d
+                (QuoteNum             INTEGER %s, 
+                 DocumentNum          INTEGER,
+                 StartChar            INTEGER,
+                 EndChar              INTEGER"""
+    # Add MySQL-specific SQL if appropriate
+    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+        query += """,
+                 PRIMARY KEY (QuoteNum))
+                 DEFAULT CHARACTER SET utf8
+                 COLLATE utf8_bin
+            """ 
+        # Add the appropriate Table Type to the CREATE Query
+        query = SetTableType(TransanaGlobal.hasInnoDB, query)
+    elif TransanaConstants.DBInstalled in ['sqlite3']:
+        query += ')'
+    # Return the query to the calling routine
+    return query % (num, autoIncrementSyntax)
+
 def CreateNotesTableQuery(num):
     """ Create query for the Notes Table """
 
@@ -490,7 +612,9 @@ def CreateNotesTableQuery(num):
                      CollectNum     INTEGER, 
                      ClipNum        INTEGER,
                      SnapshotNum    INTEGER,
-                     TranscriptNum  INTEGER, 
+                     TranscriptNum  INTEGER,
+                     DocumentNum    INTEGER,
+                     QuoteNum       INTEGER,
                      NoteTaker      VARCHAR(100), 
                      NoteText       LONGBLOB, 
                      RecordLock     VARCHAR(25), 
@@ -555,13 +679,15 @@ def CreateClipKeywordsTableQuery(num):
         # than a PRIMARY KEY for this table.
         query = """
                   CREATE TABLE IF NOT EXISTS ClipKeywords%d
-                    (EpisodeNum    INTEGER, 
+                    (EpisodeNum    INTEGER,
+                     DocumentNum   INTEGER,
                      ClipNum       INTEGER,
+                     QuoteNum      INTEGER,
                      SnapshotNum   INTEGER,
                      KeywordGroup  VARCHAR(50), 
                      Keyword       VARCHAR(85), 
                      Example       CHAR(1), 
-                     UNIQUE KEY UniqueKey (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword))
+                     UNIQUE KEY EpisodeNum (EpisodeNum, DocumentNum, ClipNum, QuoteNum, SnapshotNum, KeywordGroup, Keyword))
                      DEFAULT CHARACTER SET utf8
                      COLLATE utf8_bin
                 """
@@ -573,7 +699,9 @@ def CreateClipKeywordsTableQuery(num):
                   CREATE TABLE IF NOT EXISTS ClipKeywords%d
                     (number        INTEGER PRIMARY KEY AUTOINCREMENT,
                      EpisodeNum    INTEGER, 
+                     DocumentNum   INTEGER,
                      ClipNum       INTEGER,
+                     QuoteNum      INTEGER,
                      SnapshotNum   INTEGER,
                      KeywordGroup  VARCHAR(50), 
                      Keyword       VARCHAR(85), 
@@ -761,17 +889,15 @@ def CreateAdditionalVidsTableQuery(num):
     return query % (num, autoIncrementSyntax)
 
 
-def establish_db_exists(dbToOpen=None):
+def establish_db_exists(dbToOpen=None, usePrompt=True):
     """ Check for the existence of all database tables and create them
         if necessary.  dbToOpen is passed if we are automatically importing a database
         following 2.42 to 2.50 Data Conversion. """
 
     # NOTE:  Syntax for updating tables from MySQL 4.0 to MySQL 4.1 with Unicode UTF8 Characters Set:
     #          ALTER TABLE xxxx2 default character set utf8
-
     # Obtain a Database
-    db = get_db(dbToOpen)
-
+    db = get_db(dbToOpen, usePrompt=usePrompt)
     # If this fails, return "False" to indicate failure
     if db == None:
         return False
@@ -908,7 +1034,7 @@ def establish_db_exists(dbToOpen=None):
                 query = """INSERT INTO ConfigInfo
                              (KeyVal, Value)
                             VALUES
-                             ('DBVersion', '260')"""
+                             ('DBVersion', '300')"""
                 # Execute the Query
                 dbCursor.execute(query)
         else:
@@ -916,7 +1042,7 @@ def establish_db_exists(dbToOpen=None):
             DBVersion = int(data[0][0])
 
         # Detect OLDER Database Versions
-        if (DBVersion > 0) and (DBVersion < 260):
+        if (DBVersion > 0) and (DBVersion < 300):
             # Create and report the problem
             prompt = _("This Transana Database has NOT been upgraded.\nDo you want to upgrade it?")
             dlg = Dialogs.QuestionDialog(None, prompt)
@@ -925,9 +1051,9 @@ def establish_db_exists(dbToOpen=None):
 
             if result == wx.ID_YES:
                 # Indicate we're upgrading the DB
-                DBVersion = 260
+                DBVersion = 300
                 # update the Database Version in ConfigInfo
-                query = """UPDATE ConfigInfo SET Value = '260' WHERE KeyVal = 'DBVersion'"""
+                query = """UPDATE ConfigInfo SET Value = '300' WHERE KeyVal = 'DBVersion'"""
                 dbCursor.execute(query)
 
             else:
@@ -939,7 +1065,7 @@ def establish_db_exists(dbToOpen=None):
                 return False
 
         # Detect NEWER Database Versions
-        if DBVersion > 260:
+        if DBVersion > 300:
             # Create and report the problem
             prompt = _("This Transana Database has been upgraded.\nYou need to upgrade your copy of Transana to work with it.")
             dlg = Dialogs.ErrorDialog(None, prompt)
@@ -954,7 +1080,7 @@ def establish_db_exists(dbToOpen=None):
             return False
 
         # Get the SQL to create the Series2 Table
-        query = CreateSeriesTableQuery(2)
+        query = CreateLibraryTableQuery(2)
 
         # Execute the Query
         dbCursor.execute(query)
@@ -1114,6 +1240,21 @@ def establish_db_exists(dbToOpen=None):
         # Execute the Query
         dbCursor.execute(query)
 
+        #  Documents2 Table: Test for existence and create if needed
+        query = CreateDocumentsTableQuery(2)
+        # Execute the Query
+        dbCursor.execute(query)
+
+        #  Quotes2 Table: Test for existence and create if needed
+        query = CreateQuotesTableQuery(2)
+        # Execute the Query
+        dbCursor.execute(query)
+
+        #  QuotePositions2 Table: Test for existence and create if needed
+        query = CreateQuotePositionsTableQuery(2)
+        # Execute the Query
+        dbCursor.execute(query)
+
         # Notes2 Table: Test for existence and create if needed
         query = CreateNotesTableQuery(2)
         # Execute the Query
@@ -1158,6 +1299,27 @@ def establish_db_exists(dbToOpen=None):
                     dbCursor2.execute(query)
                     # Define a query that will set SnapshotNum to the default value of 0
                     query = "UPDATE Notes2 SET SnapshotNum = 0"
+                    dbCursor2.execute(query)
+
+                # Transana 3.00 -- Adding Document Table requires modifications to the Notes table
+                #                  so it can hold Document Notes!
+                # if a "DocumentNum" field is present, the table has already been altered.
+                if not u"documentnum" in d1.lower():
+                    # If not, we need to alter the table to add the ClipOffset field
+                    query = """ ALTER TABLE Notes2
+                                  ADD COLUMN
+                                    DocumentNum  INTEGER
+                                  AFTER SnapshotNum,
+                                  ADD COLUMN
+                                    QuoteNum  INTEGER
+                                  AFTER DocumentNum """
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
+                    # Define a query that will set DocumentNum to the default value of 0
+                    query = "UPDATE Notes2 SET DocumentNum = 0"
+                    dbCursor2.execute(query)
+                    # Define a query that will set QuoteNum to the default value of 0
+                    query = "UPDATE Notes2 SET QuoteNum = 0"
                     dbCursor2.execute(query)
 
         # Keywords2 Table: Test for existence and create if needed
@@ -1232,7 +1394,7 @@ def establish_db_exists(dbToOpen=None):
                     d1 = data[1]
                 # if a "SnapshotNum" field is present, the table has already been altered.
                 if not u"snapshotnum" in d1.lower():
-                    # If not, we need to alter the table to add the ClipOffset field
+                    # If not, we need to alter the table to add the SnapshotNum field
                     query = """ ALTER TABLE ClipKeywords2
                                   ADD COLUMN
                                     SnapshotNum  INTEGER
@@ -1249,6 +1411,46 @@ def establish_db_exists(dbToOpen=None):
                     query = """ALTER TABLE ClipKeywords2
                                  ADD UNIQUE KEY EpisodeNum (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword) """
                     dbCursor2.execute(query)
+                # if a "DocumentNum" field is present, the table has already been altered.
+                if not u"documentnum" in d1.lower():
+                    # If not, we need to alter the table to add the DocumentNum field
+                    query = """ ALTER TABLE ClipKeywords2
+                                  ADD COLUMN
+                                    DocumentNum  INTEGER
+                                  AFTER EpisodeNum,
+                                  ADD COLUMN
+                                    QuoteNum  INTEGER
+                                  AFTER ClipNum """
+                    dbCursor2 = db.cursor()
+                    dbCursor2.execute(query)
+                    # Define a query that will set DocumentNum to the default value of 0
+                    query = "UPDATE ClipKeywords2 SET DocumentNum = 0"
+                    dbCursor2.execute(query)
+                    # Define a query that will set QuoteNum to the default value of 0
+                    query = "UPDATE ClipKeywords2 SET QuoteNum = 0"
+                    dbCursor2.execute(query)
+                    # If we're using MySQL ...
+                    if TransanaConstants.DBInstalled in ['MySQLdb-embedded', 'MySQLdb-server', 'PyMySQL']:
+                        try:
+                            # Define a set of queries that will remove the old Unique key and replace it
+                            query = """ALTER TABLE ClipKeywords2
+                                      DROP KEY EpisodeNum """
+                            dbCursor2.execute(query)
+                        except:
+
+                            print "DBInterface.establish_db_exists():  Exception in dropping ClipKeywords2.EpisodeNum"
+                            
+                        try:
+                            query = """ALTER TABLE ClipKeywords2
+                                          DROP KEY UniqueKey """
+                            dbCursor2.execute(query)
+                        except:
+
+                            print "DBInterface.establish_db_exists():  Exception in dropping ClipKeywords2.UniqueKey"
+                            
+                        query = """ALTER TABLE ClipKeywords2
+                                     ADD UNIQUE KEY EpisodeNum (EpisodeNum, DocumentNum, ClipNum, QuoteNum, SnapshotNum, KeywordGroup, Keyword) """
+                        dbCursor2.execute(query)
 
         # SnapshotKeywords2 Table: Test for existence and create if needed
         query = CreateSnapshotKeywordsTableQuery(2)
@@ -1507,7 +1709,7 @@ def UpdateTranscriptRecsfor240(self):
         # Execute the query
         dbCursor2.execute(query, (TNum2, TranscriptNum))
 
-def get_db(dbToOpen=None):
+def get_db(dbToOpen=None, usePrompt=True):
     """ Get a connection object reference to the database.  If a connection has not yet been established, then create the connection.
         dbToOpen is passed if we are automatically importing a database following 2.42 to 2.50 Data Conversion. """
     global _dbref
@@ -1532,17 +1734,25 @@ def get_db(dbToOpen=None):
 
             # Destroy the form now that we're done with it.
             UsernameForm.Destroy()
-        # If we are passed a database name (2.42 to 2.50 conversion) ...
+        # If we are passed a database name (2.60 to 3.00 conversion) ...
         else:
-            # ... then we can skip the Username and Password Dialog
-            userName = dbToOpen.username          # TransanaGlobal.userName
-            password = dbToOpen.password          # ''
-            dbServer = dbToOpen.dbServer          # ''
-            databaseName = dbToOpen.databaseName  # dbToOpen
-            port = dbToOpen.port                  # ''
+            if isinstance(dbToOpen, unicode):
+                # ... then we can skip the Username and Password Dialog
+                userName = ''
+                password = ''
+                dbServer = ''
+                databaseName = dbToOpen
+                port = ''
+            else:
+                # ... then we can skip the Username and Password Dialog
+                userName = dbToOpen.username          # TransanaGlobal.userName
+                password = dbToOpen.password          # ''
+                dbServer = dbToOpen.dbServer          # ''
+                databaseName = dbToOpen.databaseName  # dbToOpen
+                port = dbToOpen.port                  # ''
             # For unit_test_search.py...
             if dbServer == 'DKW-Linux':
-                messageServer = 'transana.wcer.wisc.edu'
+                messageServer = 'DKW-Linux'
                 messageServerPort = 17595
                 if hasattr(dbToOpen, 'ssl'):
                     ssl = dbToOpen.ssl
@@ -1569,9 +1779,9 @@ def get_db(dbToOpen=None):
                 # ... get the database path
                 databasePath = TransanaGlobal.configData.databaseDir
                 # Add the path and the database extension to the database name to create the full database file path and name
-                dbName = os.path.join(databasePath, databaseName.encode(TransanaGlobal.encoding) + '.db')
+                dbName = os.path.join(databasePath, databaseName + '.db')
                 # If the database file does not exist ...
-                if not os.path.exists(dbName):
+                if not os.path.exists(dbName) and usePrompt:
                     # If the Database Name was not found, prompt the user to see if they want to create a new Database.
                     # First, create the Prompt Dialog
                     # NOTE:  This does not use Dialogs.ErrorDialog because it requires a Yes/No reponse
@@ -1594,7 +1804,7 @@ def get_db(dbToOpen=None):
                 # If we should connect to the database ...
                 if result == wx.ID_YES:
                     # ... connect to it.
-                    _dbref = sqlite3.connect(dbName)
+                    _dbref = sqlite3.connect(dbName.encode('utf8'))
                     # Enable AutoCommit
                     _dbref.isolation_level = None
                     # Have sqlite use Strings rather than Unicode, as all fields in Transana are manually encoded
@@ -1866,6 +2076,9 @@ def get_db(dbToOpen=None):
                             dbCursor.execute('SET character_set_server = utf8')
                             dbCursor.execute('SET character_set_database = utf8')
                             dbCursor.execute('SET character_set_results = utf8')
+                            dbCursor.execute('SET collation_connection = utf8_general_ci')
+                            dbCursor.execute('SET collation_database = utf8_general_ci')
+                            dbCursor.execute('SET collation_server = utf8_general_ci')
                             
                             dbCursor.execute('USE %s' % databaseName.encode('utf8'))
                             # Set the global character encoding to UTF-8
@@ -2094,7 +2307,7 @@ def get_username():
 
 
 def list_of_series():
-    """Get a list of all Series record names."""
+    """Get a list of all Library record names."""
     l = []
     query = "SELECT SeriesNum, SeriesID FROM Series2 ORDER BY SeriesID"
     DBCursor = get_db().cursor()
@@ -2132,10 +2345,10 @@ def list_of_episodes():
     # Return the list as the function result
     return l
 
-def list_of_episodes_for_series(SeriesName):
-    """Get a list of all Episodes contained within a named Series."""
+def list_of_episodes_for_series(LibraryName):
+    """Get a list of all Episodes contained within a named Library."""
     if 'unicode' in wx.PlatformInfo:
-        SeriesName = SeriesName.encode(TransanaGlobal.encoding)
+        LibraryName = LibraryName.encode(TransanaGlobal.encoding)
     l = []
     query = """
     SELECT EpisodeNum, EpisodeID, a.SeriesNum FROM Episodes2 a, Series2 b
@@ -2146,8 +2359,8 @@ def list_of_episodes_for_series(SeriesName):
     # Adjust the query for sqlite if needed
     query = FixQuery(query)
     DBCursor = get_db().cursor()
-    DBCursor.execute(query, (SeriesName, ))
-    # Records returned contain EpisodeNum, EpisodeID, and parent Series Num
+    DBCursor.execute(query, (LibraryName, ))
+    # Records returned contain EpisodeNum, EpisodeID, and parent Library Num
     for row in fetchall_named(DBCursor):
         id = row['EpisodeID']
         if 'unicode' in wx.PlatformInfo:
@@ -2181,11 +2394,11 @@ def list_of_episode_transcripts():
     # Return the list as the function results
     return l
     
-def list_transcripts(SeriesName, EpisodeName):
+def list_transcripts(LibraryName, EpisodeName):
     """Get a list of all Transcripts for the named Episode within the
-    named Series."""
+    named Library."""
     if 'unicode' in wx.PlatformInfo:
-        SeriesName = SeriesName.encode(TransanaGlobal.encoding)
+        LibraryName = LibraryName.encode(TransanaGlobal.encoding)
         EpisodeName = EpisodeName.encode(TransanaGlobal.encoding)
     l = []
     query = """
@@ -2200,7 +2413,7 @@ def list_transcripts(SeriesName, EpisodeName):
     # Adjust the query for sqlite if needed
     query = FixQuery(query)
     DBCursor = get_db().cursor()
-    DBCursor.execute(query, (EpisodeName, SeriesName, 0))
+    DBCursor.execute(query, (EpisodeName, LibraryName, 0))
     for row in fetchall_named(DBCursor):
         id = row['TranscriptID']
         if 'unicode' in wx.PlatformInfo:
@@ -2224,6 +2437,65 @@ def list_clip_transcripts(clipNum):
         l.append((row['TranscriptNum'], row['SourceTranscriptNum'], row['SortOrder']))
     DBCursor.close()
     return l
+
+def list_of_documents(libraryNum = None):
+    """ Get a list of all Document records, or only those for the specified Library. """
+    # Create an empty list to hold results
+    l = []
+    # Define the Query
+    query = "SELECT DocumentNum, DocumentID, LibraryNum FROM Documents2 "
+    if libraryNum != None:
+        query += "WHERE LibraryNum = %d " % libraryNum
+    query += "ORDER BY DocumentID"
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Execute the Query
+    DBCursor.execute(query)
+    # Iterate through the Results set
+    for row in fetchall_named(DBCursor):
+        # Get the Episode ID
+        id = row['DocumentID']
+        # If we're using Unicode ...
+        if 'unicode' in wx.PlatformInfo:
+            # ... we need to handle the Unicode decoding
+            id = ProcessDBDataForUTF8Encoding(id)
+        # Add the results to the list
+        l.append((row['DocumentNum'], id, row['LibraryNum']))
+    # Close the Database Cursor
+    DBCursor.close()
+    # Return the list as the function result
+    return l
+
+def dictionary_of_documents_and_episodes(library=None):
+    """ Create a Dictionary Object containing info on all the Documents and Episodes in a Library """
+    # Initialize a Dictionary
+    d = {}
+    # Initialize docs to an empty list in case we're in the Standard version.
+    docs = []
+    if library != None:
+        # Don't return Documents for the Standard version!
+        if TransanaConstants.proVersion:
+            # Get all the Documents for this Library
+            docs = list_of_documents(library.number)
+        # Get all the Episodes for this Library    
+        episodes = list_of_episodes_for_series(library.id)
+    else:
+        # Don't return Documents for the Standard version!
+        if TransanaConstants.proVersion:
+            # Get all the Documents for this Library
+            docs = list_of_documents()
+        # Get all the Episodes for this Library    
+        episodes = list_of_episodes()
+    # Iterate through the Document list
+    for doc in docs:
+        # Add each Document to the Dictionary
+        d[(doc[1], doc[2])] = ('Document', doc[0], doc[2])
+    # Iterate through the Episode list
+    for episode in episodes:
+        # Add each Episode to the Dictionary
+        d[(episode[1], episode[2])] = ('Episode', episode[0], episode[2])
+    # Return the Dictionary.
+    return d
 
 def list_of_collections(ParentNum=0):
     """Get a list of all collections for under the given parent record.  By
@@ -2287,18 +2559,18 @@ def list_of_all_collections():
     # Return the List as the function result
     return l
 
-def locate_quick_clips_collection():
-    """ Determine the collection number of the Quick Clips Collection, creating it if necessary. """
+def locate_quick_quotes_and_clips_collection():
+    """ Determine the collection number of the Quick Quotes and Clips Collection, creating it if necessary. """
     # Get a Database Cursor
     DBCursor = get_db().cursor()
-    # Create a query to get the Collection Number for the QuickClips Collection (Beware of nested copies of
-    # the QuickClips Collection, which might've been created by saving search results!)
+    # Create a query to get the Collection Number for the QuickQuotesAndClips Collection (Beware of nested copies of
+    # the QuickQuotesAndClips Collection, which might've been created by saving search results!)
     query = "SELECT CollectNum from Collections2 where CollectID = %s AND ParentCollectNum = 0"
     # Determine the appropriate name for the QuickClips Collection
     if 'unicode' in wx.PlatformInfo:
-        collectionName = unicode(_("Quick Clips"), 'utf8')
+        collectionName = unicode(_("Quick Quotes and Clips"), 'utf8')
     else:
-        collectionName = _("Quick Clips")
+        collectionName = _("Quick Quotes and Clips")
     if not TransanaConstants.singleUserVersion:
         collectionName += " - %s" % get_username()
     # Adjust the query for sqlite if needed
@@ -2317,20 +2589,118 @@ def locate_quick_clips_collection():
         tempCollection.id = collectionName
         tempCollection.parent = 0
         if 'unicode' in wx.PlatformInfo:
-            tempCollection.comment = unicode(_('This collection was created automatically to accept Quick Clips.'), 'utf8')
+            tempCollection.comment = unicode(_('This collection was created automatically to accept Quick Quotes and Clips.'), 'utf8')
         else:
-            tempCollection.comment = _('This collection was created automatically to accept Quick Clips.')
+            tempCollection.comment = _('This collection was created automatically to accept Quick Quotes and Clips.')
         if not TransanaConstants.singleUserVersion:
             tempCollection.owner = get_username()
         tempCollection.db_save()
         return (tempCollection.number, collectionName, True)    
+
+def list_of_quotes():
+    """ Get a list of all Quotes, regardless of collection. """
+    # Create an empty list
+    l = []
+    # Define the Query
+    query = """ SELECT QuoteNum, QuoteID, CollectNum, SourceDocumentNum, SortOrder FROM Quotes2
+                  ORDER BY SortOrder, QuoteID """
+    # Get a Database Cursor
+    DBCursor = get_db().cursor()
+    # Execute the Query
+    DBCursor.execute(query)
+    # Iterate through the Results
+    for row in fetchall_named(DBCursor):
+        # Get the Quote ID
+        id = row['QuoteID']
+        # If we're using Unicode ...
+        if 'unicode' in wx.PlatformInfo:
+            # ... we need to decode the ClipID
+            id = ProcessDBDataForUTF8Encoding(id)
+        # Add the results to the list
+        l.append((row['QuoteNum'], id, row['CollectNum'], row['SourceDocumentNum'], row['SortOrder']))
+    # Close the Database Cursor
+    DBCursor.close()
+    # Return the list as the funtion results
+    return l
+
+def list_of_quotes_by_document(DocumentNum, textPos=-1, textSel=(-2, -2)):
+    """Get a list of all Quotes that have been created from a given Document
+    Number."""
+    if (textPos != -1) and (textSel == (-2, -2)):
+        textSel = (textPos, textPos)
+    l = []
+    if textSel == (-2, -2):
+        query = """
+                  SELECT a.QuoteNum, a.QuoteID, a.CollectNum, b.StartChar, b.EndChar, c.CollectID, c.ParentCollectNum, a.Comment
+                        FROM Quotes2 a, QuotePositions2 b, Collections2 c
+                        WHERE a.QuoteNum = b.QuoteNum AND
+                              a.CollectNum = c.CollectNum AND
+                              a.SourceDocumentNum = %s
+                        ORDER BY b.StartChar, c.CollectID, a.QuoteID
+                """
+        args = (DocumentNum, )
+    else:
+        query = """
+                  SELECT a.QuoteNum, a.QuoteID, a.CollectNum, b.StartChar, b.EndChar, c.CollectID, c.ParentCollectNum, a.Comment
+                        FROM Quotes2 a, QuotePositions2 b, Collections2 c
+                        WHERE a.QuoteNum = b.QuoteNum AND
+                              a.CollectNum = c.CollectNum AND
+                              a.SourceDocumentNum = %s AND
+                              ((b.StartChar < %s AND b.EndChar > %s) OR
+                               (b.StartChar >= %s AND b.EndChar <= %s) OR
+                               (b.StartChar < %s AND b.EndChar > %s))
+                        ORDER BY b.StartChar, c.CollectID, a.QuoteID
+                """
+        args = (DocumentNum, textSel[0], textSel[0], textSel[0], textSel[1], textSel[1], textSel[1])
+
+    DBCursor = get_db().cursor()
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    DBCursor.execute(query, args)
+    for row in fetchall_named(DBCursor):
+        QuoteNum = row['QuoteNum']
+        QuoteID = row['QuoteID']
+        CollectID = row['CollectID']
+        # Convert the ID values to the proper UTF-8 representation if needed
+        if 'unicode' in wx.PlatformInfo:
+            QuoteID = ProcessDBDataForUTF8Encoding(QuoteID)
+            CollectID = ProcessDBDataForUTF8Encoding(CollectID)
+        # Add a dictionary object to the results list that spells out the clip data
+        l.append({'Type' : 'Quote', 'QuoteNum' : QuoteNum, 'QuoteID' : QuoteID,
+                  'StartChar' : row['StartChar'], 'EndChar' : row['EndChar'],
+                  'CollectID' : CollectID, 'CollectNum' : row['CollectNum'], 'ParentCollectNum' : row['ParentCollectNum'],
+                  'Comment' : row['Comment']})
+
+    DBCursor.close()
+    return l
+
+def list_of_quotes_by_collectionnum(collectionNum, includeSortOrder=False):
+    quoteList = []
+    query = """ SELECT QuoteNum, QuoteID, CollectNum, SortOrder, SourceDocumentNum
+                FROM Quotes2
+                WHERE CollectNum = %s
+                ORDER BY SortOrder, QuoteID """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    cursor = get_db().cursor()
+    cursor.execute(query, (collectionNum, ))
+    for (quoteNum, quoteID, collectNum, sortOrder, sourceDocNum) in cursor.fetchall():
+        id = quoteID
+        if 'unicode' in wx.PlatformInfo:
+            id = ProcessDBDataForUTF8Encoding(id)
+        if includeSortOrder:
+            quoteList.append((quoteNum, id, collectNum, sortOrder, sourceDocNum))
+        else:
+            quoteList.append((quoteNum, id, collectNum, sourceDocNum))
+    cursor.close()
+    return quoteList
 
 def list_of_clips():
     """ Get a list of all Clips, regardless of collection. """
     # Create an empty list
     l = []
     # Define the Query
-    query = """ SELECT ClipNum, ClipID, CollectNum, SortOrder FROM Clips2
+    query = """ SELECT ClipNum, ClipID, CollectNum, EpisodeNum, SortOrder FROM Clips2
                   ORDER BY SortOrder, ClipID """
     # Get a Database Cursor
     DBCursor = get_db().cursor()
@@ -2345,7 +2715,7 @@ def list_of_clips():
             # ... we need to decode the ClipID
             id = ProcessDBDataForUTF8Encoding(id)
         # Add the results to the list
-        l.append((row['ClipNum'], id, row['CollectNum'], row['SortOrder']))
+        l.append((row['ClipNum'], id, row['CollectNum'], row['EpisodeNum'], row['SortOrder']))
     # Close the Database Cursor
     DBCursor.close()
     # Return the list as the funtion results
@@ -2485,6 +2855,38 @@ def list_of_clips_by_transcriptnum(TranscriptNum):
     DBCursor.close()
     # Return the list of Dictionary Objects
     return l
+
+def list_of_quote_copies(quoteID, sourceDocumentNum, start_char, end_char):
+    """ Return a list of quotes that match the QuoteID, start, and stop positions submitted """
+    # Create an empty list to hold data
+    quoteList = []
+    # Define the SQL query
+    query = """ SELECT q.QuoteNum, QuoteID, CollectNum, SourceDocumentNum, StartChar, EndChar
+                  FROM Quotes2 q, QuotePositions2 qp
+                  WHERE q.QuoteNum = qp.QuoteNum AND
+                  QuoteID = %s AND
+                  SourceDocumentNum = %s AND
+                  StartChar = %s AND
+                  EndChar = %s """
+    # Define the data to get plugged into the SQL query
+    data = (quoteID.encode('utf8'), sourceDocumentNum, start_char, end_char)
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    # Get a database cursor
+    cursor = get_db().cursor()
+    # Execute the SQL query
+    cursor.execute(query, data)
+    # Fetch the data and iterate through it.
+    for (quoteNum, quoteID, collectNum, sourceDocumentNum, startChar, endChar) in cursor.fetchall():
+        # Get the Quote ID
+        id = quoteID
+        id = ProcessDBDataForUTF8Encoding(id)
+        # Add the data to the data list
+        quoteList.append((quoteNum, collectNum, id, sourceDocumentNum))
+    # Close the database cursor
+    cursor.close()
+    # Return the data list to the calling routine
+    return quoteList
 
 def list_of_clip_copies(clipID, sourceTranscriptNum, clipStart, clipStop):
     """ Return a list of clips that match the ClipID, source Transcript number, start, and stop times submitted """
@@ -2633,14 +3035,26 @@ def list_of_snapshots_by_collectionnum(collectionNum, includeSortOrder=False):
     return snapshotList
 
 def GetSortOrderData(collectionNum):
-    """ Get the Sort Order information for a Collection's Clips and Snapshots.
+    """ Get the Sort Order information for a Collection's Quotes, Clips and Snapshots.
         This function returns a dictionary of sort orders which can be looked
         up using a (nodetype, objectNumber) key.
-          nodetype is either 'ClipNode' or 'SnapshotNode'. """
+          nodetype is either 'QuoteNode', 'ClipNode' or 'SnapshotNode'. """
     # Create an empty dictionary
     d = {}
     # Get a database Cursor
     cursor = get_db().cursor()
+    # Get the Quote data
+    query = """ SELECT QuoteNum, SortOrder
+                FROM Quotes2
+                WHERE CollectNum = %s """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    # Execute the query
+    cursor.execute(query, (collectionNum, ))
+    # For each item returned from the database ...
+    for (quoteNum, sortOrder) in cursor.fetchall():
+        # ... add it to the dictionary
+        d[('QuoteNode', quoteNum)] = sortOrder
     # Get the Clip data
     query = """ SELECT ClipNum, SortOrder
                 FROM Clips2
@@ -2667,6 +3081,36 @@ def GetSortOrderData(collectionNum):
     cursor.close()
     # Return the dictionary
     return d
+
+def CheckForDuplicateQuickQuote(collectNum, documentNum, startChar, endChar):
+    """ Check to see if there is already a Quick Quote for this document segment. """
+    # Get a database cursor
+    DBCursor = get_db().cursor()
+    # Design a query to identify Quick Quotes which match the data passed in
+    query = """SELECT a.QuoteNum FROM Quotes2 a, QuotePositions2 b
+                 WHERE a.CollectNum = %s AND
+                       a.SourceDocumentNum = %s AND
+                       b.StartChar = %s AND
+                       b.EndChar = %s AND
+                       a.QuoteNum = b.QuoteNum """
+    # Put the data passed in into a compatible data structure
+    data = (collectNum, documentNum, startChar, endChar)
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    # Execute the query
+    DBCursor.execute(query, data)
+    records = DBCursor.fetchall()
+    # If no rows are returned ...
+    if len(records) == 0:
+        # ... return -1 to indicate that no duplicate quotes were found
+        quoteNum = -1
+    else:
+        quoteNum = records[0][0]
+
+    # ... close the database cursor ...
+    DBCursor.close()
+    # ... and return the Quote Number of the offending Quote.
+    return quoteNum
 
 def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart, clipStop, vidFiles):
     """ Check to see if there is already a Quick Clip for this video segment. """
@@ -2748,7 +3192,7 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
         data = (collectNum, episodeNum, clipStart, clipStop)
 
         if DEBUG:
-            tmpDlg = wx.MessageDialog(None, query % data, "Hello!")
+            tmpDlg = Dialogs.InfoDialog(None, query % data)
             tmpDlg.ShowModal()
             tmpDlg.Destroy()
 
@@ -2824,6 +3268,41 @@ def CheckForDuplicateQuickClip(collectNum, episodeNum, transcriptNum, clipStart,
             DBCursor.close()
             # ... and return the Clip Number of the offending clip.
             return clipNum
+
+def FindAdjacentQuotes(documentNum, startChar, endChar):
+    """ Find Quotes that are adjacent to the character positions sent in.
+        Parameters:  documentNum of the chosen Quote
+                     startChar of the chosen Quote
+                     endChar of the chosen Quote """
+
+    # NOTE:  To be considered adjacent, the quote needs to be from the same Source Document as Quote X,
+    #        end where X starts or start where X ends.  Because of whitespace, we leave a few characters
+    #        of slack in start and end characters.
+
+    # Initialize a results set
+    results = []
+    # Get a database cursor
+    DBCursor = get_db().cursor()
+    # Define a query
+    query = """ SELECT q.QuoteNum, QuoteID, SourceDocumentNum, q.CollectNum, CollectID, StartChar, EndChar
+                  FROM Quotes2 q, QuotePositions2 qp, Collections2 c
+                  WHERE (SourceDocumentNum = %s) AND
+                        (q.QuoteNum = qp.QuoteNum) AND
+                        (((EndChar >= %s) AND (EndChar <= %s)) OR
+                         ((StartChar >= %s) AND (StartChar <= %s))) AND
+                        (q.CollectNum = c.CollectNum)
+                  GROUP BY QuoteNum
+                  ORDER BY StartChar, QuoteID """
+    # Define the data for the query
+    data = (documentNum, (startChar - 5), (startChar + 2), (endChar - 2), (endChar + 5))
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    # Execute the query
+    DBCursor.execute(query, data)
+    # Get the query results
+    results =  DBCursor.fetchall()
+    # Return the results set
+    return results
 
 def FindAdjacentClips(episodeNum, startTime, endTime, trInfo, trFiles):
     """ Find clips that are adjacent to the time codes sent in.
@@ -2916,9 +3395,9 @@ def FindAdjacentClips(episodeNum, startTime, endTime, trInfo, trFiles):
     return results
 
 def getMaxSortOrder(collNum):
-    """Get the largest Sort Order value for all the Clips and Snapshots in a Collection."""
+    """Get the largest Sort Order value for all the Quotes, Clips and Snapshots in a Collection."""
     DBCursor = get_db().cursor()
-    query = "SELECT MAX(SortOrder) FROM Clips2 WHERE CollectNum = %s"
+    query = "SELECT MAX(SortOrder) FROM Quotes2 WHERE CollectNum = %s"
     # Adjust the query for sqlite if needed
     query = FixQuery(query)
     DBCursor.execute(query, (collNum, ))
@@ -2934,6 +3413,17 @@ def getMaxSortOrder(collNum):
             maxSortOrder = 0
     else:
         maxSortOrder = 0
+    query = "SELECT MAX(SortOrder) FROM Clips2 WHERE CollectNum = %s"
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    DBCursor.execute(query, (collNum, ))
+    # rowcount doesn't work for sqlite!
+    if TransanaConstants.DBInstalled == 'sqlite3':
+        n = 1
+    else:
+        n = DBCursor.rowcount
+    if n >= 1:
+        maxSortOrder = max(maxSortOrder, DBCursor.fetchone()[0])
     query = "SELECT MAX(SortOrder) FROM Snapshots2 WHERE CollectNum = %s"
     # Adjust the query for sqlite if needed
     query = FixQuery(query)
@@ -2950,12 +3440,12 @@ def getMaxSortOrder(collNum):
 
 
 def list_of_notes(** kwargs):
-    """Get a list of Note IDs for the given Series, Episode, Collection,
+    """Get a list of Note IDs for the given Library, Episode, Collection,
     or Clip numbers.  Parameters are passed as keyword
-    arguments, where valid parameters are Transcript, Episode, Series, Clip, and
+    arguments, where valid parameters are Transcript, Episode, Document, Library, Clip, Quote, and
     Collection.
     
-    Examples: list_of_notes(Series=12)
+    Examples: list_of_notes(Library=12)
               list_of_notes(Episode=14)
 
     The optional parameter "includeNumber=True" causes (note number, note id) tuples
@@ -2964,9 +3454,12 @@ def list_of_notes(** kwargs):
     notelist = []
     # Build the query
     query = "SELECT NoteNum, NoteID From Notes2"
-    if kwargs.has_key("Series"):
+    if kwargs.has_key("Library"):
         query += " WHERE   SeriesNum = %s"
-        values = (kwargs['Series'],)
+        values = (kwargs['Library'],)
+    elif kwargs.has_key("Document"):
+        query += " WHERE   DocumentNum = %s"
+        values = (kwargs['Document'],)
     elif kwargs.has_key("Episode"):
         query += " WHERE   EpisodeNum = %s"
         values = (kwargs['Episode'],)
@@ -2979,6 +3472,9 @@ def list_of_notes(** kwargs):
     elif kwargs.has_key("Clip"):
         query += " WHERE   ClipNum = %s"
         values = (kwargs['Clip'],)
+    elif kwargs.has_key("Quote"):
+        query += " WHERE   QuoteNum = %s"
+        values = (kwargs['Quote'],)
     elif kwargs.has_key("Snapshot"):
         query += " WHERE   SnapshotNum = %s"
         values = (kwargs['Snapshot'],)
@@ -3016,26 +3512,28 @@ def list_of_notes(** kwargs):
     return notelist
 
 def list_of_node_notes(** kwargs):
-    """ Get a list of all Notes for the given Series or Collection node, including sub-nodes.
-        Valid parameters are SeriesNode=True or CollectionNode=True."""
+    """ Get a list of all Notes for the given Library or Collection node, including sub-nodes.
+        Valid parameters are LibraryNode=True or CollectionNode=True."""
     # Create an empty list
     notelist = []
     # Start building the Query
-    query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, SnapshotNum
-                 FROM Notes2 """
-    # If we're looking for Series Node Notes ...
-    if kwargs.has_key("SeriesNode"):
-        # ... we need to build a query for Series, Episode, or Transcript Notes
+    query = """SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, SnapshotNum, DocumentNum,
+                 QuoteNum FROM Notes2 """
+    # If we're looking for Library Node Notes ...
+    if kwargs.has_key("LibraryNode"):
+        # ... we need to build a query for Library, Episode, or Transcript Notes
         query += """WHERE   SeriesNum <> 0 OR
                             EpisodeNum <> 0 OR
-                            TranscriptNum <> 0"""
+                            TranscriptNum <> 0 OR
+                            DocumentNum <> 0 """
     # If we're looking for Collection Node Notes ...
     elif kwargs.has_key("CollectionNode"):
         # ... we need to build a query for Collection or Clip Notes
         query += """WHERE   CollectNum <> 0 OR
                             ClipNum <> 0 OR
-                            SnapshotNum <> 0 """
-    # If neither SeriesNode nor CollectionNode is defined, we've got a programming error.
+                            SnapshotNum <> 0 OR
+                            QuoteNum <> 0 """
+    # If neither LibraryNode nor CollectionNode is defined, we've got a programming error.
     else:
         return []   # Should we raise an exception?
     # Finish the Query
@@ -3069,11 +3567,15 @@ def list_of_all_notes(reportType=None, searchText=None):
     # We want to display all the Notes in each section in alphabetical order.
 
     # Query for ALL Notes in order of NoteID.
-    query = """ SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, SnapshotNum, NoteTaker
+    query = """ SELECT NoteNum, NoteID, SeriesNum, EpisodeNum, TranscriptNum, CollectNum, ClipNum, SnapshotNum,
+                       DocumentNum, QuoteNum, NoteTaker
                 FROM Notes2 N"""
-    # If we want the Series report, limit the query to Series notes
-    if reportType == 'SeriesNode':
+    # If we want the Livrary report, limit the query to Library notes
+    if reportType == 'LibraryNode':
         query += " WHERE SeriesNum <> 0"
+    # If we want the Document report, limit the query to Document notes
+    elif reportType == 'DocumentNode':
+        query += " WHERE DocumentNum <> 0"
     # If we want the Episode report, limit the query to Episode notes
     elif reportType == 'EpisodeNode':
         query += " WHERE EpisodeNum <> 0"
@@ -3086,6 +3588,9 @@ def list_of_all_notes(reportType=None, searchText=None):
     # If we want the Clip report, limit the query to Clip notes
     elif reportType == 'ClipNode':
         query += " WHERE ClipNum <> 0"
+    # If we want the Quote report, limit the query to Quote notes
+    elif reportType == 'QuoteNode':
+        query += " WHERE QuoteNum <> 0"
     # If we want the Snapshot report, limit the query to Snapshot notes
     elif reportType == 'SnapshotNode':
         query += " WHERE SnapshotNum <> 0"
@@ -3112,7 +3617,7 @@ def list_of_all_notes(reportType=None, searchText=None):
     for row in results:
         # Pull out the elements that need to be encoded
         ID = row[1]
-        noteTaker = row[8]
+        noteTaker = row[10]
         # Encode the elements, if needed
         if 'unicode' in wx.PlatformInfo:
             ID = ProcessDBDataForUTF8Encoding(ID)
@@ -3123,9 +3628,11 @@ def list_of_all_notes(reportType=None, searchText=None):
                          'SeriesNum' : row[2],
                          'EpisodeNum' : row[3],
                          'TranscriptNum' : row[4],
-                         'CollectionNum' : row[5],
+                         'CollectNum' : row[5],
                          'ClipNum' : row[6],
                          'SnapshotNum' : row[7],
+                         'DocumentNum' : row[8],
+                         'QuoteNum' : row[9],
                          'NoteTaker' : noteTaker})
     # Close the Database Cursor
     DBCursor.close()
@@ -3194,7 +3701,7 @@ def list_of_all_keywords():
    
 def list_of_keywords(** kwargs):
     """Get a list of all keywordgroup/keyword pairs for the specified
-    qualifiers (Episode, Clip, Snapshot numbers).  Result is a list of tuples,
+    qualifiers (Episode, Document, Clip, Quote, Snapshot numbers).  Result is a list of tuples,
     where the first element in the tuple is the keyword group, 
     the second element is the keyword itself, and the third element
     indicates whether the keyword is an example or not.
@@ -3206,7 +3713,7 @@ def list_of_keywords(** kwargs):
     
     count = len(kwargs)
     i = 1
-    query = "SELECT EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example FROM ClipKeywords2"
+    query = "SELECT EpisodeNum, DocumentNum, ClipNum, QuoteNum, SnapshotNum, KeywordGroup, Keyword, Example FROM ClipKeywords2"
     for obj in kwargs:
         query = query + "   WHERE %sNum = %%s" % (obj)
         if i != count:      # not last item
@@ -3223,14 +3730,14 @@ def list_of_keywords(** kwargs):
     r = DBCursor.fetchall()
     kwlist = []
     # Current ClipKeywords table row format used:
-    # EpNum, ClipNum, SnapshotNum, KWGroup, Keyword, Example
+    # EpNum, DocNum, ClipNum, QuoteNum, SnapshotNum, KWGroup, Keyword, Example
     for tup in r:
         if 'unicode' in wx.PlatformInfo:
-            kwlist.append((ProcessDBDataForUTF8Encoding(tup[3]), \
-                           ProcessDBDataForUTF8Encoding(tup[4]), \
-                           ProcessDBDataForUTF8Encoding(tup[5])))
+            kwlist.append((ProcessDBDataForUTF8Encoding(tup[5]), \
+                           ProcessDBDataForUTF8Encoding(tup[6]), \
+                           ProcessDBDataForUTF8Encoding(tup[7])))
         else:
-            kwlist.append((tup[3], tup[4], tup[5]))
+            kwlist.append((tup[5], tup[6], tup[7]))
     DBCursor.close()
     return kwlist
 
@@ -3319,7 +3826,7 @@ def SetKeywordExampleStatus(kwg, kw, clipNum, exampleValue):
     # In this case, we have to ADD the record!
     # BUT ROWCOUNT DOESN'T WORK WITH sqlite!
     if (dbCursor.rowcount == 0) or (TransanaConstants.DBInstalled in ['sqlite3']):
-        insert_clip_keyword(0, clipNum, 0, kwg, kw, 1)
+        insert_clip_keyword(0, 0, clipNum, 0, 0, kwg, kw, 1)
     dbCursor.close()
 
 
@@ -3696,18 +4203,28 @@ def list_all_keyword_examples_for_a_clip(clipnum):
     # Return the list of Keyword Examples as the function result
     return kwExamples
 
-def delete_all_keywords_for_a_group(epnum, clipnum, snapshotnum):
-    """ Given an Episode, Clip, or Snapshot number, delete the appropriate keywordgroup/word pairs. """
+def delete_all_keywords_for_a_group(epnum, docnum, clipnum, quotenum, snapshotnum):
+    """ Given an Episode, Document, Clip, Quote, or Snapshot number, delete the appropriate keywordgroup/word pairs. """
     # If we have an Episode Number ...
     if epnum != 0:
         # .. delete the Episode Keywords
         specifier = "EpisodeNum"
         num = epnum
+    # If we have a Document Number ...
+    elif docnum != 0:
+        # ... delete the Document Keywords
+        specifier = "DocumentNum"
+        num = docnum
     # If we have a Clip Number ...
     elif clipnum != 0:
         # ... delete the Clip Keywords
         specifier = "ClipNum"
         num = clipnum
+    # If we have a Quote Number ...
+    elif quotenum != 0:
+        # ... delete the Quote Keywords
+        specifier = "QuoteNum"
+        num = quotenum
     # If we have a Snapshot Number ...
     elif snapshotnum != 0:
         # ... delete the Snapshot Keywords
@@ -3729,7 +4246,7 @@ def delete_all_keywords_for_a_group(epnum, clipnum, snapshotnum):
     # Close the database cursor
     DBCursor.close()
 
-def insert_clip_keyword(ep_num, clip_num, snapshot_num, kw_group, kw, exampleValue=0):
+def insert_clip_keyword(ep_num, doc_num, clip_num, quote_num, snapshot_num, kw_group, kw, exampleValue=0):
     """Insert a new record in the Clip Keywords table."""
     if 'unicode' in wx.PlatformInfo:
         kw_group = kw_group.encode(TransanaGlobal.encoding)
@@ -3753,13 +4270,13 @@ def insert_clip_keyword(ep_num, clip_num, snapshot_num, kw_group, kw, exampleVal
         # create a query to insert the Clip Keyword Record
         query = """
         INSERT INTO ClipKeywords2
-            (EpisodeNum, ClipNum, SnapshotNum, KeywordGroup, Keyword, Example)
+            (EpisodeNum, DocumentNum, ClipNum, QuoteNum, SnapshotNum, KeywordGroup, Keyword, Example)
             VALUES
-            (%s, %s, %s, %s, %s, %s)
+            (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         # Adjust the query for sqlite if needed
         query = FixQuery(query)
-        DBCursor.execute(query, (ep_num, clip_num, snapshot_num, kw_group, kw, exampleValue))
+        DBCursor.execute(query, (ep_num, doc_num, clip_num, quote_num, snapshot_num, kw_group, kw, exampleValue))
         DBCursor.close()
         # Signal success
         return True
@@ -3814,6 +4331,31 @@ def delete_keyword_group(name):
             prompt = _('%s  Keyword "%s : %s" is locked by %s\n')
         t = prompt % (t, tempkwg, tempkw, temprl)
 
+# Check for locked Documents
+    query = """SELECT a.KeywordGroup, a.Keyword, b.DocumentID, b.RecordLock
+        FROM ClipKeywords2 a, Documents2 b
+        WHERE   a.KeywordGroup = %s AND
+                a.DocumentNum <> %s AND
+                a.DocumentNum = b.DocumentNum AND
+                b.RecordLock <> %s
+    """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    DBCursor.execute(query, (kwg, 0, ""))
+    for row in fetchall_named(DBCursor):
+        tempdocid = row['DocumentID']
+        temprl = row['RecordLock']
+        if 'unicode' in wx.PlatformInfo:
+            tempdocid = ProcessDBDataForUTF8Encoding(tempdocid)
+            temprl = ProcessDBDataForUTF8Encoding(temprl)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('%s  Document "%s" is locked by %s\n'), 'utf8')
+        else:
+            prompt = _('%s  Document "%s" is locked by %s\n')
+        t = prompt % (t, tempdocid, temprl)
+
+# Check for locked Episodes
     query = """SELECT a.KeywordGroup, a.Keyword, b.EpisodeID, b.RecordLock
         FROM ClipKeywords2 a, Episodes2 b
         WHERE   a.KeywordGroup = %s AND
@@ -3836,6 +4378,30 @@ def delete_keyword_group(name):
         else:
             prompt = _('%s  Episode "%s" is locked by %s\n')
         t = prompt % (t, tempepid, temprl)
+
+    # Quotes next
+    query = """SELECT a.KeywordGroup, a.Keyword, c.QuoteID, c.RecordLock
+        FROM ClipKeywords2 a, Quotes2 c
+        WHERE   a.KeywordGroup = %s AND
+                a.QuoteNum <> %s AND
+                a.QuoteNum = c.QuoteNum AND
+                c.RecordLock <> %s
+    """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    DBCursor.execute(query, (kwg, 0, ""))
+    for row in fetchall_named(DBCursor):
+        tempqid = row['QuoteID']
+        temprl = row['RecordLock']
+        if 'unicode' in wx.PlatformInfo:
+            tempqid = ProcessDBDataForUTF8Encoding(tempqid)
+            temprl = ProcessDBDataForUTF8Encoding(temprl)
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('%s  Quote "%s" is locked by %s\n'), 'utf8')
+        else:
+            prompt = _('%s  Quote "%s" is locked by %s\n')
+        t = prompt % (t, tempqid, temprl)
 
     # Clips next
     query = """SELECT a.KeywordGroup, a.Keyword, c.ClipID, c.RecordLock
@@ -3986,6 +4552,29 @@ def delete_keyword(group, kw_name):
             temprl = ProcessDBDataForUTF8Encoding(temprl)
         t =  msg % (t, tempkwg, tempkw, temprl)
 
+    # Check for locked Documents
+    query = """SELECT a.KeywordGroup, a.Keyword, b.DocumentID, b.RecordLock
+        FROM ClipKeywords2 a, Documents2 b
+        WHERE   a.KeywordGroup = %s AND
+                a.Keyword = %s AND
+                a.DocumentNum <> %s AND
+                a.DocumentNum = b.DocumentNum AND
+                b.RecordLock <> %s
+    """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    DBCursor.execute(query, (kwg, kw, 0, ""))
+    for row in fetchall_named(DBCursor):
+        msg = _('%s  Document "%s" is locked by %s\n')
+        tempdocid = row['DocumentID']
+        temprl = row['RecordLock']
+        if 'unicode' in wx.PlatformInfo:
+            msg = unicode(msg, 'utf8')
+            tempdocid = ProcessDBDataForUTF8Encoding(tempdocid)
+            temprl = ProcessDBDataForUTF8Encoding(temprl)
+        t = msg % (t, tempdocid, temprl)
+
+    # Check for locked Episodes
     query = """SELECT a.KeywordGroup, a.Keyword, b.EpisodeID, b.RecordLock
         FROM ClipKeywords2 a, Episodes2 b
         WHERE   a.KeywordGroup = %s AND
@@ -4006,6 +4595,28 @@ def delete_keyword(group, kw_name):
             tempepid = ProcessDBDataForUTF8Encoding(tempepid)
             temprl = ProcessDBDataForUTF8Encoding(temprl)
         t = msg % (t, tempepid, temprl)
+
+    # Quotes next
+    query = """SELECT a.KeywordGroup, a.Keyword, c.QuoteID, c.RecordLock
+        FROM ClipKeywords2 a, Quotes2 c
+        WHERE   a.KeywordGroup = %s AND
+                a.Keyword = %s AND
+                a.QuoteNum <> %s AND
+                a.QuoteNum = c.QuoteNum AND
+                c.RecordLock <> %s
+    """
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    DBCursor.execute(query, (kwg, kw, 0, ""))
+    for row in fetchall_named(DBCursor):
+        msg = _('%s  Quote "%s" is locked by %s\n')
+        tempqid = row['QuoteID']
+        temprl = row['RecordLock']
+        if 'unicode' in wx.PlatformInfo:
+            msg = unicode(msg, 'utf8')
+            tempqid = ProcessDBDataForUTF8Encoding(tempqid)
+            temprl = ProcessDBDataForUTF8Encoding(temprl)
+        t = msg % (t, tempqid, temprl)
 
     # Clips next
     query = """SELECT a.KeywordGroup, a.Keyword, c.ClipID, c.RecordLock
@@ -4182,6 +4793,27 @@ def ClearSourceTranscriptRecords(transcriptNum):
     # Close the Database Cursor
     DBCursor.close()
 
+def ClearSourceDocumentRecords(documentNum):
+    """ When a Document is deleted, it must be removed as a SourceDocument from Quote records. """
+
+    # NOTE:  This routine is not perfect.  If a Quote record is locked by another user, the record WILL be changed
+    #        here but that change will be wiped out when the user with the record lock saves (thus restoring the
+    #        SourceDocumentNum value).  However, Transana still knows how to handle it when this value exists but
+    #        cannot be found, so I'm not too worried about this rare case.  Blocking the delete seems too extreme here.
+    
+    # Get a Database cursor
+    DBCursor = get_db().cursor()
+
+    # Define a query to delete the appropriate records
+    query = "UPDATE Quotes2 SET SourceDocumentNum = 0 where SourceDocumentNum = %s"
+    # Adjust the query for sqlite if needed
+    query = FixQuery(query)
+    # Execute the query
+    DBCursor.execute(query, (documentNum, ))
+
+    # Close the Database Cursor
+    DBCursor.close()
+
 def delete_filter_records(reportType, reportScope):
     """ Delete Filter Configuration records of a given reportType with a given reportScope """
     # Get a Database cursor
@@ -4221,7 +4853,7 @@ def record_match_count(table, field_names, field_values):
     # The query will have a trailing " AND\n".  Remove it.
     query = query[:-5]
     # Adjust the query for sqlite if needed
-    query = FixQuery(query)    
+    query = FixQuery(query)
     # Execute the query
     DBCursor.execute(query, field_values)
     # If we are using MySQL ...
@@ -4415,7 +5047,7 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
                     # Update the Media Filename
                     tempEpisode.media_filename = filePath + fileName
                 # Save the Record
-                tempEpisode.db_save()
+                tempEpisode.db_save(use_transactions=False)
                 # Unlock the Record
                 tempEpisode.unlock_record()
                 # Increment the Counter
@@ -4451,7 +5083,7 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
                     # Update the Media Filename
                     tempClip.media_filename = filePath + fileName
                 # Save the Record
-                tempClip.db_save()
+                tempClip.db_save(use_transactions=False)
                 # Unlock the Record
                 tempClip.unlock_record()
                 # Increment the Counter
@@ -4504,7 +5136,7 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
                             # ... then continue to use the existing file name
                             tempEpisode.additional_media_files = vid
                     # Save the Record
-                    tempEpisode.db_save()
+                    tempEpisode.db_save(use_transactions=False)
                     # Unlock the Record
                     tempEpisode.unlock_record()
                     # Increment the Counter
@@ -4546,7 +5178,7 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
                             # ... then continue to use the existing file name
                             tempClip.additional_media_files = vid
                     # Save the Record
-                    tempClip.db_save()
+                    tempClip.db_save(use_transactions=False)
                     # Unlock the Record
                     tempClip.unlock_record()
                     # Increment the Counter
@@ -4579,7 +5211,7 @@ def UpdateDBFilenames(parent, filePath, fileList, newName=''):
                     # Update the Media Filename
                     tempSnapshot.image_filename = filePath + fileName
                 # Save the Record
-                tempSnapshot.db_save()
+                tempSnapshot.db_save(use_transactions=False)
                 # Unlock the Record
                 tempSnapshot.unlock_record()
                 # Increment the Counter
@@ -4698,7 +5330,7 @@ def DeleteDatabase(username, password, server, database, port):
             # ... get the database path
             databasePath = TransanaGlobal.configData.databaseDir
             # ... and build the full database name by combining the path, database name, and file extension
-            dbName = os.path.join(databasePath, database.encode(TransanaGlobal.encoding) + '.db')
+            dbName = os.path.join(databasePath, database + '.db')
             # Build a prompt for confirming the delete
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -4769,30 +5401,67 @@ def ReportRecordLocks(parent):
     # run the query
     if 'unicode' in wx.PlatformInfo:
         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-        resMessage += unicode(_('Series records:\n'), 'utf8')
+        resMessage += unicode(_('Library records:\n'), 'utf8')
     else:
-        resMessage += _('Series records:\n')
-    # Execute the Series Query
+        resMessage += _('Library records:\n')
+    # Execute the Library Query
     DBCursor.execute(lockQuery)
     # Iterate through the records returned from the Database
     for recs in fetchall_named(DBCursor):
         # Get the DB Values
-        tempSeriesID = recs['SeriesID']
+        tempLibraryID = recs['SeriesID']
         tempRecordLock = recs['RecordLock']
         # If we're in Unicode mode, format the strings appropriately
         if 'unicode' in wx.PlatformInfo:
-            tempSeriesID = ProcessDBDataForUTF8Encoding(tempSeriesID)
+            tempLibraryID = ProcessDBDataForUTF8Encoding(tempLibraryID)
             tempRecordLock = ProcessDBDataForUTF8Encoding(tempRecordLock)
         # Add the data to the Report Results string
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_('Series "%s" is locked by %s\n'), 'utf8')
+            prompt = unicode(_('Library "%s" is locked by %s\n'), 'utf8')
         else:
-            prompt = _('Series "%s" is locked by %s\n')
-        resMessage += prompt % (tempSeriesID, tempRecordLock)
+            prompt = _('Library "%s" is locked by %s\n')
+        resMessage += prompt % (tempLibraryID, tempRecordLock)
         # If the user holding the lock isn't already in the list, add him/her.
         if not (tempRecordLock in userList):
             userList.append(tempRecordLock)
+    resMessage += '\n'
+
+    # Define the DOCUMENT Query
+    lockQuery = """SELECT DocumentID, SeriesID, d.RecordLock
+                   FROM Documents2 d, Series2 s
+                   WHERE d.RecordLock <> '' AND
+                         d.LibraryNum = s.SeriesNum """ 
+    # run the query
+    if 'unicode' in wx.PlatformInfo:
+        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+        resMessage += unicode(_('Document records:\n'), 'utf8')
+    else:
+        resMessage += _('Document records:\n')
+    # Execute the Document Query
+    DBCursor.execute(lockQuery)
+    # Iterate through the records returned from the Database
+    for recs in fetchall_named(DBCursor):
+        # Get the DB Values
+        tempDocumentID = recs['DocumentID']
+        tempLibraryID = recs['SeriesID']
+        tempRecordLock = recs['RecordLock']
+        # If we're in Unicode mode, format the strings appropriately
+        if 'unicode' in wx.PlatformInfo:
+            tempDocumentID = ProcessDBDataForUTF8Encoding(tempDocumentID)
+            tempLibraryID = ProcessDBDataForUTF8Encoding(tempLibraryID)
+            tempRecordLock = ProcessDBDataForUTF8Encoding(tempRecordLock)
+        # Add the data to the Report Results string
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Document "%s" in Library "%s" is locked by %s\n'), 'utf8')
+        else:
+            prompt = _('Document "%s" in Library "%s" is locked by %s\n')
+        resMessage += prompt % (tempDocumentID, tempLibraryID, tempRecordLock)
+        # If the user holding the lock isn't already in the list, add him/her.
+        if not (tempRecordLock in userList):
+            userList.append(tempRecordLock)
+    # Add a blank line to clearly delineate the report sections
     resMessage += '\n'
 
     # Define the EPISODE Query
@@ -4812,20 +5481,20 @@ def ReportRecordLocks(parent):
     for recs in fetchall_named(DBCursor):
         # Get the DB Values
         tempEpisodeID = recs['EpisodeID']
-        tempSeriesID = recs['SeriesID']
+        tempLibraryID = recs['SeriesID']
         tempRecordLock = recs['RecordLock']
         # If we're in Unicode mode, format the strings appropriately
         if 'unicode' in wx.PlatformInfo:
             tempEpisodeID = ProcessDBDataForUTF8Encoding(tempEpisodeID)
-            tempSeriesID = ProcessDBDataForUTF8Encoding(tempSeriesID)
+            tempLibraryID = ProcessDBDataForUTF8Encoding(tempLibraryID)
             tempRecordLock = ProcessDBDataForUTF8Encoding(tempRecordLock)
         # Add the data to the Report Results string
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_('Episode "%s" in Series "%s" is locked by %s\n'), 'utf8')
+            prompt = unicode(_('Episode "%s" in Library "%s" is locked by %s\n'), 'utf8')
         else:
-            prompt = _('Episode "%s" in Series "%s" is locked by %s\n')
-        resMessage += prompt % (tempEpisodeID, tempSeriesID, tempRecordLock)
+            prompt = _('Episode "%s" in Library "%s" is locked by %s\n')
+        resMessage += prompt % (tempEpisodeID, tempLibraryID, tempRecordLock)
         # If the user holding the lock isn't already in the list, add him/her.
         if not (tempRecordLock in userList):
             userList.append(tempRecordLock)
@@ -4853,21 +5522,21 @@ def ReportRecordLocks(parent):
         # Get the DB Values
         tempTranscriptID = recs['TranscriptID']
         tempEpisodeID = recs['EpisodeID']
-        tempSeriesID = recs['SeriesID']
+        tempLibraryID = recs['SeriesID']
         tempRecordLock = recs['RecordLock']
         # If we're in Unicode mode, format the strings appropriately
         if 'unicode' in wx.PlatformInfo:
             tempTranscriptID = ProcessDBDataForUTF8Encoding(tempTranscriptID)
             tempEpisodeID = ProcessDBDataForUTF8Encoding(tempEpisodeID)
-            tempSeriesID = ProcessDBDataForUTF8Encoding(tempSeriesID)
+            tempLibraryID = ProcessDBDataForUTF8Encoding(tempLibraryID)
             tempRecordLock = ProcessDBDataForUTF8Encoding(tempRecordLock)
         # Add the data to the Report Results string
         if 'unicode' in wx.PlatformInfo:
             # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-            prompt = unicode(_('Transcript "%s" in Episode "%s" in Series "%s" is locked by %s\n'), 'utf8')
+            prompt = unicode(_('Transcript "%s" in Episode "%s" in Library "%s" is locked by %s\n'), 'utf8')
         else:
-            prompt = _('Transcript "%s" in Episode "%s" in Series "%s" is locked by %s\n')
-        resMessage += prompt % (tempTranscriptID, tempEpisodeID, tempSeriesID, tempRecordLock)
+            prompt = _('Transcript "%s" in Episode "%s" in Library "%s" is locked by %s\n')
+        resMessage += prompt % (tempTranscriptID, tempEpisodeID, tempLibraryID, tempRecordLock)
         # If the user holding the lock isn't already in the list, add him/her.
         if not (tempRecordLock in userList):
             userList.append(tempRecordLock)
@@ -4902,6 +5571,82 @@ def ReportRecordLocks(parent):
         else:
             prompt = _('Collection "%s" ')
         resMessage += prompt % tempCollectID
+        # Note the collection Parent, so we can list Collection Nesting
+        collPar = recs['ParentCollectNum']
+        # While we're looking at a nested Collection ...
+        while collPar > 0L:
+            # ... build a query to get the parent collection ...
+            subQ = """ SELECT CollectID, ParentCollectNum
+                       FROM Collections2
+                       WHERE CollectNum = %s """
+            # Adjust the query for sqlite if needed
+            subQ = FixQuery(subQ)
+            # ... get a second database cursor ...
+            DBCursor2 = dbConn.cursor()
+            # ... execute the parent collection query ...
+            DBCursor2.execute(subQ, (collPar, ))
+            # ... get the parent collection data ...
+            rec2 = DBCursor2.fetchone()
+            # ... note the collection's parent ...
+            collPar = rec2[1]
+            # Get the DB Value
+            tempCollectID = rec2[0]
+            # If we're in Unicode mode, format the strings appropriately
+            if 'unicode' in wx.PlatformInfo:
+                tempCollectID = ProcessDBDataForUTF8Encoding(tempCollectID)
+            # ... add the parent collection to the report Results String ...
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('nested in "%s" '), 'utf8')
+            else:
+                prompt = _('nested in "%s" ')
+            resMessage += prompt % tempCollectID
+            # ... close the second database cursor ...
+            DBCursor2.close()
+        # ... and complete the Report Results string.
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('is locked by %s\n'), 'utf8')
+        else:
+            prompt = _('is locked by %s\n')
+        resMessage += prompt % tempRecordLock
+        # If the user holding the lock isn't already in the list, add him/her.
+        if not (tempRecordLock in userList):
+            userList.append(tempRecordLock)
+    # Add a blank line to clearly delineate the report sections
+    resMessage += '\n'
+
+    # Define the Quote Query
+    lockQuery = """SELECT QuoteID, CollectID, c.ParentCollectNum, q.RecordLock
+                   FROM Quotes2 q, Collections2 c
+                   WHERE q.RecordLock <> '' AND
+                         q.CollectNum = c.CollectNum""" 
+    # run the query
+    if 'unicode' in wx.PlatformInfo:
+        # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+        resMessage += unicode(_('Quote records:\n'), 'utf8')
+    else:
+        resMessage += _('Quote records:\n')
+    # Execute the Quote Query
+    DBCursor.execute(lockQuery)
+    # Iterate through the records returned from the Database
+    for recs in fetchall_named(DBCursor):
+        # Get the DB Values
+        tempQuoteID = recs['QuoteID']
+        tempCollectID = recs['CollectID']
+        tempRecordLock = recs['RecordLock']
+        # If we're in Unicode mode, format the strings appropriately
+        if 'unicode' in wx.PlatformInfo:
+            tempQuoteID = ProcessDBDataForUTF8Encoding(tempQuoteID)
+            tempCollectID = ProcessDBDataForUTF8Encoding(tempCollectID)
+            tempRecordLock = ProcessDBDataForUTF8Encoding(tempRecordLock)
+        # Add the data to the Report Results string
+        if 'unicode' in wx.PlatformInfo:
+            # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+            prompt = unicode(_('Quote "%s" in Collection "%s" '), 'utf8')
+        else:
+            prompt = _('Quote "%s" in Collection "%s" ')
+        resMessage += prompt % (tempQuoteID, tempCollectID)
         # Note the collection Parent, so we can list Collection Nesting
         collPar = recs['ParentCollectNum']
         # While we're looking at a nested Collection ...
@@ -5195,9 +5940,9 @@ def ReportRecordLocks(parent):
         if recs['SeriesNum'] > 0:
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                resMessage += unicode(_('Series') + ' ', 'utf8')
+                resMessage += unicode(_('Libraries') + ' ', 'utf8')
             else:
-                resMessage += _('Series') + ' '
+                resMessage += _('Libraries') + ' '
         elif recs['EpisodeNum'] > 0:
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -5326,7 +6071,7 @@ def UnlockRecords(parent, userName):
     # Change the Cursor to the Wait Cursor
     parent.SetCursor(wx.StockCursor(wx.CURSOR_WAIT))
     # Create a list of tables to iterate through unlocking records.
-    tableList = ['Series2', 'Episodes2', 'Transcripts2', 'Collections2', 'Clips2', 'Snapshots2', 'Notes2', 'Keywords2', 'CoreData2']
+    tableList = ['Series2', 'Documents2', 'Episodes2', 'Transcripts2', 'Collections2', 'Clips2', 'Quotes2', 'Snapshots2', 'Notes2', 'Keywords2', 'CoreData2']
     # Get a Database Connection
     dbConn = get_db()
     # Get a Database Cursor

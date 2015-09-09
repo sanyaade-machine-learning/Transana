@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -27,6 +27,11 @@ import TransanaConstants
 import TransanaGlobal
 # import Python's os module
 import os
+# Import Python's platform module
+import platform
+# import Python's sys module
+import sys
+
 
 class AboutBox(wx.Dialog):
     """ Create and display the About Dialog Box """
@@ -82,7 +87,7 @@ class AboutBox(wx.Dialog):
         mainSizer.Add(version, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
 
         # Create a label for the Program Copyright
-        str = _("Copyright 2002-2014\nThe Board of Regents of the University of Wisconsin System")
+        str = _("Copyright 2002-2015\nThe Board of Regents of the University of Wisconsin System")
         copyright = wx.StaticText(self, -1, str, style=wx.ALIGN_CENTRE)
         # Apply the last specified font (from Program Version) to the copyright label
         font = self.GetFont()
@@ -149,6 +154,13 @@ class AboutBox(wx.Dialog):
         # Add the FFmpeg Credits to the main sizer
         mainSizer.Add(self.ffmpeg, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
 
+        if ('wxMac' in wx.PlatformInfo) and \
+           (('alpha' in TransanaConstants.versionNumber.lower()) or ('beta' in TransanaConstants.versionNumber.lower())):
+            self.tmpInput = wx.TextCtrl(self, -1, "DELETE ME!", size=(1, 1))
+            mainSizer.Add(self.tmpInput, 0, wx.ALIGN_CENTER | wx.BOTTOM | wx.LEFT | wx.RIGHT, 12)
+            self.tmpInput.Bind(wx.EVT_KEY_UP, self.OnKeyUp)
+            self.tmpInput.SetFocus()
+
         # Create an OK button
         btnOK = wx.Button(self, wx.ID_OK, _("OK"))
         # Add the OK button to the main sizer
@@ -186,11 +198,28 @@ class AboutBox(wx.Dialog):
             key = event.GetKeyCode()
             # If F11 is pressed, show COMPONENT VERSION information
             if (key == wx.WXK_F11) or (key in [ord('S'), ord('s')]):
-                # Import Python's ctypes, Transana's DBInterface, and Python's sys modules
-                import Crypto, ctypes, DBInterface, paramiko, sys
+                # Import Python's ctypes, Transana's DBInterface, Python's sys modules, and numpy
+                import Crypto, ctypes, DBInterface, paramiko, sys, numpy
+
+                if sys.platform == 'win32':
+                    sysplat = 'Windows'
+                    sysver = platform.win32_ver()[0]
+                elif sys.platform == 'darwin':
+                    sysplat = 'Mac OS X'
+                    sysver = platform.mac_ver()[0]
+                else:
+                    sysplat = sys.platform
+                    sysver = platform.version()
+                str = 'Platform:  %s %s' % (sysplat, sysver)
                 # Build a string that contains the version information for crucial programming components
-                str = '\n            Transana %s uses the following tools:\n\n'% (TransanaConstants.versionNumber)
-                str = '%sPython:  %s\n' % (str, sys.version[:5])
+                str += '\n\nTransana %s uses the following tools:\n\n'% (TransanaConstants.versionNumber)
+                if (platform.architecture()[0] == '32bit') or (sys.maxint == 2 ** 31 - 1):
+                    arc = '32-bit'
+                elif platform.architecture()[0] == '64bit':
+                    arc = '64-bit'
+                else:
+                    arc = 'Unknown architecture'
+                str = '%sPython:  %s  (%s)\n' % (str, sys.version[:6].strip(), arc)
                 if 'unicode' in wx.PlatformInfo:
                     str2 = 'unicode'
                 else:
@@ -219,6 +248,7 @@ class AboutBox(wx.Dialog):
                 str = "%sctypes:  %s\n" % (str, ctypes.__version__)
                 str = "%sCrypto:  %s\n" % (str, Crypto.__version__)
                 str = "%sparamiko:  %s\n" % (str, paramiko.__version__)
+                str = "%snumpy:     %s\n" % (str, numpy.__version__)
                 str = "%sEncoding:  %s\n" % (str, TransanaGlobal.encoding)
                 str = "%sLanguage:  %s\n" % (str, TransanaGlobal.configData.language)
                 # Replace the Description text with the version information text
@@ -227,6 +257,10 @@ class AboutBox(wx.Dialog):
                 query = "SELECT COUNT(SeriesNum) FROM Series2"
                 dbCursor.execute(query)
                 seriesCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(DocumentNum) FROM Documents2"
+                dbCursor.execute(query)
+                documentCount = dbCursor.fetchall()[0][0]
                 
                 query = "SELECT COUNT(EpisodeNum) FROM Episodes2"
                 dbCursor.execute(query)
@@ -243,6 +277,10 @@ class AboutBox(wx.Dialog):
                 query = "SELECT COUNT(CollectNum) FROM Collections2"
                 dbCursor.execute(query)
                 collectionCount = dbCursor.fetchall()[0][0]
+                
+                query = "SELECT COUNT(quoteNum) FROM Quotes2"
+                dbCursor.execute(query)
+                quoteCount = dbCursor.fetchall()[0][0]
                 
                 query = "SELECT COUNT(clipNum) FROM Clips2"
                 dbCursor.execute(query)
@@ -285,22 +323,25 @@ class AboutBox(wx.Dialog):
                 filterCount = dbCursor.fetchall()[0][0]
 
                 tmpStr = """Data Records:
-  Series: %s
+  Libraries: %s
+  Documents: %s
   Episodes: %s
   Episode Transcripts: %s
   Collections: %s
+  Quotes: %s
   Clips: %s
   Clip Transcripts: %s
   Snapshots: %s
   Notes:  %s
   Keywords: %s
-  Clip Keywords: %s
+  Quote/Clip Keywords: %s
   Snapshot Keywords: %s
   Snapshot Keyword Styles: %s
   Additional Videos:  %s
   Filters:  %s
   Core Data: %s\n  """
-                data = (seriesCount, episodeCount, transcriptCount, collectionCount, clipCount, clipTranscriptCount,
+                data = (seriesCount, documentCount, episodeCount, transcriptCount, collectionCount, quoteCount,
+                        clipCount, clipTranscriptCount,
                         snapshotCount, noteCount, keywordCount, clipKeywordCount, snapshotKeywordCount,
                         snapshotKeywordStylesCount, addVidCount, filterCount, coreDataCount)
                 
@@ -318,6 +359,8 @@ class AboutBox(wx.Dialog):
                 self.ffmpeg.SetLabel(self.ffmpeg_str)
             # Fit the window to the altered controls
             self.Fit()
+            TransanaGlobal.CenterOnPrimary(self)
+
         # If ALT and SHIFT aren't both pressed ...
         else:
             # ... then we don't do anything

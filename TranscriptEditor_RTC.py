@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -30,10 +30,6 @@ if SHOWHIDDEN:
 import wx
 # Import the Rich Text Control
 from RichTextEditCtrl_RTC import RichTextEditCtrl
-### If we're on Windows ...
-##if 'wxMSW' in wx.PlatformInfo:
-##    # import the GDI Report class from RichTextEditCtrl_RTC
-##    from RichTextEditCtrl_RTC import GDIReport
 # import wxPython's RichTextCtrl
 import wx.richtext as richtext
 # Import the Format Dialog
@@ -44,10 +40,16 @@ import Transcript
 import DragAndDropObjects
 # Import Transana's Dialogs
 import Dialogs
+# import Transana's Document object
+import Document
 # Import Transana's Episode and Clip Objects 
 import Episode, Clip
+# Import Transana's Quote object
+import Quote
 # Import Transana's Constants
 import TransanaConstants
+# import Transana Exceptions
+import TransanaExceptions
 # Import Transana's Global variables
 import TransanaGlobal
 # import the RTC version of the Transcript User Interface module
@@ -101,6 +103,8 @@ class TranscriptEditor(RichTextEditCtrl):
         # There are times related to right-click play control when we need to remember the cursor position.
         # Create a variable to store that information, initialized to 0
         self.cursorPosition = 0
+        # Let's track the transcript length, required for altering Quote Positions while editing Documents!
+        self.documentLength = 0
 
         # Initialize CanDrag to False.  If Drag is allowed, it will be enabled later
         self.canDrag = False
@@ -130,12 +134,10 @@ class TranscriptEditor(RichTextEditCtrl):
 
         # Initialize Mouse Position to avoid problems later
         self.mousePosition = None
-        
-        # Remove Drag-and-Drop reference on the mac due to the Quicktime Drag-Drop bug.
-        # NOTE:  This bug has been fixed, so the macDragDrop constant is TRUE!
-        if TransanaConstants.macDragDrop or (not '__WXMAC__' in wx.PlatformInfo):
-            dt = TranscriptEditorDropTarget(self)
-            self.SetDropTarget(dt)
+
+        # make the Transcript Editor a Drop Target        
+        dt = TranscriptEditorDropTarget(self)
+        self.SetDropTarget(dt)
 
 # NOTE:  These Bindings have been removed to prevent DUPLICATE CALLS to the methods!!!
         # We need to trap both the EVT_KEY_DOWN and the EVT_CHAR event.
@@ -153,12 +155,25 @@ class TranscriptEditor(RichTextEditCtrl):
         # EVT_MOTION is used to detect mouse motion
 #        self.Bind(wx.EVT_MOTION, self.OnMotion)
 
+        # Added for tracking Document Edits, specifically to manage Quote Positions
+        self.Bind(richtext.EVT_RICHTEXT_CONTENT_INSERTED, self.OnContentChanged)
+        self.Bind(richtext.EVT_RICHTEXT_CONTENT_DELETED, self.OnContentChanged)
+
         # This causes the Transana Transcript Window to override the default
         # RichTextEditCtrl right-click menu.  Transana needs the right-click
         # for play control rather than an editing menu.
         self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
         self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
 
+        self.Bind(wx.EVT_ACTIVATE, self.OnActivate)
+
+
+    def OnActivate(self, event):
+
+        print "TranscriptEditor.OnActivate called"
+
+        event.Skip()
+        
     # Public methods
     def load_transcript(self, transcript):
         """ Load the given transcript object or RTF file name into the editor. """
@@ -173,7 +188,6 @@ class TranscriptEditor(RichTextEditCtrl):
 	self.Freeze()
 	# Suppress Undo tracking
 	self.BeginSuppressUndo()
-
         # prepare the buffer for the incoming data.
         self.ClearDoc()
         # The control needs to be editable to insert a transcript!
@@ -368,6 +382,12 @@ class TranscriptEditor(RichTextEditCtrl):
             except:
                 # Note the failure in the Error Log
                 print "TranscriptEditor_RTC.load_transcript():  SAVE AFTER CONVERSION FAILED."
+                print sys.exc_info()[0]
+                print sys.exc_info()[1]
+                import traceback
+                traceback.print_exc(file=sys.stdout)
+                print
+                
             
         # Restore Partial Transcript Editing status
         TransanaConstants.partialTranscriptEdit = tmpPartialTranscriptEdit
@@ -395,9 +415,9 @@ class TranscriptEditor(RichTextEditCtrl):
         self.GotoPos(0)
         # If we are in the Transcript Dialog, which HAS a toolbar ...
         # (When this is called from the Clip Properties form, there is no tool bar!)
-        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptDialog):
+        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptPanel):
             # ... make sure the Toolbar's buttons reflect the current display
-            self.parent.toolbar.ToggleTool(self.parent.toolbar.CMD_SHOWHIDE_ID, True)
+            self.parent.toolbar.ToggleTool(self.parent.parent.parent.parent.CMD_SHOWHIDE_ID, True)
 
         # Check Formatting to set initial Default and Basic Style info
 	self.CheckFormatting()
@@ -408,8 +428,9 @@ class TranscriptEditor(RichTextEditCtrl):
         # Mark the Edit Control as unmodified.
 	self.DiscardEdits()
 
-        # Implement Minimum Transcript Width by setting size hints for the TranscriptionUI dialog
-        self.parent.SetSizeHints(minH = 0, minW = self.TranscriptObj.minTranscriptWidth)
+        if isinstance(transcript, Transcript.Transcript):
+            # Implement Minimum Transcript Width by setting size hints for the TranscriptionUI dialog
+            self.parent.SetSizeHints(minH = 0, minW = self.TranscriptObj.minTranscriptWidth)
         # Destroy the Load Popup Dialog
         loadDlg.Destroy()
 
@@ -595,30 +616,45 @@ class TranscriptEditor(RichTextEditCtrl):
         if self.timeCodeDataVisible:
             # ... then hide them for now.
             self.changeTimeCodeValueStatus(False)
-        # If we have a defined Transcript Object ...
-        if self.TranscriptObj:
-            # Note whether the transcript has changed
-            self.TranscriptObj.has_changed = self.modified()
-            # Get the transcript data in XML format
-            self.TranscriptObj.text = self.GetFormattedSelection('XML')
-            # Write it to the database
-            self.TranscriptObj.db_save()
-        # If time codes were showing, show them again.
-        if not initCodesVis:
-            self.hide_codes()
-        # If Time Code Values were showing, show them again.
-        if initTimeCodeValueStatus:
-            self.changeTimeCodeValueStatus(True)
-        # Let's try restoring the Cursor Position when all is said and done.
-        self.RestoreCursor()
-        # Mark the Edit Control as unmodified.
-	self.DiscardEdits()
-        # Destroy the Save Popup Dialog
-        self.saveDlg.Destroy()
-        # If Partial Transcript editing is enabled ...
-        if TransanaConstants.partialTranscriptEdit and continueEditing:
-            # If we have only part of the transcript in the editor, we need to restore the partial transcript state following save
-            self.UpdateCurrentContents('EnterEditMode')
+        # Start exception handling in case there's a problem with the Save
+        try:
+            # If we have a defined Transcript Object ...
+            if self.TranscriptObj:
+                # Note whether the transcript has changed
+                self.TranscriptObj.has_changed = self.modified()
+                # Get the transcript data in XML format
+                self.TranscriptObj.text = self.GetFormattedSelection('XML')
+                # Specify the Document Length in Characters (for Documents)
+                self.TranscriptObj.document_length = self.GetLength()
+                # Write it to the database
+                self.TranscriptObj.db_save()
+        except TransanaExceptions.SaveError, e:
+            raise
+        except:
+            print "TranscriptEditor_RTC.save_transcript():"
+            print sys.exc_info()[0]
+            print sys.exc_info()[1]
+            import traceback
+            traceback.print_exc()
+            raise
+        # We need to finish this even if an exception is raised!
+        finally:
+            # If time codes were showing, show them again.
+            if not initCodesVis:
+                self.hide_codes()
+            # If Time Code Values were showing, show them again.
+            if initTimeCodeValueStatus:
+                self.changeTimeCodeValueStatus(True)
+            # Let's try restoring the Cursor Position when all is said and done.
+            self.RestoreCursor()
+            # Mark the Edit Control as unmodified.
+            self.DiscardEdits()
+            # Destroy the Save Popup Dialog
+            self.saveDlg.Destroy()
+            # If Partial Transcript editing is enabled ...
+            if TransanaConstants.partialTranscriptEdit and continueEditing:
+                # If we have only part of the transcript in the editor, we need to restore the partial transcript state following save
+                self.UpdateCurrentContents('EnterEditMode')
 
     def export_transcript(self, fname):
         """Export the transcript to an RTF file."""
@@ -1085,7 +1121,8 @@ class TranscriptEditor(RichTextEditCtrl):
         """Insert a timecode in the current cursor position of the
         Transcript.  The parameter time_ms is optional and will default
         to the current Video Position if not used."""
-        if self.get_read_only():
+        # If the item is read-only or if it is a Document (instead of a Transcript), we don't insert time codes
+        if self.get_read_only() or isinstance(self.TranscriptObj, Document.Document):
             # Don't do it in read-only mode
             return
         
@@ -1485,8 +1522,13 @@ class TranscriptEditor(RichTextEditCtrl):
         from being modified."""
         # Change the Read Only state in the RichTextEditCtrl
         self.SetReadOnly(state)
+        # Reset the document length
+        self.documentLength = self.GetLastPosition()
+
+#        print "TranscriptEditor_RTC.set_read_only():", self.documentLength
+        
         # If AutoSave is ON and we are in a Transcript Window ...
-        if TransanaGlobal.configData.autoSave and isinstance(self.parent, TranscriptionUI_RTC._TranscriptDialog):
+        if TransanaGlobal.configData.autoSave and isinstance(self.parent, TranscriptionUI_RTC._TranscriptPanel):
             # If we are switching to READ ONLY ...
             if state:
                 # ... we can turn OFF the AutoSave Timer
@@ -1729,7 +1771,7 @@ class TranscriptEditor(RichTextEditCtrl):
         self.SaveCursor()
 
         # See if the ControlObject wants to handle the key that was pressed.
-        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptDialog) and \
+        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptPanel) and \
            self.parent.ControlObject.ProcessCommonKeyCommands(event):
             # If so, we're done here.
             return
@@ -1750,7 +1792,7 @@ class TranscriptEditor(RichTextEditCtrl):
         blockSkip = False
 
         # If the Control key is being held down ...
-        if event.ControlDown():
+        if (('wxMSW' in wx.PlatformInfo) and event.ControlDown()) or (('wxMac' in wx.PlatformInfo) and event.CmdDown()):
             try:
                 # Get the Code for the key that was pressed
                 c = event.GetKeyCode()
@@ -1763,7 +1805,8 @@ class TranscriptEditor(RichTextEditCtrl):
                     # Ctrl-Cursor-Down inserts the Down Arrow / Falling Intonation symbol
                     self.InsertFallingIntonation()
                     return
-                elif c == ord("H"):
+                # OS X steals Cmd-H for a system function, so we substitute Cmd-J on the Mac.
+                elif c == ord("H") or (('wxMac' in wx.PlatformInfo) and (c == ord("J"))):
                     # Ctrl-H inserts the High Dot / Inbreath symbol
                     self.InsertInBreath()
                     return
@@ -1785,10 +1828,15 @@ class TranscriptEditor(RichTextEditCtrl):
                     self.StyleChanged(self)
                     blockSkip = True
                 elif c == ord("K"):
-                    # CTRL-K: Quick Clip Shortcut Key
-                    # Ask the Control Object for help creating a Quick Clip
-                    self.parent.ControlObject.CreateQuickClip()
-                    return
+                    # CTRL-K: Quick Clip/Quote Shortcut Key
+                    if isinstance(self.TranscriptObj, Transcript.Transcript):
+                        # Ask the Control Object for help creating a Quick Clip
+                        self.parent.ControlObject.CreateQuickClip()
+                        return
+                    elif isinstance(self.TranscriptObj, Document.Document) or isinstance(self.TranscriptObj, Quote.Quote):
+                        # Ask the Control Object for help creating a Quick Quote
+                        self.parent.ControlObject.CreateQuickQuote()
+                        return
                 
             except:
                 pass    # Non-ASCII value key pressed
@@ -1904,7 +1952,11 @@ class TranscriptEditor(RichTextEditCtrl):
 
             elif c == wx.WXK_F12:
                 # F12 is Quick Save
-                self.save_transcript()
+                # Save the transcript
+                if TransanaConstants.partialTranscriptEdit:
+                    self.save_transcript(continueEditing=True)
+                else:
+                    self.save_transcript()
                 blockSkip = True
 
             # If anything not explicitly handled is entered ...
@@ -1916,7 +1968,7 @@ class TranscriptEditor(RichTextEditCtrl):
             # ... skip to the next (parent) level event handler.
             event.Skip()
 
-        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptDialog):
+        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptPanel):
             # Always check the styles to see if the Transcript Toolbar needs to be updated.  But we need to defer the call
             # until everything else has been handled so it's always correct.
             wx.CallAfter(self.StyleChanged, self)
@@ -1934,18 +1986,170 @@ class TranscriptEditor(RichTextEditCtrl):
 
     def OnKeyUp(self, event):
         """ Catch the release of each key """
+
+        # Get the current position and selection information
+        self.pos = self.GetCurrentPos()
+        self.selection = self.GetSelection()
+        # If we're in read_only mode, position immediately with left-click.
+        # If we are not in read_only mode, we need to delay the selection until right-click.
+        if self.get_read_only():
+            # First, clear the current selection in the visualization window, if there is one.
+            self.parent.ControlObject.ClearVisualizationSelection()
+            # If there is NO SELECTION ...  ((-2, -1) comes up when holding shift with cursor keys to eliminate a selection!)
+            if self.selection in [(-2, -2), (-2, -1)]:
+                # If we have a Document object ...
+                if isinstance(self.parent.ControlObject.currentObj, Document.Document):
+                    # ... have the ControlObject update Transana Windows as appropriate
+                    self.parent.ControlObject.SetCurrentDocumentPosition(self.pos, self.selection, fromEditor=True)
+                # If we have an Episode ...
+#                elif isinstance(self.parent.ControlObject.currentObj, Episode.Episode):
+
+#                    print "We have an Episode, NO selection"
+                    
+            # If there IS a SELECTION ...
+            else:
+                # If we have a Document object ...
+                if isinstance(self.parent.ControlObject.currentObj, Document.Document):
+                    # ... have the ControlObject update Transana Windows as appropriate
+                    self.parent.ControlObject.SetCurrentDocumentSelection(self.selection[0], self.selection[1], fromEditor=True)
+                # If we have an Episode ...
+#                elif isinstance(self.parent.ControlObject.currentObj, Episode.Episode):
+
+#                    print "We have an Episode with a selection"
+
         # Call the super object's OnKeyUp method
         RichTextEditCtrl.OnKeyUp(self, event)
         # If a Style Changed method has been defined ...
         if self.StyleChanged != None:
             # ... make sure any style change is reflected on screen
             self.StyleChanged(self)
-
 #        if event.GetKeyCode() != wx.WXK_SHIFT:
 #            print "TranscriptEditor_RTC.OnKeyUp() (WITH SKIP)", event.GetKeyCode(), wx.WXK_SHIFT
 
 #       DISABLED because this causes this method to be called TWICE on each keystroke.            
 #        event.Skip()
+
+    def OnContentChanged(self, event):
+        """ Handle changes to the current Document """
+
+        # Only call it if we're editing a Document and we're in Edit mode
+        if not self.gettingFormattedSelection and isinstance(self.TranscriptObj, Document.Document) and not self.get_read_only():
+
+            if DEBUG:
+                print
+                print "TranscriptEditor_RTC.OnContentChanged():"
+                print "  read_only:", self.get_read_only()
+                print "  transcript length:", self.GetLastPosition(), "  (was %d)" % self.documentLength
+                print "  type:", type(self.TranscriptObj)
+                print "  insertion point:", self.GetCurrentPos(), self.GetSelection()
+                if isinstance(self.TranscriptObj, Document.Document):
+                    print self.TranscriptObj.quote_dict
+                print
+
+            # This code needs to be super-efficient.  That's why it's organized the way it is.
+            #    - Iterate AFTER the conditional (IF) statements so we evalute the IFs fewer times
+            #    - In Selection section, evalute the mid-selection cases last, as they will be rarest
+            # It needs to handle insertions and deletions with NO selection, as well as
+            # insertions over a selection and deletions of a selection!
+        
+
+#            import datetime
+#            startTime = datetime.datetime.now()
+
+            position = self.GetCurrentPos()
+            selection = self.GetSelection()
+
+            tmpStyle = self.GetStyleAt(position)
+
+            # We need to update the control or the following values may be incorrect for SELECTIONS!!
+            self.Update()
+            length = self.GetLastPosition()
+            sizeChange = length - self.documentLength
+
+            if DEBUG:
+                print "TranscriptEditor_RTC.OnContentChanged() --> ", length, sizeChange, self.documentLength
+            
+            # If we have NO SELECTION ...
+            if self.GetSelection() == (-2, -2):
+                # Iterate through the Quote Dictionary
+                for key in self.TranscriptObj.quote_dict:
+                    # If the Quote Start is at or after the Cursor Position ...
+                    if self.TranscriptObj.quote_dict[key][0] >= position:
+                        # ... adjust the start position by the change in size
+                        self.TranscriptObj.quote_dict[key] = \
+                           (self.TranscriptObj.quote_dict[key][0] + sizeChange,
+                            self.TranscriptObj.quote_dict[key][1])
+                    # If the Quote End is at or after the Cursor Position ...
+                    # (We *MUST* maintain a quote size of at least one character!!)
+                    if (self.TranscriptObj.quote_dict[key][1] >= position) and \
+                       (self.TranscriptObj.quote_dict[key][1] - self.TranscriptObj.quote_dict[key][0] > 1):
+                        # ... adjust the end position by the change in size
+                        self.TranscriptObj.quote_dict[key] = \
+                           (self.TranscriptObj.quote_dict[key][0],
+                            self.TranscriptObj.quote_dict[key][1] + sizeChange)
+            # If we have a SELECTION ...
+            else:
+                # Iterate through the Quote Dictionary
+                for key in self.TranscriptObj.quote_dict:
+                    # If the Quote Start is at or after the Selection End ...
+                    if self.TranscriptObj.quote_dict[key][0] >= selection[1]:
+                        # ... adjust the start position by the change in size
+                        self.TranscriptObj.quote_dict[key] = \
+                           (self.TranscriptObj.quote_dict[key][0] + sizeChange,
+                            self.TranscriptObj.quote_dict[key][1])
+                    # ELSE if the Quote Start is INSIDE the Selection ...
+                    elif (self.TranscriptObj.quote_dict[key][0] >= selection[0]) and \
+                         (self.TranscriptObj.quote_dict[key][0] < selection[1]):
+                        # ... adjust the start position by the change in size of the portion of the
+                        # selection inside the Quote's range
+                        self.TranscriptObj.quote_dict[key] = \
+                           (selection[0],
+                            self.TranscriptObj.quote_dict[key][1])
+
+                    # If the Quote End is at or after the Selection End ...
+                    # (We *MUST* maintain a quote size of at least one character!!)
+                    if (self.TranscriptObj.quote_dict[key][1] >= selection[1]) and \
+                       (self.TranscriptObj.quote_dict[key][1] - self.TranscriptObj.quote_dict[key][0] > 1):
+                        # ... adjust the end position by the change in size
+                        self.TranscriptObj.quote_dict[key] = \
+                           (self.TranscriptObj.quote_dict[key][0],
+                            self.TranscriptObj.quote_dict[key][1] + sizeChange)
+                    # ELSE if the Quote End is INSIDE the Selection ...
+                    elif (self.TranscriptObj.quote_dict[key][1] >= selection[0]) and \
+                         (self.TranscriptObj.quote_dict[key][1] < selection[1]):
+                        # ... adjust the end position by the change in size of the portion of the
+                        # selection inside the Quote's range
+                        self.TranscriptObj.quote_dict[key] = \
+                           (self.TranscriptObj.quote_dict[key][0],
+                            self.TranscriptObj.quote_dict[key][1] + sizeChange + (selection[1] - self.TranscriptObj.quote_dict[key][1]))
+            # Restore the original cursor position
+## Position hasn't changed(?), and this messes up no-selection font formatting!!
+##            self.SetCurrentPos(position)
+
+            if DEBUG:
+                if isinstance(self.TranscriptObj, Document.Document):
+                    print self.TranscriptObj.quote_dict
+
+            # YES, both of these are the SAME.  I'm still trying to figure out what that note about problems while dragging refers to.
+            # If there's no selection ... (When in Edit Mode and Dragging to create a Quote, problems arose without this!)
+            if self.GetSelection() == (-2, -2) or self.get_read_only():
+                # ... reset Document Length
+                self.documentLength = self.GetLastPosition()
+
+#                print "TranscriptEditor_RTC.HasContentChanged(no selection):", self.documentLength
+
+            else:
+
+#                print "TranscriptEditor_RTC.HasContentChanged(WITH SELECTION):", self.documentLength, self.GetLastPosition()
+        
+                self.documentLength = self.GetLastPosition()
+
+            # Update the Data Window based on key press, if needed
+            self.parent.ControlObject.UpdateDataWindowOnDocumentEdit()
+            # Update the Keyword Visualization.  In this case, we do NOT need to look up all the
+            # coding for all the Quotes or Clips taken from this object, a costly operation, so we
+            # signal that that can be skippped.
+            self.parent.ControlObject.UpdateKeywordVisualization(textChangeOnly = True)
 
     def OnAutoSave(self, event):
         """ Process the AutoSave Timer Event """
@@ -1982,6 +2186,11 @@ class TranscriptEditor(RichTextEditCtrl):
         if isPlaying:
             # ... tell it to play again!
             self.parent.ControlObject.Play()
+
+        # A few users, mostly on OS X, are experiencing program crashes following Auto-Save.  I have not been able to
+        # recreate this problem, despite trying on a large number of computers and with varied data.  This is an
+        # attempt to solve that problem blind based on other crashes I've debugged lately.
+        wx.YieldIfNeeded()
 
         # Start exception handling
         try:
@@ -2069,94 +2278,121 @@ class TranscriptEditor(RichTextEditCtrl):
             wx.CallAfter(self.SetSelection, selStart, selEnd)
 
     def OnStartDrag(self, event, copyToClipboard=False):
-        """Called on the initiation of a Drag within the Transcript."""
+        """Called on the initiation of a Drag within the Transcript, Document, or Quote."""
+
         # If we don't have a Transcript Object ...
         if not self.TranscriptObj:
             # ... abort the Start Drag 'cause the interface is empty.
             return
 
-        # Let's get the time code boundaries.  This will return a start_time of 0 if there's not initial time code,
-        # and an end_time of -1 if there's no ending time code.
-        (start_time, end_time) = self.get_selected_time_range()
+        if isinstance(self.TranscriptObj, Transcript.Transcript):
+            # Let's get the time code boundaries.  This will return a start_time of 0 if there's not initial time code,
+            # and an end_time of -1 if there's no ending time code.
+            (start_time, end_time) = self.get_selected_time_range()
 
-        # If we're creating a Clip from a Clip, we may need to make some minor adjustments to the clips start and stop times and
-        # to the video/audio checkbox data.
-        # First, let's see if we're in an Episode Transcript or a Clip Transcript.
-        if self.TranscriptObj.clip_num != 0:
-            # We're in an Clip Transcript.  If we don't have a starting time code ...
-            if start_time == 0:
-                # ... we need to use the CLIP's start as the sub-clip's start time, not the start of the video (0:00:00.0)!
-                start_time = self.parent.ControlObject.GetVideoStartPoint()
-            # Get the initial Video Checkbox data from the Video Window
-            videoCheckboxData = self.parent.ControlObject.GetVideoCheckboxDataForClips(start_time)
-            # Create a temporary variable for the Clip, just to make things easier
-            tmpClip = self.parent.ControlObject.currentObj
-            # Get a temporary copy of the source Episode for comparison purposes
-            tmpEpisode = Episode.Episode(tmpClip.episode_num)
+            # If we're creating a Clip from a Clip, we may need to make some minor adjustments to the clips start and stop times and
+            # to the video/audio checkbox data.
+            # First, let's see if we're in an Episode Transcript or a Clip Transcript.
+            if self.TranscriptObj.clip_num != 0:
+                # We're in an Clip Transcript.  If we don't have a starting time code ...
+                if start_time == 0:
+                    # ... we need to use the CLIP's start as the sub-clip's start time, not the start of the video (0:00:00.0)!
+                    start_time = self.parent.ControlObject.GetVideoStartPoint()
+                # Get the initial Video Checkbox data from the Video Window
+                videoCheckboxData = self.parent.ControlObject.GetVideoCheckboxDataForClips(start_time)
+                # Create a temporary variable for the Clip, just to make things easier
+                tmpClip = self.parent.ControlObject.currentObj
+                # Get a temporary copy of the source Episode for comparison purposes
+                tmpEpisode = Episode.Episode(tmpClip.episode_num)
 
-            # First, let's find out if the EPISODE's main file is included in the Clip.
-            if tmpEpisode.media_filename == tmpClip.media_filename:
-                # If so, its video would be checked, and the CLIP's audio value tells us if its audio would be checked.
-                videoCheckboxData = [(True, tmpClip.audio)]
-            # If not ...
-            else:
-                # ... then neither box would be checked.
-                videoCheckboxData = [(False, False)]
-            # Now let's iterate through the EPISODE's additional media files
-            for addEpVidData in tmpEpisode.additional_media_files:
-                # If this Episode Additional Media File is the Clip's Main Media File ...
-                if (addEpVidData['filename'] == tmpClip.media_filename):
-                    # ... then the Video Checkbox would have been checked, and the object tells us if audio was too.
-                    videoCheckboxData.append((True, addEpVidData['audio']))
-                # If the Clip's main media file was already established, we need to check the Episode additional files
-                # against the Clip Additional media files.
+                # First, let's find out if the EPISODE's main file is included in the Clip.
+                if tmpEpisode.media_filename == tmpClip.media_filename:
+                    # If so, its video would be checked, and the CLIP's audio value tells us if its audio would be checked.
+                    videoCheckboxData = [(True, tmpClip.audio)]
+                # If not ...
                 else:
-                    # Assume the video will not be found ...
-                    vidFound = False
-                    # ... and that the audio should NOT be included.
-                    audIncluded = False
-                    # Iterate throught the CLIP additional media files ...
-                    for addClipVidData in tmpClip.additional_media_files:
-                        # If the Clip Media File matches the Episode Media File ...
-                        if addClipVidData['filename'] == addEpVidData['filename']:
-                            # ... then we've found the Media File!
-                            vidFound = True
-                            # Note if audio should be included, getting data from the Clip Object
-                            audIncluded = addClipVidData['audio']
-                            # Stop looking!
-                            break
-                    # Add info to videoCheckboxData to indicate whether the Episode's media file and audio were checked when
-                    # the source clip was created.
-                    videoCheckboxData.append((vidFound, audIncluded))
+                    # ... then neither box would be checked.
+                    videoCheckboxData = [(False, False)]
+                # Now let's iterate through the EPISODE's additional media files
+                for addEpVidData in tmpEpisode.additional_media_files:
+                    # If this Episode Additional Media File is the Clip's Main Media File ...
+                    if (addEpVidData['filename'] == tmpClip.media_filename):
+                        # ... then the Video Checkbox would have been checked, and the object tells us if audio was too.
+                        videoCheckboxData.append((True, addEpVidData['audio']))
+                    # If the Clip's main media file was already established, we need to check the Episode additional files
+                    # against the Clip Additional media files.
+                    else:
+                        # Assume the video will not be found ...
+                        vidFound = False
+                        # ... and that the audio should NOT be included.
+                        audIncluded = False
+                        # Iterate throught the CLIP additional media files ...
+                        for addClipVidData in tmpClip.additional_media_files:
+                            # If the Clip Media File matches the Episode Media File ...
+                            if addClipVidData['filename'] == addEpVidData['filename']:
+                                # ... then we've found the Media File!
+                                vidFound = True
+                                # Note if audio should be included, getting data from the Clip Object
+                                audIncluded = addClipVidData['audio']
+                                # Stop looking!
+                                break
+                        # Add info to videoCheckboxData to indicate whether the Episode's media file and audio were checked when
+                        # the source clip was created.
+                        videoCheckboxData.append((vidFound, audIncluded))
 
-        # If we are clipping from an Episode ...
-        else:
-            # ... we need to get the Video Checkbox Data from the Video Window.  No further adjustment is needed.
-            videoCheckboxData = self.parent.ControlObject.GetVideoCheckboxDataForClips(start_time)
-            
-        # If we don't have an end Time Code ...
-        if end_time == -1:
-            # We need the VideoEndPoint.  This is accurate for either Episode Transcripts or Clip Transcripts.
-            end_time = self.parent.ControlObject.GetVideoEndPoint()
+            # If we are clipping from an Episode ...
+            else:
+                # ... we need to get the Video Checkbox Data from the Video Window.  No further adjustment is needed.
+                videoCheckboxData = self.parent.ControlObject.GetVideoCheckboxDataForClips(start_time)
+                
+            # If we don't have an end Time Code ...
+            if end_time == -1:
+                # We need the VideoEndPoint.  This is accurate for either Episode Transcripts or Clip Transcripts.
+                end_time = self.parent.ControlObject.GetVideoEndPoint()
 
-        # If there is no selection in the Transcript ...
-        if not self.HasSelection():
-            # ... get the text between the nearest time codes
-            (start_time, end_time, xmlText) = self.GetTextBetweenTimeCodes(start_time, end_time)
-        # Otherwise ...
-        else:
-            # ... let's get the selected Transcript text in XML format
-            xmlText = self.GetFormattedSelection('XML', selectionOnly=True)  # self.GetXMLBuffer(select_only=1)
+            # If there is no selection in the Transcript ...
+            if not self.HasSelection():
+                # ... get the text between the nearest time codes
+                (start_time, end_time, xmlText) = self.GetTextBetweenTimeCodes(start_time, end_time)
+            # Otherwise ...
+            else:
+                # ... let's get the selected Transcript text in XML format
+                xmlText = self.GetFormattedSelection('XML', selectionOnly=True)  # self.GetXMLBuffer(select_only=1)
 
-        # Create a ClipDragDropData object with all the data we need to create a Clip
-        data = DragAndDropObjects.ClipDragDropData(self.TranscriptObj.number, self.TranscriptObj.episode_num, \
-                start_time, end_time, xmlText, self.GetStringSelection(), videoCheckboxData)
-        # let's convert that object into a portable string using cPickle. (cPickle is faster than Pickle.)
-        pdata = cPickle.dumps(data, 1)
-        # Create a CustomDataObject with the format of the ClipDragDropData Object
-        cdo = wx.CustomDataObject(wx.CustomDataFormat("ClipDragDropData"))
-        # Put the pickled data object in the wxCustomDataObject
-        cdo.SetData(pdata)
+            # Create a ClipDragDropData object with all the data we need to create a Clip
+            data = DragAndDropObjects.ClipDragDropData(self.TranscriptObj.number, self.TranscriptObj.episode_num, \
+                    start_time, end_time, xmlText, self.GetStringSelection(), videoCheckboxData)
+
+            # let's convert that object into a portable string using cPickle. (cPickle is faster than Pickle.)
+            pdata = cPickle.dumps(data, 1)
+            # Create a CustomDataObject with the format of the ClipDragDropData Object
+            cdo = wx.CustomDataObject(wx.CustomDataFormat("ClipDragDropData"))
+            # Put the pickled data object in the wxCustomDataObject
+            cdo.SetData(pdata)
+
+        elif isinstance(self.TranscriptObj, Document.Document) or isinstance(self.TranscriptObj, Quote.Quote):
+
+            # Get the Document Selection information from the ControlObject.
+            (documentNum, startChar, endChar, text) = self.parent.ControlObject.GetDocumentSelectionInfo()
+
+            # If we are creating a Quote FROM a Quote ...
+            if isinstance(self.TranscriptObj, Quote.Quote):
+                # ... not the source Quote Number (for getting keywords!)
+                quoteNum = self.TranscriptObj.number
+            # If we are creating a Quote from a Document ...
+            else:
+                # ... there is no source quote number
+                quoteNum = 0
+
+            # Create a QuoteDragDropData object with all the data we need to create a Quote
+            data = DragAndDropObjects.QuoteDragDropData(documentNum, quoteNum, startChar, endChar, text, self.GetStringSelection())
+
+            # let's convert that object into a portable string using cPickle. (cPickle is faster than Pickle.)
+            pdata = cPickle.dumps(data, 1)
+            # Create a CustomDataObject with the format of the QuoteDragDropData Object
+            cdo = wx.CustomDataObject(wx.CustomDataFormat("QuoteDragDropData"))
+            # Put the pickled data object in the wxCustomDataObject
+            cdo.SetData(pdata)
 
         # If we are supposed to copy the data to the Clip Board ...
         if copyToClipboard:
@@ -2218,6 +2454,13 @@ class TranscriptEditor(RichTextEditCtrl):
     def OnLeftDown(self, event):
         """ Left Mouse Button Down event """
 
+#        print "TranscriptEditor_RTC.OnLeftDown"
+        
+        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptPanel):
+            if self.parent.panelNum != self.parent.parent.activePanel:
+                # If there are multiple Panels, make the one that is clicked the main interface focus!
+                self.parent.ActivatePanel()
+
         ## # Get the Transcript Scale from the Configuration Data
         ## scaleFactor = TransanaGlobal.configData.transcriptScale
         ## # Set the Transcript Scale Factor.  (self.GetScaleX() and self.GetScaleY() do not work !!!)
@@ -2244,9 +2487,14 @@ class TranscriptEditor(RichTextEditCtrl):
             # If the Mouse Character is inside the selection ...
             if (textSelection[0] <= mousePos) and (mousePos < textSelection[1]):
                 self.canDrag = True
+
+#                print "SKIP NOT CALLED"
+
             else:
                 self.canDrag = False
                 event.Skip()
+
+#                print "SKIP CALLED 1"
 
         else:
             # The Mac doesn't show the cursor properly in wxPython 3.0.0.0.
@@ -2254,6 +2502,8 @@ class TranscriptEditor(RichTextEditCtrl):
 
             self.canDrag = False
             event.Skip()
+
+#            print "SKIP CALLED 2"
 
     def OnLeftUp(self, event):
         """ Left Mouse Button Up event """
@@ -2266,13 +2516,15 @@ class TranscriptEditor(RichTextEditCtrl):
         self.pos = self.GetCurrentPos()
         # Set the selection in case SetSelectionAfter gets called later
         self.selection = self.GetSelection()
-        # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
-        # can happen.
-        self.CheckTimeCodesAtSelectionBoundaries()
         # The code that is now indented was causing an error if you tried to edit the Transcript from the
-        # Clip Properties form, as the parent didn't have a ControlObject property.
+        # Clip Properties form, as the parent didn't have a ControlObject property.  Also if we clicked on a Text Report.
         # Therefore, let's test that we're coming from the Transcript Window before we do this test.
-        if type(self.parent).__name__ == '_TranscriptDialog':
+        # If we are in a Transcript (not a Document)
+        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptPanel) and \
+           self.parent.ControlObject.GetCurrentItemType() == 'Transcript':
+            # We need to make sure the cursor is not positioned between a time code symbol and the time code data, which unfortunately
+            # can happen.
+            self.CheckTimeCodesAtSelectionBoundaries()
             # Get the Start and End times from the time codes on either side of the cursor
             (segmentStartTime, segmentEndTime) = self.get_selected_time_range()
             # If we have a Clip loaded, the StartTime should be the beginning of the Clip, not 0!
@@ -2288,7 +2540,22 @@ class TranscriptEditor(RichTextEditCtrl):
             # If we're in Edit mode ...
             else:
                 # we don't update the Video Selection, but we still need to update the Selection Text for ALL transcripts
-                wx.CallLater(200, self.parent.ControlObject.UpdateSelectionTextLater, self.parent.transcriptWindowNumber)
+                wx.CallLater(200, self.parent.ControlObject.UpdateSelectionTextLater)
+        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptPanel) and \
+           self.parent.ControlObject.GetCurrentItemType() == 'Document':
+            # If we're in read_only mode, position immediately with left-click.
+            # If we are not in read_only mode, we need to delay the selection until right-click.
+            if self.get_read_only():
+                # First, clear the current selection in the visualization window, if there is one.
+                self.parent.ControlObject.ClearVisualizationSelection()
+                # If there is NO SELECTION ...
+                if self.selection == (-2, -2):
+                    # ... have the ControlObject update Transana Windows as appropriate
+                    self.parent.ControlObject.SetCurrentDocumentPosition(self.pos, self.selection)
+                # If there IS a SELECTION ...
+                else:
+                    # ... have the ControlObject update Transana Windows as appropriate
+                    self.parent.ControlObject.SetCurrentDocumentSelection(self.selection[0], self.selection[1])
 
         # See if the mouse has moved.  If the mouse HAS moved ...
         if (self.mousePosition != event.GetPosition()):
@@ -2340,6 +2607,9 @@ class TranscriptEditor(RichTextEditCtrl):
             # update the style to the style for the character FOLLOWING the cursor
             self.txtAttr = self.GetStyleAt(ip)
 
+        event.Skip()
+#        print "TranscriptEditor_RTC.OnLeftUp():  Skip called"
+
     def OnMotion(self, event):
         """ Process the EVT_MOTION event for the Rich Text Ctrl """
         # Call the parent EVT_MOTION event
@@ -2361,8 +2631,10 @@ class TranscriptEditor(RichTextEditCtrl):
     def OnRightUp(self, event):
         """ Right-clicking should handle Video Play Control rather than providing the
             traditional right-click editing control menu """
-        # If nothing is loaded in the main interface ...
-        if (self.parent.ControlObject == None) or (self.parent.ControlObject.currentObj == None):
+        # If nothing is loaded in the main interface, or the CURRENT item is NOT a Transcript ...
+        if (self.parent.ControlObject == None) or \
+           (self.parent.ControlObject.currentObj == None) or \
+           (self.parent.ControlObject.GetCurrentItemType() != 'Transcript'):
             # ... then exit right here!  There's nothing to do.
             return
         # If we do not already have a cursor position saved, save it
@@ -2373,7 +2645,7 @@ class TranscriptEditor(RichTextEditCtrl):
         # The code that is now indented was causing an error if you tried to edit the Transcript from the
         # Clip Properties form, as the parent didn't have a ControlObject property.
         # Therefore, let's test that we're coming from the Transcript Window before we do this test.
-        if type(self.parent).__name__ == '_TranscriptDialog':
+        if type(self.parent).__name__ == '_TranscriptPanel':
 
             # If we have a Clip loaded, the StartTime should be the beginning of the Clip, not 0!
             if type(self.parent.ControlObject.currentObj).__name__ == 'Clip' and (segmentStartTime == 0):
@@ -2396,7 +2668,7 @@ class TranscriptEditor(RichTextEditCtrl):
         # The Mac with a one-button mouse requires the Ctrl-key to emulate a right-click, so we
         # have to add the Meta (Open Apple) key to the mix here.
         # Meta-Right-Click should play from current position to the end of the video on Mac!
-        if ('__WXMAC__' in wx.PlatformInfo) and event.MetaDown():
+        if ('__WXMAC__' in wx.PlatformInfo) and (event.RawControlDown() or event.ControlDown()):
             # Setting End Time to 0 instructs the video player to play to the end of the video!
             segmentEndTime = 0
 
@@ -3237,7 +3509,29 @@ class TranscriptEditor(RichTextEditCtrl):
         # We've probably taken the focus from the editor.  Let's return it.
         self.SetFocus()
 
-    def InsertImage(self, imgFile = None):
+    def InsertHyperlink(self, linkType = None, objNum = -1):
+        """ Insert a Hyperlink to a Quote, Clip, or Snapshot into a Document or Transcript """
+        # If we know the Snapshot Number ...
+        if objNum > -1:
+            # Define a Hyperlink Style (Blue, underlined)
+            urlStyle = richtext.RichTextAttr()
+#            urlStyle.SetFontFaceName('Courier New')
+#            urlStyle.SetFontSize(12)
+            urlStyle.SetTextColour(wx.BLUE)
+            urlStyle.SetFontUnderlined(True)
+            # Apply the Hyperlink Style
+            self.BeginStyle(urlStyle)
+            # ... begin a URL to create a hyperlink to the Snapshot
+            self.BeginURL("transana:%s=%d" % (linkType, objNum))
+            self.WriteText(unicode("(%s link)", 'utf8') % _(linkType))
+            # ... end the URL
+            self.EndURL()
+            # Stop using the Hyperlink Style
+            self.EndStyle()
+            # ... skip a space
+            self.WriteText(" ")
+
+    def InsertImage(self, imgFile = None, snapshotNum = -1):
         """ Insert an image from a file into the Transcript """
         # If no image name is passed, prompt the user to select an image file
         if imgFile == None:
@@ -3279,6 +3573,29 @@ class TranscriptEditor(RichTextEditCtrl):
                     image.Rescale(int(imgWidth * scaleFactor), int(imgHeight * scaleFactor), quality=wx.IMAGE_QUALITY_HIGH)
                 # Add the image to the transcript
                 self.WriteImage(image)
+                # If we know the Snapshot Number ...
+                if snapshotNum > -1:
+                    # If the link is large enough ...
+                    if imgWidth > 150:
+                        # ... add a line break
+                        self.WriteText("\n")
+                    # Otherwise ...
+                    else:
+                        # ... skip a space
+                        self.WriteText(" ")
+
+                    # Inset the Hyperlink
+                    self.InsertHyperlink('Snapshot', snapshotNum)
+                        
+                    # If the link is large enough ...
+                    if imgWidth > 150:
+                        # ... add a line break
+                        self.WriteText("\n")
+##                    # Otherwise ...
+##                    else:
+##                        # ... skip a space
+##                        self.WriteText(" ")
+                    
 
         # Check to see if the transcript has exceeded the transcript object maximum size.
         if len(self.GetFormattedSelection('XML')) > TransanaGlobal.max_allowed_packet - 80000:   # 8300000
@@ -3357,75 +3674,139 @@ class TranscriptEditorDropTarget(wx.PyDropTarget):
                 # ... add that element to our sourceList list
                 sourceList.append(sourceData)
 
+##            print
+##            print "TranscriptEditor_RTC.TranscriptEditorDropTarget.OnData():", TransanaGlobal.configData.quickClipMode
+##            print sourceData
+##            print type(self.editor.TranscriptObj)
+##            print
+
             # If a Keyword Node is dropped ...
             if sourceData.nodetype == 'KeywordNode':
-                # See if we're creating a QuickClip
-                if (TransanaConstants.macDragDrop or ('wxMac' in wx.PlatformInfo)) and TransanaGlobal.configData.quickClipMode:
-                    # Get the clip start and stop times from the transcript
-                    (startTime, endTime) = self.editor.get_selected_time_range()
+                # See if we're creating a QuickClip or QuickQuote
+                if TransanaGlobal.configData.quickClipMode:
                     # Initialize the Keyword List
                     kwList = []
-                    # Iterate through the sourceLIst list ...
+                    # Iterate through the sourceList list ...
                     for element in sourceList:
                         # ... and extract the keyword data for each element
                         kwList.append((element.parent, element.text))
-                    # Determine whether we're creating a Clip from an Episode Transcript
-                    if self.editor.TranscriptObj.clip_num == 0:
-                        # If so, get the Episode data
-                        transcriptNum = self.editor.TranscriptObj.number
-                        episodeNum = self.editor.TranscriptObj.episode_num
-                        # If thre's no specified end time ...
-                        if endTime <= 0:
-                            # ... then the end of the Episode is the end of the clip!
-                            endTime = self.editor.parent.ControlObject.currentObj.tape_length
-                    # If we are not working from an Episode, we're working from a Clip and are sub-clipping.
-                    else:
-                        # Get the source Clip data.  We can skip loading the Clip Transcript to save load time
-                        tempClip = Clip.Clip(self.editor.TranscriptObj.clip_num, skipText=True)
-                        # This gets the CORRECT Trancript Record, even with multiple transcripts
-                        transcriptNum = self.editor.TranscriptObj.source_transcript
-                        episodeNum = tempClip.episode_num
-                        # If the sub-clip starts at the start of the parent clip ... 
-                        if startTime == 0:
-                            # ... we need to grab the parent clip's start time
-                            startTime = tempClip.clip_start
-                        # if the sub-clip ends at the end of the parent clip ...
-                        if endTime <= 0:
-                            # ... we need to grab the parent clip's end time
-                            endTime = tempClip.clip_stop
-                    # If the text selection is blank, we need to send a blank rather than RTF for nothing
-                    (startPos, endPos) = self.editor.GetSelection()
-                    if startPos == endPos:
-                        text = ''
-                    else:
-                        text = self.editor.GetFormattedSelection('XML', selectionOnly=True)  # GetXMLBuffer(select_only=1)
-                    # Get the Clip Data assembled for creating the Quick Clip
-                    clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, self.editor.GetStringSelection(), self.editor.parent.ControlObject.GetVideoCheckboxDataForClips(startTime))
+
                     # I'm sure this is horrible form, but I don't know how else to do this from here!
                     dbTree = self.editor.parent.ControlObject.DataWindow.DBTab.tree
-                    # Create the Quick Clip
-                    DragAndDropObjects.CreateQuickClip(clipData, sourceData.parent, sourceData.text, dbTree, extraKeywords=kwList[1:])
-                # If we're NOT creating a Quick Clip, we're adding a keyword to the current Episode or Clip
+
+                    # If we're working from a Transcript object, we're creating a QuickClip.
+                    if isinstance(self.editor.TranscriptObj, Transcript.Transcript):
+                        # Get the clip start and stop times from the transcript
+                        (startTime, endTime) = self.editor.get_selected_time_range()
+                        # Determine whether we're creating a Clip from an Episode Transcript
+                        if self.editor.TranscriptObj.clip_num == 0:
+                            # If so, get the Episode data
+                            transcriptNum = self.editor.TranscriptObj.number
+                            episodeNum = self.editor.TranscriptObj.episode_num
+                            # If thre's no specified end time ...
+                            if endTime <= 0:
+                                # ... then the end of the Episode is the end of the clip!
+                                endTime = self.editor.parent.ControlObject.currentObj.tape_length
+                        # If we are not working from an Episode, we're working from a Clip and are sub-clipping.
+                        else:
+                            # Get the source Clip data.  We can skip loading the Clip Transcript to save load time
+                            tempClip = Clip.Clip(self.editor.TranscriptObj.clip_num, skipText=True)
+                            # This gets the CORRECT Trancript Record, even with multiple transcripts
+                            transcriptNum = self.editor.TranscriptObj.source_transcript
+                            episodeNum = tempClip.episode_num
+                            # If the sub-clip starts at the start of the parent clip ... 
+                            if startTime == 0:
+                                # ... we need to grab the parent clip's start time
+                                startTime = tempClip.clip_start
+                            # if the sub-clip ends at the end of the parent clip ...
+                            if endTime <= 0:
+                                # ... we need to grab the parent clip's end time
+                                endTime = tempClip.clip_stop
+                        # If the text selection is blank, we need to send a blank rather than RTF for nothing
+                        (startPos, endPos) = self.editor.GetSelection()
+                        if startPos == endPos:
+                            text = ''
+                        else:
+                            text = self.editor.GetFormattedSelection('XML', selectionOnly=True)  # GetXMLBuffer(select_only=1)
+                        # Get the Clip Data assembled for creating the Quick Clip
+                        clipData = DragAndDropObjects.ClipDragDropData(transcriptNum, episodeNum, startTime, endTime, text, self.editor.GetStringSelection(), self.editor.parent.ControlObject.GetVideoCheckboxDataForClips(startTime))
+                        # Create the Quick Clip
+                        DragAndDropObjects.CreateQuickClip(clipData, sourceData.parent, sourceData.text, dbTree, extraKeywords=kwList[1:])
+                        
+                    # If we're working from a Document or Quote object, we're creating a QuickQuote.
+                    elif isinstance(self.editor.TranscriptObj, Document.Document) or isinstance(self.editor.TranscriptObj, Quote.Quote):
+                        try:
+                            # Get the Document Selection information from the ControlObject.
+                            (documentNum, startChar, endChar, text) = self.editor.parent.ControlObject.GetDocumentSelectionInfo()
+                        except:
+                            if DEBUG or True:
+                                print sys.exc_info()[0]
+                                print sys.exc_info()[1]
+                                import traceback
+                                traceback.print_exc(file=sys.stdout)
+
+                            # Create an error message.
+                            msg = _('You must make a selection in a document to be able to add a Quote.')
+                            errordlg = Dialogs.InfoDialog(None, msg)
+                            errordlg.ShowModal()
+                            errordlg.Destroy()
+
+                        # Initialize the Source Document Number to 0
+                        sourceDocumentNum = 0
+                        # If our source is a Document ...
+                        if isinstance(self.editor.TranscriptObj, Document.Document):
+                            # ... we can just use the TranscriptObj's object number
+                            sourceDocumentNum = self.editor.TranscriptObj.number
+                        # If our source is a Quote ...
+                        elif isinstance(self.editor.TranscriptObj, Quote.Quote):
+                            # ... we need the TranscriptObj's originating document number
+                            sourceDocumentNum = self.editor.TranscriptObj.source_document_num
+
+                        # We now have enough information to populate a QuoteDragDropData object to pass to the Quote Creation method.
+                        quoteData = DragAndDropObjects.QuoteDragDropData(documentNum, sourceDocumentNum, startChar, endChar, text)
+                        # Pass the accumulated data to the CreateQuickQuote method, which is in the DragAndDropObjects module
+                        # because drag and drop is an alternate way to create a Quick Quote.
+                        DragAndDropObjects.CreateQuickQuote(quoteData, sourceData.parent, sourceData.text, dbTree, extraKeywords=kwList[1:])
+
+                # If we're NOT creating a Quick Clip, we're adding a keyword to the current Episode, Clip, Document, or Quote
                 else:
                     # Determine where the Transcript was loaded from
                     if self.editor.TranscriptObj:
-                        # If we've got a Clip loaded ...
-                        if self.editor.TranscriptObj.clip_num != 0:
-                            # ... assemble Clip data
-                            targetType = 'Clip'
-                            targetLabel = _('Clip')
-                            targetRecNum = self.editor.TranscriptObj.clip_num
-                            # We can skip loading the Clip Transcript to save load time
-                            clipObj = Clip.Clip(targetRecNum, skipText=True)
-                            targetName = clipObj.id
-                        # Otherwise, we have an Episode loaded ...
-                        else:
-                            # ... so assemble Episode data
-                            targetType = 'Episode'
-                            targetLabel = _('Episode')
-                            targetRecNum = self.editor.TranscriptObj.episode_num
-                            epObj = Episode.Episode(targetRecNum)
-                            targetName = epObj.id
+                        # If we are dropping on a Transcript ...
+                        if isinstance(self.editor.TranscriptObj, Transcript.Transcript):
+                            # If we've got a Clip loaded ...
+                            if self.editor.TranscriptObj.clip_num != 0:
+                                # ... assemble Clip data
+                                targetType = 'Clip'
+                                targetLabel = _('Clip')
+                                targetRecNum = self.editor.TranscriptObj.clip_num
+                                # We can skip loading the Clip Transcript to save load time
+                                clipObj = Clip.Clip(targetRecNum, skipText=True)
+                                targetName = clipObj.id
+                            # Otherwise, we have an Episode loaded ...
+                            else:
+                                # ... so assemble Episode data
+                                targetType = 'Episode'
+                                targetLabel = _('Episode')
+                                targetRecNum = self.editor.TranscriptObj.episode_num
+                                epObj = Episode.Episode(targetRecNum)
+                                targetName = epObj.id
+                        # If we are dropping on a Document
+                        elif isinstance(self.editor.TranscriptObj, Document.Document):
+                            # ... assemble Document data
+                            targetType = 'Document'
+                            targetLabel = _('Document')
+                            targetRecNum = self.editor.TranscriptObj.number
+                            docObj = Document.Document(targetRecNum)
+                            targetName = docObj.id
+                        # If we are dropping on a Quote
+                        elif isinstance(self.editor.TranscriptObj, Quote.Quote):
+                            # ... assemble Quote data
+                            targetType = 'Quote'
+                            targetLabel = _('Quote')
+                            targetRecNum = self.editor.TranscriptObj.number
+                            docObj = Quote.Quote(targetRecNum)
+                            targetName = docObj.id
 
                         # For each keyword in the sourceList list ...
                         for element in sourceList:
@@ -3534,6 +3915,7 @@ class TranscriptDropSource(wx.DropSource):
             # Regular Clips are dropped on Collections, Clips, or Snapshots.  Quick Clips are dropped on Keywords.
             # Text dropped on a Keyword Group can create a Keyword.
             if (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'CollectionNode') or \
+               (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'QuoteNode') or \
                (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'ClipNode') or \
                (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'SnapshotNode') or \
                (self.parent.ControlObject.GetDatabaseTreeTabObjectNodeType() == 'KeywordNode') or\

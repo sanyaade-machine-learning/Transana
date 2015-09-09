@@ -1,0 +1,60 @@
+<HTML>
+<HEAD>
+<TITLE>Media - Preparing Media for Analysis</TITLE>
+</HEAD>
+
+<BODY>
+
+<H2><I>Media - Preparing Media for Analysis</I><HR></H2>
+
+NOTE:  It is not necessary to fully understand everything discussed on this page.  If you are unfamiliar with the subtleties of video encoding, feel free to focus only on the section of the page that talks about how to convert your media files in Transana.  While some people find the terminology and details intimidating, the process is usually not as difficult as people fear it will be.<P>
+
+Because media files can come in so many different forms and formats, you may need to prepare your media data for import into Transana.  Unfortunately, it's not as simple as listing the formats that Transana supports, as many of these formats can be rendered in many, many different ways using many different underlying settings that complicate the process.  Different computers may have different "codecs" (coder / decoder programs) that affect what media formats work on a particular computer.  There are also significant differences between Windows and OS X that affect what files will work with Transana on different computers.<P>
+
+The "Transana with Media.mp4" file provided in the Demonstration Data files is in MPEG-4 format and is fully compatible with Transana on both Windows and OS X.  
+It is less likely that your own data will be properly formatted to work with Transana right out of the box.<P>
+
+(<FONT COLOR="Red">Note to Windows users:</FONT> If this file does not work on your computer, most likely you have not yet installed the free QuickTime player from Apple, as described on the Transana download page and in the Installer instructions.) <P>
+
+<H3>Resolution, Density, and Format</H3>
+
+Much of the video produced in the past few years is in HD format.  These files often have a resolution of 1920 x 1080 pixels, can have video bitrates of upwards of 30 megabits per second, and can have frame rates of 60 frames per second.  They can be rendered in a growing number of formats, many of which are not universally supported.  Such videos are gorgeous, providing a very clear, very large picture with lots of data behind the construction of the video image.  Unfortunately, such video often leaves very little screen space or processing power for analytic software, and therefore is not particularly appropriate for qualitative video analysis.<P>
+
+To solve this problem, Transana includes a media conversion tool.<P>
+
+<H3>Media Support and Conversion</H3>
+
+Transana strives to support a wide variety of media formats, but it is simply impossible to support all video file types and settings that exist.  Therefore, we suggest the following approach to media files in Transana:<P>
+
+First, try one of your files.  It might just work.  However, if your media file doesn't work, or if your video does not play smoothly in Transana, you may want to convert your media file.<P>
+
+If playing your media file doesn't work well initially, the second thing to try is Transana's internal Media Conversion tool.  From the Tools menu, select Media Conversion.<P>     
+
+<IMG SRC="images/mediaconvert.gif"><P>
+
+Press the "Browse" button and select your media file.  Once you have selected your media file, Transana should give you a summary of the file's details in the "Information" section in the lower half of the form.  This report specifically focusses on video and audio format details that are important to Transana.<P>
+
+<I>Format</I> options for output files include MPEG-4 for video, WAVE for audio, and JPEG for still image.  The correct value for this setting will likely be selected automatically.<P>
+
+<I>Destination Media File</I> is the name of the file that will be output.  You may change this if you wish, but you should be careful to avoid over-writing your source media file.  Do not change the file extension provided, which must match the Format you have selected.  If you are saving to JPEG format, the Destination Media File name must include a "%06d" specification or the conversion will not function properly.<P>
+
+<I>Video Size</I> is the frame resolution of the video in video output.  For analysis in Transana, you will probably want to reduce the video size significantly from HD quality to make video files significantly smaller and more manageable for the computer.  We recommend that the video width (the first value in this field) be between 800 and 640.  Transana will automatically select a value for the height that maintains the original aspect ratio for the media file.  Transana's media conversion tool can reduce video size but cannot increase video size from that of the original file.<P>
+
+<I>Video Bit Rate</I> is the amount of data that goes into each second's video frames.  This value can often be set in the 1,500 kb/s to 2,500 kb/s range without noticeably affecting the quality of the media file for most users with video widths of 800 or less.  If you see poor quality or blockiness in your media files, increase this value, while if your video does not play smoothly, reducing this value (and the video size) often helps considerably.<P>
+
+<I>Audio Parameters</I> usually make much less difference than video parameters do.  We recommend an Audio Bit Rate of 192 or 128 kb/s, and a Sample Rate of 44,100 Hz.<P>
+                
+If your computer has multiple CPU cores, Transana can convert multiple media files simultaneously with only limited impact on the conversion time involved for a given file.  If you have multiple files to convert, this can save a significant amount of time in the process.<P>
+
+Transana's Media Conversion tool does a pretty good job in many cases, but it doesn't work with everything.  If your media file is not compatible with Transana's Media Conversion tool, you will have to find an alternative conversion program or video editing program that supports your source media files.  Often, a web search of "XXX to MPEG-4 video conversion", where XXX is the file extension of your media file, provides a wealth of options for such tools.<P>
+
+In our experience, getting your first media file to work is a lot easier than it used to be before the addition of the Media Conversion tool.  Converting the first file, if the recommendations provided here don't prove satisfactory, can take a bit of trial and error.  However, once you find a good recipe or formula for converting your files, the process quickly becomes manageable.<P>
+
+<A HREF="editdocument.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="createlibrary.htm"><IMG SRC="images/standardpreviouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="createepisode.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

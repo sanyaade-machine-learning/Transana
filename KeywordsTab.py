@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -31,12 +31,16 @@ import Clip
 import Collection
 # Import Transana's Dialogs
 import Dialogs
+# import Transana's Document Object
+import Document
 # Import the Transana Episode Object
 import Episode
 # Import the Keyword List Edit Form, for editing the Keyword List
 import KeywordListEditForm
-# Import the Transana Series Object
-import Series
+# import the Transana Quote Object
+import Quote
+# Import the Transana Library Object
+import Library
 # Import Transana's Constants
 import TransanaConstants
 # Import Transana's Exceptions
@@ -55,7 +59,7 @@ MENU_KEYWORDSTAB_DELETE = wx.NewId()
 class KeywordsTab(wx.Panel):
     """Display associated keywords when an Episode or Clip is loaded."""
 
-    def __init__(self, parent, seriesObj=None, episodeObj=None, collectionObj=None, clipObj=None):
+    def __init__(self, parent, seriesObj=None, episodeObj=None, documentObj=None, collectionObj=None, clipObj=None, quoteObj=None):
         """Initialize a KeywordsTab object."""
         # Let's remember our Parent
         self.parent = parent
@@ -63,8 +67,10 @@ class KeywordsTab(wx.Panel):
         # Make the initial data objects which are passed in available to the entire KeywordsTab object
         self.seriesObj = seriesObj
         self.episodeObj = episodeObj
+        self.documentObj = documentObj
         self.collectionObj = collectionObj
         self.clipObj = clipObj
+        self.quoteObj = quoteObj
 
         # Get the size of the parent window
         psize = parent.GetSizeTuple()
@@ -82,6 +88,10 @@ class KeywordsTab(wx.Panel):
             self.kwlist = self.clipObj.keyword_list
         elif self.episodeObj != None:
             self.kwlist = self.episodeObj.keyword_list
+        elif self.documentObj != None:
+            self.kwlist = self.documentObj.keyword_list
+        elif self.quoteObj != None:
+            self.kwlist = self.quoteObj.keyword_list
             
         # Create a Panel to put stuff on.  Use WANTS_CHARS style so the panel doesn't eat the Enter key.
         # (This panel implements the Keyword Tab!  All of the window and Notebook structure is provided by DataWindow.py.)
@@ -120,18 +130,24 @@ class KeywordsTab(wx.Panel):
             been changed since they were originally loaded.  """
 
         try:
-            # If a Series Object is defined, reload it
+            # If a Library Object is defined, reload it
             if self.seriesObj != None:
-                self.seriesObj = Series.Series(self.seriesObj.number)
+                self.seriesObj = Library.Library(self.seriesObj.number)
             # If an Episode Object is defined, reload it
             if self.episodeObj != None:
                 self.episodeObj = Episode.Episode(self.episodeObj.number)
+            # if a Documetn Object is defined, reload it
+            if self.documentObj != None:
+                self.documentObj = Document.Document(self.documentObj.number)
             # If a Collection Object is defined, reload it
             if self.collectionObj != None:
                 self.collectionObj = Collection.Collection(self.collectionObj.number)
             # If a Clip Object is defined, reload it.
             if self.clipObj != None:
                 self.clipObj = Clip.Clip(self.clipObj.number)
+            # If a Quote Object is defined, reload it.
+            if self.quoteObj != None:
+                self.quoteObj = Quote.Quote(self.quoteObj.number)
             # Get the local keyword list pointer aimed at the appropriate source object.
             # NOTE:  If a Clip is defined use it (whether an episode is defined or not.)  If
             #        no clip is defined but an episode is defined, use that.
@@ -139,6 +155,10 @@ class KeywordsTab(wx.Panel):
                 self.kwlist = self.clipObj.keyword_list
             elif self.episodeObj != None:
                 self.kwlist = self.episodeObj.keyword_list
+            elif self.documentObj != None:
+                self.kwlist = self.documentObj.keyword_list
+            elif self.quoteObj != None:
+                self.kwlist = self.quoteObj.keyword_list
 
             # Update the Tab Display
             self.UpdateKeywords()
@@ -153,7 +173,7 @@ class KeywordsTab(wx.Panel):
             self.parent.parent.ControlObject.ShowDataTab(0)
 
 
-    def UpdateKeywords(self):
+    def UpdateKeywords(self, sendMUMessage=False):
         """ Update the display to display all keywords in the Keyword List """
         # Clear the visible control
         self.lbKeywordsList.DeleteAllItems()
@@ -164,9 +184,9 @@ class KeywordsTab(wx.Panel):
         if self.seriesObj != None:
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
-                prompt = unicode(_('Series: "%s"'), 'utf8')
+                prompt = unicode(_('Library: "%s"'), 'utf8')
             else:
-                prompt = _('Series: "%s"')
+                prompt = _('Library: "%s"')
             self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % self.seriesObj.id)
             
         if self.episodeObj != None:
@@ -176,6 +196,14 @@ class KeywordsTab(wx.Panel):
             else:
                 prompt = _('Episode: "%s"')
             self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % self.episodeObj.id)
+
+        if self.documentObj != None:
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Document: "%s"'), 'utf8')
+            else:
+                prompt = _('Document: "%s"')
+            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % self.documentObj.id)
 
         if self.collectionObj != None:
             if 'unicode' in wx.PlatformInfo:
@@ -203,13 +231,31 @@ class KeywordsTab(wx.Panel):
             # Update the Keyword Visualization, as the clip's keywords have probably changed.
             self.parent.parent.ControlObject.UpdateKeywordVisualization()
             # Even if this computer doesn't need to update the keyword visualization others, might need to.
-            if not TransanaConstants.singleUserVersion:
+            if not TransanaConstants.singleUserVersion and sendMUMessage:
                 # We need to update the Keyword Visualization for the current ClipObject
                 if DEBUG:
                     print 'Message to send = "UKV %s %s %s"' % ('Clip', self.clipObj.number, self.clipObj.episode_num)
                     
                 if TransanaGlobal.chatWindow != None:
                     TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Clip', self.clipObj.number, self.clipObj.episode_num))
+
+        if self.quoteObj != None:
+            if 'unicode' in wx.PlatformInfo:
+                # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
+                prompt = unicode(_('Quote: "%s"'), 'utf8')
+            else:
+                prompt = _('Quote: "%s"')
+            self.lbKeywordsList.InsertStringItem(sys.maxint, '  ' + prompt % self.quoteObj.id)
+            # Update the Keyword Visualization, as the quote's keywords have probably changed.
+            self.parent.parent.ControlObject.UpdateKeywordVisualization()
+            # Even if this computer doesn't need to update the keyword visualization others, might need to.
+            if not TransanaConstants.singleUserVersion and sendMUMessage:
+                # We need to update the Keyword Visualization for the current QuoteObject
+                if DEBUG:
+                    print 'Message to send = "UKV %s %s %s"' % ('Quote', self.quoteObj.number, self.quoteObj.source_document_num)
+                    
+                if TransanaGlobal.chatWindow != None:
+                    TransanaGlobal.chatWindow.SendMessage("UKV %s %s %s" % ('Quote', self.quoteObj.number, self.quoteObj.source_document_num))
 
         self.lbKeywordsList.InsertStringItem(sys.maxint, '')
 
@@ -262,6 +308,10 @@ class KeywordsTab(wx.Panel):
             obj = self.clipObj
         elif self.episodeObj != None:
             obj = self.episodeObj
+        elif self.documentObj != None:
+            obj = self.documentObj
+        elif self.quoteObj != None:
+            obj = self.quoteObj
             
         try:
             obj.lock_record()
@@ -283,19 +333,23 @@ class KeywordsTab(wx.Panel):
                         # Copy the local keywords list into the appropriate object and save that object
                         obj.keyword_list = self.kwlist
 
-                        for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
-                            # Load the specified Clip record.  Save time by skipping the Clip Transcript, which we don't need.
-                            tempClip = Clip.Clip(clipNum, skipText=True)
-                            # Prepare the Node List for removing the Keyword Example Node
-                            nodeList = (_('Keywords'), keywordGroup, keyword, tempClip.id)
-                            # Call the DB Tree's delete_Node method.  Include the Clip Record Number so the correct Clip entry will be removed.
-                            self.parent.GetPage(0).tree.delete_Node(nodeList, 'KeywordExampleNode', tempClip.number)
+                        if isinstance(obj, Clip.Clip):
+                            for (keywordGroup, keyword, clipNum) in dlg.keywordExamplesToDelete:
+                                # Load the specified Clip record.  Save time by skipping the Clip Transcript, which we don't need.
+                                tempClip = Clip.Clip(clipNum, skipText=True)
+                                # Prepare the Node List for removing the Keyword Example Node
+                                nodeList = (_('Keywords'), keywordGroup, keyword, tempClip.id)
+                                # Call the DB Tree's delete_Node method.  Include the Clip Record Number so the correct Clip entry will be removed.
+                                self.parent.GetPage(0).tree.delete_Node(nodeList, 'KeywordExampleNode', tempClip.number)
 
                         # If we are dealing with an Episode ...
                         if isinstance(obj, Episode.Episode):
                             # Check to see if there are keywords to be propagated
-                            self.parent.parent.ControlObject.PropagateEpisodeKeywords(obj.number, obj.keyword_list)
-
+                            self.parent.parent.ControlObject.PropagateObjectKeywords(_('Episode'), obj.number, obj.keyword_list)
+                        # If we're dealing with a Document ...
+                        elif isinstance(obj, Document.Document):
+                            # Check to see if there are keywords to be propagated
+                            self.parent.parent.ControlObject.PropagateObjectKeywords(_('Document'), obj.number, obj.keyword_list)
                         obj.db_save()
 
                         # Now let's communicate with other Transana instances if we're in Multi-user mode
@@ -304,6 +358,13 @@ class KeywordsTab(wx.Panel):
                                 msg = 'Episode %d' % obj.number
                             elif isinstance(obj, Clip.Clip):
                                 msg = 'Clip %d' % obj.number
+                            elif isinstance(obj, Document.Document):
+                                msg = 'Document %d' % obj.number
+                            elif isinstance(obj, Quote.Quote):
+                                msg = 'Quote %d' % obj.number
+
+                                print "KeywordsTab.OnEdit():  UKL sent for %s!!" % msg
+                                
                             else:
                                 msg = ''
                             if msg != '':
@@ -314,7 +375,7 @@ class KeywordsTab(wx.Panel):
                                     TransanaGlobal.chatWindow.SendMessage("UKL %s" % msg)
 
                         # Update the display to reflect changes in the Keyword List
-                        self.UpdateKeywords()
+                        self.UpdateKeywords(sendMUMessage=True)
                         # If we do all this, we don't need to continue any more.
                         contin = False
                     # If the user pressed Cancel ...
@@ -357,8 +418,12 @@ class KeywordsTab(wx.Panel):
         except TypeError, e:
             if self.clipObj != None:
                 tempObjType = _('Clip')
-            else:
+            elif self.episodeObj != None:
                 tempObjType = _('Episode')
+            elif self.documentObj != None:
+                tempObjType = _('Document')
+            elif self.quoteObj != None:
+                tempObjType = _('Quote')
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                 msg = unicode(_('You cannot proceed because %s "%s" cannot be found.'), 'utf8') + \
@@ -422,6 +487,35 @@ class KeywordsTab(wx.Panel):
                         # Unlock the record
                         self.episodeObj.unlock_record()
 
+                    elif self.quoteObj != None:
+                        # Lock the record
+                        self.quoteObj.lock_record()
+                        # Remove the keyword from the object
+                        delResult = self.quoteObj.remove_keyword(kwg, kw)
+                        # Save the object
+                        self.quoteObj.db_save()
+                        # Define the MU Chat Message
+                        msg = 'Quote %d' % self.quoteObj.number
+                        # Unlock the record
+                        self.quoteObj.unlock_record()
+                        # I'm not sure why Quotes are different, but we need to update the Keyword List here
+                        # when we don't for any other object type.
+                        self.kwlist = self.quoteObj.keyword_list
+
+                    elif self.documentObj != None:
+                        # Lock the record
+                        self.documentObj.lock_record()
+                        # Remove the keyword from the object
+                        delResult = self.documentObj.remove_keyword(kwg, kw)
+                        # Save the object
+                        self.documentObj.db_save()
+                        # Define the MU Chat Message
+                        msg = 'Document %d' % self.documentObj.number
+                        # Unlock the record
+                        self.documentObj.unlock_record()
+                        
+                        print "KeywordsTab.OnDelete():  UKL sent for %s!!" % msg
+
                     # If there's an MU Chat Message ...
                     if (not TransanaConstants.singleUserVersion) and (msg != ''):
                         if DEBUG:
@@ -438,9 +532,15 @@ class KeywordsTab(wx.Panel):
                     if self.clipObj != None:
                         obj = self.clipObj
                         tempObjType = _('Clip')
-                    else:
+                    elif self.episodeObj != None:
                         obj = self.episodeObj
                         tempObjType = _('Episode')
+                    elif self.documentObj != None:
+                        obj = self.documentObj
+                        tempObjType = _('Document')
+                    elif self.quoteObj != None:
+                        obj = self.quoteObj
+                        tempObjType = _('Quote')
                     if 'unicode' in wx.PlatformInfo:
                         # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                         msg = unicode(_('You cannot proceed because %s "%s" cannot be found.'), 'utf8') + \
@@ -455,7 +555,7 @@ class KeywordsTab(wx.Panel):
                     # Clear the deleted objects from the Transana Interface.  Otherwise, problems arise.
                     wx.CallAfter(self.parent.parent.ControlObject.ClearAllWindows)
         # Update the display to reflect changes in the Keyword List
-        self.UpdateKeywords()
+        self.Refresh()
 
     def handleRecordLock(self, e):
         """ Handles Record Lock exceptions """
@@ -467,11 +567,21 @@ class KeywordsTab(wx.Panel):
                 # ... determine the appropriate Clip error message data
                 rtype = _("Clip")
                 idVal = self.clipObj.id
-            # If we're NOT working with a Clip Object ...
-            else:
+            # If we're working with an Episode Object ...
+            elif self.episodeObj != None:
                 # ... determine the appropriate Episode error message data
                 rtype = _("Episode")
                 idVal = self.episodeObj.id
+            # If we're working with a Document Object ...
+            elif self.documentObj != None:
+                # ... determine the appropriate Document error message data
+                rtype = _("Document")
+                idVal = self.documentObj.id
+            # If we're working with a Quote Object ...
+            elif self.quoteObj != None:
+                # ... determine the appropriate Quote error message data
+                rtype = _("Quote")
+                idVal = self.quoteObj.id
             TransanaExceptions.ReportRecordLockedException(rtype, idVal, e)
         # If the lock IS caused by the local user ...
         else:
@@ -495,11 +605,21 @@ class KeywordsTab(wx.Panel):
                 # ... determine the appropriate Clip error message data
                 rtype = _("Clip")
                 idVal = self.clipObj.id
-            # If we're NOT working with a Clip Object ...
-            else:
+            # If we're working with an Episode Object ...
+            elif self.episodeObj != None:
                 # ... determine the appropriate Episode error message data
                 rtype = _("Episode")
                 idVal = self.episodeObj.id
+            # If we're working with a Document Object ...
+            elif self.documentObj != None:
+                # ... determine the appropriate Document error message data
+                rtype = _("Document")
+                idVal = self.documentObj.id
+            # If we're working with a Quote Object ...
+            elif self.quoteObj != None:
+                # ... determine the appropriate Quote error message data
+                rtype = _("Quote")
+                idVal = self.quoteObj.id
             # Convert the error message and error message data to Unicode if necessary
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.

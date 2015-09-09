@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -179,34 +179,6 @@ class DataObject(object):
         c.close()
         return notelist
 
-    # TODO:  Eliminate this.  This belongs in the Series object, not in the DataObject superclass
-    def get_episode_nums(self):
-        """Get a list of Episode numbers that belong to this Series."""
-        notelist = []
-        t = self._prefix()
-        table = self._table()
-       
-        query = """
-        SELECT EpisodeNum FROM Episodes2 a, %s b
-            WHERE a.%sNum = b.%sNum and
-                    %sID = %%s
-            ORDER BY EpisodeID
-        """ % (table, t, t, t)
-
-        if type(self.id).__name__ == 'unicode':
-            id = self.id.encode(TransanaGlobal.encoding)
-        else:
-            id = self.id
-        # Adjust the query for sqlite if needed
-        c = DBInterface.get_db().cursor()
-        query = DBInterface.FixQuery(query)
-        c.execute(query, (id, ))
-        r = c.fetchall()    # return array of tuples with results
-        for tup in r:
-            notelist.append(tup[0])
-        c.close()
-        return notelist
-
 
 # Private methods
 
@@ -214,6 +186,9 @@ class DataObject(object):
         """Return the SQL table name."""
         # general case
         t = type(self).__name__
+        # NOTE:  Series has been renamed Library, but we didn't change the table name
+        if t == 'Library':
+            t = 'Series'
         # NOTE: the CoreData table does not follow the pattern of having an 's' near the end of the table name
         if (t[-1] != "s") and (t != 'CoreData'):
             t = t + "s"
@@ -228,7 +203,9 @@ class DataObject(object):
         name = type(self).__name__
 
         # Exceptions
-        if type(self).__name__ == "Collection":
+        if type(self).__name__ == 'Library':
+            name = 'Series'
+        elif type(self).__name__ == "Collection":
             name = "Collect"
 
         return name
@@ -239,9 +216,11 @@ class DataObject(object):
         # handle this in all cases easily?
         
         # General case
-        numname = type(self).__name__ + "Num"        # e.g. "SeriesNum"
+        numname = type(self).__name__ + "Num"        # e.g. "EpisodeNum"
         # Exceptions
-        if type(self).__name__ == "Collection":
+        if type(self).__name__ == 'Library':
+            numname = 'SeriesNum'
+        elif type(self).__name__ == "Collection":
             numname = "CollectNum"
         return numname
  
@@ -341,15 +320,15 @@ class DataObject(object):
 
     def _db_start_save(self):
         """Return 0 if creating new record, 1 if updating an existing one."""
-        tname = type(self).__name__
+        tname = _(type(self).__name__)
         # You can save a Clip Transcript with a blank Transcript ID!
-        if (self.id == "") and (tname != 'Transcript'):
+        if (self.id == "") and (tname != _('Transcript')):
             if 'unicode' in wx.PlatformInfo:
                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                 prompt = unicode(_("Cannot save a %s with a blank %s ID"), 'utf8')
             else:
                 prompt = _("Cannot save a %s with a blank %s ID")
-            raise SaveError, prompt % (tname, tname)
+            raise SaveError, prompt % (tname.decode('utf8'), tname.decode('utf8'))
         else:
             # Verify record lock is still good
             if (self.number == 0) or \
@@ -363,7 +342,7 @@ class DataObject(object):
                 else:
                     return 1
             else:
-                raise SaveError, _("Record lock no longer valid.")
+                raise SaveError, _("Record lock no longer valid.\nYour changes cannot be saved.")
                 
     def _db_start_delete(self, use_transactions):
         """Initialize delete operation and begin transaction if necessary.
@@ -454,7 +433,7 @@ class DataObject(object):
         # Get the Record Lock Time from the Database
         lt = self._get_db_fields(('LockTime',))
         # If a Lock Time has been specified ...
-        if len(lt) > 0:
+        if (len(lt) > 0) and (lt[0] is not None):
             # ... If we're using sqlite, we get a string and need to convert it to a datetime object
             if TransanaConstants.DBInstalled in ['sqlite3']:
                 import datetime

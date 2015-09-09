@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -65,6 +65,9 @@ class Keyword(object):
         str += "drawMode = %s\n" % self.drawMode
         str += "lineWidth = %s\n" % self.lineWidth
         str += "lineStyle = %s\n" % self.lineStyle
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         return str
 
     def __eq__(self, other):
@@ -100,14 +103,14 @@ class Keyword(object):
             originalKeywordGroup = self.originalKeywordGroup
             originalKeyword = self.originalKeyword
 
-        # query the lock status for Episodes that contain the Keyword 
-        query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Episodes2 c
+        # query the lock status for Documents that contain the Keyword 
+        query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Documents2 c
                      WHERE a.KeywordGroup = %s AND
                            a.Keyword = %s AND
                            a.KeywordGroup = b.KeywordGroup AND
                            a.Keyword = b.Keyword AND
-                           b.EpisodeNum <> 0 AND
-                           b.EpisodeNum = c.EpisodeNum AND
+                           b.DocumentNum <> 0 AND
+                           b.DocumentNum = c.DocumentNum AND
                            (c.RecordLock <> '' AND
                             c.RecordLock IS NOT NULL)"""
         values = (originalKeywordGroup, originalKeyword)
@@ -118,7 +121,50 @@ class Keyword(object):
         RecordCount = len(result)
         c.close()
 
-        # If no Episodes that contain the record are locked, check the lock status of Clips that contain the Keyword
+
+        # If no Document that contain the record are locked, check the lock status of Episodes that contain the Keyword
+        if RecordCount == 0:
+            # query the lock status for Episodes that contain the Keyword 
+            query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Episodes2 c
+                         WHERE a.KeywordGroup = %s AND
+                               a.Keyword = %s AND
+                               a.KeywordGroup = b.KeywordGroup AND
+                               a.Keyword = b.Keyword AND
+                               b.EpisodeNum <> 0 AND
+                               b.EpisodeNum = c.EpisodeNum AND
+                               (c.RecordLock <> '' AND
+                                c.RecordLock IS NOT NULL)"""
+            values = (originalKeywordGroup, originalKeyword)
+            c = DBInterface.get_db().cursor()
+            query = DBInterface.FixQuery(query)
+            c.execute(query, values)
+            result = c.fetchall()
+            RecordCount = len(result)
+            c.close()
+
+        # If no Documents or Episodes that contain the record are locked, check the lock status of Quotes that
+        # contain the Keyword
+        if RecordCount == 0:
+            # query the lock status for Quotes that contain the Keyword 
+            query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Quotes2 c
+                         WHERE a.KeywordGroup = %s AND
+                               a.Keyword = %s AND
+                               a.KeywordGroup = b.KeywordGroup AND
+                               a.Keyword = b.Keyword AND
+                               b.QuoteNum <> 0 AND
+                               b.QuoteNum = c.QuoteNum AND
+                               (c.RecordLock <> '' AND
+                                c.RecordLock IS NOT NULL)"""
+            values = (originalKeywordGroup, originalKeyword)
+            c = DBInterface.get_db().cursor()
+            query = DBInterface.FixQuery(query)
+            c.execute(query, values)
+            result = c.fetchall()
+            RecordCount = len(result)
+            c.close()
+
+        # If no Documents, Episodes, or Quotes that contain the record are locked, check the lock status of
+        # Clips that contain the Keyword
         if RecordCount == 0:
             # query the lock status for Clips that contain the Keyword 
             query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Clips2 c
@@ -138,7 +184,8 @@ class Keyword(object):
             RecordCount = len(result)
             c.close()
 
-        # If no Episodes or Clips that contain the record are locked, check the lock status of Snapshots that contain the Keyword for Whole Snapshot coding
+        # If no Documents, Episodes, Quotes, or Clips that contain the record are locked, check the lock status
+        # of Snapshots that contain the Keyword for Whole Snapshot coding
         if RecordCount == 0:
             # query the lock status for Snapshots that contain the Keyword 
             query = """SELECT c.RecordLock FROM Keywords2 a, ClipKeywords2 b, Snapshots2 c
@@ -158,7 +205,8 @@ class Keyword(object):
             RecordCount = len(result)
             c.close()
 
-        # If no Episodes, Clips that contain the record are locked, check the lock status of Snapshots that contain the Keyword for Snapshot Coding
+        # If no Documents, Episodes, Quotes, Clips, or whole Snapshots that contain the record are locked,
+        # check the lock status of Snapshots that contain the Keyword for Snapshot Coding
         if RecordCount == 0:
             # query the lock status for Snapshots that contain the Keyword 
             query = """SELECT c.RecordLock FROM Keywords2 a, SnapshotKeywords2 b, Snapshots2 c
@@ -186,7 +234,8 @@ class Keyword(object):
         
     def removeDuplicatesForMerge(self):
         """  When merging keywords, we need to remove instances of the OLD keyword that already exist in
-             Episodes, Clips, or Snapshots that also contain the NEW keyword.  (Doing it this way reduces overhead.) """
+             Documents, Episodes, Quotes, Clips, or Snapshots that also contain the NEW keyword.  (Doing
+             it this way reduces overhead.) """
         # If we're in Unicode mode, we need to encode the parameter so that the query will work right.
         if 'unicode' in wx.PlatformInfo:
             # Encode strings to UTF8 before saving them.  The easiest way to handle this is to create local
@@ -203,13 +252,16 @@ class Keyword(object):
             keyword = self.keyword
 
         # Look for Episodes, Clips, and Whole-Snapshots that have BOTH the original and the merge keywords
-        query = """SELECT * FROM ClipKeywords2 a, ClipKeywords2 b
+        query = """SELECT a.EpisodeNum, a.DocumentNum, a.ClipNum, a.QuoteNum, a.SnapshotNum, a.KeywordGroup, a.Keyword
+                     FROM ClipKeywords2 a, ClipKeywords2 b
                      WHERE a.KeywordGroup = %s AND
                            a.Keyword = %s AND
                            b.KeywordGroup = %s AND
                            b.Keyword = %s AND
                            a.EpisodeNum = b.EpisodeNum AND
+                           a.DocumentNum = b.DocumentNum AND
                            a.ClipNum = b.ClipNum AND
+                           a.QuoteNum = b.QuoteNum AND
                            a.SnapshotNum = b.SnapshotNum"""
         values = (originalKeywordGroup, originalKeyword, keywordGroup, keyword)
         c = DBInterface.get_db().cursor()
@@ -221,7 +273,9 @@ class Keyword(object):
         # Prepare a query for deleting the duplicate
         query = """ DELETE FROM ClipKeywords2
                       WHERE EpisodeNum = %s AND
+                            DocumentNum = %s AND
                             ClipNum = %s AND
+                            QuoteNum = %s AND 
                             SnapshotNum = %s AND
                             KeywordGroup = %s AND
                             Keyword = %s """
@@ -229,7 +283,7 @@ class Keyword(object):
         # Go through the list of duplicates ...
         for line in result:
             # ... and delete the original keyword listing, leaving the other (merge) record untouched.
-            values = (line[0], line[1], line[2], line[3], line[4])
+            values = (line[0], line[1], line[2], line[3], line[4], line[5], line[6])
             c.execute(query, values)
 
         # For Snapshot Coding, we don't want to LOSE any of the drawn shapes, so we rename the OLD
@@ -493,9 +547,9 @@ class Keyword(object):
             if EpisodeClipLockCount != 0 and \
                ((originalKeywordGroup != keywordGroup) or \
                 (originalKeyword != keyword)):
-                tempstr = _("""You cannot proceed because another user has recently started editing an Episode, Clip, or Snapshot 
-that uses Keyword "%s:%s".  If you change the Keyword now, that would 
-corrupt the record that is currently locked by %s.  Please try again later.""")
+                tempstr = _("""You cannot proceed because another user has recently started editing a Document, Episode, Quote, Clip, 
+or Snapshot that uses Keyword "%s:%s".  If you change the Keyword now, 
+that would corrupt the record that is currently locked by %s.  Please try again later.""")
                 if 'unicode' in wx.PlatformInfo:
                     # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
                     tempstr = unicode(tempstr, 'utf8')
@@ -584,8 +638,8 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
                     # If we make it this far, we can commit the transaction, 'cause we're done.
                     query = 'COMMIT'
                     c.execute(query)
-                if TransanaConstants.DBInstalled in ['sqlite3']:
-                    c.commit()
+##                if TransanaConstants.DBInstalled in ['sqlite3']:
+##                    c.commit()
                 c.close()
                 # If the save is successful, we need to update the "original" values to reflect the new record key.
                 # Otherwise, we can't unlock the proper record, among other things.
@@ -600,7 +654,7 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
         RecordLockedError exception if record is locked and unable to be
         deleted."""
         tempstr = "Delete Keyword object has not been implemented."
-        dlg = wx.MessageDialog(TransanaGlobal.menuWindow, tempstr, "Keyword Object", wx.OK | wx.ICON_EXCLAMATION)
+        dlg = Dialogs.InfoDialog(TransanaGlobal.menuWindow, tempstr)
         dlg.ShowModal()
         dlg.Destroy()
 
@@ -714,7 +768,7 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
         else:
             # Verify record lock is still good
             db = DBInterface.get_db()
-            
+
             if ((self.originalKeywordGroup == None) and \
                 (self.originalKeyword == None)) or \
                ((self.record_lock == DBInterface.get_username()) and
@@ -922,7 +976,22 @@ corrupt the record that is currently locked by %s.  Please try again later.""")
         return self._get_db_fields(('RecordLock',))[0]
 
     def _get_lt(self):
-        return self._get_db_fields(('LockTime',))[0]
+        # Get the Record Lock Time from the Database
+        lt = self._get_db_fields(('LockTime',))
+        # If a Lock Time has been specified ...
+        if len(lt) > 0:
+            # ... If we're using sqlite, we get a string and need to convert it to a datetime object
+            if TransanaConstants.DBInstalled in ['sqlite3']:
+                import datetime
+                tempDate = datetime.datetime.strptime(lt[0], '%Y-%m-%d %H:%M:%S.%f')
+                return tempDate
+            # ... If we're using MySQL, we get a MySQL DateTime value
+            else:
+                return lt[0]
+        # If we don't get a Lock Time ...
+        else:
+            # ... return the current Server Time
+            return DBInterface.ServerDateTime()
 
 # Public properties
     keywordGroup = property(_get_keywordGroup, _set_keywordGroup, _del_keywordGroup,

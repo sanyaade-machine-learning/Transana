@@ -1,4 +1,4 @@
-# Copyright (C) 2010-2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2010-2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -37,12 +37,22 @@ else:
 
 # import Transana's Constants
 import TransanaConstants
+# import Transana's Exceptions
+import TransanaExceptions
 # import Transana's Globals
 import TransanaGlobal
 # import Transana's Dialogs for the ErrorDialog
 import Dialogs
+# import Transana's Menu Setup (to get ID_CUT and ID_COPY on Mac!)
+import MenuSetup
+# import Transana's Note object
+import Note
+# import Transana's Note Editor
+import NoteEditor
 # import Transana's Snapshot object
 import Snapshot
+# import Transana's Transcript object
+import Transcript
 # import the TranscriptionUI module for parent comparisons
 import TranscriptionUI_RTC
 # import the TranscriptEditor object
@@ -122,10 +132,16 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # Bind a hyperlink event handler
         self.Bind(wx.EVT_TEXT_URL, self.OnURL)
 
+        # We need to define our own Cut, Copy, and Paste methods rather than using the default ones from the RichTextCtrl.
+        self.Bind(wx.EVT_MENU, self.OnCutCopy, id=wx.ID_CUT)
+        self.Bind(wx.EVT_MENU, self.OnCutCopy, id=wx.ID_COPY)
+        self.Bind(wx.EVT_MENU, self.OnPaste,   id=wx.ID_PASTE)
+        # However, we can leave the Undo and Redo commands alone and use the default ones from the RichTextCtrl.
+
         # The wx.richtext.RichTextCtrl does some things that aren't Transana-friendly with default behaviors.
         # This section, and the accompanying methods, clean that up by replacing the standard Cut, Copy, Paste,
         # Undo, and Redo methods
-        
+
         # Replace the Accelerator Table for the RichTextCtrl.
         # This removes the Ctrl-A Select All accelerator completely
         # As of wxPython 2.9.5, this is AUTOMATICALLY converted to CMD for Mac
@@ -138,12 +154,6 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         aTable = wx.AcceleratorTable(accelList)
         # Assign the modified accelerator table to the control
         self.SetAcceleratorTable(aTable)
-
-        # We need to define our own Cut, Copy, and Paste methods rather than using the default ones from the RichTextCtrl.
-        self.Bind(wx.EVT_MENU, self.OnCutCopy, id=wx.ID_CUT)
-        self.Bind(wx.EVT_MENU, self.OnCutCopy, id=wx.ID_COPY)
-        self.Bind(wx.EVT_MENU, self.OnPaste, id=wx.ID_PASTE)
-        # However, we can leave the Undo and Redo commands alone and use the default ones from the RichTextCtrl.
 
         # Initialize current style to None
         self.txtAttr = None
@@ -203,15 +213,33 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # We occasionally need to adjust styles based on proximity to a time code.  We need a flag to indicate that.
         self.timeCodeFormatAdjustment = False
 
+        # Due to the subtleties of creating Quotes (and needing to save the source document), we need to know
+        # if we are CURRENTLY engaged in a GetFormattedSelection operation involved in creating a Quote
+        self.gettingFormattedSelection = False
+
         # This document should only display the GDI Warning once.  Create a flag.
         if 'wxMSW' in wx.PlatformInfo:
             # The GDIWarningShown flag should be False initially, unless this segment is supposed to suppress the GDI warning
             self.GDIWarningShown = suppressGDIWarning
 
+        self.Bind(wx.EVT_ACTIVATE, self.OnActivate)
+
+    def OnActivate(self, event):
+
+        print "RichTextEditCtrl_RTC.OnActivate()"
+
+        event.Skip()
+
     def SetReadOnly(self, state):
         """ Change Read Only status, implemented for wxSTC compatibility """
         # RTC uses SetEditable(), the opposite of STC's SetReadOnly()
         self.SetEditable(not state)
+
+        # If we're going into Edit Mode...
+        if not state:
+            # Set the Floating Layout Mode to False.  This solves the editing speed problem that the RichTextCtrl
+            # has and negates the need for LongTranscriptEditing!
+            self.GetBuffer().SetFloatingLayoutMode(False)
 
     def GetReadOnly(self):
         """ Report Read Only status, implemented for wxSTC compatibility """
@@ -270,6 +298,12 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
 
         # If we're just getting a selection ...
         if selectionOnly:
+
+
+            # The Formatted Selection operation is starting
+            self.gettingFormattedSelection = True
+
+                
             # Freeze the control so things will work faster
             self.Freeze()
             # Get the start and end of the current selection
@@ -367,13 +401,38 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             # Now thaw the control so that updates will be displayed again
             self.Thaw()
             
+            # The Formatted Selection operation is over
+            self.gettingFormattedSelection = False
+
         # Return the buffer's XML string
         return tmpBuffer
+
+    def OnUndo(self, event):
+        self.Undo()
 
     def OnCutCopy(self, event):
         """ Handle Cut and Copy events, over-riding the RichTextCtrl versions.
             This implementation supports Rich Text Formatted text, and at least on Windows and OS X 
             can share formatted text with other programs. """
+
+#        print "RichTextEditCtrl_RTC.OnCutCopy():"
+#        print type(self.parent), type(self.parent.parent), type(self.parent.parent.parent)
+#        print "   Tab:", self.parent.parent.parent.GetSelection(), self.parent.parent.parent.GetPageText(self.parent.parent.parent.GetSelection())
+#        print "   Panel:", self.parent.parent.activePanel
+#        print "   ", event.GetId(), wx.ID_CUT, wx.ID_COPY
+        
+#        if event.GetId() in [wx.ID_CUT, MenuSetup.MENU_TRANSCRIPT_EDIT_CUT]:
+#            print "Cut"
+#        elif event.GetId() in [wx.ID_COPY, MenuSetup.MENU_TRANSCRIPT_EDIT_COPY]:
+#            print "Copy"
+#        else:
+#            print "Unknown caller!"
+
+#            print type(event), event.GetId(), wx.ID_CUT, wx.ID_COPY,
+
+            
+#            print MenuSetup.MENU_TRANSCRIPT_EDIT_CUT, MenuSetup.MENU_TRANSCRIPT_EDIT_COPY
+        
         # Note the original selection in the text
         origSelection = self.GetSelection()
         # Get the current selection in RTF format
@@ -410,13 +469,12 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         wx.TheClipboard.SetData(compositeDataObject)
         # Close the Clipboard
         wx.TheClipboard.Close()
+
         # If we are CUTting (rather than COPYing) ...
         # (NOTE:  On OS X, the event object isn't what we expect, it's a MENU, so we have to get the menu item
         #         text and do a comparison!!!)
         if self.IsEditable() and \
-           ((event.GetId() == wx.ID_CUT) or \
-            ((sys.platform == 'darwin') and \
-             (event.GetEventObject().GetLabel(event.GetId()) == _("Cu&t\tCtrl-X").decode('utf8')))):
+           (event.GetId() in [wx.ID_CUT, MenuSetup.MENU_TRANSCRIPT_EDIT_CUT]):
             # Reset the selection, which was mangled by the GetFormattedSelection call
             self.SetSelection(origSelection[0], origSelection[1])
             # ... delete the selection from the Rich Text Ctrl.
@@ -426,6 +484,13 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         """ Handle Paste events, over-riding the RichTextCtrl version.
             This implementation supports Rich Text Formatted text, and at least on Windows can
             share formatted text with other programs. """
+
+#        print "RichTextEditCtrl_RTC.OnPaste():"
+#        print type(self.parent), type(self.parent.parent), type(self.parent.parent.parent)
+#        print "   Tab:", self.parent.parent.parent.GetSelection(), self.parent.parent.parent.GetPageText(self.parent.parent.parent.GetSelection())
+#        print "   Panel:", self.parent.parent.activePanel
+#        print "   ", event.GetId(), wx.ID_PASTE
+
         # If the Clipboard isn't Open ...
         if not wx.TheClipboard.IsOpened():
             # ... open it!
@@ -459,15 +524,20 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
                     formattedText = customDataObject.GetData()
 
                     if DEBUG:
+                        print "RichTextEditCtrl_RTC.OnPaste()"
                         print
                         print "RTF data:"
                         print formattedText
                         print
+                        
+                        # tmpTextFile = open("C:\\Users\\DavidWoods\\Desktop\\TEMP_DELETE.txt", "w")
+                        # tmpTextFile.write(formattedText)
+                        # tmpTextFile.close()
 
                     # If the RTF Text ends with a Carriage Return (and it always does!) ...
-                    if formattedText[-6:] == '\\par\n}':
+##                    if formattedText[-6:] == '\\par\n}':
                         # ... then remove that carriage return!
-                        formattedText = formattedText[:-6] + formattedText[-1]
+##                        formattedText = formattedText[:-6] + formattedText[-1]
                         
                     # Prepare the control for data
                     self.Freeze()
@@ -499,8 +569,8 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
                 self.WriteText(textDataObject.GetText())
             # End the Batch Undo
             self.EndBatchUndo()
-            # Close the Clipboard
-            wx.TheClipboard.Close()
+        # Close the Clipboard
+        wx.TheClipboard.Close()
 
 ##    def SetSavePoint(self):
 
@@ -740,8 +810,12 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             startPos = XMLText.find(st)
             # ... identify the ending position of the TIME CODE DATA
             endPos = XMLText.find('&gt;', startPos + 4)
-            # Remove the hidden time code data
-            XMLText = XMLText[ : startPos] + XMLText[endPos + 4 : ]
+
+            try:
+                # Remove the hidden time code data
+                XMLText = XMLText[ : startPos] + XMLText[endPos + 4 : ]
+            except:
+                pass
 
         return XMLText
 
@@ -989,6 +1063,17 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         else:
             # Set the Style
             self.SetTxtStyle(fontBold = setting)
+
+        try:
+
+            print "RichTextEditCtrl_RTC.SetBold():", self.parent.toolbar.GetToolState(self.parent.parent.parent.parent.CMD_BOLD_ID), setting
+        
+            self.parent.toolbar.ToggleTool(self.parent.parent.parent.parent.CMD_BOLD_ID, setting)
+
+        except:
+            print sys.exc_info()[0]
+            print sys.exc_info()[1]
+            
 
     def GetBold(self):
         """ Determine the current value of the BOLD attribute """
@@ -1262,9 +1347,11 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             return False
 
         # Perform the comparison
+        # NOTE:  If the second font's foreground color matches its background color, we can ignore differences in FaceName!
+        #        This prevents hidden fonts from eluding detection here because of font face changes.
         if (not font1.IsOk()) or \
            (not font2.IsOk()) or \
-           (font1.GetFaceName() != font2.GetFaceName()) or \
+           ((fmt2.GetTextColour() != fmt2.GetBackgroundColour()) and (font1.GetFaceName() != font2.GetFaceName())) or \
            (font1.GetPointSize() != font2.GetPointSize()) or \
            (font1.GetWeight() != font2.GetWeight()) or \
            (font1.GetStyle() != font2.GetStyle()) or \
@@ -1617,6 +1704,7 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
     def OnKeyDown(self, event):
         """ Handler for EVT_KEY_DOWN events for use with Transana.
             This handles deletion of time codes. """
+
         # Assume that event.Skip() should be called unless proven otherwise
         shouldSkip = True
         # Create some variables to make this code a little simpler to read
@@ -1839,10 +1927,18 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
 
     def OnKey(self, event):
         """ Handler for EVT_CHAR events for use with Transana """
-        # Create some variables to make this code a little simpler to read
-        ctrl = event.GetEventObject()
-        # Get the current String Selection and remember it for later
-        self.keyStringSelection = ctrl.GetStringSelection()
+
+        # If we have a Transcript (Not NEEDED for Documents / Quotes)
+        if isinstance(self.TranscriptObj, Transcript.Transcript):
+
+            # Create some variables to make this code a little simpler to read
+            ctrl = event.GetEventObject()
+
+            # On OS X, typing too fast causes loss of characters.  I'm trying to reduce time taken by the key processing routines.
+            # This seems to be the big one here.  So let's ONLY get the selection if there IS a selection.
+            if ctrl.GetSelection() != (-2, -2):
+                # Get the current String Selection and remember it for later
+                self.keyStringSelection = ctrl.GetStringSelection()
 
         # At the moment, there's nothing special to do.
         event.Skip()
@@ -1850,6 +1946,7 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
     def OnKeyUp(self, event):
         """ Handler for EVT_KEY_UP events for use with Transana.
             This handles cursor-move over time codes. """
+
         # Create some variables to make this code a little simpler to read
         ctrl = event.GetEventObject()
         # Get the current insertion point
@@ -1952,6 +2049,8 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         """ Handles the Left Mouse Down event """
         
         # NOTE:  This does NOT get called in Transana!
+
+#        print "RichTextEditCtrl_RTC.OnLeftDown()"
         
         # If there is currently a selection ...
         if event.GetEventObject().HasSelection():
@@ -2048,6 +2147,8 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
         # Call event.Skip()
         event.Skip()
 
+#        print "RichTextEditCtrl_RTC.OnLeftUp():  Skip called."
+
         # If we're not at the first character in the document AND
         # we're not at the first character following a time code ...
         if (ip > 1) and not self.IsStyleHiddenAt(ip - 1):
@@ -2092,6 +2193,8 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
     def OnURL(self, event):
         """ Handle EVT_TEXT_URL events """
 
+#        print "RichTextEditCtrl_RTC.OnURL():", wx.GetKeyState(wx.WXK_SHIFT), wx.GetKeyState(wx.WXK_ALT), wx.GetKeyState(wx.WXK_CONTROL), wx.GetKeyState(wx.WXK_COMMAND), wx.GetKeyState(396)
+        
         # Get the URL for the hyperlink
         hyperlink = event.GetString()
 
@@ -2105,27 +2208,126 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             # NOTE:  We cannot support EPISODE links, as we require a Transcript Number!
             
             # If we have a CLIP link ...
-            if objType.lower() == 'clip':
-                # ... and if there's a defined Control Object ...
-                if self.parent.controlObject != None:
-                    # ... load the Clip
-                    self.parent.controlObject.LoadClipByNumber(int(objNum))
-                # ... if there's NO defined Control Object ...
+            if objType.lower() == 'quote':
+                if wx.GetKeyState(wx.WXK_CONTROL):
+                    self.parent.ControlObject.LocateQuoteInDocument(int(objNum))
                 else:
-                    # ... print an error message
-                    print "RichTextEditCtrl_RTC.OnURL():  ControlObject is None!!"
+                    # ... and if there's a defined Control Object ...
+                    if self.parent.ControlObject != None:
+                        try:
+                            # ... load the Clip
+                            self.parent.ControlObject.LoadQuote(int(objNum))
+                        except TransanaExceptions.RecordNotFoundError, e:
+
+                            prompt = _("This hyperlink is no longer valid.  The Quote it pointed to has been deleted.")
+                            errDlg = Dialogs.ErrorDialog(self, prompt)
+                            errDlg.ShowModal()
+                            errDlg.Destroy()
+
+                    # ... if there's NO defined Control Object ...
+                    else:
+                        # ... print an error message
+                        print "RichTextEditCtrl_RTC.OnURL():  ControlObject is None!!"
+
+            # If we have a CLIP link ...
+            elif objType.lower() == 'clip':
+                if wx.GetKeyState(wx.WXK_CONTROL):
+                    # ... and if there's a defined Control Object ...
+                    if self.parent.ControlObject != None:
+                        # ... load the Clip
+                        self.parent.ControlObject.LocateClipInEpisode(int(objNum))
+                    # ... if there's NO defined Control Object ...
+                    else:
+                        # ... print an error message
+                        print "RichTextEditCtrl_RTC.OnURL():  ControlObject is None!!"
+                else:
+                    # ... and if there's a defined Control Object ...
+                    if self.parent.ControlObject != None:
+                        try:
+                            # ... load the Clip
+                            self.parent.ControlObject.LoadClipByNumber(int(objNum))
+                        except TransanaExceptions.RecordNotFoundError, e:
+
+                            prompt = _("This hyperlink is no longer valid.  The Clip it pointed to has been deleted.")
+                            errDlg = Dialogs.ErrorDialog(self, prompt)
+                            errDlg.ShowModal()
+                            errDlg.Destroy()
+
+                    # ... if there's NO defined Control Object ...
+                    else:
+                        # ... print an error message
+                        print "RichTextEditCtrl_RTC.OnURL():  ControlObject is None!!"
+
             # if we have a Snapshot Link ...
             elif objType.lower() == 'snapshot':
                 # ... and if there's a defined Control Object ...
-                if self.parent.controlObject != None:
-                    # ... get the Snapshot Object ...
-                    tmpSnapshot = Snapshot.Snapshot(int(objNum))
-                    # ... and load the Snapshot Window
-                    self.parent.controlObject.LoadSnapshot(tmpSnapshot)
+                if self.parent.ControlObject != None:
+                    try:
+                        # ... get the Snapshot Object ...
+                        tmpSnapshot = Snapshot.Snapshot(int(objNum))
+                        # ... and load the Snapshot Window
+                        self.parent.ControlObject.LoadSnapshot(tmpSnapshot)
+                    except TransanaExceptions.RecordNotFoundError, e:
+
+                        prompt = _("This hyperlink is no longer valid.  The Snapshot it pointed to has been deleted.")
+                        errDlg = Dialogs.ErrorDialog(self, prompt)
+                        errDlg.ShowModal()
+                        errDlg.Destroy()
+
                 # ... if there's NO defined Control Object ...
                 else:
                     # ... print an error message
                     print "RichTextEditCtrl_RTC.OnURL():  ControlObject is None!!"
+
+            # if we have a Note Link ...
+            elif objType.lower() == 'note':
+                # ... and if there's a defined Control Object ...
+                if self.parent.ControlObject != None:
+                    try:
+
+                        # Open the note that was selected
+                        n = Note.Note(int(objNum))
+                        # If the NotesBrowser is currently open ...
+                        if (self.parent.ControlObject.NotesBrowserWindow != None):
+                            # ... make the Notes Browser visible, on top of other windows
+                            wx.CallAfter(self.parent.ControlObject.NotesBrowserWindow.Raise)
+                            # If the window has been minimized ...
+                            if self.parent.ControlObject.NotesBrowserWindow.IsIconized():
+                                # ... then restore it to its proper size!
+                                self.parent.ControlObject.NotesBrowserWindow.Iconize(False)
+                            # Open the appropriate note
+                            self.parent.ControlObject.NotesBrowserWindow.OpenNote(int(objNum))
+                        # If the Notes Browser is NOT currently open, 
+                        else:
+                            # ... Obtain a record lock on the note
+                            n.lock_record()
+                            # Load the note into the Note Editor
+                            noteedit = NoteEditor.NoteEditor(self, n.text)
+                            # Get User Input
+                            n.text = noteedit.get_text()
+                            # Save the user's changes to the note
+                            n.db_save()
+                            # Lock the Note
+                            n.unlock_record()
+
+                    except TransanaExceptions.RecordNotFoundError, e:
+
+                        prompt = _("This hyperlink is no longer valid.  The Note it pointed to has been deleted.")
+                        errDlg = Dialogs.ErrorDialog(self, prompt)
+                        errDlg.ShowModal()
+                        errDlg.Destroy()
+
+                    # Handle the exception if the record is locked
+                    except TransanaExceptions.RecordLockedError, e:
+                        TransanaExceptions.ReportRecordLockedException(_("Note"), n.id, e)
+
+                # ... if there's NO defined Control Object ...
+                else:
+                    # ... print an error message
+                    print "RichTextEditCtrl_RTC.OnURL():  ControlObject is None!!"
+
+            else:
+                print "RichTextEditCtrl_RTC.OnURL():  transana link, unknown subtype."
                 
         # If we have an HTTP link ...
         elif linkType.lower() == 'http':
@@ -2408,9 +2610,7 @@ class RichTextEditCtrl(richtext.RichTextCtrl):
             self.PrintTextAttr("Final:", self.txtAttr)
 
         # If we have a Transcript Window ...
-        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptDialog):
-            # ... update the Formatting Bar
-            self.parent.FormatUpdate(self.txtAttr)
+        if isinstance(self.parent, TranscriptionUI_RTC._TranscriptPanel):
         
             if DEBUG and TranscriptionUI_RTC.SHOWFORMATTINGPANEL:
                 self.parent.formatPanel.txt.SetLabel("%d %d" % (self.GetLastPosition(), len(self.GetFormattedSelection('XML'))))

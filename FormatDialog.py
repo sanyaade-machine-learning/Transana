@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -142,7 +142,10 @@ class FormatDef(object):
     def _getFontFace(self):
         return self._fontFace
     def _setFontFace(self, fontFace):
-        self._fontFace = fontFace
+        if fontFace != None:
+            self._fontFace = fontFace.strip()
+        else:
+            self._fontFace = fontFace
     def _delFontFace(self):
         self._fontFace = None
 

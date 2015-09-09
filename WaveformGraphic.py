@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -112,9 +112,9 @@ def WaveformGraphicCreate(waveFilename, waveformFilename, startPoint, mediaLengt
 
                         if DEBUG:
                             print "read to ",float(abs(indent)) / 1000.0 * waveFile.getframerate(),"frames"
-                            
+
                         # Indent the wave file the appropriate number of frames to get to the right part of the wave file
-                        frames = waveFile.readframes(float(abs(indent)) / 1000.0 * waveFile.getframerate())
+                        frames = waveFile.readframes(int(float(abs(indent)) / 1000.0 * waveFile.getframerate()))
 
 #                        print "**", startPoint, indent, float(abs(indent)) / 1000.0 * waveFile.getframerate(), float(indent) / 1000.0 * waveFile.getframerate()
 

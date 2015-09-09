@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -84,7 +84,7 @@ class FormatFontPanel(wx.Panel):
         if self.font.fontFace == None:
             fontFace = ''
         else:
-            fontFace = self.font.fontFace
+            fontFace = self.font.fontFace.strip()
         self.txtFont = wx.TextCtrl(self, -1, fontFace, style=wx.TE_LEFT)
         self.txtFont.Bind(wx.EVT_TEXT, self.OnTxtFontChange)
         self.txtFont.Bind(wx.EVT_KILL_FOCUS, self.OnTxtFontKillFocus)
@@ -107,14 +107,14 @@ class FormatFontPanel(wx.Panel):
             # If the font name IS found in the dropdown ...
             if self.font.fontFace in fontList:  # self.lbFont.FindString(self.font.fontFace) != wx.NOT_FOUND:
                 # ... then select that font name.
-                self.lbFont.SetStringSelection(self.font.fontFace)
+                self.lbFont.SetStringSelection(self.font.fontFace.strip())
             # If not ...
             else:
                 # Try to use the Default Font instead.  If the default font IS found in the dropdown ...
                 if TransanaGlobal.configData.defaultFontFace in fontList:  # self.lbFont.FindString(TransanaGlobal.configData.defaultFontFace) != wx.NOT_FOUND:
                     # ... then select that font name in the dropdown and update the text control.
-                    self.txtFont.SetValue(TransanaGlobal.configData.defaultFontFace)
-                    self.lbFont.SetStringSelection(TransanaGlobal.configData.defaultFontFace)
+                    self.txtFont.SetValue(TransanaGlobal.configData.defaultFontFace.strip())
+                    self.lbFont.SetStringSelection(TransanaGlobal.configData.defaultFontFace.strip())
                 # If neither the current font nor the default font are in the list ...
                 else:
                     # ... select the first font in the list in both the dropdown and in the text control.
@@ -349,9 +349,9 @@ class FormatFontPanel(wx.Panel):
             else:
                 tmpFontSize = self.font.fontSize
             if self.font.fontFace == None:
-                tmpFontFace = TransanaGlobal.configData.defaultFontFace
+                tmpFontFace = TransanaGlobal.configData.defaultFontFace.strip()
             else:
-                tmpFontFace = self.font.fontFace
+                tmpFontFace = self.font.fontFace.strip()
             if self.font.fontStyle == FormatDialog.fd_ITALIC:
                 tmpStyle = wx.FONTSTYLE_ITALIC
             else:
@@ -417,7 +417,7 @@ class FormatFontPanel(wx.Panel):
                     # ... and stop iterating
                     break
         # Update the Font Face Name
-        self.font.fontFace = self.lbFont.GetStringSelection()
+        self.font.fontFace = self.lbFont.GetStringSelection().strip()
         # Update the Font Sample 
         self.SetSampleFont()
 
@@ -428,14 +428,14 @@ class FormatFontPanel(wx.Panel):
         # List Box values.  If it's not a legal value ...
         if (not self.closing) and (self.txtFont.GetValue() != self.lbFont.GetStringSelection()):
             # ... revert the text to the last selected font face name.
-            self.txtFont.SetValue(self.lbFont.GetStringSelection())
+            self.txtFont.SetValue(self.lbFont.GetStringSelection().strip())
         
     def OnLbFontChange(self, event):
         """ Change Font based on selection in the Font List Box """
         # Update the Font Face text control to match the list box selection
         self.txtFont.SetValue(self.lbFont.GetStringSelection())
         # Update the Current Font Face name to match the Font Name selection
-        self.font.fontFace = self.lbFont.GetStringSelection()
+        self.font.fontFace = self.lbFont.GetStringSelection().strip()
         # Update the Font Sample 
         self.SetSampleFont()
         if DEBUG:

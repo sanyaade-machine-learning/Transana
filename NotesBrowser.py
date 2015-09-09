@@ -1,4 +1,4 @@
-# Copyright (C) 2007-2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2007-2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -35,6 +35,8 @@ import DatabaseTreeTab
 import DBInterface
 # import Transana's Dialogs
 import Dialogs
+# import Transana's Document object
+import Document
 # import Transana's Episode object
 import Episode
 # import Transana's Note object
@@ -43,10 +45,12 @@ import Note
 import NoteEditor
 # Import Transana's Note Properties Form
 import NotePropertiesForm
+# Import Transana's Quote object
+import Quote
 # import Notes Report Generator
 import ReportGeneratorForNotes
-# import Transana's Series object
-import Series
+# import Transana's Library object
+import Library
 # import Transana's Snapshot object
 import Snapshot
 # import Transana's Constants
@@ -55,6 +59,8 @@ import TransanaConstants
 import TransanaExceptions
 # import Transana's Global variables
 import TransanaGlobal
+# import Transana's Images
+import TransanaImages
 # import Transana's Transcript object
 import Transcript
 
@@ -160,10 +166,8 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
         self.noteSearch.Bind(wx.EVT_KILL_FOCUS, self.OnAllNotesSearch)
         # Add the Search Text box to the note search sizer
         noteSearchSizer.Add(self.noteSearch, 1, wx.EXPAND | wx.RIGHT, 5)
-        # Get the graphic for the Search button ...
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_FIND, wx.ART_TOOLBAR, (16,16))
         # ... and create a button with that graphic
-        self.searchButton = wx.BitmapButton(self.treeNotebookSearchTab, -1, bmp, (16, 16))
+        self.searchButton = wx.BitmapButton(self.treeNotebookSearchTab, -1, TransanaImages.ArtProv_FIND.GetBitmap(), (16, 16))
         # Link the button to the method that will perform the search
         self.searchButton.Bind(wx.EVT_BUTTON, self.OnAllNotesSearch)
         # Add the button to the Note Search Sizer
@@ -222,33 +226,42 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
         if self.ControlObject != None:
             self.ControlObject.Register(NotesBrowser=self)
 
-    def AddNote(self, tree, rootNode, noteNum, noteID, seriesNum, episodeNum, transcriptNum, collectionNum, clipNum, snapshotNum, noteTaker):
-        # If we have a Series Note ...
+    def AddNote(self, tree, rootNode, noteNum, noteID, seriesNum, episodeNum, transcriptNum, collectionNum, clipNum, snapshotNum, documentNum, quoteNum, noteTaker):
+        # If we have a Library Note ...
         if seriesNum > 0:
-            # Load the Series to get the needed data
-            tempSeries = Series.Series(seriesNum)
-            # The path to the Note is the Series Name
-            pathData = tempSeries.id
+            # Load the Library to get the needed data
+            tempLibrary = Library.Library(seriesNum)
+            # The path to the Note is the Library Name
+            pathData = tempLibrary.id
             # Create the Node Data
             nodeData = DatabaseTreeTab._NodeData('NoteNode', noteNum, seriesNum)
+        # If we have a Document Note ...
+        elif documentNum > 0:
+            # Load the Document and Library to get the needed data
+            tempDocument = Document.Document(documentNum)
+            tempLibrary = Library.Library(tempDocument.library_num)
+            # The path to the Note is the Library Name and the Document Name
+            pathData = tempLibrary.id + ' > ' + tempDocument.id
+            # Create the Node Data
+            nodeData = DatabaseTreeTab._NodeData('NoteNode', noteNum, documentNum)
         # If we have an Episode Note ...
         elif episodeNum > 0:
-            # Load the Episode and Series to get the needed data
+            # Load the Episode and Library to get the needed data
             tempEpisode = Episode.Episode(episodeNum)
-            tempSeries = Series.Series(tempEpisode.series_num)
-            # The path to the Note is the Series Name and the Episode Name
-            pathData = tempSeries.id + ' > ' + tempEpisode.id
+            tempLibrary = Library.Library(tempEpisode.series_num)
+            # The path to the Note is the Library Name and the Episode Name
+            pathData = tempLibrary.id + ' > ' + tempEpisode.id
             # Create the Node Data
             nodeData = DatabaseTreeTab._NodeData('NoteNode', noteNum, episodeNum)
         # If we have a Transcript Note ...
         elif transcriptNum > 0:
-            # Load the Transcript, Episode and Series to get the needed data
+            # Load the Transcript, Episode and Library to get the needed data
             # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
             tempTranscript = Transcript.Transcript(transcriptNum, skipText=True)
             tempEpisode = Episode.Episode(tempTranscript.episode_num)
-            tempSeries = Series.Series(tempEpisode.series_num)
-            # The path to the Note is the Series Name, the Episode Name, and the Transcript Name
-            pathData = tempSeries.id + ' > ' + tempEpisode.id + ' > ' + tempTranscript.id
+            tempLibrary = Library.Library(tempEpisode.series_num)
+            # The path to the Note is the Library Name, the Episode Name, and the Transcript Name
+            pathData = tempLibrary.id + ' > ' + tempEpisode.id + ' > ' + tempTranscript.id
             # Create the Node Data
             nodeData = DatabaseTreeTab._NodeData('NoteNode', noteNum, transcriptNum)
         # If we have a Collection Note ...
@@ -277,6 +290,15 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             pathData = tempCollection.GetNodeString() + ' > ' + tempSnapshot.id
             # Create the Node Data
             nodeData = DatabaseTreeTab._NodeData('NoteNode', noteNum, snapshotNum)
+        # If we have a Quote Note ...
+        elif quoteNum > 0:
+            # Load the Quote and Collection to get the needed data.
+            tempQuote = Quote.Quote(num=quoteNum)
+            tempCollection = Collection.Collection(tempQuote.collection_num)
+            # The path to the Note is the Collection's Node String and the Clip Name
+            pathData = tempCollection.GetNodeString() + ' > ' + tempQuote.id
+            # Create the Node Data
+            nodeData = DatabaseTreeTab._NodeData('NoteNode', noteNum, quoteNum)
         # Otherwise, we have an undefined note.  (This should never get called)
         else:
             # There is no Root Node
@@ -316,9 +338,13 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
         # Add the Tree's root node
         root = tree.AddRoot(prompt)
         tree.SetPyData(root, DatabaseTreeTab._NodeData('RootNode'))
-        # Add a Series Node at the first level
-        seriesNode = tree.AppendItem(root, _("Series"))
-        tree.SetPyData(seriesNode, DatabaseTreeTab._NodeData('SeriesNode'))
+        # Add a Library Node at the first level
+        LibraryNode = tree.AppendItem(root, _('Library'))
+        tree.SetPyData(LibraryNode, DatabaseTreeTab._NodeData('LibraryNode'))
+        if TransanaConstants.proVersion:
+            # Add a Document Node at the first level
+            documentNode = tree.AppendItem(root, _("Document"))
+            tree.SetPyData(documentNode, DatabaseTreeTab._NodeData('DocumentNode'))
         # Add an Episode Node at the first level
         episodeNode = tree.AppendItem(root, _("Episode"))
         tree.SetPyData(episodeNode, DatabaseTreeTab._NodeData('EpisodeNode'))
@@ -328,6 +354,10 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
         # Add a Collection Node at the first level
         collectionNode = tree.AppendItem(root, _("Collection"))
         tree.SetPyData(collectionNode, DatabaseTreeTab._NodeData('CollectionNode'))
+        if TransanaConstants.proVersion:
+            # Add a Quote Node at the first level
+            quoteNode = tree.AppendItem(root, _("Quote"))
+            tree.SetPyData(quoteNode, DatabaseTreeTab._NodeData('QuoteNode'))
         # Add a Clip Node at the first level
         clipNode = tree.AppendItem(root, _("Clip"))
         tree.SetPyData(clipNode, DatabaseTreeTab._NodeData('ClipNode'))
@@ -341,13 +371,17 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
         # Iterate through the list of notes
         for note in notes:
             if note['SeriesNum'] > 0:
-                rootNode = seriesNode
+                rootNode = LibraryNode
+            elif TransanaConstants.proVersion and (note['DocumentNum'] > 0):
+                rootNode = documentNode
             elif note['EpisodeNum'] > 0:
                 rootNode = episodeNode
             elif note['TranscriptNum'] > 0:
                 rootNode = transcriptNode
-            elif note['CollectionNum'] > 0:
+            elif note['CollectNum'] > 0:
                 rootNode = collectionNode
+            elif TransanaConstants.proVersion and (note['QuoteNum'] > 0):
+                rootNode = quoteNode
             elif note['ClipNum'] > 0:
                 rootNode = clipNode
             elif TransanaConstants.proVersion and (note['SnapshotNum'] > 0):
@@ -355,7 +389,7 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             else:
                 rootNode = None
             if rootNode != None:
-                self.AddNote(tree, rootNode, note['NoteNum'], note['NoteID'], note['SeriesNum'], note['EpisodeNum'], note['TranscriptNum'], note['CollectionNum'], note['ClipNum'], note['SnapshotNum'], note['NoteTaker'])
+                self.AddNote(tree, rootNode, note['NoteNum'], note['NoteID'], note['SeriesNum'], note['EpisodeNum'], note['TranscriptNum'], note['CollectNum'], note['ClipNum'], note['SnapshotNum'], note['DocumentNum'], note['QuoteNum'], note['NoteTaker'])
 
         # Expand the root node so we see the first level nodes
         tree.Expand(root)
@@ -377,10 +411,12 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             # Get the Node Data for the child we're currently examining
             childNodeData = self.treeNotebookNotesTabTreeCtrl.GetPyData(childNode)
             # See if the Node Type for the Note matches the Node Type for the node we're looking at ...
-            if ((nodeType == 'SeriesNoteNode') and (childNodeData.nodetype == 'SeriesNode')) or \
+            if ((nodeType == 'LibraryNoteNode') and (childNodeData.nodetype == 'LibraryNode')) or \
+               ((nodeType == 'DocumentNoteNode') and (childNodeData.nodetype == 'DocumentNode')) or \
                ((nodeType == 'EpisodeNoteNode') and (childNodeData.nodetype == 'EpisodeNode')) or \
                ((nodeType == 'TranscriptNoteNode') and (childNodeData.nodetype == 'TranscriptNode')) or \
                ((nodeType == 'CollectionNoteNode') and (childNodeData.nodetype == 'CollectionNode')) or \
+               ((nodeType == 'QuoteNoteNode') and (childNodeData.nodetype == 'QuoteNode')) or \
                ((nodeType == 'ClipNoteNode') and (childNodeData.nodetype == 'ClipNode')) or \
                ((nodeType == 'SnapshotNoteNode') and (childNodeData.nodetype == 'SnapshotNode')):
                 # ... if so, start looking at the children of this node ...
@@ -423,14 +459,16 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
                     # Get the Node Data for the child we're currently examining
                     childNodeData = self.treeNotebookNotesTabTreeCtrl.GetPyData(childNode)
                     # See if the Node Type for the Note matches the Node Type for the node we're looking at ...
-                    if ((nodeType == 'SeriesNoteNode') and (childNodeData.nodetype == 'SeriesNode')) or \
+                    if ((nodeType == 'LibraryNoteNode') and (childNodeData.nodetype == 'LibraryNode')) or \
+                       ((nodeType == 'DocumentNoteNode') and (childNodeData.nodetype == 'DocumentNode')) or \
                        ((nodeType == 'EpisodeNoteNode') and (childNodeData.nodetype == 'EpisodeNode')) or \
                        ((nodeType == 'TranscriptNoteNode') and (childNodeData.nodetype == 'TranscriptNode')) or \
                        ((nodeType == 'CollectionNoteNode') and (childNodeData.nodetype == 'CollectionNode')) or \
+                       ((nodeType == 'QuoteNoteNode') and (childNodeData.nodetype == 'QuoteNode')) or \
                        ((nodeType == 'ClipNoteNode') and (childNodeData.nodetype == 'ClipNode')) or \
                        ((nodeType == 'SnapshotNoteNode') and (childNodeData.nodetype == 'SnapshotNode')):
                         # ... if so, add the Note to the child node ...
-                        self.AddNote(self.treeNotebookNotesTabTreeCtrl, childNode, note.number, note.id, note.series_num, note.episode_num, note.transcript_num, note.collection_num, note.clip_num, note.snapshot_num, note.author)
+                        self.AddNote(self.treeNotebookNotesTabTreeCtrl, childNode, note.number, note.id, note.series_num, note.episode_num, note.transcript_num, note.collection_num, note.clip_num, note.snapshot_num, note.document_num, note.quote_num, note.author)
                         # ... and indicate we can stop looking
                         contin = False
                     # if we have NOT found what we're looking for ...
@@ -453,10 +491,12 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
                     # Get the Node Data for the child we're currently examining
                     childNodeData = self.treeNotebookNotesTabTreeCtrl.GetPyData(childNode)
                     # See if the Node Type for the Note matches the Node Type for the node we're looking at ...
-                    if ((nodeType == 'SeriesNoteNode') and (childNodeData.nodetype == 'SeriesNode')) or \
+                    if ((nodeType == 'LibraryNoteNode') and (childNodeData.nodetype == 'LibraryNode')) or \
+                       ((nodeType == 'DocumentNoteNode') and (childNodeData.nodetype == 'DocumentNode')) or \
                        ((nodeType == 'EpisodeNoteNode') and (childNodeData.nodetype == 'EpisodeNode')) or \
                        ((nodeType == 'TranscriptNoteNode') and (childNodeData.nodetype == 'TranscriptNode')) or \
                        ((nodeType == 'CollectionNoteNode') and (childNodeData.nodetype == 'CollectionNode')) or \
+                       ((nodeType == 'QuoteNoteNode') and (childNodeData.nodetype == 'QuoteNode')) or \
                        ((nodeType == 'ClipNoteNode') and (childNodeData.nodetype == 'ClipNode')) or \
                        ((nodeType == 'SnapshotNoteNode') and (childNodeData.nodetype == 'SnapshotNode')):
                         # ... if so, start looking at the children of this node ...
@@ -578,32 +618,41 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             # (When working with a note locked by another user, originalNoteID may be BLANK!)
             noteIDToUse = note.id
         # Determine what type of note we have and set the appropriate data.
-        # If we have a Series note ...
+        # If we have a Library note ...
         if note.series_num != 0:
-            # ... load the Series data ...
-            tempSeries = Series.Series(note.series_num)
+            # ... load the Library data ...
+            tempLibrary = Library.Library(note.series_num)
             # ... set up the Tree Node data ...
-            nodeData = ("Series", tempSeries.id, noteIDToUse)
-            # ... and signal that it's a Series Note.
-            nodeType = 'SeriesNoteNode'
+            nodeData = ("Libraries", tempLibrary.id, noteIDToUse)
+            # ... and signal that it's a Library Note.
+            nodeType = 'LibraryNoteNode'
+        # if we have a Document note ...
+        elif note.document_num != 0:
+            # ... load the Library and Document data ...
+            tempDocument = Document.Document(note.document_num)
+            tempLibrary = Library.Library(tempDocument.library_num)
+            # ... set up the Tree Node data ...
+            nodeData = ("Libraries", tempLibrary.id, tempDocument.id, noteIDToUse)
+            # ... and signal that it's a Document Note.
+            nodeType = 'DocumentNoteNode'
         # if we have an Episode note ...
         elif note.episode_num != 0:
-            # ... load the Series and Episode data ...
+            # ... load the Library and Episode data ...
             tempEpisode = Episode.Episode(note.episode_num)
-            tempSeries = Series.Series(tempEpisode.series_num)
+            tempLibrary = Library.Library(tempEpisode.series_num)
             # ... set up the Tree Node data ...
-            nodeData = ("Series", tempSeries.id, tempEpisode.id, noteIDToUse)
+            nodeData = ("Libraries", tempLibrary.id, tempEpisode.id, noteIDToUse)
             # ... and signal that it's an Episode Note.
             nodeType = 'EpisodeNoteNode'
         # if we have a Transcript note ...
         elif note.transcript_num != 0:
-            # ... load the Series, Episode, and Transcript data ...
+            # ... load the Library, Episode, and Transcript data ...
             # To save time here, we can skip loading the actual transcript text, which can take time once we start dealing with images!
             tempTranscript = Transcript.Transcript(note.transcript_num, skipText=True)
             tempEpisode = Episode.Episode(tempTranscript.episode_num)
-            tempSeries = Series.Series(tempEpisode.series_num)
+            tempLibrary = Library.Library(tempEpisode.series_num)
             # ... set up the Tree Node data ...
-            nodeData = ("Series", tempSeries.id, tempEpisode.id, tempTranscript.id, noteIDToUse)
+            nodeData = ("Libraries", tempLibrary.id, tempEpisode.id, tempTranscript.id, noteIDToUse)
             # ... and signal that it's a Transcript Note.
             nodeType = 'TranscriptNoteNode'
         # if we have a Collection note ...
@@ -614,6 +663,15 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             nodeData = ("Collections",) + tempCollection.GetNodeData() + (noteIDToUse,)
             # ... and signal that it's a Collection Note.
             nodeType = 'CollectionNoteNode'
+        # if we have a Quote note ...
+        elif note.quote_num != 0:
+            # ... load the Collection and Quote data
+            tempQuote = Quote.Quote(note.quote_num)
+            tempCollection = Collection.Collection(tempQuote.collection_num)
+            # ... set up the Tree Node data ...
+            nodeData = ("Collections",) + tempCollection.GetNodeData() + (tempQuote.id, noteIDToUse,)
+            # ... and signal that it's a Quote Note.
+            nodeType = 'QuoteNoteNode'
         # if we have a Clip note ...
         elif note.clip_num != 0:
             # ... load the Collection and Clip data ....  We can skip loading the Clip Transcript to save load time
@@ -974,14 +1032,24 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
                         menu.Append(id, _("Notes Report"))
                         # Link the appropriate method to the menu item
                         wx.EVT_MENU(self, id, self.OnMenuReport)
-                    # If we have the Series Root Node ...
-                    elif sel_item_data.nodetype == 'SeriesNode':
+                    # If we have the Library Root Node ...
+                    elif sel_item_data.nodetype == 'LibraryNode':
                         # ... create the menu object
                         menu = wx.Menu()
                         # Create a new Id for a menu item
                         id = wx.NewId()
-                        # Add a menu item for the Series Notes Report
-                        menu.Append(id, _("Series Notes Report"))
+                        # Add a menu item for the Library Notes Report
+                        menu.Append(id, _("Library Notes Report"))
+                        # Link the appropriate method to the menu item
+                        wx.EVT_MENU(self, id, self.OnMenuReport)
+                    # If we have the Document Root Node ...
+                    elif sel_item_data.nodetype == 'DocumentNode':
+                        # ... create the menu object
+                        menu = wx.Menu()
+                        # Create a new Id for a menu item
+                        id = wx.NewId()
+                        # Add a menu item for the Document Notes Report
+                        menu.Append(id, _("Document Notes Report"))
                         # Link the appropriate method to the menu item
                         wx.EVT_MENU(self, id, self.OnMenuReport)
                     # If we have the Episode Root Node ...
@@ -1014,6 +1082,16 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
                         menu.Append(id, _("Collection Notes Report"))
                         # Link the appropriate method to the menu item
                         wx.EVT_MENU(self, id, self.OnMenuReport)
+                    # If we have the Quote Root Node ...
+                    elif sel_item_data.nodetype == 'QuoteNode':
+                        # ... create the menu object
+                        menu = wx.Menu()
+                        # Create a new Id for a menu item
+                        id = wx.NewId()
+                        # Add a menu item for the Quote Notes Report
+                        menu.Append(id, _("Quote Notes Report"))
+                        # Link the appropriate method to the menu item
+                        wx.EVT_MENU(self, id, self.OnMenuReport)
                     # If we have the Clip Root Node ...
                     elif sel_item_data.nodetype == 'ClipNode':
                         # ... create the menu object
@@ -1038,14 +1116,22 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
                     elif sel_item_data.nodetype == 'NoteNode':
                         # ... create the menu object
                         menu = wx.Menu()
+                        # See if we're pointing to a Quote Note by looking at the parent's label.  If so ...
+                        if (self.activeTree.GetItemText(self.activeTree.GetItemParent(sel_item)) == unicode(_('Quote'), 'utf8')):
+                            # Create a new Id for a menu item
+                            id = wx.NewId()
+                            # Add a menu item for loading a Quote Note's Quote
+                            menu.Append(id, _("Load the Associated Quote"))
+                            # Link the appropriate method to the menu item
+                            wx.EVT_MENU(self, id, self.OnMenuLoadQuoteClipOrSnapshot)
                         # See if we're pointing to a Clip Note by looking at the parent's label.  If so ...
-                        if (self.activeTree.GetItemText(self.activeTree.GetItemParent(sel_item)) == unicode(_('Clip'), 'utf8')):
+                        elif (self.activeTree.GetItemText(self.activeTree.GetItemParent(sel_item)) == unicode(_('Clip'), 'utf8')):
                             # Create a new Id for a menu item
                             id = wx.NewId()
                             # Add a menu item for loading a Clip Note's Clip
                             menu.Append(id, _("Load the Associated Clip"))
                             # Link the appropriate method to the menu item
-                            wx.EVT_MENU(self, id, self.OnMenuLoadClipOrSnapshot)
+                            wx.EVT_MENU(self, id, self.OnMenuLoadQuoteClipOrSnapshot)
                         # See if we're pointing to a Snapshot Note by looking at the parent's label.  If so ...
                         elif (self.activeTree.GetItemText(self.activeTree.GetItemParent(sel_item)) == unicode(_('Snapshot'), 'utf8')):
                             # Create a new Id for a menu item
@@ -1053,7 +1139,7 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
                             # Add a menu item for loading a Snapshot Note's Snapshot
                             menu.Append(id, _("Load the Associated Snapshot"))
                             # Link the appropriate method to the menu item
-                            wx.EVT_MENU(self, id, self.OnMenuLoadClipOrSnapshot)
+                            wx.EVT_MENU(self, id, self.OnMenuLoadQuoteClipOrSnapshot)
                         # Create a new Id for a menu item
                         id = wx.NewId()
                         # Add a menu item for Locating the Notes in the DB Tree
@@ -1106,21 +1192,25 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
                                                 reportType=self.activeTree.GetPyData(self.activeTree.GetSelection()).nodetype,
                                                 searchText=searchText)
         
-    def OnMenuLoadClipOrSnapshot(self, event):
-        """ Implement the Load Clip  or Load Snapshot function from the right-click menu """
+    def OnMenuLoadQuoteClipOrSnapshot(self, event):
+        """ Implement the Load Quote, Load Clip, or Load Snapshot function from the right-click menu """
         # See if the current note is defined (which it isn't if locked by someone else!)
         if self.activeNote != None:
             # Get the Note's Node Data ...
             (nodeData, nodeType) = self.GetNodeData(self.activeNote)
+            # If we have a Quote Note ...
+            if nodeType == 'QuoteNoteNode':
+                # ... remember the quote's number
+                objNum = self.activeNote.quote_num
             # If we have a Clip Note ...
-            if nodeType == 'ClipNoteNode':
+            elif nodeType == 'ClipNoteNode':
                 # ... remember the clip's number
                 objNum = self.activeNote.clip_num
             # If we have a Snapshot Note ...
             elif nodeType == 'SnapshotNoteNode':
                 # ... remember the snapshot's number
                 objNum = self.activeNote.snapshot_num
-        # If the note is locked, we can still load the Clip.  But we don't have the activeNote to get data from.
+        # If the note is locked, we can still load the Quote, Clip, or Snapshot.  But we don't have the activeNote to get data from.
         else:
             # Get the selected item
             sel_item = self.activeTree.GetSelection()
@@ -1130,8 +1220,12 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             tempNote = Note.Note(sel_item_data.recNum)
             # Get the Note's Node Data ...
             (nodeData, nodeType) = self.GetNodeData(tempNote)
+            # If we have a Quote Note ...
+            if nodeType == 'QuoteNoteNode':
+                # ... remember the quote's number
+                objNum = tempNote.quote_num
             # If we have a Clip Note ...
-            if nodeType == 'ClipNoteNode':
+            elif nodeType == 'ClipNoteNode':
                 # ... remember the clip's number
                 objNum = tempNote.clip_num
             # If we have a Snapshot Note ...
@@ -1140,8 +1234,12 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
                 objNum = tempNote.snapshot_num
         # We want the object, not the object's Note!  We need to drop the note from the list and change the node type!
         nodeData = nodeData[:-1]
+        # If we have a Quote Note ...
+        if nodeType == 'QuoteNoteNode':
+            # ... set the node type to Quote, not Quote Note
+            nodeType = 'QuoteNode'
         # If we have a Clip Note ...
-        if nodeType == 'ClipNoteNode':
+        elif nodeType == 'ClipNoteNode':
             # ... set the node type to Clip, not Clip Note
             nodeType = 'ClipNode'
         # If we have a Snapshot Note ...
@@ -1150,8 +1248,12 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
             nodeType = 'SnapshotNode'
         # Tell the Database Tree to display that node.  (We need to translate the Root node.)
         self.ControlObject.DataWindow.DBTab.tree.select_Node((unicode(_(nodeData[0]), 'utf8'),) + nodeData[1:], nodeType)
+        # If we have a Quote Note ...
+        if nodeType == 'QuoteNode':
+            # ... load the Quote in Transana's main interface
+            self.ControlObject.LoadQuote(objNum)
         # If we have a Clip Note ...
-        if nodeType == 'ClipNode':
+        elif nodeType == 'ClipNode':
             # ... load the Clip in Transana's main interface
             self.ControlObject.LoadClipByNumber(objNum)
         # If we have a Snapshot Note ...
@@ -1219,7 +1321,10 @@ class NotesBrowser(wx.Dialog):  # (wx.MDIChildFrame)
                             self.activeTree.SetItemText(sel_item, self.activeNote.id)
                             # ... get the note's Node Data (The Node ID could well have been changed) ...
                             (nodeData, nodeType) = self.GetNodeData(self.activeNote, idChanged=True)
-                            # ... and inform the Database tree of the Note ID change.  (We need to translate the Root node.)
+                            # We need to alter the Root node if it's "Library".
+                            if nodeData[0] == 'Library':
+                                nodeData = ('Libraries', ) + nodeData[1:]
+                            # ... and inform the Database tree of the Note ID change.
                             self.ControlObject.DataWindow.DBTab.tree.rename_Node((unicode(_(nodeData[0]),'utf8'),) + nodeData[1:], nodeType, self.activeNote.id)
                             # If we're in the Multi-User mode, we need to send a message about the change
                             if not TransanaConstants.singleUserVersion:

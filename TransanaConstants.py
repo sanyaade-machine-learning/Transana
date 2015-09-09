@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -53,9 +53,9 @@ if workshopVersion:
     expirationdate = TransanaConfigConstants.xpdt
 
 # Program Version Number
-versionNumber = '2.61b'
+versionNumber = '3.00'
 # Build Number
-buildNumber = '261b'
+buildNumber = '300'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
@@ -77,23 +77,19 @@ if labVersion:
 if demoVersion:
     maxEpisodes = 5
     maxEpisodeTranscripts = 5
-    maxClips = 30
+    maxDocuments = 5
+    maxClips = 20
+    maxQuotes = 20
     maxSnapshots = 5
     maxKeywords = 15
 
-# If this is the Workshop Version ...
-#if workshopVersion:
-    # ... note that on the Version Number
-#    versionNumber += ' Workshop'
+# Timing variables for the OS X Key Press bug (DELETE THESE!)
+t1 = t2 = t3 = t4 = t5 = t6 = t7 = 0
 
-# Allow Drag and Drop on the Mac?  (There's a bug, but it could be fixed!)
-macDragDrop = True
-
-if proVersion:
-    # Define the maximum number of Transcript Windows that can be opened
+# Define the maximum number of Transcript Windows that can be opened
+if proVersion and not demoVersion:
     maxTranscriptWindows = 5
 else:
-    # Define the maximum number of Transcript Windows that can be opened
     maxTranscriptWindows = 1
 
 # Define the Timecode Character
@@ -186,6 +182,8 @@ mediaFileTypes_RtL = ['mpg', 'mpeg', 'avi', 'wmv', 'mp3', 'wav', 'wma', 'aac']
 imageFileTypesString = _("""All files (*.*)|*.*|All supported graphics files (*.ani, *.bmp, *.cur, *.gif, *.ico, *.iff, *.jpg, *.jpeg, *.pcx, *.png, *.pnm, *.tga, *.tif, *.xpm)|*.ani;*.bmp;*.cur;*.gif;*.ico;*.iff;*.jpg;*.jpeg;*.pcx;*.png;*.pnm;*.tga;*.tif;*.xpm""")
 imageFileTypes = ['ani', 'bmp', 'cur', 'gif', 'ico', 'iff', 'jpg', 'jpeg', 'pcx', 'png', 'pnm', 'tga', 'tif', 'xpm']
 
+documentFileTypesString = _("""All files (*.*)|*.*|All supported text files (*.rtf, *.xml, *.txt)|*.rtf;*.xml;*.txt;|Rich Text Files (*.rtf)|*.rtf|Transana XML Files (*.xml)|*.xml|Plain Text Files (*.txt)|*.txt""")
+documentFileTypes = ['rtf', 'xml', 'txt']
 
 # We need to know what characters are legal in a file name!
 legalFilenameCharacters = string.ascii_letters + string.digits + ":. -_$&@!%(){}[]~'#^+=/" 

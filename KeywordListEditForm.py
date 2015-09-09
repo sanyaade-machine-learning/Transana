@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -23,8 +23,10 @@ import ClipKeywordObject
 import Collection
 import DBInterface
 import Dialogs
+import Document
 import Episode
-import Series
+import Quote
+import Library
 import Snapshot
 import KWManager
 import Misc
@@ -181,7 +183,7 @@ class KeywordListEditForm(Dialogs.GenForm):
         # Define the minimum size for this dialog as the current size
         self.SetSizeHints(max(600, width), max(385, height))
         # Center the form on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # We need to set some minimum sizes so the sizers will work right
         self.kw_group_lb.SetSizeHints(minW = 50, minH = 20)
@@ -204,8 +206,10 @@ class KeywordListEditForm(Dialogs.GenForm):
 
         # Get the Parent Object, so we can know the Default Keyword Group
         if isinstance(self.obj, Episode.Episode):
-            objParent = Series.Series(self.obj.series_num)
-        elif isinstance(self.obj, Clip.Clip) or isinstance(self.obj, Snapshot.Snapshot):
+            objParent = Library.Library(self.obj.series_num)
+        elif isinstance(self.obj, Document.Document):
+            objParent = Library.Library(self.obj.library_num)
+        elif isinstance(self.obj, Clip.Clip) or isinstance(self.obj, Snapshot.Snapshot) or isinstance(self.obj, Quote.Quote):
             objParent = Collection.Collection(self.obj.collection_num)
         if len(self.kw_groups) > 0:
             # Set the Keyword Group to the Default keyword Group
@@ -260,9 +264,10 @@ class KeywordListEditForm(Dialogs.GenForm):
         if sel:
             self.kw_list = DBInterface.list_of_keywords_by_group(sel)
             self.kw_lb.Clear()
-            self.kw_lb.InsertItems(self.kw_list, 0)
-            if self.kw_lb.GetCount() > 0:
-                self.kw_lb.EnsureVisible(0)
+            if len(self.kw_list) > 0:
+                self.kw_lb.InsertItems(self.kw_list, 0)
+                if self.kw_lb.GetCount() > 0:
+                    self.kw_lb.EnsureVisible(0)
 
     def highlight_bad_keyword(self):
         """ Highlight the first bad keyword in the keyword list """

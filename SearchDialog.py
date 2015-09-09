@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -49,7 +49,7 @@ class SearchDialog(wx.Dialog):
     def __init__(self, searchName=''):
         """ Initialize the Search Dialog, passing in the default Search Name. """
         # Define the SearchDialog as a resizable wxDialog Box
-        wx.Dialog.__init__(self, TransanaGlobal.menuWindow, -1, _("Boolean Keyword Search"), wx.DefaultPosition, wx.Size(500, 600),
+        wx.Dialog.__init__(self, TransanaGlobal.menuWindow, -1, _("Boolean Keyword Search"), wx.DefaultPosition, wx.Size(650, 600),
                            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
 
         # To look right, the Mac needs the Small Window Variant.
@@ -84,7 +84,7 @@ class SearchDialog(wx.Dialog):
         mainSizer.Add(self.searchName, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
 
         # Add Scope Label
-        scopeText = wx.StaticText(self, -1, _('Search Scope:'))
+        scopeText = wx.StaticText(self, -1, _('Items to include:'))
         mainSizer.Add(scopeText, 0, wx.LEFT | wx.RIGHT, 10)
         mainSizer.Add((0, 3))
         
@@ -94,10 +94,30 @@ class SearchDialog(wx.Dialog):
         # Add a spacer
         includeSizer.Add((1,1), 1, wx.EXPAND)
 
+        if TransanaConstants.proVersion:
+            # Add a checkbox for including Documents in the Search Results
+            self.includeDocuments = wx.CheckBox(self, -1, _('Documents'))
+            # Exclude Documents by default
+            self.includeDocuments.SetValue(False)
+            # Bind the Check event
+            self.includeDocuments.Bind(wx.EVT_CHECKBOX, self.OnBtnClick)
+            # Add the checkbox to the Include Sizer
+            includeSizer.Add(self.includeDocuments, 0)
+
+            # Add a spacer
+            includeSizer.Add((1,1), 1, wx.EXPAND)
+        else:
+            # Add a checkbox for including Documents in the Search Results
+            self.includeDocuments = wx.CheckBox(self, -1, _('Documents'))
+            # Don't Display this checkbox!
+            self.includeDocuments.Show(False)
+            # Exclude Documents from the Search
+            self.includeDocuments.SetValue(False)
+
         # Add a checkbox for including Episodes in the Search Results
-        self.includeEpisodes = wx.CheckBox(self, -1, _('Search Episodes'))
+        self.includeEpisodes = wx.CheckBox(self, -1, _('Episodes'))
         # Include Episodes by default
-        self.includeEpisodes.SetValue(True)
+        self.includeEpisodes.SetValue(False)
         # Bind the Check event
         self.includeEpisodes.Bind(wx.EVT_CHECKBOX, self.OnBtnClick)
         # Add the checkbox to the Include Sizer
@@ -106,8 +126,28 @@ class SearchDialog(wx.Dialog):
         # Add a spacer
         includeSizer.Add((1,1), 1, wx.EXPAND)
 
+        if TransanaConstants.proVersion:
+            # Add a checkbox for including Quotes in the Search Results
+            self.includeQuotes = wx.CheckBox(self, -1, _('Quotes'))
+            # Include Quotes by default
+            self.includeQuotes.SetValue(True)
+            # Bind the Check event
+            self.includeQuotes.Bind(wx.EVT_CHECKBOX, self.OnBtnClick)
+            # Add the checkbox to the Include Sizer
+            includeSizer.Add(self.includeQuotes, 0)
+
+            # Add a spacer
+            includeSizer.Add((1,1), 1, wx.EXPAND)
+        else:
+            # Add a checkbox for including Quotes in the Search Results
+            self.includeQuotes = wx.CheckBox(self, -1, _('Quotes'))
+            # Don't Display this checkbox!
+            self.includeQuotes.Show(False)
+            # Exclude Quotes from the Search
+            self.includeQuotes.SetValue(False)
+
         # Add a checkbox for including Clips in the Search Results
-        self.includeClips = wx.CheckBox(self, -1, _('Search Clips'))
+        self.includeClips = wx.CheckBox(self, -1, _('Clips'))
         # Include Clips by default
         self.includeClips.SetValue(True)
         # Bind the Check event
@@ -120,7 +160,7 @@ class SearchDialog(wx.Dialog):
             includeSizer.Add((1,1), 1, wx.EXPAND)
 
             # Add a checkbox for including Snapshots in the Search Results
-            self.includeSnapshots = wx.CheckBox(self, -1, _('Search Snapshots'))
+            self.includeSnapshots = wx.CheckBox(self, -1, _('Snapshots'))
             # Include Snapshots by default
             self.includeSnapshots.SetValue(True)
             # Bind the Check event
@@ -129,10 +169,10 @@ class SearchDialog(wx.Dialog):
             includeSizer.Add(self.includeSnapshots)
         else:
             # Add a checkbox for including Snapshots in the Search Results
-            self.includeSnapshots = wx.CheckBox(self, -1, _('Search Snapshots'))
+            self.includeSnapshots = wx.CheckBox(self, -1, _('Snapshots'))
             # Don't Display this checkbox!
             self.includeSnapshots.Show(False)
-            # Include Snapshots by default
+            # Exclude Snapshots from the Search
             self.includeSnapshots.SetValue(False)
 
         # Add a spacer
@@ -217,6 +257,12 @@ class SearchDialog(wx.Dialog):
             # Add the Root Node to the Mapping Dictionary
             mapDict[0] = self.ctcRoot
 
+            # Sometimes, a Collection appears in the DBInterface list before its Parent Collection has been
+            # established.  When this happens, we need to defer processing of these items until after their
+            # parent collection has been added.  (See DatabaseTreeTab.create_collections_node.)
+            # Initialize a list to hold those deferred collections here.
+            deferredItems = []
+
             # Get all the Collections from the Database and iterate through them
             for (collNo, collID, parentCollNo) in DBInterface.list_of_all_collections():
                 # If the Mapping Dictionary has the PARENT Collection ...
@@ -237,8 +283,62 @@ class SearchDialog(wx.Dialog):
                     # Add the new item to the Mapping Dictionary
                     mapDict[collNo] = item
 
+                    # We need to check the items waiting to be processed to see if we've just added the parent
+                    # collection for any of the items in the list.  If the list is empty, though, we don't need to bother.
+                    placementMade = (len(deferredItems) > 0)
+                    # We do this in a while loop, as each item from the list that gets added to the tree could be the
+                    # parent of other items in the list.
+                    while placementMade:
+                        # Re-initialize the while loop variable, assuming that no items will be found
+                        placementMade = False
+                        # Now see if any of the deferred items can be added!  Loop through the list ...
+                        # We can't just use a for loop, as we delete items from the list as we go!
+                        # So start by defining the list index and the number of items in the list
+                        index = 0
+                        endPoint = len(deferredItems)
+                        # As long as the index is less than the last list item ...
+                        while index < endPoint:  # for index in range(len(deferredItems)):
+                            # Get the data from the list item
+                            (dCollNo, dCollID, dParentCollNo) = deferredItems[index]
+                                
+                            # See if the parent collection has now been added to the tree and to the map dictionary
+                            if mapDict.has_key(dParentCollNo):
+                                # We can identify the parent node using the map dictionary
+                                parentItem = mapDict[dParentCollNo]
+
+#                                print "SearchDialog.__init__(): ", dCollNo, dCollID, dParentCollNo, "*** ADDED ***"
+
+                                # Create a new Checkbox Node for the current item a a child to the Parent Node
+                                item = self.ctcCollections.AppendItem(parentItem, dCollID, ct_type=CT.TREE_ITEMTYPE_CHECK)
+                                self.ctcCollections.SetItemImage(item, 0, wx.TreeItemIcon_Normal)
+                                self.ctcCollections.SetItemImage(item, 0, wx.TreeItemIcon_Selected)
+                                self.ctcCollections.SetItemImage(item, 0, wx.TreeItemIcon_Expanded)
+                                self.ctcCollections.SetItemImage(item, 0, wx.TreeItemIcon_SelectedExpanded)
+                                # Check the item
+                                self.ctcCollections.CheckItem(item, True)
+                                # Set the item's PyData to the Collection Number
+                                self.ctcCollections.SetPyData(item, collNo)
+                                # Add the new node to the map dictionary
+                                mapDict[dCollNo] = item
+                                # We need to indicate to the while loop that we found an entry that could be the parent of other entries
+                                placementMade = True
+                                # We need to remove the item we just added to the tree from the deferred items list
+                                del deferredItems[index]
+                                # If we delete the item from the list, we reduce the End Point by one and DO NOT increase the index
+                                endPoint -= 1
+                            # If the parent collection is NOT in the mapping dictionalry yet ...
+                            else:
+                                # ... just move on to the next item.  We can't do anything with this yet.
+                                index += 1                    
+
+                # If the Collection's parent is not yet in the Collection tree or the Map dictionary ...
                 else:
-                    print "SearchDialog.__init__(): Adding Collections.  ", collNo, collID, parentCollNo, "*** NOT ADDED ***"
+
+#                    print "SearchDialog.__init__(): ", collNo, collID, parentCollNo, "*** DEFERRED ***"
+
+                    # ... we need to place that collection in the list of items to process later, once the parent Collection
+                    # has been added to the database tree
+                    deferredItems.append((collNo, collID, parentCollNo))
 
             # Expand the tree's Root Node
             self.ctcCollections.Expand(self.ctcRoot)
@@ -512,10 +612,8 @@ class SearchDialog(wx.Dialog):
         btnSizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # Add the File Open button
-        # Get the image for File Open
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_FILE_OPEN, wx.ART_TOOLBAR, (16,16))
         # Create the File Open button
-        self.btnFileOpen = wx.BitmapButton(self, -1, bmp, size = wx.Size(32, 24))
+        self.btnFileOpen = wx.BitmapButton(self, -1, TransanaImages.ArtProv_FILEOPEN.GetBitmap(), size = wx.Size(32, 24))
         self.btnFileOpen.SetToolTip(wx.ToolTip(_('Load a Search')))
         btnSizer.Add(self.btnFileOpen, 0)
         self.btnFileOpen.Bind(wx.EVT_BUTTON, self.OnFileOpen)
@@ -523,10 +621,8 @@ class SearchDialog(wx.Dialog):
         btnSizer.Add((10, 0))
 
         # Add the File Save button
-        # Get the image for File Save
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_FILE_SAVE, wx.ART_TOOLBAR, (16,16))
         # Create the File Save button
-        self.btnFileSave = wx.BitmapButton(self, -1, bmp, size = wx.Size(32, 24))
+        self.btnFileSave = wx.BitmapButton(self, -1, TransanaImages.ArtProv_FILESAVE.GetBitmap(), size = wx.Size(32, 24))
         self.btnFileSave.SetToolTip(wx.ToolTip(_('Save a Search')))
         btnSizer.Add(self.btnFileSave, 0)
         self.btnFileSave.Bind(wx.EVT_BUTTON, self.OnFileSave)
@@ -535,10 +631,8 @@ class SearchDialog(wx.Dialog):
         btnSizer.Add((10, 0))
 
         # Add the File Delete button
-        # Get the image for File Delete
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_DELETE, wx.ART_TOOLBAR, (16,16))
         # Create the File Delete button
-        self.btnFileDelete = wx.BitmapButton(self, -1, bmp, size = wx.Size(32, 24))
+        self.btnFileDelete = wx.BitmapButton(self, -1, TransanaImages.ArtProv_DELETE.GetBitmap(), size = wx.Size(32, 24))
         self.btnFileDelete.SetToolTip(wx.ToolTip(_('Delete a Saved Search')))
         btnSizer.Add(self.btnFileDelete, 0)
         self.btnFileDelete.Bind(wx.EVT_BUTTON, self.OnFileDelete)
@@ -579,7 +673,7 @@ class SearchDialog(wx.Dialog):
         # Lay out the form
         self.Layout()
         # Center the dialog on screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
 
         # Get the Keyword Groups from the Database Interface
         self.kw_groups = DBInterface.list_of_keyword_groups()
@@ -846,7 +940,8 @@ class SearchDialog(wx.Dialog):
                 TransanaGlobal.menuWindow.ControlObject.Help('Search')
 
         # The "include" checkboxes
-        elif event.GetId() in [self.includeEpisodes.GetId(), self.includeClips.GetId(), self.includeSnapshots.GetId()]:
+        elif event.GetId() in [self.includeDocuments.GetId(), self.includeEpisodes.GetId(),
+                               self.includeQuotes.GetId(), self.includeClips.GetId(), self.includeSnapshots.GetId()]:
             # If we are CHECKING one of the boxes ...
             if event.IsChecked():
                 # Detect the current status of the query to see if it's a valid search.  If so ...
@@ -860,7 +955,8 @@ class SearchDialog(wx.Dialog):
                     self.btnFileSave.Enable(True)
 
         # At least one of the "Include" checkboxes MUST be checked for the Search to be valid
-        if not (self.includeEpisodes.IsChecked() or self.includeClips.IsChecked() or self.includeSnapshots.IsChecked()):
+        if not (self.includeDocuments.IsChecked() or self.includeEpisodes.IsChecked() or
+                self.includeQuotes.IsChecked() or self.includeClips.IsChecked() or self.includeSnapshots.IsChecked()):
             # If no results are included, disable the "Search" button
             self.btnSearch.Enable(False)
             # and the save button

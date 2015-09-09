@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -96,8 +96,11 @@ class Transcript(DataObject.DataObject):
         str = str + "Comment = %s\n" % self.comment
         str += "MinTranscriptWidth = %s\n" % self.minTranscriptWidth
         str = str + "LastSaveTime = %s\n" % self.lastsavetime
+#        str += "isLocked = %s\n" % self._isLocked
+#        str += "recordlock = %s\n" % self.recordlock
+#        str += "locktime = %s\n" % self.locktime
         if len(self.text) > 250:
-            str = str + "text not displayed due to length.\n\n"
+            str = str + "text[:50] = %s\n\n" % self.text[:50]
         else:
             str = str + "text = %s\n\n" % self.text
         return str.encode('utf8')

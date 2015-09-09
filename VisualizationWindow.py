@@ -1,4 +1,4 @@
-# Copyright (C) 2003 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2003 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -14,8 +14,7 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 
-"""This module implements the Visualization class as part of the Visualization
-component."""
+"""This module implements the Visualization class as part of the Visualization component."""
 
 __author__ = 'David K. Woods <dwoods@wcer.wisc.edu>, Nathaniel Case, Rajas Sambhare'
 
@@ -25,49 +24,67 @@ if DEBUG:
 
 HYBRIDOFFSET = 80
 
-import wx                     # Import wxPython
-import wx.lib.buttons         # Import wxPython's extra buttons
+# Import wxPython
+import wx
+# Import wxPython's extra buttons
+import wx.lib.buttons
 
+# For stand-alone testing...
 if __name__ == '__main__':
     # This module expects i18n.  Enable it here.
     __builtins__._ = wx.GetTranslation
 
+# Import Transana's Clip Object
 import Clip
+# Import Transana's Dialogs
+import Dialogs
+# Import Transana's Document Object
+import Document
+# Import Tranana's Episodde Object
 import Episode
+# Import Transana's GraphsicControlClass, the canvas for the Waveform / Keyword Visualization
+import GraphicsControlClass
+# Import Transana's Keyword Map Class, responsible for Keyword Visualizations
 import KeywordMapClass
-import TransanaGlobal
+# Import Transana's Miscellaneous Functions
+import Misc
+# Import Transana's Quote Object
+import Quote
+# Import Transana's Constants
 import TransanaConstants
+# Import Transana's Exceptions
 import TransanaExceptions
+# Import Transana's Globals
+import TransanaGlobal
 # Import Transana Images
 import TransanaImages
-import GraphicsControlClass
+# Import Transana's Waveform Creation routines
 import WaveformGraphic
-import WaveformProgress       # Waveform Creation Progress Dialog, used in Wave Extraction Callback function
-import Dialogs
-import Misc
-import locale                 # import locale so we can get the default system encoding for Unicode Waveforming
-import os
-import sys
-import string
-import time
-import ctypes                 # used to access wceraudio DLL/Shared Library
+# Import Transana's Waveform Creation Progress Dialog, used in Wave Extraction Callback function
+import WaveformProgress
 
-class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
-    """This class encompasses the others into a single wxPython window,
-    and provides the primary interface for the Control objects.  This
-    object will be passed a memory-mapped wave file as input for the
-    audio data to be displayed."""
+# Import Python's ctypes module, used to access wceraudio DLL/Shared Library
+import ctypes
+# Import Python's locale module, used for i18n and unicode handling
+import locale
+# Import Python's os module
+import os
+# Import Python's String module
+import string
+# Import Python's sys module
+import sys
+# Import Python's time module
+import time
+
+class VisualizationWindow(wx.Dialog):
+    """ This class creates Transana's Visualization Window, used to display waveforms (for media files) and Keyword Visualizations
+        (for media and text data).  These visualizations are intended to provide the user with useful information abou their
+        data in a visual form. """
 
     def __init__(self, parent):
         """Initialize a VisualizationWindow object."""
-        # Positioning is different on Mac and Windows, requiring subtle adjustments in this window
-        if '__WXMAC__' in wx.PlatformInfo:
-            topAdjust = 0
-        else:
-            topAdjust = 2
-            
+        # Create the Visualization Window
         wx.Dialog.__init__(self, parent, -1, _('Visualization'), pos=self.__pos(), size=self.__size(), style=wx.CAPTION | wx.RESIZE_BORDER | wx.WANTS_CHARS)
-#        wx.MDIChildFrame.__init__(self, parent, -1, _('Visualization'), pos=self.__pos(), size=self.__size(), style=wx.CAPTION | wx.RESIZE_BORDER | wx.WANTS_CHARS)
         # Set "Window Variant" to small only for Mac to use small icons
         if "__WXMAC__" in wx.PlatformInfo:
             self.SetWindowVariant(wx.WINDOW_VARIANT_SMALL)
@@ -78,12 +95,23 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         else:
             self.SetBackgroundColour(wx.WHITE)
 
+        # Define the Visualization Window's minimum size
         self.SetSizeHints(250, 100)
+        # Get the Visualization WIndow's current size
         (width, height) = self.GetSize()
 
         # The ControlObject handles all inter-object communication, initialized to None
-        self.ControlObject = None            
+        self.ControlObject = None
 
+        # Initialize the Object to be Visualized
+        self.VisualizationObject = None
+        # Initialize the Visualization Type
+        self.VisualizationType = None
+
+        # Create a Dictionary for the Visualization Settings for each object being visualized.
+        # The key reflects the object held in the Document Window's current Notebook page.
+        self.VisualizationInfo = {}
+        
         # startPoint and endPoint are used in the process of drag-selecting part of a waveform.
         self.startPoint = 0
         self.endPoint = 0
@@ -92,7 +120,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # that is currently displayed.  These are crucial in all positioning calculations.
         self.waveformLowerLimit = 0
         self.waveformUpperLimit = 0
-        # We need to signal if the Default Visualization should be loaded or not.
+        # We need to signal if the Default Visualization should be loaded or not.  (Used for first-time loads?)
         self.loadDefault = True
 
         # heightIsSet notes whether the height of the Keyword Visualization should be automatically adjusted or not.
@@ -109,14 +137,18 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
 
         # zoomInfo holds information about Zooms, to allow zoom-out in steps matching zoom-ins
         self.zoomInfo = [(0, -1)]
-        box = wx.BoxSizer(wx.VERTICAL)
-
         # We need to know the height of the Window Header to adjust the size of the Graphic Area
         headerHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
 
-        # The waveform is held in a GraphicsControlClass object that handles all the waveform display.
+        # Create a main Box sizer
+        box = wx.BoxSizer(wx.VERTICAL)
+
+        # Get the Frame Width for this platform
+        frameWidth = wx.SystemSettings.GetMetric(wx.SYS_FRAMESIZE_X)
+
+        # The waveform / Keyword Visualization is held in a GraphicsControlClass object that handles the visualization display.
         # At this time, the GraphicsControlClass is not aware of Sizers or Constraints
-        self.waveform = GraphicsControlClass.GraphicsControl(self, -1, wx.Point(1, 1), wx.Size(int(width-12), int(height-48-headerHeight)), (width-14, height-52-headerHeight), visualizationMode=True)
+        self.waveform = GraphicsControlClass.GraphicsControl(self, -1, wx.Point(1, 1), wx.Size(int(width-12), int(height-48-headerHeight)), (width-12-(2*frameWidth), height-52-headerHeight), visualizationMode=True)
         box.Add(self.waveform, 1, wx.EXPAND, 0)
 
         # Add the Timeline Panel, which holds the time line and scale information
@@ -131,10 +163,8 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # Add GUI elements to the Toolbar
         toolbarSizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Get the graphic for the Filter button
-        bmp = wx.ArtProvider_GetBitmap(wx.ART_LIST_VIEW, wx.ART_TOOLBAR, (16,16))
         # Add Filter Button
-        self.filter = wx.BitmapButton(self.toolbar, -1, bmp)
+        self.filter = wx.BitmapButton(self.toolbar, -1, TransanaImages.ArtProv_LISTVIEW.GetBitmap())
         self.filter.SetToolTipString(_("Filter"))
         toolbarSizer.Add(self.filter, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT , 2)
         self.filter.Enable(False)
@@ -200,6 +230,8 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # Bind the OnLoop event handler to the button
         self.loop.Bind(wx.EVT_BUTTON, self.OnLoop)
 
+        spacerSize = 10
+
         # Place line separating Zoom buttons from Position section
         separator = wx.StaticLine(self.toolbar, -1, size=wx.Size(2, 22))
         toolbarSizer.Add(separator, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 2)
@@ -211,6 +243,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # Add "Time" Time label
         self.lbl_Time_Time = wx.StaticText(self.toolbar, -1, "0:00:00.0")
         toolbarSizer.Add(self.lbl_Time_Time, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 4)
+        toolbarSizer.Add((spacerSize + 30, 1))
 
         # Place line separating Time from Current
         separator = wx.StaticLine(self.toolbar, -1, size=wx.Size(2, 22))
@@ -225,6 +258,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # Add "Current" Time label
         self.lbl_Current_Time = wx.StaticText(self.toolbar, -1, "0:00:00.0")
         toolbarSizer.Add(self.lbl_Current_Time, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 4)
+        toolbarSizer.Add((spacerSize + 30, 1))
 
         # Place line separating Current from Selected
         separator = wx.StaticLine(self.toolbar, -1, size=wx.Size(2, 22))
@@ -239,6 +273,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # Add "Selected" Time label
         self.lbl_Selected_Time = wx.StaticText(self.toolbar, -1, "0:00:00.0")
         toolbarSizer.Add(self.lbl_Selected_Time, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 4)
+        toolbarSizer.Add((10 * spacerSize, 1))
 
         # Place line separating Selected from Total
         separator = wx.StaticLine(self.toolbar, -1, size=wx.Size(2, 22))
@@ -251,7 +286,6 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # Add "Total" Time label
         self.lbl_Total_Time = wx.StaticText(self.toolbar, -1, "0:00:00.0")
         toolbarSizer.Add(self.lbl_Total_Time, 0, wx.ALIGN_LEFT | wx.ALIGN_CENTER | wx.LEFT | wx.RIGHT, 4)
-
         toolbarSizer.Add((1, 0), 1, wx.EXPAND | wx.RIGHT, 2)
 
         self.toolbar.SetSizer(toolbarSizer)
@@ -291,84 +325,174 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # NOTE that we assign this event to the waveform, not to self.
         wx.EVT_KEY_DOWN(self.waveform, self.OnKeyDown)
 
-        if DEBUG:
-            print "VisualizationWindow.__init__():  Initial size:", self.GetSize()
+    def SetVisualizationObject(self, visualizationObject):
+        """ Set the Object to be visualized """
+        # Reset the Zoom Information, so we don't carry it over from the last visualization
+        self.zoomInfo = [(0, -1)]
+        if self.kwMap != None:
+            # Delete the current keyword visualization object
+            del(self.kwMap)
+            # Set the reference to the keyword visualizatoin object to None so we don't get confused.
+            self.kwMap = None
 
-    def OnSize(self, event):
-        """ Handles widget positioning on Resize Event """
-        # Determine Frame Size
-        (width, height) = self.GetSize()
-        # If we're not resizing ALL Transana windows ...   (to avoid recursive OnSize calls)
-        if not TransanaGlobal.resizingAll:
-            # ... Get the Visualization Window position ...
-            (left, top) = self.GetPositionTuple()
-            # ... can call the ControlObject's Update Window Position routine with the appropiate parameters
+        # If a Visualization Object is passed in ...
+        if visualizationObject != None:
+            # ... load the current Visualization Settings for known data objects
+            self.LoadVisualizationInfo((type(visualizationObject), visualizationObject.number))
+        # Set the object to be Visualized (which CAN be None!)
+        self.VisualizationObject = visualizationObject
+        # Set the type of Visualization based on the object type.
+        # If None is passed in ...
+        if self.VisualizationObject == None:
+            # ... then we have nothing to visualize
+            self.VisualizationType = None
+        # If we have a Document or a Quote ...
+        elif isinstance(self.VisualizationObject, Document.Document) or \
+             isinstance(self.VisualizationObject, Quote.Quote):
+            # ... we need a Text-Keyword Visualization
+            self.VisualizationType = 'Text-Keyword'
+            self.redrawWhenIdle = True
 
-            if DEBUG:
-                print
-                print "Call 5", 'Visualization', width + left, height + top, "(", top, ')'
-            
-            self.ControlObject.UpdateWindowPositions('Visualization', width + left, YUpper = height + top)
+            self.createClip.Show(False)
+            self.loop.Show(False)
+            self.lbl_Time.SetLabel(_("Pos:"))
+            self.btn_Current.Enable(False)
+            self.lbl_Current_Time.SetLabel("0")
+            self.btn_Selected.Enable(False)
+            self.lbl_Selected_Time.SetLabel("0")
+            self.lbl_Time_Time.SetLabel("0")
 
-        # Determine NEW Frame Size
-        (width, height) = self.GetSize()
+        # If we have an Episode ...
+        elif isinstance(self.VisualizationObject, Episode.Episode):
+            # ... we should use the configuration setting for Media Visualization Style
+            self.VisualizationType = TransanaGlobal.configData.visualizationStyle
+            # Load the waveform for the appropriate media files with its current start and length.
+            self.load_image('Episode', visualizationObject.media_filename, visualizationObject.additional_media_files,
+                            0, 0, self.VisualizationObject.tape_length)
+            self.createClip.Show(True)
+            self.loop.Show(True)
+            self.lbl_Time.SetLabel(_("Time:"))
+            self.btn_Current.Enable(True)
+            self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(0))
+            self.btn_Selected.Enable(True)
+            self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(0))
+            self.lbl_Time_Time.SetLabel(Misc.time_in_ms_to_str(0))
 
-        # We need to know the height of the Window Header to adjust the size of the Graphic Area
-        headerHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
+        # If we have a Clip ...
+        elif isinstance(self.VisualizationObject, Clip.Clip):
+            # ... we should use the configuration setting for Media Visualization Style
+            self.VisualizationType = TransanaGlobal.configData.visualizationStyle
 
-        # Set size of Waveform Window (Do this first, or the timeline is not scaled properly.)
-        self.waveform.SetDim(0, 1, width, height-50-headerHeight)
+            # Load the waveform for the appropriate media files with its current start and length.
+            self.load_image('Clip', visualizationObject.media_filename, visualizationObject.additional_media_files,
+                            visualizationObject.offset, visualizationObject.clip_start,
+                            visualizationObject.clip_stop - visualizationObject.clip_start)
 
-        # Position toolbar Panel
-        self.toolbar.SetDimensions(0, height-28-headerHeight, width, self.toolbar.GetMinSize()[1])
+            self.createClip.Show(True)
+            self.loop.Show(True)
+            self.lbl_Time.SetLabel(_("Time:"))
+            self.btn_Current.Enable(False)
+            self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(0))
+            self.btn_Selected.Enable(True)
+            self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(0))
+            self.lbl_Time_Time.SetLabel(Misc.time_in_ms_to_str(0))
 
-        # Draw the appropriate time line
-        self.draw_timeline(self.waveformLowerLimit, self.waveformUpperLimit - self.waveformLowerLimit)
+        # If we have another object type ...
+        else:
+            # ... then we have nothing to visualize
+            self.VisualizationType = None
 
-        # Position timeline Panel
-        self.timeline.SetDimensions(0, height-50-headerHeight, width, 24)
-        # Tell the Waveform to redraw
+            print "VisualizationWindow.SetVisualizationObject():  Invalid Object Type"
+
+            # Raise an exception!
+            raise TransanaExceptions.ProgrammingError("VisualizationWindow.SetVisualizationObject():  Invalid Object Type")
+
+        # ... clear the current waveform ...
+        self.waveform.Clear()
+
+        # ... signal that the redraw is done ...
         self.redrawWhenIdle = True
+
+    def LoadVisualizationInfo(self, objKey):
+        """ Load existing Visualization information when changing main objects in Transana's main interface """
+        # If there is an entry with the requested key ...
+        if objKey in self.VisualizationInfo.keys():
+            # ... provide the Visualization Information required
+            self.zoomInfo = self.VisualizationInfo[objKey]['zoomInfo']
+            self.kwMap = self.VisualizationInfo[objKey]['kwMap']
+
+    def SaveVisualizationInfo(self, objKey):
+        """ Save existing Visualization information when changing main objects in Transana's main interface """
+        # If there is an entry with the requested key ...
+        if objKey in self.VisualizationInfo.keys():
+            # ... update the Visualization Information required
+            self.VisualizationInfo[objKey]['zoomInfo'] = self.zoomInfo
+            self.VisualizationInfo[objKey]['kwMap'] = self.kwMap
+        # If not ...
+        else:
+            # ... create a dictionary with the appropriate key ...
+            self.VisualizationInfo[objKey] = {}
+            # ... adn add the Visualization Information required
+            self.VisualizationInfo[objKey]['zoomInfo'] = self.zoomInfo
+            self.VisualizationInfo[objKey]['kwMap'] = self.kwMap
+
+    def DeleteVisualizationInfo(self, objKey):
+        """ Delete existing Visualization information when removing objects from Transana's main interface """
+        # If there is an entry with the requested key ...
+        if objKey in self.VisualizationInfo.keys():
+            # ... delete that key's information
+            del(self.VisualizationInfo[objKey])
 
     def Refresh(self):
+        """ Called to indicate that the Visualization needs to be re-drawn """
+        # The Visualization Type may have changed since it was originally set.
+        if isinstance(self.VisualizationObject, Episode.Episode) or \
+           isinstance(self.VisualizationObject, Clip.Clip):
+            # ... we should use the configuration setting for Media Visualization Style
+            self.VisualizationType = TransanaGlobal.configData.visualizationStyle
+        # Clear the existing Visualization
         self.ClearVisualization()
+        # Signal that the Visualization should be re-drawn during Idle time
         self.redrawWhenIdle = True
+        # Call the OnIdle handler's method explicitly, so this is in fact handled in real time rather than waiting for Idle time.
         self.OnIdle(None)
 
-    def UpdateKeywordVisualization(self):
+    def UpdateKeywordVisualization(self, textChangeOnly = False):
+        """ Update the Keyword Visualization based on some sort of change in the data.  If this is called based on a change
+            in the TEXT of a Document or Transcript, due to editing, the Coding involved won't have changed, so we can skip
+            the time-consuming step of loading all the coding that goes into the Visualization. """
         # Only do something if we've got the Keyword or Hybrid visualization and there is a data object currently loaded
-        if (TransanaGlobal.configData.visualizationStyle in ['Keyword', 'Hybrid']) and \
+        if (self.VisualizationType in ['Keyword', 'Hybrid', 'Text-Keyword']) and \
            (self.ControlObject.currentObj != None) and \
            (self.kwMap != None):
-            # Update the Visualization's underlying data
-            self.kwMap.UpdateKeywordVisualization()
+            # If we do NOT have a Text Change ...
+            # (This eliminates the typing speed problem observed on OS X!)
+            if not textChangeOnly:
+                # Update the Visualization's underlying data
+                self.kwMap.UpdateKeywordVisualization()
             # Signal that height can be reset
             self.heightIsSet = False
             # Call the resize Height method
             self.resizeKeywordVisualization()
             # If we are doing a Hybrid visualization ...
-            if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
-                # ... we need to redraw the visualization so we don't lose the Waveform!
+            if self.VisualizationType in ['Hybrid', 'Text-Keyword']:
+                # ... we need to redraw the visualization (Hybrid: so we don't lose the Waveform!) (Text: to handle position changes)
                 self.redrawWhenIdle = True
 
     def OnIdle(self, event):
         """ Use Idle Time to handle the drawing in this control """
         # Check to see if the waveform control needs to be redrawn.  Under the new Media Player, GetMediaLength takes a while to
         # be set, so we should wait for that too.
-        if self.redrawWhenIdle  and (not self.ControlObject.shuttingDown) and (self.ControlObject.GetMediaLength() > 0):
 
-            # Because of recusive calls, this line, adjusting Transcript Windows to accomodate for Visualization Resizing, had
-            # to be moved here from ControlObject.UpdateWindowPositions()
-            # If there are multiple transcripts ...
-            if len(self.ControlObject.TranscriptWindow) > 1:
-                # ... adjust the positions of transcripts after the first
-                self.ControlObject.AutoArrangeTranscriptWindows()
+        if self.redrawWhenIdle  and (not self.ControlObject.shuttingDown) and \
+           ((self.ControlObject.GetMediaLength() > 0) or (self.VisualizationType == 'Text-Keyword')):
 
-            # Remove old Waveform Selection and Cursor data
-            self.waveform.ClearTransanaSelection()
+            if not self.VisualizationType == 'Text-Keyword':
+                # Remove old Waveform Selection and Cursor data
+                self.waveform.ClearTransanaSelection()
 
-            # Let's make sure we're not working without a waveform!
-            if len(self.waveFilename) > 0:
+            # Let's make sure we're not working without a waveform, unless we have Text
+            if (len(self.waveFilename) > 0) and (self.VisualizationType != 'Text-Keyword'):
                 # Let's detect and correct media length problems present in new Episodes that prevent proper visualization display.
                 # If media file length was not yet defined when the waveFilename object was populated ...
                 if self.waveFilename[0]['length'] == 0:
@@ -380,6 +504,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                     else:
                         # ... we need to update all of the waveFilename object's length values from the Control Object's CurrentObject.
                         self.waveFilename[0]['length'] = self.ControlObject.currentObj.tape_length
+
                     # Iterate through the additional filenames (skipping the first, which we just took care of) ...
                     for x in range(1, len(self.waveFilename)):
                         # If the length is not known ...
@@ -392,7 +517,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                             self.waveFilename[x]['length'] = self.ControlObject.currentObj.additional_media_files[x - 1]['length']
 
             # If no main object if defined ...
-            if self.ControlObject.currentObj == None:
+            if (self.ControlObject.currentObj == None):
                 # ... clear the current waveform ...
                 self.waveform.Clear()
                 # ... signal that the redraw is done ...
@@ -402,7 +527,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
 
             # Initialize
             waveformGraphicImage = None
-            if TransanaGlobal.configData.visualizationStyle in ['Waveform', 'Hybrid']:
+            if self.VisualizationType in ['Waveform', 'Hybrid']:
                 # Create the appropriate Waveform Graphic
                 try:
                     # The Mac can't handle Unicode WaveFilenames at this point.  We need to upgrade to Python 2.4 for that.
@@ -421,11 +546,10 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                             length = self.ControlObject.GetMediaLength(True)
                         else:
                             length = self.zoomInfo[-1][1]
-                    elif type(self.ControlObject.currentObj) == Clip.Clip:
 
-##                        print "VisualizationWindow.OnIdle():  CLIP"
-##                        print self.zoomInfo
-##                        print
+#                        print "VisualizationWindow.OnIdle(2a):", start, length, self.zoomInfo
+                        
+                    elif type(self.ControlObject.currentObj) == Clip.Clip:
 
                         if False:
                             # Set the current global video selection based on the Clip.
@@ -438,8 +562,6 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                             length = max(self.zoomInfo[-1][1], 500)
                             # Set the current global video selection based on the Clip.
                             self.ControlObject.SetVideoSelection(start, self.ControlObject.currentObj.clip_stop)
-
-##                        print self.ControlObject.currentObj.clip_start, self.ControlObject.currentObj.clip_stop, '/', start, start + length
 
                     # Get the status of the VideoWindow's checkboxes
                     checkboxData = self.ControlObject.GetVideoCheckboxDataForClips(start)
@@ -464,7 +586,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                     else:
                         # ... try to function without one.
                         self.redrawWhenIdle = False
-                        
+
                 # A bug in Python 2.3.5 causes a RuntimeError with some wave files if Unicode filenames are used.
                 # This should be fixed in Python 2.4.2, but we'll leave this code here to prevent ugly errors if it
                 # does occur.
@@ -474,6 +596,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                 except:
                     self.ClearVisualization()
                     self.redrawWhenIdle = False
+
                     if DEBUG:
                         # Beware of recursive Yields; trap the exception ...
                         try:
@@ -487,14 +610,14 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
 
                 # If we're building a Hybrid visualization, capture the waveform picture.
                 # But if waveforFilename has been cleared, we're waveforming and shouldn't do this yet!
-                if (TransanaGlobal.configData.visualizationStyle == 'Hybrid'):
+                if (self.VisualizationType == 'Hybrid'):
                     # Get the waveform Bitmap and convert it to an Image
                     hybridWaveform = waveformGraphicImage
                     if hybridWaveform != None:
                         # Rescale the image so that it matches the size alloted for the Waveform (HYBRIDOFFSET)
                         hybridWaveform.Rescale(hybridWaveform.GetWidth(), HYBRIDOFFSET)
 
-            if TransanaGlobal.configData.visualizationStyle in ['Keyword', 'Hybrid']:
+            if self.VisualizationType in ['Keyword', 'Hybrid']:
                 # Clear the Visualization
                 self.waveform.Clear()
 
@@ -537,7 +660,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                     # ... and the configuration name
                     configName = ''
                 # If we're creating a Hybrid Visualization ...
-                if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
+                if self.VisualizationType == 'Hybrid':
                     # ... then the Keyword Visualization portion needs a top margin.
                     topOffset = HYBRIDOFFSET
                 # If we're just doing a Keyword Visualization ...
@@ -616,33 +739,192 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                 # If we're bulding a Hybrid visualization, so far we've created and stored the waveform, then
                 # wiped it out in favor of an offset Keyword visualization.  Here, we combine the two
                 # visualizations!  If waveforFilename has been cleared, we're waveforming and shouldn't do this yet!
-                if (TransanaGlobal.configData.visualizationStyle == 'Hybrid'):
+                if (self.VisualizationType == 'Hybrid'):
                     # Here's a trick.  By setting the waveform's backgroundImage but NOT setting the
                     # backgroundGraphicName, you can add a background image to the GraphicsControlClass
                     # that does not resize to fill the image.  The current offset Keyword visualization
                     # with the waveform overlaid as a background image works pretty well!
                     self.waveform.backgroundImage = hybridWaveform
 
+            if self.VisualizationType == 'Text-Keyword':
+                # Clear the Visualization
+                self.waveform.Clear()
+
+                # Enable the Filter button
+                self.filter.Enable(True)
+                # If there's an existing Keyword Visualization ...
+                if self.kwMap != None:
+                    # ... remember the values for the Quote List
+                    filteredQuoteList = self.kwMap.quoteFilterList[:]
+                    # We DON'T remember the UnfilteredQuoteList because the Character Positions might have changed!
+                    unfilteredQuoteList = []
+##                    # ... remember the values for the Snapshot List
+##                    filteredSnapshotList = self.kwMap.snapshotFilterList[:]
+##                    unfilteredSnapshotList = self.kwMap.snapshotList[:]
+                    # ... remember the values for the filtered Keyword List
+                    filteredKeywordList = self.kwMap.filteredKeywordList[:]
+                    # ... remember the values from the unfiltered keyword list
+                    unfilteredKeywordList = self.kwMap.unfilteredKeywordList[:]
+                    # ... remember the keyword color list too.
+                    keywordColorList = self.kwMap.keywordColors
+                    # ... and remember the configuration name
+                    configName = self.kwMap.configName
+                    # Delete the current keyword visualization object
+                    del(self.kwMap)
+                    # Set the reference to the keyword visualizatoin object to None so we don't get confused.
+                    self.kwMap = None
+                # If we're creating a brand new Keyword Visualization ...
+                else:
+                    # Initialize the Quote Lists
+                    filteredQuoteList = []
+                    unfilteredQuoteList = []
+##                    # Initialize the Snapshot Lists
+##                    filteredSnapshotList = []
+##                    unfilteredSnapshotList = []
+                    # Initialize the filtered keyword list ...
+                    filteredKeywordList = []
+                    # ... the unfiltered keyword list ...
+                    unfilteredKeywordList = []
+                    # ... and the keyword color list.
+                    keywordColorList = None
+                    # ... and the configuration name
+                    configName = ''
+
+                # Create a Keyword Visualization object as an embedded graphic, not a free-standing report.
+                self.kwMap = KeywordMapClass.KeywordMap(self, -1, "", embedded=True, topOffset=0)
+
+                # We populate the keyword visualization differently for a document and a quote.
+                if type(self.ControlObject.currentObj) == Document.Document:
+                    # The starting point of the Keyword Visualization is the start position in the top of the zoomInfo stack!
+                    kwMapStartChar = self.zoomInfo[-1][0]
+                    # The ending point of the Keyword Visualization is the end position in the top of the zoomInfo stack,
+                    # unless that value is 0, in which case it's the document's full length.
+                    if self.zoomInfo[-1][1] <= 0:
+                        kwMapEndChar = self.ControlObject.GetDocumentLength()
+                    else:
+                        kwMapEndChar = self.zoomInfo[-1][1]
+
+                    # Get the total length of the Document
+                    totalLength = self.ControlObject.GetDocumentLength()
+
+                    # Documents are different.  If they are being edited, all of the keyword positioning data from
+                    # the database will be incorrect!!  That's because keyword positioning is based on character
+                    # position, which changes during edits, instead of time code, which does not change during edits.
+                    #
+                    # As a result, we need to pass in the LIVE Document Object rather than loading it from the database
+                    # the way we do with Episodes and Clips.
+
+                    # Set up the embedded Text Keyword Visualization, sending it all the data it needs so it can draw or redraw itself.
+                    self.kwMap.SetupTextEmbedded(self.ControlObject.currentObj,
+                                                 kwMapStartChar,
+                                                 kwMapEndChar,
+                                                 totalLength,
+                                                 filteredQuoteList = filteredQuoteList,
+                                                 unfilteredQuoteList = unfilteredQuoteList, 
+##                                                 filteredSnapshotList = filteredSnapshotList,
+##                                                 unfilteredSnapshotList = unfilteredSnapshotList, 
+                                                 filteredKeywordList = filteredKeywordList,
+                                                 unfilteredKeywordList = unfilteredKeywordList, 
+                                                 keywordColors = keywordColorList,
+                                                 configName=configName,
+                                                 loadDefault=self.loadDefault)
+
+                    # Draw the TimeLine values
+                    self.draw_timeline_text(kwMapStartChar, kwMapEndChar)
+
+                elif type(self.ControlObject.currentObj) == Quote.Quote:
+                    # Determine the initial start and length for the Quote
+                    start = self.zoomInfo[-1][0]
+                    # Minimum of 4 characters in the Visualization
+                    length = max(self.zoomInfo[-1][1], 4)
+
+                    # Set up the embedded Keyword Visualization, sending it all the data it needs so it can draw or redraw itself.
+                    # A Quote gets the Source Document object rather than the Quote object itself, if possible!
+                    if self.ControlObject.currentObj.source_document_num > 0:
+                        try:
+                            sourceObj = Document.Document(self.ControlObject.currentObj.source_document_num)
+                        except TransanaExceptions.recordNotFoundError:
+                            sourceObj = self.ControlObject.currentObj
+                    else:
+                        sourceObj = self.ControlObject.currentObj
+                    self.kwMap.SetupTextEmbedded(sourceObj,
+                                                 self.ControlObject.currentObj.start_char,
+                                                 self.ControlObject.currentObj.end_char,  #  - self.ControlObject.currentObj.start_char,
+                                                 self.ControlObject.currentObj.end_char,
+                                                 filteredQuoteList = filteredQuoteList,
+                                                 unfilteredQuoteList = unfilteredQuoteList,
+##                                                 filteredSnapshotList = filteredSnapshotList,
+##                                                 unfilteredSnapshotList = unfilteredSnapshotList,
+                                                 filteredKeywordList = filteredKeywordList,
+                                                 unfilteredKeywordList = unfilteredKeywordList,
+                                                 keywordColors = keywordColorList,
+                                                 quoteNum=self.ControlObject.currentObj.number,
+                                                 configName=configName,
+                                                 loadDefault=self.loadDefault)
+
+                    # Draw the TimeLine
+                    self.draw_timeline_text(self.ControlObject.currentObj.start_char,
+                                            self.ControlObject.currentObj.end_char)
+
+                # If we have some other type of object ...
+                elif self.ControlObject.currentObj != None:
+                    # ... add the error message to the visualization!
+                    self.waveform.AddText('Text-Keyword Visualization - %s not implemented.' % type(self.ControlObject.currentObj), 5, 5)
+
+                # By this point, we've already loaded the default and don't need to do it again.
+                self.loadDefault = False
+
+                # The Keyword / Hybrid visualization height can be self-adjusting.  Let's call that function.
+                self.resizeKeywordVisualization()
+
             # Signal that the redraw is complete, and does not need to be done again until this flag is altered.
             self.redrawWhenIdle = False
 
-            # resetVideoPosition indicates where the video cursor should be set following a Waveform Repaint
-            if self.resetVideoPosition > 0:
-                # Set the Video StartPoint, as it may have been wiped out previously
-                self.ControlObject.SetVideoStartPoint(self.resetVideoPosition)
-                # Set the Visualization Object's startPoint too.
-                self.startPoint = self.resetVideoPosition
-                # Make sure the Position Cursor is drawn on the Waveform
-                self.UpdatePosition(self.resetVideoPosition)
-                # Clear the resetVideoPosition variable, as we're done.
-                self.resetVideoPosition = 0
-            # If resetVideoPosition == 0 and GetVideoStartPoint() > 0, we may have just located a Clip in the Episode.
-            elif self.ControlObject.GetVideoStartPoint() > 0:
-                # Make sure the Position Cursor is drawn on the Waveform
-                self.UpdatePosition(self.ControlObject.GetVideoPosition())
+            # If we have a Text-Keyword Visualization ...
+            if self.VisualizationType == 'Text-Keyword':
+                # If we DO NOT have a SELECTION ...
+                if (self.endPoint - self.startPoint <= 0) and not isinstance(self.ControlObject.currentObj, Quote.Quote):
+                    if (self.waveformUpperLimit - self.waveformLowerLimit) > 0:
+                        # Determine the current/new horizontal position within the visualization
+                        pos = ((float(self.startPoint - self.waveformLowerLimit)) / (self.waveformUpperLimit - self.waveformLowerLimit))
+                    else:
+                        pos = 1
+                    # Draw the Waveform Cursor
+                    self.waveform.DrawCursor(pos)
+                # If we DO have a SELECTION ...
+                else:
+                    # ... assign the start and end points in waveform ...
+                    self.waveform.startTime = self.startPoint
+                    self.waveform.endTime = self.endPoint
+                    # ... and signal that we want the selection to be shown
+                    self.waveform.reSetSelection = True
+            # If we have a media-based visualization ...
+            else:
+                # resetVideoPosition indicates where the video cursor should be set following a Waveform Repaint
+                if self.resetVideoPosition > 0:
+                    # Set the Video StartPoint, as it may have been wiped out previously
+                    self.ControlObject.SetVideoStartPoint(self.resetVideoPosition)
+                    # Set the Visualization Object's startPoint too.
+                    self.startPoint = self.resetVideoPosition
+                    # Make sure the Position Cursor is drawn on the Waveform
+                    self.UpdatePosition(self.resetVideoPosition)
+                    # Clear the resetVideoPosition variable, as we're done.
+                    self.resetVideoPosition = 0
+                # If resetVideoPosition == 0 and GetVideoStartPoint() > 0, we may have just located a Clip in the Episode.
+                elif self.ControlObject.GetVideoStartPoint() > 0:
+                    # Make sure the Position Cursor is drawn on the Waveform
+                    self.UpdatePosition(self.ControlObject.GetVideoPosition())
 
     def resizeKeywordVisualization(self):
         """ The Keyword Visualization (and Hybrid) should auto-resize under some circumstances.  This method implements that. """
+
+        # Disabled for Transana 3.0.
+
+##        print "VisualizationWindow.resizeVisualization() disabled for Transana 3.0"
+        
+        return
+
+
         # If Auto Arrange is ON and the height has not already been set, and there is only ONE media file ...
         # (We don't resize the Visualization if there are multiple media files.)
         if TransanaGlobal.configData.autoArrange and not self.heightIsSet and (len(self.waveFilename) == 1):
@@ -662,17 +944,11 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             newHeight = max(newHeight, round(h / 4))  # wx.ClientDisplayRect()
 
             # The Hybrid Visualization was losing the waveform when the Filter Dialog was called.  So when this happens ...
-            if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
+            if self.VisualizationType == 'Hybrid':
                 # ... signal that the whole visualization has to be re-drawn!
                 self.redrawWhenIdle = True
 
             # now let's adjust the window sizes for the main Transana interface.
-
-            if DEBUG:
-                print
-                print "Call 6", 'Visualization', c + a, newHeight + b
-                print
-            
             self.ControlObject.UpdateWindowPositions('Visualization', c + a, YUpper = newHeight + b)
             # once we do this, we don't need to do it again unless something changes.
             self.heightIsSet = True
@@ -759,7 +1035,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # Call the Keyword Visualization Filter Dialog
         self.kwMap.OnFilter(event)
         # The Hybrid Visualization was losing the waveform when the Filter Dialog was called.  So when this happens ...
-        if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
+        if self.VisualizationType == 'Hybrid':
             # ... signal that the whole visualization has to be re-drawn!
             #     Setting the reset parameter to false signals this is a Hybrid Visualization, preventing the
             #     waveform part of the Hybrid Visualization from being erased.
@@ -771,20 +1047,29 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             # waveform and re-draw the keyword visualization.
             self.waveform.Clear()
             self.kwMap.DrawGraph()
-
+        # Remember the new visualization zoom and filter information
+        self.SaveVisualizationInfo((type(self.VisualizationObject), self.VisualizationObject.number))
+        
     def OnZoomIn(self, event):
         """ Zoom in on a portion of the Waveform Diagram """
         if (self.startPoint < self.endPoint):
-            # Keep track of the new position.  This allows the user to zoom back out in the same steps used to zoom in
-            self.zoomInfo.append((int(self.startPoint), int(self.endPoint - self.startPoint)))
-            # Limit video playback to the selected part of the media by setting the VideoStartPoint and VideoEndPoint in the
-            # Control Object
-            self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
-            # Draw the TimeLine values
-            self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
+            if self.VisualizationType == 'Text-Keyword':
+                # Keep track of the new position.  This allows the user to zoom back out in the same steps used to zoom in
+                self.zoomInfo.append((int(self.startPoint), int(self.endPoint)))
+
+            else:
+                # Keep track of the new position.  This allows the user to zoom back out in the same steps used to zoom in
+                self.zoomInfo.append((int(self.startPoint), int(self.endPoint - self.startPoint)))
+                # Limit video playback to the selected part of the media by setting the VideoStartPoint and VideoEndPoint in the
+                # Control Object
+                self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
+                # Draw the TimeLine values
+                self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
             # Signal that the Waveform Graphic should be updated
             self.redrawWhenIdle = True
-            
+            # Remember the new visualization zoom and filter information
+            self.SaveVisualizationInfo((type(self.VisualizationObject), self.VisualizationObject.number))
+
     def OnZoomOut(self, event):
         """ Zoom out on the Waveform Diagram """
         if len(self.zoomInfo) > 1:
@@ -804,6 +1089,8 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             # Clear the Start and End points of the Visualization Selection
             self.startPoint = self.ControlObject.VideoStartPoint
             self.endPoint = self.ControlObject.VideoStartPoint + self.ControlObject.GetMediaLength()
+            # Remember the new visualization zoom and filter information
+            self.SaveVisualizationInfo((type(self.VisualizationObject), self.VisualizationObject.number))
 
     def OnZoom100(self, event):
         """ Zoom all the way out on the Waveform Diagram """
@@ -825,6 +1112,8 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             self.draw_timeline(self.ControlObject.VideoStartPoint, self.ControlObject.GetMediaLength())
             # Redraw the waveform
             self.redrawWhenIdle = True
+            # Remember the new visualization zoom and filter information
+            self.SaveVisualizationInfo((type(self.VisualizationObject), self.VisualizationObject.number))
 
     def OnCreateClip(self, event):
         """ Create a Transcript-less Clip """
@@ -957,9 +1246,15 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # Clear the Time Line
         self.draw_timeline_zero()
         # Clear all time labels
-        self.lbl_Time_Time.SetLabel(Misc.time_in_ms_to_str(0))
-        self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(0))
-        self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(0))
+        # If we have a Transcript currently selected, not a Document
+        if self.ControlObject.GetCurrentItemType() == 'Transcript':
+            self.lbl_Time_Time.SetLabel(Misc.time_in_ms_to_str(0))
+            self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(0))
+            self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(0))
+        else:
+            self.lbl_Time_Time.SetLabel("0")
+            self.lbl_Current_Time.SetLabel("0")
+            self.lbl_Selected_Time.SetLabel("0")
         self.lbl_Total_Time.SetLabel(Misc.time_in_ms_to_str(0))
         # When clearing, we need to reset loading the Default
         self.loadDefault = True
@@ -972,7 +1267,6 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
 
     def load_image(self, imgType, filename, additionalFiles, offset, mediaStart, mediaLength):
         """ Causes the proper visualization to be displayed in the Visualization Window when a Video File is loaded. """
-
         # We need to know the minimum offset value.  We know there will be a zero value
         minVal = 0
         # Add the main file data to the file list
@@ -986,16 +1280,16 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                 # See if it has the minimum (largest negative) offset
                 minVal = min(minVal, addFile['offset'])
             # This determines the VIRTUAL LENGTH of the multiple media streams
-            mediaLength = self.ControlObject.GetMediaLength()
+            mediaLength = self.ControlObject.GetMediaLength(True)
+            self.zoomInfo = [(0, -1)]
         # If we have a Clip, we just need to set up the filename list
         elif imgType == 'Clip':
             # Iterate through the additional media files
             for addFile in additionalFiles:
                 # Add the file data to the file list
                 filenameList.append({'filename' : addFile['filename'], 'offset' : addFile['offset'] + offset, 'length' : addFile['length']})
-
-        # To start with, initialize the data structure that holds information about Zooms
-        self.zoomInfo = [(mediaStart, mediaLength)]
+            # To start with, initialize the data structure that holds information about Zooms
+            self.zoomInfo = [(mediaStart, mediaLength)]
         # Let's clear the Visualization Window as we get started.
         self.ClearVisualization()
         # Remove old Waveform Selection and Cursor data
@@ -1006,6 +1300,10 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         # reset heightIsSet
         self.heightIsSet = False
 
+        # If the Visualizatoin Object is defined ...
+        if self.VisualizationObject != None:
+            # ... load the Visualization zoom and filter information for know data objects
+            self.LoadVisualizationInfo((type(self.VisualizationObject), self.VisualizationObject.number))
         # Turn off OnIdle Redraw during audio extraction.
         self.redrawWhenIdle = False
         # Initialize a list structure to hold wave file information
@@ -1033,15 +1331,40 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                 if not(os.path.exists(waveFilename)):
                     # The user only needs to say Yes once, but will be asked for each file if they say No.  See if they've already said Yes.
                     if result != wx.ID_YES:
+
+                        # This totally sucks.
+                        #
+                        # If I have a Document loaded and go to load an Episode/Transcript that has not been
+                        # thought audio extraction, the "dlg.LocalShowModal()" call below causes
+                        # self.ControlObject.currentObj to become None.  I have *NO* idea why, other than a
+                        # vague sense that there must be a memory leak somehow.  It's not caused by the act
+                        # of audio extraction, as it still happens if you choose NOT to extract.  The problem
+                        # also still occurs if you skip creation of the QuestionDialog entirely.  It is also
+                        # cross-platform.  This is all most puzzling.
+                        #
+                        # The solution I have found is to create a copy of the object, and to restore
+                        # self.ControlObject.currentObj from that copy following the destruction of the
+                        # dialog.  I apologize to the programming Gods for this kludge.
+
+                        tmpObj = self.ControlObject.currentObj
                         # Politely ask the user to create the waveform
                         dlg = Dialogs.QuestionDialog(self, _("No wave file exists.  Would you like to create one now?"), _("Transana Wave File Creation"))
                         # Remember the results.
                         result = dlg.LocalShowModal()
                         # Destroy the Dialog that asked to create the Wave file    
                         dlg.Destroy()
+                        # If self.ControlObject.currentObj has been mysteriously wiped out ...
+                        if self.ControlObject.currentObj == None:
+                            # ... restore it.
+                            self.ControlObject.currentObj = tmpObj
                     # If the user says Yes, we do audio extraction.
                     if result == wx.ID_YES:
                         try:
+
+                            # NOTE:  We can't use multi-threaded audio extraction here, as it is non-modal,
+                            #        and we need this to be modal.  That is, we want further processing
+                            #        blocked here until the audio extraction is DONE.
+                            
                             # Build the progress box's label
                             if 'unicode' in wx.PlatformInfo:
                                 # Encode with UTF-8 rather than TransanaGlobal.encoding because this is a prompt, not DB Data.
@@ -1060,7 +1383,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                             if (len(errorLog) == 1) and (errorLog[0] == 'Cancelled'):
                                 # ... signal that the WAV file was NOT created!
                                 dllvalue = 1  
-                                
+
                             # On Windows only, some Unicode files fail the standard audio extraction process because of the unicode
                             # file names.  Let's try to detect that and if we do, let's re-run audio extraction using the OLD method!
 
@@ -1078,8 +1401,11 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                                 # If the user cancelled the audio extraction ...
                                 if (len(errorLog) == 1) and (errorLog[0] == 'Cancelled'):
                                     # ... signal that the WAV file was NOT created!
-                                    dllvalue = 1  
-
+                                    dllvalue = 1
+                            # On OS X, if you do extraction from a multi-media Episode, Transana will crash soon after.  (eg. create Quick Clip.)
+                            # This appears to prevent that!!
+                            wx.YieldIfNeeded()
+                                
                         except UnicodeDecodeError:
                             if DEBUG:
                                 import traceback
@@ -1137,7 +1463,7 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             (filenameroot, extension) = os.path.splitext(filename)
 
         # If we're in Hybrid mode, clear the visualization to prevent waveform contamination!
-        if TransanaGlobal.configData.visualizationStyle == 'Hybrid':
+        if self.VisualizationType == 'Hybrid':
             self.ClearVisualization()
 
         # Now that audio extraction is complete, signal that it's time to draw the Waveform Diagram during
@@ -1232,10 +1558,11 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             topAdjust = 0
         # Set the values for the waveform Lower and Upper limits
         self.waveformLowerLimit = mediaStart
-        self.waveformUpperLimit = mediaStart + mediaLength
+        if self.VisualizationType == 'Text-Keyword':
+            self.waveformUpperLimit = mediaLength
+        else:
+            self.waveformUpperLimit = mediaStart + mediaLength
 
-#        print "VisualizationWindow.draw_timeline(): waveformUpperLimit set to ", self.waveformUpperLimit
-        
         # Determine the number of labels and the time interval between labels that should be displayed
         numIncrements, Interval = GetScaleIncrements(mediaLength)
         # Now we can determine the appropriate starting point for our labels!
@@ -1269,6 +1596,150 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         self.timeline.Layout()
         # Show the total Media Time in the Total Time label
         self.lbl_Total_Time.SetLabel(Misc.time_in_ms_to_str(mediaLength))
+
+    def draw_timeline_text(self, startChar, documentLength):
+        def GetScaleIncrements(documentLength):
+            # The general rule is to try to get logical interval sizes with 8 or fewer time increments.
+            # You always add a bit (20% at the lower levels) of the documentLength
+            # because the final length is placed elsewhere and we don't want overlap.
+            # This routine covers from 0 characters to 35,000,000 characters in length.
+
+            # documentLength of < 15 characters = 2 character intervals
+            if documentLength < 15: 
+                Num = int((documentLength + 2) / 2)
+                Interval = 2
+            # documentLength of 35 characters or less = 5 character intervals 
+            elif documentLength < 35:
+                Num = int((documentLength + 4) / 5)
+                Interval = 5
+            # documentLength of 70 characters or less = 10 character intervals 
+            elif documentLength < 70:
+                Num = int((documentLength + 10) / 10)
+                Interval = 10
+            # documentLength of 105 characters or less = 15 character intervals 
+            elif documentLength < 105:
+                Num = int((documentLength + 10) / 15)
+                Interval = 15
+            # documentLength of 140 characters or less = 20 character intervals 
+            elif documentLength < 140:
+                Num = int((documentLength + 10) / 20)
+                Interval = 20
+            # documentLength of 280 characters or less = 40 character intervals 
+            elif documentLength < 280:
+                Num = int((documentLength + 10) / 40)
+                Interval = 40
+            # documentLength of 350 characters or less = 50 character intervals 
+            elif documentLength < 350:
+                Num = int((documentLength + 10) / 50)
+                Interval = 50
+            # documentLength of 700 characters or less = 100 character intervals 
+            elif documentLength < 700:
+                Num = int((documentLength + 100) / 100)
+                Interval = 100
+            # documentLength of 1400 characters or less = 200 character intervals 
+            elif documentLength < 1400:
+                Num = int((documentLength + 100) / 200)
+                Interval = 200
+            # documentLength of 3500 characters or less = 500 character intervals 
+            elif documentLength < 3500:
+                Num = int((documentLength + 100) / 500)
+                Interval = 500
+            # documentLength of 7000 characters or less = 1000 character intervals 
+            elif documentLength < 7000:
+                Num = int((documentLength + 1000) / 1000)
+                Interval = 1000
+            # documentLength of 14000 characters or less = 2000 character intervals 
+            elif documentLength < 14000:
+                Num = int((documentLength + 1000) / 2000)
+                Interval = 2000
+            # documentLength of 35000 characters or less = 5000 character intervals 
+            elif documentLength < 35000:
+                Num = int((documentLength + 1000) / 5000)
+                Interval = 5000
+            # documentLength of 70000 characters or less = 10000 character intervals 
+            elif documentLength < 70000:
+                Num = int((documentLength + 10000) / 10000)
+                Interval = 10000
+            # documentLength of 140000 characters or less = 20000 character intervals 
+            elif documentLength < 140000:
+                Num = int((documentLength + 10000) / 20000)
+                Interval = 20000
+            # documentLength of 350000 characters or less = 50000 character intervals 
+            elif documentLength < 350000:
+                Num = int((documentLength + 10000) / 50000)
+                Interval = 50000
+            # documentLength of 700000 characters or less = 100000 character intervals 
+            elif documentLength < 700000:
+                Num = int((documentLength + 100000) / 100000)
+                Interval = 100000
+            # documentLength of 1400000 characters or less = 200000 character intervals 
+            elif documentLength < 1400000:
+                Num = int((documentLength + 100000) / 200000)
+                Interval = 200000
+            # documentLength of 3500000 characters or less = 500000 character intervals 
+            elif documentLength < 3500000:
+                Num = int((documentLength + 100000) / 500000)
+                Interval = 500000
+            # documentLength of 7000000 characters or less = 1000000 character intervals 
+            elif documentLength < 7000000:
+                Num = int((documentLength + 1000000) / 1000000)
+                Interval = 1000000
+            # documentLength of 14000000 characters or less = 2000000 character intervals 
+            elif documentLength < 14000000:
+                Num = int((documentLength + 1000000) / 2000000)
+                Interval = 2000000
+            # documentLength of 35000000 characters or less = 5000000 character intervals 
+            elif documentLength < 35000000:
+                Num = int((documentLength + 1000000) / 5000000)
+                Interval = 5000000
+            else:
+                Num = int((documentLength + 10000000) / 10000000)
+                Interval = 10000000
+            return Num, Interval
+
+        # Positioning is different on Mac and Windows, requiring subtle adjustments in this window
+        if '__WXMAC__' in wx.PlatformInfo:
+            topAdjust = -3
+        else:
+            topAdjust = 0
+        # Set the values for the waveform Lower and Upper limits
+        self.waveformLowerLimit = startChar
+        self.waveformUpperLimit = documentLength
+
+        # Determine the number of labels and the time interval between labels that should be displayed
+        numIncrements, Interval = GetScaleIncrements(documentLength - startChar)
+        # Now we can determine the appropriate starting point for our labels!
+        startingPoint = int((round(startChar / Interval) + 1) * Interval)
+
+        # Clear all the existing labels
+        self.timeline.DestroyChildren()
+        timeLabels = []
+
+        for loop in range(startingPoint, (numIncrements * Interval + startingPoint), Interval):
+            if (loop > 0) and (documentLength > 0):
+                # Place line marks
+                lay = wx.LayoutConstraints()
+                lay.top.SameAs(self.timeline, wx.Top, topAdjust)
+                (width, height) = self.timeline.GetSizeTuple()
+                width = width - 6  # Adjust for size of widget frame
+                lay.left.Absolute(int(round(((float(loop - startChar)) / (documentLength - startChar)) * (width))))  
+                lay.width.AsIs()
+                lay.height.AsIs()
+                wx.StaticLine(self.timeline, 0, size=wx.Size(2, 5)).SetConstraints(lay)
+                
+                # Place time labels
+                lay = wx.LayoutConstraints()
+                lay.top.SameAs(self.timeline, wx.Top, 4 + topAdjust)
+
+                lay.centreX.Absolute(int(round(((float(loop - startChar)) / (documentLength - startChar)) * (width))))
+                lay.width.AsIs()
+                lay.height.AsIs()
+                wx.StaticText(self.timeline, 1, "%d" % loop).SetConstraints(lay)
+
+        self.timeline.SetAutoLayout(True)
+        self.timeline.Layout()
+        # Show the total Media Length in the Total Time label
+        self.lbl_Total_Time.SetLabel("%d" % (documentLength - startChar))
 
     def draw_timeline_zero(self):
         # Positioning is different on Mac and Windows, requiring subtle adjustments in this window
@@ -1310,8 +1781,12 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
 
     def UpdatePosition(self, currentPosition):
         """ In response to an external event, this will update the Visualization window's indication of Media Position """
-        # Show the media position in the Current Time label
-        self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(currentPosition))
+        # If we have a Transcript currently selected, not a Document
+        if self.ControlObject.GetCurrentItemType() == 'Transcript':
+            # Show the media position in the Current Time label
+            self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(currentPosition))
+        else:
+            self.lbl_Current_Time.SetLabel("0")
         # If UpperLimit and LowerLimit have not been set yet, avoid dividing by zero.  Things will be cleaned up later.
         if self.waveformUpperLimit == self.waveformLowerLimit:
             self.waveformUpperLimit = self.waveformUpperLimit + 1
@@ -1377,21 +1852,43 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                 pass
             # Let's keep track of time since last redraw
             self.lastRedrawTime = time.time()
-            
+
+    def SetDocumentSelection(self, startPos, endPos):
+        """ Respond to the selection of text in a Document """
+        # Set the Selection in the Visualization Window
+        self.startPoint = startPos
+        self.endPoint = endPos
+        # Signal that he Visualization needs to be redrawn
+        self.redrawWhenIdle = True
+        # Update the Current Position
+        self.lbl_Current_Time.SetLabel("%s" % endPos)
+        # Update the Selection Text
+        self.lbl_Selected_Time.SetLabel("%d - %d" % (startPos, endPos))
+
     def OnLeftDown(self, x, y, xpct, ypct):
         """ Mouse Left Down event for the Visualization Window -- over-rides the Waveform's left down! """
         # If we don't convert this to an int, our SQL gets screwed up in non-English localizations that use commas instead
         # of decimals.
         self.startPoint = int(round(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit))
-        # Show the media position in the Current Time label
-        self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(self.startPoint))
+        # If we have a Transcript currently selected, not a Document
+        if self.ControlObject.GetCurrentItemType() == 'Transcript':
+            # Show the media position in the Current Time label
+            self.lbl_Current_Time.SetLabel(Misc.time_in_ms_to_str(self.startPoint))
+        elif self.ControlObject.GetCurrentItemType() == 'Document':
+            # Show the media position in the Current Time label
+            self.lbl_Current_Time.SetLabel("%s" % self.startPoint)
+            # The Document, but not the Transcript, needs to signal a Visualization Redraw here
+            self.redrawWhenIdle = True      
+
 
     def OnLeftUp(self, x, y, xpct, ypct):
         """ Mouse Left Up event for the Visualization Window -- over-rides the Waveform's left up! """
-        # If the media is currently playing ...
-        if self.ControlObject.IsPlaying():
-            # ... we need to stop it!
-            self.ControlObject.Stop()
+        # If we have a Transcript currently selected, not a Document
+        if self.ControlObject.GetCurrentItemType() == 'Transcript':
+            # If the media is currently playing ...
+            if self.ControlObject.IsPlaying():
+                # ... we need to stop it!
+                self.ControlObject.Stop()
         # Distinguish a left-click (positioning start only) from a left-drag (select range)
         # If we have a DRAG ...
         if self.startPoint != int(round(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit)):
@@ -1402,8 +1899,16 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
                 temp = self.startPoint
                 self.startPoint = self.endPoint
                 self.endPoint = temp
-            # Show the media selection in the Selected Time label
-            self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(self.endPoint - self.startPoint))
+            # If we have a Transcript currently selected, not a Document
+            if self.ControlObject.GetCurrentItemType() == 'Transcript':
+                # Show the media selection in the Selected Time label
+                self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(self.endPoint - self.startPoint))
+            else:
+                # Show the text selection in the Selected label
+                self.lbl_Selected_Time.SetLabel("%d - %d" % (self.startPoint, self.endPoint))
+                self.ControlObject.SetCurrentDocumentSelection(self.startPoint, self.endPoint)
+                # Signal a redraw to eliminate the selection box from the Visualization
+####                self.redrawWhenIdle = True
         # If we have a CLICK ...
         else:
             # if we have a LtR language ...
@@ -1418,10 +1923,25 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             else:
                 # ... then set endpoint to 0 to indicate we don't have a selection
                 self.endPoint = 0
-            # Clear the media selection in the Selected Time label
-            self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(0))
-        # Set the Current Video Selection to the highlighted part of the Waveform
-        self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
+            # If we have a Transcript currently selected, not a Document
+            if self.ControlObject.GetCurrentItemType() == 'Transcript':
+                # Clear the media selection in the Selected Time label
+                self.lbl_Selected_Time.SetLabel(Misc.time_in_ms_to_str(0))
+            else:
+                # Show the LACK of a text selection in the Selected label
+                self.lbl_Selected_Time.SetLabel("%d" % 0)
+                self.ControlObject.SetCurrentDocumentPosition(self.startPoint, (-2, -2))
+                # Determine the current/new horizontal position within the visualization
+                if (self.waveformUpperLimit - self.waveformLowerLimit) != 0:
+                    pos = ((float(self.startPoint - self.waveformLowerLimit)) / (self.waveformUpperLimit - self.waveformLowerLimit))
+                else:
+                    pos = 0
+                self.waveform.DrawCursor(pos)
+
+        # If we have a Transcript currently selected, not a Document
+        if self.ControlObject.GetCurrentItemType() == 'Transcript':
+            # Set the Current Video Selection to the highlighted part of the Waveform
+            self.ControlObject.SetVideoSelection(self.startPoint, self.endPoint)
 
     def TimeCodeFromPctPos(self, xpct):
         return int(round(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit))
@@ -1433,16 +1953,17 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
             return 0.0
 
     def OnRightUp(self, x, y):
-        # If there is something loaded in the main interface ...
-        if self.ControlObject.currentObj != None:
+        # If there is something loaded in the main interface and the CURRENT item is NOT a DOCUMENT
+        if (self.ControlObject.currentObj != None) and \
+           (self.ControlObject.GetCurrentItemType() == 'Transcript'):
             # ... Play / Pause the video
             self.ControlObject.PlayPause()
 
     def OnMouseOver(self, x, y, xpct, ypct):
-
-#        print "VisualizationWindow.OnMouseOver():", x, xpct
-        
-        self.lbl_Time_Time.SetLabel(Misc.time_in_ms_to_str(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit))
+        if self.ControlObject.GetCurrentItemType() == 'Transcript':
+            self.lbl_Time_Time.SetLabel(Misc.time_in_ms_to_str(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit))
+        else:
+            self.lbl_Time_Time.SetLabel("%d" % round(xpct * (self.waveformUpperLimit - self.waveformLowerLimit) + self.waveformLowerLimit))
 
     def GetDimensions(self):
         (left, top) = self.GetPositionTuple()
@@ -1483,6 +2004,39 @@ class VisualizationWindow(wx.Dialog):  # (wx.MDIChildFrame):
         size = self.__size()
         return (pos[0], pos[1], size[0], size[1])
         
+    def OnSize(self, event):
+        """ Handles widget positioning on Resize Event """
+        # Determine Frame Size
+        (width, height) = self.GetSize()
+        # If we're not resizing ALL Transana windows ...   (to avoid recursive OnSize calls)
+        if not TransanaGlobal.resizingAll:
+            # ... Get the Visualization Window position ...
+            (left, top) = self.GetPositionTuple()
+            # ... can call the ControlObject's Update Window Position routine with the appropiate parameters
+            self.ControlObject.UpdateWindowPositions('Visualization', width + left, YUpper = height + top)
+
+        # Determine NEW Frame Size
+        (width, height) = self.GetSize()
+
+        # We need to know the height of the Window Header to adjust the size of the Graphic Area
+        headerHeight = self.GetSizeTuple()[1] - self.GetClientSizeTuple()[1]
+
+        # Get the Frame Width for this platform
+        frameWidth = wx.SystemSettings.GetMetric(wx.SYS_FRAMESIZE_X)
+
+        # Set size of Waveform Window (Do this first, or the timeline is not scaled properly.)
+        self.waveform.SetDim(0, 1, width-(2*frameWidth), height-50-headerHeight)
+
+        # Position toolbar Panel
+        self.toolbar.SetDimensions(0, height-28-headerHeight, width, self.toolbar.GetMinSize()[1])
+
+        # Draw the appropriate time line
+        self.draw_timeline(self.waveformLowerLimit, self.waveformUpperLimit - self.waveformLowerLimit)
+
+        # Position timeline Panel
+        self.timeline.SetDimensions(0, height-50-headerHeight, width, 24)
+        # Tell the Waveform to redraw
+        self.redrawWhenIdle = True
 
 # Private methods    
 

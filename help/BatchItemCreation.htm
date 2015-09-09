@@ -1,0 +1,25 @@
+<HTML>
+<HEAD>
+<TITLE>Batch Item Creation</TITLE>
+</HEAD>
+
+<BODY>
+
+<H1>Batch Item Creation</H1><HR>
+
+At times, you may want to bring more than one data item into Transana.  Transana uses the same interface to allow bulk import of <A HREF="documentproperties.htm">Documents</A>, <A HREF="episodeproperties.htm">Episodes</A> (optionally with <A HREF="transcriptproperties.htm">Transcripts</A>), and <A HREF="snapshotproperties.htm">Snapshots</A>.  While the three data types must be handled separately and independently, the process by which this is accomplished is essentially identical.<P> 
+
+<B>Batch Document Creation</B> allows you to import many <A HREF="documentproperties.htm">Documents</A> into Transana with a single action.  <B>Batch Episode Creation</B> allows you to create many <A HREF="episodeproperties.htm">Episodes</A> in Transana with a single action.  To begin either of these processes, right-click (Ctrl-click on the Mac) a <A HREF="libraryproperties.htm">Library</A> in the Datatbase Tree in the <A HREF="datawindow.htm">Data Window</A> and choose either &quot;Batch Episode Creation&quot; or &quot;Batch Document Creation&quot; from the pop-up menu. <B>Batch Snapshot Creation</B> allows you to import many still-image <A HREF="snapshotproperties.htm">Snapshots</A> into a <A HREF="collectionproperties.htm">Collection</A> at once, and is triggered by right-clicking a <A HREF="collectionproperties.htm">Collection</A> rather than a <A HREF="libraryproperties.htm">Library</A>.  The Batch Item Creation dialog, which is very similar for all three processes, will appear.<P>
+
+<IMG SRC="images/batchepisodecreation.gif"><P>
+
+The &quot;Select Files&quot; button allows you to select one or more files from a directory to add to the Selected Files list for processing.  The &quot;Select Directory&quot; button allows you to select a directory, thereby adding defined importable text files (*.rtf, *.txt, and *.xml files), defined importable media files (*.aac, *.avi, *.m4a, *.m4v, *.mov, *.mp3, *.mp4, *.mpeg, *.mpg, *.wav, *.wma, *.wmv), or defined importable image files (*.ani, *.bmp, *.cur, *.gif, *.ico, *.iff, *.jpg, *.jpeg, *.pcx, *.png, *.pnm, *.tga, *.tif, *.xpm) from that directory and all subdirectories to the Selected Files list for processing.  If this adds more files to the list than you intend, you can make multiple selections within the Selected Files list and remove them using the &quot;Remove Selected File(s)&quot; button.  (Other file types may work with Transana as well.)<P>
+
+When you press &quot;OK&quot; from this dialog, Transana will create a Document, an Episode, or a Snapshot in the selected Library or Collection for each of the files selected.  The item will be named after the file imported.  For Episodes, a Transcript will also be created, also named after the media file.  If there is a Rich Text Format document (*.rtf), Transana XML document (*.xml), or a Plain Text document (*.txt) in the same directory and with the same base filename as the media file, this file will be imported into the Transcript.  That is, if you select &quot;MyVideo.mpg&quot; and Transana finds a file in the same directory called &quot;MyVideo.rtf&quot;, &quot;MyVideo.xml&quot;, or &quot;MyVideo.txt,&quot; Transana will assume that this file is an existing Transcript that should be imported into the MyVideo Transcript for the MyVideo Episode and will attempt to import it.<P>
+
+<A HREF="timecodes.htm"><IMG SRC="images/previouspage.gif"  ALT="previouspage"   BORDER=0></A>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+<A HREF="multitrans.htm"><IMG SRC="images/nextpage.gif"  ALT="nextpage"   BORDER=0></A><P>
+
+</BODY>
+</HTML>

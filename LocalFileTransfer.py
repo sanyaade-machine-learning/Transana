@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2014  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2015  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -182,7 +182,7 @@ class LocalFileTransfer(wx.Dialog):
             # Lay out the form
             self.Layout()
             # Center on the Screen
-            self.CenterOnScreen()
+            TransanaGlobal.CenterOnPrimary(self)
             # Initialize variables used in file transfer
             BytesRead = 0
             # "cancelled" is intialized to false.  If the user cancels the file transfer,

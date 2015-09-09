@@ -1,4 +1,4 @@
-# Copyright (C) 2004 - 2014  The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2004 - 2015  The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -144,7 +144,7 @@ class sFTPFileTransfer(wx.Dialog):
         # Lay out the form
         self.Layout()
         # Center on the Screen
-        self.CenterOnScreen()
+        TransanaGlobal.CenterOnPrimary(self)
         # Show the form
         self.Show()
         # make sure the loca directory ends with the proper path seperator character

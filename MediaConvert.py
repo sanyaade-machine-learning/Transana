@@ -1,5 +1,5 @@
 # -*- coding: cp1252 -*-
-# Copyright (C) 2011 - 2014 The Board of Regents of the University of Wisconsin System 
+# Copyright (C) 2011 - 2015 The Board of Regents of the University of Wisconsin System 
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of version 2 of the GNU General Public License as
@@ -48,6 +48,8 @@ import WaveformProgress
 
 # import the Python exceptions module
 import exceptions
+# import Python's multiprocessing module
+import multiprocessing
 # Import Python's os and sys modules
 import os, sys
 # import Python's shutil for fast file copies
@@ -88,8 +90,18 @@ class MediaConvert(wx.Dialog):
         # menuWindow object.
         self.locale = wx.Locale(TransanaGlobal.menuWindow.locale.Language)
 
+        # Remember the parent
+        self.parent = parent
         # Remember the File Name passed in
         self.fileName = fileName
+        # Start exception handling
+        try:
+            # Note the number of computer cores available
+            self.cpu_count = multiprocessing.cpu_count()
+        # If this raises an exception ...
+        except:
+            # ... then indicate the number of cpus is unknown
+            self.cpu_count = 0
         # If we're on Windows ...
         if 'wxMSW' in wx.PlatformInfo:
             # ... specify a Temporary Path for handling non-cp1252 files
@@ -108,12 +120,14 @@ class MediaConvert(wx.Dialog):
         self.snapshotSuccess = False
         # Initialize the process variable
         self.process = None
+        # Create a dictionary for remembering the number of conversion processes currently running
+        self.runningConversions = {}
 
         # Initialize all media file variables
         self.Reset()
         
         # Create the Dialog
-        wx.Dialog.__init__(self, parent, -1, _('Media File Conversion'), size=wx.Size(600, 700), style=wx.DEFAULT_DIALOG_STYLE | wx.THICK_FRAME)
+        wx.Dialog.__init__(self, parent, -1, _('Media File Conversion'), size=wx.Size(600, 700), style=wx.CAPTION | wx.THICK_FRAME)
 
         # To look right, the Mac needs the Small Window Variant.
         if "__WXMAC__" in wx.PlatformInfo:
@@ -338,20 +352,20 @@ class MediaConvert(wx.Dialog):
         boxButtons = wx.BoxSizer(wx.HORIZONTAL)
 
         # Create a Convert button
-        btnConvert = wx.Button(self, -1, _("Convert"))
+        self.btnConvert = wx.Button(self, -1, _("Convert"))
         # Set this as the default button
-        btnConvert.SetDefault()
-        btnConvert.Bind(wx.EVT_BUTTON, self.OnConvert)
-        boxButtons.Add(btnConvert, 0, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT, 10)
+        self.btnConvert.SetDefault()
+        self.btnConvert.Bind(wx.EVT_BUTTON, self.OnConvert)
+        boxButtons.Add(self.btnConvert, 0, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT, 10)
 
         # If we are in the DEMO version and are not taking a snapshot ...        
         if TransanaConstants.demoVersion and not snapshot:
             # ... then disable the Convert button
-            btnConvert.Enable(False)
+            self.btnConvert.Enable(False)
 
         # Create a Close button
-        btnClose = wx.Button(self, wx.ID_CANCEL, _("Close"))
-        boxButtons.Add(btnClose, 0, wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT, 10)
+        self.btnClose = wx.Button(self, wx.ID_CANCEL, _("Close"))
+        boxButtons.Add(self.btnClose, 1, wx.EXPAND | wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM | wx.RIGHT, 10)
 
         self.Bind(wx.EVT_CLOSE, self.OnClose)
 
@@ -826,7 +840,7 @@ class MediaConvert(wx.Dialog):
                     # Clear the Video Bit Rate choice box
                     self.videoBitrate.Clear()
                     # Start with a list of "default" video bit rates
-                    bitrates = [100, 150, 200, 250, 300, 350, 500, 750, 1000, 1500, 2000, 3000, 5000]
+                    bitrates = [100, 150, 200, 250, 300, 350, 500, 750, 1000, 1500, 2000, 2500, 3000, 5000]
                     # For each bit rate in the list ...
                     for bitrate in bitrates:
                         # ... if the File's Video Bit Rate is greater than the proposed bit rate setting ...
@@ -947,12 +961,13 @@ class MediaConvert(wx.Dialog):
                 
     def OnConvert(self, event):
         """ Convert Button Press Event """
+        # Check the file name, ensuring it has required the "%06d" parameter
+        # First, let's break the file name up into path, filename, and ext
+        (filename, ext) = os.path.splitext(self.txtDestFileName.GetValue())
+        (path, filename) = os.path.split(filename)
+        originalFilename = filename
         # If we're converting to a still image ...
         if self.ext in ['.jpg']:
-            # Check the file name, ensuring it has required the "%06d" parameter
-            # First, let's break the file name up into path, filename, and ext
-            (filename, ext) = os.path.splitext(self.txtDestFileName.GetValue())
-            (path, filename) = os.path.split(filename)
             # if "%06d" isn't part of the filename ...
             if not ("%06d" in filename):
                 # ... add it to the end of the file name ...
@@ -1013,13 +1028,16 @@ class MediaConvert(wx.Dialog):
             # We need to build the Extraction command line in stages.  Start with the executable path and name,
             # and add that we are using it embedded and want the first level of feedback (progress information),
             # and specify the Input File name placeholder.
-##            FFmpegCommand = '"' + TransanaGlobal.programDir + os.sep + 'ffmpeg_Transana" "-embedded" "1" "-i" "%s"'
-            FFmpegCommand = '"' + TransanaGlobal.programDir + os.sep + 'ffmpeg_Transana" "-embedded" "1"'
-
+            
             ## THEORY:  Moving -ss parameter before -i parameter will speed up Clip Export and prevent Harrie's "Buffering
             ##          several frames" problem.  "-async 1" will prevent audio-video synch problems.
             ##          See http://ffmpeg.org/pipermail/ffmpeg-user/2011-April/000234.html
             ## Implemented for Transana 2.61.  It appears to work exactly that way.
+            ##
+            ## Except, for Transana 3.0, I notice that I can't take Snapshots from MPEG-1 video!!
+
+##            FFmpegCommand = '"' + TransanaGlobal.programDir + os.sep + 'ffmpeg_Transana" "-embedded" "1" "-i" "%s"'
+            FFmpegCommand = '"' + TransanaGlobal.programDir + os.sep + 'ffmpeg_Transana" "-embedded" "1"'
 
             # For CLIPS, add "-ss StartTime" and "-t Duration (seconds)"!!
             if (not self.ext in ['.jpg']) and (self.clipDuration > 0):
@@ -1046,6 +1064,10 @@ class MediaConvert(wx.Dialog):
                     # ... just use the frame rate extracted from the video
                     tmpVidFrameRate = self.vidFrameRate
 
+                # This syntax is SLOWER, but the other syntax doesn't work for MPEG video
+                if srcExt in ['.mpg', '.mpeg']:
+                    FFmpegCommand += ' "-i" "%s"'
+
                 # If we're doing a video snapshot ...
                 if self.snapshot:
                     # Set the Clip Duration to the frame rate times the number of frames divided by 1000.
@@ -1068,7 +1090,12 @@ class MediaConvert(wx.Dialog):
                 elif self.stillFrameRate.GetStringSelection() == _("1 second"):
                     FFmpegCommand += ' "-r" "1"'
 
-            FFmpegCommand += ' "-i" "%s"'
+                # This syntax is FASTER, but the doesn't work for MPEG video
+                if not srcExt in ['.mpg', '.mpeg']:
+                    FFmpegCommand += ' "-i" "%s"'
+
+            else:
+                FFmpegCommand += ' "-i" "%s"'
 
             # Specify image size.  If we are creating a Video file ...
             if self.vidStream and (self.ext in ['.mpg', '.mp4', '.mov', '.jpg']):
@@ -1238,13 +1265,63 @@ class MediaConvert(wx.Dialog):
 
             # Create the prompt for the progress dialog
             prompt = unicode(_("Converting %s\n to %s"), 'utf8') % (self.txtSrcFileName.GetValue(), self.txtDestFileName.GetValue())
-            # Create the Progress Dialog
-            progressDlg = WaveformProgress.WaveformProgress(self, prompt, self.clipStart, self.clipDuration)
+            # Create the Progress Dialog, allowing MULTIPLE THREADS
+            progressDlg = WaveformProgress.WaveformProgress(self, prompt, self.clipStart, self.clipDuration, showModally=False)
+
+            # If there are NO currently-running conversions ...
+            if self.runningConversions == {}:
+                # ... then set the index to 1
+                indexNum = 1
+            # If there are currently-running conversions ...
+            else:
+                # ... then set the index to 1 more than the largest current number
+                indexNum = max(self.runningConversions) + 1
+            # Have the Progress Dialog remember its index number
+            progressDlg.indexNum = indexNum
+            # Have the Progress Dialog remember the name of the file being converted
+            progressDlg.originalFilename = originalFilename
+            # Add the Progress Dialog to the dictionary that holds the running conversions
+            self.runningConversions[indexNum] = progressDlg
+            # If there is exactly ONE running conversion ...
+            if len(self.runningConversions) == 1:
+                msg = unicode(_('%d conversion running'), 'utf8') % len(self.runningConversions)
+                # ... update the Close button's Text ...
+                self.btnClose.SetLabel(msg)
+                # ... and update the layout to enlarge the button
+                self.Layout()
+            # If there are MORE THAN ONE running conversions ...
+            else:
+                msg = unicode(_('%d conversions running'), 'utf8') % len(self.runningConversions)
+                # ... update the Close button's Text
+                self.btnClose.SetLabel(msg)
+            # Disable the Close Button
+            self.btnClose.Enable(False)
+
+            # If the number of CPU Cores is known ...
+            if self.cpu_count > 0:
+                # ... Add the number of cores to the message text
+                if len(self.runningConversions) == 1:
+                    msg = unicode(_('%d Conversion Running on %d computer cores'), 'utf8') % \
+                          (len(self.runningConversions), self.cpu_count)
+                else:
+                    msg = unicode(_('%d Conversions Running on %d computer cores'), 'utf8') % \
+                          (len(self.runningConversions), self.cpu_count)
+                # If we have as many conversions running as we have computer cores ...
+                if len(self.runningConversions) >= self.cpu_count:
+                    # ... disable the Convert button
+                    self.btnConvert.Enable(False)
+            # Add the current message about number of conversions (and cores, if known) to the Memo
+            self.memo.AppendText(msg + '\n\n')
 
             if DEBUG:
                 self.memo.AppendText("MediaConvert.OnConvert():  FFmpeg Command:")
                 self.memo.AppendText(FFmpegCommand % (self.txtSrcFileName.GetValue(), self.txtDestFileName.GetValue()))
                 self.memo.AppendText('\n\n')
+
+                msg = FFmpegCommand
+                dlg = Dialogs.InfoDialog(self, msg)
+                dlg.ShowModal()
+                dlg.Destroy()
             
             # Pass the Conversion Command we have created to the Progress Dialog
             progressDlg.SetProcessCommand(FFmpegCommand)
@@ -1262,18 +1339,30 @@ class MediaConvert(wx.Dialog):
 
             # Initiate the Conversion with the appropriate file names
             progressDlg.Extract(inputFile, outputFile, mode='CustomConvert')
+
+            
+            # Get the Error Log that may have been created
+#            errorLog = progressDlg.GetErrorMessages()
+            # Destroy the Progess Dialog
+#            progressDlg.Destroy()
+
+
+    def OnConvertComplete(self, progressDlg):
+
+        if DEBUG:
+            print "MediaConvert.OnConvertComplete() called for", progressDlg.indexNum, progressDlg.originalFilename
+
+        if True:    # False
+            
             # Get the Error Log that may have been created
             errorLog = progressDlg.GetErrorMessages()
-            # Destroy the Progess Dialog
-            progressDlg.Destroy()
-            
             # If the conversion was CANCELLED by the user ...
             if (len(errorLog) == 1) and (errorLog[0] == 'Cancelled'):
-                msg = _("Conversion cancelled by user.") + "\n\n"
+                msg = unicode(_('Conversion of "%s" cancelled by user.'), 'utf8') % progressDlg.originalFilename + "\n\n"
             # If the conversion was NOT cancelled ...
             else:
                 # Inform the user that the conversion is complete
-                msg = unicode(self.ext[1:].upper(), 'utf8') + unicode(_(" conversion completed."), 'utf8') + "\n\n"
+                msg = unicode(self.ext[1:].upper(), 'utf8') + unicode(_(' conversion of "%s" completed.'), 'utf8') % progressDlg.originalFilename + "\n\n"
                 # If there are messages in the Error Log ...
                 if len(errorLog) > 0:
                     # Create the message to the user
@@ -1286,8 +1375,7 @@ class MediaConvert(wx.Dialog):
                     # ... indicate that the snapshot was successful
                     self.snapshotSuccess = True
             # Display the user message
-            self.memo.AppendText(msg)
-
+            self.memo.AppendText(msg + '\n')
             # When still images are created, FFmpeg seems to like to create extra images.  We need to clean that up here.
             # Start exception handling
             try:
@@ -1301,7 +1389,6 @@ class MediaConvert(wx.Dialog):
                         if os.path.exists(self.txtDestFileName.GetValue() % img):
                             # delete the image
                             os.remove(self.txtDestFileName.GetValue() % img)
-
                 # If we have a temporary file name because of the non-cp1252 file name issue on Windows ...
                 if self.tmpFileName != '':
                     # Determine the destination file name
@@ -1312,7 +1399,6 @@ class MediaConvert(wx.Dialog):
                         destFile = destFile % 1
                     # ... move the CONVERTED file, renaming it along the way
                     shutil.move(outputFile, destFile)
-
             # Handle exceptions ...
             except:
 
@@ -1347,6 +1433,28 @@ class MediaConvert(wx.Dialog):
                             infodlg = Dialogs.InfoDialog(self, _('Update Failed.  Some records that would be affected may be locked by another user.'))
                             infodlg.ShowModal()
                             infodlg.Destroy()
+            # Remove this conversion from the dictionary of running conversions
+            del(self.runningConversions[progressDlg.indexNum])
+            # If we have NO MORE running conversions ...
+            if len(self.runningConversions) == 0:
+                # ... reset the label of the button to Close ...
+                self.btnClose.SetLabel(_('Close'))
+                # ... enable the Close button ...
+                self.btnClose.Enable(True)
+                # ... and redo the layout to resize the button
+                self.Layout()
+            # If we have exactly ONE conversion remaining ...
+            elif len(self.runningConversions) == 1:
+                # ... update the Close button text
+                self.btnClose.SetLabel(unicode(_('%d Conversion Running'), 'utf8') % len(self.runningConversions))
+            # If we have MORE THAN ONE conversions remaining ...
+            else:
+                # ... update the Close button text
+                self.btnClose.SetLabel(unicode(_('%d Conversions Running'), 'utf8') % len(self.runningConversions))
+            # If we now have fewer running convesions than CPU Cores (which should ALWAYS be true) ...
+            if len(self.runningConversions) < self.cpu_count:
+                # ... enable the Convert button
+                self.btnConvert.Enable(True)
 
             # If we are doing a snapshot ...
             if self.snapshot:
@@ -1355,33 +1463,47 @@ class MediaConvert(wx.Dialog):
 
     def OnClose(self, event):
         """ Close Button Press """
-        # If we're on Windows ...
-        if 'wxMSW' in wx.PlatformInfo:
-            # If the temporary path exists ...
-            if os.path.exists(self.tmpPath):
-                # Start exception handling
-                try:
-                    # Get a list of files in the temporary directory
-                    files = os.listdir(self.tmpPath)
-                    # iterate through the files
-                    for fil in files:
-                        # If the file is called Input or Output ...
-                        if ((len(fil) > 5) and (fil[:5] == 'Input')) or ((len(fil) > 6) and (fil[:6] == 'Output')):
-                            # ... try to delete it
-                            os.remove(os.path.join(self.tmpPath, fil))
-                    # Remove the DIRECTORY
-                    os.removedirs(self.tmpPath)
-                # If an exception is raised ...
-                except:
+        # If we have NO running conversions ...
+        if len(self.runningConversions) == 0:
+            # If we're on Windows ...
+            if 'wxMSW' in wx.PlatformInfo:
+                # If the temporary path exists ...
+                if os.path.exists(self.tmpPath):
+                    # Start exception handling
+                    try:
+                        # Get a list of files in the temporary directory
+                        files = os.listdir(self.tmpPath)
+                        # iterate through the files
+                        for fil in files:
+                            # If the file is called Input or Output ...
+                            if ((len(fil) > 5) and (fil[:5] == 'Input')) or ((len(fil) > 6) and (fil[:6] == 'Output')):
+                                # ... try to delete it
+                                os.remove(os.path.join(self.tmpPath, fil))
+                        # Remove the DIRECTORY
+                        os.removedirs(self.tmpPath)
+                    # If an exception is raised ...
+                    except:
 
-                    if DEBUG:
-                        print sys.exc_info()[0]
-                        print sys.exc_info()[1]
-                        
-                    # ... ignore it.  Transana might clean up after itself later
-                    pass
-        # Allow the form's Cancel event to fire to close the form
-        event.Skip()
+                        if DEBUG:
+                            print sys.exc_info()[0]
+                            print sys.exc_info()[1]
+                            
+                        # ... ignore it.  Transana might clean up after itself later
+                        pass
+            # Allow the form's Cancel event to fire to close the form
+            event.Skip()
+
+        # I couldn't get the VETO to work, so disabled the Close Button instead.
+        else:
+
+            print "Event.Veto() called!"
+
+            event.Veto()
+
+            errmsg = unicode(_('You still have %d conversions in progress.  Please let them finish or Cancel them before proceeding.'), 'utf8') % len(self.runningConversions)
+            errDlg = Dialogs.ErrorDialog(self, errmsg)
+            errDlg.ShowModal()
+            errDlg.Destroy()
         
     def OnBrowse(self, event):
         """ Browse Button event handler (for both source and destination file names) """
