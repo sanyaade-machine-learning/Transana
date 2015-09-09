@@ -53,9 +53,9 @@ if workshopVersion:
     expirationdate = TransanaConfigConstants.xpdt
 
 # Program Version Number
-versionNumber = '2.99 Alpha 8'
+versionNumber = '3.00'
 # Build Number
-buildNumber = '299a8'
+buildNumber = '300'
 # Modify for Multi-user if appropriate
 if not singleUserVersion:
     versionNumber = versionNumber + '-MU'
